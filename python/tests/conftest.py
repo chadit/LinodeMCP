@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 from linodemcp.config import (
     Config,
@@ -103,8 +104,6 @@ def sample_config() -> Config:
 @pytest.fixture
 def temp_config_file(tmp_path: Path, sample_config_data: dict[str, Any]) -> Path:
     """Create a temporary config file."""
-    import yaml
-
     config_file = tmp_path / "config.yml"
     config_file.write_text(yaml.dump(sample_config_data))
     return config_file

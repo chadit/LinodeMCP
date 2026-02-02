@@ -24,6 +24,7 @@ const (
 	featureProtocol  = "mcp"
 )
 
+// Build-time variables set via ldflags.
 var (
 	BuildDate = ""     //nolint:gochecknoglobals // Build-time variable set via ldflags
 	GitCommit = "dev"  //nolint:gochecknoglobals // Build-time variable set via ldflags
@@ -31,15 +32,13 @@ var (
 )
 
 // Info holds build and version metadata for the LinodeMCP server.
-//
-//nolint:tagliatelle // JSON field names maintain API compatibility with snake_case.
 type Info struct {
 	Version    string            `json:"version"`
-	APIVersion string            `json:"api_version"`
-	BuildDate  string            `json:"build_date"`
-	GitCommit  string            `json:"git_commit"`
-	GitBranch  string            `json:"git_branch"`
-	GoVersion  string            `json:"go_version"`
+	APIVersion string            `json:"api_version"` //nolint:tagliatelle // Linode API snake_case convention
+	BuildDate  string            `json:"build_date"`  //nolint:tagliatelle // Linode API snake_case convention
+	GitCommit  string            `json:"git_commit"`  //nolint:tagliatelle // Linode API snake_case convention
+	GitBranch  string            `json:"git_branch"`  //nolint:tagliatelle // Linode API snake_case convention
+	GoVersion  string            `json:"go_version"`  //nolint:tagliatelle // Linode API snake_case convention
 	Platform   string            `json:"platform"`
 	Features   map[string]string `json:"features"`
 }

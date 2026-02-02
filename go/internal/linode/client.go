@@ -32,9 +32,9 @@ type Profile struct {
 	Username           string `json:"username"`
 	Email              string `json:"email"`
 	Timezone           string `json:"timezone"`
-	EmailNotifications bool   `json:"email_notifications"`
+	EmailNotifications bool   `json:"email_notifications"` //nolint:tagliatelle // Linode API snake_case
 	Restricted         bool   `json:"restricted"`
-	TwoFactorAuth      bool   `json:"two_factor_auth"`
+	TwoFactorAuth      bool   `json:"two_factor_auth"` //nolint:tagliatelle // Linode API snake_case
 	UID                int    `json:"uid"`
 }
 
@@ -56,7 +56,7 @@ type Instance struct {
 	Updated         string   `json:"updated"`
 	Group           string   `json:"group"`
 	Tags            []string `json:"tags"`
-	WatchdogEnabled bool     `json:"watchdog_enabled"`
+	WatchdogEnabled bool     `json:"watchdog_enabled"` //nolint:tagliatelle // Linode API snake_case
 }
 
 // Specs represents instance hardware specifications.
@@ -71,9 +71,9 @@ type Specs struct {
 // Alerts represents alert settings for an instance.
 type Alerts struct {
 	CPU           int `json:"cpu"`
-	NetworkIn     int `json:"network_in"`
-	NetworkOut    int `json:"network_out"`
-	TransferQuota int `json:"transfer_quota"`
+	NetworkIn     int `json:"network_in"`     //nolint:tagliatelle // Linode API snake_case
+	NetworkOut    int `json:"network_out"`    //nolint:tagliatelle // Linode API snake_case
+	TransferQuota int `json:"transfer_quota"` //nolint:tagliatelle // Linode API snake_case
 	IO            int `json:"io"`
 }
 
@@ -82,7 +82,7 @@ type Backups struct {
 	Enabled   bool     `json:"enabled"`
 	Available bool     `json:"available"`
 	Schedule  Schedule `json:"schedule"`
-	Last      *Backup  `json:"last_successful"`
+	Last      *Backup  `json:"last_successful"` //nolint:tagliatelle // Linode API snake_case
 }
 
 // Schedule represents backup schedule settings.
@@ -148,12 +148,14 @@ func (c *Client) GetProfile(ctx context.Context) (*Profile, error) {
 	if err != nil {
 		return nil, &NetworkError{Operation: "GetProfile", Err: err}
 	}
+
 	defer func() { _ = resp.Body.Close() }()
 
 	var profile Profile
 	if err := c.handleResponse(resp, &profile); err != nil {
 		return nil, err
 	}
+
 	return &profile, nil
 }
 
@@ -166,6 +168,7 @@ func (c *Client) ListInstances(ctx context.Context) ([]Instance, error) {
 	if err != nil {
 		return nil, &NetworkError{Operation: "ListInstances", Err: err}
 	}
+
 	defer func() { _ = resp.Body.Close() }()
 
 	var response struct {
@@ -174,9 +177,11 @@ func (c *Client) ListInstances(ctx context.Context) ([]Instance, error) {
 		Pages   int        `json:"pages"`
 		Results int        `json:"results"`
 	}
+
 	if err := c.handleResponse(resp, &response); err != nil {
 		return nil, err
 	}
+
 	return response.Data, nil
 }
 
@@ -186,16 +191,19 @@ func (c *Client) GetInstance(ctx context.Context, instanceID int) (*Instance, er
 	defer cancel()
 
 	endpoint := fmt.Sprintf("/linode/instances/%d", instanceID)
+
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, &NetworkError{Operation: "GetInstance", Err: err}
 	}
+
 	defer func() { _ = resp.Body.Close() }()
 
 	var instance Instance
 	if err := c.handleResponse(resp, &instance); err != nil {
 		return nil, err
 	}
+
 	return &instance, nil
 }
 
@@ -261,10 +269,12 @@ func (c *Client) handleErrorResponse(statusCode int, body []byte, resp *http.Res
 		return &APIError{StatusCode: statusCode, Message: errMsgForbidden}
 	case httpTooManyReqs:
 		retryAfter := c.parseRetryAfter(resp)
+
 		message := errMsgRateLimit
 		if retryAfter > 0 {
 			message = fmt.Sprintf("Rate limit exceeded. Retry after %v.", retryAfter)
 		}
+
 		return &APIError{StatusCode: statusCode, Message: message}
 	case httpServerError:
 		return &APIError{StatusCode: statusCode, Message: errMsgServerError}
@@ -278,11 +288,14 @@ func (c *Client) parseRetryAfter(resp *http.Response) time.Duration {
 	if retryAfter == "" {
 		return 0
 	}
+
 	if seconds, err := strconv.Atoi(retryAfter); err == nil {
 		return time.Duration(seconds) * time.Second
 	}
+
 	if t, err := http.ParseTime(retryAfter); err == nil {
 		return time.Until(t)
 	}
+
 	return 0
 }

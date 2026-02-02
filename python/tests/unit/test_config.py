@@ -1,5 +1,6 @@
 """Unit tests for config module."""
 
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -12,7 +13,12 @@ from linodemcp.config import (
     ConfigFileNotFoundError,
     ConfigInvalidError,
     ConfigMalformedError,
+    EnvironmentConfig,
     EnvironmentNotFoundError,
+    LinodeConfig,
+    PathValidationError,
+    _validate_config,
+    _validate_path,
     get_config_dir,
     get_config_path,
     load_from_file,
@@ -56,8 +62,6 @@ def test_load_malformed_yaml(tmp_path: Path) -> None:
 
 def test_load_json_config(tmp_path: Path, sample_config_data: dict[str, Any]) -> None:
     """Test loading JSON configuration."""
-    import json
-
     config_file = tmp_path / "config.json"
     config_file.write_text(json.dumps(sample_config_data))
 
@@ -139,8 +143,6 @@ def test_get_nonexistent_linode_environment(sample_config: Config) -> None:
 
 def test_config_validation_missing_environments() -> None:
     """Test config validation with missing environments."""
-    from linodemcp.config import _validate_config
-
     cfg = Config()
     cfg.environments = {}
 
@@ -150,8 +152,6 @@ def test_config_validation_missing_environments() -> None:
 
 def test_config_validation_incomplete_linode_config() -> None:
     """Test config validation with incomplete Linode config."""
-    from linodemcp.config import EnvironmentConfig, LinodeConfig, _validate_config
-
     cfg = Config()
     cfg.environments = {
         "test": EnvironmentConfig(
@@ -179,8 +179,6 @@ def test_get_config_path_default() -> None:
 
 def test_path_validation_dangerous_paths() -> None:
     """Test path validation rejects dangerous paths."""
-    from linodemcp.config import PathValidationError, _validate_path
-
     with pytest.raises(PathValidationError):
         _validate_path(Path("/etc/passwd"))
 

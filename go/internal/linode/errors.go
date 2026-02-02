@@ -20,6 +20,7 @@ func (e *APIError) Error() string {
 	if e.Field != "" {
 		return fmt.Sprintf("Linode API error (status %d): %s (field: %s)", e.StatusCode, e.Message, e.Field)
 	}
+
 	return fmt.Sprintf("Linode API error (status %d): %s", e.StatusCode, e.Message)
 }
 
@@ -65,11 +66,14 @@ func IsNetworkError(err error) bool {
 	if errors.As(err, &networkErr) {
 		return true
 	}
+
 	var netErr net.Error
 	if errors.As(err, &netErr) {
 		return true
 	}
+
 	var urlErr *url.Error
+
 	return errors.As(err, &urlErr)
 }
 
@@ -79,6 +83,7 @@ func IsTimeoutError(err error) bool {
 	if errors.As(err, &netErr) {
 		return netErr.Timeout()
 	}
+
 	var urlErr *url.Error
 	if errors.As(err, &urlErr) {
 		var innerNetErr net.Error
@@ -86,6 +91,7 @@ func IsTimeoutError(err error) bool {
 			return innerNetErr.Timeout()
 		}
 	}
+
 	return false
 }
 
@@ -100,6 +106,7 @@ func (e *RetryableError) Error() string {
 	if e.RetryAfter > 0 {
 		return fmt.Sprintf("retryable error (retry after %v): %v", e.RetryAfter, e.Err)
 	}
+
 	return fmt.Sprintf("retryable error: %v", e.Err)
 }
 
@@ -112,9 +119,11 @@ func IsRetryable(err error) bool {
 	if errors.As(err, &retryableErr) {
 		return true
 	}
+
 	var apiErr *APIError
 	if errors.As(err, &apiErr) {
 		return apiErr.IsRateLimitError() || apiErr.IsServerError()
 	}
+
 	return IsNetworkError(err) || IsTimeoutError(err)
 }

@@ -179,9 +179,10 @@ def get_config_dir() -> Path:
         try:
             path = Path(custom_path)
             _validate_path(path)
-            return path.parent
         except PathValidationError:
             pass
+        else:
+            return path.parent
 
     home_dir = Path.home()
     return home_dir / ".config" / "linodemcp"
@@ -194,9 +195,10 @@ def get_config_path() -> Path:
         try:
             path = Path(custom_path)
             _validate_path(path)
-            return path
         except PathValidationError:
             pass
+        else:
+            return path
 
     config_dir = get_config_dir()
     json_path = config_dir / "config.json"

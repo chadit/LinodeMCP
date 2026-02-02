@@ -20,6 +20,7 @@ func NewHelloTool() (mcp.Tool, func(ctx context.Context, request mcp.CallToolReq
 	handler := func(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := request.GetString("name", "World")
 		message := fmt.Sprintf("Hello, %s! LinodeMCP server is running and ready.", name)
+
 		return mcp.NewToolResultText(message), nil
 	}
 

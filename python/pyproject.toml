@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "linodemcp"
 version = "0.1.0"
 description = "MCP server for Linode API access"
-readme = "README.md"
+readme = "../README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
@@ -20,6 +20,8 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 
 dependencies = [
@@ -142,7 +144,10 @@ ignore = [
 "tests/**/*.py" = [
     "PLR2004",  # Magic value used in comparison
     "S101",     # Use of assert
+    "S105",     # Hardcoded password string (expected in tests)
+    "S106",     # Hardcoded password argument (expected in tests)
     "ARG001",   # Unused function argument
+    "PLC0415",  # Import should be at top of module (acceptable in tests)
 ]
 
 [tool.ruff.lint.isort]

@@ -1,6 +1,6 @@
 module github.com/chadit/LinodeMCP
 
-go 1.24
+go 1.25
 
 require (
 	github.com/mark3labs/mcp-go v0.37.0

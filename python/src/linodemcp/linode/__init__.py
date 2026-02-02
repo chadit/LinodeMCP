@@ -7,6 +7,14 @@ from typing import Any
 
 import httpx
 
+# HTTP status code constants
+HTTP_BAD_REQUEST = 400
+HTTP_UNAUTHORIZED = 401
+HTTP_FORBIDDEN = 403
+HTTP_TOO_MANY_REQUESTS = 429
+HTTP_SERVER_ERROR = 500
+HTTP_SERVER_ERROR_MAX = 600
+
 __all__ = [
     "APIError",
     "Alerts",
@@ -49,19 +57,19 @@ class APIError(LinodeError):
 
     def is_authentication_error(self) -> bool:
         """Check if this is an authentication error."""
-        return self.status_code == 401
+        return self.status_code == HTTP_UNAUTHORIZED
 
     def is_rate_limit_error(self) -> bool:
         """Check if this is a rate limit error."""
-        return self.status_code == 429
+        return self.status_code == HTTP_TOO_MANY_REQUESTS
 
     def is_forbidden_error(self) -> bool:
         """Check if this is a forbidden error."""
-        return self.status_code == 403
+        return self.status_code == HTTP_FORBIDDEN
 
     def is_server_error(self) -> bool:
         """Check if this is a server error."""
-        return 500 <= self.status_code < 600
+        return HTTP_SERVER_ERROR <= self.status_code < HTTP_SERVER_ERROR_MAX
 
 
 class NetworkError(LinodeError):
@@ -245,7 +253,7 @@ class Client:
 
         response = await self.client.request(method, url, headers=headers)
 
-        if response.status_code >= 400:
+        if response.status_code >= HTTP_BAD_REQUEST:
             self._handle_error_response(response)
 
         return response
@@ -264,21 +272,25 @@ class Client:
         except (ValueError, KeyError):
             pass
 
-        if response.status_code == 401:
-            raise APIError(401, "Authentication failed. Please check your API token.")
-        if response.status_code == 403:
+        if response.status_code == HTTP_UNAUTHORIZED:
             raise APIError(
-                403,
+                HTTP_UNAUTHORIZED, "Authentication failed. Please check your API token."
+            )
+        if response.status_code == HTTP_FORBIDDEN:
+            raise APIError(
+                HTTP_FORBIDDEN,
                 "Access forbidden. Your API token may not have sufficient permissions.",
             )
-        if response.status_code == 429:
+        if response.status_code == HTTP_TOO_MANY_REQUESTS:
             retry_after = response.headers.get("Retry-After", "")
             message = "Rate limit exceeded. Please try again later."
             if retry_after:
                 message = f"Rate limit exceeded. Retry after {retry_after}."
-            raise APIError(429, message)
-        if response.status_code >= 500:
-            raise APIError(500, "Internal server error. Please try again later.")
+            raise APIError(HTTP_TOO_MANY_REQUESTS, message)
+        if response.status_code >= HTTP_SERVER_ERROR:
+            raise APIError(
+                HTTP_SERVER_ERROR, "Internal server error. Please try again later."
+            )
 
         raise APIError(
             response.status_code,
@@ -444,13 +456,7 @@ class RetryableClient:
             if error.is_authentication_error() or error.is_forbidden_error():
                 return False
 
-        if isinstance(error, NetworkError):
-            return True
-
-        if isinstance(error, httpx.TimeoutException):
-            return True
-
-        return False
+        return isinstance(error, NetworkError | httpx.TimeoutException)
 
 
 def is_retryable(error: Exception) -> bool:
@@ -459,6 +465,4 @@ def is_retryable(error: Exception) -> bool:
         return True
     if isinstance(error, APIError):
         return error.is_rate_limit_error() or error.is_server_error()
-    if isinstance(error, (NetworkError, httpx.TimeoutException)):
-        return True
-    return False
+    return isinstance(error, (NetworkError, httpx.TimeoutException))

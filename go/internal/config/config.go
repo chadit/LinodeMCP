@@ -157,10 +157,13 @@ func (cm *CacheManager) validatePath(path string) error {
 	}
 
 	cm.pathCacheMutex.RLock()
+
 	if err, exists := cm.pathValidationCache[path]; exists {
 		cm.pathCacheMutex.RUnlock()
+
 		return err
 	}
+
 	cm.pathCacheMutex.RUnlock()
 
 	err := cm.performPathValidation(path)
@@ -202,6 +205,7 @@ func containsDangerousPathElements(path string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -213,16 +217,20 @@ func (cm *CacheManager) isPathInAllowedDirectory(absPath string) bool {
 	}
 
 	cm.allowedDirsMutex.RLock()
+
 	if !cm.allowedDirsCached {
 		cm.allowedDirsMutex.RUnlock()
 		cm.allowedDirsMutex.Lock()
+
 		if !cm.allowedDirsCached {
 			cm.allowedDirsCache = buildAllowedDirectoriesCache()
 			cm.allowedDirsCached = true
 		}
+
 		cm.allowedDirsMutex.Unlock()
 		cm.allowedDirsMutex.RLock()
 	}
+
 	dirs := cm.allowedDirsCache
 	cm.allowedDirsMutex.RUnlock()
 
@@ -231,6 +239,7 @@ func (cm *CacheManager) isPathInAllowedDirectory(absPath string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -242,14 +251,17 @@ func buildAllowedDirectoriesCache() []string {
 			dirs = append(dirs, absHomeDir)
 		}
 	}
+
 	if cwd, err := os.Getwd(); err == nil {
 		if absCwd, err := filepath.Abs(cwd); err == nil {
 			dirs = append(dirs, absCwd)
 		}
 	}
+
 	if absTmpDir, err := filepath.Abs(os.TempDir()); err == nil {
 		dirs = append(dirs, absTmpDir)
 	}
+
 	dirs = append(dirs, "/tmp")
 
 	return dirs
@@ -280,37 +292,46 @@ type FileSystem interface {
 // OSFileSystem implements FileSystem using real OS operations.
 type OSFileSystem struct{}
 
+// ReadFile reads the named file and returns its contents.
 func (fs *OSFileSystem) ReadFile(filename string) ([]byte, error) {
 	if err := validatePath(filename); err != nil {
 		return nil, fmt.Errorf("invalid file path %s: %w", filename, err)
 	}
+
 	// #nosec G304 -- Path validated by validatePath()
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file %s: %w", filename, err)
 	}
+
 	return data, nil
 }
 
+// Stat returns file info for the named file.
 func (fs *OSFileSystem) Stat(name string) (os.FileInfo, error) {
 	info, err := os.Stat(name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to stat file %s: %w", name, err)
 	}
+
 	return info, nil
 }
 
+// MkdirAll creates a directory path and all parents that don't exist.
 func (fs *OSFileSystem) MkdirAll(path string, perm os.FileMode) error {
 	if err := os.MkdirAll(path, perm); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", path, err)
 	}
+
 	return nil
 }
 
+// WriteFile writes data to the named file, creating it if necessary.
 func (fs *OSFileSystem) WriteFile(filename string, data []byte, perm os.FileMode) error {
 	if err := os.WriteFile(filename, data, perm); err != nil {
 		return fmt.Errorf("failed to write file %s: %w", filename, err)
 	}
+
 	return nil
 }
 
@@ -346,9 +367,11 @@ func NewLoader(options ...LoaderOption) *Loader {
 		configPath:   GetConfigPath(),
 		cacheManager: pkgCacheManager.get(),
 	}
+
 	for _, opt := range options {
 		opt(l)
 	}
+
 	return l
 }
 
@@ -362,12 +385,14 @@ func (l *Loader) LoadFromFile(path string) (*Config, error) {
 	if cachedConfig := l.getCachedConfigIfValid(path); cachedConfig != nil {
 		return cachedConfig, nil
 	}
+
 	return l.loadAndCacheFromFile(path)
 }
 
 // Exists returns true if the configured config file exists on disk.
 func (l *Loader) Exists() bool {
 	_, err := l.fs.Stat(l.configPath)
+
 	return err == nil
 }
 
@@ -379,21 +404,26 @@ func (l *Loader) getCachedConfigIfValid(path string) *Config {
 	if !exists {
 		return nil
 	}
+
 	cachedMtime, mtimeExists := l.cacheManager.fileMtimeCache[path]
 	if !mtimeExists {
 		return nil
 	}
+
 	if info, err := os.Stat(path); err == nil {
 		if !info.ModTime().After(cachedMtime) {
 			configCopy := *cachedConfig
+
 			return &configCopy
 		}
 	}
+
 	return nil
 }
 
 func (l *Loader) loadAndCacheFromFile(path string) (*Config, error) {
 	var fileModTime time.Time
+
 	if info, err := os.Stat(path); err == nil {
 		fileModTime = info.ModTime()
 	}
@@ -405,11 +435,14 @@ func (l *Loader) loadAndCacheFromFile(path string) (*Config, error) {
 			if os.IsPermission(unwrappedErr) {
 				return nil, fmt.Errorf("%w: %s", ErrConfigPermissions, path)
 			}
+
 			if os.IsNotExist(unwrappedErr) {
 				return nil, fmt.Errorf("%w: %s", ErrConfigFileNotFound, path)
 			}
+
 			unwrappedErr = errors.Unwrap(unwrappedErr)
 		}
+
 		return nil, fmt.Errorf("failed to read config file %s: %w", path, err)
 	}
 
@@ -443,42 +476,55 @@ func (l *Loader) setDefaults(config *Config) {
 	if config.Server.Name == "" {
 		config.Server.Name = DefaultServerName
 	}
+
 	if config.Server.LogLevel == "" {
 		config.Server.LogLevel = DefaultLogLevel
 	}
+
 	if config.Server.Transport == "" {
 		config.Server.Transport = DefaultTransport
 	}
+
 	if config.Server.Host == "" {
 		config.Server.Host = DefaultHost
 	}
+
 	if config.Server.Port == 0 {
 		config.Server.Port = DefaultServerPort
 	}
+
 	if config.Metrics.Port == 0 {
 		config.Metrics.Port = DefaultMetricsPort
 	}
+
 	if config.Metrics.Path == "" {
 		config.Metrics.Path = DefaultMetricsPath
 	}
+
 	if config.Resilience.RateLimitPerMinute == 0 {
 		config.Resilience.RateLimitPerMinute = DefaultRateLimitPerMinute
 	}
+
 	if config.Resilience.CircuitBreakerThreshold == 0 {
 		config.Resilience.CircuitBreakerThreshold = DefaultCircuitBreakerThreshold
 	}
+
 	if config.Resilience.CircuitBreakerTimeout == 0 {
 		config.Resilience.CircuitBreakerTimeout = DefaultCircuitBreakerTimeout
 	}
+
 	if config.Resilience.MaxRetries == 0 {
 		config.Resilience.MaxRetries = DefaultMaxRetries
 	}
+
 	if config.Resilience.BaseRetryDelay == 0 {
 		config.Resilience.BaseRetryDelay = DefaultBaseRetryDelay
 	}
+
 	if config.Resilience.MaxRetryDelay == 0 {
 		config.Resilience.MaxRetryDelay = DefaultMaxRetryDelay
 	}
+
 	if config.Tracing.SampleRate == 0 {
 		config.Tracing.SampleRate = DefaultSampleRate
 	}
@@ -493,6 +539,7 @@ func (l *Loader) applyEnvironmentOverrides(config *Config) {
 		config.Server.Name = v
 		anyEnvVarsSet = true
 	}
+
 	if v := os.Getenv("LINODEMCP_LOG_LEVEL"); v != "" {
 		config.Server.LogLevel = v
 		anyEnvVarsSet = true
@@ -510,6 +557,7 @@ func (l *Loader) applyEnvironmentOverrides(config *Config) {
 		linodeEnvVarsSet = true
 		anyEnvVarsSet = true
 	}
+
 	if v := os.Getenv("LINODEMCP_LINODE_TOKEN"); v != "" {
 		defaultEnv.Linode.Token = v
 		linodeEnvVarsSet = true
@@ -520,6 +568,7 @@ func (l *Loader) applyEnvironmentOverrides(config *Config) {
 		if defaultEnv.Label == "" {
 			defaultEnv.Label = defaultEnvironmentLabel
 		}
+
 		config.Environments[defaultEnvironmentName] = defaultEnv
 	}
 }
@@ -580,8 +629,10 @@ func GetConfigDir() string {
 		if err := validatePath(customPath); err != nil {
 			return getDefaultConfigDir()
 		}
+
 		return filepath.Dir(customPath)
 	}
+
 	return getDefaultConfigDir()
 }
 
@@ -590,6 +641,7 @@ func getDefaultConfigDir() string {
 	if err != nil {
 		return filepath.Join(os.TempDir(), appDirName)
 	}
+
 	return filepath.Join(homeDir, configDirName, appDirName)
 }
 
@@ -599,23 +651,29 @@ func GetConfigPath() string {
 		if err := validatePath(customPath); err != nil {
 			return getDefaultConfigPath()
 		}
+
 		return customPath
 	}
+
 	return getDefaultConfigPath()
 }
 
 func getDefaultConfigPath() string {
 	configDir := GetConfigDir()
+
 	jsonPath := filepath.Join(configDir, configFileJSON)
+
 	if _, err := os.Stat(jsonPath); err == nil {
 		return jsonPath
 	}
+
 	return filepath.Join(configDir, configFileYAML)
 }
 
 // Exists returns true if a config file exists at the default path.
 func Exists() bool {
 	_, err := os.Stat(GetConfigPath())
+
 	return err == nil
 }
 
@@ -623,28 +681,35 @@ func validateConfig(config *Config) error {
 	if config == nil {
 		return ErrConfigNil
 	}
+
 	if config.Server.Name == "" {
 		return fmt.Errorf("%w: server name cannot be empty", ErrConfigInvalid)
 	}
+
 	if config.Server.LogLevel == "" {
 		return fmt.Errorf("%w: log level cannot be empty", ErrConfigInvalid)
 	}
+
 	if len(config.Environments) == 0 {
 		return ErrNoEnvironments
 	}
+
 	for envName, env := range config.Environments {
 		if envName == "" {
 			return ErrEmptyEnvironmentName
 		}
+
 		if env.Linode.APIURL != "" || env.Linode.Token != "" {
 			if env.Linode.APIURL == "" {
 				return fmt.Errorf("%w: environment '%s': Linode API URL is required when token is provided", ErrConfigInvalid, envName)
 			}
+
 			if env.Linode.Token == "" {
 				return fmt.Errorf("%w: environment '%s': Linode token is required when API URL is provided", ErrConfigInvalid, envName)
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -653,11 +718,13 @@ func (c *Config) SelectEnvironment(userInput string) (*EnvironmentConfig, error)
 	if strings.TrimSpace(userInput) == "" {
 		return nil, ErrEmptyEnvironmentName
 	}
+
 	if len(c.Environments) == 0 {
 		return nil, fmt.Errorf("%w: no provider environments configured", ErrEnvironmentNotFound)
 	}
 
 	userInputLower := strings.ToLower(strings.TrimSpace(userInput))
+
 	for envName, env := range c.Environments {
 		if strings.ToLower(envName) == userInputLower {
 			return &env, nil
@@ -680,21 +747,25 @@ func (c *Config) GetLinodeEnvironment(environmentName string) (*LinodeConfig, er
 	if len(c.Environments) == 0 {
 		return nil, fmt.Errorf("%w: no provider environments configured", ErrEnvironmentNotFound)
 	}
+
 	env, exists := c.Environments[environmentName]
 	if !exists {
 		return nil, fmt.Errorf("%w: environment '%s' not found", ErrEnvironmentNotFound, environmentName)
 	}
+
 	return &env.Linode, nil
 }
 
 // EnsureConfigDir creates the config directory if it does not exist.
 func EnsureConfigDir() error {
 	configDir := GetConfigDir()
+
 	if _, err := os.Stat(configDir); os.IsNotExist(err) {
 		if err := os.MkdirAll(configDir, DirPermissions); err != nil {
 			return fmt.Errorf("failed to create config directory: %w", err)
 		}
 	}
+
 	return nil
 }
 
@@ -703,10 +774,13 @@ func CreateTemplateConfig() error {
 	if err := EnsureConfigDir(); err != nil {
 		return err
 	}
+
 	configPath := GetConfigPath()
+
 	if _, err := os.Stat(configPath); !os.IsNotExist(err) {
 		return nil
 	}
+
 	return createYAMLTemplate(configPath)
 }
 
@@ -745,9 +819,11 @@ environments:
       apiUrl: "https://api.linode.com/v4"
       token: "${LINODEMCP_LINODE_TOKEN}"
 `
+
 	if err := os.WriteFile(configPath, []byte(template), FilePermissions); err != nil {
 		return fmt.Errorf("failed to create template config: %w", err)
 	}
+
 	return nil
 }
 
@@ -756,10 +832,12 @@ func InitializeConfig() error {
 	if err := EnsureConfigDir(); err != nil {
 		return fmt.Errorf("failed to initialize config directory: %w", err)
 	}
+
 	if !Exists() {
 		if err := CreateTemplateConfig(); err != nil {
 			return fmt.Errorf("failed to create template config: %w", err)
 		}
 	}
+
 	return nil
 }

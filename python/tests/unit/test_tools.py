@@ -4,7 +4,7 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 from linodemcp.config import Config
-from linodemcp.linode import Profile
+from linodemcp.linode import Alerts, Backups, Instance, Profile, Schedule, Specs
 from linodemcp.tools import (
     handle_hello,
     handle_linode_instances_list,
@@ -101,8 +101,6 @@ async def test_handle_linode_instances_list(
     sample_config: Config, sample_instance_data: dict[str, Any]
 ) -> None:
     """Test linode_instances_list tool."""
-    from linodemcp.linode import Alerts, Backups, Instance, Schedule, Specs
-
     mock_instance = Instance(
         id=sample_instance_data["id"],
         label=sample_instance_data["label"],
@@ -148,8 +146,6 @@ async def test_handle_linode_instances_list_with_status_filter(
     sample_instance_data: dict[str, Any],
 ) -> None:
     """Test linode_instances_list tool with status filter."""
-    from linodemcp.linode import Alerts, Backups, Instance, Schedule, Specs
-
     running_instance = Instance(
         id=123456,
         label="running-instance",

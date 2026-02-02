@@ -34,7 +34,7 @@ async def async_main() -> int:
     try:
         cfg = load()
     except ConfigError as e:
-        logger.error("failed to load configuration", error=str(e))
+        logger.exception("failed to load configuration", error=str(e))
         return 1
 
     version_info = get_version_info()
@@ -52,7 +52,7 @@ async def async_main() -> int:
         server = Server(cfg)
         await server.start()
     except Exception as e:
-        logger.error("server error", error=str(e))
+        logger.exception("server error", error=str(e))
         return 1
 
     logger.info("server shutdown complete")

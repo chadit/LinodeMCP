@@ -70,6 +70,7 @@ func selectEnvironment(cfg *config.Config, environment string) (*config.Environm
 		if env, exists := cfg.Environments[environment]; exists {
 			return &env, nil
 		}
+
 		return nil, fmt.Errorf("%w: %s", ErrEnvironmentNotFound, environment)
 	}
 
@@ -77,6 +78,7 @@ func selectEnvironment(cfg *config.Config, environment string) (*config.Environm
 	if err != nil {
 		return nil, fmt.Errorf("failed to select default environment: %w", err)
 	}
+
 	return selectedEnv, nil
 }
 
@@ -84,17 +86,21 @@ func validateLinodeConfig(env *config.EnvironmentConfig) error {
 	if env.Linode.APIURL == "" || env.Linode.Token == "" {
 		return ErrLinodeConfigIncomplete
 	}
+
 	return nil
 }
 
 func filterInstancesByStatus(instances []linode.Instance, statusFilter string) []linode.Instance {
 	var filtered []linode.Instance
+
 	statusFilter = strings.ToLower(statusFilter)
+
 	for _, instance := range instances {
 		if strings.ToLower(instance.Status) == statusFilter {
 			filtered = append(filtered, instance)
 		}
 	}
+
 	return filtered
 }
 

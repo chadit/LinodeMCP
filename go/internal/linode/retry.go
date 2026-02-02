@@ -40,6 +40,7 @@ func DefaultRetryConfig() RetryConfig {
 // RetryableClient wraps the basic Client with retry functionality.
 type RetryableClient struct {
 	*Client
+
 	retryConfig RetryConfig
 }
 
@@ -59,33 +60,45 @@ func NewRetryableClientWithDefaults(apiURL, token string) *RetryableClient {
 // GetProfile retrieves the user profile with automatic retry on transient failures.
 func (rc *RetryableClient) GetProfile(ctx context.Context) (*Profile, error) {
 	var profile *Profile
+
 	err := rc.executeWithRetry(ctx, "GetProfile", func() error {
 		var err error
+
 		profile, err = rc.Client.GetProfile(ctx)
+
 		return err
 	})
+
 	return profile, err
 }
 
 // ListInstances retrieves all instances with automatic retry on transient failures.
 func (rc *RetryableClient) ListInstances(ctx context.Context) ([]Instance, error) {
 	var instances []Instance
+
 	err := rc.executeWithRetry(ctx, "ListInstances", func() error {
 		var err error
+
 		instances, err = rc.Client.ListInstances(ctx)
+
 		return err
 	})
+
 	return instances, err
 }
 
 // GetInstance retrieves a single instance by ID with automatic retry on transient failures.
 func (rc *RetryableClient) GetInstance(ctx context.Context, instanceID int) (*Instance, error) {
 	var instance *Instance
+
 	err := rc.executeWithRetry(ctx, "GetInstance", func() error {
 		var err error
+
 		instance, err = rc.Client.GetInstance(ctx, instanceID)
+
 		return err
 	})
+
 	return instance, err
 }
 
@@ -108,9 +121,11 @@ func (rc *RetryableClient) executeWithRetry(ctx context.Context, _ string, fn fu
 		}
 
 		lastErr = err
+
 		if attempt == rc.retryConfig.MaxRetries {
 			break
 		}
+
 		if !rc.shouldRetry(err) {
 			return err
 		}
@@ -145,6 +160,7 @@ func (rc *RetryableClient) shouldRetry(err error) bool {
 		if apiErr.IsRateLimitError() || apiErr.IsServerError() {
 			return true
 		}
+
 		if apiErr.IsAuthenticationError() || apiErr.IsForbiddenError() {
 			return false
 		}
