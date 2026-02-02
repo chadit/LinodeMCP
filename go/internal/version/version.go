@@ -12,9 +12,21 @@ const Version = "0.1.0"
 // APIVersion is the current MCP API version.
 const APIVersion = "0.1.0"
 
+const (
+	defaultBuildDate = "unknown"
+
+	featureKeyTools    = "tools"
+	featureKeyLogging  = "logging"
+	featureKeyProtocol = "protocol"
+
+	featureToolsList = "hello,version"
+	featureLogging   = "basic"
+	featureProtocol  = "mcp"
+)
+
 var (
-	BuildDate = ""    //nolint:gochecknoglobals // Build-time variable set via ldflags
-	GitCommit = "dev" //nolint:gochecknoglobals // Build-time variable set via ldflags
+	BuildDate = ""     //nolint:gochecknoglobals // Build-time variable set via ldflags
+	GitCommit = "dev"  //nolint:gochecknoglobals // Build-time variable set via ldflags
 	GitBranch = "main" //nolint:gochecknoglobals // Build-time variable set via ldflags
 )
 
@@ -36,7 +48,7 @@ type Info struct {
 func Get() Info {
 	buildDate := BuildDate
 	if buildDate == "" {
-		buildDate = "unknown"
+		buildDate = defaultBuildDate
 	}
 
 	return Info{
@@ -48,9 +60,9 @@ func Get() Info {
 		GoVersion:  runtime.Version(),
 		Platform:   fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
 		Features: map[string]string{
-			"tools":    "hello,version",
-			"logging":  "basic",
-			"protocol": "mcp",
+			featureKeyTools:    featureToolsList,
+			featureKeyLogging:  featureLogging,
+			featureKeyProtocol: featureProtocol,
 		},
 	}
 }

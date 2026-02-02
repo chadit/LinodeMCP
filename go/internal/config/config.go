@@ -14,20 +14,28 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// dangerousPaths lists system directories that should never be accessed.
+//
+//nolint:gochecknoglobals // Package-level slice shared by multiple validation functions.
+var dangerousPaths = []string{
+	"/etc/", "/root/", "/proc/", "/sys/", "/dev/", "/bin/", "/sbin/",
+	"/usr/bin/", "/usr/sbin/", "/boot/", "/var/log/", "/var/run/",
+}
+
 // Static configuration errors.
 var (
-	ErrConfigFileNotFound  = errors.New("configuration file not found")
-	ErrConfigInvalid       = errors.New("configuration file is invalid")
-	ErrConfigPermissions   = errors.New("insufficient permissions to access configuration file")
-	ErrConfigMalformed     = errors.New("configuration file is malformed")
-	ErrEnvironmentNotFound = errors.New("environment not found in configuration")
-	ErrConfigNil           = errors.New("configuration is nil")
-	ErrNoEnvironments      = errors.New("no environments defined in configuration")
+	ErrConfigFileNotFound   = errors.New("configuration file not found")
+	ErrConfigInvalid        = errors.New("configuration file is invalid")
+	ErrConfigPermissions    = errors.New("insufficient permissions to access configuration file")
+	ErrConfigMalformed      = errors.New("configuration file is malformed")
+	ErrEnvironmentNotFound  = errors.New("environment not found in configuration")
+	ErrConfigNil            = errors.New("configuration is nil")
+	ErrNoEnvironments       = errors.New("no environments defined in configuration")
 	ErrEmptyEnvironmentName = errors.New("environment name cannot be empty")
-	ErrPathEmpty           = errors.New("path cannot be empty")
-	ErrPathDangerous       = errors.New("path contains dangerous elements")
-	ErrPathTraversal       = errors.New("path contains directory traversal elements")
-	ErrPathOutsideAllowed  = errors.New("path is outside allowed directories")
+	ErrPathEmpty            = errors.New("path cannot be empty")
+	ErrPathDangerous        = errors.New("path contains dangerous elements")
+	ErrPathTraversal        = errors.New("path contains directory traversal elements")
+	ErrPathOutsideAllowed   = errors.New("path is outside allowed directories")
 )
 
 // ServerConfig holds core server settings.
@@ -189,7 +197,6 @@ func (cm *CacheManager) performPathValidation(path string) error {
 }
 
 func containsDangerousPathElements(path string) bool {
-	dangerousPaths := []string{"/etc/", "/root/", "/proc/", "/sys/", "/dev/", "/bin/", "/sbin/", "/usr/bin/", "/usr/sbin/", "/boot/", "/var/log/", "/var/run/"}
 	for _, dangerous := range dangerousPaths {
 		if strings.HasPrefix(path, dangerous) {
 			return true
@@ -199,10 +206,6 @@ func containsDangerousPathElements(path string) bool {
 }
 
 func (cm *CacheManager) isPathInAllowedDirectory(absPath string) bool {
-	dangerousPaths := []string{
-		"/etc/", "/root/", "/proc/", "/sys/", "/dev/", "/bin/", "/sbin/",
-		"/usr/bin/", "/usr/sbin/", "/boot/", "/var/log/", "/var/run/",
-	}
 	for _, dangerous := range dangerousPaths {
 		if strings.HasPrefix(absPath, dangerous) {
 			return false
@@ -499,7 +502,7 @@ func (l *Loader) applyEnvironmentOverrides(config *Config) {
 		config.Environments = make(map[string]EnvironmentConfig)
 	}
 
-	defaultEnv := config.Environments["default"]
+	defaultEnv := config.Environments[defaultEnvironmentName]
 	linodeEnvVarsSet := false
 
 	if v := os.Getenv("LINODEMCP_LINODE_API_URL"); v != "" {
@@ -515,19 +518,29 @@ func (l *Loader) applyEnvironmentOverrides(config *Config) {
 
 	if linodeEnvVarsSet || (originallyNilEnvironments && anyEnvVarsSet) {
 		if defaultEnv.Label == "" {
-			defaultEnv.Label = "Default"
+			defaultEnv.Label = defaultEnvironmentLabel
 		}
-		config.Environments["default"] = defaultEnv
+		config.Environments[defaultEnvironmentName] = defaultEnv
 	}
 }
 
+const (
+	appDirName     = "linodemcp"
+	configDirName  = ".config"
+	configFileJSON = "config.json"
+	configFileYAML = "config.yml"
+
+	defaultEnvironmentName  = "default"
+	defaultEnvironmentLabel = "Default"
+)
+
 // Default server configuration values.
 const (
-	DefaultServerName = "LinodeMCP"
-	DefaultLogLevel   = "info"
-	DefaultTransport  = "stdio"
-	DefaultHost       = "127.0.0.1"
-	DefaultServerPort = 8080
+	DefaultServerName  = "LinodeMCP"
+	DefaultLogLevel    = "info"
+	DefaultTransport   = "stdio"
+	DefaultHost        = "127.0.0.1"
+	DefaultServerPort  = 8080
 	DefaultMetricsPort = 9090
 	DefaultMetricsPath = "/metrics"
 )
@@ -575,9 +588,9 @@ func GetConfigDir() string {
 func getDefaultConfigDir() string {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return filepath.Join(os.TempDir(), "linodemcp")
+		return filepath.Join(os.TempDir(), appDirName)
 	}
-	return filepath.Join(homeDir, ".config", "linodemcp")
+	return filepath.Join(homeDir, configDirName, appDirName)
 }
 
 // GetConfigPath returns the full path to the config file.
@@ -593,11 +606,11 @@ func GetConfigPath() string {
 
 func getDefaultConfigPath() string {
 	configDir := GetConfigDir()
-	jsonPath := filepath.Join(configDir, "config.json")
+	jsonPath := filepath.Join(configDir, configFileJSON)
 	if _, err := os.Stat(jsonPath); err == nil {
 		return jsonPath
 	}
-	return filepath.Join(configDir, "config.yml")
+	return filepath.Join(configDir, configFileYAML)
 }
 
 // Exists returns true if a config file exists at the default path.
@@ -638,7 +651,7 @@ func validateConfig(config *Config) error {
 // SelectEnvironment picks a Linode environment from the config.
 func (c *Config) SelectEnvironment(userInput string) (*EnvironmentConfig, error) {
 	if strings.TrimSpace(userInput) == "" {
-		return nil, fmt.Errorf("environment name cannot be empty")
+		return nil, ErrEmptyEnvironmentName
 	}
 	if len(c.Environments) == 0 {
 		return nil, fmt.Errorf("%w: no provider environments configured", ErrEnvironmentNotFound)
@@ -651,7 +664,7 @@ func (c *Config) SelectEnvironment(userInput string) (*EnvironmentConfig, error)
 		}
 	}
 
-	if defaultEnv, exists := c.Environments["default"]; exists {
+	if defaultEnv, exists := c.Environments[defaultEnvironmentName]; exists {
 		return &defaultEnv, nil
 	}
 

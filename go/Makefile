@@ -1,4 +1,4 @@
-.PHONY: help build build-prod run test test-race test-all clean lint fmt install-tools coverage tidy
+.PHONY: help build build-prod run test test-race test-all clean lint fmt install-tools coverage tidy gopls-check
 
 help:
 	@echo "LinodeMCP Development Commands:"
@@ -16,7 +16,8 @@ help:
 	@echo ""
 	@echo "Tools:"
 	@echo "  make lint            - Run golangci-lint"
-	@echo "  make fmt             - Format with gofumpt"
+	@echo "  make fmt             - Format with goimports and gofumpt"
+	@echo "  make gopls-check     - Run gopls diagnostics"
 	@echo "  make tidy            - Tidy dependencies"
 	@echo "  make clean           - Clean artifacts"
 	@echo "  make install-tools   - Install dev tools"
@@ -51,10 +52,14 @@ clean:
 	@rm -rf bin/ dist/ coverage.txt coverage.html *.coverprofile
 
 lint:
-	@golangci-lint run
+	@golangci-lint run --max-issues-per-linter=0 --max-same-issues=0
 
 fmt:
+	@goimports -w .
 	@gofumpt -w .
+
+gopls-check:
+	@gopls check -severity=hint ./...
 
 tidy:
 	@go mod tidy
@@ -66,5 +71,6 @@ coverage:
 	@echo "Coverage report: coverage.html"
 
 install-tools:
+	@go install golang.org/x/tools/cmd/goimports@latest
 	@go install mvdan.cc/gofumpt@latest
 	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest

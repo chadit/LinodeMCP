@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/chadit/LinodeMCP/internal/version"
 )
 
 // Client represents a Linode API client.
@@ -112,9 +114,13 @@ const (
 	httpServerError    = 500
 	authHeaderPrefix   = "Bearer "
 	contentTypeJSON    = "application/json"
-	userAgentValue     = "LinodeMCP/1.0"
 	// requestTimeout is the per-request context timeout for API calls.
 	requestTimeout = 30 * time.Second
+
+	errMsgAuthentication = "Authentication failed. Please check your API token."
+	errMsgForbidden      = "Access forbidden. Your API token may not have sufficient permissions."
+	errMsgRateLimit      = "Rate limit exceeded. Please try again later."
+	errMsgServerError    = "Internal server error. Please try again later."
 )
 
 // NewClient creates a new Linode API client.
@@ -203,7 +209,7 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 
 	req.Header.Set("Authorization", authHeaderPrefix+c.token)
 	req.Header.Set("Content-Type", contentTypeJSON)
-	req.Header.Set("User-Agent", userAgentValue)
+	req.Header.Set("User-Agent", "LinodeMCP/"+version.Version)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -214,8 +220,6 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 }
 
 func (c *Client) handleResponse(resp *http.Response, target any) error {
-	defer func() { _ = resp.Body.Close() }()
-
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("failed to read response body: %w", err)
@@ -252,18 +256,18 @@ func (c *Client) handleErrorResponse(statusCode int, body []byte, resp *http.Res
 
 	switch statusCode {
 	case httpUnauthorized:
-		return &APIError{StatusCode: statusCode, Message: "Authentication failed. Please check your API token."}
+		return &APIError{StatusCode: statusCode, Message: errMsgAuthentication}
 	case httpForbidden:
-		return &APIError{StatusCode: statusCode, Message: "Access forbidden. Your API token may not have sufficient permissions."}
+		return &APIError{StatusCode: statusCode, Message: errMsgForbidden}
 	case httpTooManyReqs:
 		retryAfter := c.parseRetryAfter(resp)
-		message := "Rate limit exceeded. Please try again later."
+		message := errMsgRateLimit
 		if retryAfter > 0 {
 			message = fmt.Sprintf("Rate limit exceeded. Retry after %v.", retryAfter)
 		}
 		return &APIError{StatusCode: statusCode, Message: message}
 	case httpServerError:
-		return &APIError{StatusCode: statusCode, Message: "Internal server error. Please try again later."}
+		return &APIError{StatusCode: statusCode, Message: errMsgServerError}
 	default:
 		return &APIError{StatusCode: statusCode, Message: fmt.Sprintf("API request failed with status %d", statusCode)}
 	}

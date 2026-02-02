@@ -12,6 +12,7 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/tools"
+	"github.com/chadit/LinodeMCP/internal/version"
 	"github.com/chadit/LinodeMCP/pkg/contracts"
 )
 
@@ -36,7 +37,7 @@ func New(cfg *config.Config) (*Server, error) {
 
 	mcpServer := server.NewMCPServer(
 		cfg.Server.Name,
-		"0.1.0",
+		version.Version,
 		server.WithToolCapabilities(true),
 	)
 

@@ -487,4 +487,3 @@ func TestGetConfigDir_WithEnvOverride(t *testing.T) {
 	result := config.GetConfigDir()
 	assert.Equal(t, dir, result)
 }
-
