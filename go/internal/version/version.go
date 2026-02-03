@@ -34,11 +34,11 @@ var (
 // Info holds build and version metadata for the LinodeMCP server.
 type Info struct {
 	Version    string            `json:"version"`
-	APIVersion string            `json:"api_version"` //nolint:tagliatelle // Linode API snake_case convention
-	BuildDate  string            `json:"build_date"`  //nolint:tagliatelle // Linode API snake_case convention
-	GitCommit  string            `json:"git_commit"`  //nolint:tagliatelle // Linode API snake_case convention
-	GitBranch  string            `json:"git_branch"`  //nolint:tagliatelle // Linode API snake_case convention
-	GoVersion  string            `json:"go_version"`  //nolint:tagliatelle // Linode API snake_case convention
+	APIVersion string            `json:"api_version"` //nolint:tagliatelle // snake_case for JSON compatibility
+	BuildDate  string            `json:"build_date"`  //nolint:tagliatelle // snake_case for JSON compatibility
+	GitCommit  string            `json:"git_commit"`  //nolint:tagliatelle // snake_case for JSON compatibility
+	GitBranch  string            `json:"git_branch"`  //nolint:tagliatelle // snake_case for JSON compatibility
+	GoVersion  string            `json:"go_version"`  //nolint:tagliatelle // snake_case for JSON compatibility
 	Platform   string            `json:"platform"`
 	Features   map[string]string `json:"features"`
 }

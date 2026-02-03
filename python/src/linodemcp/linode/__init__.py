@@ -289,7 +289,7 @@ class Client:
             raise APIError(HTTP_TOO_MANY_REQUESTS, message)
         if response.status_code >= HTTP_SERVER_ERROR:
             raise APIError(
-                HTTP_SERVER_ERROR, "Internal server error. Please try again later."
+                response.status_code, "Internal server error. Please try again later."
             )
 
         raise APIError(
