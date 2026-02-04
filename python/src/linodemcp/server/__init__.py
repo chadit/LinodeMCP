@@ -49,7 +49,7 @@ class Server:
 
     def _register_tools(self) -> None:
         """Register all MCP tools."""
-        self.mcp.list_tools()(  # type: ignore[no-untyped-call]
+        self.mcp.list_tools()(
             lambda: [
                 create_hello_tool(),
                 create_version_tool(),

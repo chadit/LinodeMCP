@@ -299,6 +299,7 @@ async def test_handle_linode_instance_get(
         assert len(result) == 1
         assert "test-instance" in result[0].text
         assert "running" in result[0].text
+        mock_client.get_instance.assert_called_once_with(123456)
 
 
 async def test_handle_linode_instance_get_missing_id(sample_config: Config) -> None:
@@ -354,6 +355,7 @@ async def test_handle_linode_account(sample_config: Config) -> None:
         assert len(result) == 1
         assert "Test" in result[0].text
         assert "test@example.com" in result[0].text
+        mock_client.get_account.assert_called_once()
 
 
 async def test_handle_linode_regions_list(sample_config: Config) -> None:
@@ -391,6 +393,7 @@ async def test_handle_linode_regions_list(sample_config: Config) -> None:
         assert len(result) == 1
         assert "us-east" in result[0].text
         assert "eu-west" in result[0].text
+        mock_client.list_regions.assert_called_once()
 
 
 async def test_handle_linode_regions_list_filter_country(sample_config: Config) -> None:
@@ -486,6 +489,7 @@ async def test_handle_linode_types_list(sample_config: Config) -> None:
         assert len(result) == 1
         assert "g6-nanode-1" in result[0].text
         assert "g6-standard-2" in result[0].text
+        mock_client.list_types.assert_called_once()
 
 
 async def test_handle_linode_types_list_filter_class(sample_config: Config) -> None:
@@ -581,6 +585,7 @@ async def test_handle_linode_volumes_list(sample_config: Config) -> None:
         assert len(result) == 1
         assert "data-vol" in result[0].text
         assert "backup-vol" in result[0].text
+        mock_client.list_volumes.assert_called_once()
 
 
 async def test_handle_linode_volumes_list_filter_region(sample_config: Config) -> None:
@@ -682,6 +687,7 @@ async def test_handle_linode_images_list(sample_config: Config) -> None:
         assert len(result) == 1
         assert "linode/ubuntu22.04" in result[0].text
         assert "private/12345" in result[0].text
+        mock_client.list_images.assert_called_once()
 
 
 async def test_handle_linode_images_list_filter_public(sample_config: Config) -> None:
