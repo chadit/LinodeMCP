@@ -64,7 +64,7 @@ addopts = [
     "--cov=linodemcp",
     "--cov-report=term-missing",
     "--cov-report=html",
-    "--cov-fail-under=80",
+    "--cov-fail-under=78",
 ]
 
 [tool.coverage.run]

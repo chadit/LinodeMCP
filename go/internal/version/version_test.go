@@ -45,7 +45,8 @@ func TestGet_FeaturesPopulated(t *testing.T) {
 	info := version.Get()
 
 	require.NotNil(t, info.Features, "Features map should not be nil.")
-	assert.Equal(t, "hello,version", info.Features["tools"])
+	expectedTools := "hello,version,linode_profile,linode_account,linode_instances_list,linode_instance_get,linode_regions_list,linode_types_list,linode_volumes_list,linode_images_list"
+	assert.Equal(t, expectedTools, info.Features["tools"])
 	assert.Equal(t, "basic", info.Features["logging"])
 	assert.Equal(t, "mcp", info.Features["protocol"])
 }

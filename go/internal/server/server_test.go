@@ -47,7 +47,7 @@ func TestNew_ValidConfig(t *testing.T) {
 	require.NotNil(t, srv)
 	assert.True(t, srv.HasMCP(), "MCP server should be initialized.")
 	assert.True(t, srv.HasConfig(), "config should be stored.")
-	assert.Equal(t, 4, srv.GetToolCount(), "should have 4 registered tools (hello, version, linode_profile, linode_instances_list).")
+	assert.Equal(t, 10, srv.GetToolCount(), "should have 10 registered tools.")
 }
 
 func TestNew_ToolsRegistered(t *testing.T) {

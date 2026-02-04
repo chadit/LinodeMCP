@@ -102,6 +102,81 @@ func (rc *RetryableClient) GetInstance(ctx context.Context, instanceID int) (*In
 	return instance, err
 }
 
+// GetAccount retrieves the account information with automatic retry on transient failures.
+func (rc *RetryableClient) GetAccount(ctx context.Context) (*Account, error) {
+	var account *Account
+
+	err := rc.executeWithRetry(ctx, "GetAccount", func() error {
+		var err error
+
+		account, err = rc.Client.GetAccount(ctx)
+
+		return err
+	})
+
+	return account, err
+}
+
+// ListRegions retrieves all regions with automatic retry on transient failures.
+func (rc *RetryableClient) ListRegions(ctx context.Context) ([]Region, error) {
+	var regions []Region
+
+	err := rc.executeWithRetry(ctx, "ListRegions", func() error {
+		var err error
+
+		regions, err = rc.Client.ListRegions(ctx)
+
+		return err
+	})
+
+	return regions, err
+}
+
+// ListTypes retrieves all Linode types with automatic retry on transient failures.
+func (rc *RetryableClient) ListTypes(ctx context.Context) ([]InstanceType, error) {
+	var types []InstanceType
+
+	err := rc.executeWithRetry(ctx, "ListTypes", func() error {
+		var err error
+
+		types, err = rc.Client.ListTypes(ctx)
+
+		return err
+	})
+
+	return types, err
+}
+
+// ListVolumes retrieves all volumes with automatic retry on transient failures.
+func (rc *RetryableClient) ListVolumes(ctx context.Context) ([]Volume, error) {
+	var volumes []Volume
+
+	err := rc.executeWithRetry(ctx, "ListVolumes", func() error {
+		var err error
+
+		volumes, err = rc.Client.ListVolumes(ctx)
+
+		return err
+	})
+
+	return volumes, err
+}
+
+// ListImages retrieves all images with automatic retry on transient failures.
+func (rc *RetryableClient) ListImages(ctx context.Context) ([]Image, error) {
+	var images []Image
+
+	err := rc.executeWithRetry(ctx, "ListImages", func() error {
+		var err error
+
+		images, err = rc.Client.ListImages(ctx)
+
+		return err
+	})
+
+	return images, err
+}
+
 func (rc *RetryableClient) executeWithRetry(ctx context.Context, _ string, fn func() error) error {
 	var lastErr error
 

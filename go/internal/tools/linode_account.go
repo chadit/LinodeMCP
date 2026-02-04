@@ -12,23 +12,23 @@ import (
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
-// NewLinodeProfileTool creates a tool for retrieving Linode profile info.
-func NewLinodeProfileTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_profile",
-		mcp.WithDescription("Retrieves Linode user account profile information"),
+// NewLinodeAccountTool creates a tool for retrieving Linode account information.
+func NewLinodeAccountTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool("linode_account",
+		mcp.WithDescription("Retrieves the authenticated user's Linode account information including billing details and capabilities"),
 		mcp.WithString("environment",
 			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
 		),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeProfileRequest(ctx, request, cfg)
+		return handleLinodeAccountRequest(ctx, request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeProfileRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+func handleLinodeAccountRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	environment := request.GetString("environment", "")
 
 	selectedEnv, err := selectEnvironment(cfg, environment)
@@ -42,14 +42,14 @@ func handleLinodeProfileRequest(ctx context.Context, request mcp.CallToolRequest
 
 	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
-	profile, err := client.GetProfile(ctx)
+	account, err := client.GetAccount(ctx)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Linode profile: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Linode account: %v", err)), nil
 	}
 
-	jsonResponse, err := json.MarshalIndent(profile, "", "  ")
+	jsonResponse, err := json.MarshalIndent(account, "", "  ")
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal profile response: %w", err)
+		return nil, fmt.Errorf("failed to marshal response: %w", err)
 	}
 
 	return mcp.NewToolResultText(string(jsonResponse)), nil

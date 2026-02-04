@@ -99,7 +99,31 @@ func (s *Server) registerTools() {
 	s.mcp.AddTool(linodeProfileTool, linodeProfileHandler)
 	s.tools = append(s.tools, &toolWrapper{tool: linodeProfileTool})
 
+	linodeAccountTool, linodeAccountHandler := tools.NewLinodeAccountTool(s.config)
+	s.mcp.AddTool(linodeAccountTool, linodeAccountHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: linodeAccountTool})
+
 	linodeInstancesTool, linodeInstancesHandler := tools.NewLinodeInstancesTool(s.config)
 	s.mcp.AddTool(linodeInstancesTool, linodeInstancesHandler)
 	s.tools = append(s.tools, &toolWrapper{tool: linodeInstancesTool})
+
+	linodeInstanceGetTool, linodeInstanceGetHandler := tools.NewLinodeInstanceGetTool(s.config)
+	s.mcp.AddTool(linodeInstanceGetTool, linodeInstanceGetHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: linodeInstanceGetTool})
+
+	linodeRegionsTool, linodeRegionsHandler := tools.NewLinodeRegionsListTool(s.config)
+	s.mcp.AddTool(linodeRegionsTool, linodeRegionsHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: linodeRegionsTool})
+
+	linodeTypesTool, linodeTypesHandler := tools.NewLinodeTypesListTool(s.config)
+	s.mcp.AddTool(linodeTypesTool, linodeTypesHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: linodeTypesTool})
+
+	linodeVolumesTool, linodeVolumesHandler := tools.NewLinodeVolumesListTool(s.config)
+	s.mcp.AddTool(linodeVolumesTool, linodeVolumesHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: linodeVolumesTool})
+
+	linodeImagesTool, linodeImagesHandler := tools.NewLinodeImagesListTool(s.config)
+	s.mcp.AddTool(linodeImagesTool, linodeImagesHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: linodeImagesTool})
 }

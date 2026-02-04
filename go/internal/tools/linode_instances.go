@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -18,6 +19,69 @@ var ErrEnvironmentNotFound = errors.New("environment not found in configuration"
 
 // ErrLinodeConfigIncomplete is returned when API URL or token is missing.
 var ErrLinodeConfigIncomplete = errors.New("linode configuration is incomplete: check your API URL and token")
+
+// ErrInstanceIDRequired is returned when an instance ID is required but not provided.
+var ErrInstanceIDRequired = errors.New("instance_id is required")
+
+// ErrInvalidInstanceID is returned when the instance ID is not a valid integer.
+var ErrInvalidInstanceID = errors.New("instance_id must be a valid integer")
+
+// NewLinodeInstanceGetTool creates a tool for getting a single Linode instance by ID.
+func NewLinodeInstanceGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool("linode_instance_get",
+		mcp.WithDescription("Retrieves details of a single Linode instance by its ID"),
+		mcp.WithString("environment",
+			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		),
+		mcp.WithString("instance_id",
+			mcp.Description("The ID of the Linode instance to retrieve (required)"),
+			mcp.Required(),
+		),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeInstanceGetRequest(ctx, request, cfg)
+	}
+
+	return tool, handler
+}
+
+func handleLinodeInstanceGetRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	environment := request.GetString("environment", "")
+	instanceIDStr := request.GetString("instance_id", "")
+
+	if instanceIDStr == "" {
+		return mcp.NewToolResultError(ErrInstanceIDRequired.Error()), nil
+	}
+
+	instanceID, err := strconv.Atoi(instanceIDStr)
+	if err != nil {
+		return mcp.NewToolResultError(ErrInvalidInstanceID.Error()), nil //nolint:nilerr // MCP tool errors are returned as tool results
+	}
+
+	selectedEnv, err := selectEnvironment(cfg, environment)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := validateLinodeConfig(selectedEnv); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
+
+	instance, err := client.GetInstance(ctx, instanceID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Linode instance: %v", err)), nil
+	}
+
+	jsonResponse, err := json.MarshalIndent(instance, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal response: %w", err)
+	}
+
+	return mcp.NewToolResultText(string(jsonResponse)), nil
+}
 
 // NewLinodeInstancesTool creates a tool for listing Linode instances.
 func NewLinodeInstancesTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
