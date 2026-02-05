@@ -6,14 +6,53 @@ An MCP (Model Context Protocol) server that gives AI assistants like Claude prog
 
 LinodeMCP exposes Linode API operations as MCP tools. AI assistants can use these tools to query your Linode infrastructure, check account profiles, and list running instances -- all through a standard protocol.
 
-### Available Tools
+### Available Tools (18 total)
 
+**Core Tools:**
 | Tool | Description |
 |------|-------------|
 | `hello` | Smoke test -- returns a greeting to confirm the server is running |
 | `version` | Returns build info: version, git commit, platform, feature flags |
+
+**Account & Profile:**
+| Tool | Description |
+|------|-------------|
 | `linode_profile` | Fetches your Linode account profile (username, email, 2FA status) |
+| `linode_account` | Fetches account info (balance, billing, capabilities) |
+
+**Compute:**
+| Tool | Description |
+|------|-------------|
 | `linode_instances_list` | Lists your Linode instances with optional status filtering |
+| `linode_instance_get` | Gets detailed info about a specific instance by ID |
+| `linode_regions_list` | Lists available regions with country/capability filtering |
+| `linode_types_list` | Lists instance types (plans) with class filtering |
+| `linode_images_list` | Lists images with public/deprecated filtering |
+| `linode_stackscripts_list` | Lists StackScripts with is_public/mine/label filtering |
+
+**Storage:**
+| Tool | Description |
+|------|-------------|
+| `linode_volumes_list` | Lists block storage volumes with region/label filtering |
+
+**Networking:**
+| Tool | Description |
+|------|-------------|
+| `linode_firewalls_list` | Lists Cloud Firewalls with status/label filtering |
+| `linode_nodebalancers_list` | Lists NodeBalancers with region/label filtering |
+| `linode_nodebalancer_get` | Gets detailed info about a specific NodeBalancer by ID |
+
+**DNS:**
+| Tool | Description |
+|------|-------------|
+| `linode_domains_list` | Lists DNS domains |
+| `linode_domain_get` | Gets detailed info about a specific domain by ID |
+| `linode_domain_records_list` | Lists domain records with type/name filtering |
+
+**Security:**
+| Tool | Description |
+|------|-------------|
+| `linode_sshkeys_list` | Lists SSH keys with label filtering |
 
 ### Multi-Environment Support
 
@@ -228,7 +267,7 @@ LinodeMCP/
 
 ## Status
 
-This project is in early development (v0.1.0). The foundation is in place with config management, API client, retry logic, and four working tools. More Linode API operations will be added in future releases.
+This project is in active development (v0.1.0). The foundation is complete with config management, API client, retry logic, and 18 read-only tools covering compute, storage, networking, DNS, and security resources. Write operations will be added in future releases.
 
 ## License
 
