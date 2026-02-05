@@ -9,24 +9,51 @@ from linodemcp.config import Config, EnvironmentConfig, EnvironmentNotFoundError
 from linodemcp.linode import RetryableClient, RetryConfig
 from linodemcp.version import get_version_info
 
+# Constants for truncation limits
+SSH_KEY_TRUNCATE_LIMIT = 50
+DESCRIPTION_TRUNCATE_LIMIT = 100
+
+
+def _truncate_string(value: str, limit: int) -> str:
+    """Truncate a string with ellipsis if it exceeds the limit."""
+    if len(value) > limit:
+        return value[:limit] + "..."
+    return value
+
 __all__ = [
     "create_hello_tool",
     "create_linode_account_tool",
+    "create_linode_domain_get_tool",
+    "create_linode_domain_records_list_tool",
+    "create_linode_domains_list_tool",
+    "create_linode_firewalls_list_tool",
     "create_linode_images_list_tool",
     "create_linode_instance_get_tool",
     "create_linode_instances_list_tool",
+    "create_linode_nodebalancer_get_tool",
+    "create_linode_nodebalancers_list_tool",
     "create_linode_profile_tool",
     "create_linode_regions_list_tool",
+    "create_linode_sshkeys_list_tool",
+    "create_linode_stackscripts_list_tool",
     "create_linode_types_list_tool",
     "create_linode_volumes_list_tool",
     "create_version_tool",
     "handle_hello",
     "handle_linode_account",
+    "handle_linode_domain_get",
+    "handle_linode_domain_records_list",
+    "handle_linode_domains_list",
+    "handle_linode_firewalls_list",
     "handle_linode_images_list",
     "handle_linode_instance_get",
     "handle_linode_instances_list",
+    "handle_linode_nodebalancer_get",
+    "handle_linode_nodebalancers_list",
     "handle_linode_profile",
     "handle_linode_regions_list",
+    "handle_linode_sshkeys_list",
+    "handle_linode_stackscripts_list",
     "handle_linode_types_list",
     "handle_linode_volumes_list",
     "handle_version",
@@ -767,4 +794,761 @@ async def handle_linode_images_list(
     except Exception as e:
         return [
             TextContent(type="text", text=f"Failed to retrieve Linode images: {e}")
+        ]
+
+
+# Stage 3: Extended read operations
+
+
+def create_linode_sshkeys_list_tool() -> Tool:
+    """Create the linode_sshkeys_list tool."""
+    return Tool(
+        name="linode_sshkeys_list",
+        description=(
+            "Lists all SSH keys associated with your Linode profile. "
+            "Can filter by label."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "label_contains": {
+                    "type": "string",
+                    "description": (
+                        "Filter SSH keys by label containing this string "
+                        "(case-insensitive)"
+                    ),
+                },
+            },
+        },
+    )
+
+
+async def handle_linode_sshkeys_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_sshkeys_list tool request."""
+    environment = arguments.get("environment", "")
+    label_contains = arguments.get("label_contains", "")
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            keys = await client.list_ssh_keys()
+
+            if label_contains:
+                keys = [
+                    k for k in keys if label_contains.lower() in k.label.lower()
+                ]
+
+            keys_data = [
+                {
+                    "id": k.id,
+                    "label": k.label,
+                    "ssh_key": _truncate_string(k.ssh_key, SSH_KEY_TRUNCATE_LIMIT),
+                    "created": k.created,
+                }
+                for k in keys
+            ]
+
+            response: dict[str, Any] = {
+                "count": len(keys),
+                "ssh_keys": keys_data,
+            }
+
+            if label_contains:
+                response["filter"] = f"label_contains={label_contains}"
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(type="text", text=f"Failed to retrieve SSH keys: {e}")
+        ]
+
+
+def create_linode_domains_list_tool() -> Tool:
+    """Create the linode_domains_list tool."""
+    return Tool(
+        name="linode_domains_list",
+        description=(
+            "Lists all domains managed by your Linode account. "
+            "Can filter by domain name or type (master/slave)."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "domain_contains": {
+                    "type": "string",
+                    "description": (
+                        "Filter domains by name containing this string "
+                        "(case-insensitive)"
+                    ),
+                },
+                "type": {
+                    "type": "string",
+                    "description": "Filter by domain type (master, slave)",
+                },
+            },
+        },
+    )
+
+
+async def handle_linode_domains_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_domains_list tool request."""
+    environment = arguments.get("environment", "")
+    domain_contains = arguments.get("domain_contains", "")
+    type_filter = arguments.get("type", "")
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            domains = await client.list_domains()
+
+            if domain_contains:
+                domains = [
+                    d for d in domains if domain_contains.lower() in d.domain.lower()
+                ]
+
+            if type_filter:
+                domains = [
+                    d for d in domains if d.type.lower() == type_filter.lower()
+                ]
+
+            domains_data = [
+                {
+                    "id": d.id,
+                    "domain": d.domain,
+                    "type": d.type,
+                    "status": d.status,
+                    "soa_email": d.soa_email,
+                    "created": d.created,
+                    "updated": d.updated,
+                }
+                for d in domains
+            ]
+
+            response: dict[str, Any] = {
+                "count": len(domains),
+                "domains": domains_data,
+            }
+
+            filters = []
+            if domain_contains:
+                filters.append(f"domain_contains={domain_contains}")
+            if type_filter:
+                filters.append(f"type={type_filter}")
+            if filters:
+                response["filter"] = ", ".join(filters)
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(type="text", text=f"Failed to retrieve domains: {e}")
+        ]
+
+
+def create_linode_domain_get_tool() -> Tool:
+    """Create the linode_domain_get tool."""
+    return Tool(
+        name="linode_domain_get",
+        description="Gets detailed information about a specific domain by its ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "domain_id": {
+                    "type": "integer",
+                    "description": "The ID of the domain to retrieve (required)",
+                },
+            },
+            "required": ["domain_id"],
+        },
+    )
+
+
+async def handle_linode_domain_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_domain_get tool request."""
+    environment = arguments.get("environment", "")
+    domain_id = arguments.get("domain_id", 0)
+
+    if not domain_id:
+        return [TextContent(type="text", text="Error: domain_id is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            domain = await client.get_domain(int(domain_id))
+
+            domain_data = {
+                "id": domain.id,
+                "domain": domain.domain,
+                "type": domain.type,
+                "status": domain.status,
+                "soa_email": domain.soa_email,
+                "description": domain.description,
+                "tags": domain.tags,
+                "created": domain.created,
+                "updated": domain.updated,
+            }
+
+            json_response = json.dumps(domain_data, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(type="text", text=f"Failed to retrieve domain: {e}")
+        ]
+
+
+def create_linode_domain_records_list_tool() -> Tool:
+    """Create the linode_domain_records_list tool."""
+    return Tool(
+        name="linode_domain_records_list",
+        description=(
+            "Lists all DNS records for a specific domain. "
+            "Can filter by record type or name."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "domain_id": {
+                    "type": "integer",
+                    "description": (
+                        "The ID of the domain to list records for (required)"
+                    ),
+                },
+                "type": {
+                    "type": "string",
+                    "description": (
+                        "Filter by record type (A, AAAA, NS, MX, CNAME, TXT, SRV, CAA)"
+                    ),
+                },
+                "name_contains": {
+                    "type": "string",
+                    "description": (
+                        "Filter records by name containing this string "
+                        "(case-insensitive)"
+                    ),
+                },
+            },
+            "required": ["domain_id"],
+        },
+    )
+
+
+async def handle_linode_domain_records_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_domain_records_list tool request."""
+    environment = arguments.get("environment", "")
+    domain_id = arguments.get("domain_id", 0)
+    type_filter = arguments.get("type", "")
+    name_contains = arguments.get("name_contains", "")
+
+    if not domain_id:
+        return [TextContent(type="text", text="Error: domain_id is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            records = await client.list_domain_records(int(domain_id))
+
+            if type_filter:
+                records = [
+                    r for r in records if r.type.upper() == type_filter.upper()
+                ]
+
+            if name_contains:
+                records = [
+                    r for r in records if name_contains.lower() in r.name.lower()
+                ]
+
+            records_data = [
+                {
+                    "id": r.id,
+                    "type": r.type,
+                    "name": r.name,
+                    "target": r.target,
+                    "priority": r.priority,
+                    "ttl_sec": r.ttl_sec,
+                }
+                for r in records
+            ]
+
+            response: dict[str, Any] = {
+                "count": len(records),
+                "domain_id": domain_id,
+                "records": records_data,
+            }
+
+            filters = []
+            if type_filter:
+                filters.append(f"type={type_filter}")
+            if name_contains:
+                filters.append(f"name_contains={name_contains}")
+            if filters:
+                response["filter"] = ", ".join(filters)
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(type="text", text=f"Failed to retrieve domain records: {e}")
+        ]
+
+
+def create_linode_firewalls_list_tool() -> Tool:
+    """Create the linode_firewalls_list tool."""
+    return Tool(
+        name="linode_firewalls_list",
+        description=(
+            "Lists all Cloud Firewalls on your account. "
+            "Can filter by status or label."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "status": {
+                    "type": "string",
+                    "description": (
+                        "Filter by firewall status (enabled, disabled, deleted)"
+                    ),
+                },
+                "label_contains": {
+                    "type": "string",
+                    "description": (
+                        "Filter firewalls by label containing this string "
+                        "(case-insensitive)"
+                    ),
+                },
+            },
+        },
+    )
+
+
+async def handle_linode_firewalls_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_firewalls_list tool request."""
+    environment = arguments.get("environment", "")
+    status_filter = arguments.get("status", "")
+    label_contains = arguments.get("label_contains", "")
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            firewalls = await client.list_firewalls()
+
+            if status_filter:
+                firewalls = [
+                    f for f in firewalls if f.status.lower() == status_filter.lower()
+                ]
+
+            if label_contains:
+                firewalls = [
+                    f for f in firewalls if label_contains.lower() in f.label.lower()
+                ]
+
+            firewalls_data = [
+                {
+                    "id": f.id,
+                    "label": f.label,
+                    "status": f.status,
+                    "rules_inbound_count": len(f.rules.inbound),
+                    "rules_outbound_count": len(f.rules.outbound),
+                    "created": f.created,
+                    "updated": f.updated,
+                }
+                for f in firewalls
+            ]
+
+            response: dict[str, Any] = {
+                "count": len(firewalls),
+                "firewalls": firewalls_data,
+            }
+
+            filters = []
+            if status_filter:
+                filters.append(f"status={status_filter}")
+            if label_contains:
+                filters.append(f"label_contains={label_contains}")
+            if filters:
+                response["filter"] = ", ".join(filters)
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(type="text", text=f"Failed to retrieve firewalls: {e}")
+        ]
+
+
+def create_linode_nodebalancers_list_tool() -> Tool:
+    """Create the linode_nodebalancers_list tool."""
+    return Tool(
+        name="linode_nodebalancers_list",
+        description=(
+            "Lists all NodeBalancers on your account. "
+            "Can filter by region or label."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "region": {
+                    "type": "string",
+                    "description": "Filter by region ID (e.g., us-east, eu-west)",
+                },
+                "label_contains": {
+                    "type": "string",
+                    "description": (
+                        "Filter NodeBalancers by label containing this string "
+                        "(case-insensitive)"
+                    ),
+                },
+            },
+        },
+    )
+
+
+async def handle_linode_nodebalancers_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_nodebalancers_list tool request."""
+    environment = arguments.get("environment", "")
+    region_filter = arguments.get("region", "")
+    label_contains = arguments.get("label_contains", "")
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            nodebalancers = await client.list_nodebalancers()
+
+            if region_filter:
+                nodebalancers = [
+                    nb for nb in nodebalancers
+                    if nb.region.lower() == region_filter.lower()
+                ]
+
+            if label_contains:
+                nodebalancers = [
+                    nb for nb in nodebalancers
+                    if label_contains.lower() in nb.label.lower()
+                ]
+
+            nodebalancers_data = [
+                {
+                    "id": nb.id,
+                    "label": nb.label,
+                    "region": nb.region,
+                    "hostname": nb.hostname,
+                    "ipv4": nb.ipv4,
+                    "created": nb.created,
+                    "updated": nb.updated,
+                }
+                for nb in nodebalancers
+            ]
+
+            response: dict[str, Any] = {
+                "count": len(nodebalancers),
+                "nodebalancers": nodebalancers_data,
+            }
+
+            filters = []
+            if region_filter:
+                filters.append(f"region={region_filter}")
+            if label_contains:
+                filters.append(f"label_contains={label_contains}")
+            if filters:
+                response["filter"] = ", ".join(filters)
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(type="text", text=f"Failed to retrieve NodeBalancers: {e}")
+        ]
+
+
+def create_linode_nodebalancer_get_tool() -> Tool:
+    """Create the linode_nodebalancer_get tool."""
+    return Tool(
+        name="linode_nodebalancer_get",
+        description=(
+            "Gets detailed information about a specific NodeBalancer by its ID."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "nodebalancer_id": {
+                    "type": "integer",
+                    "description": "The ID of the NodeBalancer to retrieve (required)",
+                },
+            },
+            "required": ["nodebalancer_id"],
+        },
+    )
+
+
+async def handle_linode_nodebalancer_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_nodebalancer_get tool request."""
+    environment = arguments.get("environment", "")
+    nodebalancer_id = arguments.get("nodebalancer_id", 0)
+
+    if not nodebalancer_id:
+        return [TextContent(type="text", text="Error: nodebalancer_id is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            nb = await client.get_nodebalancer(int(nodebalancer_id))
+
+            nb_data = {
+                "id": nb.id,
+                "label": nb.label,
+                "region": nb.region,
+                "hostname": nb.hostname,
+                "ipv4": nb.ipv4,
+                "ipv6": nb.ipv6,
+                "client_conn_throttle": nb.client_conn_throttle,
+                "transfer": {
+                    "in": nb.transfer.in_,
+                    "out": nb.transfer.out,
+                    "total": nb.transfer.total,
+                },
+                "tags": nb.tags,
+                "created": nb.created,
+                "updated": nb.updated,
+            }
+
+            json_response = json.dumps(nb_data, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(type="text", text=f"Failed to retrieve NodeBalancer: {e}")
+        ]
+
+
+def create_linode_stackscripts_list_tool() -> Tool:
+    """Create the linode_stackscripts_list tool."""
+    return Tool(
+        name="linode_stackscripts_list",
+        description=(
+            "Lists StackScripts. By default returns your own StackScripts. "
+            "Can filter by public status, ownership, or label."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "is_public": {
+                    "type": "string",
+                    "description": "Filter by public status (true, false)",
+                },
+                "mine": {
+                    "type": "string",
+                    "description": (
+                        "Filter by ownership - only your own StackScripts (true, false)"
+                    ),
+                },
+                "label_contains": {
+                    "type": "string",
+                    "description": (
+                        "Filter StackScripts by label containing this string "
+                        "(case-insensitive)"
+                    ),
+                },
+            },
+        },
+    )
+
+
+async def handle_linode_stackscripts_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_stackscripts_list tool request."""
+    environment = arguments.get("environment", "")
+    is_public_filter = arguments.get("is_public", "")
+    mine_filter = arguments.get("mine", "")
+    label_contains = arguments.get("label_contains", "")
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            scripts = await client.list_stackscripts()
+
+            if is_public_filter:
+                want_public = is_public_filter.lower() == "true"
+                scripts = [s for s in scripts if s.is_public == want_public]
+
+            if mine_filter:
+                want_mine = mine_filter.lower() == "true"
+                scripts = [s for s in scripts if s.mine == want_mine]
+
+            if label_contains:
+                scripts = [
+                    s for s in scripts if label_contains.lower() in s.label.lower()
+                ]
+
+            scripts_data = [
+                {
+                    "id": s.id,
+                    "label": s.label,
+                    "username": s.username,
+                    "description": _truncate_string(
+                        s.description, DESCRIPTION_TRUNCATE_LIMIT
+                    ),
+                    "is_public": s.is_public,
+                    "mine": s.mine,
+                    "deployments_total": s.deployments_total,
+                    "deployments_active": s.deployments_active,
+                    "created": s.created,
+                    "updated": s.updated,
+                }
+                for s in scripts
+            ]
+
+            response: dict[str, Any] = {
+                "count": len(scripts),
+                "stackscripts": scripts_data,
+            }
+
+            filters = []
+            if is_public_filter:
+                filters.append(f"is_public={is_public_filter}")
+            if mine_filter:
+                filters.append(f"mine={mine_filter}")
+            if label_contains:
+                filters.append(f"label_contains={label_contains}")
+            if filters:
+                response["filter"] = ", ".join(filters)
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(type="text", text=f"Failed to retrieve StackScripts: {e}")
         ]

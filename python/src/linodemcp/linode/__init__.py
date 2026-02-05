@@ -16,6 +16,7 @@ HTTP_SERVER_ERROR = 500
 HTTP_SERVER_ERROR_MAX = 600
 
 __all__ = [
+    "UDF",
     "APIError",
     "Account",
     "Addons",
@@ -24,11 +25,18 @@ __all__ = [
     "Backups",
     "BackupsAddon",
     "Client",
+    "Domain",
+    "DomainRecord",
+    "Firewall",
+    "FirewallAddresses",
+    "FirewallRule",
+    "FirewallRules",
     "Image",
     "Instance",
     "InstanceType",
     "LinodeError",
     "NetworkError",
+    "NodeBalancer",
     "Price",
     "Profile",
     "Promo",
@@ -37,8 +45,11 @@ __all__ = [
     "RetryConfig",
     "RetryableClient",
     "RetryableError",
+    "SSHKey",
     "Schedule",
     "Specs",
+    "StackScript",
+    "Transfer",
     "Volume",
     "is_retryable",
 ]
@@ -331,6 +342,150 @@ class Image:
     tags: list[str]
 
 
+# Stage 3: Extended read operations
+
+
+@dataclass
+class SSHKey:
+    """SSH key associated with a Linode profile."""
+
+    id: int
+    label: str
+    ssh_key: str
+    created: str
+
+
+@dataclass
+class Domain:
+    """Linode DNS domain."""
+
+    id: int
+    domain: str
+    type: str
+    status: str
+    soa_email: str
+    description: str
+    tags: list[str]
+    created: str
+    updated: str
+
+
+@dataclass
+class DomainRecord:
+    """DNS record for a domain."""
+
+    id: int
+    type: str
+    name: str
+    target: str
+    priority: int
+    weight: int
+    port: int
+    ttl_sec: int
+    created: str
+    updated: str
+
+
+@dataclass
+class FirewallAddresses:
+    """IP addresses for a firewall rule."""
+
+    ipv4: list[str]
+    ipv6: list[str]
+
+
+@dataclass
+class FirewallRule:
+    """Firewall rule."""
+
+    action: str
+    protocol: str
+    ports: str
+    addresses: FirewallAddresses
+    label: str
+    description: str
+
+
+@dataclass
+class FirewallRules:
+    """Firewall rules configuration."""
+
+    inbound: list[FirewallRule]
+    inbound_policy: str
+    outbound: list[FirewallRule]
+    outbound_policy: str
+
+
+@dataclass
+class Firewall:
+    """Linode Cloud Firewall."""
+
+    id: int
+    label: str
+    status: str
+    rules: FirewallRules
+    tags: list[str]
+    created: str
+    updated: str
+
+
+@dataclass
+class Transfer:
+    """Transfer usage data."""
+
+    in_: float
+    out: float
+    total: float
+
+
+@dataclass
+class NodeBalancer:
+    """Linode NodeBalancer."""
+
+    id: int
+    label: str
+    region: str
+    hostname: str
+    ipv4: str
+    ipv6: str
+    client_conn_throttle: int
+    transfer: Transfer
+    tags: list[str]
+    created: str
+    updated: str
+
+
+@dataclass
+class UDF:
+    """User defined field for StackScript."""
+
+    label: str
+    name: str
+    example: str
+    oneof: str
+    default: str
+
+
+@dataclass
+class StackScript:
+    """Linode StackScript."""
+
+    id: int
+    username: str
+    user_gravatar_id: str
+    label: str
+    description: str
+    images: list[str]
+    deployments_total: int
+    deployments_active: int
+    is_public: bool
+    mine: bool
+    created: str
+    updated: str
+    script: str
+    user_defined_fields: list[UDF]
+
+
 class Client:
     """Linode API client."""
 
@@ -434,6 +589,83 @@ class Client:
             return [self._parse_image(i) for i in data.get("data", [])]
         except httpx.HTTPError as e:
             raise NetworkError("ListImages", e) from e
+
+    # Stage 3: Extended read operations
+
+    async def list_ssh_keys(self) -> list[SSHKey]:
+        """List SSH keys."""
+        try:
+            response = await self._make_request("GET", "/profile/sshkeys")
+            data = response.json()
+            return [self._parse_ssh_key(k) for k in data.get("data", [])]
+        except httpx.HTTPError as e:
+            raise NetworkError("ListSSHKeys", e) from e
+
+    async def list_domains(self) -> list[Domain]:
+        """List domains."""
+        try:
+            response = await self._make_request("GET", "/domains")
+            data = response.json()
+            return [self._parse_domain(d) for d in data.get("data", [])]
+        except httpx.HTTPError as e:
+            raise NetworkError("ListDomains", e) from e
+
+    async def get_domain(self, domain_id: int) -> Domain:
+        """Get a specific domain."""
+        endpoint = f"/domains/{domain_id}"
+        try:
+            response = await self._make_request("GET", endpoint)
+            data = response.json()
+            return self._parse_domain(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("GetDomain", e) from e
+
+    async def list_domain_records(self, domain_id: int) -> list[DomainRecord]:
+        """List domain records for a domain."""
+        endpoint = f"/domains/{domain_id}/records"
+        try:
+            response = await self._make_request("GET", endpoint)
+            data = response.json()
+            return [self._parse_domain_record(r) for r in data.get("data", [])]
+        except httpx.HTTPError as e:
+            raise NetworkError("ListDomainRecords", e) from e
+
+    async def list_firewalls(self) -> list[Firewall]:
+        """List firewalls."""
+        try:
+            response = await self._make_request("GET", "/networking/firewalls")
+            data = response.json()
+            return [self._parse_firewall(f) for f in data.get("data", [])]
+        except httpx.HTTPError as e:
+            raise NetworkError("ListFirewalls", e) from e
+
+    async def list_nodebalancers(self) -> list[NodeBalancer]:
+        """List NodeBalancers."""
+        try:
+            response = await self._make_request("GET", "/nodebalancers")
+            data = response.json()
+            return [self._parse_nodebalancer(nb) for nb in data.get("data", [])]
+        except httpx.HTTPError as e:
+            raise NetworkError("ListNodeBalancers", e) from e
+
+    async def get_nodebalancer(self, nodebalancer_id: int) -> NodeBalancer:
+        """Get a specific NodeBalancer."""
+        endpoint = f"/nodebalancers/{nodebalancer_id}"
+        try:
+            response = await self._make_request("GET", endpoint)
+            data = response.json()
+            return self._parse_nodebalancer(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("GetNodeBalancer", e) from e
+
+    async def list_stackscripts(self) -> list[StackScript]:
+        """List StackScripts."""
+        try:
+            response = await self._make_request("GET", "/linode/stackscripts")
+            data = response.json()
+            return [self._parse_stackscript(s) for s in data.get("data", [])]
+        except httpx.HTTPError as e:
+            raise NetworkError("ListStackScripts", e) from e
 
     async def _make_request(self, method: str, endpoint: str) -> httpx.Response:
         """Make an HTTP request to the Linode API."""
@@ -685,6 +917,144 @@ class Client:
             tags=data.get("tags", []),
         )
 
+    # Stage 3: Parse methods
+
+    def _parse_ssh_key(self, data: dict[str, Any]) -> SSHKey:
+        """Parse SSH key data from API response."""
+        return SSHKey(
+            id=data.get("id", 0),
+            label=data.get("label", ""),
+            ssh_key=data.get("ssh_key", ""),
+            created=data.get("created", ""),
+        )
+
+    def _parse_domain(self, data: dict[str, Any]) -> Domain:
+        """Parse domain data from API response."""
+        return Domain(
+            id=data.get("id", 0),
+            domain=data.get("domain", ""),
+            type=data.get("type", ""),
+            status=data.get("status", ""),
+            soa_email=data.get("soa_email", ""),
+            description=data.get("description", ""),
+            tags=data.get("tags", []),
+            created=data.get("created", ""),
+            updated=data.get("updated", ""),
+        )
+
+    def _parse_domain_record(self, data: dict[str, Any]) -> DomainRecord:
+        """Parse domain record data from API response."""
+        return DomainRecord(
+            id=data.get("id", 0),
+            type=data.get("type", ""),
+            name=data.get("name", ""),
+            target=data.get("target", ""),
+            priority=data.get("priority", 0),
+            weight=data.get("weight", 0),
+            port=data.get("port", 0),
+            ttl_sec=data.get("ttl_sec", 0),
+            created=data.get("created", ""),
+            updated=data.get("updated", ""),
+        )
+
+    def _parse_firewall(self, data: dict[str, Any]) -> Firewall:
+        """Parse firewall data from API response."""
+        rules_data = data.get("rules", {})
+
+        inbound_rules = [
+            self._parse_firewall_rule(r) for r in rules_data.get("inbound", [])
+        ]
+        outbound_rules = [
+            self._parse_firewall_rule(r) for r in rules_data.get("outbound", [])
+        ]
+
+        rules = FirewallRules(
+            inbound=inbound_rules,
+            inbound_policy=rules_data.get("inbound_policy", ""),
+            outbound=outbound_rules,
+            outbound_policy=rules_data.get("outbound_policy", ""),
+        )
+
+        return Firewall(
+            id=data.get("id", 0),
+            label=data.get("label", ""),
+            status=data.get("status", ""),
+            rules=rules,
+            tags=data.get("tags", []),
+            created=data.get("created", ""),
+            updated=data.get("updated", ""),
+        )
+
+    def _parse_firewall_rule(self, data: dict[str, Any]) -> FirewallRule:
+        """Parse firewall rule data from API response."""
+        addresses_data = data.get("addresses", {})
+        addresses = FirewallAddresses(
+            ipv4=addresses_data.get("ipv4", []),
+            ipv6=addresses_data.get("ipv6", []),
+        )
+
+        return FirewallRule(
+            action=data.get("action", ""),
+            protocol=data.get("protocol", ""),
+            ports=data.get("ports", ""),
+            addresses=addresses,
+            label=data.get("label", ""),
+            description=data.get("description", ""),
+        )
+
+    def _parse_nodebalancer(self, data: dict[str, Any]) -> NodeBalancer:
+        """Parse NodeBalancer data from API response."""
+        transfer_data = data.get("transfer", {})
+        transfer = Transfer(
+            in_=transfer_data.get("in", 0.0),
+            out=transfer_data.get("out", 0.0),
+            total=transfer_data.get("total", 0.0),
+        )
+
+        return NodeBalancer(
+            id=data.get("id", 0),
+            label=data.get("label", ""),
+            region=data.get("region", ""),
+            hostname=data.get("hostname", ""),
+            ipv4=data.get("ipv4", ""),
+            ipv6=data.get("ipv6", ""),
+            client_conn_throttle=data.get("client_conn_throttle", 0),
+            transfer=transfer,
+            tags=data.get("tags", []),
+            created=data.get("created", ""),
+            updated=data.get("updated", ""),
+        )
+
+    def _parse_stackscript(self, data: dict[str, Any]) -> StackScript:
+        """Parse StackScript data from API response."""
+        user_defined_fields = [
+            UDF(
+                label=udf.get("label", ""),
+                name=udf.get("name", ""),
+                example=udf.get("example", ""),
+                oneof=udf.get("oneof", ""),
+                default=udf.get("default", ""),
+            )
+            for udf in data.get("user_defined_fields", [])
+        ]
+
+        return StackScript(
+            id=data.get("id", 0),
+            username=data.get("username", ""),
+            user_gravatar_id=data.get("user_gravatar_id", ""),
+            label=data.get("label", ""),
+            description=data.get("description", ""),
+            images=data.get("images", []),
+            deployments_total=data.get("deployments_total", 0),
+            deployments_active=data.get("deployments_active", 0),
+            is_public=data.get("is_public", False),
+            mine=data.get("mine", False),
+            created=data.get("created", ""),
+            updated=data.get("updated", ""),
+            script=data.get("script", ""),
+            user_defined_fields=user_defined_fields,
+        )
+
 
 @dataclass
 class RetryConfig:
@@ -762,6 +1132,60 @@ class RetryableClient:
     async def list_images(self) -> list[Image]:
         """List Linode images with retry."""
         result: list[Image] = await self._execute_with_retry(self.client.list_images)
+        return result
+
+    # Stage 3: Extended read operations
+
+    async def list_ssh_keys(self) -> list[SSHKey]:
+        """List SSH keys with retry."""
+        result: list[SSHKey] = await self._execute_with_retry(self.client.list_ssh_keys)
+        return result
+
+    async def list_domains(self) -> list[Domain]:
+        """List domains with retry."""
+        result: list[Domain] = await self._execute_with_retry(self.client.list_domains)
+        return result
+
+    async def get_domain(self, domain_id: int) -> Domain:
+        """Get a specific domain with retry."""
+        result: Domain = await self._execute_with_retry(
+            self.client.get_domain, domain_id
+        )
+        return result
+
+    async def list_domain_records(self, domain_id: int) -> list[DomainRecord]:
+        """List domain records with retry."""
+        result: list[DomainRecord] = await self._execute_with_retry(
+            self.client.list_domain_records, domain_id
+        )
+        return result
+
+    async def list_firewalls(self) -> list[Firewall]:
+        """List firewalls with retry."""
+        result: list[Firewall] = await self._execute_with_retry(
+            self.client.list_firewalls
+        )
+        return result
+
+    async def list_nodebalancers(self) -> list[NodeBalancer]:
+        """List NodeBalancers with retry."""
+        result: list[NodeBalancer] = await self._execute_with_retry(
+            self.client.list_nodebalancers
+        )
+        return result
+
+    async def get_nodebalancer(self, nodebalancer_id: int) -> NodeBalancer:
+        """Get a specific NodeBalancer with retry."""
+        result: NodeBalancer = await self._execute_with_retry(
+            self.client.get_nodebalancer, nodebalancer_id
+        )
+        return result
+
+    async def list_stackscripts(self) -> list[StackScript]:
+        """List StackScripts with retry."""
+        result: list[StackScript] = await self._execute_with_retry(
+            self.client.list_stackscripts
+        )
         return result
 
     async def _execute_with_retry(self, func: Any, *args: Any) -> Any:

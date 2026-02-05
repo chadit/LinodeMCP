@@ -294,3 +294,294 @@ def test_api_error_methods() -> None:
     server_error = APIError(500, "Server error")
     assert server_error.is_server_error()
     assert not server_error.is_forbidden_error()
+
+
+# Stage 3 Client Tests
+
+
+async def test_list_ssh_keys() -> None:
+    """Test listing SSH keys."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": [
+            {
+                "id": 1,
+                "label": "work-key",
+                "ssh_key": "ssh-rsa AAAA...",
+                "created": "2024-01-01T00:00:00",
+            }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        keys = await client.list_ssh_keys()
+
+        assert len(keys) == 1
+        assert keys[0].id == 1
+        assert keys[0].label == "work-key"
+
+    await client.close()
+
+
+async def test_list_domains() -> None:
+    """Test listing domains."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": [
+            {
+                "id": 1,
+                "domain": "example.com",
+                "type": "master",
+                "status": "active",
+                "soa_email": "admin@example.com",
+                "description": "Test",
+                "tags": [],
+                "created": "2024-01-01T00:00:00",
+                "updated": "2024-01-15T12:00:00",
+            }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        domains = await client.list_domains()
+
+        assert len(domains) == 1
+        assert domains[0].id == 1
+        assert domains[0].domain == "example.com"
+
+    await client.close()
+
+
+async def test_get_domain() -> None:
+    """Test getting a specific domain."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "id": 1,
+        "domain": "example.com",
+        "type": "master",
+        "status": "active",
+        "soa_email": "admin@example.com",
+        "description": "Test",
+        "tags": [],
+        "created": "2024-01-01T00:00:00",
+        "updated": "2024-01-15T12:00:00",
+    }
+
+    with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        domain = await client.get_domain(1)
+
+        assert domain.id == 1
+        assert domain.domain == "example.com"
+
+    await client.close()
+
+
+async def test_list_domain_records() -> None:
+    """Test listing domain records."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": [
+            {
+                "id": 1,
+                "type": "A",
+                "name": "www",
+                "target": "192.0.2.1",
+                "priority": 0,
+                "weight": 0,
+                "port": 0,
+                "ttl_sec": 300,
+                "created": "2024-01-01T00:00:00",
+                "updated": "2024-01-15T12:00:00",
+            }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        records = await client.list_domain_records(1)
+
+        assert len(records) == 1
+        assert records[0].id == 1
+        assert records[0].type == "A"
+
+    await client.close()
+
+
+async def test_list_firewalls() -> None:
+    """Test listing firewalls."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": [
+            {
+                "id": 1,
+                "label": "web-fw",
+                "status": "enabled",
+                "rules": {
+                    "inbound": [],
+                    "outbound": [],
+                    "inbound_policy": "DROP",
+                    "outbound_policy": "ACCEPT",
+                },
+                "tags": [],
+                "created": "2024-01-01T00:00:00",
+                "updated": "2024-01-15T12:00:00",
+            }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        firewalls = await client.list_firewalls()
+
+        assert len(firewalls) == 1
+        assert firewalls[0].id == 1
+        assert firewalls[0].label == "web-fw"
+
+    await client.close()
+
+
+async def test_list_nodebalancers() -> None:
+    """Test listing nodebalancers."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": [
+            {
+                "id": 1,
+                "label": "web-lb",
+                "hostname": "nb-1.linode.com",
+                "ipv4": "192.0.2.1",
+                "ipv6": "2001:db8::1",
+                "region": "us-east",
+                "client_conn_throttle": 0,
+                "transfer": {"in": 1000.0, "out": 2000.0, "total": 3000.0},
+                "tags": [],
+                "created": "2024-01-01T00:00:00",
+                "updated": "2024-01-15T12:00:00",
+            }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        nbs = await client.list_nodebalancers()
+
+        assert len(nbs) == 1
+        assert nbs[0].id == 1
+        assert nbs[0].label == "web-lb"
+
+    await client.close()
+
+
+async def test_get_nodebalancer() -> None:
+    """Test getting a specific nodebalancer."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "id": 1,
+        "label": "web-lb",
+        "hostname": "nb-1.linode.com",
+        "ipv4": "192.0.2.1",
+        "ipv6": "2001:db8::1",
+        "region": "us-east",
+        "client_conn_throttle": 0,
+        "transfer": {"in": 1000.0, "out": 2000.0, "total": 3000.0},
+        "tags": [],
+        "created": "2024-01-01T00:00:00",
+        "updated": "2024-01-15T12:00:00",
+    }
+
+    with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        nb = await client.get_nodebalancer(1)
+
+        assert nb.id == 1
+        assert nb.label == "web-lb"
+
+    await client.close()
+
+
+async def test_list_stackscripts() -> None:
+    """Test listing stackscripts."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": [
+            {
+                "id": 1,
+                "username": "testuser",
+                "user_gravatar_id": "abc123",
+                "label": "my-script",
+                "description": "Test script",
+                "images": ["linode/ubuntu22.04"],
+                "deployments_total": 10,
+                "deployments_active": 5,
+                "is_public": False,
+                "mine": True,
+                "created": "2024-01-01T00:00:00",
+                "updated": "2024-01-15T12:00:00",
+                "script": "#!/bin/bash",
+                "user_defined_fields": [],
+            }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        scripts = await client.list_stackscripts()
+
+        assert len(scripts) == 1
+        assert scripts[0].id == 1
+        assert scripts[0].label == "my-script"
+
+    await client.close()

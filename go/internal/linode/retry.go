@@ -177,6 +177,128 @@ func (rc *RetryableClient) ListImages(ctx context.Context) ([]Image, error) {
 	return images, err
 }
 
+// Stage 3: Extended read operations
+
+// ListSSHKeys retrieves all SSH keys with automatic retry on transient failures.
+func (rc *RetryableClient) ListSSHKeys(ctx context.Context) ([]SSHKey, error) {
+	var keys []SSHKey
+
+	err := rc.executeWithRetry(ctx, "ListSSHKeys", func() error {
+		var err error
+
+		keys, err = rc.Client.ListSSHKeys(ctx)
+
+		return err
+	})
+
+	return keys, err
+}
+
+// ListDomains retrieves all domains with automatic retry on transient failures.
+func (rc *RetryableClient) ListDomains(ctx context.Context) ([]Domain, error) {
+	var domains []Domain
+
+	err := rc.executeWithRetry(ctx, "ListDomains", func() error {
+		var err error
+
+		domains, err = rc.Client.ListDomains(ctx)
+
+		return err
+	})
+
+	return domains, err
+}
+
+// GetDomain retrieves a single domain by ID with automatic retry on transient failures.
+func (rc *RetryableClient) GetDomain(ctx context.Context, domainID int) (*Domain, error) {
+	var domain *Domain
+
+	err := rc.executeWithRetry(ctx, "GetDomain", func() error {
+		var err error
+
+		domain, err = rc.Client.GetDomain(ctx, domainID)
+
+		return err
+	})
+
+	return domain, err
+}
+
+// ListDomainRecords retrieves all records for a domain with automatic retry on transient failures.
+func (rc *RetryableClient) ListDomainRecords(ctx context.Context, domainID int) ([]DomainRecord, error) {
+	var records []DomainRecord
+
+	err := rc.executeWithRetry(ctx, "ListDomainRecords", func() error {
+		var err error
+
+		records, err = rc.Client.ListDomainRecords(ctx, domainID)
+
+		return err
+	})
+
+	return records, err
+}
+
+// ListFirewalls retrieves all firewalls with automatic retry on transient failures.
+func (rc *RetryableClient) ListFirewalls(ctx context.Context) ([]Firewall, error) {
+	var firewalls []Firewall
+
+	err := rc.executeWithRetry(ctx, "ListFirewalls", func() error {
+		var err error
+
+		firewalls, err = rc.Client.ListFirewalls(ctx)
+
+		return err
+	})
+
+	return firewalls, err
+}
+
+// ListNodeBalancers retrieves all node balancers with automatic retry on transient failures.
+func (rc *RetryableClient) ListNodeBalancers(ctx context.Context) ([]NodeBalancer, error) {
+	var nodeBalancers []NodeBalancer
+
+	err := rc.executeWithRetry(ctx, "ListNodeBalancers", func() error {
+		var err error
+
+		nodeBalancers, err = rc.Client.ListNodeBalancers(ctx)
+
+		return err
+	})
+
+	return nodeBalancers, err
+}
+
+// GetNodeBalancer retrieves a single node balancer by ID with automatic retry on transient failures.
+func (rc *RetryableClient) GetNodeBalancer(ctx context.Context, nodeBalancerID int) (*NodeBalancer, error) {
+	var nodeBalancer *NodeBalancer
+
+	err := rc.executeWithRetry(ctx, "GetNodeBalancer", func() error {
+		var err error
+
+		nodeBalancer, err = rc.Client.GetNodeBalancer(ctx, nodeBalancerID)
+
+		return err
+	})
+
+	return nodeBalancer, err
+}
+
+// ListStackScripts retrieves all stack scripts with automatic retry on transient failures.
+func (rc *RetryableClient) ListStackScripts(ctx context.Context) ([]StackScript, error) {
+	var scripts []StackScript
+
+	err := rc.executeWithRetry(ctx, "ListStackScripts", func() error {
+		var err error
+
+		scripts, err = rc.Client.ListStackScripts(ctx)
+
+		return err
+	})
+
+	return scripts, err
+}
+
 func (rc *RetryableClient) executeWithRetry(ctx context.Context, _ string, fn func() error) error {
 	var lastErr error
 

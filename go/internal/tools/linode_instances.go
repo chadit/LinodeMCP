@@ -14,6 +14,9 @@ import (
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
+// boolTrue is used for boolean string comparison in filter functions.
+const boolTrue = "true"
+
 // ErrEnvironmentNotFound is returned when the requested environment is not in the config.
 var ErrEnvironmentNotFound = errors.New("environment not found in configuration")
 

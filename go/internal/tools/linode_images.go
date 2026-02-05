@@ -1,3 +1,4 @@
+//nolint:dupl // Tool implementations have similar structure by design
 package tools
 
 import (
@@ -91,7 +92,7 @@ func filterImagesByType(images []linode.Image, typeFilter string) []linode.Image
 func filterImagesByPublic(images []linode.Image, isPublicFilter string) []linode.Image {
 	var filtered []linode.Image
 
-	wantPublic := strings.ToLower(isPublicFilter) == "true"
+	wantPublic := strings.ToLower(isPublicFilter) == boolTrue
 
 	for _, image := range images {
 		if image.IsPublic == wantPublic {
@@ -105,7 +106,7 @@ func filterImagesByPublic(images []linode.Image, isPublicFilter string) []linode
 func filterImagesByDeprecated(images []linode.Image, deprecatedFilter string) []linode.Image {
 	var filtered []linode.Image
 
-	wantDeprecated := strings.ToLower(deprecatedFilter) == "true"
+	wantDeprecated := strings.ToLower(deprecatedFilter) == boolTrue
 
 	for _, image := range images {
 		if image.Deprecated == wantDeprecated {

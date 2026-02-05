@@ -19,7 +19,7 @@ const (
 	featureKeyLogging  = "logging"
 	featureKeyProtocol = "protocol"
 
-	featureToolsList = "hello,version,linode_profile,linode_account,linode_instances_list,linode_instance_get,linode_regions_list,linode_types_list,linode_volumes_list,linode_images_list"
+	featureToolsList = "hello,version,linode_profile,linode_account,linode_instances_list,linode_instance_get,linode_regions_list,linode_types_list,linode_volumes_list,linode_images_list,linode_sshkeys_list,linode_domains_list,linode_domain_get,linode_domain_records_list,linode_firewalls_list,linode_nodebalancers_list,linode_nodebalancer_get,linode_stackscripts_list"
 	featureLogging   = "basic"
 	featureProtocol  = "mcp"
 )

@@ -126,4 +126,37 @@ func (s *Server) registerTools() {
 	linodeImagesTool, linodeImagesHandler := tools.NewLinodeImagesListTool(s.config)
 	s.mcp.AddTool(linodeImagesTool, linodeImagesHandler)
 	s.tools = append(s.tools, &toolWrapper{tool: linodeImagesTool})
+
+	// Stage 3: Extended read operations
+	linodeSSHKeysTool, linodeSSHKeysHandler := tools.NewLinodeSSHKeysListTool(s.config)
+	s.mcp.AddTool(linodeSSHKeysTool, linodeSSHKeysHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: linodeSSHKeysTool})
+
+	linodeDomainsTool, linodeDomainsHandler := tools.NewLinodeDomainsListTool(s.config)
+	s.mcp.AddTool(linodeDomainsTool, linodeDomainsHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: linodeDomainsTool})
+
+	linodeDomainGetTool, linodeDomainGetHandler := tools.NewLinodeDomainGetTool(s.config)
+	s.mcp.AddTool(linodeDomainGetTool, linodeDomainGetHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: linodeDomainGetTool})
+
+	linodeDomainRecordsTool, linodeDomainRecordsHandler := tools.NewLinodeDomainRecordsListTool(s.config)
+	s.mcp.AddTool(linodeDomainRecordsTool, linodeDomainRecordsHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: linodeDomainRecordsTool})
+
+	linodeFirewallsTool, linodeFirewallsHandler := tools.NewLinodeFirewallsListTool(s.config)
+	s.mcp.AddTool(linodeFirewallsTool, linodeFirewallsHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: linodeFirewallsTool})
+
+	linodeNodeBalancersTool, linodeNodeBalancersHandler := tools.NewLinodeNodeBalancersListTool(s.config)
+	s.mcp.AddTool(linodeNodeBalancersTool, linodeNodeBalancersHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: linodeNodeBalancersTool})
+
+	linodeNodeBalancerGetTool, linodeNodeBalancerGetHandler := tools.NewLinodeNodeBalancerGetTool(s.config)
+	s.mcp.AddTool(linodeNodeBalancerGetTool, linodeNodeBalancerGetHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: linodeNodeBalancerGetTool})
+
+	linodeStackScriptsTool, linodeStackScriptsHandler := tools.NewLinodeStackScriptsListTool(s.config)
+	s.mcp.AddTool(linodeStackScriptsTool, linodeStackScriptsHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: linodeStackScriptsTool})
 }
