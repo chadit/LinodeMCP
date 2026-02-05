@@ -35,20 +35,45 @@ from linodemcp.linode import (
 from linodemcp.tools import (
     handle_hello,
     handle_linode_account,
+    handle_linode_domain_create,
+    handle_linode_domain_delete,
     handle_linode_domain_get,
+    handle_linode_domain_record_create,
+    handle_linode_domain_record_delete,
+    handle_linode_domain_record_update,
     handle_linode_domain_records_list,
+    handle_linode_domain_update,
     handle_linode_domains_list,
+    handle_linode_firewall_create,
+    handle_linode_firewall_delete,
+    handle_linode_firewall_update,
     handle_linode_firewalls_list,
     handle_linode_images_list,
+    handle_linode_instance_boot,
+    handle_linode_instance_create,
+    handle_linode_instance_delete,
     handle_linode_instance_get,
+    handle_linode_instance_reboot,
+    handle_linode_instance_resize,
+    handle_linode_instance_shutdown,
     handle_linode_instances_list,
+    handle_linode_nodebalancer_create,
+    handle_linode_nodebalancer_delete,
     handle_linode_nodebalancer_get,
+    handle_linode_nodebalancer_update,
     handle_linode_nodebalancers_list,
     handle_linode_profile,
     handle_linode_regions_list,
+    handle_linode_sshkey_create,
+    handle_linode_sshkey_delete,
     handle_linode_sshkeys_list,
     handle_linode_stackscripts_list,
     handle_linode_types_list,
+    handle_linode_volume_attach,
+    handle_linode_volume_create,
+    handle_linode_volume_delete,
+    handle_linode_volume_detach,
+    handle_linode_volume_resize,
     handle_linode_volumes_list,
     handle_version,
 )
@@ -755,9 +780,7 @@ async def test_handle_linode_images_list_filter_public(sample_config: Config) ->
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
 
-        result = await handle_linode_images_list(
-            {"is_public": "false"}, sample_config
-        )
+        result = await handle_linode_images_list({"is_public": "false"}, sample_config)
 
         assert len(result) == 1
         assert "private/12345" in result[0].text
@@ -1287,9 +1310,7 @@ async def test_handle_linode_firewalls_list(sample_config: Config) -> None:
                         action="ACCEPT",
                         protocol="TCP",
                         ports="80,443",
-                        addresses=FirewallAddresses(
-                            ipv4=["0.0.0.0/0"], ipv6=["::/0"]
-                        ),
+                        addresses=FirewallAddresses(ipv4=["0.0.0.0/0"], ipv6=["::/0"]),
                         label="HTTP/HTTPS",
                         description="Allow web traffic",
                     )
@@ -1648,3 +1669,723 @@ async def test_handle_linode_stackscripts_list_error(sample_config: Config) -> N
 
         assert len(result) == 1
         assert "Failed" in result[0].text or "error" in result[0].text.lower()
+
+
+# Stage 4: Write operations tests
+
+
+async def test_handle_linode_sshkey_create(sample_config: Config) -> None:
+    """Test linode_sshkey_create tool."""
+    mock_key = SSHKey(
+        id=12345,
+        label="my-key",
+        ssh_key="ssh-rsa AAAA...",
+        created="2024-01-15T10:00:00",
+    )
+
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_ssh_key.return_value = mock_key
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_sshkey_create(
+            {"label": "my-key", "ssh_key": "ssh-rsa AAAA..."}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "my-key" in result[0].text
+        assert "12345" in result[0].text
+
+
+async def test_handle_linode_sshkey_create_missing_params(
+    sample_config: Config,
+) -> None:
+    """Test linode_sshkey_create tool with missing parameters."""
+    result = await handle_linode_sshkey_create({"label": "test"}, sample_config)
+    assert len(result) == 1
+    assert "Error" in result[0].text
+
+
+async def test_handle_linode_sshkey_delete(sample_config: Config) -> None:
+    """Test linode_sshkey_delete tool."""
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_ssh_key.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_sshkey_delete({"ssh_key_id": 12345}, sample_config)
+
+        assert len(result) == 1
+        assert "deleted" in result[0].text.lower()
+
+
+async def test_handle_linode_instance_boot(sample_config: Config) -> None:
+    """Test linode_instance_boot tool."""
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.boot_instance.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_instance_boot(
+            {"instance_id": 12345}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "boot" in result[0].text.lower()
+
+
+async def test_handle_linode_instance_reboot(sample_config: Config) -> None:
+    """Test linode_instance_reboot tool."""
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.reboot_instance.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_instance_reboot(
+            {"instance_id": 12345}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "reboot" in result[0].text.lower()
+
+
+async def test_handle_linode_instance_shutdown(sample_config: Config) -> None:
+    """Test linode_instance_shutdown tool."""
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.shutdown_instance.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_instance_shutdown(
+            {"instance_id": 12345}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "shutdown" in result[0].text.lower()
+
+
+async def test_handle_linode_instance_create_no_confirm(sample_config: Config) -> None:
+    """Test linode_instance_create tool without confirmation."""
+    result = await handle_linode_instance_create(
+        {"region": "us-east", "type": "g6-nanode-1"}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "confirm" in result[0].text.lower()
+
+
+async def test_handle_linode_instance_create(
+    sample_config: Config, sample_instance_data: dict[str, Any]
+) -> None:
+    """Test linode_instance_create tool."""
+    mock_instance = Instance(
+        id=sample_instance_data["id"],
+        label=sample_instance_data["label"],
+        status=sample_instance_data["status"],
+        type=sample_instance_data["type"],
+        region=sample_instance_data["region"],
+        image=sample_instance_data["image"],
+        ipv4=sample_instance_data["ipv4"],
+        ipv6=sample_instance_data["ipv6"],
+        hypervisor=sample_instance_data["hypervisor"],
+        specs=Specs(
+            disk=sample_instance_data["specs"]["disk"],
+            memory=sample_instance_data["specs"]["memory"],
+            vcpus=sample_instance_data["specs"]["vcpus"],
+            transfer=sample_instance_data["specs"]["transfer"],
+            gpus=sample_instance_data["specs"]["gpus"],
+        ),
+        alerts=Alerts(
+            cpu=sample_instance_data["alerts"]["cpu"],
+            network_in=sample_instance_data["alerts"]["network_in"],
+            network_out=sample_instance_data["alerts"]["network_out"],
+            transfer_quota=sample_instance_data["alerts"]["transfer_quota"],
+            io=sample_instance_data["alerts"]["io"],
+        ),
+        backups=Backups(
+            enabled=sample_instance_data["backups"]["enabled"],
+            available=sample_instance_data["backups"]["available"],
+            schedule=Schedule(day="Saturday", window="W0"),
+            last_successful=None,
+        ),
+        created=sample_instance_data["created"],
+        updated=sample_instance_data["updated"],
+        group=sample_instance_data["group"],
+        tags=sample_instance_data["tags"],
+        watchdog_enabled=sample_instance_data["watchdog_enabled"],
+    )
+
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_instance.return_value = mock_instance
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_instance_create(
+            {
+                "region": "us-east",
+                "type": "g6-nanode-1",
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "created" in result[0].text.lower()
+
+
+async def test_handle_linode_instance_delete_no_confirm(sample_config: Config) -> None:
+    """Test linode_instance_delete tool without confirmation."""
+    result = await handle_linode_instance_delete(
+        {"instance_id": 12345}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "confirm" in result[0].text.lower()
+
+
+async def test_handle_linode_instance_delete(sample_config: Config) -> None:
+    """Test linode_instance_delete tool."""
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_instance.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_instance_delete(
+            {"instance_id": 12345, "confirm": True}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "deleted" in result[0].text.lower()
+
+
+async def test_handle_linode_instance_resize_no_confirm(sample_config: Config) -> None:
+    """Test linode_instance_resize tool without confirmation."""
+    result = await handle_linode_instance_resize(
+        {"instance_id": 12345, "type": "g6-standard-1"}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "confirm" in result[0].text.lower()
+
+
+async def test_handle_linode_instance_resize(sample_config: Config) -> None:
+    """Test linode_instance_resize tool."""
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.resize_instance.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_instance_resize(
+            {"instance_id": 12345, "type": "g6-standard-1", "confirm": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "resize" in result[0].text.lower()
+
+
+async def test_handle_linode_firewall_create(sample_config: Config) -> None:
+    """Test linode_firewall_create tool."""
+    mock_firewall = Firewall(
+        id=12345,
+        label="my-firewall",
+        status="enabled",
+        rules=FirewallRules(
+            inbound=[],
+            inbound_policy="ACCEPT",
+            outbound=[],
+            outbound_policy="ACCEPT",
+        ),
+        tags=[],
+        created="2024-01-15T10:00:00",
+        updated="2024-01-15T10:00:00",
+    )
+
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_firewall.return_value = mock_firewall
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_firewall_create(
+            {"label": "my-firewall"}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "my-firewall" in result[0].text
+
+
+async def test_handle_linode_firewall_update(sample_config: Config) -> None:
+    """Test linode_firewall_update tool."""
+    mock_firewall = Firewall(
+        id=12345,
+        label="updated-firewall",
+        status="enabled",
+        rules=FirewallRules(
+            inbound=[],
+            inbound_policy="ACCEPT",
+            outbound=[],
+            outbound_policy="ACCEPT",
+        ),
+        tags=[],
+        created="2024-01-15T10:00:00",
+        updated="2024-01-15T12:00:00",
+    )
+
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_firewall.return_value = mock_firewall
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_firewall_update(
+            {"firewall_id": 12345, "label": "updated-firewall"}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "updated" in result[0].text.lower()
+
+
+async def test_handle_linode_firewall_delete(sample_config: Config) -> None:
+    """Test linode_firewall_delete tool."""
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_firewall.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_firewall_delete(
+            {"firewall_id": 12345, "confirm": True}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "deleted" in result[0].text.lower()
+
+
+async def test_handle_linode_domain_create(sample_config: Config) -> None:
+    """Test linode_domain_create tool."""
+    mock_domain = Domain(
+        id=12345,
+        domain="example.com",
+        type="master",
+        status="active",
+        soa_email="admin@example.com",
+        description="",
+        tags=[],
+        created="2024-01-15T10:00:00",
+        updated="2024-01-15T10:00:00",
+    )
+
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_domain.return_value = mock_domain
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_domain_create(
+            {"domain": "example.com", "soa_email": "admin@example.com"}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "example.com" in result[0].text
+
+
+async def test_handle_linode_domain_update(sample_config: Config) -> None:
+    """Test linode_domain_update tool."""
+    mock_domain = Domain(
+        id=12345,
+        domain="example.com",
+        type="master",
+        status="active",
+        soa_email="admin@example.com",
+        description="Updated",
+        tags=[],
+        created="2024-01-15T10:00:00",
+        updated="2024-01-15T12:00:00",
+    )
+
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_domain.return_value = mock_domain
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_domain_update(
+            {"domain_id": 12345, "description": "Updated"}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "updated" in result[0].text.lower()
+
+
+async def test_handle_linode_domain_delete(sample_config: Config) -> None:
+    """Test linode_domain_delete tool."""
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_domain.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_domain_delete(
+            {"domain_id": 12345, "confirm": True}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "deleted" in result[0].text.lower()
+
+
+async def test_handle_linode_domain_record_create(sample_config: Config) -> None:
+    """Test linode_domain_record_create tool."""
+    mock_record = DomainRecord(
+        id=12345,
+        type="A",
+        name="www",
+        target="192.0.2.1",
+        priority=0,
+        weight=0,
+        port=0,
+        ttl_sec=300,
+        created="2024-01-15T10:00:00",
+        updated="2024-01-15T10:00:00",
+    )
+
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_domain_record.return_value = mock_record
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_domain_record_create(
+            {
+                "domain_id": 12345,
+                "type": "A",
+                "name": "www",
+                "target": "192.0.2.1",
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "www" in result[0].text
+
+
+async def test_handle_linode_domain_record_update(sample_config: Config) -> None:
+    """Test linode_domain_record_update tool."""
+    mock_record = DomainRecord(
+        id=12345,
+        type="A",
+        name="www",
+        target="192.0.2.2",
+        priority=0,
+        weight=0,
+        port=0,
+        ttl_sec=300,
+        created="2024-01-15T10:00:00",
+        updated="2024-01-15T12:00:00",
+    )
+
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_domain_record.return_value = mock_record
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_domain_record_update(
+            {"domain_id": 12345, "record_id": 12345, "target": "192.0.2.2"},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "updated" in result[0].text.lower()
+
+
+async def test_handle_linode_domain_record_delete(sample_config: Config) -> None:
+    """Test linode_domain_record_delete tool."""
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_domain_record.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_domain_record_delete(
+            {"domain_id": 12345, "record_id": 12345}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "deleted" in result[0].text.lower()
+
+
+async def test_handle_linode_volume_create_no_confirm(sample_config: Config) -> None:
+    """Test linode_volume_create tool without confirmation."""
+    result = await handle_linode_volume_create(
+        {"label": "my-volume", "region": "us-east"}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "confirm" in result[0].text.lower()
+
+
+async def test_handle_linode_volume_create(sample_config: Config) -> None:
+    """Test linode_volume_create tool."""
+    mock_volume = Volume(
+        id=12345,
+        label="my-volume",
+        status="creating",
+        size=20,
+        region="us-east",
+        linode_id=None,
+        linode_label=None,
+        filesystem_path="/dev/disk/by-id/scsi-0Linode_Volume_my-volume",
+        created="2024-01-15T10:00:00",
+        updated="2024-01-15T10:00:00",
+        tags=[],
+        hardware_type="nvme",
+    )
+
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_volume.return_value = mock_volume
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_volume_create(
+            {"label": "my-volume", "region": "us-east", "confirm": True}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "my-volume" in result[0].text
+
+
+async def test_handle_linode_volume_attach(sample_config: Config) -> None:
+    """Test linode_volume_attach tool."""
+    mock_volume = Volume(
+        id=12345,
+        label="my-volume",
+        status="active",
+        size=20,
+        region="us-east",
+        linode_id=54321,
+        linode_label="my-linode",
+        filesystem_path="/dev/disk/by-id/scsi-0Linode_Volume_my-volume",
+        created="2024-01-15T10:00:00",
+        updated="2024-01-15T12:00:00",
+        tags=[],
+        hardware_type="nvme",
+    )
+
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.attach_volume.return_value = mock_volume
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_volume_attach(
+            {"volume_id": 12345, "linode_id": 54321}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "attached" in result[0].text.lower()
+
+
+async def test_handle_linode_volume_detach(sample_config: Config) -> None:
+    """Test linode_volume_detach tool."""
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.detach_volume.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_volume_detach(
+            {"volume_id": 12345}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "detach" in result[0].text.lower()
+
+
+async def test_handle_linode_volume_resize_no_confirm(sample_config: Config) -> None:
+    """Test linode_volume_resize tool without confirmation."""
+    result = await handle_linode_volume_resize(
+        {"volume_id": 12345, "size": 40}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "confirm" in result[0].text.lower()
+
+
+async def test_handle_linode_volume_resize(sample_config: Config) -> None:
+    """Test linode_volume_resize tool."""
+    mock_volume = Volume(
+        id=12345,
+        label="my-volume",
+        status="resizing",
+        size=40,
+        region="us-east",
+        linode_id=None,
+        linode_label=None,
+        filesystem_path="/dev/disk/by-id/scsi-0Linode_Volume_my-volume",
+        created="2024-01-15T10:00:00",
+        updated="2024-01-15T12:00:00",
+        tags=[],
+        hardware_type="nvme",
+    )
+
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.resize_volume.return_value = mock_volume
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_volume_resize(
+            {"volume_id": 12345, "size": 40, "confirm": True}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "resize" in result[0].text.lower()
+
+
+async def test_handle_linode_volume_delete_no_confirm(sample_config: Config) -> None:
+    """Test linode_volume_delete tool without confirmation."""
+    result = await handle_linode_volume_delete(
+        {"volume_id": 12345}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "confirm" in result[0].text.lower()
+
+
+async def test_handle_linode_volume_delete(sample_config: Config) -> None:
+    """Test linode_volume_delete tool."""
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_volume.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_volume_delete(
+            {"volume_id": 12345, "confirm": True}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "deleted" in result[0].text.lower()
+
+
+async def test_handle_linode_nodebalancer_create_no_confirm(
+    sample_config: Config,
+) -> None:
+    """Test linode_nodebalancer_create tool without confirmation."""
+    result = await handle_linode_nodebalancer_create(
+        {"region": "us-east"}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "confirm" in result[0].text.lower()
+
+
+async def test_handle_linode_nodebalancer_create(sample_config: Config) -> None:
+    """Test linode_nodebalancer_create tool."""
+    mock_nodebalancer = NodeBalancer(
+        id=12345,
+        label="my-nodebalancer",
+        region="us-east",
+        hostname="nb-192-0-2-1.newark.nodebalancer.linode.com",
+        ipv4="192.0.2.1",
+        ipv6="2600:3c03::1",
+        created="2024-01-15T10:00:00",
+        updated="2024-01-15T10:00:00",
+        client_conn_throttle=0,
+        transfer=Transfer(in_=100, out=200, total=300),
+        tags=[],
+    )
+
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_nodebalancer.return_value = mock_nodebalancer
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_create(
+            {"region": "us-east", "confirm": True}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "my-nodebalancer" in result[0].text or "12345" in result[0].text
+
+
+async def test_handle_linode_nodebalancer_update(sample_config: Config) -> None:
+    """Test linode_nodebalancer_update tool."""
+    mock_nodebalancer = NodeBalancer(
+        id=12345,
+        label="updated-nodebalancer",
+        region="us-east",
+        hostname="nb-192-0-2-1.newark.nodebalancer.linode.com",
+        ipv4="192.0.2.1",
+        ipv6="2600:3c03::1",
+        created="2024-01-15T10:00:00",
+        updated="2024-01-15T12:00:00",
+        client_conn_throttle=5,
+        transfer=Transfer(in_=100, out=200, total=300),
+        tags=[],
+    )
+
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_nodebalancer.return_value = mock_nodebalancer
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_update(
+            {"nodebalancer_id": 12345, "label": "updated-nodebalancer"}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "updated" in result[0].text.lower()
+
+
+async def test_handle_linode_nodebalancer_delete(sample_config: Config) -> None:
+    """Test linode_nodebalancer_delete tool."""
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_nodebalancer.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_delete(
+            {"nodebalancer_id": 12345, "confirm": True}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "deleted" in result[0].text.lower()

@@ -2,6 +2,7 @@
 package linode
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -24,6 +25,7 @@ type Client struct {
 //
 //nolint:interfacebloat // API client interface grows with supported operations
 type ClientInterface interface {
+	// Read operations
 	GetProfile(ctx context.Context) (*Profile, error)
 	GetAccount(ctx context.Context) (*Account, error)
 	ListInstances(ctx context.Context) ([]Instance, error)
@@ -32,15 +34,53 @@ type ClientInterface interface {
 	ListTypes(ctx context.Context) ([]InstanceType, error)
 	ListVolumes(ctx context.Context) ([]Volume, error)
 	ListImages(ctx context.Context) ([]Image, error)
-	// Stage 3: Extended read operations
 	ListSSHKeys(ctx context.Context) ([]SSHKey, error)
 	ListDomains(ctx context.Context) ([]Domain, error)
 	GetDomain(ctx context.Context, domainID int) (*Domain, error)
 	ListDomainRecords(ctx context.Context, domainID int) ([]DomainRecord, error)
 	ListFirewalls(ctx context.Context) ([]Firewall, error)
+	GetFirewall(ctx context.Context, firewallID int) (*Firewall, error)
 	ListNodeBalancers(ctx context.Context) ([]NodeBalancer, error)
 	GetNodeBalancer(ctx context.Context, nodeBalancerID int) (*NodeBalancer, error)
 	ListStackScripts(ctx context.Context) ([]StackScript, error)
+	GetVolume(ctx context.Context, volumeID int) (*Volume, error)
+
+	// Stage 4: Write operations - SSH Keys
+	CreateSSHKey(ctx context.Context, req CreateSSHKeyRequest) (*SSHKey, error)
+	DeleteSSHKey(ctx context.Context, sshKeyID int) error
+
+	// Stage 4: Write operations - Instances
+	BootInstance(ctx context.Context, instanceID int, configID *int) error
+	RebootInstance(ctx context.Context, instanceID int, configID *int) error
+	ShutdownInstance(ctx context.Context, instanceID int) error
+	CreateInstance(ctx context.Context, req CreateInstanceRequest) (*Instance, error)
+	DeleteInstance(ctx context.Context, instanceID int) error
+	ResizeInstance(ctx context.Context, instanceID int, req ResizeInstanceRequest) error
+
+	// Stage 4: Write operations - Firewalls
+	CreateFirewall(ctx context.Context, req CreateFirewallRequest) (*Firewall, error)
+	UpdateFirewall(ctx context.Context, firewallID int, req UpdateFirewallRequest) (*Firewall, error)
+	DeleteFirewall(ctx context.Context, firewallID int) error
+
+	// Stage 4: Write operations - Domains
+	CreateDomain(ctx context.Context, req CreateDomainRequest) (*Domain, error)
+	UpdateDomain(ctx context.Context, domainID int, req UpdateDomainRequest) (*Domain, error)
+	DeleteDomain(ctx context.Context, domainID int) error
+	CreateDomainRecord(ctx context.Context, domainID int, req CreateDomainRecordRequest) (*DomainRecord, error)
+	UpdateDomainRecord(ctx context.Context, domainID, recordID int, req UpdateDomainRecordRequest) (*DomainRecord, error)
+	DeleteDomainRecord(ctx context.Context, domainID, recordID int) error
+
+	// Stage 4: Write operations - Volumes
+	CreateVolume(ctx context.Context, req CreateVolumeRequest) (*Volume, error)
+	AttachVolume(ctx context.Context, volumeID int, req AttachVolumeRequest) (*Volume, error)
+	DetachVolume(ctx context.Context, volumeID int) error
+	ResizeVolume(ctx context.Context, volumeID int, size int) (*Volume, error)
+	DeleteVolume(ctx context.Context, volumeID int) error
+
+	// Stage 4: Write operations - NodeBalancers
+	CreateNodeBalancer(ctx context.Context, req CreateNodeBalancerRequest) (*NodeBalancer, error)
+	UpdateNodeBalancer(ctx context.Context, nodeBalancerID int, req UpdateNodeBalancerRequest) (*NodeBalancer, error)
+	DeleteNodeBalancer(ctx context.Context, nodeBalancerID int) error
 }
 
 // Profile represents a Linode user profile.
@@ -249,9 +289,9 @@ type SSHKey struct {
 type Domain struct {
 	ID          int      `json:"id"`
 	Domain      string   `json:"domain"`
-	Type        string   `json:"type"`   // master, slave
-	Status      string   `json:"status"` // active, disabled, edit_mode
-	SOAEmail    string   `json:"soa_email"`   //nolint:tagliatelle // Linode API snake_case
+	Type        string   `json:"type"`      // master, slave
+	Status      string   `json:"status"`    // active, disabled, edit_mode
+	SOAEmail    string   `json:"soa_email"` //nolint:tagliatelle // Linode API snake_case
 	Description string   `json:"description"`
 	RetrySec    int      `json:"retry_sec"`   //nolint:tagliatelle // Linode API snake_case
 	MasterIPs   []string `json:"master_ips"`  //nolint:tagliatelle // Linode API snake_case
@@ -296,7 +336,7 @@ type Firewall struct {
 // FirewallRules represents inbound and outbound firewall rules.
 type FirewallRules struct {
 	Inbound        []FirewallRule `json:"inbound"`
-	InboundPolicy  string         `json:"inbound_policy"`  //nolint:tagliatelle // Linode API snake_case
+	InboundPolicy  string         `json:"inbound_policy"` //nolint:tagliatelle // Linode API snake_case
 	Outbound       []FirewallRule `json:"outbound"`
 	OutboundPolicy string         `json:"outbound_policy"` //nolint:tagliatelle // Linode API snake_case
 }
@@ -366,6 +406,152 @@ type UDF struct {
 	OneOf   string `json:"oneof"`
 	Default string `json:"default"`
 	ManyOf  string `json:"manyof"`
+}
+
+// Stage 4: Request types for write operations
+
+// CreateSSHKeyRequest represents the request body for creating an SSH key.
+type CreateSSHKeyRequest struct {
+	Label  string `json:"label"`
+	SSHKey string `json:"ssh_key"` //nolint:tagliatelle // Linode API snake_case
+}
+
+// CreateInstanceRequest represents the request body for creating a Linode instance.
+type CreateInstanceRequest struct {
+	Region          string   `json:"region"`
+	Type            string   `json:"type"`
+	Label           string   `json:"label,omitempty"`
+	Image           string   `json:"image,omitempty"`
+	RootPass        string   `json:"root_pass,omitempty"`        //nolint:tagliatelle // Linode API snake_case
+	AuthorizedKeys  []string `json:"authorized_keys,omitempty"`  //nolint:tagliatelle // Linode API snake_case
+	AuthorizedUsers []string `json:"authorized_users,omitempty"` //nolint:tagliatelle // Linode API snake_case
+	StackScriptID   *int     `json:"stackscript_id,omitempty"`   //nolint:tagliatelle // Linode API snake_case
+	StackScriptData any      `json:"stackscript_data,omitempty"` //nolint:tagliatelle // Linode API snake_case
+	BackupsEnabled  bool     `json:"backups_enabled,omitempty"`  //nolint:tagliatelle // Linode API snake_case
+	SwapSize        *int     `json:"swap_size,omitempty"`        //nolint:tagliatelle // Linode API snake_case
+	PrivateIP       bool     `json:"private_ip,omitempty"`       //nolint:tagliatelle // Linode API snake_case
+	Tags            []string `json:"tags,omitempty"`
+	Booted          *bool    `json:"booted,omitempty"`
+}
+
+// ResizeInstanceRequest represents the request body for resizing a Linode instance.
+type ResizeInstanceRequest struct {
+	Type          string `json:"type"`
+	AllowAutoDisk bool   `json:"allow_auto_disk,omitempty"` //nolint:tagliatelle // Linode API snake_case
+	MigrationType string `json:"migration_type,omitempty"`  //nolint:tagliatelle // Linode API snake_case (cold, warm)
+}
+
+// CreateFirewallRequest represents the request body for creating a firewall.
+type CreateFirewallRequest struct {
+	Label   string         `json:"label"`
+	Rules   *FirewallRules `json:"rules,omitempty"`
+	Tags    []string       `json:"tags,omitempty"`
+	Devices []Device       `json:"devices,omitempty"`
+}
+
+// Device represents a device attached to a firewall.
+type Device struct {
+	ID   int    `json:"id"`
+	Type string `json:"type"` // linode, nodebalancer
+}
+
+// UpdateFirewallRequest represents the request body for updating a firewall.
+type UpdateFirewallRequest struct {
+	Label  string         `json:"label,omitempty"`
+	Status string         `json:"status,omitempty"` // enabled, disabled
+	Rules  *FirewallRules `json:"rules,omitempty"`
+	Tags   []string       `json:"tags,omitempty"`
+}
+
+// CreateDomainRequest represents the request body for creating a domain.
+type CreateDomainRequest struct {
+	Domain      string   `json:"domain"`
+	Type        string   `json:"type"`                // master, slave
+	SOAEmail    string   `json:"soa_email,omitempty"` //nolint:tagliatelle // Linode API snake_case
+	Description string   `json:"description,omitempty"`
+	RetrySec    int      `json:"retry_sec,omitempty"`   //nolint:tagliatelle // Linode API snake_case
+	MasterIPs   []string `json:"master_ips,omitempty"`  //nolint:tagliatelle // Linode API snake_case
+	AXFRIPs     []string `json:"axfr_ips,omitempty"`    //nolint:tagliatelle // Linode API snake_case
+	ExpireSec   int      `json:"expire_sec,omitempty"`  //nolint:tagliatelle // Linode API snake_case
+	RefreshSec  int      `json:"refresh_sec,omitempty"` //nolint:tagliatelle // Linode API snake_case
+	TTLSec      int      `json:"ttl_sec,omitempty"`     //nolint:tagliatelle // Linode API snake_case
+	Tags        []string `json:"tags,omitempty"`
+	Group       string   `json:"group,omitempty"`
+}
+
+// UpdateDomainRequest represents the request body for updating a domain.
+type UpdateDomainRequest struct {
+	Domain      string   `json:"domain,omitempty"`
+	Status      string   `json:"status,omitempty"`    // active, disabled, edit_mode
+	SOAEmail    string   `json:"soa_email,omitempty"` //nolint:tagliatelle // Linode API snake_case
+	Description string   `json:"description,omitempty"`
+	RetrySec    int      `json:"retry_sec,omitempty"`   //nolint:tagliatelle // Linode API snake_case
+	MasterIPs   []string `json:"master_ips,omitempty"`  //nolint:tagliatelle // Linode API snake_case
+	AXFRIPs     []string `json:"axfr_ips,omitempty"`    //nolint:tagliatelle // Linode API snake_case
+	ExpireSec   int      `json:"expire_sec,omitempty"`  //nolint:tagliatelle // Linode API snake_case
+	RefreshSec  int      `json:"refresh_sec,omitempty"` //nolint:tagliatelle // Linode API snake_case
+	TTLSec      int      `json:"ttl_sec,omitempty"`     //nolint:tagliatelle // Linode API snake_case
+	Tags        []string `json:"tags,omitempty"`
+	Group       string   `json:"group,omitempty"`
+}
+
+// CreateDomainRecordRequest represents the request body for creating a domain record.
+type CreateDomainRecordRequest struct {
+	Type     string `json:"type"` // A, AAAA, NS, MX, CNAME, TXT, SRV, CAA, PTR
+	Name     string `json:"name,omitempty"`
+	Target   string `json:"target"`
+	Priority int    `json:"priority,omitempty"`
+	Weight   int    `json:"weight,omitempty"`
+	Port     int    `json:"port,omitempty"`
+	Service  string `json:"service,omitempty"`
+	Protocol string `json:"protocol,omitempty"`
+	TTLSec   int    `json:"ttl_sec,omitempty"` //nolint:tagliatelle // Linode API snake_case
+	Tag      string `json:"tag,omitempty"`
+}
+
+// UpdateDomainRecordRequest represents the request body for updating a domain record.
+type UpdateDomainRecordRequest struct {
+	Name     string `json:"name,omitempty"`
+	Target   string `json:"target,omitempty"`
+	Priority int    `json:"priority,omitempty"`
+	Weight   int    `json:"weight,omitempty"`
+	Port     int    `json:"port,omitempty"`
+	Service  string `json:"service,omitempty"`
+	Protocol string `json:"protocol,omitempty"`
+	TTLSec   int    `json:"ttl_sec,omitempty"` //nolint:tagliatelle // Linode API snake_case
+	Tag      string `json:"tag,omitempty"`
+}
+
+// CreateVolumeRequest represents the request body for creating a volume.
+type CreateVolumeRequest struct {
+	Label    string   `json:"label"`
+	Region   string   `json:"region,omitempty"`
+	Size     int      `json:"size,omitempty"`
+	LinodeID *int     `json:"linode_id,omitempty"` //nolint:tagliatelle // Linode API snake_case
+	ConfigID *int     `json:"config_id,omitempty"` //nolint:tagliatelle // Linode API snake_case
+	Tags     []string `json:"tags,omitempty"`
+}
+
+// AttachVolumeRequest represents the request body for attaching a volume to a Linode.
+type AttachVolumeRequest struct {
+	LinodeID           int  `json:"linode_id"`                      //nolint:tagliatelle // Linode API snake_case
+	ConfigID           *int `json:"config_id,omitempty"`            //nolint:tagliatelle // Linode API snake_case
+	PersistAcrossBoots bool `json:"persist_across_boots,omitempty"` //nolint:tagliatelle // Linode API snake_case
+}
+
+// CreateNodeBalancerRequest represents the request body for creating a NodeBalancer.
+type CreateNodeBalancerRequest struct {
+	Region             string   `json:"region"`
+	Label              string   `json:"label,omitempty"`
+	ClientConnThrottle int      `json:"client_conn_throttle,omitempty"` //nolint:tagliatelle // Linode API snake_case
+	Tags               []string `json:"tags,omitempty"`
+}
+
+// UpdateNodeBalancerRequest represents the request body for updating a NodeBalancer.
+type UpdateNodeBalancerRequest struct {
+	Label              string   `json:"label,omitempty"`
+	ClientConnThrottle *int     `json:"client_conn_throttle,omitempty"` //nolint:tagliatelle // Linode API snake_case
+	Tags               []string `json:"tags,omitempty"`
 }
 
 const (
@@ -798,7 +984,543 @@ func (c *Client) ListStackScripts(ctx context.Context) ([]StackScript, error) {
 	return response.Data, nil
 }
 
-//nolint:unparam // method is always GET but will support POST/PUT/DELETE in future stages
+// Stage 4: Write operations
+
+// GetFirewall retrieves a single firewall by its ID.
+func (c *Client) GetFirewall(ctx context.Context, firewallID int) (*Firewall, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/networking/firewalls/%d", firewallID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetFirewall", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var firewall Firewall
+	if err := c.handleResponse(resp, &firewall); err != nil {
+		return nil, err
+	}
+
+	return &firewall, nil
+}
+
+// GetVolume retrieves a single volume by its ID.
+func (c *Client) GetVolume(ctx context.Context, volumeID int) (*Volume, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/volumes/%d", volumeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetVolume", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var volume Volume
+	if err := c.handleResponse(resp, &volume); err != nil {
+		return nil, err
+	}
+
+	return &volume, nil
+}
+
+// CreateSSHKey creates a new SSH key in the user's profile.
+func (c *Client) CreateSSHKey(ctx context.Context, req CreateSSHKeyRequest) (*SSHKey, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeJSONRequest(ctx, http.MethodPost, "/profile/sshkeys", req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateSSHKey", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var sshKey SSHKey
+	if err := c.handleResponse(resp, &sshKey); err != nil {
+		return nil, err
+	}
+
+	return &sshKey, nil
+}
+
+// DeleteSSHKey deletes an SSH key from the user's profile.
+func (c *Client) DeleteSSHKey(ctx context.Context, sshKeyID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/profile/sshkeys/%d", sshKeyID)
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteSSHKey", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	return c.handleResponse(resp, nil)
+}
+
+// BootInstance boots a Linode instance.
+func (c *Client) BootInstance(ctx context.Context, instanceID int, configID *int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/linode/instances/%d/boot", instanceID)
+
+	var payload any
+	if configID != nil {
+		payload = map[string]int{"config_id": *configID}
+	}
+
+	resp, err := c.makeJSONRequest(ctx, http.MethodPost, endpoint, payload)
+	if err != nil {
+		return &NetworkError{Operation: "BootInstance", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	return c.handleResponse(resp, nil)
+}
+
+// RebootInstance reboots a Linode instance.
+func (c *Client) RebootInstance(ctx context.Context, instanceID int, configID *int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/linode/instances/%d/reboot", instanceID)
+
+	var payload any
+	if configID != nil {
+		payload = map[string]int{"config_id": *configID}
+	}
+
+	resp, err := c.makeJSONRequest(ctx, http.MethodPost, endpoint, payload)
+	if err != nil {
+		return &NetworkError{Operation: "RebootInstance", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	return c.handleResponse(resp, nil)
+}
+
+// ShutdownInstance shuts down a Linode instance.
+func (c *Client) ShutdownInstance(ctx context.Context, instanceID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/linode/instances/%d/shutdown", instanceID)
+
+	resp, err := c.makeJSONRequest(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "ShutdownInstance", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	return c.handleResponse(resp, nil)
+}
+
+// CreateInstance creates a new Linode instance.
+func (c *Client) CreateInstance(ctx context.Context, req CreateInstanceRequest) (*Instance, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeJSONRequest(ctx, http.MethodPost, "/linode/instances", req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateInstance", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var instance Instance
+	if err := c.handleResponse(resp, &instance); err != nil {
+		return nil, err
+	}
+
+	return &instance, nil
+}
+
+// DeleteInstance deletes a Linode instance.
+func (c *Client) DeleteInstance(ctx context.Context, instanceID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/linode/instances/%d", instanceID)
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteInstance", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	return c.handleResponse(resp, nil)
+}
+
+// ResizeInstance resizes a Linode instance to a new plan.
+func (c *Client) ResizeInstance(ctx context.Context, instanceID int, req ResizeInstanceRequest) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/linode/instances/%d/resize", instanceID)
+
+	resp, err := c.makeJSONRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return &NetworkError{Operation: "ResizeInstance", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	return c.handleResponse(resp, nil)
+}
+
+// CreateFirewall creates a new Cloud Firewall.
+func (c *Client) CreateFirewall(ctx context.Context, req CreateFirewallRequest) (*Firewall, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeJSONRequest(ctx, http.MethodPost, "/networking/firewalls", req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateFirewall", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var firewall Firewall
+	if err := c.handleResponse(resp, &firewall); err != nil {
+		return nil, err
+	}
+
+	return &firewall, nil
+}
+
+// UpdateFirewall updates an existing Cloud Firewall.
+func (c *Client) UpdateFirewall(ctx context.Context, firewallID int, req UpdateFirewallRequest) (*Firewall, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/networking/firewalls/%d", firewallID)
+
+	resp, err := c.makeJSONRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateFirewall", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var firewall Firewall
+	if err := c.handleResponse(resp, &firewall); err != nil {
+		return nil, err
+	}
+
+	return &firewall, nil
+}
+
+// DeleteFirewall deletes a Cloud Firewall.
+func (c *Client) DeleteFirewall(ctx context.Context, firewallID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/networking/firewalls/%d", firewallID)
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteFirewall", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	return c.handleResponse(resp, nil)
+}
+
+// CreateDomain creates a new DNS domain.
+func (c *Client) CreateDomain(ctx context.Context, req CreateDomainRequest) (*Domain, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeJSONRequest(ctx, http.MethodPost, "/domains", req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateDomain", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var domain Domain
+	if err := c.handleResponse(resp, &domain); err != nil {
+		return nil, err
+	}
+
+	return &domain, nil
+}
+
+// UpdateDomain updates an existing DNS domain.
+func (c *Client) UpdateDomain(ctx context.Context, domainID int, req UpdateDomainRequest) (*Domain, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/domains/%d", domainID)
+
+	resp, err := c.makeJSONRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateDomain", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var domain Domain
+	if err := c.handleResponse(resp, &domain); err != nil {
+		return nil, err
+	}
+
+	return &domain, nil
+}
+
+// DeleteDomain deletes a DNS domain and all its records.
+func (c *Client) DeleteDomain(ctx context.Context, domainID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/domains/%d", domainID)
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteDomain", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	return c.handleResponse(resp, nil)
+}
+
+// CreateDomainRecord creates a new DNS record within a domain.
+func (c *Client) CreateDomainRecord(ctx context.Context, domainID int, req CreateDomainRecordRequest) (*DomainRecord, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/domains/%d/records", domainID)
+
+	resp, err := c.makeJSONRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateDomainRecord", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var record DomainRecord
+	if err := c.handleResponse(resp, &record); err != nil {
+		return nil, err
+	}
+
+	return &record, nil
+}
+
+// UpdateDomainRecord updates an existing DNS record.
+func (c *Client) UpdateDomainRecord(ctx context.Context, domainID, recordID int, req UpdateDomainRecordRequest) (*DomainRecord, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/domains/%d/records/%d", domainID, recordID)
+
+	resp, err := c.makeJSONRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateDomainRecord", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var record DomainRecord
+	if err := c.handleResponse(resp, &record); err != nil {
+		return nil, err
+	}
+
+	return &record, nil
+}
+
+// DeleteDomainRecord deletes a DNS record from a domain.
+func (c *Client) DeleteDomainRecord(ctx context.Context, domainID, recordID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/domains/%d/records/%d", domainID, recordID)
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteDomainRecord", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	return c.handleResponse(resp, nil)
+}
+
+// CreateVolume creates a new block storage volume.
+func (c *Client) CreateVolume(ctx context.Context, req CreateVolumeRequest) (*Volume, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeJSONRequest(ctx, http.MethodPost, "/volumes", req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateVolume", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var volume Volume
+	if err := c.handleResponse(resp, &volume); err != nil {
+		return nil, err
+	}
+
+	return &volume, nil
+}
+
+// AttachVolume attaches a volume to a Linode instance.
+func (c *Client) AttachVolume(ctx context.Context, volumeID int, req AttachVolumeRequest) (*Volume, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/volumes/%d/attach", volumeID)
+
+	resp, err := c.makeJSONRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "AttachVolume", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var volume Volume
+	if err := c.handleResponse(resp, &volume); err != nil {
+		return nil, err
+	}
+
+	return &volume, nil
+}
+
+// DetachVolume detaches a volume from a Linode instance.
+func (c *Client) DetachVolume(ctx context.Context, volumeID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/volumes/%d/detach", volumeID)
+
+	resp, err := c.makeJSONRequest(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DetachVolume", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	return c.handleResponse(resp, nil)
+}
+
+// ResizeVolume resizes a volume to a larger size.
+func (c *Client) ResizeVolume(ctx context.Context, volumeID int, size int) (*Volume, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/volumes/%d/resize", volumeID)
+	payload := map[string]int{"size": size}
+
+	resp, err := c.makeJSONRequest(ctx, http.MethodPost, endpoint, payload)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ResizeVolume", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var volume Volume
+	if err := c.handleResponse(resp, &volume); err != nil {
+		return nil, err
+	}
+
+	return &volume, nil
+}
+
+// DeleteVolume deletes a block storage volume.
+func (c *Client) DeleteVolume(ctx context.Context, volumeID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/volumes/%d", volumeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteVolume", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	return c.handleResponse(resp, nil)
+}
+
+// CreateNodeBalancer creates a new NodeBalancer.
+func (c *Client) CreateNodeBalancer(ctx context.Context, req CreateNodeBalancerRequest) (*NodeBalancer, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeJSONRequest(ctx, http.MethodPost, "/nodebalancers", req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateNodeBalancer", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var nodeBalancer NodeBalancer
+	if err := c.handleResponse(resp, &nodeBalancer); err != nil {
+		return nil, err
+	}
+
+	return &nodeBalancer, nil
+}
+
+// UpdateNodeBalancer updates an existing NodeBalancer.
+func (c *Client) UpdateNodeBalancer(ctx context.Context, nodeBalancerID int, req UpdateNodeBalancerRequest) (*NodeBalancer, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/nodebalancers/%d", nodeBalancerID)
+
+	resp, err := c.makeJSONRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateNodeBalancer", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var nodeBalancer NodeBalancer
+	if err := c.handleResponse(resp, &nodeBalancer); err != nil {
+		return nil, err
+	}
+
+	return &nodeBalancer, nil
+}
+
+// DeleteNodeBalancer deletes a NodeBalancer.
+func (c *Client) DeleteNodeBalancer(ctx context.Context, nodeBalancerID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/nodebalancers/%d", nodeBalancerID)
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteNodeBalancer", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	return c.handleResponse(resp, nil)
+}
+
+// Private helper methods
+
 func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body io.Reader) (*http.Response, error) {
 	url := c.baseURL + endpoint
 
@@ -817,6 +1539,21 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 	}
 
 	return resp, nil
+}
+
+func (c *Client) makeJSONRequest(ctx context.Context, method, endpoint string, payload any) (*http.Response, error) {
+	var body io.Reader
+
+	if payload != nil {
+		jsonData, err := json.Marshal(payload)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal request body: %w", err)
+		}
+
+		body = bytes.NewReader(jsonData)
+	}
+
+	return c.makeRequest(ctx, method, endpoint, body)
 }
 
 func (c *Client) handleResponse(resp *http.Response, target any) error {

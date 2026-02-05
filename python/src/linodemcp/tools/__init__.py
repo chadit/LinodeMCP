@@ -20,41 +20,92 @@ def _truncate_string(value: str, limit: int) -> str:
         return value[:limit] + "..."
     return value
 
+
 __all__ = [
     "create_hello_tool",
     "create_linode_account_tool",
+    "create_linode_domain_create_tool",
+    "create_linode_domain_delete_tool",
     "create_linode_domain_get_tool",
+    "create_linode_domain_record_create_tool",
+    "create_linode_domain_record_delete_tool",
+    "create_linode_domain_record_update_tool",
     "create_linode_domain_records_list_tool",
+    "create_linode_domain_update_tool",
     "create_linode_domains_list_tool",
+    "create_linode_firewall_create_tool",
+    "create_linode_firewall_delete_tool",
+    "create_linode_firewall_update_tool",
     "create_linode_firewalls_list_tool",
     "create_linode_images_list_tool",
+    "create_linode_instance_boot_tool",
+    "create_linode_instance_create_tool",
+    "create_linode_instance_delete_tool",
     "create_linode_instance_get_tool",
+    "create_linode_instance_reboot_tool",
+    "create_linode_instance_resize_tool",
+    "create_linode_instance_shutdown_tool",
     "create_linode_instances_list_tool",
+    "create_linode_nodebalancer_create_tool",
+    "create_linode_nodebalancer_delete_tool",
     "create_linode_nodebalancer_get_tool",
+    "create_linode_nodebalancer_update_tool",
     "create_linode_nodebalancers_list_tool",
     "create_linode_profile_tool",
     "create_linode_regions_list_tool",
+    "create_linode_sshkey_create_tool",
+    "create_linode_sshkey_delete_tool",
     "create_linode_sshkeys_list_tool",
     "create_linode_stackscripts_list_tool",
     "create_linode_types_list_tool",
+    "create_linode_volume_attach_tool",
+    "create_linode_volume_create_tool",
+    "create_linode_volume_delete_tool",
+    "create_linode_volume_detach_tool",
+    "create_linode_volume_resize_tool",
     "create_linode_volumes_list_tool",
     "create_version_tool",
     "handle_hello",
     "handle_linode_account",
+    "handle_linode_domain_create",
+    "handle_linode_domain_delete",
     "handle_linode_domain_get",
+    "handle_linode_domain_record_create",
+    "handle_linode_domain_record_delete",
+    "handle_linode_domain_record_update",
     "handle_linode_domain_records_list",
+    "handle_linode_domain_update",
     "handle_linode_domains_list",
+    "handle_linode_firewall_create",
+    "handle_linode_firewall_delete",
+    "handle_linode_firewall_update",
     "handle_linode_firewalls_list",
     "handle_linode_images_list",
+    "handle_linode_instance_boot",
+    "handle_linode_instance_create",
+    "handle_linode_instance_delete",
     "handle_linode_instance_get",
+    "handle_linode_instance_reboot",
+    "handle_linode_instance_resize",
+    "handle_linode_instance_shutdown",
     "handle_linode_instances_list",
+    "handle_linode_nodebalancer_create",
+    "handle_linode_nodebalancer_delete",
     "handle_linode_nodebalancer_get",
+    "handle_linode_nodebalancer_update",
     "handle_linode_nodebalancers_list",
     "handle_linode_profile",
     "handle_linode_regions_list",
+    "handle_linode_sshkey_create",
+    "handle_linode_sshkey_delete",
     "handle_linode_sshkeys_list",
     "handle_linode_stackscripts_list",
     "handle_linode_types_list",
+    "handle_linode_volume_attach",
+    "handle_linode_volume_create",
+    "handle_linode_volume_delete",
+    "handle_linode_volume_detach",
+    "handle_linode_volume_resize",
     "handle_linode_volumes_list",
     "handle_version",
 ]
@@ -554,9 +605,7 @@ async def handle_linode_types_list(
             types = await client.list_types()
 
             if class_filter:
-                types = [
-                    t for t in types if t.class_.lower() == class_filter.lower()
-                ]
+                types = [t for t in types if t.class_.lower() == class_filter.lower()]
 
             types_data = [
                 {
@@ -585,9 +634,7 @@ async def handle_linode_types_list(
     except (EnvironmentNotFoundError, ValueError) as e:
         return [TextContent(type="text", text=f"Error: {e}")]
     except Exception as e:
-        return [
-            TextContent(type="text", text=f"Failed to retrieve Linode types: {e}")
-        ]
+        return [TextContent(type="text", text=f"Failed to retrieve Linode types: {e}")]
 
 
 def create_linode_volumes_list_tool() -> Tool:
@@ -649,9 +696,7 @@ async def handle_linode_volumes_list(
 
             if label_contains:
                 volumes = [
-                    v
-                    for v in volumes
-                    if label_contains.lower() in v.label.lower()
+                    v for v in volumes if label_contains.lower() in v.label.lower()
                 ]
 
             volumes_data = [
@@ -792,9 +837,7 @@ async def handle_linode_images_list(
     except (EnvironmentNotFoundError, ValueError) as e:
         return [TextContent(type="text", text=f"Error: {e}")]
     except Exception as e:
-        return [
-            TextContent(type="text", text=f"Failed to retrieve Linode images: {e}")
-        ]
+        return [TextContent(type="text", text=f"Failed to retrieve Linode images: {e}")]
 
 
 # Stage 3: Extended read operations
@@ -848,9 +891,7 @@ async def handle_linode_sshkeys_list(
             keys = await client.list_ssh_keys()
 
             if label_contains:
-                keys = [
-                    k for k in keys if label_contains.lower() in k.label.lower()
-                ]
+                keys = [k for k in keys if label_contains.lower() in k.label.lower()]
 
             keys_data = [
                 {
@@ -876,9 +917,7 @@ async def handle_linode_sshkeys_list(
     except (EnvironmentNotFoundError, ValueError) as e:
         return [TextContent(type="text", text=f"Error: {e}")]
     except Exception as e:
-        return [
-            TextContent(type="text", text=f"Failed to retrieve SSH keys: {e}")
-        ]
+        return [TextContent(type="text", text=f"Failed to retrieve SSH keys: {e}")]
 
 
 def create_linode_domains_list_tool() -> Tool:
@@ -939,9 +978,7 @@ async def handle_linode_domains_list(
                 ]
 
             if type_filter:
-                domains = [
-                    d for d in domains if d.type.lower() == type_filter.lower()
-                ]
+                domains = [d for d in domains if d.type.lower() == type_filter.lower()]
 
             domains_data = [
                 {
@@ -975,9 +1012,7 @@ async def handle_linode_domains_list(
     except (EnvironmentNotFoundError, ValueError) as e:
         return [TextContent(type="text", text=f"Error: {e}")]
     except Exception as e:
-        return [
-            TextContent(type="text", text=f"Failed to retrieve domains: {e}")
-        ]
+        return [TextContent(type="text", text=f"Failed to retrieve domains: {e}")]
 
 
 def create_linode_domain_get_tool() -> Tool:
@@ -1043,9 +1078,7 @@ async def handle_linode_domain_get(
     except (EnvironmentNotFoundError, ValueError) as e:
         return [TextContent(type="text", text=f"Error: {e}")]
     except Exception as e:
-        return [
-            TextContent(type="text", text=f"Failed to retrieve domain: {e}")
-        ]
+        return [TextContent(type="text", text=f"Failed to retrieve domain: {e}")]
 
 
 def create_linode_domain_records_list_tool() -> Tool:
@@ -1114,9 +1147,7 @@ async def handle_linode_domain_records_list(
             records = await client.list_domain_records(int(domain_id))
 
             if type_filter:
-                records = [
-                    r for r in records if r.type.upper() == type_filter.upper()
-                ]
+                records = [r for r in records if r.type.upper() == type_filter.upper()]
 
             if name_contains:
                 records = [
@@ -1165,8 +1196,7 @@ def create_linode_firewalls_list_tool() -> Tool:
     return Tool(
         name="linode_firewalls_list",
         description=(
-            "Lists all Cloud Firewalls on your account. "
-            "Can filter by status or label."
+            "Lists all Cloud Firewalls on your account. Can filter by status or label."
         ),
         inputSchema={
             "type": "object",
@@ -1256,9 +1286,7 @@ async def handle_linode_firewalls_list(
     except (EnvironmentNotFoundError, ValueError) as e:
         return [TextContent(type="text", text=f"Error: {e}")]
     except Exception as e:
-        return [
-            TextContent(type="text", text=f"Failed to retrieve firewalls: {e}")
-        ]
+        return [TextContent(type="text", text=f"Failed to retrieve firewalls: {e}")]
 
 
 def create_linode_nodebalancers_list_tool() -> Tool:
@@ -1266,8 +1294,7 @@ def create_linode_nodebalancers_list_tool() -> Tool:
     return Tool(
         name="linode_nodebalancers_list",
         description=(
-            "Lists all NodeBalancers on your account. "
-            "Can filter by region or label."
+            "Lists all NodeBalancers on your account. Can filter by region or label."
         ),
         inputSchema={
             "type": "object",
@@ -1315,13 +1342,15 @@ async def handle_linode_nodebalancers_list(
 
             if region_filter:
                 nodebalancers = [
-                    nb for nb in nodebalancers
+                    nb
+                    for nb in nodebalancers
                     if nb.region.lower() == region_filter.lower()
                 ]
 
             if label_contains:
                 nodebalancers = [
-                    nb for nb in nodebalancers
+                    nb
+                    for nb in nodebalancers
                     if label_contains.lower() in nb.label.lower()
                 ]
 
@@ -1357,9 +1386,7 @@ async def handle_linode_nodebalancers_list(
     except (EnvironmentNotFoundError, ValueError) as e:
         return [TextContent(type="text", text=f"Error: {e}")]
     except Exception as e:
-        return [
-            TextContent(type="text", text=f"Failed to retrieve NodeBalancers: {e}")
-        ]
+        return [TextContent(type="text", text=f"Failed to retrieve NodeBalancers: {e}")]
 
 
 def create_linode_nodebalancer_get_tool() -> Tool:
@@ -1433,9 +1460,7 @@ async def handle_linode_nodebalancer_get(
     except (EnvironmentNotFoundError, ValueError) as e:
         return [TextContent(type="text", text=f"Error: {e}")]
     except Exception as e:
-        return [
-            TextContent(type="text", text=f"Failed to retrieve NodeBalancer: {e}")
-        ]
+        return [TextContent(type="text", text=f"Failed to retrieve NodeBalancer: {e}")]
 
 
 def create_linode_stackscripts_list_tool() -> Tool:
@@ -1549,6 +1574,2075 @@ async def handle_linode_stackscripts_list(
     except (EnvironmentNotFoundError, ValueError) as e:
         return [TextContent(type="text", text=f"Error: {e}")]
     except Exception as e:
+        return [TextContent(type="text", text=f"Failed to retrieve StackScripts: {e}")]
+
+
+# Stage 4: Write operations
+
+
+def create_linode_sshkey_create_tool() -> Tool:
+    """Create the linode_sshkey_create tool."""
+    return Tool(
+        name="linode_sshkey_create",
+        description="Creates a new SSH key and adds it to your Linode profile.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "label": {
+                    "type": "string",
+                    "description": "A label for the SSH key (required)",
+                },
+                "ssh_key": {
+                    "type": "string",
+                    "description": "The public SSH key (required)",
+                },
+            },
+            "required": ["label", "ssh_key"],
+        },
+    )
+
+
+async def handle_linode_sshkey_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_sshkey_create tool request."""
+    environment = arguments.get("environment", "")
+    label = arguments.get("label", "")
+    ssh_key = arguments.get("ssh_key", "")
+
+    if not label:
+        return [TextContent(type="text", text="Error: label is required")]
+    if not ssh_key:
+        return [TextContent(type="text", text="Error: ssh_key is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            key = await client.create_ssh_key(label, ssh_key)
+
+            response = {
+                "message": f"SSH key '{key.label}' (ID: {key.id}) created successfully",
+                "ssh_key": {
+                    "id": key.id,
+                    "label": key.label,
+                    "created": key.created,
+                },
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Failed to create SSH key: {e}")]
+
+
+def create_linode_sshkey_delete_tool() -> Tool:
+    """Create the linode_sshkey_delete tool."""
+    return Tool(
+        name="linode_sshkey_delete",
+        description="Deletes an SSH key from your Linode profile.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "ssh_key_id": {
+                    "type": "integer",
+                    "description": "The ID of the SSH key to delete (required)",
+                },
+            },
+            "required": ["ssh_key_id"],
+        },
+    )
+
+
+async def handle_linode_sshkey_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_sshkey_delete tool request."""
+    environment = arguments.get("environment", "")
+    ssh_key_id = arguments.get("ssh_key_id", 0)
+
+    if not ssh_key_id:
+        return [TextContent(type="text", text="Error: ssh_key_id is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            await client.delete_ssh_key(int(ssh_key_id))
+
+            response = {
+                "message": f"SSH key {ssh_key_id} deleted successfully",
+                "ssh_key_id": ssh_key_id,
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Failed to delete SSH key: {e}")]
+
+
+def create_linode_instance_boot_tool() -> Tool:
+    """Create the linode_instance_boot tool."""
+    return Tool(
+        name="linode_instance_boot",
+        description="Boots a Linode instance that is currently offline.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "instance_id": {
+                    "type": "integer",
+                    "description": "The ID of the instance to boot (required)",
+                },
+                "config_id": {
+                    "type": "integer",
+                    "description": (
+                        "The ID of the config profile to boot with (optional)"
+                    ),
+                },
+            },
+            "required": ["instance_id"],
+        },
+    )
+
+
+async def handle_linode_instance_boot(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_boot tool request."""
+    environment = arguments.get("environment", "")
+    instance_id = arguments.get("instance_id", 0)
+    config_id = arguments.get("config_id")
+
+    if not instance_id:
+        return [TextContent(type="text", text="Error: instance_id is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            await client.boot_instance(int(instance_id), config_id)
+
+            response = {
+                "message": f"Instance {instance_id} boot initiated successfully",
+                "instance_id": instance_id,
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Failed to boot instance: {e}")]
+
+
+def create_linode_instance_reboot_tool() -> Tool:
+    """Create the linode_instance_reboot tool."""
+    return Tool(
+        name="linode_instance_reboot",
+        description="Reboots a running Linode instance.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "instance_id": {
+                    "type": "integer",
+                    "description": "The ID of the instance to reboot (required)",
+                },
+                "config_id": {
+                    "type": "integer",
+                    "description": (
+                        "The ID of the config profile to reboot with (optional)"
+                    ),
+                },
+            },
+            "required": ["instance_id"],
+        },
+    )
+
+
+async def handle_linode_instance_reboot(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_reboot tool request."""
+    environment = arguments.get("environment", "")
+    instance_id = arguments.get("instance_id", 0)
+    config_id = arguments.get("config_id")
+
+    if not instance_id:
+        return [TextContent(type="text", text="Error: instance_id is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            await client.reboot_instance(int(instance_id), config_id)
+
+            response = {
+                "message": f"Instance {instance_id} reboot initiated successfully",
+                "instance_id": instance_id,
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Failed to reboot instance: {e}")]
+
+
+def create_linode_instance_shutdown_tool() -> Tool:
+    """Create the linode_instance_shutdown tool."""
+    return Tool(
+        name="linode_instance_shutdown",
+        description="Shuts down a running Linode instance.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "instance_id": {
+                    "type": "integer",
+                    "description": "The ID of the instance to shutdown (required)",
+                },
+            },
+            "required": ["instance_id"],
+        },
+    )
+
+
+async def handle_linode_instance_shutdown(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_shutdown tool request."""
+    environment = arguments.get("environment", "")
+    instance_id = arguments.get("instance_id", 0)
+
+    if not instance_id:
+        return [TextContent(type="text", text="Error: instance_id is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            await client.shutdown_instance(int(instance_id))
+
+            response = {
+                "message": f"Instance {instance_id} shutdown initiated successfully",
+                "instance_id": instance_id,
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Failed to shutdown instance: {e}")]
+
+
+def create_linode_instance_create_tool() -> Tool:
+    """Create the linode_instance_create tool."""
+    return Tool(
+        name="linode_instance_create",
+        description=(
+            "Creates a new Linode instance. WARNING: Billing starts immediately. "
+            "Use linode_regions_list and linode_types_list to find valid values."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "region": {
+                    "type": "string",
+                    "description": (
+                        "Region where the instance will be created (required)"
+                    ),
+                },
+                "type": {
+                    "type": "string",
+                    "description": "Instance type/plan (required)",
+                },
+                "image": {
+                    "type": "string",
+                    "description": "Image ID to deploy (optional)",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Label for the instance (optional)",
+                },
+                "root_pass": {
+                    "type": "string",
+                    "description": "Root password (required if image is provided)",
+                },
+                "authorized_keys": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "SSH public keys to add (optional)",
+                },
+                "booted": {
+                    "type": "boolean",
+                    "description": "Whether to boot the instance (default: true)",
+                },
+                "backups_enabled": {
+                    "type": "boolean",
+                    "description": "Enable backups (default: false)",
+                },
+                "private_ip": {
+                    "type": "boolean",
+                    "description": "Add private IP (default: false)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to confirm creation. This incurs billing."
+                    ),
+                },
+            },
+            "required": ["region", "type", "confirm"],
+        },
+    )
+
+
+async def handle_linode_instance_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_create tool request."""
+    environment = arguments.get("environment", "")
+    confirm = arguments.get("confirm", False)
+
+    if not confirm:
         return [
-            TextContent(type="text", text=f"Failed to retrieve StackScripts: {e}")
+            TextContent(
+                type="text",
+                text="Error: This creates a billable resource. Set confirm=true.",
+            )
         ]
+
+    region = arguments.get("region", "")
+    instance_type = arguments.get("type", "")
+
+    if not region:
+        return [TextContent(type="text", text="Error: region is required")]
+    if not instance_type:
+        return [TextContent(type="text", text="Error: type is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            instance = await client.create_instance(
+                region=region,
+                instance_type=instance_type,
+                image=arguments.get("image"),
+                label=arguments.get("label"),
+                root_pass=arguments.get("root_pass"),
+                authorized_keys=arguments.get("authorized_keys"),
+                booted=arguments.get("booted", True),
+                backups_enabled=arguments.get("backups_enabled", False),
+                private_ip=arguments.get("private_ip", False),
+            )
+
+            response = {
+                "message": (
+                    f"Instance '{instance.label}' (ID: {instance.id}) "
+                    f"created successfully in {instance.region}"
+                ),
+                "instance": {
+                    "id": instance.id,
+                    "label": instance.label,
+                    "status": instance.status,
+                    "type": instance.type,
+                    "region": instance.region,
+                    "ipv4": instance.ipv4,
+                    "ipv6": instance.ipv6,
+                },
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Failed to create instance: {e}")]
+
+
+def create_linode_instance_delete_tool() -> Tool:
+    """Create the linode_instance_delete tool."""
+    return Tool(
+        name="linode_instance_delete",
+        description=(
+            "Deletes a Linode instance. WARNING: This is destructive and cannot "
+            "be undone. All data will be lost."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "instance_id": {
+                    "type": "integer",
+                    "description": "The ID of the instance to delete (required)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm deletion.",
+                },
+            },
+            "required": ["instance_id", "confirm"],
+        },
+    )
+
+
+async def handle_linode_instance_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_delete tool request."""
+    environment = arguments.get("environment", "")
+    instance_id = arguments.get("instance_id", 0)
+    confirm = arguments.get("confirm", False)
+
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text="Error: This is destructive. Set confirm=true to proceed.",
+            )
+        ]
+
+    if not instance_id:
+        return [TextContent(type="text", text="Error: instance_id is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            await client.delete_instance(int(instance_id))
+
+            response = {
+                "message": f"Instance {instance_id} deleted successfully",
+                "instance_id": instance_id,
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Failed to delete instance: {e}")]
+
+
+def create_linode_instance_resize_tool() -> Tool:
+    """Create the linode_instance_resize tool."""
+    return Tool(
+        name="linode_instance_resize",
+        description=(
+            "Resizes a Linode instance to a different plan. "
+            "WARNING: This may cause downtime and billing changes."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "instance_id": {
+                    "type": "integer",
+                    "description": "The ID of the instance to resize (required)",
+                },
+                "type": {
+                    "type": "string",
+                    "description": "The new instance type/plan (required)",
+                },
+                "allow_auto_disk_resize": {
+                    "type": "boolean",
+                    "description": (
+                        "Auto-resize disks to fit new plan (default: true)"
+                    ),
+                },
+                "migration_type": {
+                    "type": "string",
+                    "description": "Migration type: 'warm' or 'cold' (default: 'warm')",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm resize.",
+                },
+            },
+            "required": ["instance_id", "type", "confirm"],
+        },
+    )
+
+
+async def handle_linode_instance_resize(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_resize tool request."""
+    environment = arguments.get("environment", "")
+    instance_id = arguments.get("instance_id", 0)
+    instance_type = arguments.get("type", "")
+    confirm = arguments.get("confirm", False)
+
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text="Error: This may cause downtime. Set confirm=true to proceed.",
+            )
+        ]
+
+    if not instance_id:
+        return [TextContent(type="text", text="Error: instance_id is required")]
+    if not instance_type:
+        return [TextContent(type="text", text="Error: type is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            await client.resize_instance(
+                instance_id=int(instance_id),
+                instance_type=instance_type,
+                allow_auto_disk_resize=arguments.get("allow_auto_disk_resize", True),
+                migration_type=arguments.get("migration_type", "warm"),
+            )
+
+            response = {
+                "message": (
+                    f"Instance {instance_id} resize to {instance_type} initiated"
+                ),
+                "instance_id": instance_id,
+                "new_type": instance_type,
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Failed to resize instance: {e}")]
+
+
+def create_linode_firewall_create_tool() -> Tool:
+    """Create the linode_firewall_create tool."""
+    return Tool(
+        name="linode_firewall_create",
+        description=(
+            "Creates a new Cloud Firewall. The firewall is created with no rules."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "label": {
+                    "type": "string",
+                    "description": "A label for the firewall (required)",
+                },
+                "inbound_policy": {
+                    "type": "string",
+                    "description": (
+                        "Default inbound policy: 'ACCEPT' or 'DROP' (default: 'ACCEPT')"
+                    ),
+                },
+                "outbound_policy": {
+                    "type": "string",
+                    "description": (
+                        "Default outbound policy: 'ACCEPT' or 'DROP' "
+                        "(default: 'ACCEPT')"
+                    ),
+                },
+            },
+            "required": ["label"],
+        },
+    )
+
+
+async def handle_linode_firewall_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_firewall_create tool request."""
+    environment = arguments.get("environment", "")
+    label = arguments.get("label", "")
+    inbound_policy = arguments.get("inbound_policy", "ACCEPT")
+    outbound_policy = arguments.get("outbound_policy", "ACCEPT")
+
+    if not label:
+        return [TextContent(type="text", text="Error: label is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            firewall = await client.create_firewall(
+                label=label,
+                inbound_policy=inbound_policy,
+                outbound_policy=outbound_policy,
+            )
+
+            response = {
+                "message": (
+                    f"Firewall '{firewall.label}' (ID: {firewall.id}) "
+                    "created successfully"
+                ),
+                "firewall": {
+                    "id": firewall.id,
+                    "label": firewall.label,
+                    "status": firewall.status,
+                    "created": firewall.created,
+                },
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Failed to create firewall: {e}")]
+
+
+def create_linode_firewall_update_tool() -> Tool:
+    """Create the linode_firewall_update tool."""
+    return Tool(
+        name="linode_firewall_update",
+        description="Updates an existing Cloud Firewall.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "firewall_id": {
+                    "type": "integer",
+                    "description": "The ID of the firewall to update (required)",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "New label for the firewall (optional)",
+                },
+                "status": {
+                    "type": "string",
+                    "description": "New status: 'enabled' or 'disabled' (optional)",
+                },
+                "inbound_policy": {
+                    "type": "string",
+                    "description": "New inbound policy: 'ACCEPT' or 'DROP' (optional)",
+                },
+                "outbound_policy": {
+                    "type": "string",
+                    "description": "New outbound policy: 'ACCEPT' or 'DROP' (optional)",
+                },
+            },
+            "required": ["firewall_id"],
+        },
+    )
+
+
+async def handle_linode_firewall_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_firewall_update tool request."""
+    environment = arguments.get("environment", "")
+    firewall_id = arguments.get("firewall_id", 0)
+
+    if not firewall_id:
+        return [TextContent(type="text", text="Error: firewall_id is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            firewall = await client.update_firewall(
+                firewall_id=int(firewall_id),
+                label=arguments.get("label"),
+                status=arguments.get("status"),
+                inbound_policy=arguments.get("inbound_policy"),
+                outbound_policy=arguments.get("outbound_policy"),
+            )
+
+            response = {
+                "message": f"Firewall {firewall_id} updated successfully",
+                "firewall": {
+                    "id": firewall.id,
+                    "label": firewall.label,
+                    "status": firewall.status,
+                    "updated": firewall.updated,
+                },
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Failed to update firewall: {e}")]
+
+
+def create_linode_firewall_delete_tool() -> Tool:
+    """Create the linode_firewall_delete tool."""
+    return Tool(
+        name="linode_firewall_delete",
+        description=(
+            "Deletes a Cloud Firewall. WARNING: This removes all rules "
+            "and unassigns all devices."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "firewall_id": {
+                    "type": "integer",
+                    "description": "The ID of the firewall to delete (required)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm deletion.",
+                },
+            },
+            "required": ["firewall_id", "confirm"],
+        },
+    )
+
+
+async def handle_linode_firewall_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_firewall_delete tool request."""
+    environment = arguments.get("environment", "")
+    firewall_id = arguments.get("firewall_id", 0)
+    confirm = arguments.get("confirm", False)
+
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text="Error: This is destructive. Set confirm=true to proceed.",
+            )
+        ]
+
+    if not firewall_id:
+        return [TextContent(type="text", text="Error: firewall_id is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            await client.delete_firewall(int(firewall_id))
+
+            response = {
+                "message": f"Firewall {firewall_id} deleted successfully",
+                "firewall_id": firewall_id,
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Failed to delete firewall: {e}")]
+
+
+def create_linode_domain_create_tool() -> Tool:
+    """Create the linode_domain_create tool."""
+    return Tool(
+        name="linode_domain_create",
+        description="Creates a new DNS domain.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "domain": {
+                    "type": "string",
+                    "description": "The domain name (required)",
+                },
+                "type": {
+                    "type": "string",
+                    "description": (
+                        "Domain type: 'master' or 'slave' (default: 'master')"
+                    ),
+                },
+                "soa_email": {
+                    "type": "string",
+                    "description": "SOA email address (required for master domains)",
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Description for the domain (optional)",
+                },
+            },
+            "required": ["domain"],
+        },
+    )
+
+
+async def handle_linode_domain_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_domain_create tool request."""
+    environment = arguments.get("environment", "")
+    domain_name = arguments.get("domain", "")
+
+    if not domain_name:
+        return [TextContent(type="text", text="Error: domain is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            domain = await client.create_domain(
+                domain=domain_name,
+                domain_type=arguments.get("type", "master"),
+                soa_email=arguments.get("soa_email"),
+                description=arguments.get("description"),
+            )
+
+            response = {
+                "message": (
+                    f"Domain '{domain.domain}' (ID: {domain.id}) created successfully"
+                ),
+                "domain": {
+                    "id": domain.id,
+                    "domain": domain.domain,
+                    "type": domain.type,
+                    "status": domain.status,
+                    "created": domain.created,
+                },
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Failed to create domain: {e}")]
+
+
+def create_linode_domain_update_tool() -> Tool:
+    """Create the linode_domain_update tool."""
+    return Tool(
+        name="linode_domain_update",
+        description="Updates an existing DNS domain.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "domain_id": {
+                    "type": "integer",
+                    "description": "The ID of the domain to update (required)",
+                },
+                "domain": {
+                    "type": "string",
+                    "description": "New domain name (optional)",
+                },
+                "soa_email": {
+                    "type": "string",
+                    "description": "New SOA email address (optional)",
+                },
+                "description": {
+                    "type": "string",
+                    "description": "New description (optional)",
+                },
+            },
+            "required": ["domain_id"],
+        },
+    )
+
+
+async def handle_linode_domain_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_domain_update tool request."""
+    environment = arguments.get("environment", "")
+    domain_id = arguments.get("domain_id", 0)
+
+    if not domain_id:
+        return [TextContent(type="text", text="Error: domain_id is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            domain = await client.update_domain(
+                domain_id=int(domain_id),
+                domain=arguments.get("domain"),
+                soa_email=arguments.get("soa_email"),
+                description=arguments.get("description"),
+            )
+
+            response = {
+                "message": f"Domain {domain_id} updated successfully",
+                "domain": {
+                    "id": domain.id,
+                    "domain": domain.domain,
+                    "type": domain.type,
+                    "status": domain.status,
+                    "updated": domain.updated,
+                },
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Failed to update domain: {e}")]
+
+
+def create_linode_domain_delete_tool() -> Tool:
+    """Create the linode_domain_delete tool."""
+    return Tool(
+        name="linode_domain_delete",
+        description=(
+            "Deletes a DNS domain. WARNING: This also deletes all associated records."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "domain_id": {
+                    "type": "integer",
+                    "description": "The ID of the domain to delete (required)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm deletion.",
+                },
+            },
+            "required": ["domain_id", "confirm"],
+        },
+    )
+
+
+async def handle_linode_domain_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_domain_delete tool request."""
+    environment = arguments.get("environment", "")
+    domain_id = arguments.get("domain_id", 0)
+    confirm = arguments.get("confirm", False)
+
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text="Error: This is destructive. Set confirm=true to proceed.",
+            )
+        ]
+
+    if not domain_id:
+        return [TextContent(type="text", text="Error: domain_id is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            await client.delete_domain(int(domain_id))
+
+            response = {
+                "message": f"Domain {domain_id} deleted successfully",
+                "domain_id": domain_id,
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Failed to delete domain: {e}")]
+
+
+def create_linode_domain_record_create_tool() -> Tool:
+    """Create the linode_domain_record_create tool."""
+    return Tool(
+        name="linode_domain_record_create",
+        description="Creates a new DNS record for a domain.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "domain_id": {
+                    "type": "integer",
+                    "description": "The ID of the domain (required)",
+                },
+                "type": {
+                    "type": "string",
+                    "description": (
+                        "Record type: A, AAAA, NS, MX, CNAME, TXT, SRV, CAA (required)"
+                    ),
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Record name/subdomain (optional)",
+                },
+                "target": {
+                    "type": "string",
+                    "description": (
+                        "Target value for the record (required for most types)"
+                    ),
+                },
+                "priority": {
+                    "type": "integer",
+                    "description": "Priority (for MX and SRV records)",
+                },
+                "weight": {
+                    "type": "integer",
+                    "description": "Weight (for SRV records)",
+                },
+                "port": {
+                    "type": "integer",
+                    "description": "Port (for SRV records)",
+                },
+                "ttl_sec": {
+                    "type": "integer",
+                    "description": "TTL in seconds (optional)",
+                },
+            },
+            "required": ["domain_id", "type"],
+        },
+    )
+
+
+async def handle_linode_domain_record_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_domain_record_create tool request."""
+    environment = arguments.get("environment", "")
+    domain_id = arguments.get("domain_id", 0)
+    record_type = arguments.get("type", "")
+
+    if not domain_id:
+        return [TextContent(type="text", text="Error: domain_id is required")]
+    if not record_type:
+        return [TextContent(type="text", text="Error: type is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            record = await client.create_domain_record(
+                domain_id=int(domain_id),
+                record_type=record_type,
+                name=arguments.get("name"),
+                target=arguments.get("target"),
+                priority=arguments.get("priority"),
+                weight=arguments.get("weight"),
+                port=arguments.get("port"),
+                ttl_sec=arguments.get("ttl_sec"),
+            )
+
+            response = {
+                "message": (
+                    f"DNS record (ID: {record.id}) created successfully "
+                    f"for domain {domain_id}"
+                ),
+                "record": {
+                    "id": record.id,
+                    "type": record.type,
+                    "name": record.name,
+                    "target": record.target,
+                    "ttl_sec": record.ttl_sec,
+                },
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Failed to create DNS record: {e}")]
+
+
+def create_linode_domain_record_update_tool() -> Tool:
+    """Create the linode_domain_record_update tool."""
+    return Tool(
+        name="linode_domain_record_update",
+        description="Updates an existing DNS record.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "domain_id": {
+                    "type": "integer",
+                    "description": "The ID of the domain (required)",
+                },
+                "record_id": {
+                    "type": "integer",
+                    "description": "The ID of the record to update (required)",
+                },
+                "name": {
+                    "type": "string",
+                    "description": "New record name (optional)",
+                },
+                "target": {
+                    "type": "string",
+                    "description": "New target value (optional)",
+                },
+                "priority": {
+                    "type": "integer",
+                    "description": "New priority (optional)",
+                },
+                "weight": {
+                    "type": "integer",
+                    "description": "New weight (optional)",
+                },
+                "port": {
+                    "type": "integer",
+                    "description": "New port (optional)",
+                },
+                "ttl_sec": {
+                    "type": "integer",
+                    "description": "New TTL in seconds (optional)",
+                },
+            },
+            "required": ["domain_id", "record_id"],
+        },
+    )
+
+
+async def handle_linode_domain_record_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_domain_record_update tool request."""
+    environment = arguments.get("environment", "")
+    domain_id = arguments.get("domain_id", 0)
+    record_id = arguments.get("record_id", 0)
+
+    if not domain_id:
+        return [TextContent(type="text", text="Error: domain_id is required")]
+    if not record_id:
+        return [TextContent(type="text", text="Error: record_id is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            record = await client.update_domain_record(
+                domain_id=int(domain_id),
+                record_id=int(record_id),
+                name=arguments.get("name"),
+                target=arguments.get("target"),
+                priority=arguments.get("priority"),
+                weight=arguments.get("weight"),
+                port=arguments.get("port"),
+                ttl_sec=arguments.get("ttl_sec"),
+            )
+
+            response = {
+                "message": f"DNS record {record_id} updated successfully",
+                "record": {
+                    "id": record.id,
+                    "type": record.type,
+                    "name": record.name,
+                    "target": record.target,
+                    "ttl_sec": record.ttl_sec,
+                },
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Failed to update DNS record: {e}")]
+
+
+def create_linode_domain_record_delete_tool() -> Tool:
+    """Create the linode_domain_record_delete tool."""
+    return Tool(
+        name="linode_domain_record_delete",
+        description="Deletes a DNS record.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "domain_id": {
+                    "type": "integer",
+                    "description": "The ID of the domain (required)",
+                },
+                "record_id": {
+                    "type": "integer",
+                    "description": "The ID of the record to delete (required)",
+                },
+            },
+            "required": ["domain_id", "record_id"],
+        },
+    )
+
+
+async def handle_linode_domain_record_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_domain_record_delete tool request."""
+    environment = arguments.get("environment", "")
+    domain_id = arguments.get("domain_id", 0)
+    record_id = arguments.get("record_id", 0)
+
+    if not domain_id:
+        return [TextContent(type="text", text="Error: domain_id is required")]
+    if not record_id:
+        return [TextContent(type="text", text="Error: record_id is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            await client.delete_domain_record(int(domain_id), int(record_id))
+
+            response = {
+                "message": f"DNS record {record_id} deleted successfully",
+                "domain_id": domain_id,
+                "record_id": record_id,
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Failed to delete DNS record: {e}")]
+
+
+def create_linode_volume_create_tool() -> Tool:
+    """Create the linode_volume_create tool."""
+    return Tool(
+        name="linode_volume_create",
+        description=(
+            "Creates a new block storage volume. WARNING: Billing starts immediately."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Label for the volume (required)",
+                },
+                "region": {
+                    "type": "string",
+                    "description": "Region for the volume (required if not attaching)",
+                },
+                "size": {
+                    "type": "integer",
+                    "description": "Size in GB (default: 20, min: 10, max: 10240)",
+                },
+                "linode_id": {
+                    "type": "integer",
+                    "description": "Linode ID to attach to (optional)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to confirm creation. This incurs billing."
+                    ),
+                },
+            },
+            "required": ["label", "confirm"],
+        },
+    )
+
+
+async def handle_linode_volume_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_volume_create tool request."""
+    environment = arguments.get("environment", "")
+    confirm = arguments.get("confirm", False)
+
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text="Error: This creates a billable resource. Set confirm=true.",
+            )
+        ]
+
+    label = arguments.get("label", "")
+    if not label:
+        return [TextContent(type="text", text="Error: label is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            volume = await client.create_volume(
+                label=label,
+                region=arguments.get("region"),
+                linode_id=arguments.get("linode_id"),
+                size=arguments.get("size", 20),
+            )
+
+            response = {
+                "message": (
+                    f"Volume '{volume.label}' (ID: {volume.id}) "
+                    f"created successfully in {volume.region}"
+                ),
+                "volume": {
+                    "id": volume.id,
+                    "label": volume.label,
+                    "size": volume.size,
+                    "region": volume.region,
+                    "status": volume.status,
+                    "filesystem_path": volume.filesystem_path,
+                },
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Failed to create volume: {e}")]
+
+
+def create_linode_volume_attach_tool() -> Tool:
+    """Create the linode_volume_attach tool."""
+    return Tool(
+        name="linode_volume_attach",
+        description="Attaches a block storage volume to a Linode instance.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "volume_id": {
+                    "type": "integer",
+                    "description": "The ID of the volume to attach (required)",
+                },
+                "linode_id": {
+                    "type": "integer",
+                    "description": "The ID of the Linode to attach to (required)",
+                },
+                "config_id": {
+                    "type": "integer",
+                    "description": "Config profile ID (optional)",
+                },
+                "persist_across_boots": {
+                    "type": "boolean",
+                    "description": "Keep attached across reboots (default: false)",
+                },
+            },
+            "required": ["volume_id", "linode_id"],
+        },
+    )
+
+
+async def handle_linode_volume_attach(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_volume_attach tool request."""
+    environment = arguments.get("environment", "")
+    volume_id = arguments.get("volume_id", 0)
+    linode_id = arguments.get("linode_id", 0)
+
+    if not volume_id:
+        return [TextContent(type="text", text="Error: volume_id is required")]
+    if not linode_id:
+        return [TextContent(type="text", text="Error: linode_id is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            volume = await client.attach_volume(
+                volume_id=int(volume_id),
+                linode_id=int(linode_id),
+                config_id=arguments.get("config_id"),
+                persist_across_boots=arguments.get("persist_across_boots", False),
+            )
+
+            response = {
+                "message": (
+                    f"Volume {volume_id} attached to Linode {linode_id} successfully"
+                ),
+                "volume": {
+                    "id": volume.id,
+                    "label": volume.label,
+                    "linode_id": volume.linode_id,
+                    "filesystem_path": volume.filesystem_path,
+                },
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Failed to attach volume: {e}")]
+
+
+def create_linode_volume_detach_tool() -> Tool:
+    """Create the linode_volume_detach tool."""
+    return Tool(
+        name="linode_volume_detach",
+        description="Detaches a block storage volume from a Linode instance.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "volume_id": {
+                    "type": "integer",
+                    "description": "The ID of the volume to detach (required)",
+                },
+            },
+            "required": ["volume_id"],
+        },
+    )
+
+
+async def handle_linode_volume_detach(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_volume_detach tool request."""
+    environment = arguments.get("environment", "")
+    volume_id = arguments.get("volume_id", 0)
+
+    if not volume_id:
+        return [TextContent(type="text", text="Error: volume_id is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            await client.detach_volume(int(volume_id))
+
+            response = {
+                "message": f"Volume {volume_id} detached successfully",
+                "volume_id": volume_id,
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Failed to detach volume: {e}")]
+
+
+def create_linode_volume_resize_tool() -> Tool:
+    """Create the linode_volume_resize tool."""
+    return Tool(
+        name="linode_volume_resize",
+        description=(
+            "Resizes a block storage volume. WARNING: Volumes can only be resized "
+            "up, not down. This increases billing."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "volume_id": {
+                    "type": "integer",
+                    "description": "The ID of the volume to resize (required)",
+                },
+                "size": {
+                    "type": "integer",
+                    "description": "New size in GB (must be larger than current)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to confirm resize. This increases billing."
+                    ),
+                },
+            },
+            "required": ["volume_id", "size", "confirm"],
+        },
+    )
+
+
+async def handle_linode_volume_resize(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_volume_resize tool request."""
+    environment = arguments.get("environment", "")
+    volume_id = arguments.get("volume_id", 0)
+    size = arguments.get("size", 0)
+    confirm = arguments.get("confirm", False)
+
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text="Error: This increases billing. Set confirm=true to proceed.",
+            )
+        ]
+
+    if not volume_id:
+        return [TextContent(type="text", text="Error: volume_id is required")]
+    if not size:
+        return [TextContent(type="text", text="Error: size is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            volume = await client.resize_volume(int(volume_id), int(size))
+
+            response = {
+                "message": f"Volume {volume_id} resized to {size}GB successfully",
+                "volume": {
+                    "id": volume.id,
+                    "label": volume.label,
+                    "size": volume.size,
+                },
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Failed to resize volume: {e}")]
+
+
+def create_linode_volume_delete_tool() -> Tool:
+    """Create the linode_volume_delete tool."""
+    return Tool(
+        name="linode_volume_delete",
+        description=(
+            "Deletes a block storage volume. WARNING: This is destructive "
+            "and all data will be lost. Volume must be detached first."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "volume_id": {
+                    "type": "integer",
+                    "description": "The ID of the volume to delete (required)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm deletion.",
+                },
+            },
+            "required": ["volume_id", "confirm"],
+        },
+    )
+
+
+async def handle_linode_volume_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_volume_delete tool request."""
+    environment = arguments.get("environment", "")
+    volume_id = arguments.get("volume_id", 0)
+    confirm = arguments.get("confirm", False)
+
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text="Error: This is destructive. Set confirm=true to proceed.",
+            )
+        ]
+
+    if not volume_id:
+        return [TextContent(type="text", text="Error: volume_id is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            await client.delete_volume(int(volume_id))
+
+            response = {
+                "message": f"Volume {volume_id} deleted successfully",
+                "volume_id": volume_id,
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Failed to delete volume: {e}")]
+
+
+def create_linode_nodebalancer_create_tool() -> Tool:
+    """Create the linode_nodebalancer_create tool."""
+    return Tool(
+        name="linode_nodebalancer_create",
+        description=(
+            "Creates a new NodeBalancer (load balancer). "
+            "WARNING: Billing starts immediately."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "region": {
+                    "type": "string",
+                    "description": "Region for the NodeBalancer (required)",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Label for the NodeBalancer (optional)",
+                },
+                "client_conn_throttle": {
+                    "type": "integer",
+                    "description": "Connections per second throttle (0-20, default: 0)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to confirm creation. This incurs billing."
+                    ),
+                },
+            },
+            "required": ["region", "confirm"],
+        },
+    )
+
+
+async def handle_linode_nodebalancer_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_nodebalancer_create tool request."""
+    environment = arguments.get("environment", "")
+    confirm = arguments.get("confirm", False)
+
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text="Error: This creates a billable resource. Set confirm=true.",
+            )
+        ]
+
+    region = arguments.get("region", "")
+    if not region:
+        return [TextContent(type="text", text="Error: region is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            nb = await client.create_nodebalancer(
+                region=region,
+                label=arguments.get("label"),
+                client_conn_throttle=arguments.get("client_conn_throttle", 0),
+            )
+
+            response = {
+                "message": (
+                    f"NodeBalancer '{nb.label}' (ID: {nb.id}) "
+                    f"created successfully in {nb.region}"
+                ),
+                "nodebalancer": {
+                    "id": nb.id,
+                    "label": nb.label,
+                    "region": nb.region,
+                    "hostname": nb.hostname,
+                    "ipv4": nb.ipv4,
+                    "ipv6": nb.ipv6,
+                },
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Failed to create NodeBalancer: {e}")]
+
+
+def create_linode_nodebalancer_update_tool() -> Tool:
+    """Create the linode_nodebalancer_update tool."""
+    return Tool(
+        name="linode_nodebalancer_update",
+        description="Updates an existing NodeBalancer.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "nodebalancer_id": {
+                    "type": "integer",
+                    "description": "The ID of the NodeBalancer to update (required)",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "New label (optional)",
+                },
+                "client_conn_throttle": {
+                    "type": "integer",
+                    "description": "New throttle limit (0-20, optional)",
+                },
+            },
+            "required": ["nodebalancer_id"],
+        },
+    )
+
+
+async def handle_linode_nodebalancer_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_nodebalancer_update tool request."""
+    environment = arguments.get("environment", "")
+    nodebalancer_id = arguments.get("nodebalancer_id", 0)
+
+    if not nodebalancer_id:
+        return [TextContent(type="text", text="Error: nodebalancer_id is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            nb = await client.update_nodebalancer(
+                nodebalancer_id=int(nodebalancer_id),
+                label=arguments.get("label"),
+                client_conn_throttle=arguments.get("client_conn_throttle"),
+            )
+
+            response = {
+                "message": f"NodeBalancer {nodebalancer_id} updated successfully",
+                "nodebalancer": {
+                    "id": nb.id,
+                    "label": nb.label,
+                    "client_conn_throttle": nb.client_conn_throttle,
+                    "updated": nb.updated,
+                },
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Failed to update NodeBalancer: {e}")]
+
+
+def create_linode_nodebalancer_delete_tool() -> Tool:
+    """Create the linode_nodebalancer_delete tool."""
+    return Tool(
+        name="linode_nodebalancer_delete",
+        description=(
+            "Deletes a NodeBalancer. WARNING: This removes the load balancer "
+            "and all its configurations."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "nodebalancer_id": {
+                    "type": "integer",
+                    "description": "The ID of the NodeBalancer to delete (required)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm deletion.",
+                },
+            },
+            "required": ["nodebalancer_id", "confirm"],
+        },
+    )
+
+
+async def handle_linode_nodebalancer_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_nodebalancer_delete tool request."""
+    environment = arguments.get("environment", "")
+    nodebalancer_id = arguments.get("nodebalancer_id", 0)
+    confirm = arguments.get("confirm", False)
+
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text="Error: This is destructive. Set confirm=true to proceed.",
+            )
+        ]
+
+    if not nodebalancer_id:
+        return [TextContent(type="text", text="Error: nodebalancer_id is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            await client.delete_nodebalancer(int(nodebalancer_id))
+
+            response = {
+                "message": f"NodeBalancer {nodebalancer_id} deleted successfully",
+                "nodebalancer_id": nodebalancer_id,
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Failed to delete NodeBalancer: {e}")]

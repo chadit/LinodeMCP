@@ -119,8 +119,8 @@ func filterStackScriptsByLabel(scripts []linode.StackScript, labelContains strin
 
 func formatStackScriptsResponse(scripts []linode.StackScript, isPublicFilter, mineFilter, labelContains string) (*mcp.CallToolResult, error) {
 	response := struct {
-		Count        int                   `json:"count"`
-		Filter       string                `json:"filter,omitempty"`
+		Count        int                  `json:"count"`
+		Filter       string               `json:"filter,omitempty"`
 		StackScripts []linode.StackScript `json:"stackscripts"`
 	}{
 		Count:        len(scripts),

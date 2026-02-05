@@ -164,4 +164,5 @@ def sample_instance_data() -> dict[str, Any]:
         "group": "production",
         "tags": ["web", "production"],
         "watchdog_enabled": True,
+        "host_uuid": "test-host-uuid-123",
     }

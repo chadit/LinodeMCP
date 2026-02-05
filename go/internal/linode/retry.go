@@ -299,6 +299,317 @@ func (rc *RetryableClient) ListStackScripts(ctx context.Context) ([]StackScript,
 	return scripts, err
 }
 
+// GetFirewall retrieves a single firewall by ID with automatic retry on transient failures.
+func (rc *RetryableClient) GetFirewall(ctx context.Context, firewallID int) (*Firewall, error) {
+	var firewall *Firewall
+
+	err := rc.executeWithRetry(ctx, "GetFirewall", func() error {
+		var err error
+
+		firewall, err = rc.Client.GetFirewall(ctx, firewallID)
+
+		return err
+	})
+
+	return firewall, err
+}
+
+// GetVolume retrieves a single volume by ID with automatic retry on transient failures.
+func (rc *RetryableClient) GetVolume(ctx context.Context, volumeID int) (*Volume, error) {
+	var volume *Volume
+
+	err := rc.executeWithRetry(ctx, "GetVolume", func() error {
+		var err error
+
+		volume, err = rc.Client.GetVolume(ctx, volumeID)
+
+		return err
+	})
+
+	return volume, err
+}
+
+// Stage 4: Write operations with retry
+
+// CreateSSHKey creates a new SSH key with automatic retry on transient failures.
+func (rc *RetryableClient) CreateSSHKey(ctx context.Context, req CreateSSHKeyRequest) (*SSHKey, error) {
+	var sshKey *SSHKey
+
+	err := rc.executeWithRetry(ctx, "CreateSSHKey", func() error {
+		var err error
+
+		sshKey, err = rc.Client.CreateSSHKey(ctx, req)
+
+		return err
+	})
+
+	return sshKey, err
+}
+
+// DeleteSSHKey deletes an SSH key with automatic retry on transient failures.
+func (rc *RetryableClient) DeleteSSHKey(ctx context.Context, sshKeyID int) error {
+	return rc.executeWithRetry(ctx, "DeleteSSHKey", func() error {
+		return rc.Client.DeleteSSHKey(ctx, sshKeyID)
+	})
+}
+
+// BootInstance boots a Linode instance with automatic retry on transient failures.
+func (rc *RetryableClient) BootInstance(ctx context.Context, instanceID int, configID *int) error {
+	return rc.executeWithRetry(ctx, "BootInstance", func() error {
+		return rc.Client.BootInstance(ctx, instanceID, configID)
+	})
+}
+
+// RebootInstance reboots a Linode instance with automatic retry on transient failures.
+func (rc *RetryableClient) RebootInstance(ctx context.Context, instanceID int, configID *int) error {
+	return rc.executeWithRetry(ctx, "RebootInstance", func() error {
+		return rc.Client.RebootInstance(ctx, instanceID, configID)
+	})
+}
+
+// ShutdownInstance shuts down a Linode instance with automatic retry on transient failures.
+func (rc *RetryableClient) ShutdownInstance(ctx context.Context, instanceID int) error {
+	return rc.executeWithRetry(ctx, "ShutdownInstance", func() error {
+		return rc.Client.ShutdownInstance(ctx, instanceID)
+	})
+}
+
+// CreateInstance creates a new Linode instance with automatic retry on transient failures.
+func (rc *RetryableClient) CreateInstance(ctx context.Context, req CreateInstanceRequest) (*Instance, error) {
+	var instance *Instance
+
+	err := rc.executeWithRetry(ctx, "CreateInstance", func() error {
+		var err error
+
+		instance, err = rc.Client.CreateInstance(ctx, req)
+
+		return err
+	})
+
+	return instance, err
+}
+
+// DeleteInstance deletes a Linode instance with automatic retry on transient failures.
+func (rc *RetryableClient) DeleteInstance(ctx context.Context, instanceID int) error {
+	return rc.executeWithRetry(ctx, "DeleteInstance", func() error {
+		return rc.Client.DeleteInstance(ctx, instanceID)
+	})
+}
+
+// ResizeInstance resizes a Linode instance with automatic retry on transient failures.
+func (rc *RetryableClient) ResizeInstance(ctx context.Context, instanceID int, req ResizeInstanceRequest) error {
+	return rc.executeWithRetry(ctx, "ResizeInstance", func() error {
+		return rc.Client.ResizeInstance(ctx, instanceID, req)
+	})
+}
+
+// CreateFirewall creates a new firewall with automatic retry on transient failures.
+func (rc *RetryableClient) CreateFirewall(ctx context.Context, req CreateFirewallRequest) (*Firewall, error) {
+	var firewall *Firewall
+
+	err := rc.executeWithRetry(ctx, "CreateFirewall", func() error {
+		var err error
+
+		firewall, err = rc.Client.CreateFirewall(ctx, req)
+
+		return err
+	})
+
+	return firewall, err
+}
+
+// UpdateFirewall updates a firewall with automatic retry on transient failures.
+func (rc *RetryableClient) UpdateFirewall(ctx context.Context, firewallID int, req UpdateFirewallRequest) (*Firewall, error) {
+	var firewall *Firewall
+
+	err := rc.executeWithRetry(ctx, "UpdateFirewall", func() error {
+		var err error
+
+		firewall, err = rc.Client.UpdateFirewall(ctx, firewallID, req)
+
+		return err
+	})
+
+	return firewall, err
+}
+
+// DeleteFirewall deletes a firewall with automatic retry on transient failures.
+func (rc *RetryableClient) DeleteFirewall(ctx context.Context, firewallID int) error {
+	return rc.executeWithRetry(ctx, "DeleteFirewall", func() error {
+		return rc.Client.DeleteFirewall(ctx, firewallID)
+	})
+}
+
+// CreateDomain creates a new domain with automatic retry on transient failures.
+func (rc *RetryableClient) CreateDomain(ctx context.Context, req CreateDomainRequest) (*Domain, error) {
+	var domain *Domain
+
+	err := rc.executeWithRetry(ctx, "CreateDomain", func() error {
+		var err error
+
+		domain, err = rc.Client.CreateDomain(ctx, req)
+
+		return err
+	})
+
+	return domain, err
+}
+
+// UpdateDomain updates a domain with automatic retry on transient failures.
+func (rc *RetryableClient) UpdateDomain(ctx context.Context, domainID int, req UpdateDomainRequest) (*Domain, error) {
+	var domain *Domain
+
+	err := rc.executeWithRetry(ctx, "UpdateDomain", func() error {
+		var err error
+
+		domain, err = rc.Client.UpdateDomain(ctx, domainID, req)
+
+		return err
+	})
+
+	return domain, err
+}
+
+// DeleteDomain deletes a domain with automatic retry on transient failures.
+func (rc *RetryableClient) DeleteDomain(ctx context.Context, domainID int) error {
+	return rc.executeWithRetry(ctx, "DeleteDomain", func() error {
+		return rc.Client.DeleteDomain(ctx, domainID)
+	})
+}
+
+// CreateDomainRecord creates a domain record with automatic retry on transient failures.
+func (rc *RetryableClient) CreateDomainRecord(ctx context.Context, domainID int, req CreateDomainRecordRequest) (*DomainRecord, error) {
+	var record *DomainRecord
+
+	err := rc.executeWithRetry(ctx, "CreateDomainRecord", func() error {
+		var err error
+
+		record, err = rc.Client.CreateDomainRecord(ctx, domainID, req)
+
+		return err
+	})
+
+	return record, err
+}
+
+// UpdateDomainRecord updates a domain record with automatic retry on transient failures.
+func (rc *RetryableClient) UpdateDomainRecord(ctx context.Context, domainID, recordID int, req UpdateDomainRecordRequest) (*DomainRecord, error) {
+	var record *DomainRecord
+
+	err := rc.executeWithRetry(ctx, "UpdateDomainRecord", func() error {
+		var err error
+
+		record, err = rc.Client.UpdateDomainRecord(ctx, domainID, recordID, req)
+
+		return err
+	})
+
+	return record, err
+}
+
+// DeleteDomainRecord deletes a domain record with automatic retry on transient failures.
+func (rc *RetryableClient) DeleteDomainRecord(ctx context.Context, domainID, recordID int) error {
+	return rc.executeWithRetry(ctx, "DeleteDomainRecord", func() error {
+		return rc.Client.DeleteDomainRecord(ctx, domainID, recordID)
+	})
+}
+
+// CreateVolume creates a new volume with automatic retry on transient failures.
+func (rc *RetryableClient) CreateVolume(ctx context.Context, req CreateVolumeRequest) (*Volume, error) {
+	var volume *Volume
+
+	err := rc.executeWithRetry(ctx, "CreateVolume", func() error {
+		var err error
+
+		volume, err = rc.Client.CreateVolume(ctx, req)
+
+		return err
+	})
+
+	return volume, err
+}
+
+// AttachVolume attaches a volume to a Linode with automatic retry on transient failures.
+func (rc *RetryableClient) AttachVolume(ctx context.Context, volumeID int, req AttachVolumeRequest) (*Volume, error) {
+	var volume *Volume
+
+	err := rc.executeWithRetry(ctx, "AttachVolume", func() error {
+		var err error
+
+		volume, err = rc.Client.AttachVolume(ctx, volumeID, req)
+
+		return err
+	})
+
+	return volume, err
+}
+
+// DetachVolume detaches a volume from a Linode with automatic retry on transient failures.
+func (rc *RetryableClient) DetachVolume(ctx context.Context, volumeID int) error {
+	return rc.executeWithRetry(ctx, "DetachVolume", func() error {
+		return rc.Client.DetachVolume(ctx, volumeID)
+	})
+}
+
+// ResizeVolume resizes a volume with automatic retry on transient failures.
+func (rc *RetryableClient) ResizeVolume(ctx context.Context, volumeID int, size int) (*Volume, error) {
+	var volume *Volume
+
+	err := rc.executeWithRetry(ctx, "ResizeVolume", func() error {
+		var err error
+
+		volume, err = rc.Client.ResizeVolume(ctx, volumeID, size)
+
+		return err
+	})
+
+	return volume, err
+}
+
+// DeleteVolume deletes a volume with automatic retry on transient failures.
+func (rc *RetryableClient) DeleteVolume(ctx context.Context, volumeID int) error {
+	return rc.executeWithRetry(ctx, "DeleteVolume", func() error {
+		return rc.Client.DeleteVolume(ctx, volumeID)
+	})
+}
+
+// CreateNodeBalancer creates a new NodeBalancer with automatic retry on transient failures.
+func (rc *RetryableClient) CreateNodeBalancer(ctx context.Context, req CreateNodeBalancerRequest) (*NodeBalancer, error) {
+	var nodeBalancer *NodeBalancer
+
+	err := rc.executeWithRetry(ctx, "CreateNodeBalancer", func() error {
+		var err error
+
+		nodeBalancer, err = rc.Client.CreateNodeBalancer(ctx, req)
+
+		return err
+	})
+
+	return nodeBalancer, err
+}
+
+// UpdateNodeBalancer updates a NodeBalancer with automatic retry on transient failures.
+func (rc *RetryableClient) UpdateNodeBalancer(ctx context.Context, nodeBalancerID int, req UpdateNodeBalancerRequest) (*NodeBalancer, error) {
+	var nodeBalancer *NodeBalancer
+
+	err := rc.executeWithRetry(ctx, "UpdateNodeBalancer", func() error {
+		var err error
+
+		nodeBalancer, err = rc.Client.UpdateNodeBalancer(ctx, nodeBalancerID, req)
+
+		return err
+	})
+
+	return nodeBalancer, err
+}
+
+// DeleteNodeBalancer deletes a NodeBalancer with automatic retry on transient failures.
+func (rc *RetryableClient) DeleteNodeBalancer(ctx context.Context, nodeBalancerID int) error {
+	return rc.executeWithRetry(ctx, "DeleteNodeBalancer", func() error {
+		return rc.Client.DeleteNodeBalancer(ctx, nodeBalancerID)
+	})
+}
+
 func (rc *RetryableClient) executeWithRetry(ctx context.Context, _ string, fn func() error) error {
 	var lastErr error
 

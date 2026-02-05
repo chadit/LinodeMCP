@@ -32,6 +32,23 @@ class VersionInfo:
         )
 
 
+FEATURE_TOOLS_LIST = (
+    "hello,version,linode_profile,linode_account,linode_instances_list,"
+    "linode_instance_get,linode_regions_list,linode_types_list,linode_volumes_list,"
+    "linode_images_list,linode_sshkeys_list,linode_domains_list,linode_domain_get,"
+    "linode_domain_records_list,linode_firewalls_list,linode_nodebalancers_list,"
+    "linode_nodebalancer_get,linode_stackscripts_list,linode_sshkey_create,"
+    "linode_sshkey_delete,linode_instance_boot,linode_instance_reboot,"
+    "linode_instance_shutdown,linode_instance_create,linode_instance_delete,"
+    "linode_instance_resize,linode_firewall_create,linode_firewall_update,"
+    "linode_firewall_delete,linode_domain_create,linode_domain_update,"
+    "linode_domain_delete,linode_domain_record_create,linode_domain_record_update,"
+    "linode_domain_record_delete,linode_volume_create,linode_volume_attach,"
+    "linode_volume_detach,linode_volume_resize,linode_volume_delete,"
+    "linode_nodebalancer_create,linode_nodebalancer_update,linode_nodebalancer_delete"
+)
+
+
 def get_version_info(
     build_date: str = "unknown",
     git_commit: str = "dev",
@@ -47,7 +64,7 @@ def get_version_info(
         python_version=platform.python_version(),
         platform=f"{platform.system()}/{platform.machine()}",
         features={
-            "tools": "hello,version,linode_profile,linode_instances_list",
+            "tools": FEATURE_TOOLS_LIST,
             "logging": "basic",
             "protocol": "mcp",
         },

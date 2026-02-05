@@ -667,7 +667,455 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListStackScripts", e) from e
 
-    async def _make_request(self, method: str, endpoint: str) -> httpx.Response:
+    # Stage 4: Write operations
+
+    async def create_ssh_key(self, label: str, ssh_key: str) -> SSHKey:
+        """Create a new SSH key."""
+        try:
+            body = {"label": label, "ssh_key": ssh_key}
+            response = await self._make_request("POST", "/profile/sshkeys", body)
+            data = response.json()
+            return self._parse_ssh_key(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateSSHKey", e) from e
+
+    async def delete_ssh_key(self, ssh_key_id: int) -> None:
+        """Delete an SSH key."""
+        endpoint = f"/profile/sshkeys/{ssh_key_id}"
+        try:
+            await self._make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteSSHKey", e) from e
+
+    async def boot_instance(
+        self, instance_id: int, config_id: int | None = None
+    ) -> None:
+        """Boot an instance."""
+        endpoint = f"/linode/instances/{instance_id}/boot"
+        try:
+            body: dict[str, Any] = {}
+            if config_id is not None:
+                body["config_id"] = config_id
+            await self._make_request("POST", endpoint, body if body else None)
+        except httpx.HTTPError as e:
+            raise NetworkError("BootInstance", e) from e
+
+    async def reboot_instance(
+        self, instance_id: int, config_id: int | None = None
+    ) -> None:
+        """Reboot an instance."""
+        endpoint = f"/linode/instances/{instance_id}/reboot"
+        try:
+            body: dict[str, Any] = {}
+            if config_id is not None:
+                body["config_id"] = config_id
+            await self._make_request("POST", endpoint, body if body else None)
+        except httpx.HTTPError as e:
+            raise NetworkError("RebootInstance", e) from e
+
+    async def shutdown_instance(self, instance_id: int) -> None:
+        """Shutdown an instance."""
+        endpoint = f"/linode/instances/{instance_id}/shutdown"
+        try:
+            await self._make_request("POST", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("ShutdownInstance", e) from e
+
+    async def create_instance(
+        self,
+        region: str,
+        instance_type: str,
+        image: str | None = None,
+        label: str | None = None,
+        root_pass: str | None = None,
+        authorized_keys: list[str] | None = None,
+        authorized_users: list[str] | None = None,
+        booted: bool = True,
+        backups_enabled: bool = False,
+        private_ip: bool = False,
+        tags: list[str] | None = None,
+    ) -> Instance:
+        """Create a new Linode instance."""
+        try:
+            body: dict[str, Any] = {
+                "region": region,
+                "type": instance_type,
+                "booted": booted,
+                "backups_enabled": backups_enabled,
+                "private_ip": private_ip,
+            }
+            if image:
+                body["image"] = image
+            if label:
+                body["label"] = label
+            if root_pass:
+                body["root_pass"] = root_pass
+            if authorized_keys:
+                body["authorized_keys"] = authorized_keys
+            if authorized_users:
+                body["authorized_users"] = authorized_users
+            if tags:
+                body["tags"] = tags
+
+            response = await self._make_request("POST", "/linode/instances", body)
+            data = response.json()
+            return self._parse_instance(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateInstance", e) from e
+
+    async def delete_instance(self, instance_id: int) -> None:
+        """Delete an instance."""
+        endpoint = f"/linode/instances/{instance_id}"
+        try:
+            await self._make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteInstance", e) from e
+
+    async def resize_instance(
+        self,
+        instance_id: int,
+        instance_type: str,
+        allow_auto_disk_resize: bool = True,
+        migration_type: str = "warm",
+    ) -> None:
+        """Resize an instance."""
+        endpoint = f"/linode/instances/{instance_id}/resize"
+        try:
+            body = {
+                "type": instance_type,
+                "allow_auto_disk_resize": allow_auto_disk_resize,
+                "migration_type": migration_type,
+            }
+            await self._make_request("POST", endpoint, body)
+        except httpx.HTTPError as e:
+            raise NetworkError("ResizeInstance", e) from e
+
+    async def create_firewall(
+        self,
+        label: str,
+        inbound_policy: str = "ACCEPT",
+        outbound_policy: str = "ACCEPT",
+    ) -> Firewall:
+        """Create a new firewall."""
+        try:
+            body = {
+                "label": label,
+                "rules": {
+                    "inbound_policy": inbound_policy,
+                    "outbound_policy": outbound_policy,
+                },
+            }
+            response = await self._make_request("POST", "/networking/firewalls", body)
+            data = response.json()
+            return self._parse_firewall(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateFirewall", e) from e
+
+    async def update_firewall(
+        self,
+        firewall_id: int,
+        label: str | None = None,
+        status: str | None = None,
+        inbound_policy: str | None = None,
+        outbound_policy: str | None = None,
+    ) -> Firewall:
+        """Update a firewall."""
+        endpoint = f"/networking/firewalls/{firewall_id}"
+        try:
+            body: dict[str, Any] = {}
+            if label:
+                body["label"] = label
+            if status:
+                body["status"] = status
+            if inbound_policy or outbound_policy:
+                body["rules"] = {}
+                if inbound_policy:
+                    body["rules"]["inbound_policy"] = inbound_policy
+                if outbound_policy:
+                    body["rules"]["outbound_policy"] = outbound_policy
+
+            response = await self._make_request("PUT", endpoint, body)
+            data = response.json()
+            return self._parse_firewall(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateFirewall", e) from e
+
+    async def delete_firewall(self, firewall_id: int) -> None:
+        """Delete a firewall."""
+        endpoint = f"/networking/firewalls/{firewall_id}"
+        try:
+            await self._make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteFirewall", e) from e
+
+    async def create_domain(
+        self,
+        domain: str,
+        domain_type: str = "master",
+        soa_email: str | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+    ) -> Domain:
+        """Create a new domain."""
+        try:
+            body: dict[str, Any] = {"domain": domain, "type": domain_type}
+            if soa_email:
+                body["soa_email"] = soa_email
+            if description:
+                body["description"] = description
+            if tags:
+                body["tags"] = tags
+
+            response = await self._make_request("POST", "/domains", body)
+            data = response.json()
+            return self._parse_domain(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateDomain", e) from e
+
+    async def update_domain(
+        self,
+        domain_id: int,
+        domain: str | None = None,
+        soa_email: str | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+    ) -> Domain:
+        """Update a domain."""
+        endpoint = f"/domains/{domain_id}"
+        try:
+            body: dict[str, Any] = {}
+            if domain:
+                body["domain"] = domain
+            if soa_email:
+                body["soa_email"] = soa_email
+            if description is not None:
+                body["description"] = description
+            if tags is not None:
+                body["tags"] = tags
+
+            response = await self._make_request("PUT", endpoint, body)
+            data = response.json()
+            return self._parse_domain(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateDomain", e) from e
+
+    async def delete_domain(self, domain_id: int) -> None:
+        """Delete a domain."""
+        endpoint = f"/domains/{domain_id}"
+        try:
+            await self._make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteDomain", e) from e
+
+    async def create_domain_record(
+        self,
+        domain_id: int,
+        record_type: str,
+        name: str | None = None,
+        target: str | None = None,
+        priority: int | None = None,
+        weight: int | None = None,
+        port: int | None = None,
+        ttl_sec: int | None = None,
+    ) -> DomainRecord:
+        """Create a new domain record."""
+        endpoint = f"/domains/{domain_id}/records"
+        try:
+            body: dict[str, Any] = {"type": record_type}
+            if name is not None:
+                body["name"] = name
+            if target is not None:
+                body["target"] = target
+            if priority is not None:
+                body["priority"] = priority
+            if weight is not None:
+                body["weight"] = weight
+            if port is not None:
+                body["port"] = port
+            if ttl_sec is not None:
+                body["ttl_sec"] = ttl_sec
+
+            response = await self._make_request("POST", endpoint, body)
+            data = response.json()
+            return self._parse_domain_record(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateDomainRecord", e) from e
+
+    async def update_domain_record(
+        self,
+        domain_id: int,
+        record_id: int,
+        name: str | None = None,
+        target: str | None = None,
+        priority: int | None = None,
+        weight: int | None = None,
+        port: int | None = None,
+        ttl_sec: int | None = None,
+    ) -> DomainRecord:
+        """Update a domain record."""
+        endpoint = f"/domains/{domain_id}/records/{record_id}"
+        try:
+            body: dict[str, Any] = {}
+            if name is not None:
+                body["name"] = name
+            if target is not None:
+                body["target"] = target
+            if priority is not None:
+                body["priority"] = priority
+            if weight is not None:
+                body["weight"] = weight
+            if port is not None:
+                body["port"] = port
+            if ttl_sec is not None:
+                body["ttl_sec"] = ttl_sec
+
+            response = await self._make_request("PUT", endpoint, body)
+            data = response.json()
+            return self._parse_domain_record(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateDomainRecord", e) from e
+
+    async def delete_domain_record(self, domain_id: int, record_id: int) -> None:
+        """Delete a domain record."""
+        endpoint = f"/domains/{domain_id}/records/{record_id}"
+        try:
+            await self._make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteDomainRecord", e) from e
+
+    async def create_volume(
+        self,
+        label: str,
+        region: str | None = None,
+        linode_id: int | None = None,
+        size: int = 20,
+        tags: list[str] | None = None,
+    ) -> Volume:
+        """Create a new volume."""
+        try:
+            body: dict[str, Any] = {"label": label, "size": size}
+            if region:
+                body["region"] = region
+            if linode_id is not None:
+                body["linode_id"] = linode_id
+            if tags:
+                body["tags"] = tags
+
+            response = await self._make_request("POST", "/volumes", body)
+            data = response.json()
+            return self._parse_volume(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateVolume", e) from e
+
+    async def attach_volume(
+        self,
+        volume_id: int,
+        linode_id: int,
+        config_id: int | None = None,
+        persist_across_boots: bool = False,
+    ) -> Volume:
+        """Attach a volume to an instance."""
+        endpoint = f"/volumes/{volume_id}/attach"
+        try:
+            body: dict[str, Any] = {
+                "linode_id": linode_id,
+                "persist_across_boots": persist_across_boots,
+            }
+            if config_id is not None:
+                body["config_id"] = config_id
+
+            response = await self._make_request("POST", endpoint, body)
+            data = response.json()
+            return self._parse_volume(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("AttachVolume", e) from e
+
+    async def detach_volume(self, volume_id: int) -> None:
+        """Detach a volume from an instance."""
+        endpoint = f"/volumes/{volume_id}/detach"
+        try:
+            await self._make_request("POST", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DetachVolume", e) from e
+
+    async def resize_volume(self, volume_id: int, size: int) -> Volume:
+        """Resize a volume."""
+        endpoint = f"/volumes/{volume_id}/resize"
+        try:
+            body = {"size": size}
+            response = await self._make_request("POST", endpoint, body)
+            data = response.json()
+            return self._parse_volume(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("ResizeVolume", e) from e
+
+    async def delete_volume(self, volume_id: int) -> None:
+        """Delete a volume."""
+        endpoint = f"/volumes/{volume_id}"
+        try:
+            await self._make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteVolume", e) from e
+
+    async def create_nodebalancer(
+        self,
+        region: str,
+        label: str | None = None,
+        client_conn_throttle: int = 0,
+        tags: list[str] | None = None,
+    ) -> NodeBalancer:
+        """Create a new NodeBalancer."""
+        try:
+            body: dict[str, Any] = {
+                "region": region,
+                "client_conn_throttle": client_conn_throttle,
+            }
+            if label:
+                body["label"] = label
+            if tags:
+                body["tags"] = tags
+
+            response = await self._make_request("POST", "/nodebalancers", body)
+            data = response.json()
+            return self._parse_nodebalancer(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateNodeBalancer", e) from e
+
+    async def update_nodebalancer(
+        self,
+        nodebalancer_id: int,
+        label: str | None = None,
+        client_conn_throttle: int | None = None,
+        tags: list[str] | None = None,
+    ) -> NodeBalancer:
+        """Update a NodeBalancer."""
+        endpoint = f"/nodebalancers/{nodebalancer_id}"
+        try:
+            body: dict[str, Any] = {}
+            if label:
+                body["label"] = label
+            if client_conn_throttle is not None:
+                body["client_conn_throttle"] = client_conn_throttle
+            if tags is not None:
+                body["tags"] = tags
+
+            response = await self._make_request("PUT", endpoint, body)
+            data = response.json()
+            return self._parse_nodebalancer(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateNodeBalancer", e) from e
+
+    async def delete_nodebalancer(self, nodebalancer_id: int) -> None:
+        """Delete a NodeBalancer."""
+        endpoint = f"/nodebalancers/{nodebalancer_id}"
+        try:
+            await self._make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteNodeBalancer", e) from e
+
+    async def _make_request(
+        self, method: str, endpoint: str, body: dict[str, Any] | None = None
+    ) -> httpx.Response:
         """Make an HTTP request to the Linode API."""
         url = self.base_url + endpoint
         headers = {
@@ -676,7 +1124,12 @@ class Client:
             "User-Agent": "LinodeMCP/1.0",
         }
 
-        response = await self.client.request(method, url, headers=headers)
+        if body is not None:
+            response = await self.client.request(
+                method, url, headers=headers, json=body
+            )
+        else:
+            response = await self.client.request(method, url, headers=headers)
 
         if response.status_code >= HTTP_BAD_REQUEST:
             self._handle_error_response(response)
@@ -1187,6 +1640,293 @@ class RetryableClient:
             self.client.list_stackscripts
         )
         return result
+
+    # Stage 4: Write operations with retry
+
+    async def create_ssh_key(self, label: str, ssh_key: str) -> SSHKey:
+        """Create SSH key with retry."""
+        result: SSHKey = await self._execute_with_retry(
+            self.client.create_ssh_key, label, ssh_key
+        )
+        return result
+
+    async def delete_ssh_key(self, ssh_key_id: int) -> None:
+        """Delete SSH key with retry."""
+        await self._execute_with_retry(self.client.delete_ssh_key, ssh_key_id)
+
+    async def boot_instance(
+        self, instance_id: int, config_id: int | None = None
+    ) -> None:
+        """Boot instance with retry."""
+        await self._execute_with_retry(
+            self.client.boot_instance, instance_id, config_id
+        )
+
+    async def reboot_instance(
+        self, instance_id: int, config_id: int | None = None
+    ) -> None:
+        """Reboot instance with retry."""
+        await self._execute_with_retry(
+            self.client.reboot_instance, instance_id, config_id
+        )
+
+    async def shutdown_instance(self, instance_id: int) -> None:
+        """Shutdown instance with retry."""
+        await self._execute_with_retry(self.client.shutdown_instance, instance_id)
+
+    async def create_instance(
+        self,
+        region: str,
+        instance_type: str,
+        image: str | None = None,
+        label: str | None = None,
+        root_pass: str | None = None,
+        authorized_keys: list[str] | None = None,
+        authorized_users: list[str] | None = None,
+        booted: bool = True,
+        backups_enabled: bool = False,
+        private_ip: bool = False,
+        tags: list[str] | None = None,
+    ) -> Instance:
+        """Create instance with retry."""
+        result: Instance = await self._execute_with_retry(
+            self.client.create_instance,
+            region,
+            instance_type,
+            image,
+            label,
+            root_pass,
+            authorized_keys,
+            authorized_users,
+            booted,
+            backups_enabled,
+            private_ip,
+            tags,
+        )
+        return result
+
+    async def delete_instance(self, instance_id: int) -> None:
+        """Delete instance with retry."""
+        await self._execute_with_retry(self.client.delete_instance, instance_id)
+
+    async def resize_instance(
+        self,
+        instance_id: int,
+        instance_type: str,
+        allow_auto_disk_resize: bool = True,
+        migration_type: str = "warm",
+    ) -> None:
+        """Resize instance with retry."""
+        await self._execute_with_retry(
+            self.client.resize_instance,
+            instance_id,
+            instance_type,
+            allow_auto_disk_resize,
+            migration_type,
+        )
+
+    async def create_firewall(
+        self,
+        label: str,
+        inbound_policy: str = "ACCEPT",
+        outbound_policy: str = "ACCEPT",
+    ) -> Firewall:
+        """Create firewall with retry."""
+        result: Firewall = await self._execute_with_retry(
+            self.client.create_firewall, label, inbound_policy, outbound_policy
+        )
+        return result
+
+    async def update_firewall(
+        self,
+        firewall_id: int,
+        label: str | None = None,
+        status: str | None = None,
+        inbound_policy: str | None = None,
+        outbound_policy: str | None = None,
+    ) -> Firewall:
+        """Update firewall with retry."""
+        result: Firewall = await self._execute_with_retry(
+            self.client.update_firewall,
+            firewall_id,
+            label,
+            status,
+            inbound_policy,
+            outbound_policy,
+        )
+        return result
+
+    async def delete_firewall(self, firewall_id: int) -> None:
+        """Delete firewall with retry."""
+        await self._execute_with_retry(self.client.delete_firewall, firewall_id)
+
+    async def create_domain(
+        self,
+        domain: str,
+        domain_type: str = "master",
+        soa_email: str | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+    ) -> Domain:
+        """Create domain with retry."""
+        result: Domain = await self._execute_with_retry(
+            self.client.create_domain, domain, domain_type, soa_email, description, tags
+        )
+        return result
+
+    async def update_domain(
+        self,
+        domain_id: int,
+        domain: str | None = None,
+        soa_email: str | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+    ) -> Domain:
+        """Update domain with retry."""
+        result: Domain = await self._execute_with_retry(
+            self.client.update_domain, domain_id, domain, soa_email, description, tags
+        )
+        return result
+
+    async def delete_domain(self, domain_id: int) -> None:
+        """Delete domain with retry."""
+        await self._execute_with_retry(self.client.delete_domain, domain_id)
+
+    async def create_domain_record(
+        self,
+        domain_id: int,
+        record_type: str,
+        name: str | None = None,
+        target: str | None = None,
+        priority: int | None = None,
+        weight: int | None = None,
+        port: int | None = None,
+        ttl_sec: int | None = None,
+    ) -> DomainRecord:
+        """Create domain record with retry."""
+        result: DomainRecord = await self._execute_with_retry(
+            self.client.create_domain_record,
+            domain_id,
+            record_type,
+            name,
+            target,
+            priority,
+            weight,
+            port,
+            ttl_sec,
+        )
+        return result
+
+    async def update_domain_record(
+        self,
+        domain_id: int,
+        record_id: int,
+        name: str | None = None,
+        target: str | None = None,
+        priority: int | None = None,
+        weight: int | None = None,
+        port: int | None = None,
+        ttl_sec: int | None = None,
+    ) -> DomainRecord:
+        """Update domain record with retry."""
+        result: DomainRecord = await self._execute_with_retry(
+            self.client.update_domain_record,
+            domain_id,
+            record_id,
+            name,
+            target,
+            priority,
+            weight,
+            port,
+            ttl_sec,
+        )
+        return result
+
+    async def delete_domain_record(self, domain_id: int, record_id: int) -> None:
+        """Delete domain record with retry."""
+        await self._execute_with_retry(
+            self.client.delete_domain_record, domain_id, record_id
+        )
+
+    async def create_volume(
+        self,
+        label: str,
+        region: str | None = None,
+        linode_id: int | None = None,
+        size: int = 20,
+        tags: list[str] | None = None,
+    ) -> Volume:
+        """Create volume with retry."""
+        result: Volume = await self._execute_with_retry(
+            self.client.create_volume, label, region, linode_id, size, tags
+        )
+        return result
+
+    async def attach_volume(
+        self,
+        volume_id: int,
+        linode_id: int,
+        config_id: int | None = None,
+        persist_across_boots: bool = False,
+    ) -> Volume:
+        """Attach volume with retry."""
+        result: Volume = await self._execute_with_retry(
+            self.client.attach_volume,
+            volume_id,
+            linode_id,
+            config_id,
+            persist_across_boots,
+        )
+        return result
+
+    async def detach_volume(self, volume_id: int) -> None:
+        """Detach volume with retry."""
+        await self._execute_with_retry(self.client.detach_volume, volume_id)
+
+    async def resize_volume(self, volume_id: int, size: int) -> Volume:
+        """Resize volume with retry."""
+        result: Volume = await self._execute_with_retry(
+            self.client.resize_volume, volume_id, size
+        )
+        return result
+
+    async def delete_volume(self, volume_id: int) -> None:
+        """Delete volume with retry."""
+        await self._execute_with_retry(self.client.delete_volume, volume_id)
+
+    async def create_nodebalancer(
+        self,
+        region: str,
+        label: str | None = None,
+        client_conn_throttle: int = 0,
+        tags: list[str] | None = None,
+    ) -> NodeBalancer:
+        """Create NodeBalancer with retry."""
+        result: NodeBalancer = await self._execute_with_retry(
+            self.client.create_nodebalancer, region, label, client_conn_throttle, tags
+        )
+        return result
+
+    async def update_nodebalancer(
+        self,
+        nodebalancer_id: int,
+        label: str | None = None,
+        client_conn_throttle: int | None = None,
+        tags: list[str] | None = None,
+    ) -> NodeBalancer:
+        """Update NodeBalancer with retry."""
+        result: NodeBalancer = await self._execute_with_retry(
+            self.client.update_nodebalancer,
+            nodebalancer_id,
+            label,
+            client_conn_throttle,
+            tags,
+        )
+        return result
+
+    async def delete_nodebalancer(self, nodebalancer_id: int) -> None:
+        """Delete NodeBalancer with retry."""
+        await self._execute_with_retry(self.client.delete_nodebalancer, nodebalancer_id)
 
     async def _execute_with_retry(self, func: Any, *args: Any) -> Any:
         """Execute a function with retry logic."""

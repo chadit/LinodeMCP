@@ -4,9 +4,9 @@ An MCP (Model Context Protocol) server that gives AI assistants like Claude prog
 
 ## What It Does
 
-LinodeMCP exposes Linode API operations as MCP tools. AI assistants can use these tools to query your Linode infrastructure, check account profiles, and list running instances -- all through a standard protocol.
+LinodeMCP exposes Linode API operations as MCP tools. AI assistants can use these tools to query and manage your Linode infrastructure -- all through a standard protocol.
 
-### Available Tools (18 total)
+### Available Tools (43 total)
 
 **Core Tools:**
 | Tool | Description |
@@ -25,6 +25,12 @@ LinodeMCP exposes Linode API operations as MCP tools. AI assistants can use thes
 |------|-------------|
 | `linode_instances_list` | Lists your Linode instances with optional status filtering |
 | `linode_instance_get` | Gets detailed info about a specific instance by ID |
+| `linode_instance_create` | Creates a new Linode instance (confirm required) |
+| `linode_instance_delete` | Deletes a Linode instance (confirm required) |
+| `linode_instance_resize` | Resizes an instance to a different plan (confirm required) |
+| `linode_instance_boot` | Boots a stopped instance |
+| `linode_instance_reboot` | Reboots a running instance |
+| `linode_instance_shutdown` | Shuts down a running instance |
 | `linode_regions_list` | Lists available regions with country/capability filtering |
 | `linode_types_list` | Lists instance types (plans) with class filtering |
 | `linode_images_list` | Lists images with public/deprecated filtering |
@@ -34,25 +40,46 @@ LinodeMCP exposes Linode API operations as MCP tools. AI assistants can use thes
 | Tool | Description |
 |------|-------------|
 | `linode_volumes_list` | Lists block storage volumes with region/label filtering |
+| `linode_volume_create` | Creates a new block storage volume (confirm required) |
+| `linode_volume_attach` | Attaches a volume to an instance |
+| `linode_volume_detach` | Detaches a volume from an instance |
+| `linode_volume_resize` | Resizes a volume, expand only (confirm required) |
+| `linode_volume_delete` | Deletes a block storage volume (confirm required) |
 
 **Networking:**
 | Tool | Description |
 |------|-------------|
 | `linode_firewalls_list` | Lists Cloud Firewalls with status/label filtering |
+| `linode_firewall_create` | Creates a new Cloud Firewall |
+| `linode_firewall_update` | Updates firewall rules and settings |
+| `linode_firewall_delete` | Deletes a Cloud Firewall (confirm required) |
 | `linode_nodebalancers_list` | Lists NodeBalancers with region/label filtering |
 | `linode_nodebalancer_get` | Gets detailed info about a specific NodeBalancer by ID |
+| `linode_nodebalancer_create` | Creates a new NodeBalancer (confirm required) |
+| `linode_nodebalancer_update` | Updates NodeBalancer settings (confirm required) |
+| `linode_nodebalancer_delete` | Deletes a NodeBalancer (confirm required) |
 
 **DNS:**
 | Tool | Description |
 |------|-------------|
 | `linode_domains_list` | Lists DNS domains |
 | `linode_domain_get` | Gets detailed info about a specific domain by ID |
+| `linode_domain_create` | Creates a new DNS domain |
+| `linode_domain_update` | Updates domain settings |
+| `linode_domain_delete` | Deletes a DNS domain and all its records |
 | `linode_domain_records_list` | Lists domain records with type/name filtering |
+| `linode_domain_record_create` | Creates a new DNS record |
+| `linode_domain_record_update` | Updates a DNS record |
+| `linode_domain_record_delete` | Deletes a DNS record |
 
 **Security:**
 | Tool | Description |
 |------|-------------|
 | `linode_sshkeys_list` | Lists SSH keys with label filtering |
+| `linode_sshkey_create` | Adds a new SSH key to your profile |
+| `linode_sshkey_delete` | Removes an SSH key from your profile |
+
+**Safety Note:** Tools marked with "(confirm required)" are destructive or incur billing charges. These operations require `confirm: true` to execute.
 
 ### Multi-Environment Support
 
@@ -267,7 +294,7 @@ LinodeMCP/
 
 ## Status
 
-This project is in active development (v0.1.0). The foundation is complete with config management, API client, retry logic, and 18 read-only tools covering compute, storage, networking, DNS, and security resources. Write operations will be added in future releases.
+This project is in active development (v0.1.0). The foundation is complete with config management, API client, retry logic, and 43 tools covering compute, storage, networking, DNS, and security resources. Both read and write operations are fully implemented across Go and Python.
 
 ## License
 
