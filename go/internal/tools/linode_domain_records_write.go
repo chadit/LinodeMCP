@@ -85,8 +85,12 @@ func handleLinodeDomainRecordCreateRequest(ctx context.Context, request mcp.Call
 		return mcp.NewToolResultError("type is required"), nil
 	}
 
-	if target == "" {
-		return mcp.NewToolResultError("target is required"), nil
+	if err := validateDNSRecordName(name); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := validateDNSRecordTarget(recordType, target); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	selectedEnv, err := selectEnvironment(cfg, environment)

@@ -25,7 +25,7 @@ type Client struct {
 //
 //nolint:interfacebloat // API client interface grows with supported operations
 type ClientInterface interface {
-	// Read operations
+	// Read operations.
 	GetProfile(ctx context.Context) (*Profile, error)
 	GetAccount(ctx context.Context) (*Account, error)
 	ListInstances(ctx context.Context) ([]Instance, error)
@@ -45,11 +45,11 @@ type ClientInterface interface {
 	ListStackScripts(ctx context.Context) ([]StackScript, error)
 	GetVolume(ctx context.Context, volumeID int) (*Volume, error)
 
-	// Stage 4: Write operations - SSH Keys
+	// Stage 4: Write operations - SSH Keys.
 	CreateSSHKey(ctx context.Context, req CreateSSHKeyRequest) (*SSHKey, error)
 	DeleteSSHKey(ctx context.Context, sshKeyID int) error
 
-	// Stage 4: Write operations - Instances
+	// Stage 4: Write operations - Instances.
 	BootInstance(ctx context.Context, instanceID int, configID *int) error
 	RebootInstance(ctx context.Context, instanceID int, configID *int) error
 	ShutdownInstance(ctx context.Context, instanceID int) error
@@ -57,12 +57,12 @@ type ClientInterface interface {
 	DeleteInstance(ctx context.Context, instanceID int) error
 	ResizeInstance(ctx context.Context, instanceID int, req ResizeInstanceRequest) error
 
-	// Stage 4: Write operations - Firewalls
+	// Stage 4: Write operations - Firewalls.
 	CreateFirewall(ctx context.Context, req CreateFirewallRequest) (*Firewall, error)
 	UpdateFirewall(ctx context.Context, firewallID int, req UpdateFirewallRequest) (*Firewall, error)
 	DeleteFirewall(ctx context.Context, firewallID int) error
 
-	// Stage 4: Write operations - Domains
+	// Stage 4: Write operations - Domains.
 	CreateDomain(ctx context.Context, req CreateDomainRequest) (*Domain, error)
 	UpdateDomain(ctx context.Context, domainID int, req UpdateDomainRequest) (*Domain, error)
 	DeleteDomain(ctx context.Context, domainID int) error
@@ -70,14 +70,14 @@ type ClientInterface interface {
 	UpdateDomainRecord(ctx context.Context, domainID, recordID int, req UpdateDomainRecordRequest) (*DomainRecord, error)
 	DeleteDomainRecord(ctx context.Context, domainID, recordID int) error
 
-	// Stage 4: Write operations - Volumes
+	// Stage 4: Write operations - Volumes.
 	CreateVolume(ctx context.Context, req CreateVolumeRequest) (*Volume, error)
 	AttachVolume(ctx context.Context, volumeID int, req AttachVolumeRequest) (*Volume, error)
 	DetachVolume(ctx context.Context, volumeID int) error
 	ResizeVolume(ctx context.Context, volumeID int, size int) (*Volume, error)
 	DeleteVolume(ctx context.Context, volumeID int) error
 
-	// Stage 4: Write operations - NodeBalancers
+	// Stage 4: Write operations - NodeBalancers.
 	CreateNodeBalancer(ctx context.Context, req CreateNodeBalancerRequest) (*NodeBalancer, error)
 	UpdateNodeBalancer(ctx context.Context, nodeBalancerID int, req UpdateNodeBalancerRequest) (*NodeBalancer, error)
 	DeleteNodeBalancer(ctx context.Context, nodeBalancerID int) error
@@ -408,7 +408,7 @@ type UDF struct {
 	ManyOf  string `json:"manyof"`
 }
 
-// Stage 4: Request types for write operations
+// Stage 4: Request types for write operations.
 
 // CreateSSHKeyRequest represents the request body for creating an SSH key.
 type CreateSSHKeyRequest struct {
@@ -984,7 +984,7 @@ func (c *Client) ListStackScripts(ctx context.Context) ([]StackScript, error) {
 	return response.Data, nil
 }
 
-// Stage 4: Write operations
+// Stage 4: Write operations.
 
 // GetFirewall retrieves a single firewall by its ID.
 func (c *Client) GetFirewall(ctx context.Context, firewallID int) (*Firewall, error) {

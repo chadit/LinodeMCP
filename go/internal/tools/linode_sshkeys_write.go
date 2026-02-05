@@ -45,8 +45,8 @@ func handleLinodeSSHKeyCreateRequest(ctx context.Context, request mcp.CallToolRe
 		return mcp.NewToolResultError("label is required"), nil
 	}
 
-	if sshKey == "" {
-		return mcp.NewToolResultError("ssh_key is required"), nil
+	if err := validateSSHKey(sshKey); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	selectedEnv, err := selectEnvironment(cfg, environment)

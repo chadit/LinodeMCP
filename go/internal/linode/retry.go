@@ -329,7 +329,7 @@ func (rc *RetryableClient) GetVolume(ctx context.Context, volumeID int) (*Volume
 	return volume, err
 }
 
-// Stage 4: Write operations with retry
+// Stage 4: Write operations with retry.
 
 // CreateSSHKey creates a new SSH key with automatic retry on transient failures.
 func (rc *RetryableClient) CreateSSHKey(ctx context.Context, req CreateSSHKeyRequest) (*SSHKey, error) {

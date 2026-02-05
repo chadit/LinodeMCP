@@ -273,6 +273,10 @@ func handleLinodeInstanceCreateRequest(ctx context.Context, request mcp.CallTool
 		return mcp.NewToolResultError("type is required"), nil
 	}
 
+	if err := validateRootPassword(rootPass); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	selectedEnv, err := selectEnvironment(cfg, environment)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil

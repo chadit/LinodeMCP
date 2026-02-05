@@ -48,6 +48,14 @@ func handleLinodeFirewallCreateRequest(ctx context.Context, request mcp.CallTool
 		return mcp.NewToolResultError("label is required"), nil
 	}
 
+	if err := validateFirewallPolicy(inboundPolicy); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("inbound_policy: %v", err)), nil
+	}
+
+	if err := validateFirewallPolicy(outboundPolicy); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("outbound_policy: %v", err)), nil
+	}
+
 	selectedEnv, err := selectEnvironment(cfg, environment)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil

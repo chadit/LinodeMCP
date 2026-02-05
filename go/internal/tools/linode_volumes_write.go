@@ -65,6 +65,12 @@ func handleLinodeVolumeCreateRequest(ctx context.Context, request mcp.CallToolRe
 		return mcp.NewToolResultError("either region or linode_id is required"), nil
 	}
 
+	if size > 0 {
+		if err := validateVolumeSize(size); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+	}
+
 	selectedEnv, err := selectEnvironment(cfg, environment)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -291,8 +297,8 @@ func handleLinodeVolumeResizeRequest(ctx context.Context, request mcp.CallToolRe
 		return mcp.NewToolResultError("volume_id is required"), nil
 	}
 
-	if size == 0 {
-		return mcp.NewToolResultError("size is required"), nil
+	if err := validateVolumeSize(size); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	selectedEnv, err := selectEnvironment(cfg, environment)

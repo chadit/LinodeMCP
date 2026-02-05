@@ -160,7 +160,7 @@ func (s *Server) registerTools() {
 	s.mcp.AddTool(linodeStackScriptsTool, linodeStackScriptsHandler)
 	s.tools = append(s.tools, &toolWrapper{tool: linodeStackScriptsTool})
 
-	// Stage 4: Write operations - SSH Keys
+	// Stage 4: Write operations - SSH Keys.
 	linodeSSHKeyCreateTool, linodeSSHKeyCreateHandler := tools.NewLinodeSSHKeyCreateTool(s.config)
 	s.mcp.AddTool(linodeSSHKeyCreateTool, linodeSSHKeyCreateHandler)
 	s.tools = append(s.tools, &toolWrapper{tool: linodeSSHKeyCreateTool})
@@ -169,7 +169,7 @@ func (s *Server) registerTools() {
 	s.mcp.AddTool(linodeSSHKeyDeleteTool, linodeSSHKeyDeleteHandler)
 	s.tools = append(s.tools, &toolWrapper{tool: linodeSSHKeyDeleteTool})
 
-	// Stage 4: Write operations - Instances
+	// Stage 4: Write operations - Instances.
 	linodeInstanceBootTool, linodeInstanceBootHandler := tools.NewLinodeInstanceBootTool(s.config)
 	s.mcp.AddTool(linodeInstanceBootTool, linodeInstanceBootHandler)
 	s.tools = append(s.tools, &toolWrapper{tool: linodeInstanceBootTool})
@@ -194,7 +194,7 @@ func (s *Server) registerTools() {
 	s.mcp.AddTool(linodeInstanceResizeTool, linodeInstanceResizeHandler)
 	s.tools = append(s.tools, &toolWrapper{tool: linodeInstanceResizeTool})
 
-	// Stage 4: Write operations - Firewalls
+	// Stage 4: Write operations - Firewalls.
 	linodeFirewallCreateTool, linodeFirewallCreateHandler := tools.NewLinodeFirewallCreateTool(s.config)
 	s.mcp.AddTool(linodeFirewallCreateTool, linodeFirewallCreateHandler)
 	s.tools = append(s.tools, &toolWrapper{tool: linodeFirewallCreateTool})
@@ -207,7 +207,7 @@ func (s *Server) registerTools() {
 	s.mcp.AddTool(linodeFirewallDeleteTool, linodeFirewallDeleteHandler)
 	s.tools = append(s.tools, &toolWrapper{tool: linodeFirewallDeleteTool})
 
-	// Stage 4: Write operations - Domains
+	// Stage 4: Write operations - Domains.
 	linodeDomainCreateTool, linodeDomainCreateHandler := tools.NewLinodeDomainCreateTool(s.config)
 	s.mcp.AddTool(linodeDomainCreateTool, linodeDomainCreateHandler)
 	s.tools = append(s.tools, &toolWrapper{tool: linodeDomainCreateTool})
@@ -220,7 +220,7 @@ func (s *Server) registerTools() {
 	s.mcp.AddTool(linodeDomainDeleteTool, linodeDomainDeleteHandler)
 	s.tools = append(s.tools, &toolWrapper{tool: linodeDomainDeleteTool})
 
-	// Stage 4: Write operations - Domain Records
+	// Stage 4: Write operations - Domain Records.
 	linodeDomainRecordCreateTool, linodeDomainRecordCreateHandler := tools.NewLinodeDomainRecordCreateTool(s.config)
 	s.mcp.AddTool(linodeDomainRecordCreateTool, linodeDomainRecordCreateHandler)
 	s.tools = append(s.tools, &toolWrapper{tool: linodeDomainRecordCreateTool})
@@ -233,7 +233,7 @@ func (s *Server) registerTools() {
 	s.mcp.AddTool(linodeDomainRecordDeleteTool, linodeDomainRecordDeleteHandler)
 	s.tools = append(s.tools, &toolWrapper{tool: linodeDomainRecordDeleteTool})
 
-	// Stage 4: Write operations - Volumes
+	// Stage 4: Write operations - Volumes.
 	linodeVolumeCreateTool, linodeVolumeCreateHandler := tools.NewLinodeVolumeCreateTool(s.config)
 	s.mcp.AddTool(linodeVolumeCreateTool, linodeVolumeCreateHandler)
 	s.tools = append(s.tools, &toolWrapper{tool: linodeVolumeCreateTool})
@@ -254,7 +254,7 @@ func (s *Server) registerTools() {
 	s.mcp.AddTool(linodeVolumeDeleteTool, linodeVolumeDeleteHandler)
 	s.tools = append(s.tools, &toolWrapper{tool: linodeVolumeDeleteTool})
 
-	// Stage 4: Write operations - NodeBalancers
+	// Stage 4: Write operations - NodeBalancers.
 	linodeNodeBalancerCreateTool, linodeNodeBalancerCreateHandler := tools.NewLinodeNodeBalancerCreateTool(s.config)
 	s.mcp.AddTool(linodeNodeBalancerCreateTool, linodeNodeBalancerCreateHandler)
 	s.tools = append(s.tools, &toolWrapper{tool: linodeNodeBalancerCreateTool})

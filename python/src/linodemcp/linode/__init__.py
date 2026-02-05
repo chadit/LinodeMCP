@@ -1,11 +1,140 @@
 """Linode API client."""
 
 import asyncio
+import logging
+import re
 import secrets
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
+
+logger = logging.getLogger(__name__)
+
+# Validation patterns
+VALID_SSH_KEY_PREFIXES = (
+    "ssh-rsa",
+    "ssh-ed25519",
+    "ecdsa-sha2-nistp256",
+    "ecdsa-sha2-nistp384",
+    "ecdsa-sha2-nistp521",
+    "ssh-dss",
+)
+
+VALID_DNS_NAME_PATTERN = re.compile(
+    r"^[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?"
+    r"(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)*$|^@$|^$"
+)
+VALID_IPV4_PATTERN = re.compile(r"^(\d{1,3}\.){3}\d{1,3}$")
+
+# Validation constants
+MIN_SSH_KEY_LENGTH = 80
+MAX_SSH_KEY_LENGTH = 16000
+MIN_PASSWORD_LENGTH = 12
+MAX_PASSWORD_LENGTH = 128
+MAX_DNS_NAME_LENGTH = 253
+MIN_VOLUME_SIZE_GB = 10
+MAX_VOLUME_SIZE_GB = 10240
+MAX_LABEL_LENGTH = 64
+
+
+def validate_ssh_key(key: str) -> None:
+    """Validate SSH key format."""
+    if not key:
+        msg = "ssh_key is required"
+        raise ValueError(msg)
+
+    key = key.strip()
+    if not any(key.startswith(f"{prefix} ") for prefix in VALID_SSH_KEY_PREFIXES):
+        msg = "invalid SSH key format: use ssh-rsa, ssh-ed25519, or ecdsa-sha2-*"
+        raise ValueError(msg)
+
+    if len(key) < MIN_SSH_KEY_LENGTH or len(key) > MAX_SSH_KEY_LENGTH:
+        msg = "invalid SSH key length: key appears malformed"
+        raise ValueError(msg)
+
+
+def validate_root_password(password: str | None) -> None:
+    """Validate root password strength."""
+    if not password:
+        return  # Password is optional
+
+    if len(password) < MIN_PASSWORD_LENGTH:
+        msg = "root_pass must be at least 12 characters"
+        raise ValueError(msg)
+
+    if len(password) > MAX_PASSWORD_LENGTH:
+        msg = "root_pass must not exceed 128 characters"
+        raise ValueError(msg)
+
+    has_upper = any(c.isupper() for c in password)
+    has_lower = any(c.islower() for c in password)
+    has_digit = any(c.isdigit() for c in password)
+
+    if not (has_upper and has_lower and has_digit):
+        msg = "root_pass must contain uppercase, lowercase, and digits"
+        raise ValueError(msg)
+
+
+def validate_dns_record_name(name: str) -> None:
+    """Validate DNS record name."""
+    if len(name) > MAX_DNS_NAME_LENGTH:
+        msg = "DNS record name exceeds maximum length of 253 characters"
+        raise ValueError(msg)
+
+    if name and name != "@" and not VALID_DNS_NAME_PATTERN.match(name):
+        msg = "invalid DNS record name: alphanumeric, hyphens, dots only"
+        raise ValueError(msg)
+
+
+def validate_dns_record_target(record_type: str, target: str) -> None:
+    """Validate DNS record target based on type."""
+    if not target:
+        msg = "target is required"
+        raise ValueError(msg)
+
+    record_type = record_type.upper()
+
+    if record_type == "A":
+        if not VALID_IPV4_PATTERN.match(target):
+            msg = "A record target must be a valid IPv4 address"
+            raise ValueError(msg)
+        if target.startswith(("10.", "192.168.", "127.")):
+            msg = "A record target cannot be a private IP address"
+            raise ValueError(msg)
+
+
+def validate_firewall_policy(policy: str) -> None:
+    """Validate firewall policy value."""
+    if policy.upper() not in ("ACCEPT", "DROP"):
+        msg = f"firewall policy must be 'ACCEPT' or 'DROP', got '{policy}'"
+        raise ValueError(msg)
+
+
+def validate_volume_size(size: int) -> None:
+    """Validate volume size."""
+    if size < MIN_VOLUME_SIZE_GB:
+        msg = "volume size must be at least 10 GB"
+        raise ValueError(msg)
+    if size > MAX_VOLUME_SIZE_GB:
+        msg = "volume size cannot exceed 10240 GB (10 TB)"
+        raise ValueError(msg)
+
+
+def validate_label(label: str | None) -> None:
+    """Validate resource label."""
+    if not label:
+        return
+
+    if len(label) > MAX_LABEL_LENGTH:
+        msg = "label must not exceed 64 characters"
+        raise ValueError(msg)
+
+    for char in label:
+        if not (char.isalnum() or char in "_-."):
+            msg = f"label contains invalid character '{char}'"
+            raise ValueError(msg)
+
 
 # HTTP status code constants
 HTTP_BAD_REQUEST = 400
@@ -52,6 +181,13 @@ __all__ = [
     "Transfer",
     "Volume",
     "is_retryable",
+    "validate_dns_record_name",
+    "validate_dns_record_target",
+    "validate_firewall_policy",
+    "validate_label",
+    "validate_root_password",
+    "validate_ssh_key",
+    "validate_volume_size",
 ]
 
 
@@ -671,20 +807,50 @@ class Client:
 
     async def create_ssh_key(self, label: str, ssh_key: str) -> SSHKey:
         """Create a new SSH key."""
+        validate_label(label)
+        validate_ssh_key(ssh_key)
+
+        logger.info("Creating SSH key", extra={"label": label})
+
         try:
             body = {"label": label, "ssh_key": ssh_key}
             response = await self._make_request("POST", "/profile/sshkeys", body)
             data = response.json()
-            return self._parse_ssh_key(data)
+            result = self._parse_ssh_key(data)
+            logger.info("SSH key created", extra={"id": result.id})
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout creating SSH key: %s", e)
+            raise NetworkError("CreateSSHKey", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout creating SSH key: %s", e)
+            raise NetworkError("CreateSSHKey", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error creating SSH key")
+            raise NetworkError("CreateSSHKey", e) from e
         except httpx.HTTPError as e:
+            logger.exception("HTTP error creating SSH key: %s", e)
             raise NetworkError("CreateSSHKey", e) from e
 
     async def delete_ssh_key(self, ssh_key_id: int) -> None:
         """Delete an SSH key."""
         endpoint = f"/profile/sshkeys/{ssh_key_id}"
+        logger.info("Deleting SSH key", extra={"ssh_key_id": ssh_key_id})
+
         try:
             await self._make_request("DELETE", endpoint)
+            logger.info("SSH key deleted", extra={"ssh_key_id": ssh_key_id})
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout deleting SSH key: %s", e)
+            raise NetworkError("DeleteSSHKey", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout deleting SSH key: %s", e)
+            raise NetworkError("DeleteSSHKey", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error deleting SSH key")
+            raise NetworkError("DeleteSSHKey", e) from e
         except httpx.HTTPError as e:
+            logger.exception("HTTP error deleting SSH key: %s", e)
             raise NetworkError("DeleteSSHKey", e) from e
 
     async def boot_instance(
@@ -692,12 +858,25 @@ class Client:
     ) -> None:
         """Boot an instance."""
         endpoint = f"/linode/instances/{instance_id}/boot"
+        logger.info("Booting instance", extra={"instance_id": instance_id})
+
         try:
             body: dict[str, Any] = {}
             if config_id is not None:
                 body["config_id"] = config_id
             await self._make_request("POST", endpoint, body if body else None)
+            logger.info("Instance booted", extra={"instance_id": instance_id})
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout booting instance: %s", e)
+            raise NetworkError("BootInstance", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout booting instance: %s", e)
+            raise NetworkError("BootInstance", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error booting instance")
+            raise NetworkError("BootInstance", e) from e
         except httpx.HTTPError as e:
+            logger.exception("HTTP error booting instance: %s", e)
             raise NetworkError("BootInstance", e) from e
 
     async def reboot_instance(
@@ -705,20 +884,46 @@ class Client:
     ) -> None:
         """Reboot an instance."""
         endpoint = f"/linode/instances/{instance_id}/reboot"
+        logger.info("Rebooting instance", extra={"instance_id": instance_id})
+
         try:
             body: dict[str, Any] = {}
             if config_id is not None:
                 body["config_id"] = config_id
             await self._make_request("POST", endpoint, body if body else None)
+            logger.info("Instance rebooted", extra={"instance_id": instance_id})
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout rebooting instance: %s", e)
+            raise NetworkError("RebootInstance", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout rebooting instance: %s", e)
+            raise NetworkError("RebootInstance", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error rebooting instance")
+            raise NetworkError("RebootInstance", e) from e
         except httpx.HTTPError as e:
+            logger.exception("HTTP error rebooting instance: %s", e)
             raise NetworkError("RebootInstance", e) from e
 
     async def shutdown_instance(self, instance_id: int) -> None:
         """Shutdown an instance."""
         endpoint = f"/linode/instances/{instance_id}/shutdown"
+        logger.info("Shutting down instance", extra={"instance_id": instance_id})
+
         try:
             await self._make_request("POST", endpoint)
+            logger.info("Instance shut down", extra={"instance_id": instance_id})
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout shutting down instance: %s", e)
+            raise NetworkError("ShutdownInstance", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout shutting down instance: %s", e)
+            raise NetworkError("ShutdownInstance", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error shutting down instance")
+            raise NetworkError("ShutdownInstance", e) from e
         except httpx.HTTPError as e:
+            logger.exception("HTTP error shutting down instance: %s", e)
             raise NetworkError("ShutdownInstance", e) from e
 
     async def create_instance(
@@ -736,6 +941,14 @@ class Client:
         tags: list[str] | None = None,
     ) -> Instance:
         """Create a new Linode instance."""
+        validate_label(label)
+        validate_root_password(root_pass)
+
+        logger.info(
+            "Creating instance",
+            extra={"region": region, "type": instance_type, "label": label},
+        )
+
         try:
             body: dict[str, Any] = {
                 "region": region,
@@ -759,16 +972,41 @@ class Client:
 
             response = await self._make_request("POST", "/linode/instances", body)
             data = response.json()
-            return self._parse_instance(data)
+            result = self._parse_instance(data)
+            logger.info("Instance created", extra={"id": result.id})
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout creating instance: %s", e)
+            raise NetworkError("CreateInstance", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout creating instance: %s", e)
+            raise NetworkError("CreateInstance", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error creating instance")
+            raise NetworkError("CreateInstance", e) from e
         except httpx.HTTPError as e:
+            logger.exception("HTTP error creating instance: %s", e)
             raise NetworkError("CreateInstance", e) from e
 
     async def delete_instance(self, instance_id: int) -> None:
         """Delete an instance."""
         endpoint = f"/linode/instances/{instance_id}"
+        logger.info("Deleting instance", extra={"instance_id": instance_id})
+
         try:
             await self._make_request("DELETE", endpoint)
+            logger.info("Instance deleted", extra={"instance_id": instance_id})
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout deleting instance: %s", e)
+            raise NetworkError("DeleteInstance", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout deleting instance: %s", e)
+            raise NetworkError("DeleteInstance", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error deleting instance")
+            raise NetworkError("DeleteInstance", e) from e
         except httpx.HTTPError as e:
+            logger.exception("HTTP error deleting instance: %s", e)
             raise NetworkError("DeleteInstance", e) from e
 
     async def resize_instance(
@@ -780,6 +1018,11 @@ class Client:
     ) -> None:
         """Resize an instance."""
         endpoint = f"/linode/instances/{instance_id}/resize"
+        logger.info(
+            "Resizing instance",
+            extra={"instance_id": instance_id, "new_type": instance_type},
+        )
+
         try:
             body = {
                 "type": instance_type,
@@ -787,7 +1030,18 @@ class Client:
                 "migration_type": migration_type,
             }
             await self._make_request("POST", endpoint, body)
+            logger.info("Instance resized", extra={"instance_id": instance_id})
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout resizing instance: %s", e)
+            raise NetworkError("ResizeInstance", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout resizing instance: %s", e)
+            raise NetworkError("ResizeInstance", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error resizing instance")
+            raise NetworkError("ResizeInstance", e) from e
         except httpx.HTTPError as e:
+            logger.exception("HTTP error resizing instance: %s", e)
             raise NetworkError("ResizeInstance", e) from e
 
     async def create_firewall(
@@ -797,6 +1051,12 @@ class Client:
         outbound_policy: str = "ACCEPT",
     ) -> Firewall:
         """Create a new firewall."""
+        validate_label(label)
+        validate_firewall_policy(inbound_policy)
+        validate_firewall_policy(outbound_policy)
+
+        logger.info("Creating firewall", extra={"label": label})
+
         try:
             body = {
                 "label": label,
@@ -807,8 +1067,20 @@ class Client:
             }
             response = await self._make_request("POST", "/networking/firewalls", body)
             data = response.json()
-            return self._parse_firewall(data)
+            result = self._parse_firewall(data)
+            logger.info("Firewall created", extra={"id": result.id})
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout creating firewall: %s", e)
+            raise NetworkError("CreateFirewall", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout creating firewall: %s", e)
+            raise NetworkError("CreateFirewall", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error creating firewall")
+            raise NetworkError("CreateFirewall", e) from e
         except httpx.HTTPError as e:
+            logger.exception("HTTP error creating firewall: %s", e)
             raise NetworkError("CreateFirewall", e) from e
 
     async def update_firewall(
@@ -821,6 +1093,13 @@ class Client:
     ) -> Firewall:
         """Update a firewall."""
         endpoint = f"/networking/firewalls/{firewall_id}"
+        if inbound_policy:
+            validate_firewall_policy(inbound_policy)
+        if outbound_policy:
+            validate_firewall_policy(outbound_policy)
+
+        logger.info("Updating firewall", extra={"firewall_id": firewall_id})
+
         try:
             body: dict[str, Any] = {}
             if label:
@@ -836,16 +1115,41 @@ class Client:
 
             response = await self._make_request("PUT", endpoint, body)
             data = response.json()
-            return self._parse_firewall(data)
+            result = self._parse_firewall(data)
+            logger.info("Firewall updated", extra={"id": result.id})
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout updating firewall: %s", e)
+            raise NetworkError("UpdateFirewall", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout updating firewall: %s", e)
+            raise NetworkError("UpdateFirewall", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error updating firewall")
+            raise NetworkError("UpdateFirewall", e) from e
         except httpx.HTTPError as e:
+            logger.exception("HTTP error updating firewall: %s", e)
             raise NetworkError("UpdateFirewall", e) from e
 
     async def delete_firewall(self, firewall_id: int) -> None:
         """Delete a firewall."""
         endpoint = f"/networking/firewalls/{firewall_id}"
+        logger.info("Deleting firewall", extra={"firewall_id": firewall_id})
+
         try:
             await self._make_request("DELETE", endpoint)
+            logger.info("Firewall deleted", extra={"firewall_id": firewall_id})
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout deleting firewall: %s", e)
+            raise NetworkError("DeleteFirewall", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout deleting firewall: %s", e)
+            raise NetworkError("DeleteFirewall", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error deleting firewall")
+            raise NetworkError("DeleteFirewall", e) from e
         except httpx.HTTPError as e:
+            logger.exception("HTTP error deleting firewall: %s", e)
             raise NetworkError("DeleteFirewall", e) from e
 
     async def create_domain(
@@ -857,6 +1161,10 @@ class Client:
         tags: list[str] | None = None,
     ) -> Domain:
         """Create a new domain."""
+        validate_label(domain)
+
+        logger.info("Creating domain", extra={"domain": domain})
+
         try:
             body: dict[str, Any] = {"domain": domain, "type": domain_type}
             if soa_email:
@@ -868,8 +1176,20 @@ class Client:
 
             response = await self._make_request("POST", "/domains", body)
             data = response.json()
-            return self._parse_domain(data)
+            result = self._parse_domain(data)
+            logger.info("Domain created", extra={"id": result.id})
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout creating domain: %s", e)
+            raise NetworkError("CreateDomain", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout creating domain: %s", e)
+            raise NetworkError("CreateDomain", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error creating domain")
+            raise NetworkError("CreateDomain", e) from e
         except httpx.HTTPError as e:
+            logger.exception("HTTP error creating domain: %s", e)
             raise NetworkError("CreateDomain", e) from e
 
     async def update_domain(
@@ -882,6 +1202,8 @@ class Client:
     ) -> Domain:
         """Update a domain."""
         endpoint = f"/domains/{domain_id}"
+        logger.info("Updating domain", extra={"domain_id": domain_id})
+
         try:
             body: dict[str, Any] = {}
             if domain:
@@ -895,16 +1217,41 @@ class Client:
 
             response = await self._make_request("PUT", endpoint, body)
             data = response.json()
-            return self._parse_domain(data)
+            result = self._parse_domain(data)
+            logger.info("Domain updated", extra={"id": result.id})
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout updating domain: %s", e)
+            raise NetworkError("UpdateDomain", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout updating domain: %s", e)
+            raise NetworkError("UpdateDomain", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error updating domain")
+            raise NetworkError("UpdateDomain", e) from e
         except httpx.HTTPError as e:
+            logger.exception("HTTP error updating domain: %s", e)
             raise NetworkError("UpdateDomain", e) from e
 
     async def delete_domain(self, domain_id: int) -> None:
         """Delete a domain."""
         endpoint = f"/domains/{domain_id}"
+        logger.info("Deleting domain", extra={"domain_id": domain_id})
+
         try:
             await self._make_request("DELETE", endpoint)
+            logger.info("Domain deleted", extra={"domain_id": domain_id})
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout deleting domain: %s", e)
+            raise NetworkError("DeleteDomain", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout deleting domain: %s", e)
+            raise NetworkError("DeleteDomain", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error deleting domain")
+            raise NetworkError("DeleteDomain", e) from e
         except httpx.HTTPError as e:
+            logger.exception("HTTP error deleting domain: %s", e)
             raise NetworkError("DeleteDomain", e) from e
 
     async def create_domain_record(
@@ -920,6 +1267,16 @@ class Client:
     ) -> DomainRecord:
         """Create a new domain record."""
         endpoint = f"/domains/{domain_id}/records"
+        if name:
+            validate_dns_record_name(name)
+        if target:
+            validate_dns_record_target(record_type, target)
+
+        logger.info(
+            "Creating domain record",
+            extra={"domain_id": domain_id, "type": record_type, "name": name},
+        )
+
         try:
             body: dict[str, Any] = {"type": record_type}
             if name is not None:
@@ -937,8 +1294,22 @@ class Client:
 
             response = await self._make_request("POST", endpoint, body)
             data = response.json()
-            return self._parse_domain_record(data)
+            result = self._parse_domain_record(data)
+            logger.info("Domain record created", extra={"id": result.id})
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout creating domain record: %s", e)
+            raise NetworkError("CreateDomainRecord", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout creating domain record: %s", e)
+            raise NetworkError("CreateDomainRecord", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception(
+                "HTTP error creating domain record: status %d", e.response.status_code
+            )
+            raise NetworkError("CreateDomainRecord", e) from e
         except httpx.HTTPError as e:
+            logger.exception("HTTP error creating domain record: %s", e)
             raise NetworkError("CreateDomainRecord", e) from e
 
     async def update_domain_record(
@@ -954,6 +1325,14 @@ class Client:
     ) -> DomainRecord:
         """Update a domain record."""
         endpoint = f"/domains/{domain_id}/records/{record_id}"
+        if name:
+            validate_dns_record_name(name)
+
+        logger.info(
+            "Updating domain record",
+            extra={"domain_id": domain_id, "record_id": record_id},
+        )
+
         try:
             body: dict[str, Any] = {}
             if name is not None:
@@ -971,16 +1350,48 @@ class Client:
 
             response = await self._make_request("PUT", endpoint, body)
             data = response.json()
-            return self._parse_domain_record(data)
+            result = self._parse_domain_record(data)
+            logger.info("Domain record updated", extra={"id": result.id})
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout updating domain record: %s", e)
+            raise NetworkError("UpdateDomainRecord", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout updating domain record: %s", e)
+            raise NetworkError("UpdateDomainRecord", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception(
+                "HTTP error updating domain record: status %d", e.response.status_code
+            )
+            raise NetworkError("UpdateDomainRecord", e) from e
         except httpx.HTTPError as e:
+            logger.exception("HTTP error updating domain record: %s", e)
             raise NetworkError("UpdateDomainRecord", e) from e
 
     async def delete_domain_record(self, domain_id: int, record_id: int) -> None:
         """Delete a domain record."""
         endpoint = f"/domains/{domain_id}/records/{record_id}"
+        logger.info(
+            "Deleting domain record",
+            extra={"domain_id": domain_id, "record_id": record_id},
+        )
+
         try:
             await self._make_request("DELETE", endpoint)
+            logger.info("Domain record deleted", extra={"record_id": record_id})
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout deleting domain record: %s", e)
+            raise NetworkError("DeleteDomainRecord", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout deleting domain record: %s", e)
+            raise NetworkError("DeleteDomainRecord", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception(
+                "HTTP error deleting domain record: status %d", e.response.status_code
+            )
+            raise NetworkError("DeleteDomainRecord", e) from e
         except httpx.HTTPError as e:
+            logger.exception("HTTP error deleting domain record: %s", e)
             raise NetworkError("DeleteDomainRecord", e) from e
 
     async def create_volume(
@@ -992,6 +1403,11 @@ class Client:
         tags: list[str] | None = None,
     ) -> Volume:
         """Create a new volume."""
+        validate_label(label)
+        validate_volume_size(size)
+
+        logger.info("Creating volume", extra={"label": label, "size": size})
+
         try:
             body: dict[str, Any] = {"label": label, "size": size}
             if region:
@@ -1003,8 +1419,20 @@ class Client:
 
             response = await self._make_request("POST", "/volumes", body)
             data = response.json()
-            return self._parse_volume(data)
+            result = self._parse_volume(data)
+            logger.info("Volume created", extra={"id": result.id})
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout creating volume: %s", e)
+            raise NetworkError("CreateVolume", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout creating volume: %s", e)
+            raise NetworkError("CreateVolume", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error creating volume")
+            raise NetworkError("CreateVolume", e) from e
         except httpx.HTTPError as e:
+            logger.exception("HTTP error creating volume: %s", e)
             raise NetworkError("CreateVolume", e) from e
 
     async def attach_volume(
@@ -1016,6 +1444,11 @@ class Client:
     ) -> Volume:
         """Attach a volume to an instance."""
         endpoint = f"/volumes/{volume_id}/attach"
+        logger.info(
+            "Attaching volume",
+            extra={"volume_id": volume_id, "linode_id": linode_id},
+        )
+
         try:
             body: dict[str, Any] = {
                 "linode_id": linode_id,
@@ -1026,35 +1459,89 @@ class Client:
 
             response = await self._make_request("POST", endpoint, body)
             data = response.json()
-            return self._parse_volume(data)
+            result = self._parse_volume(data)
+            logger.info("Volume attached", extra={"volume_id": volume_id})
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout attaching volume: %s", e)
+            raise NetworkError("AttachVolume", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout attaching volume: %s", e)
+            raise NetworkError("AttachVolume", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error attaching volume")
+            raise NetworkError("AttachVolume", e) from e
         except httpx.HTTPError as e:
+            logger.exception("HTTP error attaching volume: %s", e)
             raise NetworkError("AttachVolume", e) from e
 
     async def detach_volume(self, volume_id: int) -> None:
         """Detach a volume from an instance."""
         endpoint = f"/volumes/{volume_id}/detach"
+        logger.info("Detaching volume", extra={"volume_id": volume_id})
+
         try:
             await self._make_request("POST", endpoint)
+            logger.info("Volume detached", extra={"volume_id": volume_id})
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout detaching volume: %s", e)
+            raise NetworkError("DetachVolume", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout detaching volume: %s", e)
+            raise NetworkError("DetachVolume", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error detaching volume")
+            raise NetworkError("DetachVolume", e) from e
         except httpx.HTTPError as e:
+            logger.exception("HTTP error detaching volume: %s", e)
             raise NetworkError("DetachVolume", e) from e
 
     async def resize_volume(self, volume_id: int, size: int) -> Volume:
         """Resize a volume."""
         endpoint = f"/volumes/{volume_id}/resize"
+        validate_volume_size(size)
+
+        logger.info("Resizing volume", extra={"volume_id": volume_id, "new_size": size})
+
         try:
             body = {"size": size}
             response = await self._make_request("POST", endpoint, body)
             data = response.json()
-            return self._parse_volume(data)
+            result = self._parse_volume(data)
+            logger.info("Volume resized", extra={"volume_id": volume_id})
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout resizing volume: %s", e)
+            raise NetworkError("ResizeVolume", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout resizing volume: %s", e)
+            raise NetworkError("ResizeVolume", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error resizing volume")
+            raise NetworkError("ResizeVolume", e) from e
         except httpx.HTTPError as e:
+            logger.exception("HTTP error resizing volume: %s", e)
             raise NetworkError("ResizeVolume", e) from e
 
     async def delete_volume(self, volume_id: int) -> None:
         """Delete a volume."""
         endpoint = f"/volumes/{volume_id}"
+        logger.info("Deleting volume", extra={"volume_id": volume_id})
+
         try:
             await self._make_request("DELETE", endpoint)
+            logger.info("Volume deleted", extra={"volume_id": volume_id})
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout deleting volume: %s", e)
+            raise NetworkError("DeleteVolume", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout deleting volume: %s", e)
+            raise NetworkError("DeleteVolume", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error deleting volume")
+            raise NetworkError("DeleteVolume", e) from e
         except httpx.HTTPError as e:
+            logger.exception("HTTP error deleting volume: %s", e)
             raise NetworkError("DeleteVolume", e) from e
 
     async def create_nodebalancer(
@@ -1065,6 +1552,10 @@ class Client:
         tags: list[str] | None = None,
     ) -> NodeBalancer:
         """Create a new NodeBalancer."""
+        validate_label(label)
+
+        logger.info("Creating NodeBalancer", extra={"region": region, "label": label})
+
         try:
             body: dict[str, Any] = {
                 "region": region,
@@ -1077,8 +1568,24 @@ class Client:
 
             response = await self._make_request("POST", "/nodebalancers", body)
             data = response.json()
-            return self._parse_nodebalancer(data)
+            result = self._parse_nodebalancer(data)
+            logger.info(
+                "NodeBalancer created", extra={"id": result.id, "label": result.label}
+            )
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout creating NodeBalancer: %s", e)
+            raise NetworkError("CreateNodeBalancer", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout creating NodeBalancer: %s", e)
+            raise NetworkError("CreateNodeBalancer", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception(
+                "HTTP error creating NodeBalancer: status %d", e.response.status_code
+            )
+            raise NetworkError("CreateNodeBalancer", e) from e
         except httpx.HTTPError as e:
+            logger.exception("HTTP error creating NodeBalancer: %s", e)
             raise NetworkError("CreateNodeBalancer", e) from e
 
     async def update_nodebalancer(
@@ -1090,6 +1597,8 @@ class Client:
     ) -> NodeBalancer:
         """Update a NodeBalancer."""
         endpoint = f"/nodebalancers/{nodebalancer_id}"
+        logger.info("Updating NodeBalancer", extra={"nodebalancer_id": nodebalancer_id})
+
         try:
             body: dict[str, Any] = {}
             if label:
@@ -1101,16 +1610,45 @@ class Client:
 
             response = await self._make_request("PUT", endpoint, body)
             data = response.json()
-            return self._parse_nodebalancer(data)
+            result = self._parse_nodebalancer(data)
+            logger.info("NodeBalancer updated", extra={"id": result.id})
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout updating NodeBalancer: %s", e)
+            raise NetworkError("UpdateNodeBalancer", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout updating NodeBalancer: %s", e)
+            raise NetworkError("UpdateNodeBalancer", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception(
+                "HTTP error updating NodeBalancer: status %d", e.response.status_code
+            )
+            raise NetworkError("UpdateNodeBalancer", e) from e
         except httpx.HTTPError as e:
+            logger.exception("HTTP error updating NodeBalancer: %s", e)
             raise NetworkError("UpdateNodeBalancer", e) from e
 
     async def delete_nodebalancer(self, nodebalancer_id: int) -> None:
         """Delete a NodeBalancer."""
         endpoint = f"/nodebalancers/{nodebalancer_id}"
+        logger.info("Deleting NodeBalancer", extra={"nodebalancer_id": nodebalancer_id})
+
         try:
             await self._make_request("DELETE", endpoint)
+            logger.info("NodeBalancer deleted", extra={"id": nodebalancer_id})
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout deleting NodeBalancer: %s", e)
+            raise NetworkError("DeleteNodeBalancer", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout deleting NodeBalancer: %s", e)
+            raise NetworkError("DeleteNodeBalancer", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception(
+                "HTTP error deleting NodeBalancer: status %d", e.response.status_code
+            )
+            raise NetworkError("DeleteNodeBalancer", e) from e
         except httpx.HTTPError as e:
+            logger.exception("HTTP error deleting NodeBalancer: %s", e)
             raise NetworkError("DeleteNodeBalancer", e) from e
 
     async def _make_request(
@@ -1528,6 +2066,7 @@ class RetryableClient:
     ) -> None:
         self.client = Client(api_url, token)
         self.retry_config = retry_config or RetryConfig()
+        self._request_semaphore = asyncio.Semaphore(10)
 
     async def close(self) -> None:
         """Close the HTTP client."""
@@ -1930,23 +2469,24 @@ class RetryableClient:
 
     async def _execute_with_retry(self, func: Any, *args: Any) -> Any:
         """Execute a function with retry logic."""
-        last_error: Exception | None = None
+        async with self._request_semaphore:
+            last_error: Exception | None = None
 
-        for attempt in range(self.retry_config.max_retries + 1):
-            if attempt > 0:
-                delay = self._calculate_delay(attempt)
-                await asyncio.sleep(delay)
+            for attempt in range(self.retry_config.max_retries + 1):
+                if attempt > 0:
+                    delay = self._calculate_delay(attempt)
+                    await asyncio.sleep(delay)
 
-            try:
-                return await func(*args)
-            except Exception as e:
-                last_error = e
-                if attempt == self.retry_config.max_retries:
-                    break
-                if not self._should_retry(e):
-                    raise
+                try:
+                    return await func(*args)
+                except Exception as e:
+                    last_error = e
+                    if attempt == self.retry_config.max_retries:
+                        break
+                    if not self._should_retry(e):
+                        raise
 
-        raise last_error if last_error else LinodeError("Unknown error during retry")
+            raise last_error if last_error else LinodeError("Unknown retry error")
 
     def _calculate_delay(self, attempt: int) -> float:
         """Calculate delay for retry with exponential backoff and jitter."""
