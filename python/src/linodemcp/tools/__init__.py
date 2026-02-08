@@ -51,6 +51,11 @@ __all__ = [
     "create_linode_nodebalancer_get_tool",
     "create_linode_nodebalancer_update_tool",
     "create_linode_nodebalancers_list_tool",
+    "create_linode_object_storage_bucket_contents_tool",
+    "create_linode_object_storage_bucket_get_tool",
+    "create_linode_object_storage_buckets_list_tool",
+    "create_linode_object_storage_clusters_list_tool",
+    "create_linode_object_storage_types_list_tool",
     "create_linode_profile_tool",
     "create_linode_regions_list_tool",
     "create_linode_sshkey_create_tool",
@@ -94,6 +99,11 @@ __all__ = [
     "handle_linode_nodebalancer_get",
     "handle_linode_nodebalancer_update",
     "handle_linode_nodebalancers_list",
+    "handle_linode_object_storage_bucket_contents",
+    "handle_linode_object_storage_bucket_get",
+    "handle_linode_object_storage_buckets_list",
+    "handle_linode_object_storage_clusters_list",
+    "handle_linode_object_storage_types_list",
     "handle_linode_profile",
     "handle_linode_regions_list",
     "handle_linode_sshkey_create",
@@ -1575,6 +1585,395 @@ async def handle_linode_stackscripts_list(
         return [TextContent(type="text", text=f"Error: {e}")]
     except Exception as e:
         return [TextContent(type="text", text=f"Failed to retrieve StackScripts: {e}")]
+
+
+# Phase 1: Object Storage read operations
+
+
+def create_linode_object_storage_buckets_list_tool() -> Tool:
+    """Create the linode_object_storage_buckets_list tool."""
+    return Tool(
+        name="linode_object_storage_buckets_list",
+        description="Lists all Object Storage buckets on your Linode account.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+            },
+        },
+    )
+
+
+async def handle_linode_object_storage_buckets_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_object_storage_buckets_list tool request."""
+    environment = arguments.get("environment", "")
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            buckets = await client.list_object_storage_buckets()
+
+            response: dict[str, Any] = {
+                "count": len(buckets),
+                "buckets": buckets,
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(
+                type="text",
+                text=f"Failed to retrieve Object Storage buckets: {e}",
+            )
+        ]
+
+
+def create_linode_object_storage_bucket_get_tool() -> Tool:
+    """Create the linode_object_storage_bucket_get tool."""
+    return Tool(
+        name="linode_object_storage_bucket_get",
+        description="Gets details about a specific Object Storage bucket.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "region": {
+                    "type": "string",
+                    "description": (
+                        "The region/cluster ID where the bucket exists (required)"
+                    ),
+                },
+                "label": {
+                    "type": "string",
+                    "description": "The label/name of the bucket (required)",
+                },
+            },
+            "required": ["region", "label"],
+        },
+    )
+
+
+async def handle_linode_object_storage_bucket_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_object_storage_bucket_get tool request."""
+    environment = arguments.get("environment", "")
+    region = arguments.get("region", "")
+    label = arguments.get("label", "")
+
+    if not region:
+        return [TextContent(type="text", text="Error: region is required")]
+    if not label:
+        return [TextContent(type="text", text="Error: label is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            bucket = await client.get_object_storage_bucket(region, label)
+
+            json_response = json.dumps(bucket, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(
+                type="text", text=f"Failed to retrieve Object Storage bucket: {e}"
+            )
+        ]
+
+
+def create_linode_object_storage_bucket_contents_tool() -> Tool:
+    """Create the linode_object_storage_bucket_contents tool."""
+    return Tool(
+        name="linode_object_storage_bucket_contents",
+        description=(
+            "Lists objects in an Object Storage bucket. "
+            "Supports pagination and filtering by prefix/delimiter."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "region": {
+                    "type": "string",
+                    "description": (
+                        "The region/cluster ID where the bucket exists (required)"
+                    ),
+                },
+                "label": {
+                    "type": "string",
+                    "description": "The label/name of the bucket (required)",
+                },
+                "prefix": {
+                    "type": "string",
+                    "description": (
+                        "Limits results to object keys that begin with this prefix"
+                    ),
+                },
+                "delimiter": {
+                    "type": "string",
+                    "description": (
+                        "Character used to group keys "
+                        "(e.g., '/' for directory-like listing)"
+                    ),
+                },
+                "marker": {
+                    "type": "string",
+                    "description": "Object key to start listing from (for pagination)",
+                },
+                "page_size": {
+                    "type": "string",
+                    "description": "Number of objects to return per page (1-1000)",
+                },
+            },
+            "required": ["region", "label"],
+        },
+    )
+
+
+def _build_bucket_params(
+    prefix: str, delimiter: str, marker: str, page_size: str
+) -> dict[str, str]:
+    """Build parameters dictionary for bucket contents request."""
+    params: dict[str, str] = {}
+    if prefix:
+        params["prefix"] = prefix
+    if delimiter:
+        params["delimiter"] = delimiter
+    if marker:
+        params["marker"] = marker
+    if page_size:
+        params["page_size"] = page_size
+    return params
+
+
+def _build_bucket_filter_string(
+    prefix: str, delimiter: str, marker: str, page_size: str
+) -> str:
+    """Build filter string for bucket contents response."""
+    filters = []
+    if prefix:
+        filters.append(f"prefix={prefix}")
+    if delimiter:
+        filters.append(f"delimiter={delimiter}")
+    if marker:
+        filters.append(f"marker={marker}")
+    if page_size:
+        filters.append(f"page_size={page_size}")
+    return ", ".join(filters) if filters else ""
+
+
+async def handle_linode_object_storage_bucket_contents(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_object_storage_bucket_contents tool request."""
+    environment = arguments.get("environment", "")
+    region = arguments.get("region", "")
+    label = arguments.get("label", "")
+    prefix = arguments.get("prefix", "")
+    delimiter = arguments.get("delimiter", "")
+    marker = arguments.get("marker", "")
+    page_size = arguments.get("page_size", "")
+
+    if not region:
+        return [TextContent(type="text", text="Error: region is required")]
+    if not label:
+        return [TextContent(type="text", text="Error: label is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        params = _build_bucket_params(prefix, delimiter, marker, page_size)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            result = await client.list_object_storage_bucket_contents(
+                region, label, params if params else None
+            )
+
+            objects = result.get("data", [])
+            response: dict[str, Any] = {
+                "count": len(objects),
+                "objects": objects,
+                "is_truncated": result.get("is_truncated", False),
+            }
+
+            if result.get("next_marker"):
+                response["next_marker"] = result["next_marker"]
+
+            filter_str = _build_bucket_filter_string(
+                prefix, delimiter, marker, page_size
+            )
+            if filter_str:
+                response["filter"] = filter_str
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(
+                type="text",
+                text=f"Failed to retrieve Object Storage bucket contents: {e}",
+            )
+        ]
+
+
+def create_linode_object_storage_clusters_list_tool() -> Tool:
+    """Create the linode_object_storage_clusters_list tool."""
+    return Tool(
+        name="linode_object_storage_clusters_list",
+        description=(
+            "Lists available Object Storage clusters/regions. "
+            "Shows which regions support Object Storage and their endpoints."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+            },
+        },
+    )
+
+
+async def handle_linode_object_storage_clusters_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_object_storage_clusters_list tool request."""
+    environment = arguments.get("environment", "")
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            clusters = await client.list_object_storage_clusters()
+
+            response: dict[str, Any] = {
+                "count": len(clusters),
+                "clusters": clusters,
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(
+                type="text",
+                text=f"Failed to retrieve Object Storage clusters: {e}",
+            )
+        ]
+
+
+def create_linode_object_storage_types_list_tool() -> Tool:
+    """Create the linode_object_storage_types_list tool."""
+    return Tool(
+        name="linode_object_storage_types_list",
+        description=(
+            "Lists Object Storage pricing tiers and capabilities. Shows pricing, "
+            "storage limits, and transfer allowances."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+            },
+        },
+    )
+
+
+async def handle_linode_object_storage_types_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_object_storage_types_list tool request."""
+    environment = arguments.get("environment", "")
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            types = await client.list_object_storage_types()
+
+            response: dict[str, Any] = {
+                "count": len(types),
+                "types": types,
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(
+                type="text",
+                text=f"Failed to retrieve Object Storage types: {e}",
+            )
+        ]
 
 
 # Stage 4: Write operations

@@ -266,4 +266,25 @@ func (s *Server) registerTools() {
 	linodeNodeBalancerDeleteTool, linodeNodeBalancerDeleteHandler := tools.NewLinodeNodeBalancerDeleteTool(s.config)
 	s.mcp.AddTool(linodeNodeBalancerDeleteTool, linodeNodeBalancerDeleteHandler)
 	s.tools = append(s.tools, &toolWrapper{tool: linodeNodeBalancerDeleteTool})
+
+	// Stage 5: Object Storage read operations.
+	objBucketsListTool, objBucketsListHandler := tools.NewLinodeObjectStorageBucketsListTool(s.config)
+	s.mcp.AddTool(objBucketsListTool, objBucketsListHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: objBucketsListTool})
+
+	objBucketGetTool, objBucketGetHandler := tools.NewLinodeObjectStorageBucketGetTool(s.config)
+	s.mcp.AddTool(objBucketGetTool, objBucketGetHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: objBucketGetTool})
+
+	objBucketContentsTool, objBucketContentsHandler := tools.NewLinodeObjectStorageBucketContentsTool(s.config)
+	s.mcp.AddTool(objBucketContentsTool, objBucketContentsHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: objBucketContentsTool})
+
+	objClustersListTool, objClustersListHandler := tools.NewLinodeObjectStorageClustersListTool(s.config)
+	s.mcp.AddTool(objClustersListTool, objClustersListHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: objClustersListTool})
+
+	objTypeListTool, objTypeListHandler := tools.NewLinodeObjectStorageTypeListTool(s.config)
+	s.mcp.AddTool(objTypeListTool, objTypeListHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: objTypeListTool})
 }

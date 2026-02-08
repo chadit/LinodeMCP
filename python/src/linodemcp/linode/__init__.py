@@ -803,6 +803,72 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListStackScripts", e) from e
 
+    # Phase 1: Object Storage read operations
+
+    async def list_object_storage_buckets(self) -> list[dict[str, Any]]:
+        """List Object Storage buckets."""
+        try:
+            response = await self._make_request("GET", "/object-storage/buckets")
+            data = response.json()
+            buckets: list[dict[str, Any]] = data.get("data", [])
+            return buckets
+        except httpx.HTTPError as e:
+            raise NetworkError("ListObjectStorageBuckets", e) from e
+
+    async def get_object_storage_bucket(
+        self, region: str, label: str
+    ) -> dict[str, Any]:
+        """Get a specific Object Storage bucket."""
+        endpoint = f"/object-storage/buckets/{region}/{label}"
+        try:
+            response = await self._make_request("GET", endpoint)
+            bucket: dict[str, Any] = response.json()
+            return bucket
+        except httpx.HTTPError as e:
+            raise NetworkError("GetObjectStorageBucket", e) from e
+
+    async def list_object_storage_bucket_contents(
+        self, region: str, label: str, params: dict[str, str] | None = None
+    ) -> dict[str, Any]:
+        """List contents of an Object Storage bucket."""
+        endpoint = f"/object-storage/buckets/{region}/{label}/object-list"
+
+        # Build query string if params provided
+        if params:
+            query_parts = []
+            for key in ["prefix", "delimiter", "marker", "page_size"]:
+                if key in params:
+                    query_parts.append(f"{key}={params[key]}")
+            if query_parts:
+                endpoint += "?" + "&".join(query_parts)
+
+        try:
+            response = await self._make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListObjectStorageBucketContents", e) from e
+
+    async def list_object_storage_clusters(self) -> list[dict[str, Any]]:
+        """List Object Storage clusters."""
+        try:
+            response = await self._make_request("GET", "/object-storage/clusters")
+            data = response.json()
+            clusters: list[dict[str, Any]] = data.get("data", [])
+            return clusters
+        except httpx.HTTPError as e:
+            raise NetworkError("ListObjectStorageClusters", e) from e
+
+    async def list_object_storage_types(self) -> list[dict[str, Any]]:
+        """List Object Storage types/pricing."""
+        try:
+            response = await self._make_request("GET", "/object-storage/types")
+            data = response.json()
+            types: list[dict[str, Any]] = data.get("data", [])
+            return types
+        except httpx.HTTPError as e:
+            raise NetworkError("ListObjectStorageTypes", e) from e
+
     # Stage 4: Write operations
 
     async def create_ssh_key(self, label: str, ssh_key: str) -> SSHKey:
@@ -2177,6 +2243,47 @@ class RetryableClient:
         """List StackScripts with retry."""
         result: list[StackScript] = await self._execute_with_retry(
             self.client.list_stackscripts
+        )
+        return result
+
+    # Phase 1: Object Storage read operations with retry
+
+    async def list_object_storage_buckets(self) -> list[dict[str, Any]]:
+        """List Object Storage buckets with retry."""
+        result: list[dict[str, Any]] = await self._execute_with_retry(
+            self.client.list_object_storage_buckets
+        )
+        return result
+
+    async def get_object_storage_bucket(
+        self, region: str, label: str
+    ) -> dict[str, Any]:
+        """Get a specific Object Storage bucket with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_object_storage_bucket, region, label
+        )
+        return result
+
+    async def list_object_storage_bucket_contents(
+        self, region: str, label: str, params: dict[str, str] | None = None
+    ) -> dict[str, Any]:
+        """List contents of an Object Storage bucket with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.list_object_storage_bucket_contents, region, label, params
+        )
+        return result
+
+    async def list_object_storage_clusters(self) -> list[dict[str, Any]]:
+        """List Object Storage clusters with retry."""
+        result: list[dict[str, Any]] = await self._execute_with_retry(
+            self.client.list_object_storage_clusters
+        )
+        return result
+
+    async def list_object_storage_types(self) -> list[dict[str, Any]]:
+        """List Object Storage types/pricing with retry."""
+        result: list[dict[str, Any]] = await self._execute_with_retry(
+            self.client.list_object_storage_types
         )
         return result
 

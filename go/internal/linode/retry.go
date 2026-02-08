@@ -610,6 +610,87 @@ func (rc *RetryableClient) DeleteNodeBalancer(ctx context.Context, nodeBalancerI
 	})
 }
 
+// Stage 5: Object Storage read operations with retry.
+
+// ListObjectStorageBuckets retrieves all Object Storage buckets with automatic retry.
+func (rc *RetryableClient) ListObjectStorageBuckets(ctx context.Context) ([]ObjectStorageBucket, error) {
+	var buckets []ObjectStorageBucket
+
+	err := rc.executeWithRetry(ctx, "ListObjectStorageBuckets", func() error {
+		var err error
+
+		buckets, err = rc.Client.ListObjectStorageBuckets(ctx)
+
+		return err
+	})
+
+	return buckets, err
+}
+
+// GetObjectStorageBucket retrieves a specific bucket with automatic retry.
+func (rc *RetryableClient) GetObjectStorageBucket(ctx context.Context, region, label string) (*ObjectStorageBucket, error) {
+	var bucket *ObjectStorageBucket
+
+	err := rc.executeWithRetry(ctx, "GetObjectStorageBucket", func() error {
+		var err error
+
+		bucket, err = rc.Client.GetObjectStorageBucket(ctx, region, label)
+
+		return err
+	})
+
+	return bucket, err
+}
+
+// ListObjectStorageBucketContents lists objects in a bucket with automatic retry.
+func (rc *RetryableClient) ListObjectStorageBucketContents(ctx context.Context, region, label string, params map[string]string) ([]ObjectStorageObject, bool, string, error) {
+	var objects []ObjectStorageObject
+
+	var isTruncated bool
+
+	var nextMarker string
+
+	err := rc.executeWithRetry(ctx, "ListObjectStorageBucketContents", func() error {
+		var err error
+
+		objects, isTruncated, nextMarker, err = rc.Client.ListObjectStorageBucketContents(ctx, region, label, params)
+
+		return err
+	})
+
+	return objects, isTruncated, nextMarker, err
+}
+
+// ListObjectStorageClusters retrieves Object Storage clusters with automatic retry.
+func (rc *RetryableClient) ListObjectStorageClusters(ctx context.Context) ([]ObjectStorageCluster, error) {
+	var clusters []ObjectStorageCluster
+
+	err := rc.executeWithRetry(ctx, "ListObjectStorageClusters", func() error {
+		var err error
+
+		clusters, err = rc.Client.ListObjectStorageClusters(ctx)
+
+		return err
+	})
+
+	return clusters, err
+}
+
+// ListObjectStorageTypes retrieves Object Storage types with automatic retry.
+func (rc *RetryableClient) ListObjectStorageTypes(ctx context.Context) ([]ObjectStorageType, error) {
+	var types []ObjectStorageType
+
+	err := rc.executeWithRetry(ctx, "ListObjectStorageTypes", func() error {
+		var err error
+
+		types, err = rc.Client.ListObjectStorageTypes(ctx)
+
+		return err
+	})
+
+	return types, err
+}
+
 func (rc *RetryableClient) executeWithRetry(ctx context.Context, _ string, fn func() error) error {
 	var lastErr error
 

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -81,6 +82,13 @@ type ClientInterface interface {
 	CreateNodeBalancer(ctx context.Context, req CreateNodeBalancerRequest) (*NodeBalancer, error)
 	UpdateNodeBalancer(ctx context.Context, nodeBalancerID int, req UpdateNodeBalancerRequest) (*NodeBalancer, error)
 	DeleteNodeBalancer(ctx context.Context, nodeBalancerID int) error
+
+	// Stage 5: Object Storage read operations.
+	ListObjectStorageBuckets(ctx context.Context) ([]ObjectStorageBucket, error)
+	GetObjectStorageBucket(ctx context.Context, region, label string) (*ObjectStorageBucket, error)
+	ListObjectStorageBucketContents(ctx context.Context, region, label string, params map[string]string) ([]ObjectStorageObject, bool, string, error)
+	ListObjectStorageClusters(ctx context.Context) ([]ObjectStorageCluster, error)
+	ListObjectStorageTypes(ctx context.Context) ([]ObjectStorageType, error)
 }
 
 // Profile represents a Linode user profile.
@@ -552,6 +560,49 @@ type UpdateNodeBalancerRequest struct {
 	Label              string   `json:"label,omitempty"`
 	ClientConnThrottle *int     `json:"client_conn_throttle,omitempty"` //nolint:tagliatelle // Linode API snake_case
 	Tags               []string `json:"tags,omitempty"`
+}
+
+// Stage 5: Object Storage types.
+
+// ObjectStorageBucket represents a Linode Object Storage bucket.
+type ObjectStorageBucket struct {
+	Label    string `json:"label"`
+	Region   string `json:"region"`
+	Hostname string `json:"hostname"`
+	Created  string `json:"created"`
+	Objects  int    `json:"objects"`
+	Size     int    `json:"size"`
+	Cluster  string `json:"cluster"`
+}
+
+// ObjectStorageObject represents an object within a bucket.
+type ObjectStorageObject struct {
+	Name         string `json:"name"`
+	Etag         string `json:"etag"`
+	LastModified string `json:"last_modified"` //nolint:tagliatelle // Linode API snake_case
+	Owner        string `json:"owner"`
+	Size         int    `json:"size"`
+	IsPrefix     bool   `json:"is_prefix"` //nolint:tagliatelle // Linode API snake_case
+}
+
+// ObjectStorageCluster represents an Object Storage cluster/region.
+type ObjectStorageCluster struct {
+	ID         string `json:"id"`
+	Region     string `json:"region"`
+	Domain     string `json:"domain"`
+	StaticSite struct {
+		Domain string `json:"domain"`
+	} `json:"static_site"` //nolint:tagliatelle // Linode API snake_case
+	Status string `json:"status"`
+}
+
+// ObjectStorageType represents Object Storage pricing and type info.
+type ObjectStorageType struct {
+	ID       string `json:"id"`
+	Label    string `json:"label"`
+	Price    Price  `json:"price"`
+	Transfer int    `json:"transfer"`
+	Region   string `json:"region_prices,omitempty"` //nolint:tagliatelle // Linode API snake_case
 }
 
 const (
@@ -1517,6 +1568,145 @@ func (c *Client) DeleteNodeBalancer(ctx context.Context, nodeBalancerID int) err
 	defer func() { _ = resp.Body.Close() }()
 
 	return c.handleResponse(resp, nil)
+}
+
+// Stage 5: Object Storage read operations.
+
+// ListObjectStorageBuckets retrieves all Object Storage buckets.
+func (c *Client) ListObjectStorageBuckets(ctx context.Context) ([]ObjectStorageBucket, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, "/object-storage/buckets", nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListObjectStorageBuckets", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var response struct {
+		Data    []ObjectStorageBucket `json:"data"`
+		Page    int                   `json:"page"`
+		Pages   int                   `json:"pages"`
+		Results int                   `json:"results"`
+	}
+
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
+}
+
+// GetObjectStorageBucket retrieves a specific Object Storage bucket.
+func (c *Client) GetObjectStorageBucket(ctx context.Context, region, label string) (*ObjectStorageBucket, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/object-storage/buckets/%s/%s", region, label)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetObjectStorageBucket", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var bucket ObjectStorageBucket
+	if err := c.handleResponse(resp, &bucket); err != nil {
+		return nil, err
+	}
+
+	return &bucket, nil
+}
+
+// ListObjectStorageBucketContents lists objects in a bucket.
+// Returns objects, isTruncated flag, and nextMarker for pagination.
+func (c *Client) ListObjectStorageBucketContents(ctx context.Context, region, label string, params map[string]string) ([]ObjectStorageObject, bool, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/object-storage/buckets/%s/%s/object-list", region, label)
+
+	if len(params) > 0 {
+		vals := url.Values{}
+		for k, v := range params {
+			vals.Set(k, v)
+		}
+
+		endpoint += "?" + vals.Encode()
+	}
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, false, "", &NetworkError{Operation: "ListObjectStorageBucketContents", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var response struct {
+		Data        []ObjectStorageObject `json:"data"`
+		IsTruncated bool                  `json:"is_truncated"` //nolint:tagliatelle // Linode API snake_case
+		NextMarker  string                `json:"next_marker"`  //nolint:tagliatelle // Linode API snake_case
+	}
+
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, false, "", err
+	}
+
+	return response.Data, response.IsTruncated, response.NextMarker, nil
+}
+
+// ListObjectStorageClusters retrieves available Object Storage clusters.
+func (c *Client) ListObjectStorageClusters(ctx context.Context) ([]ObjectStorageCluster, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, "/object-storage/clusters", nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListObjectStorageClusters", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var response struct {
+		Data    []ObjectStorageCluster `json:"data"`
+		Page    int                    `json:"page"`
+		Pages   int                    `json:"pages"`
+		Results int                    `json:"results"`
+	}
+
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
+}
+
+// ListObjectStorageTypes retrieves Object Storage types and pricing.
+func (c *Client) ListObjectStorageTypes(ctx context.Context) ([]ObjectStorageType, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, "/object-storage/types", nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListObjectStorageTypes", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var response struct {
+		Data    []ObjectStorageType `json:"data"`
+		Page    int                 `json:"page"`
+		Pages   int                 `json:"pages"`
+		Results int                 `json:"results"`
+	}
+
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
 }
 
 // Private helper methods

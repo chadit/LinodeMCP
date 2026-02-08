@@ -62,6 +62,11 @@ from linodemcp.tools import (
     handle_linode_nodebalancer_get,
     handle_linode_nodebalancer_update,
     handle_linode_nodebalancers_list,
+    handle_linode_object_storage_bucket_contents,
+    handle_linode_object_storage_bucket_get,
+    handle_linode_object_storage_buckets_list,
+    handle_linode_object_storage_clusters_list,
+    handle_linode_object_storage_types_list,
     handle_linode_profile,
     handle_linode_regions_list,
     handle_linode_sshkey_create,
@@ -1847,9 +1852,7 @@ async def test_handle_linode_instance_create(
 
 async def test_handle_linode_instance_delete_no_confirm(sample_config: Config) -> None:
     """Test linode_instance_delete tool without confirmation."""
-    result = await handle_linode_instance_delete(
-        {"instance_id": 12345}, sample_config
-    )
+    result = await handle_linode_instance_delete({"instance_id": 12345}, sample_config)
 
     assert len(result) == 1
     assert "confirm" in result[0].text.lower()
@@ -2223,9 +2226,7 @@ async def test_handle_linode_volume_detach(sample_config: Config) -> None:
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
 
-        result = await handle_linode_volume_detach(
-            {"volume_id": 12345}, sample_config
-        )
+        result = await handle_linode_volume_detach({"volume_id": 12345}, sample_config)
 
         assert len(result) == 1
         assert "detach" in result[0].text.lower()
@@ -2275,9 +2276,7 @@ async def test_handle_linode_volume_resize(sample_config: Config) -> None:
 
 async def test_handle_linode_volume_delete_no_confirm(sample_config: Config) -> None:
     """Test linode_volume_delete tool without confirmation."""
-    result = await handle_linode_volume_delete(
-        {"volume_id": 12345}, sample_config
-    )
+    result = await handle_linode_volume_delete({"volume_id": 12345}, sample_config)
 
     assert len(result) == 1
     assert "confirm" in result[0].text.lower()
@@ -2389,3 +2388,290 @@ async def test_handle_linode_nodebalancer_delete(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "deleted" in result[0].text.lower()
+
+
+# Object Storage tools
+
+
+async def test_handle_linode_object_storage_buckets_list(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_buckets_list tool."""
+    mock_buckets = [
+        {
+            "label": "my-bucket",
+            "region": "us-east-1",
+            "hostname": "my-bucket.us-east-1.linodeobjects.com",
+            "created": "2024-01-01T00:00:00",
+            "objects": 42,
+            "size": 1024000,
+            "cluster": "us-east-1",
+        },
+    ]
+
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_object_storage_buckets.return_value = mock_buckets
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_object_storage_buckets_list({}, sample_config)
+
+        assert len(result) == 1
+        assert "my-bucket" in result[0].text
+        assert '"count": 1' in result[0].text
+        mock_client.list_object_storage_buckets.assert_called_once()
+
+
+async def test_handle_linode_object_storage_buckets_list_error(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_buckets_list tool error handling."""
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_object_storage_buckets.side_effect = Exception("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_object_storage_buckets_list({}, sample_config)
+
+        assert len(result) == 1
+        assert "Failed" in result[0].text
+
+
+async def test_handle_linode_object_storage_bucket_get(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_bucket_get tool."""
+    mock_bucket = {
+        "label": "my-bucket",
+        "region": "us-east-1",
+        "hostname": "my-bucket.us-east-1.linodeobjects.com",
+        "created": "2024-01-01T00:00:00",
+        "objects": 42,
+        "size": 1024000,
+    }
+
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_object_storage_bucket.return_value = mock_bucket
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_object_storage_bucket_get(
+            {"region": "us-east-1", "label": "my-bucket"}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "my-bucket" in result[0].text
+        mock_client.get_object_storage_bucket.assert_called_once_with(
+            "us-east-1", "my-bucket"
+        )
+
+
+async def test_handle_linode_object_storage_bucket_get_missing_region(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_bucket_get with missing region."""
+    result = await handle_linode_object_storage_bucket_get(
+        {"label": "my-bucket"}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "region is required" in result[0].text
+
+
+async def test_handle_linode_object_storage_bucket_get_missing_label(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_bucket_get with missing label."""
+    result = await handle_linode_object_storage_bucket_get(
+        {"region": "us-east-1"}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "label is required" in result[0].text
+
+
+async def test_handle_linode_object_storage_bucket_contents(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_bucket_contents tool."""
+    mock_response = {
+        "data": [
+            {
+                "name": "photos/cat.jpg",
+                "etag": "abc123",
+                "last_modified": "2024-06-01T00:00:00",
+                "owner": "user",
+                "size": 512000,
+                "is_prefix": False,
+            },
+        ],
+        "is_truncated": False,
+        "next_marker": "",
+    }
+
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_object_storage_bucket_contents.return_value = mock_response
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_object_storage_bucket_contents(
+            {"region": "us-east-1", "label": "my-bucket"}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "cat.jpg" in result[0].text
+        assert '"count": 1' in result[0].text
+
+
+async def test_handle_linode_object_storage_bucket_contents_with_prefix(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_bucket_contents with prefix filter."""
+    mock_response = {
+        "data": [
+            {
+                "name": "images/logo.png",
+                "etag": "def456",
+                "last_modified": "2024-06-01T00:00:00",
+                "owner": "user",
+                "size": 256000,
+                "is_prefix": False,
+            },
+        ],
+        "is_truncated": True,
+        "next_marker": "images/next.png",
+    }
+
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_object_storage_bucket_contents.return_value = mock_response
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_object_storage_bucket_contents(
+            {
+                "region": "us-east-1",
+                "label": "my-bucket",
+                "prefix": "images/",
+                "delimiter": "/",
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "logo.png" in result[0].text
+        assert "next_marker" in result[0].text
+        assert "prefix=images/" in result[0].text
+
+
+async def test_handle_linode_object_storage_bucket_contents_missing_region(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_bucket_contents with missing region."""
+    result = await handle_linode_object_storage_bucket_contents(
+        {"label": "my-bucket"}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "region is required" in result[0].text
+
+
+async def test_handle_linode_object_storage_clusters_list(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_clusters_list tool."""
+    mock_clusters = [
+        {
+            "id": "us-east-1",
+            "region": "us-east",
+            "domain": "us-east-1.linodeobjects.com",
+            "status": "available",
+            "static_site": {"domain": "website-us-east-1.linodeobjects.com"},
+        },
+    ]
+
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_object_storage_clusters.return_value = mock_clusters
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_object_storage_clusters_list({}, sample_config)
+
+        assert len(result) == 1
+        assert "us-east-1" in result[0].text
+        assert '"count": 1' in result[0].text
+        mock_client.list_object_storage_clusters.assert_called_once()
+
+
+async def test_handle_linode_object_storage_clusters_list_error(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_clusters_list tool error handling."""
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_object_storage_clusters.side_effect = Exception("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_object_storage_clusters_list({}, sample_config)
+
+        assert len(result) == 1
+        assert "Failed" in result[0].text
+
+
+async def test_handle_linode_object_storage_types_list(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_types_list tool."""
+    mock_types = [
+        {
+            "id": "objectstorage",
+            "label": "Object Storage",
+            "price": {"hourly": 0.02, "monthly": 5.0},
+            "transfer": 1000,
+            "region": "us-east",
+        },
+    ]
+
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_object_storage_types.return_value = mock_types
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_object_storage_types_list({}, sample_config)
+
+        assert len(result) == 1
+        assert "objectstorage" in result[0].text
+        assert '"count": 1' in result[0].text
+        mock_client.list_object_storage_types.assert_called_once()
+
+
+async def test_handle_linode_object_storage_types_list_error(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_types_list tool error handling."""
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_object_storage_types.side_effect = Exception("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_object_storage_types_list({}, sample_config)
+
+        assert len(result) == 1
+        assert "Failed" in result[0].text
