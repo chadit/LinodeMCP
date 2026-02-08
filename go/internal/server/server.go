@@ -287,4 +287,21 @@ func (s *Server) registerTools() {
 	objTypeListTool, objTypeListHandler := tools.NewLinodeObjectStorageTypeListTool(s.config)
 	s.mcp.AddTool(objTypeListTool, objTypeListHandler)
 	s.tools = append(s.tools, &toolWrapper{tool: objTypeListTool})
+
+	// Stage 5 Phase 2: Object Storage access key & transfer read operations.
+	objKeysListTool, objKeysListHandler := tools.NewLinodeObjectStorageKeysListTool(s.config)
+	s.mcp.AddTool(objKeysListTool, objKeysListHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: objKeysListTool})
+
+	objKeyGetTool, objKeyGetHandler := tools.NewLinodeObjectStorageKeyGetTool(s.config)
+	s.mcp.AddTool(objKeyGetTool, objKeyGetHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: objKeyGetTool})
+
+	objTransferTool, objTransferHandler := tools.NewLinodeObjectStorageTransferTool(s.config)
+	s.mcp.AddTool(objTransferTool, objTransferHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: objTransferTool})
+
+	objBucketAccessGetTool, objBucketAccessGetHandler := tools.NewLinodeObjectStorageBucketAccessGetTool(s.config)
+	s.mcp.AddTool(objBucketAccessGetTool, objBucketAccessGetHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: objBucketAccessGetTool})
 }

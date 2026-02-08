@@ -869,6 +869,47 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListObjectStorageTypes", e) from e
 
+    async def list_object_storage_keys(self) -> list[dict[str, Any]]:
+        """List all Object Storage access keys."""
+        try:
+            response = await self._make_request("GET", "/object-storage/keys")
+            data = response.json()
+            keys: list[dict[str, Any]] = data.get("data", [])
+            return keys
+        except httpx.HTTPError as e:
+            raise NetworkError("ListObjectStorageKeys", e) from e
+
+    async def get_object_storage_key(self, key_id: int) -> dict[str, Any]:
+        """Get a specific Object Storage access key."""
+        endpoint = f"/object-storage/keys/{key_id}"
+        try:
+            response = await self._make_request("GET", endpoint)
+            key: dict[str, Any] = response.json()
+            return key
+        except httpx.HTTPError as e:
+            raise NetworkError("GetObjectStorageKey", e) from e
+
+    async def get_object_storage_transfer(self) -> dict[str, Any]:
+        """Get Object Storage outbound data transfer usage."""
+        try:
+            response = await self._make_request("GET", "/object-storage/transfer")
+            transfer: dict[str, Any] = response.json()
+            return transfer
+        except httpx.HTTPError as e:
+            raise NetworkError("GetObjectStorageTransfer", e) from e
+
+    async def get_object_storage_bucket_access(
+        self, region: str, label: str
+    ) -> dict[str, Any]:
+        """Get bucket ACL and CORS settings."""
+        endpoint = f"/object-storage/buckets/{region}/{label}/access"
+        try:
+            response = await self._make_request("GET", endpoint)
+            access: dict[str, Any] = response.json()
+            return access
+        except httpx.HTTPError as e:
+            raise NetworkError("GetObjectStorageBucketAccess", e) from e
+
     # Stage 4: Write operations
 
     async def create_ssh_key(self, label: str, ssh_key: str) -> SSHKey:
@@ -2284,6 +2325,36 @@ class RetryableClient:
         """List Object Storage types/pricing with retry."""
         result: list[dict[str, Any]] = await self._execute_with_retry(
             self.client.list_object_storage_types
+        )
+        return result
+
+    async def list_object_storage_keys(self) -> list[dict[str, Any]]:
+        """List Object Storage access keys with retry."""
+        result: list[dict[str, Any]] = await self._execute_with_retry(
+            self.client.list_object_storage_keys
+        )
+        return result
+
+    async def get_object_storage_key(self, key_id: int) -> dict[str, Any]:
+        """Get a specific Object Storage access key with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_object_storage_key, key_id
+        )
+        return result
+
+    async def get_object_storage_transfer(self) -> dict[str, Any]:
+        """Get Object Storage transfer usage with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_object_storage_transfer
+        )
+        return result
+
+    async def get_object_storage_bucket_access(
+        self, region: str, label: str
+    ) -> dict[str, Any]:
+        """Get bucket ACL/CORS settings with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_object_storage_bucket_access, region, label
         )
         return result
 

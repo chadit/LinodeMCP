@@ -691,6 +691,66 @@ func (rc *RetryableClient) ListObjectStorageTypes(ctx context.Context) ([]Object
 	return types, err
 }
 
+// ListObjectStorageKeys retrieves all Object Storage access keys with automatic retry.
+func (rc *RetryableClient) ListObjectStorageKeys(ctx context.Context) ([]ObjectStorageKey, error) {
+	var keys []ObjectStorageKey
+
+	err := rc.executeWithRetry(ctx, "ListObjectStorageKeys", func() error {
+		var err error
+
+		keys, err = rc.Client.ListObjectStorageKeys(ctx)
+
+		return err
+	})
+
+	return keys, err
+}
+
+// GetObjectStorageKey retrieves a specific access key with automatic retry.
+func (rc *RetryableClient) GetObjectStorageKey(ctx context.Context, keyID int) (*ObjectStorageKey, error) {
+	var key *ObjectStorageKey
+
+	err := rc.executeWithRetry(ctx, "GetObjectStorageKey", func() error {
+		var err error
+
+		key, err = rc.Client.GetObjectStorageKey(ctx, keyID)
+
+		return err
+	})
+
+	return key, err
+}
+
+// GetObjectStorageTransfer retrieves Object Storage transfer usage with automatic retry.
+func (rc *RetryableClient) GetObjectStorageTransfer(ctx context.Context) (*ObjectStorageTransfer, error) {
+	var transfer *ObjectStorageTransfer
+
+	err := rc.executeWithRetry(ctx, "GetObjectStorageTransfer", func() error {
+		var err error
+
+		transfer, err = rc.Client.GetObjectStorageTransfer(ctx)
+
+		return err
+	})
+
+	return transfer, err
+}
+
+// GetObjectStorageBucketAccess retrieves bucket ACL/CORS settings with automatic retry.
+func (rc *RetryableClient) GetObjectStorageBucketAccess(ctx context.Context, region, label string) (*ObjectStorageBucketAccess, error) {
+	var access *ObjectStorageBucketAccess
+
+	err := rc.executeWithRetry(ctx, "GetObjectStorageBucketAccess", func() error {
+		var err error
+
+		access, err = rc.Client.GetObjectStorageBucketAccess(ctx, region, label)
+
+		return err
+	})
+
+	return access, err
+}
+
 func (rc *RetryableClient) executeWithRetry(ctx context.Context, _ string, fn func() error) error {
 	var lastErr error
 

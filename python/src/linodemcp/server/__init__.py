@@ -37,10 +37,14 @@ from linodemcp.tools import (
     create_linode_nodebalancer_get_tool,
     create_linode_nodebalancer_update_tool,
     create_linode_nodebalancers_list_tool,
+    create_linode_object_storage_bucket_access_get_tool,
     create_linode_object_storage_bucket_contents_tool,
     create_linode_object_storage_bucket_get_tool,
     create_linode_object_storage_buckets_list_tool,
     create_linode_object_storage_clusters_list_tool,
+    create_linode_object_storage_key_get_tool,
+    create_linode_object_storage_keys_list_tool,
+    create_linode_object_storage_transfer_tool,
     create_linode_object_storage_types_list_tool,
     create_linode_profile_tool,
     create_linode_regions_list_tool,
@@ -85,10 +89,14 @@ from linodemcp.tools import (
     handle_linode_nodebalancer_get,
     handle_linode_nodebalancer_update,
     handle_linode_nodebalancers_list,
+    handle_linode_object_storage_bucket_access_get,
     handle_linode_object_storage_bucket_contents,
     handle_linode_object_storage_bucket_get,
     handle_linode_object_storage_buckets_list,
     handle_linode_object_storage_clusters_list,
+    handle_linode_object_storage_key_get,
+    handle_linode_object_storage_keys_list,
+    handle_linode_object_storage_transfer,
     handle_linode_object_storage_types_list,
     handle_linode_profile,
     handle_linode_regions_list,
@@ -152,6 +160,11 @@ class Server:
                 create_linode_object_storage_bucket_contents_tool(),
                 create_linode_object_storage_clusters_list_tool(),
                 create_linode_object_storage_types_list_tool(),
+                # Phase 2: Object Storage access key & transfer read operations
+                create_linode_object_storage_keys_list_tool(),
+                create_linode_object_storage_key_get_tool(),
+                create_linode_object_storage_transfer_tool(),
+                create_linode_object_storage_bucket_access_get_tool(),
                 # Stage 4: Write operations
                 create_linode_sshkey_create_tool(),
                 create_linode_sshkey_delete_tool(),
@@ -215,6 +228,19 @@ class Server:
             ),
             "linode_object_storage_types_list": (
                 handle_linode_object_storage_types_list
+            ),
+            # Phase 2: Object Storage access key & transfer read operations
+            "linode_object_storage_keys_list": (
+                handle_linode_object_storage_keys_list
+            ),
+            "linode_object_storage_key_get": (
+                handle_linode_object_storage_key_get
+            ),
+            "linode_object_storage_transfer": (
+                handle_linode_object_storage_transfer
+            ),
+            "linode_object_storage_bucket_access_get": (
+                handle_linode_object_storage_bucket_access_get
             ),
             # Stage 4: Write operations
             "linode_sshkey_create": handle_linode_sshkey_create,

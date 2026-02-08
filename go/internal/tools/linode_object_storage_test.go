@@ -478,3 +478,357 @@ func TestLinodeObjectStorageTypeListTool_IncompleteConfig(t *testing.T) {
 	require.NotNil(t, result)
 	assert.True(t, result.IsError)
 }
+
+// Phase 2: Access Key & Transfer Tests
+
+func TestLinodeObjectStorageKeysListTool_Definition(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	tool, handler := tools.NewLinodeObjectStorageKeysListTool(cfg)
+
+	assert.Equal(t, "linode_object_storage_keys_list", tool.Name)
+	assert.NotEmpty(t, tool.Description)
+	assert.NotNil(t, handler)
+}
+
+func TestLinodeObjectStorageKeysListTool_Success(t *testing.T) {
+	t.Parallel()
+
+	keys := []linode.ObjectStorageKey{
+		{
+			ID:        1,
+			Label:     "my-key",
+			AccessKey: "AKIAIOSFODNN7EXAMPLE",
+			Limited:   false,
+		},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/object-storage/keys", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			"data":    keys,
+			"page":    1,
+			"pages":   1,
+			"results": 1,
+		}))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageKeysListTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.IsError)
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, "my-key")
+	assert.Contains(t, textContent.Text, `"count": 1`)
+}
+
+func TestLinodeObjectStorageKeysListTool_IncompleteConfig(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "", Token: ""},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageKeysListTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+}
+
+func TestLinodeObjectStorageKeyGetTool_Definition(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	tool, handler := tools.NewLinodeObjectStorageKeyGetTool(cfg)
+
+	assert.Equal(t, "linode_object_storage_key_get", tool.Name)
+	assert.NotEmpty(t, tool.Description)
+	assert.NotNil(t, handler)
+}
+
+func TestLinodeObjectStorageKeyGetTool_Success(t *testing.T) {
+	t.Parallel()
+
+	key := linode.ObjectStorageKey{
+		ID:        42,
+		Label:     "my-key",
+		AccessKey: "AKIAIOSFODNN7EXAMPLE",
+		Limited:   true,
+		BucketAccess: []linode.ObjectStorageKeyBucketAccess{
+			{BucketName: "my-bucket", Region: "us-east-1", Permissions: "read_only"},
+		},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/object-storage/keys/42", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(key))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageKeyGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{"key_id": "42"})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.IsError)
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, "my-key")
+	assert.Contains(t, textContent.Text, "my-bucket")
+}
+
+func TestLinodeObjectStorageKeyGetTool_MissingKeyID(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageKeyGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+}
+
+func TestLinodeObjectStorageKeyGetTool_InvalidKeyID(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageKeyGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{"key_id": "not-a-number"})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, "key_id must be a valid integer")
+}
+
+func TestLinodeObjectStorageTransferTool_Definition(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	tool, handler := tools.NewLinodeObjectStorageTransferTool(cfg)
+
+	assert.Equal(t, "linode_object_storage_transfer", tool.Name)
+	assert.NotEmpty(t, tool.Description)
+	assert.NotNil(t, handler)
+}
+
+func TestLinodeObjectStorageTransferTool_Success(t *testing.T) {
+	t.Parallel()
+
+	transfer := linode.ObjectStorageTransfer{UsedBytes: 1073741824}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/object-storage/transfer", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(transfer))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageTransferTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.IsError)
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, "1073741824")
+}
+
+func TestLinodeObjectStorageTransferTool_IncompleteConfig(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "", Token: ""},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageTransferTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+}
+
+func TestLinodeObjectStorageBucketAccessGetTool_Definition(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	tool, handler := tools.NewLinodeObjectStorageBucketAccessGetTool(cfg)
+
+	assert.Equal(t, "linode_object_storage_bucket_access_get", tool.Name)
+	assert.NotEmpty(t, tool.Description)
+	assert.NotNil(t, handler)
+}
+
+func TestLinodeObjectStorageBucketAccessGetTool_Success(t *testing.T) {
+	t.Parallel()
+
+	access := linode.ObjectStorageBucketAccess{
+		ACL:         "public-read",
+		CORSEnabled: true,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/access", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(access))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageBucketAccessGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{"region": "us-east-1", "label": "my-bucket"})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.IsError)
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, "public-read")
+	assert.Contains(t, textContent.Text, "true")
+}
+
+func TestLinodeObjectStorageBucketAccessGetTool_MissingRegion(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageBucketAccessGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{"label": "my-bucket"})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+}
+
+func TestLinodeObjectStorageBucketAccessGetTool_MissingLabel(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageBucketAccessGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{"region": "us-east-1"})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+}
+
+func TestLinodeObjectStorageBucketAccessGetTool_MissingEnvironment(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{},
+	}
+	_, handler := tools.NewLinodeObjectStorageBucketAccessGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{"region": "us-east-1", "label": "my-bucket"})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+}

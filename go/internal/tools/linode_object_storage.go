@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -344,6 +345,220 @@ func handleObjectStorageTypeListRequest(ctx context.Context, request mcp.CallToo
 	}
 
 	jsonResponse, err := json.MarshalIndent(response, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal response: %w", err)
+	}
+
+	return mcp.NewToolResultText(string(jsonResponse)), nil
+}
+
+// Phase 2: Read-Only Access Key & Transfer Tools
+
+// NewLinodeObjectStorageKeysListTool creates a tool for listing Object Storage access keys.
+func NewLinodeObjectStorageKeysListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool("linode_object_storage_keys_list",
+		mcp.WithDescription("Lists all Object Storage access keys for the authenticated user"),
+		mcp.WithString("environment",
+			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleObjectStorageKeysListRequest(ctx, request, cfg)
+	}
+
+	return tool, handler
+}
+
+func handleObjectStorageKeysListRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	environment := request.GetString("environment", "")
+
+	selectedEnv, err := selectEnvironment(cfg, environment)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := validateLinodeConfig(selectedEnv); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
+
+	keys, err := client.ListObjectStorageKeys(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Object Storage keys: %v", err)), nil
+	}
+
+	response := struct {
+		Count int                       `json:"count"`
+		Keys  []linode.ObjectStorageKey `json:"keys"`
+	}{
+		Count: len(keys),
+		Keys:  keys,
+	}
+
+	jsonResponse, err := json.MarshalIndent(response, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal response: %w", err)
+	}
+
+	return mcp.NewToolResultText(string(jsonResponse)), nil
+}
+
+// NewLinodeObjectStorageKeyGetTool creates a tool for getting a specific access key.
+func NewLinodeObjectStorageKeyGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool("linode_object_storage_key_get",
+		mcp.WithDescription("Gets details about a specific Object Storage access key by ID"),
+		mcp.WithString("environment",
+			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		),
+		mcp.WithString("key_id",
+			mcp.Required(),
+			mcp.Description("The ID of the access key to retrieve"),
+		),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleObjectStorageKeyGetRequest(ctx, request, cfg)
+	}
+
+	return tool, handler
+}
+
+func handleObjectStorageKeyGetRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	environment := request.GetString("environment", "")
+	keyIDStr := request.GetString("key_id", "")
+
+	if keyIDStr == "" {
+		return mcp.NewToolResultError("key_id is required"), nil
+	}
+
+	keyID, err := strconv.Atoi(keyIDStr)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("key_id must be a valid integer: %v", err)), nil
+	}
+
+	selectedEnv, err := selectEnvironment(cfg, environment)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := validateLinodeConfig(selectedEnv); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
+
+	key, err := client.GetObjectStorageKey(ctx, keyID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve access key %d: %v", keyID, err)), nil
+	}
+
+	jsonResponse, err := json.MarshalIndent(key, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal response: %w", err)
+	}
+
+	return mcp.NewToolResultText(string(jsonResponse)), nil
+}
+
+// NewLinodeObjectStorageTransferTool creates a tool for getting Object Storage transfer usage.
+func NewLinodeObjectStorageTransferTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool("linode_object_storage_transfer",
+		mcp.WithDescription("Gets Object Storage outbound data transfer usage for the current month"),
+		mcp.WithString("environment",
+			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleObjectStorageTransferRequest(ctx, request, cfg)
+	}
+
+	return tool, handler
+}
+
+func handleObjectStorageTransferRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	environment := request.GetString("environment", "")
+
+	selectedEnv, err := selectEnvironment(cfg, environment)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := validateLinodeConfig(selectedEnv); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
+
+	transfer, err := client.GetObjectStorageTransfer(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Object Storage transfer usage: %v", err)), nil
+	}
+
+	jsonResponse, err := json.MarshalIndent(transfer, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal response: %w", err)
+	}
+
+	return mcp.NewToolResultText(string(jsonResponse)), nil
+}
+
+// NewLinodeObjectStorageBucketAccessGetTool creates a tool for getting bucket ACL/CORS settings.
+func NewLinodeObjectStorageBucketAccessGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool("linode_object_storage_bucket_access_get",
+		mcp.WithDescription("Gets the ACL and CORS settings for a specific Object Storage bucket"),
+		mcp.WithString("environment",
+			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		),
+		mcp.WithString("region",
+			mcp.Required(),
+			mcp.Description("Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1')"),
+		),
+		mcp.WithString("label",
+			mcp.Required(),
+			mcp.Description("The bucket label (name)"),
+		),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleObjectStorageBucketAccessGetRequest(ctx, request, cfg)
+	}
+
+	return tool, handler
+}
+
+func handleObjectStorageBucketAccessGetRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	environment := request.GetString("environment", "")
+	region := request.GetString("region", "")
+	label := request.GetString("label", "")
+
+	if region == "" {
+		return mcp.NewToolResultError("region is required"), nil
+	}
+
+	if label == "" {
+		return mcp.NewToolResultError("label is required"), nil
+	}
+
+	selectedEnv, err := selectEnvironment(cfg, environment)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := validateLinodeConfig(selectedEnv); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
+
+	access, err := client.GetObjectStorageBucketAccess(ctx, region, label)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve bucket access for '%s' in region '%s': %v", label, region, err)), nil
+	}
+
+	jsonResponse, err := json.MarshalIndent(access, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal response: %w", err)
 	}

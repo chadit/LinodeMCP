@@ -89,6 +89,10 @@ type ClientInterface interface {
 	ListObjectStorageBucketContents(ctx context.Context, region, label string, params map[string]string) ([]ObjectStorageObject, bool, string, error)
 	ListObjectStorageClusters(ctx context.Context) ([]ObjectStorageCluster, error)
 	ListObjectStorageTypes(ctx context.Context) ([]ObjectStorageType, error)
+	ListObjectStorageKeys(ctx context.Context) ([]ObjectStorageKey, error)
+	GetObjectStorageKey(ctx context.Context, keyID int) (*ObjectStorageKey, error)
+	GetObjectStorageTransfer(ctx context.Context) (*ObjectStorageTransfer, error)
+	GetObjectStorageBucketAccess(ctx context.Context, region, label string) (*ObjectStorageBucketAccess, error)
 }
 
 // Profile represents a Linode user profile.
@@ -603,6 +607,41 @@ type ObjectStorageType struct {
 	Price    Price  `json:"price"`
 	Transfer int    `json:"transfer"`
 	Region   string `json:"region_prices,omitempty"` //nolint:tagliatelle // Linode API snake_case
+}
+
+// ObjectStorageKeyBucketAccess represents bucket-level permissions for an access key.
+type ObjectStorageKeyBucketAccess struct {
+	BucketName  string `json:"bucket_name"`  //nolint:tagliatelle // Linode API snake_case
+	Region      string `json:"region"`
+	Permissions string `json:"permissions"`
+}
+
+// ObjectStorageKey represents a Linode Object Storage access key.
+type ObjectStorageKey struct {
+	ID           int                            `json:"id"`
+	Label        string                         `json:"label"`
+	AccessKey    string                         `json:"access_key"`    //nolint:tagliatelle // Linode API snake_case
+	SecretKey    string                         `json:"secret_key"`    //nolint:tagliatelle // Linode API snake_case
+	Limited      bool                           `json:"limited"`
+	BucketAccess []ObjectStorageKeyBucketAccess `json:"bucket_access"` //nolint:tagliatelle // Linode API snake_case
+	Regions      []ObjectStorageKeyRegion       `json:"regions"`
+}
+
+// ObjectStorageKeyRegion represents a region associated with an Object Storage key.
+type ObjectStorageKeyRegion struct {
+	ID          string `json:"id"`
+	S3Endpoint  string `json:"s3_endpoint"`  //nolint:tagliatelle // Linode API snake_case
+}
+
+// ObjectStorageTransfer represents Object Storage transfer usage.
+type ObjectStorageTransfer struct {
+	UsedBytes int `json:"used"`
+}
+
+// ObjectStorageBucketAccess represents bucket ACL and CORS settings.
+type ObjectStorageBucketAccess struct {
+	ACL         string `json:"acl"`
+	CORSEnabled bool   `json:"cors_enabled"` //nolint:tagliatelle // Linode API snake_case
 }
 
 const (
@@ -1707,6 +1746,96 @@ func (c *Client) ListObjectStorageTypes(ctx context.Context) ([]ObjectStorageTyp
 	}
 
 	return response.Data, nil
+}
+
+// ListObjectStorageKeys retrieves all Object Storage access keys.
+func (c *Client) ListObjectStorageKeys(ctx context.Context) ([]ObjectStorageKey, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, "/object-storage/keys", nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListObjectStorageKeys", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var response struct {
+		Data    []ObjectStorageKey `json:"data"`
+		Page    int                `json:"page"`
+		Pages   int                `json:"pages"`
+		Results int                `json:"results"`
+	}
+
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
+}
+
+// GetObjectStorageKey retrieves a specific Object Storage access key by ID.
+func (c *Client) GetObjectStorageKey(ctx context.Context, keyID int) (*ObjectStorageKey, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/object-storage/keys/%d", keyID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetObjectStorageKey", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var key ObjectStorageKey
+	if err := c.handleResponse(resp, &key); err != nil {
+		return nil, err
+	}
+
+	return &key, nil
+}
+
+// GetObjectStorageTransfer retrieves Object Storage outbound data transfer usage.
+func (c *Client) GetObjectStorageTransfer(ctx context.Context) (*ObjectStorageTransfer, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, "/object-storage/transfer", nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetObjectStorageTransfer", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var transfer ObjectStorageTransfer
+	if err := c.handleResponse(resp, &transfer); err != nil {
+		return nil, err
+	}
+
+	return &transfer, nil
+}
+
+// GetObjectStorageBucketAccess retrieves ACL and CORS settings for a bucket.
+func (c *Client) GetObjectStorageBucketAccess(ctx context.Context, region, label string) (*ObjectStorageBucketAccess, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/object-storage/buckets/%s/%s/access", region, label)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetObjectStorageBucketAccess", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var access ObjectStorageBucketAccess
+	if err := c.handleResponse(resp, &access); err != nil {
+		return nil, err
+	}
+
+	return &access, nil
 }
 
 // Private helper methods

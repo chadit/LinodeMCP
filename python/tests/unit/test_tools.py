@@ -62,10 +62,14 @@ from linodemcp.tools import (
     handle_linode_nodebalancer_get,
     handle_linode_nodebalancer_update,
     handle_linode_nodebalancers_list,
+    handle_linode_object_storage_bucket_access_get,
     handle_linode_object_storage_bucket_contents,
     handle_linode_object_storage_bucket_get,
     handle_linode_object_storage_buckets_list,
     handle_linode_object_storage_clusters_list,
+    handle_linode_object_storage_key_get,
+    handle_linode_object_storage_keys_list,
+    handle_linode_object_storage_transfer,
     handle_linode_object_storage_types_list,
     handle_linode_profile,
     handle_linode_regions_list,
@@ -2672,6 +2676,208 @@ async def test_handle_linode_object_storage_types_list_error(
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_object_storage_types_list({}, sample_config)
+
+        assert len(result) == 1
+        assert "Failed" in result[0].text
+
+
+# Phase 2: Access Key & Transfer Tests
+
+
+async def test_handle_linode_object_storage_keys_list(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_keys_list tool."""
+    mock_keys = [
+        {
+            "id": 1,
+            "label": "my-key",
+            "access_key": "AKIAIOSFODNN7EXAMPLE",
+            "secret_key": "[REDACTED]",
+            "limited": False,
+            "bucket_access": None,
+        },
+    ]
+
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_object_storage_keys.return_value = mock_keys
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_object_storage_keys_list({}, sample_config)
+
+        assert len(result) == 1
+        assert "my-key" in result[0].text
+        assert '"count": 1' in result[0].text
+        mock_client.list_object_storage_keys.assert_called_once()
+
+
+async def test_handle_linode_object_storage_keys_list_error(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_keys_list tool error handling."""
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_object_storage_keys.side_effect = Exception("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_object_storage_keys_list({}, sample_config)
+
+        assert len(result) == 1
+        assert "Failed" in result[0].text
+
+
+async def test_handle_linode_object_storage_key_get(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_key_get tool."""
+    mock_key = {
+        "id": 42,
+        "label": "my-key",
+        "access_key": "AKIAIOSFODNN7EXAMPLE",
+        "secret_key": "[REDACTED]",
+        "limited": True,
+        "bucket_access": [
+            {
+                "bucket_name": "my-bucket",
+                "region": "us-east-1",
+                "permissions": "read_only",
+            },
+        ],
+    }
+
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_object_storage_key.return_value = mock_key
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_object_storage_key_get(
+            {"key_id": 42}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "my-key" in result[0].text
+        assert "my-bucket" in result[0].text
+        mock_client.get_object_storage_key.assert_called_once_with(42)
+
+
+async def test_handle_linode_object_storage_key_get_missing_id(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_key_get with missing key_id."""
+    result = await handle_linode_object_storage_key_get({}, sample_config)
+
+    assert len(result) == 1
+    assert "key_id is required" in result[0].text
+
+
+async def test_handle_linode_object_storage_transfer(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_transfer tool."""
+    mock_transfer = {"used": 1073741824}
+
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_object_storage_transfer.return_value = mock_transfer
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_object_storage_transfer({}, sample_config)
+
+        assert len(result) == 1
+        assert "1073741824" in result[0].text
+        mock_client.get_object_storage_transfer.assert_called_once()
+
+
+async def test_handle_linode_object_storage_transfer_error(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_transfer tool error handling."""
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_object_storage_transfer.side_effect = Exception("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_object_storage_transfer({}, sample_config)
+
+        assert len(result) == 1
+        assert "Failed" in result[0].text
+
+
+async def test_handle_linode_object_storage_bucket_access_get(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_bucket_access_get tool."""
+    mock_access = {"acl": "public-read", "cors_enabled": True}
+
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_object_storage_bucket_access.return_value = mock_access
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_object_storage_bucket_access_get(
+            {"region": "us-east-1", "label": "my-bucket"}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "public-read" in result[0].text
+        mock_client.get_object_storage_bucket_access.assert_called_once_with(
+            "us-east-1", "my-bucket"
+        )
+
+
+async def test_handle_linode_object_storage_bucket_access_get_missing_region(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_bucket_access_get with missing region."""
+    result = await handle_linode_object_storage_bucket_access_get(
+        {"label": "my-bucket"}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "region is required" in result[0].text
+
+
+async def test_handle_linode_object_storage_bucket_access_get_missing_label(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_bucket_access_get with missing label."""
+    result = await handle_linode_object_storage_bucket_access_get(
+        {"region": "us-east-1"}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "label is required" in result[0].text
+
+
+async def test_handle_linode_object_storage_bucket_access_get_error(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_bucket_access_get tool error handling."""
+    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_object_storage_bucket_access.side_effect = Exception(
+            "API error"
+        )
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_object_storage_bucket_access_get(
+            {"region": "us-east-1", "label": "my-bucket"}, sample_config
+        )
 
         assert len(result) == 1
         assert "Failed" in result[0].text

@@ -51,10 +51,14 @@ __all__ = [
     "create_linode_nodebalancer_get_tool",
     "create_linode_nodebalancer_update_tool",
     "create_linode_nodebalancers_list_tool",
+    "create_linode_object_storage_bucket_access_get_tool",
     "create_linode_object_storage_bucket_contents_tool",
     "create_linode_object_storage_bucket_get_tool",
     "create_linode_object_storage_buckets_list_tool",
     "create_linode_object_storage_clusters_list_tool",
+    "create_linode_object_storage_key_get_tool",
+    "create_linode_object_storage_keys_list_tool",
+    "create_linode_object_storage_transfer_tool",
     "create_linode_object_storage_types_list_tool",
     "create_linode_profile_tool",
     "create_linode_regions_list_tool",
@@ -99,10 +103,14 @@ __all__ = [
     "handle_linode_nodebalancer_get",
     "handle_linode_nodebalancer_update",
     "handle_linode_nodebalancers_list",
+    "handle_linode_object_storage_bucket_access_get",
     "handle_linode_object_storage_bucket_contents",
     "handle_linode_object_storage_bucket_get",
     "handle_linode_object_storage_buckets_list",
     "handle_linode_object_storage_clusters_list",
+    "handle_linode_object_storage_key_get",
+    "handle_linode_object_storage_keys_list",
+    "handle_linode_object_storage_transfer",
     "handle_linode_object_storage_types_list",
     "handle_linode_profile",
     "handle_linode_regions_list",
@@ -1972,6 +1980,245 @@ async def handle_linode_object_storage_types_list(
             TextContent(
                 type="text",
                 text=f"Failed to retrieve Object Storage types: {e}",
+            )
+        ]
+
+
+# Phase 2: Read-Only Access Key & Transfer Tools
+
+
+def create_linode_object_storage_keys_list_tool() -> Tool:
+    """Create the linode_object_storage_keys_list tool."""
+    return Tool(
+        name="linode_object_storage_keys_list",
+        description="Lists all Object Storage access keys for the authenticated user.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+            },
+        },
+    )
+
+
+async def handle_linode_object_storage_keys_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_object_storage_keys_list tool request."""
+    environment = arguments.get("environment", "")
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            keys = await client.list_object_storage_keys()
+
+            response: dict[str, Any] = {
+                "count": len(keys),
+                "keys": keys,
+            }
+
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(
+                type="text",
+                text=f"Failed to retrieve Object Storage keys: {e}",
+            )
+        ]
+
+
+def create_linode_object_storage_key_get_tool() -> Tool:
+    """Create the linode_object_storage_key_get tool."""
+    return Tool(
+        name="linode_object_storage_key_get",
+        description="Gets details about a specific Object Storage access key by ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "key_id": {
+                    "type": "integer",
+                    "description": "The ID of the access key to retrieve (required)",
+                },
+            },
+            "required": ["key_id"],
+        },
+    )
+
+
+async def handle_linode_object_storage_key_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_object_storage_key_get tool request."""
+    environment = arguments.get("environment", "")
+    key_id = arguments.get("key_id", 0)
+
+    if not key_id:
+        return [TextContent(type="text", text="Error: key_id is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            key = await client.get_object_storage_key(int(key_id))
+
+            json_response = json.dumps(key, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(
+                type="text",
+                text=f"Failed to retrieve Object Storage key: {e}",
+            )
+        ]
+
+
+def create_linode_object_storage_transfer_tool() -> Tool:
+    """Create the linode_object_storage_transfer tool."""
+    return Tool(
+        name="linode_object_storage_transfer",
+        description=(
+            "Gets Object Storage outbound data transfer usage for the current month."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+            },
+        },
+    )
+
+
+async def handle_linode_object_storage_transfer(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_object_storage_transfer tool request."""
+    environment = arguments.get("environment", "")
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            transfer = await client.get_object_storage_transfer()
+
+            json_response = json.dumps(transfer, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(
+                type="text",
+                text=f"Failed to retrieve Object Storage transfer usage: {e}",
+            )
+        ]
+
+
+def create_linode_object_storage_bucket_access_get_tool() -> Tool:
+    """Create the linode_object_storage_bucket_access_get tool."""
+    return Tool(
+        name="linode_object_storage_bucket_access_get",
+        description=(
+            "Gets the ACL and CORS settings for a specific Object Storage bucket."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "region": {
+                    "type": "string",
+                    "description": (
+                        "The region/cluster ID where the bucket exists (required)"
+                    ),
+                },
+                "label": {
+                    "type": "string",
+                    "description": "The label/name of the bucket (required)",
+                },
+            },
+            "required": ["region", "label"],
+        },
+    )
+
+
+async def handle_linode_object_storage_bucket_access_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_object_storage_bucket_access_get tool request."""
+    environment = arguments.get("environment", "")
+    region = arguments.get("region", "")
+    label = arguments.get("label", "")
+
+    if not region:
+        return [TextContent(type="text", text="Error: region is required")]
+    if not label:
+        return [TextContent(type="text", text="Error: label is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            access = await client.get_object_storage_bucket_access(region, label)
+
+            json_response = json.dumps(access, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(
+                type="text",
+                text=f"Failed to retrieve bucket access settings: {e}",
             )
         ]
 
