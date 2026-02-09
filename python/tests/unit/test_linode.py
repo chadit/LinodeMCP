@@ -15,6 +15,7 @@ from linodemcp.linode import (
     RetryConfig,
     is_retryable,
     validate_dns_record_name,
+    validate_dns_record_target,
     validate_firewall_policy,
     validate_label,
     validate_root_password,
@@ -683,6 +684,57 @@ class TestValidateDNSRecordName:
         """Test long name raises error."""
         with pytest.raises(ValueError, match="maximum length"):
             validate_dns_record_name("a" * 254)
+
+
+class TestValidateDNSRecordTarget:
+    """Tests for DNS record target validation."""
+
+    def test_valid_public_ipv4(self) -> None:
+        """Test valid public IPv4 addresses pass."""
+        validate_dns_record_target("A", "8.8.8.8")
+        validate_dns_record_target("A", "1.1.1.1")
+        validate_dns_record_target("A", "104.237.137.1")
+
+    def test_172_outside_private_range_allowed(self) -> None:
+        """Test 172.x IPs outside 172.16-31.x.x pass."""
+        validate_dns_record_target("A", "172.15.0.1")
+        validate_dns_record_target("A", "172.32.0.1")
+
+    def test_private_10_range_rejected(self) -> None:
+        """Test 10.x.x.x private range is rejected."""
+        with pytest.raises(ValueError, match="private IP"):
+            validate_dns_record_target("A", "10.0.0.1")
+
+    def test_private_192_168_range_rejected(self) -> None:
+        """Test 192.168.x.x private range is rejected."""
+        with pytest.raises(ValueError, match="private IP"):
+            validate_dns_record_target("A", "192.168.1.1")
+
+    def test_private_172_16_range_rejected(self) -> None:
+        """Test 172.16-31.x.x private range is rejected."""
+        with pytest.raises(ValueError, match="private IP"):
+            validate_dns_record_target("A", "172.16.0.1")
+        with pytest.raises(ValueError, match="private IP"):
+            validate_dns_record_target("A", "172.31.255.255")
+        with pytest.raises(ValueError, match="private IP"):
+            validate_dns_record_target("A", "172.20.10.5")
+
+    def test_loopback_rejected(self) -> None:
+        """Test 127.x.x.x loopback is rejected."""
+        with pytest.raises(ValueError, match="private IP"):
+            validate_dns_record_target("A", "127.0.0.1")
+
+    def test_invalid_ipv4_rejected(self) -> None:
+        """Test invalid IPv4 like 999.999.999.999 is rejected."""
+        with pytest.raises(ValueError, match="valid IPv4"):
+            validate_dns_record_target("A", "999.999.999.999")
+        with pytest.raises(ValueError, match="valid IPv4"):
+            validate_dns_record_target("A", "not-an-ip")
+
+    def test_empty_target_rejected(self) -> None:
+        """Test empty target is rejected."""
+        with pytest.raises(ValueError, match="required"):
+            validate_dns_record_target("A", "")
 
 
 class TestValidateFirewallPolicy:

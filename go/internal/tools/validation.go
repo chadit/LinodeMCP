@@ -3,6 +3,7 @@ package tools
 import (
 	"errors"
 	"fmt"
+	"net"
 	"regexp"
 	"strings"
 	"unicode"
@@ -134,8 +135,6 @@ func validateRootPassword(password string) error {
 // DNS record validation.
 var (
 	validDNSNameRegex     = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)*$|^@$|^$`)
-	validIPv4Regex        = regexp.MustCompile(`^(\d{1,3}\.){3}\d{1,3}$`)
-	validIPv6Regex        = regexp.MustCompile(`^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$`)
 	validBucketLabelRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]{1,2}$`)
 )
 
@@ -158,17 +157,17 @@ func validateDNSRecordTarget(recordType, target string) error {
 
 	switch strings.ToUpper(recordType) {
 	case "A":
-		if !validIPv4Regex.MatchString(target) {
+		ip := net.ParseIP(target)
+		if ip == nil || ip.To4() == nil {
 			return ErrDNSTargetInvalidA
 		}
-		// Check for private IP ranges.
-		if strings.HasPrefix(target, "10.") ||
-			strings.HasPrefix(target, "192.168.") ||
-			strings.HasPrefix(target, "127.") {
+
+		if ip.IsPrivate() || ip.IsLoopback() {
 			return ErrDNSTargetPrivateIP
 		}
 	case "AAAA":
-		if !validIPv6Regex.MatchString(target) {
+		ip := net.ParseIP(target)
+		if ip == nil || ip.To4() != nil {
 			return ErrDNSTargetInvalidAAAA
 		}
 	case "CNAME", "NS", "MX":

@@ -1,6 +1,7 @@
 """Linode API client."""
 
 import asyncio
+import ipaddress
 import logging
 import re
 import secrets
@@ -25,7 +26,6 @@ VALID_DNS_NAME_PATTERN = re.compile(
     r"^[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?"
     r"(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)*$|^@$|^$"
 )
-VALID_IPV4_PATTERN = re.compile(r"^(\d{1,3}\.){3}\d{1,3}$")
 
 # Validation constants
 MIN_SSH_KEY_LENGTH = 80
@@ -96,10 +96,17 @@ def validate_dns_record_target(record_type: str, target: str) -> None:
     record_type = record_type.upper()
 
     if record_type == "A":
-        if not VALID_IPV4_PATTERN.match(target):
+        try:
+            ip = ipaddress.ip_address(target)
+        except ValueError:
+            msg = "A record target must be a valid IPv4 address"
+            raise ValueError(msg) from None
+
+        if not isinstance(ip, ipaddress.IPv4Address):
             msg = "A record target must be a valid IPv4 address"
             raise ValueError(msg)
-        if target.startswith(("10.", "192.168.", "127.")):
+
+        if ip.is_private or ip.is_loopback:
             msg = "A record target cannot be a private IP address"
             raise ValueError(msg)
 

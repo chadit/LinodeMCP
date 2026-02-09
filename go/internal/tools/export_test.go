@@ -26,3 +26,13 @@ func FilterInstancesByStatus(instances []linode.Instance, statusFilter string) [
 func FormatInstancesResponse(instances []linode.Instance, statusFilter string) (*mcp.CallToolResult, error) {
 	return formatInstancesResponse(instances, statusFilter)
 }
+
+// ValidateDNSRecordTarget exposes validateDNSRecordTarget for testing.
+func ValidateDNSRecordTarget(recordType, target string) error {
+	return validateDNSRecordTarget(recordType, target)
+}
+
+// ValidateDNSRecordName exposes validateDNSRecordName for testing.
+func ValidateDNSRecordName(name string) error {
+	return validateDNSRecordName(name)
+}

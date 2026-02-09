@@ -2422,3 +2422,142 @@ func assertErrorContains(t *testing.T, result *mcp.CallToolResult, expected stri
 	require.True(t, ok, "expected TextContent type")
 	assert.Contains(t, textContent.Text, expected)
 }
+
+// =============================================================================
+// DNS Record Target Validation Tests
+// =============================================================================
+
+func TestValidateDNSRecordTarget_ValidPublicIPv4(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		target string
+	}{
+		{name: "standard public IP", target: "8.8.8.8"},
+		{name: "another public IP", target: "1.1.1.1"},
+		{name: "linode IP", target: "139.162.130.5"},
+		{name: "high octet public", target: "203.0.113.1"},
+		{name: "172 outside private range", target: "172.15.0.1"},
+		{name: "172 above private range", target: "172.32.0.1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := tools.ValidateDNSRecordTarget("A", tt.target)
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestValidateDNSRecordTarget_PrivateIPv4Rejected(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		target string
+	}{
+		{name: "10.x range", target: "10.0.0.1"},
+		{name: "10.x high", target: "10.255.255.255"},
+		{name: "192.168.x range", target: "192.168.1.1"},
+		{name: "192.168.0.x", target: "192.168.0.100"},
+		{name: "127 loopback", target: "127.0.0.1"},
+		{name: "172.16 start of range", target: "172.16.0.1"},
+		{name: "172.31 end of range", target: "172.31.255.255"},
+		{name: "172.20 middle of range", target: "172.20.10.5"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := tools.ValidateDNSRecordTarget("A", tt.target)
+			assert.ErrorIs(t, err, tools.ErrDNSTargetPrivateIP)
+		})
+	}
+}
+
+func TestValidateDNSRecordTarget_InvalidIPv4Rejected(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		target string
+	}{
+		{name: "octets too large", target: "999.999.999.999"},
+		{name: "single octet over 255", target: "256.1.1.1"},
+		{name: "not an IP", target: "not-an-ip"},
+		{name: "empty octets", target: "1.2..4"},
+		{name: "too few octets", target: "1.2.3"},
+		{name: "IPv6 as A record", target: "::1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := tools.ValidateDNSRecordTarget("A", tt.target)
+			assert.ErrorIs(t, err, tools.ErrDNSTargetInvalidA)
+		})
+	}
+}
+
+func TestValidateDNSRecordTarget_ValidIPv6(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		target string
+	}{
+		{name: "full address", target: "2001:0db8:85a3:0000:0000:8a2e:0370:7334"},
+		{name: "compressed", target: "2001:db8::1"},
+		{name: "loopback", target: "::1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := tools.ValidateDNSRecordTarget("AAAA", tt.target)
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestValidateDNSRecordTarget_InvalidIPv6Rejected(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		target string
+	}{
+		{name: "IPv4 as AAAA", target: "8.8.8.8"},
+		{name: "not an IP", target: "not-an-ip"},
+		{name: "empty", target: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if tt.target == "" {
+				err := tools.ValidateDNSRecordTarget("AAAA", tt.target)
+				assert.ErrorIs(t, err, tools.ErrDNSTargetRequired)
+
+				return
+			}
+
+			err := tools.ValidateDNSRecordTarget("AAAA", tt.target)
+			assert.ErrorIs(t, err, tools.ErrDNSTargetInvalidAAAA)
+		})
+	}
+}
+
+func TestValidateDNSRecordTarget_EmptyTarget(t *testing.T) {
+	t.Parallel()
+
+	err := tools.ValidateDNSRecordTarget("A", "")
+	assert.ErrorIs(t, err, tools.ErrDNSTargetRequired)
+}
