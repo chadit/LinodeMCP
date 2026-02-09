@@ -50,6 +50,11 @@ from linodemcp.tools import (
     create_linode_object_storage_key_get_tool,
     create_linode_object_storage_key_update_tool,
     create_linode_object_storage_keys_list_tool,
+    create_linode_object_storage_object_acl_get_tool,
+    create_linode_object_storage_object_acl_update_tool,
+    create_linode_object_storage_presigned_url_tool,
+    create_linode_object_storage_ssl_delete_tool,
+    create_linode_object_storage_ssl_get_tool,
     create_linode_object_storage_transfer_tool,
     create_linode_object_storage_types_list_tool,
     create_linode_profile_tool,
@@ -108,6 +113,11 @@ from linodemcp.tools import (
     handle_linode_object_storage_key_get,
     handle_linode_object_storage_key_update,
     handle_linode_object_storage_keys_list,
+    handle_linode_object_storage_object_acl_get,
+    handle_linode_object_storage_object_acl_update,
+    handle_linode_object_storage_presigned_url,
+    handle_linode_object_storage_ssl_delete,
+    handle_linode_object_storage_ssl_get,
     handle_linode_object_storage_transfer,
     handle_linode_object_storage_types_list,
     handle_linode_profile,
@@ -185,6 +195,12 @@ class Server:
                 create_linode_object_storage_key_create_tool(),
                 create_linode_object_storage_key_update_tool(),
                 create_linode_object_storage_key_delete_tool(),
+                # Phase 5: Presigned URLs, Object ACL, and SSL
+                create_linode_object_storage_presigned_url_tool(),
+                create_linode_object_storage_object_acl_get_tool(),
+                create_linode_object_storage_object_acl_update_tool(),
+                create_linode_object_storage_ssl_get_tool(),
+                create_linode_object_storage_ssl_delete_tool(),
                 # Stage 4: Write operations
                 create_linode_sshkey_create_tool(),
                 create_linode_sshkey_delete_tool(),
@@ -281,6 +297,22 @@ class Server:
             ),
             "linode_object_storage_key_delete": (
                 handle_linode_object_storage_key_delete
+            ),
+            # Phase 5: Presigned URLs, Object ACL, and SSL
+            "linode_object_storage_presigned_url": (
+                handle_linode_object_storage_presigned_url
+            ),
+            "linode_object_storage_object_acl_get": (
+                handle_linode_object_storage_object_acl_get
+            ),
+            "linode_object_storage_object_acl_update": (
+                handle_linode_object_storage_object_acl_update
+            ),
+            "linode_object_storage_ssl_get": (
+                handle_linode_object_storage_ssl_get
+            ),
+            "linode_object_storage_ssl_delete": (
+                handle_linode_object_storage_ssl_delete
             ),
             # Stage 4: Write operations
             "linode_sshkey_create": handle_linode_sshkey_create,

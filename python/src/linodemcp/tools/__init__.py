@@ -65,6 +65,11 @@ __all__ = [
     "create_linode_object_storage_key_get_tool",
     "create_linode_object_storage_key_update_tool",
     "create_linode_object_storage_keys_list_tool",
+    "create_linode_object_storage_object_acl_get_tool",
+    "create_linode_object_storage_object_acl_update_tool",
+    "create_linode_object_storage_presigned_url_tool",
+    "create_linode_object_storage_ssl_delete_tool",
+    "create_linode_object_storage_ssl_get_tool",
     "create_linode_object_storage_transfer_tool",
     "create_linode_object_storage_types_list_tool",
     "create_linode_profile_tool",
@@ -123,6 +128,11 @@ __all__ = [
     "handle_linode_object_storage_key_get",
     "handle_linode_object_storage_key_update",
     "handle_linode_object_storage_keys_list",
+    "handle_linode_object_storage_object_acl_get",
+    "handle_linode_object_storage_object_acl_update",
+    "handle_linode_object_storage_presigned_url",
+    "handle_linode_object_storage_ssl_delete",
+    "handle_linode_object_storage_ssl_get",
     "handle_linode_object_storage_transfer",
     "handle_linode_object_storage_types_list",
     "handle_linode_profile",
@@ -3076,6 +3086,514 @@ async def handle_linode_object_storage_key_delete(
             TextContent(
                 type="text",
                 text=f"Failed to revoke access key {key_id}: {e}",
+            )
+        ]
+
+
+# Stage 5 Phase 5: Presigned URLs, Object ACL, and SSL
+
+_VALID_PRESIGNED_METHODS = {"GET", "PUT"}
+_MIN_EXPIRES_IN = 1
+_MAX_EXPIRES_IN = 604800
+_DEFAULT_EXPIRES_IN = 3600
+
+
+def _validate_presigned_method(method: str) -> str | None:
+    """Validate presigned URL method. Returns error message or None."""
+    if method.upper() not in _VALID_PRESIGNED_METHODS:
+        return (
+            f"method must be 'GET' or 'PUT', got '{method}'"
+        )
+    return None
+
+
+def _validate_expires_in(expires_in: int) -> str | None:
+    """Validate expires_in value. Returns error message or None."""
+    if expires_in < _MIN_EXPIRES_IN or expires_in > _MAX_EXPIRES_IN:
+        return (
+            f"expires_in must be between {_MIN_EXPIRES_IN} and"
+            f" {_MAX_EXPIRES_IN} seconds (7 days),"
+            f" got {expires_in}"
+        )
+    return None
+
+
+def create_linode_object_storage_presigned_url_tool() -> Tool:
+    """Create the linode_object_storage_presigned_url tool."""
+    return Tool(
+        name="linode_object_storage_presigned_url",
+        description=(
+            "Generates a presigned URL for accessing an object"
+            " in Object Storage. Use method=GET to create a"
+            " download URL, method=PUT to create an upload URL."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use"
+                        " (optional, defaults to 'default')"
+                    ),
+                },
+                "region": {
+                    "type": "string",
+                    "description": (
+                        "Region where the bucket is located"
+                    ),
+                },
+                "label": {
+                    "type": "string",
+                    "description": "The bucket label (name)",
+                },
+                "name": {
+                    "type": "string",
+                    "description": (
+                        "The object key (path/filename"
+                        " within the bucket)"
+                    ),
+                },
+                "method": {
+                    "type": "string",
+                    "description": (
+                        "HTTP method: 'GET' for download URL,"
+                        " 'PUT' for upload URL"
+                    ),
+                },
+                "expires_in": {
+                    "type": "number",
+                    "description": (
+                        "URL expiration in seconds"
+                        " (1-604800, default 3600 = 1 hour)"
+                    ),
+                },
+            },
+            "required": ["region", "label", "name", "method"],
+        },
+    )
+
+
+async def handle_linode_object_storage_presigned_url(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_object_storage_presigned_url tool request."""
+    environment = arguments.get("environment", "")
+    region = arguments.get("region", "")
+    label = arguments.get("label", "")
+    name = arguments.get("name", "")
+    method = arguments.get("method", "")
+    expires_in = int(
+        arguments.get("expires_in", _DEFAULT_EXPIRES_IN)
+    )
+
+    missing = (
+        "region is required" if not region
+        else "label is required" if not label
+        else "name (object key) is required" if not name
+        else None
+    )
+    if missing is not None:
+        return [TextContent(type="text", text=f"Error: {missing}")]
+
+    validation_err = _validate_presigned_method(method)
+    if validation_err is None:
+        validation_err = _validate_expires_in(expires_in)
+    if validation_err is not None:
+        return [TextContent(type="text", text=f"Error: {validation_err}")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            result = await client.create_presigned_url(
+                region, label, name, method.upper(), expires_in
+            )
+            json_response = json.dumps(result, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(
+                type="text",
+                text=f"Failed to generate presigned URL: {e}",
+            )
+        ]
+
+
+def create_linode_object_storage_object_acl_get_tool() -> Tool:
+    """Create the linode_object_storage_object_acl_get tool."""
+    return Tool(
+        name="linode_object_storage_object_acl_get",
+        description=(
+            "Gets the Access Control List (ACL) for a specific"
+            " object in an Object Storage bucket"
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use"
+                        " (optional, defaults to 'default')"
+                    ),
+                },
+                "region": {
+                    "type": "string",
+                    "description": (
+                        "Region where the bucket is located"
+                    ),
+                },
+                "label": {
+                    "type": "string",
+                    "description": "The bucket label (name)",
+                },
+                "name": {
+                    "type": "string",
+                    "description": (
+                        "The object key (path/filename"
+                        " within the bucket)"
+                    ),
+                },
+            },
+            "required": ["region", "label", "name"],
+        },
+    )
+
+
+async def handle_linode_object_storage_object_acl_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_object_storage_object_acl_get tool request."""
+    environment = arguments.get("environment", "")
+    region = arguments.get("region", "")
+    label = arguments.get("label", "")
+    name = arguments.get("name", "")
+
+    if not region:
+        return [TextContent(type="text", text="Error: region is required")]
+    if not label:
+        return [TextContent(type="text", text="Error: label is required")]
+    if not name:
+        return [TextContent(type="text", text="Error: name (object key) is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            acl = await client.get_object_acl(region, label, name)
+            json_response = json.dumps(acl, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(
+                type="text",
+                text=f"Failed to retrieve object ACL: {e}",
+            )
+        ]
+
+
+def create_linode_object_storage_object_acl_update_tool() -> Tool:
+    """Create the linode_object_storage_object_acl_update tool."""
+    return Tool(
+        name="linode_object_storage_object_acl_update",
+        description=(
+            "Updates the Access Control List (ACL) for a specific"
+            " object in an Object Storage bucket."
+            " Requires confirm=true to proceed."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use"
+                        " (optional, defaults to 'default')"
+                    ),
+                },
+                "region": {
+                    "type": "string",
+                    "description": (
+                        "Region where the bucket is located"
+                    ),
+                },
+                "label": {
+                    "type": "string",
+                    "description": "The bucket label (name)",
+                },
+                "name": {
+                    "type": "string",
+                    "description": (
+                        "The object key (path/filename"
+                        " within the bucket)"
+                    ),
+                },
+                "acl": {
+                    "type": "string",
+                    "description": (
+                        "ACL to set: private, public-read,"
+                        " authenticated-read,"
+                        " or public-read-write"
+                    ),
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to proceed."
+                        " This modifies the object's"
+                        " access permissions."
+                    ),
+                },
+            },
+            "required": [
+                "region", "label", "name", "acl", "confirm",
+            ],
+        },
+    )
+
+
+async def handle_linode_object_storage_object_acl_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_object_storage_object_acl_update tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text="This modifies the object's access permissions."
+                " Set confirm=true to proceed.",
+            )
+        ]
+
+    environment = arguments.get("environment", "")
+    region = arguments.get("region", "")
+    label = arguments.get("label", "")
+    name = arguments.get("name", "")
+    acl = arguments.get("acl", "")
+
+    missing = (
+        "region is required" if not region
+        else "label is required" if not label
+        else "name (object key) is required" if not name
+        else None
+    )
+    if missing is not None:
+        return [TextContent(type="text", text=f"Error: {missing}")]
+
+    acl_err = _validate_bucket_acl(acl)
+    if acl_err is not None:
+        return [TextContent(type="text", text=f"Error: {acl_err}")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            result = await client.update_object_acl(
+                region, label, name, acl
+            )
+            json_response = json.dumps(result, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(
+                type="text",
+                text=f"Failed to update object ACL: {e}",
+            )
+        ]
+
+
+def create_linode_object_storage_ssl_get_tool() -> Tool:
+    """Create the linode_object_storage_ssl_get tool."""
+    return Tool(
+        name="linode_object_storage_ssl_get",
+        description=(
+            "Checks whether an Object Storage bucket has an"
+            " SSL/TLS certificate installed"
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use"
+                        " (optional, defaults to 'default')"
+                    ),
+                },
+                "region": {
+                    "type": "string",
+                    "description": (
+                        "Region where the bucket is located"
+                    ),
+                },
+                "label": {
+                    "type": "string",
+                    "description": "The bucket label (name)",
+                },
+            },
+            "required": ["region", "label"],
+        },
+    )
+
+
+async def handle_linode_object_storage_ssl_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_object_storage_ssl_get tool request."""
+    environment = arguments.get("environment", "")
+    region = arguments.get("region", "")
+    label = arguments.get("label", "")
+
+    if not region:
+        return [TextContent(type="text", text="Error: region is required")]
+    if not label:
+        return [TextContent(type="text", text="Error: label is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            ssl = await client.get_bucket_ssl(region, label)
+            json_response = json.dumps(ssl, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(
+                type="text",
+                text=f"Failed to retrieve SSL status: {e}",
+            )
+        ]
+
+
+def create_linode_object_storage_ssl_delete_tool() -> Tool:
+    """Create the linode_object_storage_ssl_delete tool."""
+    return Tool(
+        name="linode_object_storage_ssl_delete",
+        description=(
+            "Deletes the SSL/TLS certificate from an Object"
+            " Storage bucket."
+            " Requires confirm=true to proceed."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use"
+                        " (optional, defaults to 'default')"
+                    ),
+                },
+                "region": {
+                    "type": "string",
+                    "description": (
+                        "Region where the bucket is located"
+                    ),
+                },
+                "label": {
+                    "type": "string",
+                    "description": "The bucket label (name)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to proceed."
+                        " This removes the SSL certificate"
+                        " from the bucket."
+                    ),
+                },
+            },
+            "required": ["region", "label", "confirm"],
+        },
+    )
+
+
+async def handle_linode_object_storage_ssl_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_object_storage_ssl_delete tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text="This removes the SSL certificate"
+                " from the bucket."
+                " Set confirm=true to proceed.",
+            )
+        ]
+
+    environment = arguments.get("environment", "")
+    region = arguments.get("region", "")
+    label = arguments.get("label", "")
+
+    if not region:
+        return [TextContent(type="text", text="Error: region is required")]
+    if not label:
+        return [TextContent(type="text", text="Error: label is required")]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            await client.delete_bucket_ssl(region, label)
+            response = {
+                "message": (
+                    f"SSL certificate deleted from bucket"
+                    f" '{label}' in region '{region}'"
+                ),
+                "region": region,
+                "bucket": label,
+            }
+            json_response = json.dumps(response, indent=2)
+            return [TextContent(type="text", text=json_response)]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(
+                type="text",
+                text=f"Failed to delete SSL certificate: {e}",
             )
         ]
 

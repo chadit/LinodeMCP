@@ -14,6 +14,8 @@ import (
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
+const defaultPresignedExpiry = 3600
+
 // NewLinodeObjectStorageBucketsListTool creates a tool for listing Object Storage buckets.
 func NewLinodeObjectStorageBucketsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_object_storage_buckets_list",
@@ -559,6 +561,231 @@ func handleObjectStorageBucketAccessGetRequest(ctx context.Context, request mcp.
 	}
 
 	jsonResponse, err := json.MarshalIndent(access, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal response: %w", err)
+	}
+
+	return mcp.NewToolResultText(string(jsonResponse)), nil
+}
+
+// NewLinodeObjectStoragePresignedURLTool creates a tool for generating presigned URLs for objects.
+func NewLinodeObjectStoragePresignedURLTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool("linode_object_storage_presigned_url",
+		mcp.WithDescription("Generates a presigned URL for accessing an object in Object Storage. "+
+			"Use method=GET to create a download URL, method=PUT to create an upload URL."),
+		mcp.WithString("environment",
+			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		),
+		mcp.WithString("region",
+			mcp.Required(),
+			mcp.Description("Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1')"),
+		),
+		mcp.WithString("label",
+			mcp.Required(),
+			mcp.Description("The bucket label (name)"),
+		),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("The object key (path/filename within the bucket)"),
+		),
+		mcp.WithString("method",
+			mcp.Required(),
+			mcp.Description("HTTP method: 'GET' for download URL, 'PUT' for upload URL"),
+		),
+		mcp.WithNumber("expires_in",
+			mcp.Description("URL expiration in seconds (1-604800, default 3600 = 1 hour)"),
+		),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleObjectStoragePresignedURLRequest(ctx, request, cfg)
+	}
+
+	return tool, handler
+}
+
+func handleObjectStoragePresignedURLRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	environment := request.GetString("environment", "")
+	region := request.GetString("region", "")
+	label := request.GetString("label", "")
+	name := request.GetString("name", "")
+	method := request.GetString("method", "")
+	expiresIn := request.GetInt("expires_in", defaultPresignedExpiry)
+
+	if region == "" {
+		return mcp.NewToolResultError("region is required"), nil
+	}
+
+	if label == "" {
+		return mcp.NewToolResultError("label is required"), nil
+	}
+
+	if name == "" {
+		return mcp.NewToolResultError(ErrObjectNameRequired.Error()), nil
+	}
+
+	if err := validatePresignedMethod(method); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := validateExpiresIn(expiresIn); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	selectedEnv, err := selectEnvironment(cfg, environment)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := validateLinodeConfig(selectedEnv); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
+
+	req := linode.PresignedURLRequest{
+		Method:    strings.ToUpper(method),
+		Name:      name,
+		ExpiresIn: expiresIn,
+	}
+
+	result, err := client.CreatePresignedURL(ctx, region, label, req)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to generate presigned URL for '%s' in bucket '%s': %v", name, label, err)), nil
+	}
+
+	jsonResponse, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal response: %w", err)
+	}
+
+	return mcp.NewToolResultText(string(jsonResponse)), nil
+}
+
+// NewLinodeObjectStorageObjectACLGetTool creates a tool for getting an object's ACL.
+func NewLinodeObjectStorageObjectACLGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool("linode_object_storage_object_acl_get",
+		mcp.WithDescription("Gets the Access Control List (ACL) for a specific object in an Object Storage bucket"),
+		mcp.WithString("environment",
+			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		),
+		mcp.WithString("region",
+			mcp.Required(),
+			mcp.Description("Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1')"),
+		),
+		mcp.WithString("label",
+			mcp.Required(),
+			mcp.Description("The bucket label (name)"),
+		),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("The object key (path/filename within the bucket)"),
+		),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleObjectStorageObjectACLGetRequest(ctx, request, cfg)
+	}
+
+	return tool, handler
+}
+
+func handleObjectStorageObjectACLGetRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	environment := request.GetString("environment", "")
+	region := request.GetString("region", "")
+	label := request.GetString("label", "")
+	name := request.GetString("name", "")
+
+	if region == "" {
+		return mcp.NewToolResultError("region is required"), nil
+	}
+
+	if label == "" {
+		return mcp.NewToolResultError("label is required"), nil
+	}
+
+	if name == "" {
+		return mcp.NewToolResultError(ErrObjectNameRequired.Error()), nil
+	}
+
+	selectedEnv, err := selectEnvironment(cfg, environment)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := validateLinodeConfig(selectedEnv); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
+
+	acl, err := client.GetObjectACL(ctx, region, label, name)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve ACL for object '%s' in bucket '%s': %v", name, label, err)), nil
+	}
+
+	jsonResponse, err := json.MarshalIndent(acl, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal response: %w", err)
+	}
+
+	return mcp.NewToolResultText(string(jsonResponse)), nil
+}
+
+// NewLinodeObjectStorageSSLGetTool creates a tool for checking a bucket's SSL certificate status.
+func NewLinodeObjectStorageSSLGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool("linode_object_storage_ssl_get",
+		mcp.WithDescription("Checks whether an Object Storage bucket has an SSL/TLS certificate installed"),
+		mcp.WithString("environment",
+			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		),
+		mcp.WithString("region",
+			mcp.Required(),
+			mcp.Description("Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1')"),
+		),
+		mcp.WithString("label",
+			mcp.Required(),
+			mcp.Description("The bucket label (name)"),
+		),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleObjectStorageSSLGetRequest(ctx, request, cfg)
+	}
+
+	return tool, handler
+}
+
+func handleObjectStorageSSLGetRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	environment := request.GetString("environment", "")
+	region := request.GetString("region", "")
+	label := request.GetString("label", "")
+
+	if region == "" {
+		return mcp.NewToolResultError("region is required"), nil
+	}
+
+	if label == "" {
+		return mcp.NewToolResultError("label is required"), nil
+	}
+
+	selectedEnv, err := selectEnvironment(cfg, environment)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := validateLinodeConfig(selectedEnv); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
+
+	ssl, err := client.GetBucketSSL(ctx, region, label)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve SSL status for bucket '%s' in region '%s': %v", label, region, err)), nil
+	}
+
+	jsonResponse, err := json.MarshalIndent(ssl, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal response: %w", err)
 	}

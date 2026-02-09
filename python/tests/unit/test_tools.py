@@ -75,6 +75,11 @@ from linodemcp.tools import (
     handle_linode_object_storage_key_get,
     handle_linode_object_storage_key_update,
     handle_linode_object_storage_keys_list,
+    handle_linode_object_storage_object_acl_get,
+    handle_linode_object_storage_object_acl_update,
+    handle_linode_object_storage_presigned_url,
+    handle_linode_object_storage_ssl_delete,
+    handle_linode_object_storage_ssl_get,
     handle_linode_object_storage_transfer,
     handle_linode_object_storage_types_list,
     handle_linode_profile,
@@ -3351,6 +3356,332 @@ async def test_object_storage_key_delete_missing_env() -> None:
     result = list(
         await handle_linode_object_storage_key_delete(
             {"key_id": 42, "confirm": True},
+            cfg,
+        )
+    )
+
+    assert len(result) == 1
+    assert "Error" in result[0].text
+
+
+# Phase 5: Presigned URLs, Object ACL & SSL Tool Tests
+
+
+async def test_presigned_url_missing_name(
+    sample_config: Config,
+) -> None:
+    """Presigned URL should fail when name is missing."""
+    result = list(
+        await handle_linode_object_storage_presigned_url(
+            {"region": "us-east-1", "label": "my-bucket", "method": "GET"},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "name" in result[0].text
+
+
+async def test_presigned_url_invalid_method(
+    sample_config: Config,
+) -> None:
+    """Presigned URL should fail with invalid method."""
+    result = list(
+        await handle_linode_object_storage_presigned_url(
+            {
+                "region": "us-east-1",
+                "label": "my-bucket",
+                "name": "photo.jpg",
+                "method": "DELETE",
+            },
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "GET" in result[0].text
+    assert "PUT" in result[0].text
+
+
+async def test_presigned_url_invalid_expires(
+    sample_config: Config,
+) -> None:
+    """Presigned URL should fail with out of range expires_in."""
+    result = list(
+        await handle_linode_object_storage_presigned_url(
+            {
+                "region": "us-east-1",
+                "label": "my-bucket",
+                "name": "photo.jpg",
+                "method": "GET",
+                "expires_in": 700000,
+            },
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "604800" in result[0].text
+
+
+async def test_presigned_url_success(
+    sample_config: Config,
+) -> None:
+    """Presigned URL should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.create_presigned_url.return_value = {
+            "url": "https://bucket.example.com/photo.jpg?signed=abc",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_object_storage_presigned_url(
+                {
+                    "region": "us-east-1",
+                    "label": "my-bucket",
+                    "name": "photo.jpg",
+                    "method": "GET",
+                },
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "signed=abc" in result[0].text
+
+
+async def test_presigned_url_missing_env() -> None:
+    """Presigned URL should fail with missing environment."""
+    cfg = Config(environments={})
+    result = list(
+        await handle_linode_object_storage_presigned_url(
+            {
+                "region": "us-east-1",
+                "label": "my-bucket",
+                "name": "photo.jpg",
+                "method": "GET",
+            },
+            cfg,
+        )
+    )
+
+    assert len(result) == 1
+    assert "Error" in result[0].text
+
+
+async def test_object_acl_get_missing_name(
+    sample_config: Config,
+) -> None:
+    """Object ACL get should fail when name is missing."""
+    result = list(
+        await handle_linode_object_storage_object_acl_get(
+            {"region": "us-east-1", "label": "my-bucket"},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "name" in result[0].text
+
+
+async def test_object_acl_get_success(
+    sample_config: Config,
+) -> None:
+    """Object ACL get should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_object_acl.return_value = {
+            "acl": "public-read",
+            "acl_xml": "<AccessControlPolicy>...</AccessControlPolicy>",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_object_storage_object_acl_get(
+                {
+                    "region": "us-east-1",
+                    "label": "my-bucket",
+                    "name": "photo.jpg",
+                },
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "public-read" in result[0].text
+
+
+async def test_object_acl_update_confirm_required(
+    sample_config: Config,
+) -> None:
+    """Object ACL update should require confirm=true."""
+    result = list(
+        await handle_linode_object_storage_object_acl_update(
+            {
+                "region": "us-east-1",
+                "label": "my-bucket",
+                "name": "photo.jpg",
+                "acl": "public-read",
+                "confirm": False,
+            },
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_object_acl_update_invalid_acl(
+    sample_config: Config,
+) -> None:
+    """Object ACL update should fail with invalid ACL."""
+    result = list(
+        await handle_linode_object_storage_object_acl_update(
+            {
+                "region": "us-east-1",
+                "label": "my-bucket",
+                "name": "photo.jpg",
+                "acl": "invalid-acl",
+                "confirm": True,
+            },
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "acl must be one of" in result[0].text
+
+
+async def test_object_acl_update_success(
+    sample_config: Config,
+) -> None:
+    """Object ACL update should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.update_object_acl.return_value = {
+            "acl": "public-read",
+            "acl_xml": "<AccessControlPolicy>...</AccessControlPolicy>",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_object_storage_object_acl_update(
+                {
+                    "region": "us-east-1",
+                    "label": "my-bucket",
+                    "name": "photo.jpg",
+                    "acl": "public-read",
+                    "confirm": True,
+                },
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "public-read" in result[0].text
+
+
+async def test_ssl_get_success(
+    sample_config: Config,
+) -> None:
+    """SSL get should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_bucket_ssl.return_value = {
+            "ssl": True,
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_object_storage_ssl_get(
+                {"region": "us-east-1", "label": "my-bucket"},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "true" in result[0].text
+
+
+async def test_ssl_get_missing_env() -> None:
+    """SSL get should fail with missing environment."""
+    cfg = Config(environments={})
+    result = list(
+        await handle_linode_object_storage_ssl_get(
+            {"region": "us-east-1", "label": "my-bucket"},
+            cfg,
+        )
+    )
+
+    assert len(result) == 1
+    assert "Error" in result[0].text
+
+
+async def test_ssl_delete_confirm_required(
+    sample_config: Config,
+) -> None:
+    """SSL delete should require confirm=true."""
+    result = list(
+        await handle_linode_object_storage_ssl_delete(
+            {
+                "region": "us-east-1",
+                "label": "my-bucket",
+                "confirm": False,
+            },
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_ssl_delete_success(
+    sample_config: Config,
+) -> None:
+    """SSL delete should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.delete_bucket_ssl.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_object_storage_ssl_delete(
+                {
+                    "region": "us-east-1",
+                    "label": "my-bucket",
+                    "confirm": True,
+                },
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "SSL certificate deleted" in result[0].text
+
+
+async def test_ssl_delete_missing_env() -> None:
+    """SSL delete should fail with missing environment."""
+    cfg = Config(environments={})
+    result = list(
+        await handle_linode_object_storage_ssl_delete(
+            {
+                "region": "us-east-1",
+                "label": "my-bucket",
+                "confirm": True,
+            },
             cfg,
         )
     )

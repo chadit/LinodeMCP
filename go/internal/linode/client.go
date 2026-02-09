@@ -103,6 +103,13 @@ type ClientInterface interface {
 	CreateObjectStorageKey(ctx context.Context, req CreateObjectStorageKeyRequest) (*ObjectStorageKey, error)
 	UpdateObjectStorageKey(ctx context.Context, keyID int, req UpdateObjectStorageKeyRequest) error
 	DeleteObjectStorageKey(ctx context.Context, keyID int) error
+
+	// Stage 5 Phase 5: Presigned URLs, Object ACL, and SSL.
+	CreatePresignedURL(ctx context.Context, region, label string, req PresignedURLRequest) (*PresignedURLResponse, error)
+	GetObjectACL(ctx context.Context, region, label, name string) (*ObjectACL, error)
+	UpdateObjectACL(ctx context.Context, region, label string, req ObjectACLUpdateRequest) (*ObjectACL, error)
+	GetBucketSSL(ctx context.Context, region, label string) (*BucketSSL, error)
+	DeleteBucketSSL(ctx context.Context, region, label string) error
 }
 
 // Profile represents a Linode user profile.
@@ -650,6 +657,35 @@ type CreateObjectStorageKeyRequest struct {
 type UpdateObjectStorageKeyRequest struct {
 	Label        string                         `json:"label,omitempty"`
 	BucketAccess []ObjectStorageKeyBucketAccess `json:"bucket_access,omitempty"` //nolint:tagliatelle // Linode API snake_case
+}
+
+// PresignedURLRequest represents the request body for generating a presigned URL.
+type PresignedURLRequest struct {
+	Method    string `json:"method"`
+	Name      string `json:"name"`
+	ExpiresIn int    `json:"expires_in"` //nolint:tagliatelle // Linode API snake_case
+}
+
+// PresignedURLResponse represents the response from generating a presigned URL.
+type PresignedURLResponse struct {
+	URL string `json:"url"`
+}
+
+// ObjectACL represents the ACL of an object in Object Storage.
+type ObjectACL struct {
+	ACL    string `json:"acl"`
+	ACLXml string `json:"acl_xml"` //nolint:tagliatelle // Linode API snake_case
+}
+
+// ObjectACLUpdateRequest represents the request body for updating an object's ACL.
+type ObjectACLUpdateRequest struct {
+	ACL  string `json:"acl"`
+	Name string `json:"name"`
+}
+
+// BucketSSL represents the SSL/TLS certificate status for an Object Storage bucket.
+type BucketSSL struct {
+	SSL bool `json:"ssl"`
 }
 
 // ObjectStorageKey represents a Linode Object Storage access key.
@@ -1975,6 +2011,111 @@ func (c *Client) DeleteObjectStorageKey(ctx context.Context, keyID int) error {
 	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
 	if err != nil {
 		return &NetworkError{Operation: "DeleteObjectStorageKey", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	return c.handleResponse(resp, nil)
+}
+
+// CreatePresignedURL generates a presigned URL for an object in Object Storage.
+func (c *Client) CreatePresignedURL(ctx context.Context, region, label string, req PresignedURLRequest) (*PresignedURLResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/object-storage/buckets/%s/%s/object-url", region, label)
+
+	resp, err := c.makeJSONRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreatePresignedURL", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var result PresignedURLResponse
+	if err := c.handleResponse(resp, &result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+// GetObjectACL retrieves the ACL of an object in Object Storage.
+func (c *Client) GetObjectACL(ctx context.Context, region, label, name string) (*ObjectACL, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/object-storage/buckets/%s/%s/object-acl?name=%s", region, label, name)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetObjectACL", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var result ObjectACL
+	if err := c.handleResponse(resp, &result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+// UpdateObjectACL updates the ACL of an object in Object Storage.
+func (c *Client) UpdateObjectACL(ctx context.Context, region, label string, req ObjectACLUpdateRequest) (*ObjectACL, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/object-storage/buckets/%s/%s/object-acl", region, label)
+
+	resp, err := c.makeJSONRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateObjectACL", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var result ObjectACL
+	if err := c.handleResponse(resp, &result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+// GetBucketSSL retrieves the SSL/TLS certificate status for an Object Storage bucket.
+func (c *Client) GetBucketSSL(ctx context.Context, region, label string) (*BucketSSL, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/object-storage/buckets/%s/%s/ssl", region, label)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetBucketSSL", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var result BucketSSL
+	if err := c.handleResponse(resp, &result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+// DeleteBucketSSL deletes the SSL/TLS certificate from an Object Storage bucket.
+func (c *Client) DeleteBucketSSL(ctx context.Context, region, label string) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/object-storage/buckets/%s/%s/ssl", region, label)
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteBucketSSL", Err: err}
 	}
 
 	defer func() { _ = resp.Body.Close() }()

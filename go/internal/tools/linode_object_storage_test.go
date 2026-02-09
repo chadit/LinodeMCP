@@ -1784,3 +1784,586 @@ func TestLinodeObjectStorageKeyDeleteTool_MissingEnvironment(t *testing.T) {
 	require.NotNil(t, result)
 	assert.True(t, result.IsError)
 }
+
+// Phase 5: Presigned URL tests.
+
+func TestNewLinodeObjectStoragePresignedURLTool_ToolDefinition(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	tool, handler := tools.NewLinodeObjectStoragePresignedURLTool(cfg)
+
+	assert.Equal(t, "linode_object_storage_presigned_url", tool.Name)
+	assert.NotEmpty(t, tool.Description)
+	assert.NotNil(t, handler)
+
+	props := tool.InputSchema.Properties
+	assert.Contains(t, props, "region")
+	assert.Contains(t, props, "label")
+	assert.Contains(t, props, "name")
+	assert.Contains(t, props, "method")
+	assert.Contains(t, props, "expires_in")
+}
+
+func TestLinodeObjectStoragePresignedURLTool_MissingName(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStoragePresignedURLTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"region": "us-east-1",
+		"label":  "my-bucket",
+		"method": "GET",
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, "name")
+}
+
+func TestLinodeObjectStoragePresignedURLTool_InvalidMethod(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStoragePresignedURLTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"region": "us-east-1",
+		"label":  "my-bucket",
+		"name":   "photo.jpg",
+		"method": "DELETE",
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, "GET")
+	assert.Contains(t, textContent.Text, "PUT")
+}
+
+func TestLinodeObjectStoragePresignedURLTool_InvalidExpiresIn(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStoragePresignedURLTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"region":     "us-east-1",
+		"label":      "my-bucket",
+		"name":       "photo.jpg",
+		"method":     "GET",
+		"expires_in": float64(700000),
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, "604800")
+}
+
+func TestLinodeObjectStoragePresignedURLTool_Success(t *testing.T) {
+	t.Parallel()
+
+	resp := linode.PresignedURLResponse{
+		URL: "https://my-bucket.us-east-1.linodeobjects.com/photo.jpg?signed=abc123",
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/object-url", r.URL.Path)
+		assert.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStoragePresignedURLTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"region": "us-east-1",
+		"label":  "my-bucket",
+		"name":   "photo.jpg",
+		"method": "GET",
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.IsError)
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, "signed=abc123")
+}
+
+func TestLinodeObjectStoragePresignedURLTool_MissingEnvironment(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{},
+	}
+	_, handler := tools.NewLinodeObjectStoragePresignedURLTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"region": "us-east-1",
+		"label":  "my-bucket",
+		"name":   "photo.jpg",
+		"method": "GET",
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+}
+
+// Phase 5: Object ACL Get tests.
+
+func TestNewLinodeObjectStorageObjectACLGetTool_ToolDefinition(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	tool, handler := tools.NewLinodeObjectStorageObjectACLGetTool(cfg)
+
+	assert.Equal(t, "linode_object_storage_object_acl_get", tool.Name)
+	assert.NotEmpty(t, tool.Description)
+	assert.NotNil(t, handler)
+
+	props := tool.InputSchema.Properties
+	assert.Contains(t, props, "region")
+	assert.Contains(t, props, "label")
+	assert.Contains(t, props, "name")
+}
+
+func TestLinodeObjectStorageObjectACLGetTool_MissingName(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageObjectACLGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"region": "us-east-1",
+		"label":  "my-bucket",
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, "name")
+}
+
+func TestLinodeObjectStorageObjectACLGetTool_Success(t *testing.T) {
+	t.Parallel()
+
+	acl := linode.ObjectACL{
+		ACL:    "public-read",
+		ACLXml: "<AccessControlPolicy>...</AccessControlPolicy>",
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/object-acl", r.URL.Path)
+		assert.Equal(t, "photo.jpg", r.URL.Query().Get("name"))
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(acl))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageObjectACLGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"region": "us-east-1",
+		"label":  "my-bucket",
+		"name":   "photo.jpg",
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.IsError)
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, "public-read")
+}
+
+// Phase 5: Object ACL Update tests.
+
+func TestNewLinodeObjectStorageObjectACLUpdateTool_ToolDefinition(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	tool, handler := tools.NewLinodeObjectStorageObjectACLUpdateTool(cfg)
+
+	assert.Equal(t, "linode_object_storage_object_acl_update", tool.Name)
+	assert.NotEmpty(t, tool.Description)
+	assert.NotNil(t, handler)
+
+	props := tool.InputSchema.Properties
+	assert.Contains(t, props, "region")
+	assert.Contains(t, props, "label")
+	assert.Contains(t, props, "name")
+	assert.Contains(t, props, "acl")
+	assert.Contains(t, props, "confirm")
+}
+
+func TestLinodeObjectStorageObjectACLUpdateTool_ConfirmRequired(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	_, handler := tools.NewLinodeObjectStorageObjectACLUpdateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"region":  "us-east-1",
+		"label":   "my-bucket",
+		"name":    "photo.jpg",
+		"acl":     "public-read",
+		"confirm": false,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, "confirm=true")
+}
+
+func TestLinodeObjectStorageObjectACLUpdateTool_MissingName(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageObjectACLUpdateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"region":  "us-east-1",
+		"label":   "my-bucket",
+		"acl":     "public-read",
+		"confirm": true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, "name")
+}
+
+func TestLinodeObjectStorageObjectACLUpdateTool_InvalidACL(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageObjectACLUpdateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"region":  "us-east-1",
+		"label":   "my-bucket",
+		"name":    "photo.jpg",
+		"acl":     "invalid-acl",
+		"confirm": true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, "acl must be one of")
+}
+
+func TestLinodeObjectStorageObjectACLUpdateTool_Success(t *testing.T) {
+	t.Parallel()
+
+	resp := linode.ObjectACL{
+		ACL:    "public-read",
+		ACLXml: "<AccessControlPolicy>...</AccessControlPolicy>",
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/object-acl", r.URL.Path)
+		assert.Equal(t, http.MethodPut, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageObjectACLUpdateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"region":  "us-east-1",
+		"label":   "my-bucket",
+		"name":    "photo.jpg",
+		"acl":     "public-read",
+		"confirm": true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.IsError)
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, "public-read")
+}
+
+// Phase 5: SSL Get tests.
+
+func TestNewLinodeObjectStorageSSLGetTool_ToolDefinition(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	tool, handler := tools.NewLinodeObjectStorageSSLGetTool(cfg)
+
+	assert.Equal(t, "linode_object_storage_ssl_get", tool.Name)
+	assert.NotEmpty(t, tool.Description)
+	assert.NotNil(t, handler)
+
+	props := tool.InputSchema.Properties
+	assert.Contains(t, props, "region")
+	assert.Contains(t, props, "label")
+}
+
+func TestLinodeObjectStorageSSLGetTool_Success(t *testing.T) {
+	t.Parallel()
+
+	resp := linode.BucketSSL{
+		SSL: true,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/ssl", r.URL.Path)
+		assert.Equal(t, http.MethodGet, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageSSLGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"region": "us-east-1",
+		"label":  "my-bucket",
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.IsError)
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, "true")
+}
+
+func TestLinodeObjectStorageSSLGetTool_MissingEnvironment(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{},
+	}
+	_, handler := tools.NewLinodeObjectStorageSSLGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"region": "us-east-1",
+		"label":  "my-bucket",
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+}
+
+// Phase 5: SSL Delete tests.
+
+func TestNewLinodeObjectStorageSSLDeleteTool_ToolDefinition(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	tool, handler := tools.NewLinodeObjectStorageSSLDeleteTool(cfg)
+
+	assert.Equal(t, "linode_object_storage_ssl_delete", tool.Name)
+	assert.NotEmpty(t, tool.Description)
+	assert.NotNil(t, handler)
+
+	props := tool.InputSchema.Properties
+	assert.Contains(t, props, "region")
+	assert.Contains(t, props, "label")
+	assert.Contains(t, props, "confirm")
+}
+
+func TestLinodeObjectStorageSSLDeleteTool_ConfirmRequired(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	_, handler := tools.NewLinodeObjectStorageSSLDeleteTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"region":  "us-east-1",
+		"label":   "my-bucket",
+		"confirm": false,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, "confirm=true")
+}
+
+func TestLinodeObjectStorageSSLDeleteTool_Success(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/ssl", r.URL.Path)
+		assert.Equal(t, http.MethodDelete, r.Method)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageSSLDeleteTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"region":  "us-east-1",
+		"label":   "my-bucket",
+		"confirm": true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.IsError)
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, "SSL certificate deleted")
+}
+
+func TestLinodeObjectStorageSSLDeleteTool_MissingEnvironment(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{},
+	}
+	_, handler := tools.NewLinodeObjectStorageSSLDeleteTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"region":  "us-east-1",
+		"label":   "my-bucket",
+		"confirm": true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+}

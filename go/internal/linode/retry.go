@@ -809,6 +809,73 @@ func (rc *RetryableClient) DeleteObjectStorageKey(ctx context.Context, keyID int
 	})
 }
 
+// CreatePresignedURL generates a presigned URL with automatic retry.
+func (rc *RetryableClient) CreatePresignedURL(ctx context.Context, region, label string, req PresignedURLRequest) (*PresignedURLResponse, error) {
+	var result *PresignedURLResponse
+
+	err := rc.executeWithRetry(ctx, "CreatePresignedURL", func() error {
+		var retryErr error
+
+		result, retryErr = rc.Client.CreatePresignedURL(ctx, region, label, req)
+
+		return retryErr
+	})
+
+	return result, err
+}
+
+// GetObjectACL retrieves an object's ACL with automatic retry.
+func (rc *RetryableClient) GetObjectACL(ctx context.Context, region, label, name string) (*ObjectACL, error) {
+	var result *ObjectACL
+
+	err := rc.executeWithRetry(ctx, "GetObjectACL", func() error {
+		var retryErr error
+
+		result, retryErr = rc.Client.GetObjectACL(ctx, region, label, name)
+
+		return retryErr
+	})
+
+	return result, err
+}
+
+// UpdateObjectACL updates an object's ACL with automatic retry.
+func (rc *RetryableClient) UpdateObjectACL(ctx context.Context, region, label string, req ObjectACLUpdateRequest) (*ObjectACL, error) {
+	var result *ObjectACL
+
+	err := rc.executeWithRetry(ctx, "UpdateObjectACL", func() error {
+		var retryErr error
+
+		result, retryErr = rc.Client.UpdateObjectACL(ctx, region, label, req)
+
+		return retryErr
+	})
+
+	return result, err
+}
+
+// GetBucketSSL retrieves a bucket's SSL status with automatic retry.
+func (rc *RetryableClient) GetBucketSSL(ctx context.Context, region, label string) (*BucketSSL, error) {
+	var result *BucketSSL
+
+	err := rc.executeWithRetry(ctx, "GetBucketSSL", func() error {
+		var retryErr error
+
+		result, retryErr = rc.Client.GetBucketSSL(ctx, region, label)
+
+		return retryErr
+	})
+
+	return result, err
+}
+
+// DeleteBucketSSL removes a bucket's SSL certificate with automatic retry.
+func (rc *RetryableClient) DeleteBucketSSL(ctx context.Context, region, label string) error {
+	return rc.executeWithRetry(ctx, "DeleteBucketSSL", func() error {
+		return rc.Client.DeleteBucketSSL(ctx, region, label)
+	})
+}
+
 func (rc *RetryableClient) executeWithRetry(ctx context.Context, _ string, fn func() error) error {
 	var lastErr error
 

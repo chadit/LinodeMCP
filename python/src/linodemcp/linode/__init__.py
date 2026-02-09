@@ -1022,6 +1022,88 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("DeleteObjectStorageKey", e) from e
 
+    # Stage 5 Phase 5: Presigned URLs, Object ACL, and SSL.
+
+    async def create_presigned_url(
+        self,
+        region: str,
+        label: str,
+        name: str,
+        method: str,
+        expires_in: int = 3600,
+    ) -> dict[str, Any]:
+        """Generate a presigned URL for an object."""
+        endpoint = (
+            f"/object-storage/buckets/{region}/{label}/object-url"
+        )
+        body: dict[str, Any] = {
+            "method": method,
+            "name": name,
+            "expires_in": expires_in,
+        }
+        try:
+            response = await self._make_request(
+                "POST", endpoint, body
+            )
+            return dict(response.json())
+        except httpx.HTTPError as e:
+            raise NetworkError("CreatePresignedURL", e) from e
+
+    async def get_object_acl(
+        self, region: str, label: str, name: str
+    ) -> dict[str, Any]:
+        """Get the ACL for an object in Object Storage."""
+        endpoint = (
+            f"/object-storage/buckets/{region}/{label}"
+            f"/object-acl?name={name}"
+        )
+        try:
+            response = await self._make_request("GET", endpoint)
+            return dict(response.json())
+        except httpx.HTTPError as e:
+            raise NetworkError("GetObjectACL", e) from e
+
+    async def update_object_acl(
+        self, region: str, label: str, name: str, acl: str
+    ) -> dict[str, Any]:
+        """Update the ACL for an object in Object Storage."""
+        endpoint = (
+            f"/object-storage/buckets/{region}/{label}/object-acl"
+        )
+        body = {"acl": acl, "name": name}
+        try:
+            response = await self._make_request(
+                "PUT", endpoint, body
+            )
+            return dict(response.json())
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateObjectACL", e) from e
+
+    async def get_bucket_ssl(
+        self, region: str, label: str
+    ) -> dict[str, Any]:
+        """Get the SSL/TLS certificate status for a bucket."""
+        endpoint = (
+            f"/object-storage/buckets/{region}/{label}/ssl"
+        )
+        try:
+            response = await self._make_request("GET", endpoint)
+            return dict(response.json())
+        except httpx.HTTPError as e:
+            raise NetworkError("GetBucketSSL", e) from e
+
+    async def delete_bucket_ssl(
+        self, region: str, label: str
+    ) -> None:
+        """Delete the SSL/TLS certificate from a bucket."""
+        endpoint = (
+            f"/object-storage/buckets/{region}/{label}/ssl"
+        )
+        try:
+            await self._make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteBucketSSL", e) from e
+
     # Stage 4: Write operations
 
     async def create_ssh_key(self, label: str, ssh_key: str) -> SSHKey:
@@ -2548,6 +2630,60 @@ class RetryableClient:
         """Delete Object Storage access key with retry."""
         await self._execute_with_retry(
             self.client.delete_object_storage_key, key_id
+        )
+
+    async def create_presigned_url(
+        self,
+        region: str,
+        label: str,
+        name: str,
+        method: str,
+        expires_in: int = 3600,
+    ) -> dict[str, Any]:
+        """Generate presigned URL with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.create_presigned_url,
+            region,
+            label,
+            name,
+            method,
+            expires_in,
+        )
+        return result
+
+    async def get_object_acl(
+        self, region: str, label: str, name: str
+    ) -> dict[str, Any]:
+        """Get object ACL with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_object_acl, region, label, name
+        )
+        return result
+
+    async def update_object_acl(
+        self, region: str, label: str, name: str, acl: str
+    ) -> dict[str, Any]:
+        """Update object ACL with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.update_object_acl, region, label, name, acl
+        )
+        return result
+
+    async def get_bucket_ssl(
+        self, region: str, label: str
+    ) -> dict[str, Any]:
+        """Get bucket SSL status with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_bucket_ssl, region, label
+        )
+        return result
+
+    async def delete_bucket_ssl(
+        self, region: str, label: str
+    ) -> None:
+        """Delete bucket SSL certificate with retry."""
+        await self._execute_with_retry(
+            self.client.delete_bucket_ssl, region, label
         )
 
     # Stage 4: Write operations with retry

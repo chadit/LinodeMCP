@@ -331,4 +331,25 @@ func (s *Server) registerTools() {
 	objKeyDeleteTool, objKeyDeleteHandler := tools.NewLinodeObjectStorageKeyDeleteTool(s.config)
 	s.mcp.AddTool(objKeyDeleteTool, objKeyDeleteHandler)
 	s.tools = append(s.tools, &toolWrapper{tool: objKeyDeleteTool})
+
+	// Stage 5 Phase 5: Presigned URLs, Object ACL, and SSL.
+	presignedURLTool, presignedURLHandler := tools.NewLinodeObjectStoragePresignedURLTool(s.config)
+	s.mcp.AddTool(presignedURLTool, presignedURLHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: presignedURLTool})
+
+	objectACLGetTool, objectACLGetHandler := tools.NewLinodeObjectStorageObjectACLGetTool(s.config)
+	s.mcp.AddTool(objectACLGetTool, objectACLGetHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: objectACLGetTool})
+
+	objectACLUpdateTool, objectACLUpdateHandler := tools.NewLinodeObjectStorageObjectACLUpdateTool(s.config)
+	s.mcp.AddTool(objectACLUpdateTool, objectACLUpdateHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: objectACLUpdateTool})
+
+	sslGetTool, sslGetHandler := tools.NewLinodeObjectStorageSSLGetTool(s.config)
+	s.mcp.AddTool(sslGetTool, sslGetHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: sslGetTool})
+
+	sslDeleteTool, sslDeleteHandler := tools.NewLinodeObjectStorageSSLDeleteTool(s.config)
+	s.mcp.AddTool(sslDeleteTool, sslDeleteHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: sslDeleteTool})
 }

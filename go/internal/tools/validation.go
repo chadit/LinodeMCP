@@ -265,6 +265,36 @@ var (
 	ErrKeyBucketRegionRequired = errors.New("bucket_access entries must include region")
 )
 
+// Presigned URL validation errors.
+var (
+	ErrPresignedMethodInvalid  = errors.New("method must be 'GET' or 'PUT'")
+	ErrPresignedExpiresInvalid = errors.New("expires_in must be between 1 and 604800 seconds (7 days)")
+	ErrObjectNameRequired      = errors.New("name (object key) is required")
+)
+
+// Presigned URL validation constants.
+const (
+	minExpiresIn = 1
+	maxExpiresIn = 604800
+)
+
+func validatePresignedMethod(method string) error {
+	upper := strings.ToUpper(method)
+	if upper != "GET" && upper != "PUT" {
+		return fmt.Errorf("got '%s': %w", method, ErrPresignedMethodInvalid)
+	}
+
+	return nil
+}
+
+func validateExpiresIn(expiresIn int) error {
+	if expiresIn < minExpiresIn || expiresIn > maxExpiresIn {
+		return fmt.Errorf("got %d: %w", expiresIn, ErrPresignedExpiresInvalid)
+	}
+
+	return nil
+}
+
 // Object Storage access key label validation.
 func validateKeyLabel(label string) error {
 	if label == "" {

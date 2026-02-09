@@ -562,6 +562,180 @@ func handleObjectStorageKeyDeleteRequest(ctx context.Context, request mcp.CallTo
 	return mcp.NewToolResultText(string(jsonResponse)), nil
 }
 
+// NewLinodeObjectStorageObjectACLUpdateTool creates a tool for updating an object's ACL.
+func NewLinodeObjectStorageObjectACLUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool("linode_object_storage_object_acl_update",
+		mcp.WithDescription("Updates the Access Control List (ACL) for a specific object in an Object Storage bucket. "+
+			"Requires confirm=true to proceed."),
+		mcp.WithString("environment",
+			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		),
+		mcp.WithString("region",
+			mcp.Required(),
+			mcp.Description("Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1')"),
+		),
+		mcp.WithString("label",
+			mcp.Required(),
+			mcp.Description("The bucket label (name)"),
+		),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("The object key (path/filename within the bucket)"),
+		),
+		mcp.WithString("acl",
+			mcp.Required(),
+			mcp.Description("ACL to set: 'private', 'public-read', 'authenticated-read', or 'public-read-write'"),
+		),
+		mcp.WithBoolean("confirm",
+			mcp.Required(),
+			mcp.Description("Must be true to proceed. This modifies the object's access permissions."),
+		),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleObjectStorageObjectACLUpdateRequest(ctx, request, cfg)
+	}
+
+	return tool, handler
+}
+
+func handleObjectStorageObjectACLUpdateRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	confirm := request.GetBool("confirm", false)
+	if !confirm {
+		return mcp.NewToolResultError("This modifies the object's access permissions. Set confirm=true to proceed."), nil
+	}
+
+	environment := request.GetString("environment", "")
+	region := request.GetString("region", "")
+	label := request.GetString("label", "")
+	name := request.GetString("name", "")
+	acl := request.GetString("acl", "")
+
+	if region == "" {
+		return mcp.NewToolResultError("region is required"), nil
+	}
+
+	if label == "" {
+		return mcp.NewToolResultError("label is required"), nil
+	}
+
+	if name == "" {
+		return mcp.NewToolResultError(ErrObjectNameRequired.Error()), nil
+	}
+
+	if err := validateBucketACL(acl); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	selectedEnv, err := selectEnvironment(cfg, environment)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := validateLinodeConfig(selectedEnv); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
+
+	req := linode.ObjectACLUpdateRequest{
+		ACL:  acl,
+		Name: name,
+	}
+
+	result, err := client.UpdateObjectACL(ctx, region, label, req)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to update ACL for object '%s' in bucket '%s': %v", name, label, err)), nil
+	}
+
+	jsonResponse, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal response: %w", err)
+	}
+
+	return mcp.NewToolResultText(string(jsonResponse)), nil
+}
+
+// NewLinodeObjectStorageSSLDeleteTool creates a tool for deleting a bucket's SSL certificate.
+func NewLinodeObjectStorageSSLDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool("linode_object_storage_ssl_delete",
+		mcp.WithDescription("Deletes the SSL/TLS certificate from an Object Storage bucket. "+
+			"Requires confirm=true to proceed."),
+		mcp.WithString("environment",
+			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		),
+		mcp.WithString("region",
+			mcp.Required(),
+			mcp.Description("Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1')"),
+		),
+		mcp.WithString("label",
+			mcp.Required(),
+			mcp.Description("The bucket label (name)"),
+		),
+		mcp.WithBoolean("confirm",
+			mcp.Required(),
+			mcp.Description("Must be true to proceed. This removes the SSL certificate from the bucket."),
+		),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleObjectStorageSSLDeleteRequest(ctx, request, cfg)
+	}
+
+	return tool, handler
+}
+
+func handleObjectStorageSSLDeleteRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	confirm := request.GetBool("confirm", false)
+	if !confirm {
+		return mcp.NewToolResultError("This removes the SSL certificate from the bucket. Set confirm=true to proceed."), nil
+	}
+
+	environment := request.GetString("environment", "")
+	region := request.GetString("region", "")
+	label := request.GetString("label", "")
+
+	if region == "" {
+		return mcp.NewToolResultError("region is required"), nil
+	}
+
+	if label == "" {
+		return mcp.NewToolResultError("label is required"), nil
+	}
+
+	selectedEnv, err := selectEnvironment(cfg, environment)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := validateLinodeConfig(selectedEnv); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
+
+	if err := client.DeleteBucketSSL(ctx, region, label); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to delete SSL certificate for bucket '%s' in region '%s': %v", label, region, err)), nil
+	}
+
+	response := struct {
+		Message string `json:"message"`
+		Region  string `json:"region"`
+		Bucket  string `json:"bucket"`
+	}{
+		Message: fmt.Sprintf("SSL certificate deleted from bucket '%s' in region '%s'", label, region),
+		Region:  region,
+		Bucket:  label,
+	}
+
+	jsonResponse, err := json.MarshalIndent(response, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal response: %w", err)
+	}
+
+	return mcp.NewToolResultText(string(jsonResponse)), nil
+}
+
 // validateBucketAccessEntries validates each entry in a bucket_access array.
 func validateBucketAccessEntries(entries []linode.ObjectStorageKeyBucketAccess) error {
 	for i, entry := range entries {
