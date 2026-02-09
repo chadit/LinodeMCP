@@ -6,7 +6,7 @@ An MCP (Model Context Protocol) server that gives AI assistants like Claude prog
 
 LinodeMCP exposes Linode API operations as MCP tools. AI assistants can use these tools to query and manage your Linode infrastructure -- all through a standard protocol.
 
-### Available Tools (43 total)
+### Available Tools (63 total)
 
 **Core Tools:**
 | Tool | Description |
@@ -45,6 +45,30 @@ LinodeMCP exposes Linode API operations as MCP tools. AI assistants can use thes
 | `linode_volume_detach` | Detaches a volume from an instance |
 | `linode_volume_resize` | Resizes a volume, expand only (confirm required) |
 | `linode_volume_delete` | Deletes a block storage volume (confirm required) |
+
+**Object Storage:**
+| Tool | Description |
+|------|-------------|
+| `linode_object_storage_buckets_list` | Lists all Object Storage buckets |
+| `linode_object_storage_bucket_get` | Gets detailed info about a specific bucket |
+| `linode_object_storage_bucket_contents` | Lists objects in a bucket with prefix/marker/delimiter filtering |
+| `linode_object_storage_bucket_create` | Creates a new Object Storage bucket (confirm required) |
+| `linode_object_storage_bucket_delete` | Deletes an Object Storage bucket (confirm required) |
+| `linode_object_storage_bucket_access_get` | Gets bucket ACL and CORS settings |
+| `linode_object_storage_bucket_access_update` | Updates bucket ACL and CORS settings (confirm required) |
+| `linode_object_storage_clusters_list` | Lists Object Storage cluster endpoints |
+| `linode_object_storage_type_list` | Lists Object Storage pricing types |
+| `linode_object_storage_keys_list` | Lists Object Storage access keys |
+| `linode_object_storage_key_get` | Gets detailed info about a specific access key |
+| `linode_object_storage_key_create` | Creates a new access key (confirm required, secret shown once) |
+| `linode_object_storage_key_update` | Updates access key label or bucket permissions (confirm required) |
+| `linode_object_storage_key_delete` | Revokes an access key permanently (confirm required) |
+| `linode_object_storage_transfer` | Gets Object Storage transfer usage |
+| `linode_object_storage_presigned_url` | Generates a presigned URL for object download or upload |
+| `linode_object_storage_object_acl_get` | Gets the ACL for a specific object |
+| `linode_object_storage_object_acl_update` | Updates an object's ACL (confirm required) |
+| `linode_object_storage_ssl_get` | Checks if a bucket has an SSL certificate |
+| `linode_object_storage_ssl_delete` | Removes a bucket's SSL certificate (confirm required) |
 
 **Networking:**
 | Tool | Description |
@@ -294,7 +318,7 @@ LinodeMCP/
 
 ## Status
 
-This project is in active development (v0.1.0). The foundation is complete with config management, API client, retry logic, and 43 tools covering compute, storage, networking, DNS, and security resources. Both read and write operations are fully implemented across Go and Python.
+This project is in active development (v0.1.0). The foundation is complete with config management, API client, retry logic, and 63 tools covering compute, block storage, object storage, networking, DNS, and security resources. Both read and write operations are fully implemented across Go and Python.
 
 ## License
 
