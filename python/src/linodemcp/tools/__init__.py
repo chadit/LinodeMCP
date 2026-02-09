@@ -60,7 +60,10 @@ __all__ = [
     "create_linode_object_storage_bucket_get_tool",
     "create_linode_object_storage_buckets_list_tool",
     "create_linode_object_storage_clusters_list_tool",
+    "create_linode_object_storage_key_create_tool",
+    "create_linode_object_storage_key_delete_tool",
     "create_linode_object_storage_key_get_tool",
+    "create_linode_object_storage_key_update_tool",
     "create_linode_object_storage_keys_list_tool",
     "create_linode_object_storage_transfer_tool",
     "create_linode_object_storage_types_list_tool",
@@ -115,7 +118,10 @@ __all__ = [
     "handle_linode_object_storage_bucket_get",
     "handle_linode_object_storage_buckets_list",
     "handle_linode_object_storage_clusters_list",
+    "handle_linode_object_storage_key_create",
+    "handle_linode_object_storage_key_delete",
     "handle_linode_object_storage_key_get",
+    "handle_linode_object_storage_key_update",
     "handle_linode_object_storage_keys_list",
     "handle_linode_object_storage_transfer",
     "handle_linode_object_storage_types_list",
@@ -2651,6 +2657,425 @@ async def handle_linode_object_storage_bucket_access_update(
                     "Failed to update bucket access"
                     f" settings: {e}"
                 ),
+            )
+        ]
+
+
+# Stage 5 Phase 4: Object Storage access key write operations
+
+_MAX_KEY_LABEL_LENGTH = 50
+_VALID_KEY_PERMISSIONS = {"read_only", "read_write"}
+
+
+def _validate_key_label(label: str) -> str | None:
+    """Validate access key label. Returns error message or None."""
+    if not label:
+        return "label is required"
+    if len(label) > _MAX_KEY_LABEL_LENGTH:
+        return "access key label must not exceed 50 characters"
+    return None
+
+
+def _validate_bucket_access_entries(
+    entries: list[dict[str, str]],
+) -> str | None:
+    """Validate bucket_access entries. Returns error message or None."""
+    for i, entry in enumerate(entries):
+        if not entry.get("bucket_name", "").strip():
+            return f"entry {i}: bucket_access entries must include bucket_name"
+        if not entry.get("region", "").strip():
+            return f"entry {i}: bucket_access entries must include region"
+        perms = entry.get("permissions", "")
+        if perms not in _VALID_KEY_PERMISSIONS:
+            return (
+                f"entry {i}: bucket_access permissions must be"
+                f" 'read_only' or 'read_write', got '{perms}'"
+            )
+    return None
+
+
+def create_linode_object_storage_key_create_tool() -> Tool:
+    """Create the linode_object_storage_key_create tool."""
+    return Tool(
+        name="linode_object_storage_key_create",
+        description=(
+            "Creates a new Object Storage access key."
+            " WARNING: The secret_key is only shown ONCE"
+            " in the response and cannot be retrieved later."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use"
+                        " (optional, defaults to 'default')"
+                    ),
+                },
+                "label": {
+                    "type": "string",
+                    "description": (
+                        "Label for the access key (max 50 characters)"
+                    ),
+                },
+                "bucket_access": {
+                    "type": "string",
+                    "description": (
+                        "JSON array of bucket permissions:"
+                        ' [{"bucket_name": "name", "region":'
+                        ' "region", "permissions":'
+                        ' "read_only|read_write"}].'
+                        " Omit for unrestricted access."
+                    ),
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be set to true."
+                        " The secret_key is only shown ONCE."
+                    ),
+                },
+            },
+            "required": ["label", "confirm"],
+        },
+    )
+
+
+def create_linode_object_storage_key_update_tool() -> Tool:
+    """Create the linode_object_storage_key_update tool."""
+    return Tool(
+        name="linode_object_storage_key_update",
+        description=(
+            "Updates an Object Storage access key's"
+            " label or bucket permissions."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use"
+                        " (optional, defaults to 'default')"
+                    ),
+                },
+                "key_id": {
+                    "type": "number",
+                    "description": "ID of the access key to update",
+                },
+                "label": {
+                    "type": "string",
+                    "description": (
+                        "New label for the access key"
+                        " (max 50 characters)"
+                    ),
+                },
+                "bucket_access": {
+                    "type": "string",
+                    "description": (
+                        "JSON array of bucket permissions:"
+                        ' [{"bucket_name": "name", "region":'
+                        ' "region", "permissions":'
+                        ' "read_only|read_write"}]'
+                    ),
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be set to true to confirm key update."
+                    ),
+                },
+            },
+            "required": ["key_id", "confirm"],
+        },
+    )
+
+
+def create_linode_object_storage_key_delete_tool() -> Tool:
+    """Create the linode_object_storage_key_delete tool."""
+    return Tool(
+        name="linode_object_storage_key_delete",
+        description=(
+            "Revokes an Object Storage access key permanently."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use"
+                        " (optional, defaults to 'default')"
+                    ),
+                },
+                "key_id": {
+                    "type": "number",
+                    "description": (
+                        "ID of the access key to revoke"
+                    ),
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be set to true to confirm"
+                        " key revocation. This action is permanent."
+                    ),
+                },
+            },
+            "required": ["key_id", "confirm"],
+        },
+    )
+
+
+async def handle_linode_object_storage_key_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle the linode_object_storage_key_create tool."""
+    environment = arguments.get("environment", "")
+    label = arguments.get("label", "")
+    bucket_access_json = arguments.get("bucket_access", "")
+    confirm = arguments.get("confirm", False)
+
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text=(
+                    "Error: This creates an access key."
+                    " The secret_key is only shown ONCE"
+                    " in the response."
+                    " Set confirm=true to proceed."
+                ),
+            )
+        ]
+
+    validation_err = _validate_key_label(label)
+    bucket_access = None
+    if not validation_err and bucket_access_json:
+        try:
+            bucket_access = json.loads(bucket_access_json)
+            validation_err = _validate_bucket_access_entries(
+                bucket_access
+            )
+        except (json.JSONDecodeError, TypeError) as e:
+            validation_err = (
+                f"Invalid bucket_access JSON: {e}."
+                " Expected format:"
+                ' [{"bucket_name": "name",'
+                ' "region": "region",'
+                ' "permissions": "read_only"}]'
+            )
+    if validation_err:
+        return [
+            TextContent(
+                type="text", text=f"Error: {validation_err}"
+            )
+        ]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            key = await client.create_object_storage_key(
+                label=label,
+                bucket_access=bucket_access,
+            )
+
+            response = {
+                "warning": (
+                    "IMPORTANT: The secret_key below is shown"
+                    " ONLY ONCE. Save it now - it cannot be"
+                    " retrieved later."
+                ),
+                "message": (
+                    f"Access key '{key.get('label', label)}'"
+                    " created successfully"
+                    f" (ID: {key.get('id', 'unknown')})"
+                ),
+                "key": key,
+            }
+
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(response, indent=2),
+                )
+            ]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(
+                type="text",
+                text=f"Failed to create access key: {e}",
+            )
+        ]
+
+
+async def handle_linode_object_storage_key_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle the linode_object_storage_key_update tool."""
+    environment = arguments.get("environment", "")
+    key_id = arguments.get("key_id", 0)
+    label = arguments.get("label", "")
+    bucket_access_json = arguments.get("bucket_access", "")
+    confirm = arguments.get("confirm", False)
+
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text=(
+                    "Error: This modifies access key permissions."
+                    " Set confirm=true to proceed."
+                ),
+            )
+        ]
+
+    validation_err = None
+    if not key_id or int(key_id) <= 0:
+        validation_err = (
+            "key_id is required and must be a positive integer"
+        )
+    elif label:
+        validation_err = _validate_key_label(label)
+
+    key_id = int(key_id) if not validation_err else 0
+    bucket_access = None
+    if not validation_err and bucket_access_json:
+        try:
+            bucket_access = json.loads(bucket_access_json)
+            validation_err = _validate_bucket_access_entries(
+                bucket_access
+            )
+        except (json.JSONDecodeError, TypeError) as e:
+            validation_err = (
+                f"Invalid bucket_access JSON: {e}."
+                " Expected format:"
+                ' [{"bucket_name": "name",'
+                ' "region": "region",'
+                ' "permissions": "read_only"}]'
+            )
+    if validation_err:
+        return [
+            TextContent(
+                type="text", text=f"Error: {validation_err}"
+            )
+        ]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            await client.update_object_storage_key(
+                key_id=key_id,
+                label=label or None,
+                bucket_access=bucket_access,
+            )
+
+            response = {
+                "message": (
+                    f"Access key {key_id} updated successfully"
+                ),
+                "key_id": key_id,
+            }
+
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(response, indent=2),
+                )
+            ]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(
+                type="text",
+                text=f"Failed to update access key {key_id}: {e}",
+            )
+        ]
+
+
+async def handle_linode_object_storage_key_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle the linode_object_storage_key_delete tool."""
+    environment = arguments.get("environment", "")
+    key_id = arguments.get("key_id", 0)
+    confirm = arguments.get("confirm", False)
+
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text=(
+                    "Error: This revokes the access key"
+                    " permanently."
+                    " Set confirm=true to proceed."
+                ),
+            )
+        ]
+
+    if not key_id or int(key_id) <= 0:
+        return [
+            TextContent(
+                type="text",
+                text=(
+                    "Error: key_id is required and must"
+                    " be a positive integer"
+                ),
+            )
+        ]
+
+    key_id = int(key_id)
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            await client.delete_object_storage_key(key_id=key_id)
+
+            response = {
+                "message": (
+                    f"Access key {key_id} revoked successfully"
+                ),
+                "key_id": key_id,
+            }
+
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(response, indent=2),
+                )
+            ]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(
+                type="text",
+                text=f"Failed to revoke access key {key_id}: {e}",
             )
         ]
 

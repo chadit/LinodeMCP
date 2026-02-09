@@ -10,15 +10,16 @@ import (
 
 // Validation constants.
 const (
-	minPasswordLength   = 12
-	maxPasswordLength   = 128
-	maxDNSNameLength    = 253
-	minVolumeSizeGB     = 10
-	maxVolumeSizeGB     = 10240
-	minSSHKeyLength     = 80
-	maxSSHKeyLength     = 16000
+	minPasswordLength    = 12
+	maxPasswordLength    = 128
+	maxDNSNameLength     = 253
+	minVolumeSizeGB      = 10
+	maxVolumeSizeGB      = 10240
+	minSSHKeyLength      = 80
+	maxSSHKeyLength      = 16000
 	minBucketLabelLength = 3
 	maxBucketLabelLength = 63
+	maxKeyLabelLength    = 50
 )
 
 // SSH key validation errors.
@@ -191,13 +192,13 @@ func validateFirewallPolicy(policy string) error {
 
 // Object Storage bucket label validation errors.
 var (
-	ErrBucketLabelRequired   = errors.New("label is required")
-	ErrBucketLabelTooShort   = errors.New("bucket label must be at least 3 characters")
-	ErrBucketLabelTooLong    = errors.New("bucket label must not exceed 63 characters")
-	ErrBucketLabelStartEnd   = errors.New("bucket label must start and end with a lowercase letter or number")
-	ErrBucketLabelInvalid    = errors.New("bucket label must contain only lowercase letters, numbers, and hyphens")
-	ErrBucketACLInvalid      = errors.New("acl must be one of: private, public-read, authenticated-read, public-read-write")
-	ErrBucketRegionRequired  = errors.New("region is required")
+	ErrBucketLabelRequired  = errors.New("label is required")
+	ErrBucketLabelTooShort  = errors.New("bucket label must be at least 3 characters")
+	ErrBucketLabelTooLong   = errors.New("bucket label must not exceed 63 characters")
+	ErrBucketLabelStartEnd  = errors.New("bucket label must start and end with a lowercase letter or number")
+	ErrBucketLabelInvalid   = errors.New("bucket label must contain only lowercase letters, numbers, and hyphens")
+	ErrBucketACLInvalid     = errors.New("acl must be one of: private, public-read, authenticated-read, public-read-write")
+	ErrBucketRegionRequired = errors.New("region is required")
 )
 
 // Object Storage bucket label validation (S3 naming rules).
@@ -249,6 +250,38 @@ func validateVolumeSize(size int) error {
 
 	if size > maxVolumeSizeGB {
 		return ErrVolumeSizeTooLarge
+	}
+
+	return nil
+}
+
+// Object Storage access key validation errors.
+var (
+	ErrKeyLabelRequired        = errors.New("label is required")
+	ErrKeyLabelTooLong         = errors.New("access key label must not exceed 50 characters")
+	ErrKeyIDRequired           = errors.New("key_id is required and must be a positive integer")
+	ErrKeyPermissionsInvalid   = errors.New("bucket_access permissions must be 'read_only' or 'read_write'")
+	ErrKeyBucketNameRequired   = errors.New("bucket_access entries must include bucket_name")
+	ErrKeyBucketRegionRequired = errors.New("bucket_access entries must include region")
+)
+
+// Object Storage access key label validation.
+func validateKeyLabel(label string) error {
+	if label == "" {
+		return ErrKeyLabelRequired
+	}
+
+	if len(label) > maxKeyLabelLength {
+		return ErrKeyLabelTooLong
+	}
+
+	return nil
+}
+
+// Object Storage access key permissions validation.
+func validateKeyPermissions(permissions string) error {
+	if permissions != "read_only" && permissions != "read_write" {
+		return fmt.Errorf("got '%s': %w", permissions, ErrKeyPermissionsInvalid)
 	}
 
 	return nil

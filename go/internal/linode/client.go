@@ -98,6 +98,11 @@ type ClientInterface interface {
 	CreateObjectStorageBucket(ctx context.Context, req CreateObjectStorageBucketRequest) (*ObjectStorageBucket, error)
 	DeleteObjectStorageBucket(ctx context.Context, region, label string) error
 	UpdateObjectStorageBucketAccess(ctx context.Context, region, label string, req UpdateObjectStorageBucketAccessRequest) error
+
+	// Stage 5 Phase 4: Object Storage access key write operations.
+	CreateObjectStorageKey(ctx context.Context, req CreateObjectStorageKeyRequest) (*ObjectStorageKey, error)
+	UpdateObjectStorageKey(ctx context.Context, keyID int, req UpdateObjectStorageKeyRequest) error
+	DeleteObjectStorageKey(ctx context.Context, keyID int) error
 }
 
 // Profile represents a Linode user profile.
@@ -630,17 +635,29 @@ type UpdateObjectStorageBucketAccessRequest struct {
 
 // ObjectStorageKeyBucketAccess represents bucket-level permissions for an access key.
 type ObjectStorageKeyBucketAccess struct {
-	BucketName  string `json:"bucket_name"`  //nolint:tagliatelle // Linode API snake_case
+	BucketName  string `json:"bucket_name"` //nolint:tagliatelle // Linode API snake_case
 	Region      string `json:"region"`
 	Permissions string `json:"permissions"`
+}
+
+// CreateObjectStorageKeyRequest represents the request body for creating an Object Storage key.
+type CreateObjectStorageKeyRequest struct {
+	Label        string                         `json:"label"`
+	BucketAccess []ObjectStorageKeyBucketAccess `json:"bucket_access,omitempty"` //nolint:tagliatelle // Linode API snake_case
+}
+
+// UpdateObjectStorageKeyRequest represents the request body for updating an Object Storage key.
+type UpdateObjectStorageKeyRequest struct {
+	Label        string                         `json:"label,omitempty"`
+	BucketAccess []ObjectStorageKeyBucketAccess `json:"bucket_access,omitempty"` //nolint:tagliatelle // Linode API snake_case
 }
 
 // ObjectStorageKey represents a Linode Object Storage access key.
 type ObjectStorageKey struct {
 	ID           int                            `json:"id"`
 	Label        string                         `json:"label"`
-	AccessKey    string                         `json:"access_key"`    //nolint:tagliatelle // Linode API snake_case
-	SecretKey    string                         `json:"secret_key"`    //nolint:tagliatelle // Linode API snake_case
+	AccessKey    string                         `json:"access_key"` //nolint:tagliatelle // Linode API snake_case
+	SecretKey    string                         `json:"secret_key"` //nolint:tagliatelle // Linode API snake_case
 	Limited      bool                           `json:"limited"`
 	BucketAccess []ObjectStorageKeyBucketAccess `json:"bucket_access"` //nolint:tagliatelle // Linode API snake_case
 	Regions      []ObjectStorageKeyRegion       `json:"regions"`
@@ -648,8 +665,8 @@ type ObjectStorageKey struct {
 
 // ObjectStorageKeyRegion represents a region associated with an Object Storage key.
 type ObjectStorageKeyRegion struct {
-	ID          string `json:"id"`
-	S3Endpoint  string `json:"s3_endpoint"`  //nolint:tagliatelle // Linode API snake_case
+	ID         string `json:"id"`
+	S3Endpoint string `json:"s3_endpoint"` //nolint:tagliatelle // Linode API snake_case
 }
 
 // ObjectStorageTransfer represents Object Storage transfer usage.
@@ -1904,6 +1921,60 @@ func (c *Client) UpdateObjectStorageBucketAccess(ctx context.Context, region, la
 	resp, err := c.makeJSONRequest(ctx, http.MethodPut, endpoint, req)
 	if err != nil {
 		return &NetworkError{Operation: "UpdateObjectStorageBucketAccess", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	return c.handleResponse(resp, nil)
+}
+
+// CreateObjectStorageKey creates a new Object Storage access key.
+func (c *Client) CreateObjectStorageKey(ctx context.Context, req CreateObjectStorageKeyRequest) (*ObjectStorageKey, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeJSONRequest(ctx, http.MethodPost, "/object-storage/keys", req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateObjectStorageKey", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var key ObjectStorageKey
+	if err := c.handleResponse(resp, &key); err != nil {
+		return nil, err
+	}
+
+	return &key, nil
+}
+
+// UpdateObjectStorageKey updates an Object Storage access key.
+func (c *Client) UpdateObjectStorageKey(ctx context.Context, keyID int, req UpdateObjectStorageKeyRequest) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/object-storage/keys/%d", keyID)
+
+	resp, err := c.makeJSONRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return &NetworkError{Operation: "UpdateObjectStorageKey", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	return c.handleResponse(resp, nil)
+}
+
+// DeleteObjectStorageKey revokes an Object Storage access key.
+func (c *Client) DeleteObjectStorageKey(ctx context.Context, keyID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/object-storage/keys/%d", keyID)
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteObjectStorageKey", Err: err}
 	}
 
 	defer func() { _ = resp.Body.Close() }()

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -1301,6 +1302,480 @@ func TestLinodeObjectStorageBucketAccessUpdateTool_MissingEnvironment(t *testing
 		"region":  "us-east-1",
 		"label":   "my-bucket",
 		"acl":     "private",
+		"confirm": true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+}
+
+// Phase 4: Write Access Key Tool Tests.
+
+func TestNewLinodeObjectStorageKeyCreateTool_ToolDefinition(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	tool, handler := tools.NewLinodeObjectStorageKeyCreateTool(cfg)
+
+	assert.Equal(t, "linode_object_storage_key_create", tool.Name)
+	assert.NotEmpty(t, tool.Description)
+	assert.NotNil(t, handler)
+	assert.Contains(t, tool.Description, "WARNING")
+	assert.Contains(t, tool.Description, "secret_key")
+
+	props := tool.InputSchema.Properties
+	assert.Contains(t, props, "label")
+	assert.Contains(t, props, "bucket_access")
+	assert.Contains(t, props, "confirm")
+}
+
+func TestLinodeObjectStorageKeyCreateTool_RequiresConfirm(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageKeyCreateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"label": "my-key",
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+	assertErrorContains(t, result, "confirm=true")
+	assertErrorContains(t, result, "secret_key")
+}
+
+func TestLinodeObjectStorageKeyCreateTool_EmptyLabel(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageKeyCreateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"label":   "",
+		"confirm": true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+	assertErrorContains(t, result, "label is required")
+}
+
+func TestLinodeObjectStorageKeyCreateTool_LabelTooLong(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageKeyCreateTool(cfg)
+
+	longLabel := strings.Repeat("a", 51)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"label":   longLabel,
+		"confirm": true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+	assertErrorContains(t, result, "50 characters")
+}
+
+func TestLinodeObjectStorageKeyCreateTool_InvalidBucketAccessJSON(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageKeyCreateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"label":         "my-key",
+		"bucket_access": "not-valid-json",
+		"confirm":       true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+	assertErrorContains(t, result, "Invalid bucket_access JSON")
+}
+
+func TestLinodeObjectStorageKeyCreateTool_InvalidPermissions(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageKeyCreateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"label":         "my-key",
+		"bucket_access": `[{"bucket_name": "mybucket", "region": "us-east-1", "permissions": "admin"}]`,
+		"confirm":       true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+	assertErrorContains(t, result, "read_only")
+}
+
+func TestLinodeObjectStorageKeyCreateTool_MissingBucketName(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageKeyCreateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"label":         "my-key",
+		"bucket_access": `[{"bucket_name": "", "region": "us-east-1", "permissions": "read_only"}]`,
+		"confirm":       true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+	assertErrorContains(t, result, "bucket_name")
+}
+
+func TestLinodeObjectStorageKeyCreateTool_Success(t *testing.T) {
+	t.Parallel()
+
+	key := linode.ObjectStorageKey{
+		ID:        42,
+		Label:     "my-key",
+		AccessKey: "AKIAIOSFODNN7EXAMPLE",
+		SecretKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+		Limited:   true,
+		BucketAccess: []linode.ObjectStorageKeyBucketAccess{
+			{BucketName: "mybucket", Region: "us-east-1", Permissions: "read_write"},
+		},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/object-storage/keys", r.URL.Path)
+		assert.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(key))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageKeyCreateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"label":         "my-key",
+		"bucket_access": `[{"bucket_name": "mybucket", "region": "us-east-1", "permissions": "read_write"}]`,
+		"confirm":       true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.IsError)
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, "my-key")
+	assert.Contains(t, textContent.Text, "created successfully")
+	assert.Contains(t, textContent.Text, "IMPORTANT")
+	assert.Contains(t, textContent.Text, "secret_key")
+	assert.Contains(t, textContent.Text, "wJalrXUtnFEMI")
+}
+
+func TestLinodeObjectStorageKeyCreateTool_MissingEnvironment(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{},
+	}
+	_, handler := tools.NewLinodeObjectStorageKeyCreateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"label":   "my-key",
+		"confirm": true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+}
+
+// Key Update tests.
+
+func TestNewLinodeObjectStorageKeyUpdateTool_ToolDefinition(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	tool, handler := tools.NewLinodeObjectStorageKeyUpdateTool(cfg)
+
+	assert.Equal(t, "linode_object_storage_key_update", tool.Name)
+	assert.NotEmpty(t, tool.Description)
+	assert.NotNil(t, handler)
+
+	props := tool.InputSchema.Properties
+	assert.Contains(t, props, "key_id")
+	assert.Contains(t, props, "label")
+	assert.Contains(t, props, "bucket_access")
+	assert.Contains(t, props, "confirm")
+}
+
+func TestLinodeObjectStorageKeyUpdateTool_RequiresConfirm(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageKeyUpdateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"key_id": float64(42),
+		"label":  "new-label",
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+	assertErrorContains(t, result, "confirm=true")
+}
+
+func TestLinodeObjectStorageKeyUpdateTool_InvalidKeyID(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageKeyUpdateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"key_id":  float64(0),
+		"label":   "new-label",
+		"confirm": true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+	assertErrorContains(t, result, "key_id is required")
+}
+
+func TestLinodeObjectStorageKeyUpdateTool_Success(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/object-storage/keys/42", r.URL.Path)
+		assert.Equal(t, http.MethodPut, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageKeyUpdateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"key_id":  float64(42),
+		"label":   "updated-key",
+		"confirm": true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.IsError)
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, "updated successfully")
+}
+
+// Key Delete tests.
+
+func TestNewLinodeObjectStorageKeyDeleteTool_ToolDefinition(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	tool, handler := tools.NewLinodeObjectStorageKeyDeleteTool(cfg)
+
+	assert.Equal(t, "linode_object_storage_key_delete", tool.Name)
+	assert.NotEmpty(t, tool.Description)
+	assert.NotNil(t, handler)
+
+	props := tool.InputSchema.Properties
+	assert.Contains(t, props, "key_id")
+	assert.Contains(t, props, "confirm")
+}
+
+func TestLinodeObjectStorageKeyDeleteTool_RequiresConfirm(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageKeyDeleteTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"key_id": float64(42),
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+	assertErrorContains(t, result, "confirm=true")
+}
+
+func TestLinodeObjectStorageKeyDeleteTool_InvalidKeyID(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageKeyDeleteTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"key_id":  float64(-1),
+		"confirm": true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+	assertErrorContains(t, result, "key_id is required")
+}
+
+func TestLinodeObjectStorageKeyDeleteTool_Success(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/object-storage/keys/42", r.URL.Path)
+		assert.Equal(t, http.MethodDelete, r.Method)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageKeyDeleteTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"key_id":  float64(42),
+		"confirm": true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.IsError)
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, "revoked successfully")
+}
+
+func TestLinodeObjectStorageKeyDeleteTool_MissingEnvironment(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{},
+	}
+	_, handler := tools.NewLinodeObjectStorageKeyDeleteTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"key_id":  float64(42),
 		"confirm": true,
 	})
 	result, err := handler(t.Context(), req)

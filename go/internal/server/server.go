@@ -318,4 +318,17 @@ func (s *Server) registerTools() {
 	objBucketAccessUpdateTool, objBucketAccessUpdateHandler := tools.NewLinodeObjectStorageBucketAccessUpdateTool(s.config)
 	s.mcp.AddTool(objBucketAccessUpdateTool, objBucketAccessUpdateHandler)
 	s.tools = append(s.tools, &toolWrapper{tool: objBucketAccessUpdateTool})
+
+	// Stage 5 Phase 4: Object Storage access key write operations.
+	objKeyCreateTool, objKeyCreateHandler := tools.NewLinodeObjectStorageKeyCreateTool(s.config)
+	s.mcp.AddTool(objKeyCreateTool, objKeyCreateHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: objKeyCreateTool})
+
+	objKeyUpdateTool, objKeyUpdateHandler := tools.NewLinodeObjectStorageKeyUpdateTool(s.config)
+	s.mcp.AddTool(objKeyUpdateTool, objKeyUpdateHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: objKeyUpdateTool})
+
+	objKeyDeleteTool, objKeyDeleteHandler := tools.NewLinodeObjectStorageKeyDeleteTool(s.config)
+	s.mcp.AddTool(objKeyDeleteTool, objKeyDeleteHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: objKeyDeleteTool})
 }

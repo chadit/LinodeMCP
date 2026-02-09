@@ -70,7 +70,10 @@ from linodemcp.tools import (
     handle_linode_object_storage_bucket_get,
     handle_linode_object_storage_buckets_list,
     handle_linode_object_storage_clusters_list,
+    handle_linode_object_storage_key_create,
+    handle_linode_object_storage_key_delete,
     handle_linode_object_storage_key_get,
+    handle_linode_object_storage_key_update,
     handle_linode_object_storage_keys_list,
     handle_linode_object_storage_transfer,
     handle_linode_object_storage_types_list,
@@ -3088,3 +3091,269 @@ async def test_handle_object_storage_bucket_access_update_success(
 
         assert len(result) == 1
         assert "updated successfully" in result[0].text
+
+
+# Phase 4: Object Storage Access Key Write Tool Tests
+
+
+async def test_object_storage_key_create_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Key create should require confirm=true."""
+    result = list(
+        await handle_linode_object_storage_key_create(
+            {"label": "my-key"},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "Error" in result[0].text
+    assert "confirm=true" in result[0].text
+    assert "secret_key" in result[0].text
+
+
+async def test_object_storage_key_create_empty_label(
+    sample_config: Config,
+) -> None:
+    """Key create should reject empty label."""
+    result = list(
+        await handle_linode_object_storage_key_create(
+            {"label": "", "confirm": True},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "label is required" in result[0].text
+
+
+async def test_object_storage_key_create_label_too_long(
+    sample_config: Config,
+) -> None:
+    """Key create should reject label over 50 chars."""
+    result = list(
+        await handle_linode_object_storage_key_create(
+            {"label": "a" * 51, "confirm": True},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "50 characters" in result[0].text
+
+
+async def test_object_storage_key_create_invalid_json(
+    sample_config: Config,
+) -> None:
+    """Key create should reject invalid bucket_access JSON."""
+    result = list(
+        await handle_linode_object_storage_key_create(
+            {
+                "label": "my-key",
+                "bucket_access": "not-valid-json",
+                "confirm": True,
+            },
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "Invalid bucket_access JSON" in result[0].text
+
+
+async def test_object_storage_key_create_invalid_permissions(
+    sample_config: Config,
+) -> None:
+    """Key create should reject invalid permissions."""
+    import json
+
+    bucket_access = json.dumps(
+        [
+            {
+                "bucket_name": "mybucket",
+                "region": "us-east-1",
+                "permissions": "admin",
+            }
+        ]
+    )
+    result = list(
+        await handle_linode_object_storage_key_create(
+            {
+                "label": "my-key",
+                "bucket_access": bucket_access,
+                "confirm": True,
+            },
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "read_only" in result[0].text
+
+
+async def test_object_storage_key_create_success(
+    sample_config: Config,
+) -> None:
+    """Key create should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.create_object_storage_key.return_value = {
+            "id": 42,
+            "label": "my-key",
+            "access_key": "AKIAIOSFODNN7EXAMPLE",
+            "secret_key": "wJalrXUtnFEMI/bPxRfiCYEXAMPLEKEY",
+            "limited": False,
+            "bucket_access": [],
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_object_storage_key_create(
+                {"label": "my-key", "confirm": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "created successfully" in result[0].text
+        assert "IMPORTANT" in result[0].text
+        assert "ONLY ONCE" in result[0].text
+
+
+async def test_object_storage_key_create_missing_env() -> None:
+    """Key create should fail with missing environment."""
+    cfg = Config(environments={})
+    result = list(
+        await handle_linode_object_storage_key_create(
+            {"label": "my-key", "confirm": True},
+            cfg,
+        )
+    )
+
+    assert len(result) == 1
+    assert "Error" in result[0].text
+
+
+async def test_object_storage_key_update_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Key update should require confirm=true."""
+    result = list(
+        await handle_linode_object_storage_key_update(
+            {"key_id": 42, "label": "new-label"},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_object_storage_key_update_invalid_key_id(
+    sample_config: Config,
+) -> None:
+    """Key update should reject invalid key_id."""
+    result = list(
+        await handle_linode_object_storage_key_update(
+            {"key_id": 0, "label": "new-label", "confirm": True},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "key_id is required" in result[0].text
+
+
+async def test_object_storage_key_update_success(
+    sample_config: Config,
+) -> None:
+    """Key update should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.update_object_storage_key.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_object_storage_key_update(
+                {
+                    "key_id": 42,
+                    "label": "updated-key",
+                    "confirm": True,
+                },
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "updated successfully" in result[0].text
+
+
+async def test_object_storage_key_delete_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Key delete should require confirm=true."""
+    result = list(
+        await handle_linode_object_storage_key_delete(
+            {"key_id": 42},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_object_storage_key_delete_invalid_key_id(
+    sample_config: Config,
+) -> None:
+    """Key delete should reject invalid key_id."""
+    result = list(
+        await handle_linode_object_storage_key_delete(
+            {"key_id": -1, "confirm": True},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "key_id is required" in result[0].text
+
+
+async def test_object_storage_key_delete_success(
+    sample_config: Config,
+) -> None:
+    """Key delete should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.delete_object_storage_key.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_object_storage_key_delete(
+                {"key_id": 42, "confirm": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "revoked successfully" in result[0].text
+
+
+async def test_object_storage_key_delete_missing_env() -> None:
+    """Key delete should fail with missing environment."""
+    cfg = Config(environments={})
+    result = list(
+        await handle_linode_object_storage_key_delete(
+            {"key_id": 42, "confirm": True},
+            cfg,
+        )
+    )
+
+    assert len(result) == 1
+    assert "Error" in result[0].text

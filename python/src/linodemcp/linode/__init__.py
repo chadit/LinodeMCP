@@ -976,6 +976,52 @@ class Client:
                 "UpdateObjectStorageBucketAccess", e
             ) from e
 
+    # Stage 5 Phase 4: Object Storage access key write operations
+
+    async def create_object_storage_key(
+        self,
+        label: str,
+        bucket_access: list[dict[str, str]] | None = None,
+    ) -> dict[str, Any]:
+        """Create a new Object Storage access key."""
+        try:
+            body: dict[str, Any] = {"label": label}
+            if bucket_access is not None:
+                body["bucket_access"] = bucket_access
+            response = await self._make_request(
+                "POST", "/object-storage/keys", body
+            )
+            key: dict[str, Any] = response.json()
+            return key
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateObjectStorageKey", e) from e
+
+    async def update_object_storage_key(
+        self,
+        key_id: int,
+        label: str | None = None,
+        bucket_access: list[dict[str, str]] | None = None,
+    ) -> None:
+        """Update an Object Storage access key."""
+        endpoint = f"/object-storage/keys/{key_id}"
+        try:
+            body: dict[str, Any] = {}
+            if label is not None:
+                body["label"] = label
+            if bucket_access is not None:
+                body["bucket_access"] = bucket_access
+            await self._make_request("PUT", endpoint, body)
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateObjectStorageKey", e) from e
+
+    async def delete_object_storage_key(self, key_id: int) -> None:
+        """Delete (revoke) an Object Storage access key."""
+        endpoint = f"/object-storage/keys/{key_id}"
+        try:
+            await self._make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteObjectStorageKey", e) from e
+
     # Stage 4: Write operations
 
     async def create_ssh_key(self, label: str, ssh_key: str) -> SSHKey:
@@ -2467,6 +2513,41 @@ class RetryableClient:
             label,
             acl,
             cors_enabled,
+        )
+
+    # Stage 5 Phase 4: Object Storage access key write operations with retry
+
+    async def create_object_storage_key(
+        self,
+        label: str,
+        bucket_access: list[dict[str, str]] | None = None,
+    ) -> dict[str, Any]:
+        """Create Object Storage access key with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.create_object_storage_key,
+            label,
+            bucket_access,
+        )
+        return result
+
+    async def update_object_storage_key(
+        self,
+        key_id: int,
+        label: str | None = None,
+        bucket_access: list[dict[str, str]] | None = None,
+    ) -> None:
+        """Update Object Storage access key with retry."""
+        await self._execute_with_retry(
+            self.client.update_object_storage_key,
+            key_id,
+            label,
+            bucket_access,
+        )
+
+    async def delete_object_storage_key(self, key_id: int) -> None:
+        """Delete Object Storage access key with retry."""
+        await self._execute_with_retry(
+            self.client.delete_object_storage_key, key_id
         )
 
     # Stage 4: Write operations with retry
