@@ -32,8 +32,8 @@ var ErrInvalidInstanceID = errors.New("instance_id must be a valid integer")
 func NewLinodeInstanceGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_instance_get",
 		mcp.WithDescription("Retrieves details of a single Linode instance by its ID"),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithString("instance_id",
 			mcp.Description("The ID of the Linode instance to retrieve (required)"),
@@ -49,7 +49,7 @@ func NewLinodeInstanceGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Co
 }
 
 func handleLinodeInstanceGetRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	instanceIDStr := request.GetString("instance_id", "")
 
 	if instanceIDStr == "" {
@@ -84,8 +84,8 @@ func handleLinodeInstanceGetRequest(ctx context.Context, request mcp.CallToolReq
 func NewLinodeInstancesTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_instances_list",
 		mcp.WithDescription("Lists Linode instances with optional filtering by status"),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithString("status",
 			mcp.Description("Filter instances by status (running, stopped, etc.)"),
@@ -100,7 +100,7 @@ func NewLinodeInstancesTool(cfg *config.Config) (mcp.Tool, func(ctx context.Cont
 }
 
 func handleLinodeInstancesRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	statusFilter := request.GetString("status", "")
 
 	selectedEnv, err := selectEnvironment(cfg, environment)
@@ -152,7 +152,7 @@ func validateLinodeConfig(env *config.EnvironmentConfig) error {
 }
 
 func filterInstancesByStatus(instances []linode.Instance, statusFilter string) []linode.Instance {
-	var filtered []linode.Instance
+	filtered := make([]linode.Instance, 0, len(instances))
 
 	statusFilter = strings.ToLower(statusFilter)
 

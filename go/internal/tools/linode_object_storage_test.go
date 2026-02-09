@@ -26,7 +26,7 @@ func TestNewLinodeObjectStorageBucketsListTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_object_storage_buckets_list", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 }
 
 func TestLinodeObjectStorageBucketsListTool_Success(t *testing.T) {
@@ -99,7 +99,7 @@ func TestNewLinodeObjectStorageBucketGetTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_object_storage_bucket_get", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 }
 
 func TestLinodeObjectStorageBucketGetTool_Success(t *testing.T) {
@@ -195,7 +195,7 @@ func TestNewLinodeObjectStorageBucketContentsTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_object_storage_bucket_contents", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 }
 
 func TestLinodeObjectStorageBucketContentsTool_Success(t *testing.T) {
@@ -357,7 +357,7 @@ func TestNewLinodeObjectStorageClustersListTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_object_storage_clusters_list", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 }
 
 func TestLinodeObjectStorageClustersListTool_Success(t *testing.T) {
@@ -414,7 +414,7 @@ func TestNewLinodeObjectStorageTypeListTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_object_storage_type_list", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 }
 
 func TestLinodeObjectStorageTypeListTool_Success(t *testing.T) {
@@ -490,7 +490,7 @@ func TestLinodeObjectStorageKeysListTool_Definition(t *testing.T) {
 
 	assert.Equal(t, "linode_object_storage_keys_list", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 }
 
 func TestLinodeObjectStorageKeysListTool_Success(t *testing.T) {
@@ -569,7 +569,7 @@ func TestLinodeObjectStorageKeyGetTool_Definition(t *testing.T) {
 
 	assert.Equal(t, "linode_object_storage_key_get", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 }
 
 func TestLinodeObjectStorageKeyGetTool_Success(t *testing.T) {
@@ -669,7 +669,7 @@ func TestLinodeObjectStorageTransferTool_Definition(t *testing.T) {
 
 	assert.Equal(t, "linode_object_storage_transfer", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 }
 
 func TestLinodeObjectStorageTransferTool_Success(t *testing.T) {
@@ -735,7 +735,7 @@ func TestLinodeObjectStorageBucketAccessGetTool_Definition(t *testing.T) {
 
 	assert.Equal(t, "linode_object_storage_bucket_access_get", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 }
 
 func TestLinodeObjectStorageBucketAccessGetTool_Success(t *testing.T) {
@@ -844,7 +844,7 @@ func TestNewLinodeObjectStorageBucketCreateTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_object_storage_bucket_create", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 	assert.Contains(t, tool.Description, "WARNING")
 
 	props := tool.InputSchema.Properties
@@ -957,6 +957,33 @@ func TestLinodeObjectStorageBucketCreateTool_InvalidLabel_StartWithHyphen(t *tes
 	assert.True(t, result.IsError)
 }
 
+func TestValidateBucketLabel_IPAddress(t *testing.T) {
+	t.Parallel()
+
+	ipLabels := []string{"192.168.1.1", "10.0.0.1", "127.0.0.1"}
+	for _, label := range ipLabels {
+		err := tools.ValidateBucketLabel(label)
+		assert.ErrorIs(t, err, tools.ErrBucketLabelIPAddress, "label %q should be rejected as IP", label)
+	}
+}
+
+func TestValidateBucketLabel_XNPrefix(t *testing.T) {
+	t.Parallel()
+
+	err := tools.ValidateBucketLabel("xn--example")
+	assert.ErrorIs(t, err, tools.ErrBucketLabelXNPrefix)
+}
+
+func TestValidateBucketLabel_ValidNames(t *testing.T) {
+	t.Parallel()
+
+	validLabels := []string{"my-bucket", "test123", "a-b-c"}
+	for _, label := range validLabels {
+		err := tools.ValidateBucketLabel(label)
+		assert.NoError(t, err, "label %q should be valid", label)
+	}
+}
+
 func TestLinodeObjectStorageBucketCreateTool_InvalidACL(t *testing.T) {
 	t.Parallel()
 
@@ -1062,7 +1089,7 @@ func TestNewLinodeObjectStorageBucketDeleteTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_object_storage_bucket_delete", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 	assert.Contains(t, tool.Description, "WARNING")
 
 	props := tool.InputSchema.Properties
@@ -1190,7 +1217,7 @@ func TestNewLinodeObjectStorageBucketAccessUpdateTool_ToolDefinition(t *testing.
 
 	assert.Equal(t, "linode_object_storage_bucket_access_update", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 
 	props := tool.InputSchema.Properties
 	assert.Contains(t, props, "region")
@@ -1321,7 +1348,7 @@ func TestNewLinodeObjectStorageKeyCreateTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_object_storage_key_create", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 	assert.Contains(t, tool.Description, "WARNING")
 	assert.Contains(t, tool.Description, "secret_key")
 
@@ -1567,7 +1594,7 @@ func TestNewLinodeObjectStorageKeyUpdateTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_object_storage_key_update", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 
 	props := tool.InputSchema.Properties
 	assert.Contains(t, props, "key_id")
@@ -1675,7 +1702,7 @@ func TestNewLinodeObjectStorageKeyDeleteTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_object_storage_key_delete", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 
 	props := tool.InputSchema.Properties
 	assert.Contains(t, props, "key_id")
@@ -1795,7 +1822,7 @@ func TestNewLinodeObjectStoragePresignedURLTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_object_storage_presigned_url", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 
 	props := tool.InputSchema.Properties
 	assert.Contains(t, props, "region")
@@ -1969,7 +1996,7 @@ func TestNewLinodeObjectStorageObjectACLGetTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_object_storage_object_acl_get", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 
 	props := tool.InputSchema.Properties
 	assert.Contains(t, props, "region")
@@ -2057,7 +2084,7 @@ func TestNewLinodeObjectStorageObjectACLUpdateTool_ToolDefinition(t *testing.T) 
 
 	assert.Equal(t, "linode_object_storage_object_acl_update", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 
 	props := tool.InputSchema.Properties
 	assert.Contains(t, props, "region")
@@ -2206,7 +2233,7 @@ func TestNewLinodeObjectStorageSSLGetTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_object_storage_ssl_get", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 
 	props := tool.InputSchema.Properties
 	assert.Contains(t, props, "region")
@@ -2282,7 +2309,7 @@ func TestNewLinodeObjectStorageSSLDeleteTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_object_storage_ssl_delete", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 
 	props := tool.InputSchema.Properties
 	assert.Contains(t, props, "region")

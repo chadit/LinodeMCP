@@ -23,7 +23,7 @@ func TestNewHelloTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "hello", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 }
 
 func TestHelloTool_DefaultName(t *testing.T) {
@@ -68,7 +68,7 @@ func TestNewVersionTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "version", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 }
 
 func TestVersionTool_ReturnsVersionInfo(t *testing.T) {
@@ -98,7 +98,7 @@ func TestNewLinodeInstancesTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_instances_list", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 }
 
 func TestNewLinodeProfileTool_ToolDefinition(t *testing.T) {
@@ -109,7 +109,7 @@ func TestNewLinodeProfileTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_profile", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 }
 
 func TestLinodeInstancesTool_MissingEnvironment(t *testing.T) {
@@ -373,7 +373,7 @@ func TestNewLinodeInstanceGetTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_instance_get", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 }
 
 func TestLinodeInstanceGetTool_MissingInstanceID(t *testing.T) {
@@ -466,7 +466,7 @@ func TestNewLinodeAccountTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_account", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 }
 
 func TestLinodeAccountTool_Success(t *testing.T) {
@@ -518,7 +518,7 @@ func TestNewLinodeRegionsListTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_regions_list", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 }
 
 func TestLinodeRegionsListTool_Success(t *testing.T) {
@@ -617,7 +617,7 @@ func TestNewLinodeTypesListTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_types_list", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 }
 
 func TestLinodeTypesListTool_Success(t *testing.T) {
@@ -714,7 +714,7 @@ func TestNewLinodeVolumesListTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_volumes_list", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 }
 
 func TestLinodeVolumesListTool_Success(t *testing.T) {
@@ -855,7 +855,7 @@ func TestNewLinodeImagesListTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_images_list", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 }
 
 func TestLinodeImagesListTool_Success(t *testing.T) {

@@ -5,10 +5,13 @@ import ipaddress
 import logging
 import re
 import secrets
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeVar
 
 import httpx
+
+T = TypeVar("T")
 
 logger = logging.getLogger(__name__)
 
@@ -2980,7 +2983,9 @@ class RetryableClient:
         """Delete NodeBalancer with retry."""
         await self._execute_with_retry(self.client.delete_nodebalancer, nodebalancer_id)
 
-    async def _execute_with_retry(self, func: Any, *args: Any) -> Any:
+    async def _execute_with_retry(
+        self, func: Callable[..., Awaitable[T]], *args: Any
+    ) -> T:
         """Execute a function with retry logic."""
         async with self._request_semaphore:
             last_error: Exception | None = None

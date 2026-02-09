@@ -27,6 +27,11 @@ func FormatInstancesResponse(instances []linode.Instance, statusFilter string) (
 	return formatInstancesResponse(instances, statusFilter)
 }
 
+// ValidateBucketLabel exposes validateBucketLabel for testing.
+func ValidateBucketLabel(label string) error {
+	return validateBucketLabel(label)
+}
+
 // ValidateDNSRecordTarget exposes validateDNSRecordTarget for testing.
 func ValidateDNSRecordTarget(recordType, target string) error {
 	return validateDNSRecordTarget(recordType, target)

@@ -16,8 +16,8 @@ import (
 func NewLinodeVolumesListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_volumes_list",
 		mcp.WithDescription("Lists all block storage volumes for the authenticated user with optional filtering by region or label"),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithString("region",
 			mcp.Description("Filter volumes by region (e.g., 'us-east', 'eu-west')"),
@@ -35,7 +35,7 @@ func NewLinodeVolumesListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Co
 }
 
 func handleLinodeVolumesListRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	regionFilter := request.GetString("region", "")
 	labelContains := request.GetString("label_contains", "")
 
@@ -67,7 +67,7 @@ func handleLinodeVolumesListRequest(ctx context.Context, request mcp.CallToolReq
 }
 
 func filterVolumesByRegion(volumes []linode.Volume, regionFilter string) []linode.Volume {
-	var filtered []linode.Volume
+	filtered := make([]linode.Volume, 0, len(volumes))
 
 	regionFilter = strings.ToLower(regionFilter)
 
@@ -81,7 +81,7 @@ func filterVolumesByRegion(volumes []linode.Volume, regionFilter string) []linod
 }
 
 func filterVolumesByLabel(volumes []linode.Volume, labelContains string) []linode.Volume {
-	var filtered []linode.Volume
+	filtered := make([]linode.Volume, 0, len(volumes))
 
 	labelContains = strings.ToLower(labelContains)
 

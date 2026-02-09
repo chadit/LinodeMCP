@@ -14,7 +14,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// dangerousPaths lists system directories that should never be accessed.
+// dangerousPaths lists system directories that config files must never be loaded from,
+// preventing path traversal attacks that could read sensitive OS files or overwrite system configs.
 //
 //nolint:gochecknoglobals // Package-level slice shared by multiple validation functions.
 var dangerousPaths = []string{

@@ -15,8 +15,8 @@ import (
 func NewLinodeAccountTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_account",
 		mcp.WithDescription("Retrieves the authenticated user's Linode account information including billing details and capabilities"),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 	)
 
@@ -28,7 +28,7 @@ func NewLinodeAccountTool(cfg *config.Config) (mcp.Tool, func(ctx context.Contex
 }
 
 func handleLinodeAccountRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 
 	selectedEnv, err := selectEnvironment(cfg, environment)
 	if err != nil {

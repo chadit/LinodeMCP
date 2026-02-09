@@ -16,8 +16,8 @@ import (
 func NewLinodeRegionsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_regions_list",
 		mcp.WithDescription("Lists all available Linode regions (datacenters) with optional filtering by country or capabilities"),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithString("country",
 			mcp.Description("Filter regions by country code (e.g., 'us', 'de', 'jp')"),
@@ -35,7 +35,7 @@ func NewLinodeRegionsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Co
 }
 
 func handleLinodeRegionsListRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	countryFilter := request.GetString("country", "")
 	capabilityFilter := request.GetString("capability", "")
 
@@ -67,7 +67,7 @@ func handleLinodeRegionsListRequest(ctx context.Context, request mcp.CallToolReq
 }
 
 func filterRegionsByCountry(regions []linode.Region, countryFilter string) []linode.Region {
-	var filtered []linode.Region
+	filtered := make([]linode.Region, 0, len(regions))
 
 	countryFilter = strings.ToLower(countryFilter)
 
@@ -81,7 +81,7 @@ func filterRegionsByCountry(regions []linode.Region, countryFilter string) []lin
 }
 
 func filterRegionsByCapability(regions []linode.Region, capabilityFilter string) []linode.Region {
-	var filtered []linode.Region
+	filtered := make([]linode.Region, 0, len(regions))
 
 	capabilityFilter = strings.ToLower(capabilityFilter)
 

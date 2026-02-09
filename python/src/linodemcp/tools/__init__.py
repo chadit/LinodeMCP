@@ -2,13 +2,63 @@
 
 import json
 import re
-from typing import Any
+from typing import Any, NotRequired, TypedDict
 
 from mcp.types import TextContent, Tool
 
 from linodemcp.config import Config, EnvironmentConfig, EnvironmentNotFoundError
 from linodemcp.linode import RetryableClient, RetryConfig
 from linodemcp.version import get_version_info
+
+
+class EnvironmentArgs(TypedDict):
+    """Common arguments with environment field."""
+
+    environment: NotRequired[str]
+
+
+class HelloArgs(TypedDict):
+    """Arguments for hello tool."""
+
+    name: NotRequired[str]
+
+
+class InstanceFilterArgs(EnvironmentArgs):
+    """Arguments for instance listing with filters."""
+
+    status: NotRequired[str]
+
+
+class InstanceIDArgs(EnvironmentArgs):
+    """Arguments requiring instance_id."""
+
+    instance_id: int
+
+
+class RegionFilterArgs(EnvironmentArgs):
+    """Arguments for region listing with filters."""
+
+    capabilities: NotRequired[str]
+
+
+class TypeFilterArgs(EnvironmentArgs):
+    """Arguments for type listing with filters."""
+
+    type_class: NotRequired[str]
+
+
+class VolumeFilterArgs(EnvironmentArgs):
+    """Arguments for volume listing with filters."""
+
+    region: NotRequired[str]
+    label: NotRequired[str]
+
+
+class ImageFilterArgs(EnvironmentArgs):
+    """Arguments for image listing with filters."""
+
+    is_public: NotRequired[bool]
+    include_deprecated: NotRequired[bool]
 
 # Constants for truncation limits
 SSH_KEY_TRUNCATE_LIMIT = 50
@@ -170,7 +220,11 @@ def create_hello_tool() -> Tool:
 
 
 async def handle_hello(arguments: dict[str, Any]) -> list[TextContent]:
-    """Handle hello tool request."""
+    """Handle hello tool request.
+
+    Args:
+        arguments: HelloArgs - name (optional)
+    """
     name = arguments.get("name", "World")
     message = f"Hello, {name}! LinodeMCP server is running and ready."
     return [TextContent(type="text", text=message)]
@@ -217,7 +271,12 @@ def create_linode_profile_tool() -> Tool:
 async def handle_linode_profile(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_profile tool request."""
+    """Handle linode_profile tool request.
+
+    Args:
+        arguments: EnvironmentArgs - environment (optional)
+        cfg: Configuration object
+    """
     environment = arguments.get("environment", "")
 
     try:
@@ -280,7 +339,12 @@ def create_linode_instances_list_tool() -> Tool:
 async def handle_linode_instances_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_instances_list tool request."""
+    """Handle linode_instances_list tool request.
+
+    Args:
+        arguments: InstanceFilterArgs - environment, status (optional)
+        cfg: Configuration object
+    """
     environment = arguments.get("environment", "")
     status_filter = arguments.get("status", "")
 
@@ -386,7 +450,12 @@ def create_linode_instance_get_tool() -> Tool:
 async def handle_linode_instance_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_instance_get tool request."""
+    """Handle linode_instance_get tool request.
+
+    Args:
+        arguments: InstanceIDArgs - instance_id, environment (optional)
+        cfg: Configuration object
+    """
     environment = arguments.get("environment", "")
     instance_id_str = arguments.get("instance_id", "")
 
@@ -461,7 +530,12 @@ def create_linode_account_tool() -> Tool:
 async def handle_linode_account(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_account tool request."""
+    """Handle linode_account tool request.
+
+    Args:
+        arguments: EnvironmentArgs - environment (optional)
+        cfg: Configuration object
+    """
     environment = arguments.get("environment", "")
 
     try:
@@ -533,10 +607,15 @@ def create_linode_regions_list_tool() -> Tool:
 async def handle_linode_regions_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_regions_list tool request."""
-    environment = arguments.get("environment", "")
-    country_filter = arguments.get("country", "")
-    capability_filter = arguments.get("capability", "")
+    """Handle linode_regions_list tool request.
+
+    Args:
+        arguments: RegionFilterArgs - environment, capabilities (optional)
+        cfg: Configuration object
+    """
+    environment: str = arguments.get("environment", "")
+    country_filter: str = arguments.get("country", "")
+    capability_filter: str = arguments.get("capability", "")
 
     try:
         selected_env = _select_environment(cfg, environment)
@@ -630,9 +709,14 @@ def create_linode_types_list_tool() -> Tool:
 async def handle_linode_types_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_types_list tool request."""
-    environment = arguments.get("environment", "")
-    class_filter = arguments.get("class", "")
+    """Handle linode_types_list tool request.
+
+    Args:
+        arguments: TypeFilterArgs - environment, type_class (optional)
+        cfg: Configuration object
+    """
+    environment: str = arguments.get("environment", "")
+    class_filter: str = arguments.get("class", "")
 
     try:
         selected_env = _select_environment(cfg, environment)
@@ -714,10 +798,15 @@ def create_linode_volumes_list_tool() -> Tool:
 async def handle_linode_volumes_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_volumes_list tool request."""
-    environment = arguments.get("environment", "")
-    region_filter = arguments.get("region", "")
-    label_contains = arguments.get("label_contains", "")
+    """Handle linode_volumes_list tool request.
+
+    Args:
+        arguments: VolumeFilterArgs - environment, region, label (optional)
+        cfg: Configuration object
+    """
+    environment: str = arguments.get("environment", "")
+    region_filter: str = arguments.get("region", "")
+    label_contains: str = arguments.get("label_contains", "")
 
     try:
         selected_env = _select_environment(cfg, environment)
@@ -815,11 +904,17 @@ def create_linode_images_list_tool() -> Tool:
 async def handle_linode_images_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_images_list tool request."""
-    environment = arguments.get("environment", "")
-    type_filter = arguments.get("type", "")
-    is_public_filter = arguments.get("is_public", "")
-    deprecated_filter = arguments.get("deprecated", "")
+    """Handle linode_images_list tool request.
+
+    Args:
+        arguments: ImageFilterArgs - environment, is_public,
+            include_deprecated (optional)
+        cfg: Configuration object
+    """
+    environment: str = arguments.get("environment", "")
+    type_filter: str = arguments.get("type", "")
+    is_public_filter: str | bool = arguments.get("is_public", "")
+    deprecated_filter: str = arguments.get("deprecated", "")
 
     try:
         selected_env = _select_environment(cfg, environment)
@@ -836,7 +931,11 @@ async def handle_linode_images_list(
                 images = [i for i in images if i.type.lower() == type_filter.lower()]
 
             if is_public_filter:
-                want_public = is_public_filter.lower() == "true"
+                want_public = (
+                    is_public_filter.lower() == "true"
+                    if isinstance(is_public_filter, str)
+                    else is_public_filter
+                )
                 images = [i for i in images if i.is_public == want_public]
 
             if deprecated_filter:

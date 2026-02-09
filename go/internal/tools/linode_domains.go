@@ -16,8 +16,8 @@ import (
 func NewLinodeDomainsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_domains_list",
 		mcp.WithDescription("Lists all domains managed by your Linode account. Can filter by domain name or type (master/slave)."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithString("domain_contains",
 			mcp.Description("Filter domains by name containing this string (case-insensitive)"),
@@ -35,7 +35,7 @@ func NewLinodeDomainsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Co
 }
 
 func handleLinodeDomainsListRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	domainContains := request.GetString("domain_contains", "")
 	typeFilter := request.GetString("type", "")
 
@@ -67,7 +67,7 @@ func handleLinodeDomainsListRequest(ctx context.Context, request mcp.CallToolReq
 }
 
 func filterDomainsByName(domains []linode.Domain, domainContains string) []linode.Domain {
-	var filtered []linode.Domain
+	filtered := make([]linode.Domain, 0, len(domains))
 
 	domainContains = strings.ToLower(domainContains)
 
@@ -81,7 +81,7 @@ func filterDomainsByName(domains []linode.Domain, domainContains string) []linod
 }
 
 func filterDomainsByType(domains []linode.Domain, typeFilter string) []linode.Domain {
-	var filtered []linode.Domain
+	filtered := make([]linode.Domain, 0, len(domains))
 
 	typeFilter = strings.ToLower(typeFilter)
 
@@ -124,8 +124,8 @@ func formatDomainsResponse(domains []linode.Domain, domainContains, typeFilter s
 func NewLinodeDomainGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_domain_get",
 		mcp.WithDescription("Gets detailed information about a specific domain by its ID."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithNumber("domain_id",
 			mcp.Required(),
@@ -141,7 +141,7 @@ func NewLinodeDomainGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Cont
 }
 
 func handleLinodeDomainGetRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	domainID := request.GetInt("domain_id", 0)
 
 	if domainID == 0 {
@@ -171,8 +171,8 @@ func handleLinodeDomainGetRequest(ctx context.Context, request mcp.CallToolReque
 func NewLinodeDomainRecordsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_domain_records_list",
 		mcp.WithDescription("Lists all DNS records for a specific domain. Can filter by record type or name."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithNumber("domain_id",
 			mcp.Required(),
@@ -194,7 +194,7 @@ func NewLinodeDomainRecordsListTool(cfg *config.Config) (mcp.Tool, func(ctx cont
 }
 
 func handleLinodeDomainRecordsListRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	domainID := request.GetInt("domain_id", 0)
 	typeFilter := request.GetString("type", "")
 	nameContains := request.GetString("name_contains", "")
@@ -231,7 +231,7 @@ func handleLinodeDomainRecordsListRequest(ctx context.Context, request mcp.CallT
 }
 
 func filterDomainRecordsByType(records []linode.DomainRecord, typeFilter string) []linode.DomainRecord {
-	var filtered []linode.DomainRecord
+	filtered := make([]linode.DomainRecord, 0, len(records))
 
 	typeFilter = strings.ToUpper(typeFilter)
 
@@ -245,7 +245,7 @@ func filterDomainRecordsByType(records []linode.DomainRecord, typeFilter string)
 }
 
 func filterDomainRecordsByName(records []linode.DomainRecord, nameContains string) []linode.DomainRecord {
-	var filtered []linode.DomainRecord
+	filtered := make([]linode.DomainRecord, 0, len(records))
 
 	nameContains = strings.ToLower(nameContains)
 

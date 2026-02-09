@@ -9,7 +9,7 @@ import (
 	"unicode"
 )
 
-// Validation constants.
+// Limits for input validation across Linode API tool parameters.
 const (
 	minPasswordLength    = 12
 	maxPasswordLength    = 128
@@ -23,21 +23,21 @@ const (
 	maxKeyLabelLength    = 50
 )
 
-// SSH key validation errors.
+// ErrSSHKeyRequired and related errors are returned when SSH key input fails format checks.
 var (
 	ErrSSHKeyRequired      = errors.New("ssh_key is required")
 	ErrSSHKeyInvalidFormat = errors.New("invalid SSH key format: must start with ssh-rsa, ssh-ed25519, or ecdsa-sha2-*")
 	ErrSSHKeyInvalidLength = errors.New("invalid SSH key length: key appears malformed")
 )
 
-// Password validation errors.
+// ErrPasswordTooShort and related errors are returned when root_pass fails complexity checks.
 var (
 	ErrPasswordTooShort    = errors.New("root_pass must be at least 12 characters")
 	ErrPasswordTooLong     = errors.New("root_pass must not exceed 128 characters")
 	ErrPasswordMissingChar = errors.New("root_pass must contain uppercase, lowercase, and digits")
 )
 
-// DNS validation errors.
+// ErrDNSNameTooLong and related errors are returned when DNS record input fails format checks.
 var (
 	ErrDNSNameTooLong       = errors.New("DNS record name exceeds maximum length of 253 characters")
 	ErrDNSNameInvalid       = errors.New("invalid DNS record name: must contain only alphanumeric characters, hyphens, and dots")
@@ -47,20 +47,20 @@ var (
 	ErrDNSTargetInvalidAAAA = errors.New("aaaa record target must be a valid IPv6 address")
 )
 
-// Firewall validation errors.
+// ErrFirewallPolicyInvalid is returned when a firewall inbound/outbound policy is not ACCEPT or DROP.
 var (
 	ErrFirewallPolicyInvalid = errors.New("firewall policy must be 'ACCEPT' or 'DROP'")
 )
 
-// Volume validation errors.
+// ErrVolumeSizeTooSmall and ErrVolumeSizeTooLarge are returned when volume size is outside Linode's allowed range.
 var (
 	ErrVolumeSizeTooSmall = errors.New("volume size must be at least 10 GB")
 	ErrVolumeSizeTooLarge = errors.New("volume size cannot exceed 10240 GB (10 TB)")
 )
 
-// SSH key validation.
+// validSSHKeyPrefixes lists the algorithm prefixes accepted by Linode for SSH keys.
 //
-//nolint:gochecknoglobals // Read-only slice of valid SSH key prefixes.
+//nolint:gochecknoglobals // Read-only slice used by validateSSHKey.
 var validSSHKeyPrefixes = []string{
 	"ssh-rsa",
 	"ssh-ed25519",
@@ -98,7 +98,7 @@ func validateSSHKey(key string) error {
 	return nil
 }
 
-// Password validation.
+// validateRootPassword checks length and character complexity requirements for instance root passwords.
 func validateRootPassword(password string) error {
 	if password == "" {
 		return nil // Password is optional.
@@ -132,7 +132,7 @@ func validateRootPassword(password string) error {
 	return nil
 }
 
-// DNS record validation.
+// validDNSNameRegex matches RFC 1035 hostnames; validBucketLabelRegex matches S3-compatible bucket names.
 var (
 	validDNSNameRegex     = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)*$|^@$|^$`)
 	validBucketLabelRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]{1,2}$`)
@@ -179,7 +179,7 @@ func validateDNSRecordTarget(recordType, target string) error {
 	return nil
 }
 
-// Firewall policy validation.
+// validateFirewallPolicy rejects any policy value other than ACCEPT or DROP.
 func validateFirewallPolicy(policy string) error {
 	upper := strings.ToUpper(policy)
 	if upper != "ACCEPT" && upper != "DROP" {
@@ -189,18 +189,20 @@ func validateFirewallPolicy(policy string) error {
 	return nil
 }
 
-// Object Storage bucket label validation errors.
+// ErrBucketLabelRequired and related errors are returned when bucket label or ACL input is invalid per S3 naming rules.
 var (
 	ErrBucketLabelRequired  = errors.New("label is required")
 	ErrBucketLabelTooShort  = errors.New("bucket label must be at least 3 characters")
 	ErrBucketLabelTooLong   = errors.New("bucket label must not exceed 63 characters")
 	ErrBucketLabelStartEnd  = errors.New("bucket label must start and end with a lowercase letter or number")
 	ErrBucketLabelInvalid   = errors.New("bucket label must contain only lowercase letters, numbers, and hyphens")
+	ErrBucketLabelIPAddress = errors.New("bucket label must not be formatted as an IP address")
+	ErrBucketLabelXNPrefix  = errors.New("bucket label must not use the 'xn--' prefix (reserved for internationalized domain names)")
 	ErrBucketACLInvalid     = errors.New("acl must be one of: private, public-read, authenticated-read, public-read-write")
 	ErrBucketRegionRequired = errors.New("region is required")
 )
 
-// Object Storage bucket label validation (S3 naming rules).
+// validateBucketLabel checks that a bucket label conforms to S3 naming rules (3-63 chars, lowercase alphanumeric and hyphens).
 func validateBucketLabel(label string) error {
 	if label == "" {
 		return ErrBucketLabelRequired
@@ -212,6 +214,14 @@ func validateBucketLabel(label string) error {
 
 	if len(label) > maxBucketLabelLength {
 		return ErrBucketLabelTooLong
+	}
+
+	if net.ParseIP(label) != nil {
+		return ErrBucketLabelIPAddress
+	}
+
+	if strings.HasPrefix(label, "xn--") {
+		return ErrBucketLabelXNPrefix
 	}
 
 	if !validBucketLabelRegex.MatchString(label) {
@@ -231,7 +241,7 @@ func validateBucketLabel(label string) error {
 	return nil
 }
 
-// Object Storage ACL validation.
+// validateBucketACL ensures the ACL value is one of the four S3-compatible options supported by Linode.
 func validateBucketACL(acl string) error {
 	switch acl {
 	case "private", "public-read", "authenticated-read", "public-read-write":
@@ -241,7 +251,7 @@ func validateBucketACL(acl string) error {
 	}
 }
 
-// Volume size validation.
+// validateVolumeSize ensures the requested volume size is within Linode's 10 GB to 10 TB range.
 func validateVolumeSize(size int) error {
 	if size < minVolumeSizeGB {
 		return ErrVolumeSizeTooSmall
@@ -254,7 +264,7 @@ func validateVolumeSize(size int) error {
 	return nil
 }
 
-// Object Storage access key validation errors.
+// ErrKeyLabelRequired and related errors are returned when Object Storage access key parameters are invalid.
 var (
 	ErrKeyLabelRequired        = errors.New("label is required")
 	ErrKeyLabelTooLong         = errors.New("access key label must not exceed 50 characters")
@@ -264,14 +274,14 @@ var (
 	ErrKeyBucketRegionRequired = errors.New("bucket_access entries must include region")
 )
 
-// Presigned URL validation errors.
+// ErrPresignedMethodInvalid and related errors are returned when presigned URL parameters are out of range.
 var (
 	ErrPresignedMethodInvalid  = errors.New("method must be 'GET' or 'PUT'")
 	ErrPresignedExpiresInvalid = errors.New("expires_in must be between 1 and 604800 seconds (7 days)")
 	ErrObjectNameRequired      = errors.New("name (object key) is required")
 )
 
-// Presigned URL validation constants.
+// Presigned URL expiration limits (1 second to 7 days).
 const (
 	minExpiresIn = 1
 	maxExpiresIn = 604800
@@ -294,7 +304,7 @@ func validateExpiresIn(expiresIn int) error {
 	return nil
 }
 
-// Object Storage access key label validation.
+// validateKeyLabel checks that an Object Storage access key label is present and within length limits.
 func validateKeyLabel(label string) error {
 	if label == "" {
 		return ErrKeyLabelRequired
@@ -307,7 +317,7 @@ func validateKeyLabel(label string) error {
 	return nil
 }
 
-// Object Storage access key permissions validation.
+// validateKeyPermissions rejects any permission value other than read_only or read_write.
 func validateKeyPermissions(permissions string) error {
 	if permissions != "read_only" && permissions != "read_write" {
 		return fmt.Errorf("got '%s': %w", permissions, ErrKeyPermissionsInvalid)

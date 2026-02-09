@@ -15,8 +15,8 @@ import (
 func NewLinodeDomainCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_domain_create",
 		mcp.WithDescription("Creates a new DNS domain. Use type 'master' for domains you control, 'slave' for secondary DNS."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithString("domain",
 			mcp.Required(),
@@ -45,7 +45,7 @@ func NewLinodeDomainCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 }
 
 func handleLinodeDomainCreateRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	domain := request.GetString("domain", "")
 	domainType := request.GetString("type", "")
 	soaEmail := request.GetString("soa_email", "")
@@ -99,8 +99,8 @@ func handleLinodeDomainCreateRequest(ctx context.Context, request mcp.CallToolRe
 func NewLinodeDomainUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_domain_update",
 		mcp.WithDescription("Updates an existing DNS domain. Can modify SOA email, description, TTL, and status."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithNumber("domain_id",
 			mcp.Required(),
@@ -128,7 +128,7 @@ func NewLinodeDomainUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 }
 
 func handleLinodeDomainUpdateRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	domainID := request.GetInt("domain_id", 0)
 	soaEmail := request.GetString("soa_email", "")
 	description := request.GetString("description", "")
@@ -177,14 +177,14 @@ func handleLinodeDomainUpdateRequest(ctx context.Context, request mcp.CallToolRe
 func NewLinodeDomainDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_domain_delete",
 		mcp.WithDescription("Deletes a DNS domain and all its records. WARNING: This action is irreversible."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithNumber("domain_id",
 			mcp.Required(),
 			mcp.Description("The ID of the domain to delete"),
 		),
-		mcp.WithBoolean("confirm",
+		mcp.WithBoolean(paramConfirm,
 			mcp.Required(),
 			mcp.Description("Must be set to true to confirm deletion. This deletes all DNS records."),
 		),
@@ -198,9 +198,9 @@ func NewLinodeDomainDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 }
 
 func handleLinodeDomainDeleteRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	domainID := request.GetInt("domain_id", 0)
-	confirm := request.GetBool("confirm", false)
+	confirm := request.GetBool(paramConfirm, false)
 
 	if !confirm {
 		return mcp.NewToolResultError("This operation is destructive and deletes all DNS records. Set confirm=true to proceed."), nil

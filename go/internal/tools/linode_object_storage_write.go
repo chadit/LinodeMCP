@@ -17,8 +17,8 @@ import (
 func NewLinodeObjectStorageBucketCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_object_storage_bucket_create",
 		mcp.WithDescription("Creates a new Object Storage bucket. WARNING: Billing starts immediately. Use linode_object_storage_clusters_list to find valid regions."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithString("label",
 			mcp.Required(),
@@ -34,7 +34,7 @@ func NewLinodeObjectStorageBucketCreateTool(cfg *config.Config) (mcp.Tool, func(
 		mcp.WithBoolean("cors_enabled",
 			mcp.Description("Whether to enable CORS on the bucket (default: true)"),
 		),
-		mcp.WithBoolean("confirm",
+		mcp.WithBoolean(paramConfirm,
 			mcp.Required(),
 			mcp.Description("Must be set to true to confirm bucket creation. This operation incurs billing charges."),
 		),
@@ -48,11 +48,11 @@ func NewLinodeObjectStorageBucketCreateTool(cfg *config.Config) (mcp.Tool, func(
 }
 
 func handleObjectStorageBucketCreateRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	label := request.GetString("label", "")
 	region := request.GetString("region", "")
 	acl := request.GetString("acl", "")
-	confirm := request.GetBool("confirm", false)
+	confirm := request.GetBool(paramConfirm, false)
 
 	if !confirm {
 		return mcp.NewToolResultError("This operation creates a billable resource. Set confirm=true to proceed."), nil
@@ -114,8 +114,8 @@ func handleObjectStorageBucketCreateRequest(ctx context.Context, request mcp.Cal
 func NewLinodeObjectStorageBucketDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_object_storage_bucket_delete",
 		mcp.WithDescription("Deletes an Object Storage bucket. WARNING: This is irreversible. All objects must be removed first."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithString("region",
 			mcp.Required(),
@@ -125,7 +125,7 @@ func NewLinodeObjectStorageBucketDeleteTool(cfg *config.Config) (mcp.Tool, func(
 			mcp.Required(),
 			mcp.Description("Label of the bucket to delete"),
 		),
-		mcp.WithBoolean("confirm",
+		mcp.WithBoolean(paramConfirm,
 			mcp.Required(),
 			mcp.Description("Must be set to true to confirm deletion. This action is irreversible."),
 		),
@@ -139,10 +139,10 @@ func NewLinodeObjectStorageBucketDeleteTool(cfg *config.Config) (mcp.Tool, func(
 }
 
 func handleObjectStorageBucketDeleteRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	region := request.GetString("region", "")
 	label := request.GetString("label", "")
-	confirm := request.GetBool("confirm", false)
+	confirm := request.GetBool(paramConfirm, false)
 
 	if !confirm {
 		return mcp.NewToolResultError("This operation is destructive and irreversible. All objects must be removed first. Set confirm=true to proceed."), nil
@@ -188,8 +188,8 @@ func handleObjectStorageBucketDeleteRequest(ctx context.Context, request mcp.Cal
 func NewLinodeObjectStorageBucketAccessUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_object_storage_bucket_access_update",
 		mcp.WithDescription("Updates access control settings for an Object Storage bucket. Changes ACL and/or CORS configuration."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithString("region",
 			mcp.Required(),
@@ -205,7 +205,7 @@ func NewLinodeObjectStorageBucketAccessUpdateTool(cfg *config.Config) (mcp.Tool,
 		mcp.WithBoolean("cors_enabled",
 			mcp.Description("Whether to enable CORS on the bucket"),
 		),
-		mcp.WithBoolean("confirm",
+		mcp.WithBoolean(paramConfirm,
 			mcp.Required(),
 			mcp.Description("Must be set to true to confirm access update."),
 		),
@@ -219,11 +219,11 @@ func NewLinodeObjectStorageBucketAccessUpdateTool(cfg *config.Config) (mcp.Tool,
 }
 
 func handleObjectStorageBucketAccessUpdateRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	region := request.GetString("region", "")
 	label := request.GetString("label", "")
 	acl := request.GetString("acl", "")
-	confirm := request.GetBool("confirm", false)
+	confirm := request.GetBool(paramConfirm, false)
 
 	if !confirm {
 		return mcp.NewToolResultError("This operation changes bucket access controls. Set confirm=true to proceed."), nil
@@ -286,8 +286,8 @@ func handleObjectStorageBucketAccessUpdateRequest(ctx context.Context, request m
 func NewLinodeObjectStorageKeyCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_object_storage_key_create",
 		mcp.WithDescription("Creates a new Object Storage access key. WARNING: The secret_key is only shown ONCE in the response and cannot be retrieved later."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithString("label",
 			mcp.Required(),
@@ -296,7 +296,7 @@ func NewLinodeObjectStorageKeyCreateTool(cfg *config.Config) (mcp.Tool, func(ctx
 		mcp.WithString("bucket_access",
 			mcp.Description("JSON array of bucket permissions: [{\"bucket_name\": \"name\", \"region\": \"region\", \"permissions\": \"read_only|read_write\"}]. Omit for unrestricted access."),
 		),
-		mcp.WithBoolean("confirm",
+		mcp.WithBoolean(paramConfirm,
 			mcp.Required(),
 			mcp.Description("Must be set to true. The secret_key is only shown ONCE in the response."),
 		),
@@ -310,10 +310,10 @@ func NewLinodeObjectStorageKeyCreateTool(cfg *config.Config) (mcp.Tool, func(ctx
 }
 
 func handleObjectStorageKeyCreateRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	label := request.GetString("label", "")
 	bucketAccessJSON := request.GetString("bucket_access", "")
-	confirm := request.GetBool("confirm", false)
+	confirm := request.GetBool(paramConfirm, false)
 
 	if !confirm {
 		return mcp.NewToolResultError(
@@ -377,8 +377,8 @@ func handleObjectStorageKeyCreateRequest(ctx context.Context, request mcp.CallTo
 func NewLinodeObjectStorageKeyUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_object_storage_key_update",
 		mcp.WithDescription("Updates an Object Storage access key's label or bucket permissions."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithNumber("key_id",
 			mcp.Required(),
@@ -390,7 +390,7 @@ func NewLinodeObjectStorageKeyUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx
 		mcp.WithString("bucket_access",
 			mcp.Description("JSON array of bucket permissions: [{\"bucket_name\": \"name\", \"region\": \"region\", \"permissions\": \"read_only|read_write\"}]"),
 		),
-		mcp.WithBoolean("confirm",
+		mcp.WithBoolean(paramConfirm,
 			mcp.Required(),
 			mcp.Description("Must be set to true to confirm key update."),
 		),
@@ -404,11 +404,11 @@ func NewLinodeObjectStorageKeyUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx
 }
 
 func handleObjectStorageKeyUpdateRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	keyID := request.GetInt("key_id", 0)
 	label := request.GetString("label", "")
 	bucketAccessJSON := request.GetString("bucket_access", "")
-	confirm := request.GetBool("confirm", false)
+	confirm := request.GetBool(paramConfirm, false)
 
 	if !confirm {
 		return mcp.NewToolResultError("This modifies access key permissions. Set confirm=true to proceed."), nil
@@ -473,14 +473,14 @@ func handleObjectStorageKeyUpdateRequest(ctx context.Context, request mcp.CallTo
 func NewLinodeObjectStorageKeyDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_object_storage_key_delete",
 		mcp.WithDescription("Revokes an Object Storage access key permanently."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithNumber("key_id",
 			mcp.Required(),
 			mcp.Description("ID of the access key to revoke"),
 		),
-		mcp.WithBoolean("confirm",
+		mcp.WithBoolean(paramConfirm,
 			mcp.Required(),
 			mcp.Description("Must be set to true to confirm key revocation. This action is permanent."),
 		),
@@ -494,9 +494,9 @@ func NewLinodeObjectStorageKeyDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx
 }
 
 func handleObjectStorageKeyDeleteRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	keyID := request.GetInt("key_id", 0)
-	confirm := request.GetBool("confirm", false)
+	confirm := request.GetBool(paramConfirm, false)
 
 	if !confirm {
 		return mcp.NewToolResultError("This revokes the access key permanently. Set confirm=true to proceed."), nil
@@ -537,8 +537,8 @@ func NewLinodeObjectStorageObjectACLUpdateTool(cfg *config.Config) (mcp.Tool, fu
 	tool := mcp.NewTool("linode_object_storage_object_acl_update",
 		mcp.WithDescription("Updates the Access Control List (ACL) for a specific object in an Object Storage bucket. "+
 			"Requires confirm=true to proceed."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithString("region",
 			mcp.Required(),
@@ -556,7 +556,7 @@ func NewLinodeObjectStorageObjectACLUpdateTool(cfg *config.Config) (mcp.Tool, fu
 			mcp.Required(),
 			mcp.Description("ACL to set: 'private', 'public-read', 'authenticated-read', or 'public-read-write'"),
 		),
-		mcp.WithBoolean("confirm",
+		mcp.WithBoolean(paramConfirm,
 			mcp.Required(),
 			mcp.Description("Must be true to proceed. This modifies the object's access permissions."),
 		),
@@ -570,12 +570,12 @@ func NewLinodeObjectStorageObjectACLUpdateTool(cfg *config.Config) (mcp.Tool, fu
 }
 
 func handleObjectStorageObjectACLUpdateRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	confirm := request.GetBool("confirm", false)
+	confirm := request.GetBool(paramConfirm, false)
 	if !confirm {
 		return mcp.NewToolResultError("This modifies the object's access permissions. Set confirm=true to proceed."), nil
 	}
 
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	region := request.GetString("region", "")
 	label := request.GetString("label", "")
 	name := request.GetString("name", "")
@@ -626,8 +626,8 @@ func NewLinodeObjectStorageSSLDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx
 	tool := mcp.NewTool("linode_object_storage_ssl_delete",
 		mcp.WithDescription("Deletes the SSL/TLS certificate from an Object Storage bucket. "+
 			"Requires confirm=true to proceed."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithString("region",
 			mcp.Required(),
@@ -637,7 +637,7 @@ func NewLinodeObjectStorageSSLDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx
 			mcp.Required(),
 			mcp.Description("The bucket label (name)"),
 		),
-		mcp.WithBoolean("confirm",
+		mcp.WithBoolean(paramConfirm,
 			mcp.Required(),
 			mcp.Description("Must be true to proceed. This removes the SSL certificate from the bucket."),
 		),
@@ -651,12 +651,12 @@ func NewLinodeObjectStorageSSLDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx
 }
 
 func handleObjectStorageSSLDeleteRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	confirm := request.GetBool("confirm", false)
+	confirm := request.GetBool(paramConfirm, false)
 	if !confirm {
 		return mcp.NewToolResultError("This removes the SSL certificate from the bucket. Set confirm=true to proceed."), nil
 	}
 
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	region := request.GetString("region", "")
 	label := request.GetString("label", "")
 

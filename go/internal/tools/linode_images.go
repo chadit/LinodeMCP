@@ -16,8 +16,8 @@ import (
 func NewLinodeImagesListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_images_list",
 		mcp.WithDescription("Lists all available Linode images (OS images and custom images) with optional filtering by type, public status, or deprecated status"),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithString("type",
 			mcp.Description("Filter images by type (manual, automatic)"),
@@ -38,7 +38,7 @@ func NewLinodeImagesListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Con
 }
 
 func handleLinodeImagesListRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	typeFilter := request.GetString("type", "")
 	isPublicFilter := request.GetString("is_public", "")
 	deprecatedFilter := request.GetString("deprecated", "")
@@ -75,7 +75,7 @@ func handleLinodeImagesListRequest(ctx context.Context, request mcp.CallToolRequ
 }
 
 func filterImagesByType(images []linode.Image, typeFilter string) []linode.Image {
-	var filtered []linode.Image
+	filtered := make([]linode.Image, 0, len(images))
 
 	typeFilter = strings.ToLower(typeFilter)
 
@@ -89,7 +89,7 @@ func filterImagesByType(images []linode.Image, typeFilter string) []linode.Image
 }
 
 func filterImagesByPublic(images []linode.Image, isPublicFilter string) []linode.Image {
-	var filtered []linode.Image
+	filtered := make([]linode.Image, 0, len(images))
 
 	wantPublic := strings.ToLower(isPublicFilter) == boolTrue
 
@@ -103,7 +103,7 @@ func filterImagesByPublic(images []linode.Image, isPublicFilter string) []linode
 }
 
 func filterImagesByDeprecated(images []linode.Image, deprecatedFilter string) []linode.Image {
-	var filtered []linode.Image
+	filtered := make([]linode.Image, 0, len(images))
 
 	wantDeprecated := strings.ToLower(deprecatedFilter) == boolTrue
 

@@ -27,7 +27,7 @@ func TestNewLinodeSSHKeyCreateTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_sshkey_create", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 
 	// Verify required parameters exist in schema.
 	props := tool.InputSchema.Properties
@@ -134,7 +134,7 @@ func TestNewLinodeSSHKeyDeleteTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_sshkey_delete", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 
 	props := tool.InputSchema.Properties
 	assert.Contains(t, props, "sshkey_id")
@@ -206,7 +206,7 @@ func TestNewLinodeInstanceBootTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_instance_boot", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 
 	props := tool.InputSchema.Properties
 	assert.Contains(t, props, "instance_id")
@@ -276,7 +276,7 @@ func TestNewLinodeInstanceRebootTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_instance_reboot", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 
 	props := tool.InputSchema.Properties
 	assert.Contains(t, props, "instance_id")
@@ -346,7 +346,7 @@ func TestNewLinodeInstanceShutdownTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_instance_shutdown", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 
 	props := tool.InputSchema.Properties
 	assert.Contains(t, props, "instance_id")
@@ -415,7 +415,7 @@ func TestNewLinodeInstanceCreateTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_instance_create", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 	assert.Contains(t, tool.Description, "WARNING")
 
 	props := tool.InputSchema.Properties
@@ -555,7 +555,7 @@ func TestNewLinodeInstanceDeleteTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_instance_delete", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 	assert.Contains(t, tool.Description, "WARNING")
 
 	props := tool.InputSchema.Properties
@@ -650,7 +650,7 @@ func TestNewLinodeInstanceResizeTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_instance_resize", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 	assert.Contains(t, tool.Description, "WARNING")
 
 	props := tool.InputSchema.Properties
@@ -784,7 +784,7 @@ func TestNewLinodeFirewallCreateTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_firewall_create", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 
 	props := tool.InputSchema.Properties
 	assert.Contains(t, props, "label")
@@ -865,7 +865,7 @@ func TestNewLinodeFirewallUpdateTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_firewall_update", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 
 	props := tool.InputSchema.Properties
 	assert.Contains(t, props, "firewall_id")
@@ -945,7 +945,7 @@ func TestNewLinodeFirewallDeleteTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_firewall_delete", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 	assert.Contains(t, tool.Description, "WARNING")
 
 	props := tool.InputSchema.Properties
@@ -1022,7 +1022,7 @@ func TestNewLinodeDomainCreateTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_domain_create", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 
 	props := tool.InputSchema.Properties
 	assert.Contains(t, props, "domain")
@@ -1127,7 +1127,7 @@ func TestNewLinodeDomainUpdateTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_domain_update", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 
 	props := tool.InputSchema.Properties
 	assert.Contains(t, props, "domain_id")
@@ -1208,7 +1208,7 @@ func TestNewLinodeDomainDeleteTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_domain_delete", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 	assert.Contains(t, tool.Description, "WARNING")
 
 	props := tool.InputSchema.Properties
@@ -1285,7 +1285,7 @@ func TestNewLinodeDomainRecordCreateTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_domain_record_create", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 
 	props := tool.InputSchema.Properties
 	assert.Contains(t, props, "domain_id")
@@ -1422,7 +1422,7 @@ func TestNewLinodeDomainRecordUpdateTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_domain_record_update", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 
 	props := tool.InputSchema.Properties
 	assert.Contains(t, props, "domain_id")
@@ -1532,7 +1532,7 @@ func TestNewLinodeDomainRecordDeleteTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_domain_record_delete", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 
 	props := tool.InputSchema.Properties
 	assert.Contains(t, props, "domain_id")
@@ -1630,7 +1630,7 @@ func TestNewLinodeVolumeCreateTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_volume_create", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 	assert.Contains(t, tool.Description, "WARNING")
 
 	props := tool.InputSchema.Properties
@@ -1770,7 +1770,7 @@ func TestNewLinodeVolumeAttachTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_volume_attach", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 
 	props := tool.InputSchema.Properties
 	assert.Contains(t, props, "volume_id")
@@ -1875,7 +1875,7 @@ func TestNewLinodeVolumeDetachTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_volume_detach", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 
 	props := tool.InputSchema.Properties
 	assert.Contains(t, props, "volume_id")
@@ -1944,7 +1944,7 @@ func TestNewLinodeVolumeResizeTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_volume_resize", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 	assert.Contains(t, tool.Description, "WARNING")
 
 	props := tool.InputSchema.Properties
@@ -2082,7 +2082,7 @@ func TestNewLinodeVolumeDeleteTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_volume_delete", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 	assert.Contains(t, tool.Description, "WARNING")
 
 	props := tool.InputSchema.Properties
@@ -2159,7 +2159,7 @@ func TestNewLinodeNodeBalancerCreateTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_nodebalancer_create", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 	assert.Contains(t, tool.Description, "WARNING")
 
 	props := tool.InputSchema.Properties
@@ -2264,7 +2264,7 @@ func TestNewLinodeNodeBalancerUpdateTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_nodebalancer_update", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 
 	props := tool.InputSchema.Properties
 	assert.Contains(t, props, "nodebalancer_id")
@@ -2344,7 +2344,7 @@ func TestNewLinodeNodeBalancerDeleteTool_ToolDefinition(t *testing.T) {
 
 	assert.Equal(t, "linode_nodebalancer_delete", tool.Name)
 	assert.NotEmpty(t, tool.Description)
-	assert.NotNil(t, handler)
+	require.NotNil(t, handler)
 	assert.Contains(t, tool.Description, "WARNING")
 
 	props := tool.InputSchema.Properties

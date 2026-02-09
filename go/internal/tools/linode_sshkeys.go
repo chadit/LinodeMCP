@@ -15,8 +15,8 @@ import (
 func NewLinodeSSHKeysListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_sshkeys_list",
 		mcp.WithDescription("Lists all SSH keys associated with your Linode profile. Can filter by label."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithString("label_contains",
 			mcp.Description("Filter SSH keys by label containing this string (case-insensitive)"),
@@ -31,7 +31,7 @@ func NewLinodeSSHKeysListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Co
 }
 
 func handleLinodeSSHKeysListRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	labelContains := request.GetString("label_contains", "")
 
 	selectedEnv, err := selectEnvironment(cfg, environment)
@@ -58,7 +58,7 @@ func handleLinodeSSHKeysListRequest(ctx context.Context, request mcp.CallToolReq
 }
 
 func filterSSHKeysByLabel(keys []linode.SSHKey, labelContains string) []linode.SSHKey {
-	var filtered []linode.SSHKey
+	filtered := make([]linode.SSHKey, 0, len(keys))
 
 	labelContains = strings.ToLower(labelContains)
 

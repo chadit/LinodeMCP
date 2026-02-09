@@ -345,15 +345,16 @@ class Server:
         @self.mcp.call_tool()  # type: ignore[untyped-decorator]
         async def call_tool_handler(name: str, arguments: dict[str, Any]) -> list[Any]:
             """Handle tool calls."""
-            if name == "hello":
-                return await handle_hello(arguments)
-            if name == "version":
-                return await handle_version(arguments)
-            if name in config_handlers:
-                return await config_handlers[name](arguments, self.config)
-
-            msg = f"Unknown tool: {name}"
-            raise ValueError(msg)
+            match name:
+                case "hello":
+                    return await handle_hello(arguments)
+                case "version":
+                    return await handle_version(arguments)
+                case _ if name in config_handlers:
+                    return await config_handlers[name](arguments, self.config)
+                case _:
+                    msg = f"Unknown tool: {name}"
+                    raise ValueError(msg)
 
     async def start(self) -> None:
         """Start the MCP server using stdio transport."""

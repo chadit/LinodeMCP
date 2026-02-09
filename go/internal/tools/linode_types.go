@@ -15,8 +15,8 @@ import (
 func NewLinodeTypesListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_types_list",
 		mcp.WithDescription("Lists all available Linode instance types (plans) with pricing information. Can filter by class (standard, dedicated, gpu, highmem, premium)."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithString("class",
 			mcp.Description("Filter types by class (standard, dedicated, gpu, highmem, premium)"),
@@ -31,7 +31,7 @@ func NewLinodeTypesListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Cont
 }
 
 func handleLinodeTypesListRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	classFilter := request.GetString("class", "")
 
 	selectedEnv, err := selectEnvironment(cfg, environment)
@@ -58,7 +58,7 @@ func handleLinodeTypesListRequest(ctx context.Context, request mcp.CallToolReque
 }
 
 func filterTypesByClass(types []linode.InstanceType, classFilter string) []linode.InstanceType {
-	var filtered []linode.InstanceType
+	filtered := make([]linode.InstanceType, 0, len(types))
 
 	classFilter = strings.ToLower(classFilter)
 

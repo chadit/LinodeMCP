@@ -16,8 +16,8 @@ import (
 func NewLinodeNodeBalancersListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_nodebalancers_list",
 		mcp.WithDescription("Lists all NodeBalancers on your account. Can filter by region or label."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithString("region",
 			mcp.Description("Filter by region ID (e.g., us-east, eu-west)"),
@@ -35,7 +35,7 @@ func NewLinodeNodeBalancersListTool(cfg *config.Config) (mcp.Tool, func(ctx cont
 }
 
 func handleLinodeNodeBalancersListRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	regionFilter := request.GetString("region", "")
 	labelContains := request.GetString("label_contains", "")
 
@@ -67,7 +67,7 @@ func handleLinodeNodeBalancersListRequest(ctx context.Context, request mcp.CallT
 }
 
 func filterNodeBalancersByRegion(nodeBalancers []linode.NodeBalancer, regionFilter string) []linode.NodeBalancer {
-	var filtered []linode.NodeBalancer
+	filtered := make([]linode.NodeBalancer, 0, len(nodeBalancers))
 
 	regionFilter = strings.ToLower(regionFilter)
 
@@ -81,7 +81,7 @@ func filterNodeBalancersByRegion(nodeBalancers []linode.NodeBalancer, regionFilt
 }
 
 func filterNodeBalancersByLabel(nodeBalancers []linode.NodeBalancer, labelContains string) []linode.NodeBalancer {
-	var filtered []linode.NodeBalancer
+	filtered := make([]linode.NodeBalancer, 0, len(nodeBalancers))
 
 	labelContains = strings.ToLower(labelContains)
 
@@ -124,8 +124,8 @@ func formatNodeBalancersResponse(nodeBalancers []linode.NodeBalancer, regionFilt
 func NewLinodeNodeBalancerGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_nodebalancer_get",
 		mcp.WithDescription("Gets detailed information about a specific NodeBalancer by its ID."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithNumber("nodebalancer_id",
 			mcp.Required(),
@@ -141,7 +141,7 @@ func NewLinodeNodeBalancerGetTool(cfg *config.Config) (mcp.Tool, func(ctx contex
 }
 
 func handleLinodeNodeBalancerGetRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	nodeBalancerID := request.GetInt("nodebalancer_id", 0)
 
 	if nodeBalancerID == 0 {

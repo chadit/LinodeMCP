@@ -57,8 +57,7 @@ func NewClient(apiURL, token string) *Client {
 	}
 }
 
-// Private helper methods
-
+// makeRequest builds and executes an authenticated HTTP request against the Linode API.
 func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body io.Reader) (*http.Response, error) {
 	url := c.baseURL + endpoint
 
@@ -79,6 +78,7 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 	return resp, nil
 }
 
+// makeJSONRequest marshals payload as JSON and delegates to makeRequest. A nil payload sends no body.
 func (c *Client) makeJSONRequest(ctx context.Context, method, endpoint string, payload any) (*http.Response, error) {
 	var body io.Reader
 
@@ -94,6 +94,8 @@ func (c *Client) makeJSONRequest(ctx context.Context, method, endpoint string, p
 	return c.makeRequest(ctx, method, endpoint, body)
 }
 
+// handleResponse reads the full response body, checks for error status codes, and unmarshals into target.
+// The caller is responsible for closing resp.Body before calling this method.
 func (c *Client) handleResponse(resp *http.Response, target any) error {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

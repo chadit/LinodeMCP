@@ -15,8 +15,8 @@ import (
 func NewLinodeSSHKeyCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_sshkey_create",
 		mcp.WithDescription("Creates a new SSH key in your Linode profile. The key can then be used when deploying new Linode instances."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithString("label",
 			mcp.Required(),
@@ -36,7 +36,7 @@ func NewLinodeSSHKeyCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 }
 
 func handleLinodeSSHKeyCreateRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	label := request.GetString("label", "")
 	sshKey := request.GetString("ssh_key", "")
 
@@ -84,8 +84,8 @@ func handleLinodeSSHKeyCreateRequest(ctx context.Context, request mcp.CallToolRe
 func NewLinodeSSHKeyDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_sshkey_delete",
 		mcp.WithDescription("Deletes an SSH key from your Linode profile. This will not affect any instances already using this key."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithNumber("sshkey_id",
 			mcp.Required(),
@@ -101,7 +101,7 @@ func NewLinodeSSHKeyDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 }
 
 func handleLinodeSSHKeyDeleteRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	sshKeyID := request.GetInt("sshkey_id", 0)
 
 	if sshKeyID == 0 {

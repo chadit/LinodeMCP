@@ -15,8 +15,8 @@ import (
 func NewLinodeVolumeCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_volume_create",
 		mcp.WithDescription("Creates a new block storage volume. WARNING: Billing starts immediately. Use linode_regions_list to find valid regions."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithString("label",
 			mcp.Required(),
@@ -31,7 +31,7 @@ func NewLinodeVolumeCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 		mcp.WithNumber("linode_id",
 			mcp.Description("Linode ID to attach the volume to (optional). If provided, region is inferred."),
 		),
-		mcp.WithBoolean("confirm",
+		mcp.WithBoolean(paramConfirm,
 			mcp.Required(),
 			mcp.Description("Must be set to true to confirm volume creation. This operation incurs billing charges."),
 		),
@@ -45,12 +45,12 @@ func NewLinodeVolumeCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 }
 
 func handleLinodeVolumeCreateRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	label := request.GetString("label", "")
 	region := request.GetString("region", "")
 	size := request.GetInt("size", 0)
 	linodeID := request.GetInt("linode_id", 0)
-	confirm := request.GetBool("confirm", false)
+	confirm := request.GetBool(paramConfirm, false)
 
 	if !confirm {
 		return mcp.NewToolResultError("This operation creates a billable resource. Set confirm=true to proceed."), nil
@@ -111,8 +111,8 @@ func handleLinodeVolumeCreateRequest(ctx context.Context, request mcp.CallToolRe
 func NewLinodeVolumeAttachTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_volume_attach",
 		mcp.WithDescription("Attaches a block storage volume to a Linode instance. The volume and instance must be in the same region."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithNumber("volume_id",
 			mcp.Required(),
@@ -135,7 +135,7 @@ func NewLinodeVolumeAttachTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 }
 
 func handleLinodeVolumeAttachRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	volumeID := request.GetInt("volume_id", 0)
 	linodeID := request.GetInt("linode_id", 0)
 	configID := request.GetInt("config_id", 0)
@@ -189,8 +189,8 @@ func handleLinodeVolumeAttachRequest(ctx context.Context, request mcp.CallToolRe
 func NewLinodeVolumeDetachTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_volume_detach",
 		mcp.WithDescription("Detaches a block storage volume from a Linode instance. The volume data is preserved."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithNumber("volume_id",
 			mcp.Required(),
@@ -206,7 +206,7 @@ func NewLinodeVolumeDetachTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 }
 
 func handleLinodeVolumeDetachRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	volumeID := request.GetInt("volume_id", 0)
 
 	if volumeID == 0 {
@@ -243,8 +243,8 @@ func handleLinodeVolumeDetachRequest(ctx context.Context, request mcp.CallToolRe
 func NewLinodeVolumeResizeTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_volume_resize",
 		mcp.WithDescription("Resizes a block storage volume. WARNING: Volumes can only be resized UP. This operation may incur additional billing."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithNumber("volume_id",
 			mcp.Required(),
@@ -254,7 +254,7 @@ func NewLinodeVolumeResizeTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 			mcp.Required(),
 			mcp.Description("New size in GB (must be larger than current size)"),
 		),
-		mcp.WithBoolean("confirm",
+		mcp.WithBoolean(paramConfirm,
 			mcp.Required(),
 			mcp.Description("Must be set to true to confirm resize. Volumes cannot be downsized."),
 		),
@@ -268,10 +268,10 @@ func NewLinodeVolumeResizeTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 }
 
 func handleLinodeVolumeResizeRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	volumeID := request.GetInt("volume_id", 0)
 	size := request.GetInt("size", 0)
-	confirm := request.GetBool("confirm", false)
+	confirm := request.GetBool(paramConfirm, false)
 
 	if !confirm {
 		return mcp.NewToolResultError("This operation may increase billing. Volumes cannot be downsized. Set confirm=true to proceed."), nil
@@ -316,14 +316,14 @@ func handleLinodeVolumeResizeRequest(ctx context.Context, request mcp.CallToolRe
 func NewLinodeVolumeDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_volume_delete",
 		mcp.WithDescription("Deletes a block storage volume. WARNING: This action is irreversible and all data will be permanently lost. The volume must be detached first."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithNumber("volume_id",
 			mcp.Required(),
 			mcp.Description("The ID of the volume to delete"),
 		),
-		mcp.WithBoolean("confirm",
+		mcp.WithBoolean(paramConfirm,
 			mcp.Required(),
 			mcp.Description("Must be set to true to confirm deletion. This action is irreversible."),
 		),
@@ -337,9 +337,9 @@ func NewLinodeVolumeDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 }
 
 func handleLinodeVolumeDeleteRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	volumeID := request.GetInt("volume_id", 0)
-	confirm := request.GetBool("confirm", false)
+	confirm := request.GetBool(paramConfirm, false)
 
 	if !confirm {
 		return mcp.NewToolResultError("This operation is destructive and irreversible. Set confirm=true to proceed."), nil

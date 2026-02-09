@@ -41,10 +41,10 @@ type Alerts struct {
 
 // Backups represents backup settings.
 type Backups struct {
-	Enabled   bool     `json:"enabled"`
-	Available bool     `json:"available"`
 	Schedule  Schedule `json:"schedule"`
 	Last      *Backup  `json:"last_successful"` //nolint:tagliatelle // Linode API snake_case
+	Enabled   bool     `json:"enabled"`
+	Available bool     `json:"available"`
 }
 
 // Schedule represents backup schedule settings.
@@ -120,9 +120,6 @@ type Image struct {
 	Label        string   `json:"label"`
 	Description  string   `json:"description"`
 	Type         string   `json:"type"`
-	IsPublic     bool     `json:"is_public"` //nolint:tagliatelle // Linode API snake_case
-	Deprecated   bool     `json:"deprecated"`
-	Size         int      `json:"size"`
 	Vendor       string   `json:"vendor"`
 	Status       string   `json:"status"`
 	Created      string   `json:"created"`
@@ -131,25 +128,28 @@ type Image struct {
 	EOL          *string  `json:"eol"`
 	Capabilities []string `json:"capabilities"`
 	Tags         []string `json:"tags"`
+	Size         int      `json:"size"`
+	IsPublic     bool     `json:"is_public"` //nolint:tagliatelle // Linode API snake_case
+	Deprecated   bool     `json:"deprecated"`
 }
 
 // StackScript represents a Linode StackScript for automated deployments.
 type StackScript struct {
-	ID                int      `json:"id"`
 	Username          string   `json:"username"`
 	UserGravatarID    string   `json:"user_gravatar_id"` //nolint:tagliatelle // Linode API snake_case
 	Label             string   `json:"label"`
 	Description       string   `json:"description"`
 	Images            []string `json:"images"`
-	DeploymentsTotal  int      `json:"deployments_total"`  //nolint:tagliatelle // Linode API snake_case
-	DeploymentsActive int      `json:"deployments_active"` //nolint:tagliatelle // Linode API snake_case
-	IsPublic          bool     `json:"is_public"`          //nolint:tagliatelle // Linode API snake_case
-	Mine              bool     `json:"mine"`
 	Created           string   `json:"created"`
 	Updated           string   `json:"updated"`
 	RevNote           string   `json:"rev_note"` //nolint:tagliatelle // Linode API snake_case
 	Script            string   `json:"script"`
 	UserDefinedFields []UDF    `json:"user_defined_fields"` //nolint:tagliatelle // Linode API snake_case
+	ID                int      `json:"id"`
+	DeploymentsTotal  int      `json:"deployments_total"`  //nolint:tagliatelle // Linode API snake_case
+	DeploymentsActive int      `json:"deployments_active"` //nolint:tagliatelle // Linode API snake_case
+	IsPublic          bool     `json:"is_public"`          //nolint:tagliatelle // Linode API snake_case
+	Mine              bool     `json:"mine"`
 }
 
 // UDF represents a user-defined field in a StackScript.
@@ -183,6 +183,6 @@ type CreateInstanceRequest struct {
 // ResizeInstanceRequest represents the request body for resizing a Linode instance.
 type ResizeInstanceRequest struct {
 	Type          string `json:"type"`
-	AllowAutoDisk bool   `json:"allow_auto_disk,omitempty"` //nolint:tagliatelle // Linode API snake_case
 	MigrationType string `json:"migration_type,omitempty"`  //nolint:tagliatelle // Linode API snake_case (cold, warm)
+	AllowAutoDisk bool   `json:"allow_auto_disk,omitempty"` //nolint:tagliatelle // Linode API snake_case
 }

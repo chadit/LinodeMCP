@@ -15,8 +15,8 @@ import (
 func NewLinodeNodeBalancerCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_nodebalancer_create",
 		mcp.WithDescription("Creates a new NodeBalancer (load balancer). WARNING: Billing starts immediately. Use linode_regions_list to find valid regions."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithString("region",
 			mcp.Required(),
@@ -28,7 +28,7 @@ func NewLinodeNodeBalancerCreateTool(cfg *config.Config) (mcp.Tool, func(ctx con
 		mcp.WithNumber("client_conn_throttle",
 			mcp.Description("Connections per second throttle limit (0-20). Default is 0 (no throttle)."),
 		),
-		mcp.WithBoolean("confirm",
+		mcp.WithBoolean(paramConfirm,
 			mcp.Required(),
 			mcp.Description("Must be set to true to confirm creation. This operation incurs billing charges."),
 		),
@@ -42,11 +42,11 @@ func NewLinodeNodeBalancerCreateTool(cfg *config.Config) (mcp.Tool, func(ctx con
 }
 
 func handleLinodeNodeBalancerCreateRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	region := request.GetString("region", "")
 	label := request.GetString("label", "")
 	clientConnThrottle := request.GetInt("client_conn_throttle", 0)
-	confirm := request.GetBool("confirm", false)
+	confirm := request.GetBool(paramConfirm, false)
 
 	if !confirm {
 		return mcp.NewToolResultError("This operation creates a billable resource. Set confirm=true to proceed."), nil
@@ -93,8 +93,8 @@ func handleLinodeNodeBalancerCreateRequest(ctx context.Context, request mcp.Call
 func NewLinodeNodeBalancerUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_nodebalancer_update",
 		mcp.WithDescription("Updates an existing NodeBalancer. Can modify label and connection throttle."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithNumber("nodebalancer_id",
 			mcp.Required(),
@@ -116,7 +116,7 @@ func NewLinodeNodeBalancerUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx con
 }
 
 func handleLinodeNodeBalancerUpdateRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	nodeBalancerID := request.GetInt("nodebalancer_id", 0)
 	label := request.GetString("label", "")
 	clientConnThrottle := request.GetInt("client_conn_throttle", -1) // -1 indicates not provided
@@ -164,14 +164,14 @@ func handleLinodeNodeBalancerUpdateRequest(ctx context.Context, request mcp.Call
 func NewLinodeNodeBalancerDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_nodebalancer_delete",
 		mcp.WithDescription("Deletes a NodeBalancer. WARNING: This will remove the load balancer and all its configurations."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithNumber("nodebalancer_id",
 			mcp.Required(),
 			mcp.Description("The ID of the NodeBalancer to delete"),
 		),
-		mcp.WithBoolean("confirm",
+		mcp.WithBoolean(paramConfirm,
 			mcp.Required(),
 			mcp.Description("Must be set to true to confirm deletion."),
 		),
@@ -185,9 +185,9 @@ func NewLinodeNodeBalancerDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx con
 }
 
 func handleLinodeNodeBalancerDeleteRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	nodeBalancerID := request.GetInt("nodebalancer_id", 0)
-	confirm := request.GetBool("confirm", false)
+	confirm := request.GetBool(paramConfirm, false)
 
 	if !confirm {
 		return mcp.NewToolResultError("This operation is destructive. Set confirm=true to proceed."), nil

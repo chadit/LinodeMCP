@@ -7,6 +7,13 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
+// Common MCP tool parameter names and descriptions used across all tools.
+const (
+	paramEnvironment     = "environment"
+	paramEnvironmentDesc = "Linode environment to use (optional, defaults to 'default')"
+	paramConfirm         = "confirm"
+)
+
 // marshalToolResponse serializes v as indented JSON and wraps it in an MCP text result.
 func marshalToolResponse(v any) (*mcp.CallToolResult, error) {
 	data, err := json.MarshalIndent(v, "", "  ")

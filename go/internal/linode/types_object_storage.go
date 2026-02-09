@@ -105,13 +105,13 @@ type BucketSSL struct {
 
 // ObjectStorageKey represents a Linode Object Storage access key.
 type ObjectStorageKey struct {
-	ID           int                            `json:"id"`
 	Label        string                         `json:"label"`
-	AccessKey    string                         `json:"access_key"` //nolint:tagliatelle // Linode API snake_case
-	SecretKey    string                         `json:"secret_key"` //nolint:tagliatelle // Linode API snake_case
-	Limited      bool                           `json:"limited"`
+	AccessKey    string                         `json:"access_key"`    //nolint:tagliatelle // Linode API snake_case
+	SecretKey    string                         `json:"secret_key"`    //nolint:tagliatelle // Linode API snake_case
 	BucketAccess []ObjectStorageKeyBucketAccess `json:"bucket_access"` //nolint:tagliatelle // Linode API snake_case
 	Regions      []ObjectStorageKeyRegion       `json:"regions"`
+	ID           int                            `json:"id"`
+	Limited      bool                           `json:"limited"`
 }
 
 // ObjectStorageKeyRegion represents a region associated with an Object Storage key.

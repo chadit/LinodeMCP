@@ -5,10 +5,10 @@ type Profile struct {
 	Username           string `json:"username"`
 	Email              string `json:"email"`
 	Timezone           string `json:"timezone"`
+	UID                int    `json:"uid"`
 	EmailNotifications bool   `json:"email_notifications"` //nolint:tagliatelle // Linode API snake_case
 	Restricted         bool   `json:"restricted"`
 	TwoFactorAuth      bool   `json:"two_factor_auth"` //nolint:tagliatelle // Linode API snake_case
-	UID                int    `json:"uid"`
 }
 
 // Account represents a Linode account.

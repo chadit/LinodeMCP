@@ -16,8 +16,8 @@ import (
 func NewLinodeStackScriptsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_stackscripts_list",
 		mcp.WithDescription("Lists StackScripts. By default returns your own StackScripts. Can filter by public status, ownership, or label."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithString("is_public",
 			mcp.Description("Filter by public status (true, false)"),
@@ -38,7 +38,7 @@ func NewLinodeStackScriptsListTool(cfg *config.Config) (mcp.Tool, func(ctx conte
 }
 
 func handleLinodeStackScriptsListRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	isPublicFilter := request.GetString("is_public", "")
 	mineFilter := request.GetString("mine", "")
 	labelContains := request.GetString("label_contains", "")
@@ -75,7 +75,7 @@ func handleLinodeStackScriptsListRequest(ctx context.Context, request mcp.CallTo
 }
 
 func filterStackScriptsByPublic(scripts []linode.StackScript, isPublicFilter string) []linode.StackScript {
-	var filtered []linode.StackScript
+	filtered := make([]linode.StackScript, 0, len(scripts))
 
 	wantPublic := strings.ToLower(isPublicFilter) == boolTrue
 
@@ -89,7 +89,7 @@ func filterStackScriptsByPublic(scripts []linode.StackScript, isPublicFilter str
 }
 
 func filterStackScriptsByMine(scripts []linode.StackScript, mineFilter string) []linode.StackScript {
-	var filtered []linode.StackScript
+	filtered := make([]linode.StackScript, 0, len(scripts))
 
 	wantMine := strings.ToLower(mineFilter) == boolTrue
 
@@ -103,7 +103,7 @@ func filterStackScriptsByMine(scripts []linode.StackScript, mineFilter string) [
 }
 
 func filterStackScriptsByLabel(scripts []linode.StackScript, labelContains string) []linode.StackScript {
-	var filtered []linode.StackScript
+	filtered := make([]linode.StackScript, 0, len(scripts))
 
 	labelContains = strings.ToLower(labelContains)
 

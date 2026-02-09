@@ -14,8 +14,8 @@ import (
 func NewLinodeDomainRecordCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_domain_record_create",
 		mcp.WithDescription("Creates a new DNS record within a domain. Supports A, AAAA, NS, MX, CNAME, TXT, SRV, CAA, and PTR record types."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithNumber("domain_id",
 			mcp.Required(),
@@ -63,7 +63,7 @@ func NewLinodeDomainRecordCreateTool(cfg *config.Config) (mcp.Tool, func(ctx con
 }
 
 func handleLinodeDomainRecordCreateRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	domainID := request.GetInt("domain_id", 0)
 	recordType := request.GetString("type", "")
 	name := request.GetString("name", "")
@@ -138,8 +138,8 @@ func handleLinodeDomainRecordCreateRequest(ctx context.Context, request mcp.Call
 func NewLinodeDomainRecordUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_domain_record_update",
 		mcp.WithDescription("Updates an existing DNS record. Note: Record type cannot be changed."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithNumber("domain_id",
 			mcp.Required(),
@@ -177,7 +177,7 @@ func NewLinodeDomainRecordUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx con
 }
 
 func handleLinodeDomainRecordUpdateRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	domainID := request.GetInt("domain_id", 0)
 	recordID := request.GetInt("record_id", 0)
 	name := request.GetString("name", "")
@@ -237,8 +237,8 @@ func handleLinodeDomainRecordUpdateRequest(ctx context.Context, request mcp.Call
 func NewLinodeDomainRecordDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_domain_record_delete",
 		mcp.WithDescription("Deletes a DNS record from a domain."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithNumber("domain_id",
 			mcp.Required(),
@@ -258,7 +258,7 @@ func NewLinodeDomainRecordDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx con
 }
 
 func handleLinodeDomainRecordDeleteRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	domainID := request.GetInt("domain_id", 0)
 	recordID := request.GetInt("record_id", 0)
 

@@ -16,8 +16,8 @@ import (
 func NewLinodeFirewallsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool("linode_firewalls_list",
 		mcp.WithDescription("Lists all Cloud Firewalls on your account. Can filter by status or label."),
-		mcp.WithString("environment",
-			mcp.Description("Linode environment to use (optional, defaults to 'default')"),
+		mcp.WithString(paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
 		),
 		mcp.WithString("status",
 			mcp.Description("Filter by firewall status (enabled, disabled, deleted)"),
@@ -35,7 +35,7 @@ func NewLinodeFirewallsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.
 }
 
 func handleLinodeFirewallsListRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString("environment", "")
+	environment := request.GetString(paramEnvironment, "")
 	statusFilter := request.GetString("status", "")
 	labelContains := request.GetString("label_contains", "")
 
@@ -67,7 +67,7 @@ func handleLinodeFirewallsListRequest(ctx context.Context, request mcp.CallToolR
 }
 
 func filterFirewallsByStatus(firewalls []linode.Firewall, statusFilter string) []linode.Firewall {
-	var filtered []linode.Firewall
+	filtered := make([]linode.Firewall, 0, len(firewalls))
 
 	statusFilter = strings.ToLower(statusFilter)
 
@@ -81,7 +81,7 @@ func filterFirewallsByStatus(firewalls []linode.Firewall, statusFilter string) [
 }
 
 func filterFirewallsByLabel(firewalls []linode.Firewall, labelContains string) []linode.Firewall {
-	var filtered []linode.Firewall
+	filtered := make([]linode.Firewall, 0, len(firewalls))
 
 	labelContains = strings.ToLower(labelContains)
 
