@@ -2010,7 +2010,7 @@ func TestLinodeObjectStorageObjectACLGetTool_Success(t *testing.T) {
 
 	acl := linode.ObjectACL{
 		ACL:    "public-read",
-		ACLXml: "<AccessControlPolicy>...</AccessControlPolicy>",
+		ACLXML: "<AccessControlPolicy>...</AccessControlPolicy>",
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -2157,7 +2157,7 @@ func TestLinodeObjectStorageObjectACLUpdateTool_Success(t *testing.T) {
 
 	resp := linode.ObjectACL{
 		ACL:    "public-read",
-		ACLXml: "<AccessControlPolicy>...</AccessControlPolicy>",
+		ACLXML: "<AccessControlPolicy>...</AccessControlPolicy>",
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

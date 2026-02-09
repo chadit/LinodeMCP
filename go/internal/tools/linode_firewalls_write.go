@@ -3,7 +3,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -88,12 +87,7 @@ func handleLinodeFirewallCreateRequest(ctx context.Context, request mcp.CallTool
 		Firewall: firewall,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeFirewallUpdateTool creates a tool for updating a firewall.
@@ -176,12 +170,7 @@ func handleLinodeFirewallUpdateRequest(ctx context.Context, request mcp.CallTool
 		Firewall: firewall,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeFirewallDeleteTool creates a tool for deleting a firewall.
@@ -244,10 +233,5 @@ func handleLinodeFirewallDeleteRequest(ctx context.Context, request mcp.CallTool
 		FirewallID: firewallID,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }

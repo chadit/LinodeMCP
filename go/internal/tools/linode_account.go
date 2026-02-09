@@ -3,7 +3,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -47,10 +46,5 @@ func handleLinodeAccountRequest(ctx context.Context, request mcp.CallToolRequest
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Linode account: %v", err)), nil
 	}
 
-	jsonResponse, err := json.MarshalIndent(account, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(account)
 }

@@ -3,7 +3,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -93,12 +92,7 @@ func handleLinodeDomainCreateRequest(ctx context.Context, request mcp.CallToolRe
 		Domain:  createdDomain,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeDomainUpdateTool creates a tool for updating a domain.
@@ -176,12 +170,7 @@ func handleLinodeDomainUpdateRequest(ctx context.Context, request mcp.CallToolRe
 		Domain:  updatedDomain,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeDomainDeleteTool creates a tool for deleting a domain.
@@ -244,10 +233,5 @@ func handleLinodeDomainDeleteRequest(ctx context.Context, request mcp.CallToolRe
 		DomainID: domainID,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }

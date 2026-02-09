@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -86,10 +85,5 @@ func formatTypesResponse(types []linode.InstanceType, classFilter string) (*mcp.
 		response.Filter = "class=" + classFilter
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }

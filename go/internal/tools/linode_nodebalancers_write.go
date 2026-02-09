@@ -3,7 +3,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -87,12 +86,7 @@ func handleLinodeNodeBalancerCreateRequest(ctx context.Context, request mcp.Call
 		NodeBalancer: nodeBalancer,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeNodeBalancerUpdateTool creates a tool for updating a NodeBalancer.
@@ -163,12 +157,7 @@ func handleLinodeNodeBalancerUpdateRequest(ctx context.Context, request mcp.Call
 		NodeBalancer: nodeBalancer,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeNodeBalancerDeleteTool creates a tool for deleting a NodeBalancer.
@@ -231,10 +220,5 @@ func handleLinodeNodeBalancerDeleteRequest(ctx context.Context, request mcp.Call
 		NodeBalancerID: nodeBalancerID,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }

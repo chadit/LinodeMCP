@@ -3,7 +3,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -105,12 +104,7 @@ func handleLinodeVolumeCreateRequest(ctx context.Context, request mcp.CallToolRe
 		Volume:  volume,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeVolumeAttachTool creates a tool for attaching a volume to a Linode.
@@ -188,12 +182,7 @@ func handleLinodeVolumeAttachRequest(ctx context.Context, request mcp.CallToolRe
 		Volume:   volume,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeVolumeDetachTool creates a tool for detaching a volume from a Linode.
@@ -247,12 +236,7 @@ func handleLinodeVolumeDetachRequest(ctx context.Context, request mcp.CallToolRe
 		VolumeID: volumeID,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeVolumeResizeTool creates a tool for resizing a volume.
@@ -325,12 +309,7 @@ func handleLinodeVolumeResizeRequest(ctx context.Context, request mcp.CallToolRe
 		Volume:  volume,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeVolumeDeleteTool creates a tool for deleting a volume.
@@ -393,10 +372,5 @@ func handleLinodeVolumeDeleteRequest(ctx context.Context, request mcp.CallToolRe
 		VolumeID: volumeID,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }

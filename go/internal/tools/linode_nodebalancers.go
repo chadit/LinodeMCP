@@ -3,7 +3,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -118,12 +117,7 @@ func formatNodeBalancersResponse(nodeBalancers []linode.NodeBalancer, regionFilt
 		response.Filter = strings.Join(filters, ", ")
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeNodeBalancerGetTool creates a tool for getting a single NodeBalancer.
@@ -170,10 +164,5 @@ func handleLinodeNodeBalancerGetRequest(ctx context.Context, request mcp.CallToo
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve NodeBalancer %d: %v", nodeBalancerID, err)), nil
 	}
 
-	jsonResponse, err := json.MarshalIndent(nodeBalancer, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(nodeBalancer)
 }

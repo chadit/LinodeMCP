@@ -107,12 +107,7 @@ func handleObjectStorageBucketCreateRequest(ctx context.Context, request mcp.Cal
 		Bucket:  bucket,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeObjectStorageBucketDeleteTool creates a tool for deleting an Object Storage bucket.
@@ -186,12 +181,7 @@ func handleObjectStorageBucketDeleteRequest(ctx context.Context, request mcp.Cal
 		Label:   label,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeObjectStorageBucketAccessUpdateTool creates a tool for updating bucket access controls.
@@ -289,12 +279,7 @@ func handleObjectStorageBucketAccessUpdateRequest(ctx context.Context, request m
 		ACL:     acl,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeObjectStorageKeyCreateTool creates a tool for creating an Object Storage access key.
@@ -385,12 +370,7 @@ func handleObjectStorageKeyCreateRequest(ctx context.Context, request mcp.CallTo
 		Key:     key,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeObjectStorageKeyUpdateTool creates a tool for updating an Object Storage access key.
@@ -486,12 +466,7 @@ func handleObjectStorageKeyUpdateRequest(ctx context.Context, request mcp.CallTo
 		KeyID:   keyID,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeObjectStorageKeyDeleteTool creates a tool for revoking an Object Storage access key.
@@ -554,12 +529,7 @@ func handleObjectStorageKeyDeleteRequest(ctx context.Context, request mcp.CallTo
 		KeyID:   keyID,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeObjectStorageObjectACLUpdateTool creates a tool for updating an object's ACL.
@@ -648,12 +618,7 @@ func handleObjectStorageObjectACLUpdateRequest(ctx context.Context, request mcp.
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to update ACL for object '%s' in bucket '%s': %v", name, label, err)), nil
 	}
 
-	jsonResponse, err := json.MarshalIndent(result, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(result)
 }
 
 // NewLinodeObjectStorageSSLDeleteTool creates a tool for deleting a bucket's SSL certificate.
@@ -728,12 +693,7 @@ func handleObjectStorageSSLDeleteRequest(ctx context.Context, request mcp.CallTo
 		Bucket:  label,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // validateBucketAccessEntries validates each entry in a bucket_access array.

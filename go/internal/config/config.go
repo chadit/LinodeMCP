@@ -292,6 +292,9 @@ type FileSystem interface {
 // OSFileSystem implements FileSystem using real OS operations.
 type OSFileSystem struct{}
 
+// Compile-time check that OSFileSystem implements FileSystem.
+var _ FileSystem = (*OSFileSystem)(nil)
+
 // ReadFile reads the named file and returns its contents.
 func (fs *OSFileSystem) ReadFile(filename string) ([]byte, error) {
 	if err := validatePath(filename); err != nil {

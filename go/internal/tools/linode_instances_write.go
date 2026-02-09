@@ -3,7 +3,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -72,12 +71,7 @@ func handleLinodeInstanceBootRequest(ctx context.Context, request mcp.CallToolRe
 		InstanceID: instanceID,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeInstanceRebootTool creates a tool for rebooting a Linode instance.
@@ -140,12 +134,7 @@ func handleLinodeInstanceRebootRequest(ctx context.Context, request mcp.CallTool
 		InstanceID: instanceID,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeInstanceShutdownTool creates a tool for shutting down a Linode instance.
@@ -199,12 +188,7 @@ func handleLinodeInstanceShutdownRequest(ctx context.Context, request mcp.CallTo
 		InstanceID: instanceID,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeInstanceCreateTool creates a tool for creating a new Linode instance.
@@ -311,12 +295,7 @@ func handleLinodeInstanceCreateRequest(ctx context.Context, request mcp.CallTool
 		Instance: instance,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeInstanceDeleteTool creates a tool for deleting a Linode instance.
@@ -379,12 +358,7 @@ func handleLinodeInstanceDeleteRequest(ctx context.Context, request mcp.CallTool
 		InstanceID: instanceID,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeInstanceResizeTool creates a tool for resizing a Linode instance.
@@ -472,10 +446,5 @@ func handleLinodeInstanceResizeRequest(ctx context.Context, request mcp.CallTool
 		NewType:    instanceType,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }

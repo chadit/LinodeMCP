@@ -3,7 +3,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -59,12 +58,7 @@ func handleObjectStorageBucketsListRequest(ctx context.Context, request mcp.Call
 		Buckets: buckets,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeObjectStorageBucketGetTool creates a tool for getting a specific bucket.
@@ -120,12 +114,7 @@ func handleObjectStorageBucketGetRequest(ctx context.Context, request mcp.CallTo
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve bucket '%s' in region '%s': %v", label, region, err)), nil
 	}
 
-	jsonResponse, err := json.MarshalIndent(bucket, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(bucket)
 }
 
 // NewLinodeObjectStorageBucketContentsTool creates a tool for listing objects in a bucket.
@@ -244,12 +233,7 @@ func formatBucketContentsResponse(objects []linode.ObjectStorageObject, isTrunca
 		response.Filter = strings.Join(filters, ", ")
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeObjectStorageClustersListTool creates a tool for listing Object Storage clusters.
@@ -295,12 +279,7 @@ func handleObjectStorageClustersListRequest(ctx context.Context, request mcp.Cal
 		Clusters: clusters,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeObjectStorageTypeListTool creates a tool for listing Object Storage types and pricing.
@@ -346,12 +325,7 @@ func handleObjectStorageTypeListRequest(ctx context.Context, request mcp.CallToo
 		Types: types,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // Phase 2: Read-Only Access Key & Transfer Tools
@@ -399,12 +373,7 @@ func handleObjectStorageKeysListRequest(ctx context.Context, request mcp.CallToo
 		Keys:  keys,
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeObjectStorageKeyGetTool creates a tool for getting a specific access key.
@@ -456,12 +425,7 @@ func handleObjectStorageKeyGetRequest(ctx context.Context, request mcp.CallToolR
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve access key %d: %v", keyID, err)), nil
 	}
 
-	jsonResponse, err := json.MarshalIndent(key, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(key)
 }
 
 // NewLinodeObjectStorageTransferTool creates a tool for getting Object Storage transfer usage.
@@ -499,12 +463,7 @@ func handleObjectStorageTransferRequest(ctx context.Context, request mcp.CallToo
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Object Storage transfer usage: %v", err)), nil
 	}
 
-	jsonResponse, err := json.MarshalIndent(transfer, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(transfer)
 }
 
 // NewLinodeObjectStorageBucketAccessGetTool creates a tool for getting bucket ACL/CORS settings.
@@ -560,12 +519,7 @@ func handleObjectStorageBucketAccessGetRequest(ctx context.Context, request mcp.
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve bucket access for '%s' in region '%s': %v", label, region, err)), nil
 	}
 
-	jsonResponse, err := json.MarshalIndent(access, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(access)
 }
 
 // NewLinodeObjectStoragePresignedURLTool creates a tool for generating presigned URLs for objects.
@@ -654,12 +608,7 @@ func handleObjectStoragePresignedURLRequest(ctx context.Context, request mcp.Cal
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to generate presigned URL for '%s' in bucket '%s': %v", name, label, err)), nil
 	}
 
-	jsonResponse, err := json.MarshalIndent(result, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(result)
 }
 
 // NewLinodeObjectStorageObjectACLGetTool creates a tool for getting an object's ACL.
@@ -724,12 +673,7 @@ func handleObjectStorageObjectACLGetRequest(ctx context.Context, request mcp.Cal
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve ACL for object '%s' in bucket '%s': %v", name, label, err)), nil
 	}
 
-	jsonResponse, err := json.MarshalIndent(acl, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(acl)
 }
 
 // NewLinodeObjectStorageSSLGetTool creates a tool for checking a bucket's SSL certificate status.
@@ -785,10 +729,5 @@ func handleObjectStorageSSLGetRequest(ctx context.Context, request mcp.CallToolR
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve SSL status for bucket '%s' in region '%s': %v", label, region, err)), nil
 	}
 
-	jsonResponse, err := json.MarshalIndent(ssl, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(ssl)
 }

@@ -3,7 +3,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -118,12 +117,7 @@ func formatDomainsResponse(domains []linode.Domain, domainContains, typeFilter s
 		response.Filter = strings.Join(filters, ", ")
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
 
 // NewLinodeDomainGetTool creates a tool for getting a single domain.
@@ -170,12 +164,7 @@ func handleLinodeDomainGetRequest(ctx context.Context, request mcp.CallToolReque
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve domain %d: %v", domainID, err)), nil
 	}
 
-	jsonResponse, err := json.MarshalIndent(domain, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(domain)
 }
 
 // NewLinodeDomainRecordsListTool creates a tool for listing domain records.
@@ -294,10 +283,5 @@ func formatDomainRecordsResponse(records []linode.DomainRecord, domainID int, ty
 		response.Filter = strings.Join(filters, ", ")
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }

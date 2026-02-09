@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -78,12 +77,7 @@ func handleLinodeInstanceGetRequest(ctx context.Context, request mcp.CallToolReq
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Linode instance: %v", err)), nil
 	}
 
-	jsonResponse, err := json.MarshalIndent(instance, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(instance)
 }
 
 // NewLinodeInstancesTool creates a tool for listing Linode instances.
@@ -185,10 +179,5 @@ func formatInstancesResponse(instances []linode.Instance, statusFilter string) (
 		response.Filter = "status=" + statusFilter
 	}
 
-	jsonResponse, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(jsonResponse)), nil
+	return marshalToolResponse(response)
 }
