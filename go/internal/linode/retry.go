@@ -751,6 +751,35 @@ func (rc *RetryableClient) GetObjectStorageBucketAccess(ctx context.Context, reg
 	return access, err
 }
 
+// CreateObjectStorageBucket creates a new Object Storage bucket with automatic retry.
+func (rc *RetryableClient) CreateObjectStorageBucket(ctx context.Context, req CreateObjectStorageBucketRequest) (*ObjectStorageBucket, error) {
+	var bucket *ObjectStorageBucket
+
+	err := rc.executeWithRetry(ctx, "CreateObjectStorageBucket", func() error {
+		var err error
+
+		bucket, err = rc.Client.CreateObjectStorageBucket(ctx, req)
+
+		return err
+	})
+
+	return bucket, err
+}
+
+// DeleteObjectStorageBucket deletes an Object Storage bucket with automatic retry.
+func (rc *RetryableClient) DeleteObjectStorageBucket(ctx context.Context, region, label string) error {
+	return rc.executeWithRetry(ctx, "DeleteObjectStorageBucket", func() error {
+		return rc.Client.DeleteObjectStorageBucket(ctx, region, label)
+	})
+}
+
+// UpdateObjectStorageBucketAccess updates bucket access settings with automatic retry.
+func (rc *RetryableClient) UpdateObjectStorageBucketAccess(ctx context.Context, region, label string, req UpdateObjectStorageBucketAccessRequest) error {
+	return rc.executeWithRetry(ctx, "UpdateObjectStorageBucketAccess", func() error {
+		return rc.Client.UpdateObjectStorageBucketAccess(ctx, region, label, req)
+	})
+}
+
 func (rc *RetryableClient) executeWithRetry(ctx context.Context, _ string, fn func() error) error {
 	var lastErr error
 

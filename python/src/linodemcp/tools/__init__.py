@@ -1,6 +1,7 @@
 """MCP tools for LinodeMCP."""
 
 import json
+import re
 from typing import Any
 
 from mcp.types import TextContent, Tool
@@ -52,7 +53,10 @@ __all__ = [
     "create_linode_nodebalancer_update_tool",
     "create_linode_nodebalancers_list_tool",
     "create_linode_object_storage_bucket_access_get_tool",
+    "create_linode_object_storage_bucket_access_update_tool",
     "create_linode_object_storage_bucket_contents_tool",
+    "create_linode_object_storage_bucket_create_tool",
+    "create_linode_object_storage_bucket_delete_tool",
     "create_linode_object_storage_bucket_get_tool",
     "create_linode_object_storage_buckets_list_tool",
     "create_linode_object_storage_clusters_list_tool",
@@ -104,7 +108,10 @@ __all__ = [
     "handle_linode_nodebalancer_update",
     "handle_linode_nodebalancers_list",
     "handle_linode_object_storage_bucket_access_get",
+    "handle_linode_object_storage_bucket_access_update",
     "handle_linode_object_storage_bucket_contents",
+    "handle_linode_object_storage_bucket_create",
+    "handle_linode_object_storage_bucket_delete",
     "handle_linode_object_storage_bucket_get",
     "handle_linode_object_storage_buckets_list",
     "handle_linode_object_storage_clusters_list",
@@ -2219,6 +2226,431 @@ async def handle_linode_object_storage_bucket_access_get(
             TextContent(
                 type="text",
                 text=f"Failed to retrieve bucket access settings: {e}",
+            )
+        ]
+
+
+# Stage 5 Phase 3: Object Storage write operations
+
+_VALID_BUCKET_LABEL_RE = re.compile(
+    r"^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]{1,2}$"
+)
+_VALID_ACLS = {"private", "public-read", "authenticated-read", "public-read-write"}
+_MIN_BUCKET_LABEL_LENGTH = 3
+_MAX_BUCKET_LABEL_LENGTH = 63
+
+
+def _validate_bucket_label(label: str) -> str | None:
+    """Validate S3 bucket label. Returns error message or None."""
+    if not label:
+        return "label is required"
+    if len(label) < _MIN_BUCKET_LABEL_LENGTH:
+        return "bucket label must be at least 3 characters"
+    if len(label) > _MAX_BUCKET_LABEL_LENGTH:
+        return "bucket label must not exceed 63 characters"
+    if not _VALID_BUCKET_LABEL_RE.match(label):
+        return (
+            "bucket label must contain only lowercase letters,"
+            " numbers, and hyphens"
+        )
+    first, last = label[0], label[-1]
+    if not (first.isalnum() and last.isalnum()):
+        return (
+            "bucket label must start and end with a lowercase"
+            " letter or number"
+        )
+    return None
+
+
+def _validate_bucket_acl(acl: str) -> str | None:
+    """Validate bucket ACL. Returns error message or None."""
+    if acl not in _VALID_ACLS:
+        return (
+            f"acl must be one of: {', '.join(sorted(_VALID_ACLS))}"
+        )
+    return None
+
+
+def create_linode_object_storage_bucket_create_tool() -> Tool:
+    """Create the linode_object_storage_bucket_create tool."""
+    return Tool(
+        name="linode_object_storage_bucket_create",
+        description=(
+            "Creates a new Object Storage bucket."
+            " WARNING: Billing starts immediately."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use"
+                        " (optional, defaults to 'default')"
+                    ),
+                },
+                "label": {
+                    "type": "string",
+                    "description": (
+                        "Bucket label (3-63 chars, lowercase"
+                        " alphanumeric and hyphens)"
+                    ),
+                },
+                "region": {
+                    "type": "string",
+                    "description": (
+                        "Region for the bucket (e.g. us-east-1)"
+                    ),
+                },
+                "acl": {
+                    "type": "string",
+                    "description": (
+                        "Access control: private, public-read,"
+                        " authenticated-read, or"
+                        " public-read-write"
+                    ),
+                },
+                "cors_enabled": {
+                    "type": "boolean",
+                    "description": (
+                        "Whether to enable CORS (default: true)"
+                    ),
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to confirm creation."
+                        " This incurs billing."
+                    ),
+                },
+            },
+            "required": ["label", "region", "confirm"],
+        },
+    )
+
+
+async def handle_linode_object_storage_bucket_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_object_storage_bucket_create tool request."""
+    environment = arguments.get("environment", "")
+    confirm = arguments.get("confirm", False)
+
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text=(
+                    "Error: This creates a billable resource."
+                    " Set confirm=true to proceed."
+                ),
+            )
+        ]
+
+    label = arguments.get("label", "")
+    region = arguments.get("region", "")
+    acl = arguments.get("acl")
+    cors_enabled = arguments.get("cors_enabled")
+
+    label_err = _validate_bucket_label(label)
+    if label_err:
+        return [TextContent(type="text", text=f"Error: {label_err}")]
+
+    validation_err = None
+    if not region:
+        validation_err = "region is required"
+    elif acl is not None:
+        validation_err = _validate_bucket_acl(acl)
+    if validation_err:
+        return [
+            TextContent(type="text", text=f"Error: {validation_err}")
+        ]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            bucket = await client.create_object_storage_bucket(
+                label=label,
+                region=region,
+                acl=acl,
+                cors_enabled=cors_enabled,
+            )
+
+            response = {
+                "message": (
+                    f"Bucket '{label}' created successfully"
+                    f" in {region}"
+                ),
+                "bucket": bucket,
+            }
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(response, indent=2),
+                )
+            ]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(
+                type="text",
+                text=f"Failed to create bucket: {e}",
+            )
+        ]
+
+
+def create_linode_object_storage_bucket_delete_tool() -> Tool:
+    """Create the linode_object_storage_bucket_delete tool."""
+    return Tool(
+        name="linode_object_storage_bucket_delete",
+        description=(
+            "Deletes an Object Storage bucket."
+            " WARNING: This is irreversible."
+            " All objects must be removed first."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use"
+                        " (optional, defaults to 'default')"
+                    ),
+                },
+                "region": {
+                    "type": "string",
+                    "description": "Region of the bucket",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Label of the bucket",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to confirm deletion."
+                        " This is irreversible."
+                    ),
+                },
+            },
+            "required": ["region", "label", "confirm"],
+        },
+    )
+
+
+async def handle_linode_object_storage_bucket_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_object_storage_bucket_delete tool request."""
+    environment = arguments.get("environment", "")
+    confirm = arguments.get("confirm", False)
+
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text=(
+                    "Error: This is destructive and irreversible."
+                    " All objects must be removed first."
+                    " Set confirm=true to proceed."
+                ),
+            )
+        ]
+
+    region = arguments.get("region", "")
+    label = arguments.get("label", "")
+
+    if not region:
+        return [
+            TextContent(
+                type="text", text="Error: region is required"
+            )
+        ]
+    if not label:
+        return [
+            TextContent(
+                type="text", text="Error: label is required"
+            )
+        ]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            await client.delete_object_storage_bucket(
+                region, label
+            )
+
+            response = {
+                "message": (
+                    f"Bucket '{label}' in {region}"
+                    " deleted successfully"
+                ),
+                "region": region,
+                "label": label,
+            }
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(response, indent=2),
+                )
+            ]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(
+                type="text",
+                text=f"Failed to delete bucket: {e}",
+            )
+        ]
+
+
+def create_linode_object_storage_bucket_access_update_tool() -> Tool:
+    """Create the linode_object_storage_bucket_access_update tool."""
+    return Tool(
+        name="linode_object_storage_bucket_access_update",
+        description=(
+            "Updates access control settings for an"
+            " Object Storage bucket."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use"
+                        " (optional, defaults to 'default')"
+                    ),
+                },
+                "region": {
+                    "type": "string",
+                    "description": "Region of the bucket",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Label of the bucket",
+                },
+                "acl": {
+                    "type": "string",
+                    "description": (
+                        "New access control: private,"
+                        " public-read, authenticated-read,"
+                        " or public-read-write"
+                    ),
+                },
+                "cors_enabled": {
+                    "type": "boolean",
+                    "description": (
+                        "Whether to enable CORS on the bucket"
+                    ),
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to confirm access update."
+                    ),
+                },
+            },
+            "required": ["region", "label", "confirm"],
+        },
+    )
+
+
+async def handle_linode_object_storage_bucket_access_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle bucket access update tool request."""
+    environment = arguments.get("environment", "")
+    confirm = arguments.get("confirm", False)
+
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text=(
+                    "Error: This changes bucket access controls."
+                    " Set confirm=true to proceed."
+                ),
+            )
+        ]
+
+    region = arguments.get("region", "")
+    label = arguments.get("label", "")
+    acl = arguments.get("acl")
+    cors_enabled = arguments.get("cors_enabled")
+
+    validation_err = None
+    if not region:
+        validation_err = "region is required"
+    elif not label:
+        validation_err = "label is required"
+    elif acl is not None:
+        validation_err = _validate_bucket_acl(acl)
+    if validation_err:
+        return [
+            TextContent(type="text", text=f"Error: {validation_err}")
+        ]
+
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            RetryConfig(),
+        ) as client:
+            await client.update_object_storage_bucket_access(
+                region=region,
+                label=label,
+                acl=acl,
+                cors_enabled=cors_enabled,
+            )
+
+            response = {
+                "message": (
+                    f"Access settings for bucket '{label}'"
+                    f" in {region} updated successfully"
+                ),
+                "region": region,
+                "label": label,
+            }
+            if acl is not None:
+                response["acl"] = acl
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(response, indent=2),
+                )
+            ]
+
+    except (EnvironmentNotFoundError, ValueError) as e:
+        return [TextContent(type="text", text=f"Error: {e}")]
+    except Exception as e:
+        return [
+            TextContent(
+                type="text",
+                text=(
+                    "Failed to update bucket access"
+                    f" settings: {e}"
+                ),
             )
         ]
 

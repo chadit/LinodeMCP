@@ -832,3 +832,480 @@ func TestLinodeObjectStorageBucketAccessGetTool_MissingEnvironment(t *testing.T)
 	require.NotNil(t, result)
 	assert.True(t, result.IsError)
 }
+
+// Phase 3: Write Bucket Tool Tests.
+
+func TestNewLinodeObjectStorageBucketCreateTool_ToolDefinition(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	tool, handler := tools.NewLinodeObjectStorageBucketCreateTool(cfg)
+
+	assert.Equal(t, "linode_object_storage_bucket_create", tool.Name)
+	assert.NotEmpty(t, tool.Description)
+	assert.NotNil(t, handler)
+	assert.Contains(t, tool.Description, "WARNING")
+
+	props := tool.InputSchema.Properties
+	assert.Contains(t, props, "label")
+	assert.Contains(t, props, "region")
+	assert.Contains(t, props, "acl")
+	assert.Contains(t, props, "cors_enabled")
+	assert.Contains(t, props, "confirm")
+}
+
+func TestLinodeObjectStorageBucketCreateTool_RequiresConfirm(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageBucketCreateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"label":  "my-bucket",
+		"region": "us-east-1",
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+	assertErrorContains(t, result, "confirm=true")
+}
+
+func TestLinodeObjectStorageBucketCreateTool_InvalidLabel_TooShort(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageBucketCreateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"label":   "ab",
+		"region":  "us-east-1",
+		"confirm": true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+	assertErrorContains(t, result, "at least 3 characters")
+}
+
+func TestLinodeObjectStorageBucketCreateTool_InvalidLabel_Uppercase(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageBucketCreateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"label":   "MyBucket",
+		"region":  "us-east-1",
+		"confirm": true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+	assertErrorContains(t, result, "lowercase")
+}
+
+func TestLinodeObjectStorageBucketCreateTool_InvalidLabel_StartWithHyphen(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageBucketCreateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"label":   "-my-bucket",
+		"region":  "us-east-1",
+		"confirm": true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+}
+
+func TestLinodeObjectStorageBucketCreateTool_InvalidACL(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageBucketCreateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"label":   "my-bucket",
+		"region":  "us-east-1",
+		"acl":     "invalid-acl",
+		"confirm": true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+	assertErrorContains(t, result, "acl must be one of")
+}
+
+func TestLinodeObjectStorageBucketCreateTool_MissingRegion(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageBucketCreateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"label":   "my-bucket",
+		"confirm": true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+	assertErrorContains(t, result, "region is required")
+}
+
+func TestLinodeObjectStorageBucketCreateTool_Success(t *testing.T) {
+	t.Parallel()
+
+	bucket := linode.ObjectStorageBucket{
+		Label:   "my-bucket",
+		Region:  "us-east-1",
+		Created: "2024-01-01T00:00:00",
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/object-storage/buckets", r.URL.Path)
+		assert.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(bucket))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageBucketCreateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"label":   "my-bucket",
+		"region":  "us-east-1",
+		"acl":     "private",
+		"confirm": true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.IsError)
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, "my-bucket")
+	assert.Contains(t, textContent.Text, "created successfully")
+}
+
+func TestNewLinodeObjectStorageBucketDeleteTool_ToolDefinition(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	tool, handler := tools.NewLinodeObjectStorageBucketDeleteTool(cfg)
+
+	assert.Equal(t, "linode_object_storage_bucket_delete", tool.Name)
+	assert.NotEmpty(t, tool.Description)
+	assert.NotNil(t, handler)
+	assert.Contains(t, tool.Description, "WARNING")
+
+	props := tool.InputSchema.Properties
+	assert.Contains(t, props, "region")
+	assert.Contains(t, props, "label")
+	assert.Contains(t, props, "confirm")
+}
+
+func TestLinodeObjectStorageBucketDeleteTool_RequiresConfirm(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageBucketDeleteTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"region": "us-east-1",
+		"label":  "my-bucket",
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+	assertErrorContains(t, result, "confirm=true")
+}
+
+func TestLinodeObjectStorageBucketDeleteTool_MissingRegion(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageBucketDeleteTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"label":   "my-bucket",
+		"confirm": true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+	assertErrorContains(t, result, "region is required")
+}
+
+func TestLinodeObjectStorageBucketDeleteTool_MissingLabel(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageBucketDeleteTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"region":  "us-east-1",
+		"confirm": true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+	assertErrorContains(t, result, "label is required")
+}
+
+func TestLinodeObjectStorageBucketDeleteTool_Success(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket", r.URL.Path)
+		assert.Equal(t, http.MethodDelete, r.Method)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageBucketDeleteTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"region":  "us-east-1",
+		"label":   "my-bucket",
+		"confirm": true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.IsError)
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, "deleted successfully")
+}
+
+func TestNewLinodeObjectStorageBucketAccessUpdateTool_ToolDefinition(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	tool, handler := tools.NewLinodeObjectStorageBucketAccessUpdateTool(cfg)
+
+	assert.Equal(t, "linode_object_storage_bucket_access_update", tool.Name)
+	assert.NotEmpty(t, tool.Description)
+	assert.NotNil(t, handler)
+
+	props := tool.InputSchema.Properties
+	assert.Contains(t, props, "region")
+	assert.Contains(t, props, "label")
+	assert.Contains(t, props, "acl")
+	assert.Contains(t, props, "cors_enabled")
+	assert.Contains(t, props, "confirm")
+}
+
+func TestLinodeObjectStorageBucketAccessUpdateTool_RequiresConfirm(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageBucketAccessUpdateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"region": "us-east-1",
+		"label":  "my-bucket",
+		"acl":    "public-read",
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+	assertErrorContains(t, result, "confirm=true")
+}
+
+func TestLinodeObjectStorageBucketAccessUpdateTool_InvalidACL(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageBucketAccessUpdateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"region":  "us-east-1",
+		"label":   "my-bucket",
+		"acl":     "bad-acl",
+		"confirm": true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+	assertErrorContains(t, result, "acl must be one of")
+}
+
+func TestLinodeObjectStorageBucketAccessUpdateTool_Success(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/access", r.URL.Path)
+		assert.Equal(t, http.MethodPut, r.Method)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			"default": {
+				Label:  "Default",
+				Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+			},
+		},
+	}
+	_, handler := tools.NewLinodeObjectStorageBucketAccessUpdateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"region":  "us-east-1",
+		"label":   "my-bucket",
+		"acl":     "public-read",
+		"confirm": true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.IsError)
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, "updated successfully")
+}
+
+func TestLinodeObjectStorageBucketAccessUpdateTool_MissingEnvironment(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{},
+	}
+	_, handler := tools.NewLinodeObjectStorageBucketAccessUpdateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		"region":  "us-east-1",
+		"label":   "my-bucket",
+		"acl":     "private",
+		"confirm": true,
+	})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError)
+}

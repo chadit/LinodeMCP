@@ -86,6 +86,7 @@ func (s *Server) GetToolCount() int {
 	return len(s.tools)
 }
 
+//nolint:maintidx // Tool registration is intentionally a flat list of repetitive calls.
 func (s *Server) registerTools() {
 	helloTool, helloHandler := tools.NewHelloTool()
 	s.mcp.AddTool(helloTool, helloHandler)
@@ -304,4 +305,17 @@ func (s *Server) registerTools() {
 	objBucketAccessGetTool, objBucketAccessGetHandler := tools.NewLinodeObjectStorageBucketAccessGetTool(s.config)
 	s.mcp.AddTool(objBucketAccessGetTool, objBucketAccessGetHandler)
 	s.tools = append(s.tools, &toolWrapper{tool: objBucketAccessGetTool})
+
+	// Stage 5 Phase 3: Object Storage write operations.
+	objBucketCreateTool, objBucketCreateHandler := tools.NewLinodeObjectStorageBucketCreateTool(s.config)
+	s.mcp.AddTool(objBucketCreateTool, objBucketCreateHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: objBucketCreateTool})
+
+	objBucketDeleteTool, objBucketDeleteHandler := tools.NewLinodeObjectStorageBucketDeleteTool(s.config)
+	s.mcp.AddTool(objBucketDeleteTool, objBucketDeleteHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: objBucketDeleteTool})
+
+	objBucketAccessUpdateTool, objBucketAccessUpdateHandler := tools.NewLinodeObjectStorageBucketAccessUpdateTool(s.config)
+	s.mcp.AddTool(objBucketAccessUpdateTool, objBucketAccessUpdateHandler)
+	s.tools = append(s.tools, &toolWrapper{tool: objBucketAccessUpdateTool})
 }

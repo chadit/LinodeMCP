@@ -10,13 +10,15 @@ import (
 
 // Validation constants.
 const (
-	minPasswordLength = 12
-	maxPasswordLength = 128
-	maxDNSNameLength  = 253
-	minVolumeSizeGB   = 10
-	maxVolumeSizeGB   = 10240
-	minSSHKeyLength   = 80
-	maxSSHKeyLength   = 16000
+	minPasswordLength   = 12
+	maxPasswordLength   = 128
+	maxDNSNameLength    = 253
+	minVolumeSizeGB     = 10
+	maxVolumeSizeGB     = 10240
+	minSSHKeyLength     = 80
+	maxSSHKeyLength     = 16000
+	minBucketLabelLength = 3
+	maxBucketLabelLength = 63
 )
 
 // SSH key validation errors.
@@ -130,9 +132,10 @@ func validateRootPassword(password string) error {
 
 // DNS record validation.
 var (
-	validDNSNameRegex = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)*$|^@$|^$`)
-	validIPv4Regex    = regexp.MustCompile(`^(\d{1,3}\.){3}\d{1,3}$`)
-	validIPv6Regex    = regexp.MustCompile(`^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$`)
+	validDNSNameRegex     = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)*$|^@$|^$`)
+	validIPv4Regex        = regexp.MustCompile(`^(\d{1,3}\.){3}\d{1,3}$`)
+	validIPv6Regex        = regexp.MustCompile(`^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$`)
+	validBucketLabelRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]{1,2}$`)
 )
 
 func validateDNSRecordName(name string) error {
@@ -184,6 +187,58 @@ func validateFirewallPolicy(policy string) error {
 	}
 
 	return nil
+}
+
+// Object Storage bucket label validation errors.
+var (
+	ErrBucketLabelRequired   = errors.New("label is required")
+	ErrBucketLabelTooShort   = errors.New("bucket label must be at least 3 characters")
+	ErrBucketLabelTooLong    = errors.New("bucket label must not exceed 63 characters")
+	ErrBucketLabelStartEnd   = errors.New("bucket label must start and end with a lowercase letter or number")
+	ErrBucketLabelInvalid    = errors.New("bucket label must contain only lowercase letters, numbers, and hyphens")
+	ErrBucketACLInvalid      = errors.New("acl must be one of: private, public-read, authenticated-read, public-read-write")
+	ErrBucketRegionRequired  = errors.New("region is required")
+)
+
+// Object Storage bucket label validation (S3 naming rules).
+func validateBucketLabel(label string) error {
+	if label == "" {
+		return ErrBucketLabelRequired
+	}
+
+	if len(label) < minBucketLabelLength {
+		return ErrBucketLabelTooShort
+	}
+
+	if len(label) > maxBucketLabelLength {
+		return ErrBucketLabelTooLong
+	}
+
+	if !validBucketLabelRegex.MatchString(label) {
+		return ErrBucketLabelInvalid
+	}
+
+	first := label[0]
+	last := label[len(label)-1]
+
+	firstValid := (first >= 'a' && first <= 'z') || (first >= '0' && first <= '9')
+	lastValid := (last >= 'a' && last <= 'z') || (last >= '0' && last <= '9')
+
+	if !firstValid || !lastValid {
+		return ErrBucketLabelStartEnd
+	}
+
+	return nil
+}
+
+// Object Storage ACL validation.
+func validateBucketACL(acl string) error {
+	switch acl {
+	case "private", "public-read", "authenticated-read", "public-read-write":
+		return nil
+	default:
+		return fmt.Errorf("got '%s': %w", acl, ErrBucketACLInvalid)
+	}
 }
 
 // Volume size validation.

@@ -63,7 +63,10 @@ from linodemcp.tools import (
     handle_linode_nodebalancer_update,
     handle_linode_nodebalancers_list,
     handle_linode_object_storage_bucket_access_get,
+    handle_linode_object_storage_bucket_access_update,
     handle_linode_object_storage_bucket_contents,
+    handle_linode_object_storage_bucket_create,
+    handle_linode_object_storage_bucket_delete,
     handle_linode_object_storage_bucket_get,
     handle_linode_object_storage_buckets_list,
     handle_linode_object_storage_clusters_list,
@@ -2881,3 +2884,207 @@ async def test_handle_linode_object_storage_bucket_access_get_error(
 
         assert len(result) == 1
         assert "Failed" in result[0].text
+
+
+# Phase 3: Object Storage Write Bucket Tool Tests
+
+
+async def test_handle_object_storage_bucket_create_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Test bucket create requires confirm=true."""
+    result = await handle_linode_object_storage_bucket_create(
+        {"label": "my-bucket", "region": "us-east-1"},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_handle_object_storage_bucket_create_invalid_label(
+    sample_config: Config,
+) -> None:
+    """Test bucket create rejects invalid label."""
+    result = await handle_linode_object_storage_bucket_create(
+        {"label": "AB", "region": "us-east-1", "confirm": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "at least 3" in result[0].text
+
+
+async def test_handle_object_storage_bucket_create_invalid_acl(
+    sample_config: Config,
+) -> None:
+    """Test bucket create rejects invalid ACL."""
+    result = await handle_linode_object_storage_bucket_create(
+        {
+            "label": "my-bucket",
+            "region": "us-east-1",
+            "acl": "bad-acl",
+            "confirm": True,
+        },
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "acl must be one of" in result[0].text
+
+
+async def test_handle_object_storage_bucket_create_missing_region(
+    sample_config: Config,
+) -> None:
+    """Test bucket create requires region."""
+    result = await handle_linode_object_storage_bucket_create(
+        {"label": "my-bucket", "confirm": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "region is required" in result[0].text
+
+
+async def test_handle_object_storage_bucket_create_success(
+    sample_config: Config,
+) -> None:
+    """Test bucket create success."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.create_object_storage_bucket.return_value = {
+            "label": "my-bucket",
+            "region": "us-east-1",
+            "created": "2024-01-01T00:00:00",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_object_storage_bucket_create(
+            {
+                "label": "my-bucket",
+                "region": "us-east-1",
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "created successfully" in result[0].text
+
+
+async def test_handle_object_storage_bucket_delete_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Test bucket delete requires confirm=true."""
+    result = await handle_linode_object_storage_bucket_delete(
+        {"region": "us-east-1", "label": "my-bucket"},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_handle_object_storage_bucket_delete_missing_region(
+    sample_config: Config,
+) -> None:
+    """Test bucket delete requires region."""
+    result = await handle_linode_object_storage_bucket_delete(
+        {"label": "my-bucket", "confirm": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "region is required" in result[0].text
+
+
+async def test_handle_object_storage_bucket_delete_success(
+    sample_config: Config,
+) -> None:
+    """Test bucket delete success."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.delete_object_storage_bucket.return_value = (
+            None
+        )
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_object_storage_bucket_delete(
+            {
+                "region": "us-east-1",
+                "label": "my-bucket",
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "deleted successfully" in result[0].text
+
+
+async def test_handle_object_storage_bucket_access_update_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Test bucket access update requires confirm."""
+    result = await handle_linode_object_storage_bucket_access_update(
+        {
+            "region": "us-east-1",
+            "label": "my-bucket",
+            "acl": "public-read",
+        },
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_handle_object_storage_bucket_access_update_invalid_acl(
+    sample_config: Config,
+) -> None:
+    """Test bucket access update rejects invalid ACL."""
+    result = await handle_linode_object_storage_bucket_access_update(
+        {
+            "region": "us-east-1",
+            "label": "my-bucket",
+            "acl": "bad-acl",
+            "confirm": True,
+        },
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "acl must be one of" in result[0].text
+
+
+async def test_handle_object_storage_bucket_access_update_success(
+    sample_config: Config,
+) -> None:
+    """Test bucket access update success."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.update_object_storage_bucket_access.return_value = (
+            None
+        )
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = (
+            await handle_linode_object_storage_bucket_access_update(
+                {
+                    "region": "us-east-1",
+                    "label": "my-bucket",
+                    "acl": "public-read",
+                    "confirm": True,
+                },
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "updated successfully" in result[0].text

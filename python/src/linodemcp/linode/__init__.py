@@ -910,6 +910,72 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetObjectStorageBucketAccess", e) from e
 
+    # Stage 5 Phase 3: Object Storage write operations
+
+    async def create_object_storage_bucket(
+        self,
+        label: str,
+        region: str,
+        acl: str | None = None,
+        cors_enabled: bool | None = None,
+    ) -> dict[str, Any]:
+        """Create a new Object Storage bucket."""
+        try:
+            body: dict[str, Any] = {
+                "label": label,
+                "region": region,
+            }
+            if acl is not None:
+                body["acl"] = acl
+            if cors_enabled is not None:
+                body["cors_enabled"] = cors_enabled
+            response = await self._make_request(
+                "POST", "/object-storage/buckets", body
+            )
+            bucket: dict[str, Any] = response.json()
+            return bucket
+        except httpx.HTTPError as e:
+            raise NetworkError(
+                "CreateObjectStorageBucket", e
+            ) from e
+
+    async def delete_object_storage_bucket(
+        self, region: str, label: str
+    ) -> None:
+        """Delete an Object Storage bucket."""
+        endpoint = (
+            f"/object-storage/buckets/{region}/{label}"
+        )
+        try:
+            await self._make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError(
+                "DeleteObjectStorageBucket", e
+            ) from e
+
+    async def update_object_storage_bucket_access(
+        self,
+        region: str,
+        label: str,
+        acl: str | None = None,
+        cors_enabled: bool | None = None,
+    ) -> None:
+        """Update bucket ACL and CORS settings."""
+        endpoint = (
+            f"/object-storage/buckets/{region}/{label}/access"
+        )
+        try:
+            body: dict[str, Any] = {}
+            if acl is not None:
+                body["acl"] = acl
+            if cors_enabled is not None:
+                body["cors_enabled"] = cors_enabled
+            await self._make_request("PUT", endpoint, body)
+        except httpx.HTTPError as e:
+            raise NetworkError(
+                "UpdateObjectStorageBucketAccess", e
+            ) from e
+
     # Stage 4: Write operations
 
     async def create_ssh_key(self, label: str, ssh_key: str) -> SSHKey:
@@ -2357,6 +2423,51 @@ class RetryableClient:
             self.client.get_object_storage_bucket_access, region, label
         )
         return result
+
+    # Stage 5 Phase 3: Object Storage write operations with retry
+
+    async def create_object_storage_bucket(
+        self,
+        label: str,
+        region: str,
+        acl: str | None = None,
+        cors_enabled: bool | None = None,
+    ) -> dict[str, Any]:
+        """Create Object Storage bucket with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.create_object_storage_bucket,
+            label,
+            region,
+            acl,
+            cors_enabled,
+        )
+        return result
+
+    async def delete_object_storage_bucket(
+        self, region: str, label: str
+    ) -> None:
+        """Delete Object Storage bucket with retry."""
+        await self._execute_with_retry(
+            self.client.delete_object_storage_bucket,
+            region,
+            label,
+        )
+
+    async def update_object_storage_bucket_access(
+        self,
+        region: str,
+        label: str,
+        acl: str | None = None,
+        cors_enabled: bool | None = None,
+    ) -> None:
+        """Update bucket access settings with retry."""
+        await self._execute_with_retry(
+            self.client.update_object_storage_bucket_access,
+            region,
+            label,
+            acl,
+            cors_enabled,
+        )
 
     # Stage 4: Write operations with retry
 

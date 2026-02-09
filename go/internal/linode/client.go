@@ -93,6 +93,11 @@ type ClientInterface interface {
 	GetObjectStorageKey(ctx context.Context, keyID int) (*ObjectStorageKey, error)
 	GetObjectStorageTransfer(ctx context.Context) (*ObjectStorageTransfer, error)
 	GetObjectStorageBucketAccess(ctx context.Context, region, label string) (*ObjectStorageBucketAccess, error)
+
+	// Stage 5 Phase 3: Object Storage write operations.
+	CreateObjectStorageBucket(ctx context.Context, req CreateObjectStorageBucketRequest) (*ObjectStorageBucket, error)
+	DeleteObjectStorageBucket(ctx context.Context, region, label string) error
+	UpdateObjectStorageBucketAccess(ctx context.Context, region, label string, req UpdateObjectStorageBucketAccessRequest) error
 }
 
 // Profile represents a Linode user profile.
@@ -607,6 +612,20 @@ type ObjectStorageType struct {
 	Price    Price  `json:"price"`
 	Transfer int    `json:"transfer"`
 	Region   string `json:"region_prices,omitempty"` //nolint:tagliatelle // Linode API snake_case
+}
+
+// CreateObjectStorageBucketRequest represents the request body for creating an Object Storage bucket.
+type CreateObjectStorageBucketRequest struct {
+	Label       string `json:"label"`
+	Region      string `json:"region"`
+	ACL         string `json:"acl,omitempty"`
+	CORSEnabled *bool  `json:"cors_enabled,omitempty"` //nolint:tagliatelle // Linode API snake_case
+}
+
+// UpdateObjectStorageBucketAccessRequest represents the request body for updating bucket access.
+type UpdateObjectStorageBucketAccessRequest struct {
+	ACL         string `json:"acl,omitempty"`
+	CORSEnabled *bool  `json:"cors_enabled,omitempty"` //nolint:tagliatelle // Linode API snake_case
 }
 
 // ObjectStorageKeyBucketAccess represents bucket-level permissions for an access key.
@@ -1836,6 +1855,60 @@ func (c *Client) GetObjectStorageBucketAccess(ctx context.Context, region, label
 	}
 
 	return &access, nil
+}
+
+// CreateObjectStorageBucket creates a new Object Storage bucket.
+func (c *Client) CreateObjectStorageBucket(ctx context.Context, req CreateObjectStorageBucketRequest) (*ObjectStorageBucket, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeJSONRequest(ctx, http.MethodPost, "/object-storage/buckets", req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateObjectStorageBucket", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var bucket ObjectStorageBucket
+	if err := c.handleResponse(resp, &bucket); err != nil {
+		return nil, err
+	}
+
+	return &bucket, nil
+}
+
+// DeleteObjectStorageBucket deletes an Object Storage bucket.
+func (c *Client) DeleteObjectStorageBucket(ctx context.Context, region, label string) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/object-storage/buckets/%s/%s", region, label)
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteObjectStorageBucket", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	return c.handleResponse(resp, nil)
+}
+
+// UpdateObjectStorageBucketAccess updates bucket ACL and CORS settings.
+func (c *Client) UpdateObjectStorageBucketAccess(ctx context.Context, region, label string, req UpdateObjectStorageBucketAccessRequest) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("/object-storage/buckets/%s/%s/access", region, label)
+
+	resp, err := c.makeJSONRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return &NetworkError{Operation: "UpdateObjectStorageBucketAccess", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	return c.handleResponse(resp, nil)
 }
 
 // Private helper methods
