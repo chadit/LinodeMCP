@@ -1,10 +1,12 @@
 """MCP server implementation for LinodeMCP."""
 
 import logging
-from typing import Any
+from collections.abc import Awaitable, Callable
+from typing import Any, cast
 
 from mcp.server import Server as MCPServer
 from mcp.server.stdio import stdio_server
+from mcp.types import Tool
 
 from linodemcp.config import Config
 from linodemcp.tools import (
@@ -140,6 +142,18 @@ __all__ = ["Server"]
 
 logger = logging.getLogger(__name__)
 
+# The MCP library's list_tools() and call_tool() methods lack return type
+# annotations. These type aliases let us cast them to their actual signatures
+# (verified from the library source) instead of suppressing type errors.
+ListToolsDecorator = Callable[
+    [Callable[[], Awaitable[list[Tool]]]],
+    Callable[[], Awaitable[list[Tool]]],
+]
+CallToolDecorator = Callable[
+    [Callable[..., Awaitable[list[Any]]]],
+    Callable[..., Awaitable[list[Any]]],
+]
+
 
 class Server:
     """LinodeMCP server."""
@@ -155,8 +169,12 @@ class Server:
 
     def _register_tools(self) -> None:
         """Register all MCP tools."""
-        self.mcp.list_tools()(  # type: ignore[no-untyped-call]
-            lambda: [
+        _list_tools_method = cast(
+            "Callable[[], ListToolsDecorator]", self.mcp.list_tools
+        )
+
+        async def _list_tools() -> list[Tool]:
+            return [
                 create_hello_tool(),
                 create_version_tool(),
                 create_linode_profile_tool(),
@@ -228,7 +246,8 @@ class Server:
                 create_linode_nodebalancer_update_tool(),
                 create_linode_nodebalancer_delete_tool(),
             ]
-        )
+
+        _list_tools_method()(_list_tools)
 
         # Tool handlers requiring config
         config_handlers = {
@@ -334,8 +353,7 @@ class Server:
             "linode_nodebalancer_delete": handle_linode_nodebalancer_delete,
         }
 
-        @self.mcp.call_tool()  # type: ignore[untyped-decorator]
-        async def call_tool_handler(name: str, arguments: dict[str, Any]) -> list[Any]:
+        async def _call_tool(name: str, arguments: dict[str, Any]) -> list[Any]:
             """Handle tool calls."""
             match name:
                 case "hello":
@@ -347,6 +365,8 @@ class Server:
                 case _:
                     msg = f"Unknown tool: {name}"
                     raise ValueError(msg)
+
+        cast("CallToolDecorator", self.mcp.call_tool())(_call_tool)
 
     async def start(self) -> None:
         """Start the MCP server using stdio transport."""

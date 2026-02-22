@@ -1,0 +1,9 @@
+{
+  "include": ["python/src/linodemcp", "python/tests"],
+  "extraPaths": ["python/src"],
+  "venvPath": "python",
+  "venv": ".venv",
+  "typeCheckingMode": "strict",
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": false
+}

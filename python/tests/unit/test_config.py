@@ -17,11 +17,11 @@ from linodemcp.config import (
     EnvironmentNotFoundError,
     LinodeConfig,
     PathValidationError,
-    _validate_config,
-    _validate_path,
     get_config_dir,
     get_config_path,
     load_from_file,
+    validate_config,
+    validate_path,
 )
 
 
@@ -147,7 +147,7 @@ def test_config_validation_missing_environments() -> None:
     cfg.environments = {}
 
     with pytest.raises(ConfigInvalidError, match="no environments defined"):
-        _validate_config(cfg)
+        validate_config(cfg)
 
 
 def test_config_validation_incomplete_linode_config() -> None:
@@ -161,7 +161,7 @@ def test_config_validation_incomplete_linode_config() -> None:
     }
 
     with pytest.raises(ConfigInvalidError, match="Linode token is required"):
-        _validate_config(cfg)
+        validate_config(cfg)
 
 
 def test_get_config_dir_default() -> None:
@@ -180,7 +180,7 @@ def test_get_config_path_default() -> None:
 def test_path_validation_dangerous_paths() -> None:
     """Test path validation rejects dangerous paths."""
     with pytest.raises(PathValidationError):
-        _validate_path(Path("/etc/passwd"))
+        validate_path(Path("/etc/passwd"))
 
     with pytest.raises(PathValidationError):
-        _validate_path(Path("/root/config.yml"))
+        validate_path(Path("/root/config.yml"))

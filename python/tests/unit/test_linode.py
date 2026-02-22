@@ -52,7 +52,7 @@ async def test_get_profile(sample_profile_data: dict[str, Any]) -> None:
     mock_response.status_code = 200
     mock_response.json.return_value = sample_profile_data
 
-    with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
         profile = await client.get_profile()
@@ -78,7 +78,7 @@ async def test_list_instances(sample_instance_data: dict[str, Any]) -> None:
         "results": 1,
     }
 
-    with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
         instances = await client.list_instances()
@@ -99,7 +99,7 @@ async def test_get_instance(sample_instance_data: dict[str, Any]) -> None:
     mock_response.status_code = 200
     mock_response.json.return_value = sample_instance_data
 
-    with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
         instance = await client.get_instance(123456)
@@ -123,7 +123,7 @@ async def test_api_error_401() -> None:
         mock_request.return_value = mock_response
 
         with pytest.raises(APIError) as exc_info:
-            await client._make_request("GET", "/profile")
+            await client.make_request("GET", "/profile")
 
         assert exc_info.value.status_code == 401
         assert "Authentication failed" in str(exc_info.value)
@@ -144,7 +144,7 @@ async def test_api_error_429() -> None:
         mock_request.return_value = mock_response
 
         with pytest.raises(APIError) as exc_info:
-            await client._make_request("GET", "/profile")
+            await client.make_request("GET", "/profile")
 
         assert exc_info.value.status_code == 429
         assert exc_info.value.is_rate_limit_error()
@@ -165,7 +165,7 @@ async def test_api_error_500() -> None:
         mock_request.return_value = mock_response
 
         with pytest.raises(APIError) as exc_info:
-            await client._make_request("GET", "/profile")
+            await client.make_request("GET", "/profile")
 
         assert exc_info.value.status_code == 500
         assert exc_info.value.is_server_error()
@@ -177,7 +177,7 @@ async def test_network_error() -> None:
     """Test network error handling."""
     client = Client("https://api.linode.com/v4", "test-token")
 
-    with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.side_effect = httpx.ConnectError("Connection failed")
 
         with pytest.raises(NetworkError) as exc_info:
@@ -199,7 +199,7 @@ async def test_retryable_client_success(sample_profile_data: dict[str, Any]) -> 
     mock_response.json.return_value = sample_profile_data
 
     with patch.object(
-        client.client, "_make_request", new_callable=AsyncMock
+        client.client, "make_request", new_callable=AsyncMock
     ) as mock_request:
         mock_request.return_value = mock_response
 
@@ -326,7 +326,7 @@ async def test_list_ssh_keys() -> None:
         "results": 1,
     }
 
-    with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
         keys = await client.list_ssh_keys()
@@ -363,7 +363,7 @@ async def test_list_domains() -> None:
         "results": 1,
     }
 
-    with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
         domains = await client.list_domains()
@@ -393,7 +393,7 @@ async def test_get_domain() -> None:
         "updated": "2024-01-15T12:00:00",
     }
 
-    with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
         domain = await client.get_domain(1)
@@ -430,7 +430,7 @@ async def test_list_domain_records() -> None:
         "results": 1,
     }
 
-    with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
         records = await client.list_domain_records(1)
@@ -470,7 +470,7 @@ async def test_list_firewalls() -> None:
         "results": 1,
     }
 
-    with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
         firewalls = await client.list_firewalls()
@@ -509,7 +509,7 @@ async def test_list_nodebalancers() -> None:
         "results": 1,
     }
 
-    with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
         nbs = await client.list_nodebalancers()
@@ -541,7 +541,7 @@ async def test_get_nodebalancer() -> None:
         "updated": "2024-01-15T12:00:00",
     }
 
-    with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
         nb = await client.get_nodebalancer(1)
@@ -582,7 +582,7 @@ async def test_list_stackscripts() -> None:
         "results": 1,
     }
 
-    with patch.object(client, "_make_request", new_callable=AsyncMock) as mock_request:
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
         scripts = await client.list_stackscripts()

@@ -658,7 +658,7 @@ class Client:
     async def get_profile(self) -> Profile:
         """Get Linode user profile."""
         try:
-            response = await self._make_request("GET", "/profile")
+            response = await self.make_request("GET", "/profile")
             data = response.json()
             return Profile(
                 username=data["username"],
@@ -675,7 +675,7 @@ class Client:
     async def list_instances(self) -> list[Instance]:
         """List Linode instances."""
         try:
-            response = await self._make_request("GET", "/linode/instances")
+            response = await self.make_request("GET", "/linode/instances")
             data = response.json()
             return [self._parse_instance(inst) for inst in data.get("data", [])]
         except httpx.HTTPError as e:
@@ -685,7 +685,7 @@ class Client:
         """Get a specific Linode instance."""
         endpoint = f"/linode/instances/{instance_id}"
         try:
-            response = await self._make_request("GET", endpoint)
+            response = await self.make_request("GET", endpoint)
             data = response.json()
             return self._parse_instance(data)
         except httpx.HTTPError as e:
@@ -694,7 +694,7 @@ class Client:
     async def get_account(self) -> Account:
         """Get Linode account information."""
         try:
-            response = await self._make_request("GET", "/account")
+            response = await self.make_request("GET", "/account")
             data = response.json()
             return self._parse_account(data)
         except httpx.HTTPError as e:
@@ -703,7 +703,7 @@ class Client:
     async def list_regions(self) -> list[Region]:
         """List Linode regions."""
         try:
-            response = await self._make_request("GET", "/regions")
+            response = await self.make_request("GET", "/regions")
             data = response.json()
             return [self._parse_region(r) for r in data.get("data", [])]
         except httpx.HTTPError as e:
@@ -712,7 +712,7 @@ class Client:
     async def list_types(self) -> list[InstanceType]:
         """List Linode instance types."""
         try:
-            response = await self._make_request("GET", "/linode/types")
+            response = await self.make_request("GET", "/linode/types")
             data = response.json()
             return [self._parse_instance_type(t) for t in data.get("data", [])]
         except httpx.HTTPError as e:
@@ -721,7 +721,7 @@ class Client:
     async def list_volumes(self) -> list[Volume]:
         """List Linode block storage volumes."""
         try:
-            response = await self._make_request("GET", "/volumes")
+            response = await self.make_request("GET", "/volumes")
             data = response.json()
             return [self._parse_volume(v) for v in data.get("data", [])]
         except httpx.HTTPError as e:
@@ -730,7 +730,7 @@ class Client:
     async def list_images(self) -> list[Image]:
         """List Linode images."""
         try:
-            response = await self._make_request("GET", "/images")
+            response = await self.make_request("GET", "/images")
             data = response.json()
             return [self._parse_image(i) for i in data.get("data", [])]
         except httpx.HTTPError as e:
@@ -741,7 +741,7 @@ class Client:
     async def list_ssh_keys(self) -> list[SSHKey]:
         """List SSH keys."""
         try:
-            response = await self._make_request("GET", "/profile/sshkeys")
+            response = await self.make_request("GET", "/profile/sshkeys")
             data = response.json()
             return [self._parse_ssh_key(k) for k in data.get("data", [])]
         except httpx.HTTPError as e:
@@ -750,7 +750,7 @@ class Client:
     async def list_domains(self) -> list[Domain]:
         """List domains."""
         try:
-            response = await self._make_request("GET", "/domains")
+            response = await self.make_request("GET", "/domains")
             data = response.json()
             return [self._parse_domain(d) for d in data.get("data", [])]
         except httpx.HTTPError as e:
@@ -760,7 +760,7 @@ class Client:
         """Get a specific domain."""
         endpoint = f"/domains/{domain_id}"
         try:
-            response = await self._make_request("GET", endpoint)
+            response = await self.make_request("GET", endpoint)
             data = response.json()
             return self._parse_domain(data)
         except httpx.HTTPError as e:
@@ -770,7 +770,7 @@ class Client:
         """List domain records for a domain."""
         endpoint = f"/domains/{domain_id}/records"
         try:
-            response = await self._make_request("GET", endpoint)
+            response = await self.make_request("GET", endpoint)
             data = response.json()
             return [self._parse_domain_record(r) for r in data.get("data", [])]
         except httpx.HTTPError as e:
@@ -779,7 +779,7 @@ class Client:
     async def list_firewalls(self) -> list[Firewall]:
         """List firewalls."""
         try:
-            response = await self._make_request("GET", "/networking/firewalls")
+            response = await self.make_request("GET", "/networking/firewalls")
             data = response.json()
             return [self._parse_firewall(f) for f in data.get("data", [])]
         except httpx.HTTPError as e:
@@ -788,7 +788,7 @@ class Client:
     async def list_nodebalancers(self) -> list[NodeBalancer]:
         """List NodeBalancers."""
         try:
-            response = await self._make_request("GET", "/nodebalancers")
+            response = await self.make_request("GET", "/nodebalancers")
             data = response.json()
             return [self._parse_nodebalancer(nb) for nb in data.get("data", [])]
         except httpx.HTTPError as e:
@@ -798,7 +798,7 @@ class Client:
         """Get a specific NodeBalancer."""
         endpoint = f"/nodebalancers/{nodebalancer_id}"
         try:
-            response = await self._make_request("GET", endpoint)
+            response = await self.make_request("GET", endpoint)
             data = response.json()
             return self._parse_nodebalancer(data)
         except httpx.HTTPError as e:
@@ -807,7 +807,7 @@ class Client:
     async def list_stackscripts(self) -> list[StackScript]:
         """List StackScripts."""
         try:
-            response = await self._make_request("GET", "/linode/stackscripts")
+            response = await self.make_request("GET", "/linode/stackscripts")
             data = response.json()
             return [self._parse_stackscript(s) for s in data.get("data", [])]
         except httpx.HTTPError as e:
@@ -818,7 +818,7 @@ class Client:
     async def list_object_storage_buckets(self) -> list[dict[str, Any]]:
         """List Object Storage buckets."""
         try:
-            response = await self._make_request("GET", "/object-storage/buckets")
+            response = await self.make_request("GET", "/object-storage/buckets")
             data = response.json()
             buckets: list[dict[str, Any]] = data.get("data", [])
             return buckets
@@ -831,7 +831,7 @@ class Client:
         """Get a specific Object Storage bucket."""
         endpoint = f"/object-storage/buckets/{region}/{label}"
         try:
-            response = await self._make_request("GET", endpoint)
+            response = await self.make_request("GET", endpoint)
             bucket: dict[str, Any] = response.json()
             return bucket
         except httpx.HTTPError as e:
@@ -854,7 +854,7 @@ class Client:
                 endpoint += "?" + "&".join(query_parts)
 
         try:
-            response = await self._make_request("GET", endpoint)
+            response = await self.make_request("GET", endpoint)
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -863,7 +863,7 @@ class Client:
     async def list_object_storage_clusters(self) -> list[dict[str, Any]]:
         """List Object Storage clusters."""
         try:
-            response = await self._make_request("GET", "/object-storage/clusters")
+            response = await self.make_request("GET", "/object-storage/clusters")
             data = response.json()
             clusters: list[dict[str, Any]] = data.get("data", [])
             return clusters
@@ -873,7 +873,7 @@ class Client:
     async def list_object_storage_types(self) -> list[dict[str, Any]]:
         """List Object Storage types/pricing."""
         try:
-            response = await self._make_request("GET", "/object-storage/types")
+            response = await self.make_request("GET", "/object-storage/types")
             data = response.json()
             types: list[dict[str, Any]] = data.get("data", [])
             return types
@@ -883,7 +883,7 @@ class Client:
     async def list_object_storage_keys(self) -> list[dict[str, Any]]:
         """List all Object Storage access keys."""
         try:
-            response = await self._make_request("GET", "/object-storage/keys")
+            response = await self.make_request("GET", "/object-storage/keys")
             data = response.json()
             keys: list[dict[str, Any]] = data.get("data", [])
             return keys
@@ -894,7 +894,7 @@ class Client:
         """Get a specific Object Storage access key."""
         endpoint = f"/object-storage/keys/{key_id}"
         try:
-            response = await self._make_request("GET", endpoint)
+            response = await self.make_request("GET", endpoint)
             key: dict[str, Any] = response.json()
             return key
         except httpx.HTTPError as e:
@@ -903,7 +903,7 @@ class Client:
     async def get_object_storage_transfer(self) -> dict[str, Any]:
         """Get Object Storage outbound data transfer usage."""
         try:
-            response = await self._make_request("GET", "/object-storage/transfer")
+            response = await self.make_request("GET", "/object-storage/transfer")
             transfer: dict[str, Any] = response.json()
             return transfer
         except httpx.HTTPError as e:
@@ -915,7 +915,7 @@ class Client:
         """Get bucket ACL and CORS settings."""
         endpoint = f"/object-storage/buckets/{region}/{label}/access"
         try:
-            response = await self._make_request("GET", endpoint)
+            response = await self.make_request("GET", endpoint)
             access: dict[str, Any] = response.json()
             return access
         except httpx.HTTPError as e:
@@ -940,7 +940,7 @@ class Client:
                 body["acl"] = acl
             if cors_enabled is not None:
                 body["cors_enabled"] = cors_enabled
-            response = await self._make_request("POST", "/object-storage/buckets", body)
+            response = await self.make_request("POST", "/object-storage/buckets", body)
             bucket: dict[str, Any] = response.json()
             return bucket
         except httpx.HTTPError as e:
@@ -950,7 +950,7 @@ class Client:
         """Delete an Object Storage bucket."""
         endpoint = f"/object-storage/buckets/{region}/{label}"
         try:
-            await self._make_request("DELETE", endpoint)
+            await self.make_request("DELETE", endpoint)
         except httpx.HTTPError as e:
             raise NetworkError("DeleteObjectStorageBucket", e) from e
 
@@ -969,7 +969,7 @@ class Client:
                 body["acl"] = acl
             if cors_enabled is not None:
                 body["cors_enabled"] = cors_enabled
-            await self._make_request("PUT", endpoint, body)
+            await self.make_request("PUT", endpoint, body)
         except httpx.HTTPError as e:
             raise NetworkError("UpdateObjectStorageBucketAccess", e) from e
 
@@ -985,7 +985,7 @@ class Client:
             body: dict[str, Any] = {"label": label}
             if bucket_access is not None:
                 body["bucket_access"] = bucket_access
-            response = await self._make_request("POST", "/object-storage/keys", body)
+            response = await self.make_request("POST", "/object-storage/keys", body)
             key: dict[str, Any] = response.json()
             return key
         except httpx.HTTPError as e:
@@ -1005,7 +1005,7 @@ class Client:
                 body["label"] = label
             if bucket_access is not None:
                 body["bucket_access"] = bucket_access
-            await self._make_request("PUT", endpoint, body)
+            await self.make_request("PUT", endpoint, body)
         except httpx.HTTPError as e:
             raise NetworkError("UpdateObjectStorageKey", e) from e
 
@@ -1013,7 +1013,7 @@ class Client:
         """Delete (revoke) an Object Storage access key."""
         endpoint = f"/object-storage/keys/{key_id}"
         try:
-            await self._make_request("DELETE", endpoint)
+            await self.make_request("DELETE", endpoint)
         except httpx.HTTPError as e:
             raise NetworkError("DeleteObjectStorageKey", e) from e
 
@@ -1035,7 +1035,7 @@ class Client:
             "expires_in": expires_in,
         }
         try:
-            response = await self._make_request("POST", endpoint, body)
+            response = await self.make_request("POST", endpoint, body)
             return dict(response.json())
         except httpx.HTTPError as e:
             raise NetworkError("CreatePresignedURL", e) from e
@@ -1046,7 +1046,7 @@ class Client:
         """Get the ACL for an object in Object Storage."""
         endpoint = f"/object-storage/buckets/{region}/{label}/object-acl?name={name}"
         try:
-            response = await self._make_request("GET", endpoint)
+            response = await self.make_request("GET", endpoint)
             return dict(response.json())
         except httpx.HTTPError as e:
             raise NetworkError("GetObjectACL", e) from e
@@ -1058,7 +1058,7 @@ class Client:
         endpoint = f"/object-storage/buckets/{region}/{label}/object-acl"
         body = {"acl": acl, "name": name}
         try:
-            response = await self._make_request("PUT", endpoint, body)
+            response = await self.make_request("PUT", endpoint, body)
             return dict(response.json())
         except httpx.HTTPError as e:
             raise NetworkError("UpdateObjectACL", e) from e
@@ -1067,7 +1067,7 @@ class Client:
         """Get the SSL/TLS certificate status for a bucket."""
         endpoint = f"/object-storage/buckets/{region}/{label}/ssl"
         try:
-            response = await self._make_request("GET", endpoint)
+            response = await self.make_request("GET", endpoint)
             return dict(response.json())
         except httpx.HTTPError as e:
             raise NetworkError("GetBucketSSL", e) from e
@@ -1076,7 +1076,7 @@ class Client:
         """Delete the SSL/TLS certificate from a bucket."""
         endpoint = f"/object-storage/buckets/{region}/{label}/ssl"
         try:
-            await self._make_request("DELETE", endpoint)
+            await self.make_request("DELETE", endpoint)
         except httpx.HTTPError as e:
             raise NetworkError("DeleteBucketSSL", e) from e
 
@@ -1091,7 +1091,7 @@ class Client:
 
         try:
             body = {"label": label, "ssh_key": ssh_key}
-            response = await self._make_request("POST", "/profile/sshkeys", body)
+            response = await self.make_request("POST", "/profile/sshkeys", body)
             data = response.json()
             result = self._parse_ssh_key(data)
             logger.info("SSH key created", extra={"id": result.id})
@@ -1115,7 +1115,7 @@ class Client:
         logger.info("Deleting SSH key", extra={"ssh_key_id": ssh_key_id})
 
         try:
-            await self._make_request("DELETE", endpoint)
+            await self.make_request("DELETE", endpoint)
             logger.info("SSH key deleted", extra={"ssh_key_id": ssh_key_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout deleting SSH key: %s", e)
@@ -1141,7 +1141,7 @@ class Client:
             body: dict[str, Any] = {}
             if config_id is not None:
                 body["config_id"] = config_id
-            await self._make_request("POST", endpoint, body or None)
+            await self.make_request("POST", endpoint, body or None)
             logger.info("Instance booted", extra={"instance_id": instance_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout booting instance: %s", e)
@@ -1167,7 +1167,7 @@ class Client:
             body: dict[str, Any] = {}
             if config_id is not None:
                 body["config_id"] = config_id
-            await self._make_request("POST", endpoint, body or None)
+            await self.make_request("POST", endpoint, body or None)
             logger.info("Instance rebooted", extra={"instance_id": instance_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout rebooting instance: %s", e)
@@ -1188,7 +1188,7 @@ class Client:
         logger.info("Shutting down instance", extra={"instance_id": instance_id})
 
         try:
-            await self._make_request("POST", endpoint)
+            await self.make_request("POST", endpoint)
             logger.info("Instance shut down", extra={"instance_id": instance_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout shutting down instance: %s", e)
@@ -1247,7 +1247,7 @@ class Client:
             if tags:
                 body["tags"] = tags
 
-            response = await self._make_request("POST", "/linode/instances", body)
+            response = await self.make_request("POST", "/linode/instances", body)
             data = response.json()
             result = self._parse_instance(data)
             logger.info("Instance created", extra={"id": result.id})
@@ -1271,7 +1271,7 @@ class Client:
         logger.info("Deleting instance", extra={"instance_id": instance_id})
 
         try:
-            await self._make_request("DELETE", endpoint)
+            await self.make_request("DELETE", endpoint)
             logger.info("Instance deleted", extra={"instance_id": instance_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout deleting instance: %s", e)
@@ -1306,7 +1306,7 @@ class Client:
                 "allow_auto_disk_resize": allow_auto_disk_resize,
                 "migration_type": migration_type,
             }
-            await self._make_request("POST", endpoint, body)
+            await self.make_request("POST", endpoint, body)
             logger.info("Instance resized", extra={"instance_id": instance_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout resizing instance: %s", e)
@@ -1342,7 +1342,7 @@ class Client:
                     "outbound_policy": outbound_policy,
                 },
             }
-            response = await self._make_request("POST", "/networking/firewalls", body)
+            response = await self.make_request("POST", "/networking/firewalls", body)
             data = response.json()
             result = self._parse_firewall(data)
             logger.info("Firewall created", extra={"id": result.id})
@@ -1390,7 +1390,7 @@ class Client:
                 if outbound_policy:
                     body["rules"]["outbound_policy"] = outbound_policy
 
-            response = await self._make_request("PUT", endpoint, body)
+            response = await self.make_request("PUT", endpoint, body)
             data = response.json()
             result = self._parse_firewall(data)
             logger.info("Firewall updated", extra={"id": result.id})
@@ -1414,7 +1414,7 @@ class Client:
         logger.info("Deleting firewall", extra={"firewall_id": firewall_id})
 
         try:
-            await self._make_request("DELETE", endpoint)
+            await self.make_request("DELETE", endpoint)
             logger.info("Firewall deleted", extra={"firewall_id": firewall_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout deleting firewall: %s", e)
@@ -1451,7 +1451,7 @@ class Client:
             if tags:
                 body["tags"] = tags
 
-            response = await self._make_request("POST", "/domains", body)
+            response = await self.make_request("POST", "/domains", body)
             data = response.json()
             result = self._parse_domain(data)
             logger.info("Domain created", extra={"id": result.id})
@@ -1492,7 +1492,7 @@ class Client:
             if tags is not None:
                 body["tags"] = tags
 
-            response = await self._make_request("PUT", endpoint, body)
+            response = await self.make_request("PUT", endpoint, body)
             data = response.json()
             result = self._parse_domain(data)
             logger.info("Domain updated", extra={"id": result.id})
@@ -1516,7 +1516,7 @@ class Client:
         logger.info("Deleting domain", extra={"domain_id": domain_id})
 
         try:
-            await self._make_request("DELETE", endpoint)
+            await self.make_request("DELETE", endpoint)
             logger.info("Domain deleted", extra={"domain_id": domain_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout deleting domain: %s", e)
@@ -1566,7 +1566,7 @@ class Client:
             }
             body.update({k: v for k, v in optional_fields.items() if v is not None})
 
-            response = await self._make_request("POST", endpoint, body)
+            response = await self.make_request("POST", endpoint, body)
             data = response.json()
             result = self._parse_domain_record(data)
             logger.info("Domain record created", extra={"id": result.id})
@@ -1622,7 +1622,7 @@ class Client:
             if ttl_sec is not None:
                 body["ttl_sec"] = ttl_sec
 
-            response = await self._make_request("PUT", endpoint, body)
+            response = await self.make_request("PUT", endpoint, body)
             data = response.json()
             result = self._parse_domain_record(data)
             logger.info("Domain record updated", extra={"id": result.id})
@@ -1651,7 +1651,7 @@ class Client:
         )
 
         try:
-            await self._make_request("DELETE", endpoint)
+            await self.make_request("DELETE", endpoint)
             logger.info("Domain record deleted", extra={"record_id": record_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout deleting domain record: %s", e)
@@ -1691,7 +1691,7 @@ class Client:
             if tags:
                 body["tags"] = tags
 
-            response = await self._make_request("POST", "/volumes", body)
+            response = await self.make_request("POST", "/volumes", body)
             data = response.json()
             result = self._parse_volume(data)
             logger.info("Volume created", extra={"id": result.id})
@@ -1731,7 +1731,7 @@ class Client:
             if config_id is not None:
                 body["config_id"] = config_id
 
-            response = await self._make_request("POST", endpoint, body)
+            response = await self.make_request("POST", endpoint, body)
             data = response.json()
             result = self._parse_volume(data)
             logger.info("Volume attached", extra={"volume_id": volume_id})
@@ -1755,7 +1755,7 @@ class Client:
         logger.info("Detaching volume", extra={"volume_id": volume_id})
 
         try:
-            await self._make_request("POST", endpoint)
+            await self.make_request("POST", endpoint)
             logger.info("Volume detached", extra={"volume_id": volume_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout detaching volume: %s", e)
@@ -1779,7 +1779,7 @@ class Client:
 
         try:
             body = {"size": size}
-            response = await self._make_request("POST", endpoint, body)
+            response = await self.make_request("POST", endpoint, body)
             data = response.json()
             result = self._parse_volume(data)
             logger.info("Volume resized", extra={"volume_id": volume_id})
@@ -1803,7 +1803,7 @@ class Client:
         logger.info("Deleting volume", extra={"volume_id": volume_id})
 
         try:
-            await self._make_request("DELETE", endpoint)
+            await self.make_request("DELETE", endpoint)
             logger.info("Volume deleted", extra={"volume_id": volume_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout deleting volume: %s", e)
@@ -1840,7 +1840,7 @@ class Client:
             if tags:
                 body["tags"] = tags
 
-            response = await self._make_request("POST", "/nodebalancers", body)
+            response = await self.make_request("POST", "/nodebalancers", body)
             data = response.json()
             result = self._parse_nodebalancer(data)
             logger.info(
@@ -1882,7 +1882,7 @@ class Client:
             if tags is not None:
                 body["tags"] = tags
 
-            response = await self._make_request("PUT", endpoint, body)
+            response = await self.make_request("PUT", endpoint, body)
             data = response.json()
             result = self._parse_nodebalancer(data)
             logger.info("NodeBalancer updated", extra={"id": result.id})
@@ -1908,7 +1908,7 @@ class Client:
         logger.info("Deleting NodeBalancer", extra={"nodebalancer_id": nodebalancer_id})
 
         try:
-            await self._make_request("DELETE", endpoint)
+            await self.make_request("DELETE", endpoint)
             logger.info("NodeBalancer deleted", extra={"id": nodebalancer_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout deleting NodeBalancer: %s", e)
@@ -1925,7 +1925,7 @@ class Client:
             logger.exception("HTTP error deleting NodeBalancer: %s", e)
             raise NetworkError("DeleteNodeBalancer", e) from e
 
-    async def _make_request(
+    async def make_request(
         self, method: str, endpoint: str, body: dict[str, Any] | None = None
     ) -> httpx.Response:
         """Make an HTTP request to the Linode API."""

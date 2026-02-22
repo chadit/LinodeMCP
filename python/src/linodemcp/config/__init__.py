@@ -99,7 +99,9 @@ class Config:
     metrics: MetricsConfig = field(default_factory=MetricsConfig)
     tracing: TracingConfig = field(default_factory=TracingConfig)
     resilience: ResilienceConfig = field(default_factory=ResilienceConfig)
-    environments: dict[str, EnvironmentConfig] = field(default_factory=dict)
+    environments: dict[str, EnvironmentConfig] = field(
+        default_factory=dict[str, EnvironmentConfig]
+    )
 
     def select_environment(self, user_input: str) -> EnvironmentConfig:
         """Select a Linode environment from the config."""
@@ -134,7 +136,7 @@ class Config:
         return self.environments[environment_name].linode
 
 
-def _validate_path(path: Path) -> None:
+def validate_path(path: Path) -> None:
     """Validate file path for security."""
     if not path:
         msg = "path cannot be empty"
@@ -178,7 +180,7 @@ def get_config_dir() -> Path:
     if custom_path:
         try:
             path = Path(custom_path)
-            _validate_path(path)
+            validate_path(path)
         except PathValidationError:
             pass
         else:
@@ -194,7 +196,7 @@ def get_config_path() -> Path:
     if custom_path:
         try:
             path = Path(custom_path)
-            _validate_path(path)
+            validate_path(path)
         except PathValidationError:
             pass
         else:
@@ -213,12 +215,18 @@ def _parse_config_data(data: str) -> dict[str, Any]:
     data_stripped = data.strip()
     if data_stripped.startswith("{"):
         try:
-            return json.loads(data_stripped)  # type: ignore[no-any-return]
+            parsed: object = json.loads(data_stripped)
+            if isinstance(parsed, dict):
+                return parsed
         except json.JSONDecodeError:
             pass
 
     try:
-        return yaml.safe_load(data_stripped)  # type: ignore[no-any-return]
+        parsed = yaml.safe_load(data_stripped)
+        if isinstance(parsed, dict):
+            return parsed
+        msg = "config must be a YAML mapping, not a scalar or list"
+        raise ConfigMalformedError(msg)
     except yaml.YAMLError as e:
         msg = f"failed to parse YAML: {e}"
         raise ConfigMalformedError(msg) from e
@@ -279,7 +287,7 @@ def _apply_environment_overrides(data: dict[str, Any]) -> None:
             data["environments"]["default"]["label"] = "Default"
 
 
-def _validate_config(cfg: Config) -> None:
+def validate_config(cfg: Config) -> None:
     """Validate configuration."""
     if not cfg.server.name:
         msg = "server name cannot be empty"
@@ -377,7 +385,7 @@ def load_from_file(path: Path) -> Config:
         raise ConfigFileNotFoundError(msg)
 
     try:
-        _validate_path(path)
+        validate_path(path)
     except PathValidationError as e:
         msg = f"invalid file path: {path}"
         raise ConfigInvalidError(msg) from e
@@ -393,7 +401,7 @@ def load_from_file(path: Path) -> Config:
     _apply_environment_overrides(data)
 
     cfg = _data_to_config(data)
-    _validate_config(cfg)
+    validate_config(cfg)
 
     return cfg
 

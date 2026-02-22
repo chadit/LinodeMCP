@@ -606,7 +606,7 @@ async def handle_linode_regions_list(
             "regions": regions_data,
         }
 
-        filters = []
+        filters: list[str] = []
         if country_filter:
             filters.append(f"country={country_filter}")
         if capability_filter:
@@ -753,7 +753,7 @@ async def handle_linode_volumes_list(
             "volumes": volumes_data,
         }
 
-        filters = []
+        filters: list[str] = []
         if region_filter:
             filters.append(f"region={region_filter}")
         if label_contains:
@@ -845,7 +845,7 @@ async def handle_linode_images_list(
             "images": images_data,
         }
 
-        filters = []
+        filters: list[str] = []
         if type_filter:
             filters.append(f"type={type_filter}")
         if is_public_filter:
@@ -996,7 +996,7 @@ async def handle_linode_domains_list(
             "domains": domains_data,
         }
 
-        filters = []
+        filters: list[str] = []
         if domain_contains:
             filters.append(f"domain_contains={domain_contains}")
         if type_filter:
@@ -1139,7 +1139,7 @@ async def handle_linode_domain_records_list(
             "records": records_data,
         }
 
-        filters = []
+        filters: list[str] = []
         if type_filter:
             filters.append(f"type={type_filter}")
         if name_contains:
@@ -1224,7 +1224,7 @@ async def handle_linode_firewalls_list(
             "firewalls": firewalls_data,
         }
 
-        filters = []
+        filters: list[str] = []
         if status_filter:
             filters.append(f"status={status_filter}")
         if label_contains:
@@ -1307,7 +1307,7 @@ async def handle_linode_nodebalancers_list(
             "nodebalancers": nodebalancers_data,
         }
 
-        filters = []
+        filters: list[str] = []
         if region_filter:
             filters.append(f"region={region_filter}")
         if label_contains:
@@ -1462,7 +1462,7 @@ async def handle_linode_stackscripts_list(
             "stackscripts": scripts_data,
         }
 
-        filters = []
+        filters: list[str] = []
         if is_public_filter:
             filters.append(f"is_public={is_public_filter}")
         if mine_filter:
@@ -1636,7 +1636,7 @@ def _build_bucket_filter_string(
     prefix: str, delimiter: str, marker: str, page_size: str
 ) -> str:
     """Build filter string for bucket contents response."""
-    filters = []
+    filters: list[str] = []
     if prefix:
         filters.append(f"prefix={prefix}")
     if delimiter:
