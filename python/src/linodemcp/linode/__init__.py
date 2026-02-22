@@ -5,9 +5,11 @@ import ipaddress
 import logging
 import re
 import secrets
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 import httpx
 
@@ -647,7 +649,7 @@ class Client:
         """Close the HTTP client."""
         await self.client.aclose()
 
-    async def __aenter__(self) -> "Client":
+    async def __aenter__(self) -> Client:
         """Async context manager entry."""
         return self
 
@@ -2345,7 +2347,7 @@ class RetryableClient:
         """Close the HTTP client."""
         await self.client.close()
 
-    async def __aenter__(self) -> "RetryableClient":
+    async def __aenter__(self) -> RetryableClient:
         """Async context manager entry."""
         return self
 

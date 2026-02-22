@@ -2,13 +2,14 @@
 
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from mcp.server import Server as MCPServer
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool
 
-from linodemcp.config import Config
+if TYPE_CHECKING:
+    from linodemcp.config import Config
 from linodemcp.tools import (
     create_hello_tool,
     create_linode_account_tool,

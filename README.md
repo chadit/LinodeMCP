@@ -1,6 +1,6 @@
 # LinodeMCP
 
-An MCP (Model Context Protocol) server that gives AI assistants like Claude programmatic access to the Linode cloud platform API. Ships with both Go and Python implementations that share the same configuration format and tool interface.
+An MCP (Model Context Protocol) server that gives AI assistants like Claude|Gemini|Copilot programmatic access to the Linode cloud platform API. Ships with both Go and Python implementations that share the same configuration format and tool interface.
 
 ## What It Does
 
@@ -117,7 +117,7 @@ LinodeMCP exposes Linode API operations as MCP tools. AI assistants can use thes
 
 Configure multiple Linode environments (production, staging, dev) in a single config file. Tools accept an optional `environment` parameter to target a specific one, falling back to `default` when omitted.
 
-## Quick Start
+## Installation
 
 ### Prerequisites
 
@@ -128,7 +128,7 @@ Configure multiple Linode environments (production, staging, dev) in a single co
 
 **Python implementation:**
 
-- Python 3.11+
+- Python 3.14+
 - A Linode API token
 
 ### Configuration
@@ -182,64 +182,208 @@ You can also set configuration through environment variables:
 
 ### Go
 
-```bash
-cd go/
+1. Clone the repo and change into the Go directory:
 
-# Install dev tools
-make install-tools
+   ```bash
+   git clone https://github.com/chadit/LinodeMCP.git
+   cd LinodeMCP/go/
+   ```
 
-# Build and run
-make build
-./bin/linodemcp
+2. Install dev tooling:
 
-# Or build + run in one step
-make run
-```
+   ```bash
+   make install-tools
+   ```
+
+3. Build the binary:
+
+   ```bash
+   make build
+   ```
+
+   This puts the binary at `go/bin/linodemcp`. You'll need this absolute path for MCP client config below.
+
+4. Quick test run:
+
+   ```bash
+   make run
+   ```
 
 ### Python
 
+1. Clone the repo and change into the Python directory:
+
+   ```bash
+   git clone https://github.com/chadit/LinodeMCP.git
+   cd LinodeMCP/python/
+   ```
+
+2. Install with dev dependencies (creates a venv automatically):
+
+   ```bash
+   make install-dev
+   ```
+
+   The binary lands at `python/.venv/bin/linodemcp`. You'll need this absolute path for MCP client config below.
+
+3. Quick test run:
+
+   ```bash
+   make run
+   ```
+
+## MCP Client Setup
+
+Each MCP client needs to know where the LinodeMCP binary lives and how to pass your Linode API token. Pick your client below -- all examples show both Go and Python variants.
+
+### Claude Desktop
+
+Add this to your Claude Desktop config on macOS at `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+**Go:**
+
+```json
+{
+  "mcpServers": {
+    "linodemcp": {
+      "command": "/absolute/path/to/LinodeMCP/go/bin/linodemcp",
+      "env": {
+        "LINODEMCP_LINODE_TOKEN": "your-token-here"
+      }
+    }
+  }
+}
+```
+
+**Python:**
+
+```json
+{
+  "mcpServers": {
+    "linodemcp": {
+      "command": "/absolute/path/to/LinodeMCP/python/.venv/bin/linodemcp",
+      "env": {
+        "LINODEMCP_LINODE_TOKEN": "your-token-here"
+      }
+    }
+  }
+}
+```
+
+### Claude Code CLI
+
+Add LinodeMCP to the current project with a one-liner:
+
+**Go:**
+
 ```bash
-cd python/
-
-# Install with dev dependencies
-make install-dev
-
-# Run the server
-make run
+claude mcp add linodemcp -- /absolute/path/to/LinodeMCP/go/bin/linodemcp
 ```
 
-### Claude Desktop Integration
+**Python:**
 
-Add this to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+```bash
+claude mcp add linodemcp -- /absolute/path/to/LinodeMCP/python/.venv/bin/linodemcp
+```
+
+To make it available across all your projects, add `--scope user`:
+
+```bash
+claude mcp add --scope user linodemcp -- /absolute/path/to/LinodeMCP/go/bin/linodemcp
+```
+
+For team sharing, drop a `.mcp.json` in the project root:
 
 ```json
 {
   "mcpServers": {
     "linodemcp": {
-      "command": "/path/to/linodemcp/go/bin/linodemcp",
+      "command": "/absolute/path/to/LinodeMCP/go/bin/linodemcp",
       "env": {
-        "LINODEMCP_LINODE_TOKEN": "your-token-here"
+        "LINODEMCP_LINODE_TOKEN": "${LINODEMCP_LINODE_TOKEN}"
       }
     }
   }
 }
 ```
 
-For the Python version:
+Set the `LINODEMCP_LINODE_TOKEN` env var in your shell, and Claude Code picks it up automatically.
+
+### Gemini CLI
+
+Add to `~/.gemini/settings.json`:
+
+**Go:**
 
 ```json
 {
   "mcpServers": {
     "linodemcp": {
-      "command": "python",
-      "args": ["-m", "linodemcp"],
+      "command": "/absolute/path/to/LinodeMCP/go/bin/linodemcp",
       "env": {
-        "LINODEMCP_LINODE_TOKEN": "your-token-here"
+        "LINODEMCP_LINODE_TOKEN": "$LINODEMCP_LINODE_TOKEN"
       }
     }
   }
 }
 ```
+
+**Python:**
+
+```json
+{
+  "mcpServers": {
+    "linodemcp": {
+      "command": "/absolute/path/to/LinodeMCP/python/.venv/bin/linodemcp",
+      "env": {
+        "LINODEMCP_LINODE_TOKEN": "$LINODEMCP_LINODE_TOKEN"
+      }
+    }
+  }
+}
+```
+
+Note: Gemini CLI uses `$VAR` syntax (no curly braces) for environment variable references.
+
+### GitHub Copilot (VS Code)
+
+Create a `.vscode/mcp.json` in your workspace:
+
+**Go:**
+
+```json
+{
+  "servers": {
+    "linodemcp": {
+      "command": "/absolute/path/to/LinodeMCP/go/bin/linodemcp",
+      "env": {
+        "LINODEMCP_LINODE_TOKEN": "${input:linode-token}"
+      }
+    }
+  }
+}
+```
+
+**Python:**
+
+```json
+{
+  "servers": {
+    "linodemcp": {
+      "command": "/absolute/path/to/LinodeMCP/python/.venv/bin/linodemcp",
+      "env": {
+        "LINODEMCP_LINODE_TOKEN": "${input:linode-token}"
+      }
+    }
+  }
+}
+```
+
+VS Code prompts you for the token value on first use through the `${input:linode-token}` pattern. The token gets cached for the session.
+
+### Cursor / Windsurf
+
+Both Cursor and Windsurf use the same `.mcp.json` format as Claude Code. See the [Claude Code CLI](#claude-code-cli) section and drop that same file in your project root.
 
 ## Development
 
