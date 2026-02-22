@@ -81,8 +81,8 @@ func (c *Client) ListObjectStorageBucketContents(ctx context.Context, region, la
 
 	var response struct {
 		Data        []ObjectStorageObject `json:"data"`
-		IsTruncated bool                  `json:"is_truncated"` //nolint:tagliatelle // Linode API snake_case
-		NextMarker  string                `json:"next_marker"`  //nolint:tagliatelle // Linode API snake_case
+		IsTruncated bool                  `json:"is_truncated"`
+		NextMarker  string                `json:"next_marker"`
 	}
 
 	if err := c.handleResponse(resp, &response); err != nil {

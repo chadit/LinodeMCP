@@ -8,10 +8,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
-	"github.com/chadit/LinodeMCP/internal/version"
+	"github.com/chadit/LinodeMCP/internal/appinfo"
 )
 
 // Client represents a Linode API client.
@@ -59,18 +60,23 @@ func NewClient(apiURL, token string) *Client {
 
 // makeRequest builds and executes an authenticated HTTP request against the Linode API.
 func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body io.Reader) (*http.Response, error) {
-	url := c.baseURL + endpoint
+	rawURL := c.baseURL + endpoint
 
-	req, err := http.NewRequestWithContext(ctx, method, url, body)
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid request URL: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, parsedURL.String(), body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Authorization", authHeaderPrefix+c.token)
 	req.Header.Set("Content-Type", contentTypeJSON)
-	req.Header.Set("User-Agent", "LinodeMCP/"+version.Version)
+	req.Header.Set("User-Agent", "LinodeMCP/"+appinfo.Version)
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.httpClient.Do(req) //nolint:gosec // G704: baseURL comes from operator config, not from MCP tool parameters — no SSRF risk
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
@@ -152,7 +158,7 @@ func (c *Client) handleErrorResponse(statusCode int, body []byte, resp *http.Res
 	}
 }
 
-func (c *Client) parseRetryAfter(resp *http.Response) time.Duration {
+func (*Client) parseRetryAfter(resp *http.Response) time.Duration {
 	retryAfter := resp.Header.Get("Retry-After")
 	if retryAfter == "" {
 		return 0

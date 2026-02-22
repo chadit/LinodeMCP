@@ -40,7 +40,7 @@ func TestLinodeObjectStorageBucketsListTool_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/object-storage/buckets", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"data":    buckets,
 			"page":    1,
 			"pages":   1,
@@ -116,7 +116,7 @@ func TestLinodeObjectStorageBucketGetTool_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(bucket))
+		assert.NoError(t, json.NewEncoder(w).Encode(bucket))
 	}))
 	defer srv.Close()
 
@@ -209,7 +209,7 @@ func TestLinodeObjectStorageBucketContentsTool_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/object-list", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"data":         objects,
 			"is_truncated": false,
 			"next_marker":  "",
@@ -251,7 +251,7 @@ func TestLinodeObjectStorageBucketContentsTool_WithPrefix(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "images/", r.URL.Query().Get("prefix"))
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"data":         objects,
 			"is_truncated": false,
 			"next_marker":  "",
@@ -295,7 +295,7 @@ func TestLinodeObjectStorageBucketContentsTool_Truncated(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"data":         objects,
 			"is_truncated": true,
 			"next_marker":  "file2.txt",
@@ -371,7 +371,7 @@ func TestLinodeObjectStorageClustersListTool_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/object-storage/clusters", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"data":    clusters,
 			"page":    1,
 			"pages":   1,
@@ -427,7 +427,7 @@ func TestLinodeObjectStorageTypeListTool_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/object-storage/types", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"data":    types,
 			"page":    1,
 			"pages":   1,
@@ -500,7 +500,7 @@ func TestLinodeObjectStorageKeysListTool_Success(t *testing.T) {
 		{
 			ID:        1,
 			Label:     "my-key",
-			AccessKey: "AKIAIOSFODNN7EXAMPLE",
+			AccessKey: "TESTKEY00000000EXAMPLE",
 			Limited:   false,
 		},
 	}
@@ -508,7 +508,7 @@ func TestLinodeObjectStorageKeysListTool_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/object-storage/keys", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"data":    keys,
 			"page":    1,
 			"pages":   1,
@@ -578,7 +578,7 @@ func TestLinodeObjectStorageKeyGetTool_Success(t *testing.T) {
 	key := linode.ObjectStorageKey{
 		ID:        42,
 		Label:     "my-key",
-		AccessKey: "AKIAIOSFODNN7EXAMPLE",
+		AccessKey: "TESTKEY00000000EXAMPLE",
 		Limited:   true,
 		BucketAccess: []linode.ObjectStorageKeyBucketAccess{
 			{BucketName: "my-bucket", Region: "us-east-1", Permissions: "read_only"},
@@ -588,7 +588,7 @@ func TestLinodeObjectStorageKeyGetTool_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/object-storage/keys/42", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(key))
+		assert.NoError(t, json.NewEncoder(w).Encode(key))
 	}))
 	defer srv.Close()
 
@@ -680,7 +680,7 @@ func TestLinodeObjectStorageTransferTool_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/object-storage/transfer", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(transfer))
+		assert.NoError(t, json.NewEncoder(w).Encode(transfer))
 	}))
 	defer srv.Close()
 
@@ -749,7 +749,7 @@ func TestLinodeObjectStorageBucketAccessGetTool_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/access", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(access))
+		assert.NoError(t, json.NewEncoder(w).Encode(access))
 	}))
 	defer srv.Close()
 
@@ -962,7 +962,7 @@ func TestValidateBucketLabel_IPAddress(t *testing.T) {
 
 	ipLabels := []string{"192.168.1.1", "10.0.0.1", "127.0.0.1"}
 	for _, label := range ipLabels {
-		err := tools.ValidateBucketLabel(label)
+		err := tools.ExportedValidateBucketLabel(label)
 		assert.ErrorIs(t, err, tools.ErrBucketLabelIPAddress, "label %q should be rejected as IP", label)
 	}
 }
@@ -970,7 +970,7 @@ func TestValidateBucketLabel_IPAddress(t *testing.T) {
 func TestValidateBucketLabel_XNPrefix(t *testing.T) {
 	t.Parallel()
 
-	err := tools.ValidateBucketLabel("xn--example")
+	err := tools.ExportedValidateBucketLabel("xn--example")
 	assert.ErrorIs(t, err, tools.ErrBucketLabelXNPrefix)
 }
 
@@ -979,7 +979,7 @@ func TestValidateBucketLabel_ValidNames(t *testing.T) {
 
 	validLabels := []string{"my-bucket", "test123", "a-b-c"}
 	for _, label := range validLabels {
-		err := tools.ValidateBucketLabel(label)
+		err := tools.ExportedValidateBucketLabel(label)
 		assert.NoError(t, err, "label %q should be valid", label)
 	}
 }
@@ -1049,7 +1049,7 @@ func TestLinodeObjectStorageBucketCreateTool_Success(t *testing.T) {
 		assert.Equal(t, "/object-storage/buckets", r.URL.Path)
 		assert.Equal(t, http.MethodPost, r.Method)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(bucket))
+		assert.NoError(t, json.NewEncoder(w).Encode(bucket))
 	}))
 	defer srv.Close()
 
@@ -1519,7 +1519,7 @@ func TestLinodeObjectStorageKeyCreateTool_Success(t *testing.T) {
 	key := linode.ObjectStorageKey{
 		ID:        42,
 		Label:     "my-key",
-		AccessKey: "AKIAIOSFODNN7EXAMPLE",
+		AccessKey: "TESTKEY00000000EXAMPLE",
 		SecretKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
 		Limited:   true,
 		BucketAccess: []linode.ObjectStorageKeyBucketAccess{
@@ -1531,7 +1531,7 @@ func TestLinodeObjectStorageKeyCreateTool_Success(t *testing.T) {
 		assert.Equal(t, "/object-storage/keys", r.URL.Path)
 		assert.Equal(t, http.MethodPost, r.Method)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(key))
+		assert.NoError(t, json.NewEncoder(w).Encode(key))
 	}))
 	defer srv.Close()
 
@@ -1934,7 +1934,7 @@ func TestLinodeObjectStoragePresignedURLTool_Success(t *testing.T) {
 		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/object-url", r.URL.Path)
 		assert.Equal(t, http.MethodPost, r.Method)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(resp))
+		assert.NoError(t, json.NewEncoder(w).Encode(resp))
 	}))
 	defer srv.Close()
 
@@ -2044,7 +2044,7 @@ func TestLinodeObjectStorageObjectACLGetTool_Success(t *testing.T) {
 		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/object-acl", r.URL.Path)
 		assert.Equal(t, "photo.jpg", r.URL.Query().Get("name"))
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(acl))
+		assert.NoError(t, json.NewEncoder(w).Encode(acl))
 	}))
 	defer srv.Close()
 
@@ -2191,7 +2191,7 @@ func TestLinodeObjectStorageObjectACLUpdateTool_Success(t *testing.T) {
 		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/object-acl", r.URL.Path)
 		assert.Equal(t, http.MethodPut, r.Method)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(resp))
+		assert.NoError(t, json.NewEncoder(w).Encode(resp))
 	}))
 	defer srv.Close()
 
@@ -2251,7 +2251,7 @@ func TestLinodeObjectStorageSSLGetTool_Success(t *testing.T) {
 		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/ssl", r.URL.Path)
 		assert.Equal(t, http.MethodGet, r.Method)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(resp))
+		assert.NoError(t, json.NewEncoder(w).Encode(resp))
 	}))
 	defer srv.Close()
 

@@ -3,7 +3,6 @@ package linode_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -37,7 +36,7 @@ func TestClient_GetProfile_Success(t *testing.T) {
 		assert.Equal(t, "/profile", r.URL.Path)
 		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(profile))
+		assert.NoError(t, json.NewEncoder(w).Encode(profile))
 	}))
 	defer srv.Close()
 
@@ -54,7 +53,7 @@ func TestClient_GetProfile_Unauthorized(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"errors": []map[string]string{{"reason": "Invalid Token"}},
 		}))
 	}))
@@ -64,8 +63,10 @@ func TestClient_GetProfile_Unauthorized(t *testing.T) {
 	_, err := client.GetProfile(t.Context())
 
 	require.Error(t, err)
+
 	var apiErr *linode.APIError
-	require.True(t, errors.As(err, &apiErr))
+
+	require.ErrorAs(t, err, &apiErr)
 	assert.Equal(t, 401, apiErr.StatusCode)
 }
 
@@ -80,7 +81,7 @@ func TestClient_ListInstances_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/linode/instances", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"data":    instances,
 			"page":    1,
 			"pages":   1,
@@ -105,7 +106,7 @@ func TestClient_GetInstance_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/linode/instances/42", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(instance))
+		assert.NoError(t, json.NewEncoder(w).Encode(instance))
 	}))
 	defer srv.Close()
 
@@ -130,8 +131,10 @@ func TestClient_GetInstance_ServerError(t *testing.T) {
 	_, err := client.GetInstance(t.Context(), 1)
 
 	require.Error(t, err)
+
 	var apiErr *linode.APIError
-	require.True(t, errors.As(err, &apiErr))
+
+	require.ErrorAs(t, err, &apiErr)
 	assert.Equal(t, 500, apiErr.StatusCode)
 }
 
@@ -142,8 +145,10 @@ func TestClient_GetProfile_NetworkError(t *testing.T) {
 	_, err := client.GetProfile(t.Context())
 
 	require.Error(t, err)
+
 	var netErr *linode.NetworkError
-	assert.True(t, errors.As(err, &netErr))
+
+	assert.ErrorAs(t, err, &netErr)
 }
 
 func TestClient_HandleResponse_RateLimitWithRetryAfter(t *testing.T) {
@@ -160,8 +165,10 @@ func TestClient_HandleResponse_RateLimitWithRetryAfter(t *testing.T) {
 	_, err := client.GetProfile(t.Context())
 
 	require.Error(t, err)
+
 	var apiErr *linode.APIError
-	require.True(t, errors.As(err, &apiErr))
+
+	require.ErrorAs(t, err, &apiErr)
 	assert.Equal(t, 429, apiErr.StatusCode)
 	assert.Contains(t, apiErr.Message, "Retry after")
 }
@@ -179,8 +186,10 @@ func TestClient_HandleResponse_ForbiddenNoBody(t *testing.T) {
 	_, err := client.GetProfile(t.Context())
 
 	require.Error(t, err)
+
 	var apiErr *linode.APIError
-	require.True(t, errors.As(err, &apiErr))
+
+	require.ErrorAs(t, err, &apiErr)
 	assert.Equal(t, 403, apiErr.StatusCode)
 }
 
@@ -189,7 +198,7 @@ func TestClient_ContextCancelled(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		require.NoError(t, json.NewEncoder(w).Encode(linode.Profile{Username: "test"}))
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.Profile{Username: "test"}))
 	}))
 	defer srv.Close()
 

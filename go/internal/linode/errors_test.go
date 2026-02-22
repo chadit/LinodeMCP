@@ -2,7 +2,6 @@ package linode_test
 
 import (
 	"errors"
-	"fmt"
 	"net"
 	"net/url"
 	"testing"
@@ -66,7 +65,7 @@ func TestAPIError_StatusChecks(t *testing.T) {
 func TestNetworkError_ErrorAndUnwrap(t *testing.T) {
 	t.Parallel()
 
-	inner := fmt.Errorf("connection refused")
+	inner := errors.New("connection refused")
 	err := &linode.NetworkError{Operation: "GetProfile", Err: inner}
 
 	assert.Contains(t, err.Error(), "GetProfile")
@@ -77,18 +76,18 @@ func TestNetworkError_ErrorAndUnwrap(t *testing.T) {
 func TestIsNetworkError(t *testing.T) {
 	t.Parallel()
 
-	assert.True(t, linode.IsNetworkError(&linode.NetworkError{Operation: "test", Err: fmt.Errorf("fail")}))
-	assert.True(t, linode.IsNetworkError(&url.Error{Op: "Get", URL: "http://x", Err: fmt.Errorf("fail")}))
-	assert.False(t, linode.IsNetworkError(fmt.Errorf("random error")))
+	assert.True(t, linode.IsNetworkError(&linode.NetworkError{Operation: "test", Err: errors.New("fail")}))
+	assert.True(t, linode.IsNetworkError(&url.Error{Op: "Get", URL: "http://x", Err: errors.New("fail")}))
+	assert.False(t, linode.IsNetworkError(errors.New("random error")))
 }
 
 type mockNetError struct {
 	timeout bool
 }
 
-func (m *mockNetError) Error() string   { return "mock net error" }
-func (m *mockNetError) Timeout() bool   { return m.timeout }
-func (m *mockNetError) Temporary() bool { return false }
+func (*mockNetError) Error() string   { return "mock net error" }
+func (m *mockNetError) Timeout() bool { return m.timeout }
+func (*mockNetError) Temporary() bool { return false }
 
 // Ensure mockNetError satisfies net.Error at compile time.
 var _ net.Error = (*mockNetError)(nil)
@@ -98,7 +97,7 @@ func TestIsTimeoutError(t *testing.T) {
 
 	assert.True(t, linode.IsTimeoutError(&mockNetError{timeout: true}))
 	assert.False(t, linode.IsTimeoutError(&mockNetError{timeout: false}))
-	assert.False(t, linode.IsTimeoutError(fmt.Errorf("not a timeout")))
+	assert.False(t, linode.IsTimeoutError(errors.New("not a timeout")))
 }
 
 func TestIsTimeoutError_WrappedInURLError(t *testing.T) {
@@ -115,7 +114,7 @@ func TestIsTimeoutError_WrappedInURLError(t *testing.T) {
 func TestRetryableError_ErrorMessage(t *testing.T) {
 	t.Parallel()
 
-	inner := fmt.Errorf("server busy")
+	inner := errors.New("server busy")
 
 	withDelay := &linode.RetryableError{Err: inner, RetryAfter: 5 * time.Second}
 	assert.Contains(t, withDelay.Error(), "retry after")
@@ -129,9 +128,9 @@ func TestRetryableError_ErrorMessage(t *testing.T) {
 func TestRetryableError_Unwrap(t *testing.T) {
 	t.Parallel()
 
-	inner := fmt.Errorf("inner")
+	inner := errors.New("inner")
 	err := &linode.RetryableError{Err: inner}
-	assert.True(t, errors.Is(err, inner))
+	assert.ErrorIs(t, err, inner)
 }
 
 func TestIsRetryable(t *testing.T) {
@@ -142,14 +141,14 @@ func TestIsRetryable(t *testing.T) {
 		err       error
 		retryable bool
 	}{
-		{"retryable error type", &linode.RetryableError{Err: fmt.Errorf("x")}, true},
+		{"retryable error type", &linode.RetryableError{Err: errors.New("x")}, true},
 		{"rate limit API error", &linode.APIError{StatusCode: 429, Message: "rate"}, true},
 		{"server error API error", &linode.APIError{StatusCode: 500, Message: "server"}, true},
 		{"auth API error not retryable", &linode.APIError{StatusCode: 401, Message: "auth"}, false},
 		{"404 API error not retryable", &linode.APIError{StatusCode: 404, Message: "not found"}, false},
-		{"network error", &linode.NetworkError{Operation: "test", Err: fmt.Errorf("conn")}, true},
+		{"network error", &linode.NetworkError{Operation: "test", Err: errors.New("conn")}, true},
 		{"timeout error", &mockNetError{timeout: true}, true},
-		{"plain error not retryable", fmt.Errorf("plain"), false},
+		{"plain error not retryable", errors.New("plain"), false},
 	}
 
 	for _, tt := range tests {

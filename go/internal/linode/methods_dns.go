@@ -83,7 +83,7 @@ func (c *Client) ListDomainRecords(ctx context.Context, domainID int) ([]DomainR
 }
 
 // CreateDomain creates a new DNS domain.
-func (c *Client) CreateDomain(ctx context.Context, req CreateDomainRequest) (*Domain, error) {
+func (c *Client) CreateDomain(ctx context.Context, req *CreateDomainRequest) (*Domain, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
@@ -103,7 +103,7 @@ func (c *Client) CreateDomain(ctx context.Context, req CreateDomainRequest) (*Do
 }
 
 // UpdateDomain updates an existing DNS domain.
-func (c *Client) UpdateDomain(ctx context.Context, domainID int, req UpdateDomainRequest) (*Domain, error) {
+func (c *Client) UpdateDomain(ctx context.Context, domainID int, req *UpdateDomainRequest) (*Domain, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
@@ -142,7 +142,7 @@ func (c *Client) DeleteDomain(ctx context.Context, domainID int) error {
 }
 
 // CreateDomainRecord creates a new DNS record within a domain.
-func (c *Client) CreateDomainRecord(ctx context.Context, domainID int, req CreateDomainRecordRequest) (*DomainRecord, error) {
+func (c *Client) CreateDomainRecord(ctx context.Context, domainID int, req *CreateDomainRecordRequest) (*DomainRecord, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
@@ -164,7 +164,7 @@ func (c *Client) CreateDomainRecord(ctx context.Context, domainID int, req Creat
 }
 
 // UpdateDomainRecord updates an existing DNS record.
-func (c *Client) UpdateDomainRecord(ctx context.Context, domainID, recordID int, req UpdateDomainRecordRequest) (*DomainRecord, error) {
+func (c *Client) UpdateDomainRecord(ctx context.Context, domainID, recordID int, req *UpdateDomainRecordRequest) (*DomainRecord, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 

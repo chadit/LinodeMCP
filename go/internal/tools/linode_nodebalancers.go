@@ -1,10 +1,8 @@
-//nolint:dupl // Tool implementations have similar structure by design
 package tools
 
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -14,110 +12,20 @@ import (
 
 // NewLinodeNodeBalancersListTool creates a tool for listing NodeBalancers.
 func NewLinodeNodeBalancersListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_nodebalancers_list",
-		mcp.WithDescription("Lists all NodeBalancers on your account. Can filter by region or label."),
-		mcp.WithString(paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithString("region",
-			mcp.Description("Filter by region ID (e.g., us-east, eu-west)"),
-		),
-		mcp.WithString("label_contains",
-			mcp.Description("Filter NodeBalancers by label containing this string (case-insensitive)"),
-		),
+	return newListTool(cfg,
+		"linode_nodebalancers_list",
+		"Lists all NodeBalancers on your account. Can filter by region or label.",
+		func(ctx context.Context, client *linode.RetryableClient) ([]linode.NodeBalancer, error) {
+			return client.ListNodeBalancers(ctx)
+		},
+		[]listFilterParam[linode.NodeBalancer]{
+			fieldFilter("region", "Filter by region ID (e.g., us-east, eu-west)",
+				func(n linode.NodeBalancer) string { return n.Region }),
+			containsFilter("label_contains", "Filter NodeBalancers by label containing this string (case-insensitive)",
+				func(n linode.NodeBalancer) string { return n.Label }),
+		},
+		"nodebalancers",
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeNodeBalancersListRequest(ctx, request, cfg)
-	}
-
-	return tool, handler
-}
-
-func handleLinodeNodeBalancersListRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
-	regionFilter := request.GetString("region", "")
-	labelContains := request.GetString("label_contains", "")
-
-	selectedEnv, err := selectEnvironment(cfg, environment)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
-
-	nodeBalancers, err := client.ListNodeBalancers(ctx)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve NodeBalancers: %v", err)), nil
-	}
-
-	if regionFilter != "" {
-		nodeBalancers = filterNodeBalancersByRegion(nodeBalancers, regionFilter)
-	}
-
-	if labelContains != "" {
-		nodeBalancers = filterNodeBalancersByLabel(nodeBalancers, labelContains)
-	}
-
-	return formatNodeBalancersResponse(nodeBalancers, regionFilter, labelContains)
-}
-
-func filterNodeBalancersByRegion(nodeBalancers []linode.NodeBalancer, regionFilter string) []linode.NodeBalancer {
-	filtered := make([]linode.NodeBalancer, 0, len(nodeBalancers))
-
-	regionFilter = strings.ToLower(regionFilter)
-
-	for _, nb := range nodeBalancers {
-		if strings.ToLower(nb.Region) == regionFilter {
-			filtered = append(filtered, nb)
-		}
-	}
-
-	return filtered
-}
-
-func filterNodeBalancersByLabel(nodeBalancers []linode.NodeBalancer, labelContains string) []linode.NodeBalancer {
-	filtered := make([]linode.NodeBalancer, 0, len(nodeBalancers))
-
-	labelContains = strings.ToLower(labelContains)
-
-	for _, nb := range nodeBalancers {
-		if strings.Contains(strings.ToLower(nb.Label), labelContains) {
-			filtered = append(filtered, nb)
-		}
-	}
-
-	return filtered
-}
-
-func formatNodeBalancersResponse(nodeBalancers []linode.NodeBalancer, regionFilter, labelContains string) (*mcp.CallToolResult, error) {
-	response := struct {
-		Count         int                   `json:"count"`
-		Filter        string                `json:"filter,omitempty"`
-		NodeBalancers []linode.NodeBalancer `json:"nodebalancers"`
-	}{
-		Count:         len(nodeBalancers),
-		NodeBalancers: nodeBalancers,
-	}
-
-	var filters []string
-	if regionFilter != "" {
-		filters = append(filters, "region="+regionFilter)
-	}
-
-	if labelContains != "" {
-		filters = append(filters, "label_contains="+labelContains)
-	}
-
-	if len(filters) > 0 {
-		response.Filter = strings.Join(filters, ", ")
-	}
-
-	return marshalToolResponse(response)
 }
 
 // NewLinodeNodeBalancerGetTool creates a tool for getting a single NodeBalancer.
@@ -134,30 +42,23 @@ func NewLinodeNodeBalancerGetTool(cfg *config.Config) (mcp.Tool, func(ctx contex
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeNodeBalancerGetRequest(ctx, request, cfg)
+		return handleLinodeNodeBalancerGetRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeNodeBalancerGetRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleLinodeNodeBalancerGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	nodeBalancerID := request.GetInt("nodebalancer_id", 0)
 
 	if nodeBalancerID == 0 {
 		return mcp.NewToolResultError("nodebalancer_id is required"), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	nodeBalancer, err := client.GetNodeBalancer(ctx, nodeBalancerID)
 	if err != nil {

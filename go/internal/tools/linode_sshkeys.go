@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -24,26 +23,19 @@ func NewLinodeSSHKeysListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Co
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeSSHKeysListRequest(ctx, request, cfg)
+		return handleLinodeSSHKeysListRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeSSHKeysListRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleLinodeSSHKeysListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	labelContains := request.GetString("label_contains", "")
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	keys, err := client.ListSSHKeys(ctx)
 	if err != nil {
@@ -51,31 +43,15 @@ func handleLinodeSSHKeysListRequest(ctx context.Context, request mcp.CallToolReq
 	}
 
 	if labelContains != "" {
-		keys = filterSSHKeysByLabel(keys, labelContains)
+		keys = filterByContains(keys, labelContains, func(k linode.SSHKey) string {
+			return k.Label
+		})
 	}
 
-	return formatSSHKeysResponse(keys, labelContains)
-}
-
-func filterSSHKeysByLabel(keys []linode.SSHKey, labelContains string) []linode.SSHKey {
-	filtered := make([]linode.SSHKey, 0, len(keys))
-
-	labelContains = strings.ToLower(labelContains)
-
-	for _, key := range keys {
-		if strings.Contains(strings.ToLower(key.Label), labelContains) {
-			filtered = append(filtered, key)
-		}
-	}
-
-	return filtered
-}
-
-func formatSSHKeysResponse(keys []linode.SSHKey, labelContains string) (*mcp.CallToolResult, error) {
 	response := struct {
 		Count   int             `json:"count"`
 		Filter  string          `json:"filter,omitempty"`
-		SSHKeys []linode.SSHKey `json:"ssh_keys"` //nolint:tagliatelle // snake_case for consistent JSON
+		SSHKeys []linode.SSHKey `json:"ssh_keys"`
 	}{
 		Count:   len(keys),
 		SSHKeys: keys,

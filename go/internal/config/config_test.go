@@ -30,11 +30,11 @@ environments:
 
 func validJSONConfig() string {
 	return `{
-  "server": {"name": "JSONServer", "logLevel": "warn"},
+  "server": {"name": "JSONServer", "log_level": "warn"},
   "environments": {
     "default": {
       "label": "Default",
-      "linode": {"apiUrl": "https://api.linode.com/v4", "token": "json-token"}
+      "linode": {"api_url": "https://api.linode.com/v4", "token": "json-token"}
     }
   }
 }`
@@ -114,7 +114,7 @@ environments:
 	assert.Equal(t, config.DefaultMaxRetries, cfg.Resilience.MaxRetries, "default max retries.")
 	assert.Equal(t, config.DefaultBaseRetryDelay, cfg.Resilience.BaseRetryDelay, "default base retry delay.")
 	assert.Equal(t, config.DefaultMaxRetryDelay, cfg.Resilience.MaxRetryDelay, "default max retry delay.")
-	assert.Equal(t, config.DefaultSampleRate, cfg.Tracing.SampleRate, "default sample rate.")
+	assert.InDelta(t, config.DefaultSampleRate, cfg.Tracing.SampleRate, 0.001, "default sample rate.")
 }
 
 func TestLoadFromFile_FileNotFound(t *testing.T) {
@@ -160,7 +160,7 @@ server:
 func TestValidateConfig_NilConfig(t *testing.T) {
 	t.Parallel()
 
-	err := config.ValidateConfig(nil)
+	err := config.ExportedValidateConfig(nil)
 	assert.ErrorIs(t, err, config.ErrConfigNil)
 }
 
@@ -170,7 +170,7 @@ func TestValidateConfig_NoEnvironments(t *testing.T) {
 	cfg := &config.Config{
 		Server: config.ServerConfig{Name: "test", LogLevel: "info"},
 	}
-	err := config.ValidateConfig(cfg)
+	err := config.ExportedValidateConfig(cfg)
 	assert.ErrorIs(t, err, config.ErrNoEnvironments)
 }
 
@@ -186,7 +186,7 @@ func TestValidateConfig_IncompleteLinodeConfig(t *testing.T) {
 			},
 		},
 	}
-	err := config.ValidateConfig(cfg)
+	err := config.ExportedValidateConfig(cfg)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, config.ErrConfigInvalid)
 }
@@ -203,7 +203,7 @@ func TestValidateConfig_ValidConfig(t *testing.T) {
 			},
 		},
 	}
-	err := config.ValidateConfig(cfg)
+	err := config.ExportedValidateConfig(cfg)
 	assert.NoError(t, err)
 }
 
@@ -345,7 +345,7 @@ func TestValidatePath_EmptyPath(t *testing.T) {
 
 	config.ResetCaches()
 
-	err := config.ValidatePath("")
+	err := config.ExportedValidatePath("")
 	assert.ErrorIs(t, err, config.ErrPathEmpty)
 }
 
@@ -354,7 +354,7 @@ func TestValidatePath_DangerousPath(t *testing.T) {
 
 	config.ResetCaches()
 
-	err := config.ValidatePath("/etc/passwd")
+	err := config.ExportedValidatePath("/etc/passwd")
 	assert.ErrorIs(t, err, config.ErrPathDangerous)
 }
 
@@ -363,7 +363,7 @@ func TestValidatePath_TraversalPath(t *testing.T) {
 
 	config.ResetCaches()
 
-	err := config.ValidatePath("/tmp/foo/../../etc/passwd")
+	err := config.ExportedValidatePath("/tmp/foo/../../etc/passwd")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, config.ErrPathOutsideAllowed)
 }
@@ -373,43 +373,44 @@ func TestValidatePath_ValidTempPath(t *testing.T) {
 
 	config.ResetCaches()
 
-	err := config.ValidatePath("/tmp/linodemcp-test-config.yml")
+	err := config.ExportedValidatePath("/tmp/linodemcp-test-config.yml")
 	assert.NoError(t, err)
 }
 
 func TestCacheManager_PathValidationCaching(t *testing.T) {
 	t.Parallel()
 
-	cm := config.NewCacheManager()
+	cacheManager := config.NewCacheManager()
 	path := "/tmp/cache-test-path"
 
 	// First call performs validation.
-	err1 := cm.ValidatePath(path)
-	assert.NoError(t, err1)
+	err1 := cacheManager.ExportedValidatePath(path)
+	require.NoError(t, err1)
 
 	// Second call should hit the cache.
-	err2 := cm.ValidatePath(path)
+	err2 := cacheManager.ExportedValidatePath(path)
 	assert.NoError(t, err2)
 }
 
 func TestCacheManager_ResetCaches(t *testing.T) {
 	t.Parallel()
 
-	cm := config.NewCacheManager()
-	cm.PathValidationCache()["test"] = nil
+	cacheManager := config.NewCacheManager()
+	cacheManager.PathValidationCache()["test"] = nil
 
-	cm.ResetCaches()
+	cacheManager.ResetCaches()
 
-	assert.Empty(t, cm.PathValidationCache())
-	assert.Nil(t, cm.AllowedDirsCache())
-	assert.False(t, cm.AllowedDirsCached())
+	assert.Empty(t, cacheManager.PathValidationCache())
+	assert.Nil(t, cacheManager.AllowedDirsCache())
+	assert.False(t, cacheManager.AllowedDirsCached())
 }
 
 func TestParseConfigData_JSON(t *testing.T) {
 	t.Parallel()
 
 	var cfg config.Config
-	err := config.ParseConfigData([]byte(validJSONConfig()), &cfg)
+
+	err := config.ExportedParseConfigData([]byte(validJSONConfig()), &cfg)
 	require.NoError(t, err)
 	assert.Equal(t, "JSONServer", cfg.Server.Name)
 }
@@ -418,7 +419,8 @@ func TestParseConfigData_YAML(t *testing.T) {
 	t.Parallel()
 
 	var cfg config.Config
-	err := config.ParseConfigData([]byte(validYAMLConfig()), &cfg)
+
+	err := config.ExportedParseConfigData([]byte(validYAMLConfig()), &cfg)
 	require.NoError(t, err)
 	assert.Equal(t, "TestServer", cfg.Server.Name)
 }
@@ -427,7 +429,8 @@ func TestParseConfigData_Invalid(t *testing.T) {
 	t.Parallel()
 
 	var cfg config.Config
-	err := config.ParseConfigData([]byte(`not: [valid: yaml: {{`), &cfg)
+
+	err := config.ExportedParseConfigData([]byte(`not: [valid: yaml: {{`), &cfg)
 	require.Error(t, err)
 }
 

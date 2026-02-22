@@ -1,17 +1,17 @@
 package config
 
-// ValidateConfig exposes validateConfig for testing.
-func ValidateConfig(cfg *Config) error {
+// ExportedValidateConfig exposes validateConfig for testing.
+func ExportedValidateConfig(cfg *Config) error {
 	return validateConfig(cfg)
 }
 
-// ParseConfigData exposes parseConfigData for testing.
-func ParseConfigData(data []byte, cfg *Config) error {
+// ExportedParseConfigData exposes parseConfigData for testing.
+func ExportedParseConfigData(data []byte, cfg *Config) error {
 	return parseConfigData(data, cfg)
 }
 
-// ValidatePath exposes validatePath for testing.
-func ValidatePath(path string) error {
+// ExportedValidatePath exposes validatePath for testing.
+func ExportedValidatePath(path string) error {
 	return validatePath(path)
 }
 
@@ -30,7 +30,7 @@ func (cm *CacheManager) AllowedDirsCached() bool {
 	return cm.allowedDirsCached
 }
 
-// CacheManagerValidatePath exposes the instance method for testing.
-func (cm *CacheManager) ValidatePath(path string) error {
+// ExportedCacheManagerValidatePath exposes the instance method for testing.
+func (cm *CacheManager) ExportedValidatePath(path string) error {
 	return cm.validatePath(path)
 }

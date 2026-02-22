@@ -4,16 +4,16 @@ package linode
 type Domain struct {
 	ID          int      `json:"id"`
 	Domain      string   `json:"domain"`
-	Type        string   `json:"type"`      // master, slave
-	Status      string   `json:"status"`    // active, disabled, edit_mode
-	SOAEmail    string   `json:"soa_email"` //nolint:tagliatelle // Linode API snake_case
+	Type        string   `json:"type"`   // master, slave
+	Status      string   `json:"status"` // active, disabled, edit_mode
+	SOAEmail    string   `json:"soa_email"`
 	Description string   `json:"description"`
-	RetrySec    int      `json:"retry_sec"`   //nolint:tagliatelle // Linode API snake_case
-	MasterIPs   []string `json:"master_ips"`  //nolint:tagliatelle // Linode API snake_case
-	AXFRIPs     []string `json:"axfr_ips"`    //nolint:tagliatelle // Linode API snake_case
-	ExpireSec   int      `json:"expire_sec"`  //nolint:tagliatelle // Linode API snake_case
-	RefreshSec  int      `json:"refresh_sec"` //nolint:tagliatelle // Linode API snake_case
-	TTLSec      int      `json:"ttl_sec"`     //nolint:tagliatelle // Linode API snake_case
+	RetrySec    int      `json:"retry_sec"`
+	MasterIPs   []string `json:"master_ips"`
+	AXFRIPs     []string `json:"axfr_ips"`
+	ExpireSec   int      `json:"expire_sec"`
+	RefreshSec  int      `json:"refresh_sec"`
+	TTLSec      int      `json:"ttl_sec"`
 	Tags        []string `json:"tags"`
 	Created     string   `json:"created"`
 	Updated     string   `json:"updated"`
@@ -31,7 +31,7 @@ type DomainRecord struct {
 	Port     int    `json:"port"`
 	Service  string `json:"service"`
 	Protocol string `json:"protocol"`
-	TTLSec   int    `json:"ttl_sec"` //nolint:tagliatelle // Linode API snake_case
+	TTLSec   int    `json:"ttl_sec"`
 	Tag      string `json:"tag"`
 	Created  string `json:"created"`
 	Updated  string `json:"updated"`
@@ -40,15 +40,15 @@ type DomainRecord struct {
 // CreateDomainRequest represents the request body for creating a domain.
 type CreateDomainRequest struct {
 	Domain      string   `json:"domain"`
-	Type        string   `json:"type"`                // master, slave
-	SOAEmail    string   `json:"soa_email,omitempty"` //nolint:tagliatelle // Linode API snake_case
+	Type        string   `json:"type"` // master, slave
+	SOAEmail    string   `json:"soa_email,omitempty"`
 	Description string   `json:"description,omitempty"`
-	RetrySec    int      `json:"retry_sec,omitempty"`   //nolint:tagliatelle // Linode API snake_case
-	MasterIPs   []string `json:"master_ips,omitempty"`  //nolint:tagliatelle // Linode API snake_case
-	AXFRIPs     []string `json:"axfr_ips,omitempty"`    //nolint:tagliatelle // Linode API snake_case
-	ExpireSec   int      `json:"expire_sec,omitempty"`  //nolint:tagliatelle // Linode API snake_case
-	RefreshSec  int      `json:"refresh_sec,omitempty"` //nolint:tagliatelle // Linode API snake_case
-	TTLSec      int      `json:"ttl_sec,omitempty"`     //nolint:tagliatelle // Linode API snake_case
+	RetrySec    int      `json:"retry_sec,omitempty"`
+	MasterIPs   []string `json:"master_ips,omitempty"`
+	AXFRIPs     []string `json:"axfr_ips,omitempty"`
+	ExpireSec   int      `json:"expire_sec,omitempty"`
+	RefreshSec  int      `json:"refresh_sec,omitempty"`
+	TTLSec      int      `json:"ttl_sec,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
 	Group       string   `json:"group,omitempty"`
 }
@@ -56,15 +56,15 @@ type CreateDomainRequest struct {
 // UpdateDomainRequest represents the request body for updating a domain.
 type UpdateDomainRequest struct {
 	Domain      string   `json:"domain,omitempty"`
-	Status      string   `json:"status,omitempty"`    // active, disabled, edit_mode
-	SOAEmail    string   `json:"soa_email,omitempty"` //nolint:tagliatelle // Linode API snake_case
+	Status      string   `json:"status,omitempty"` // active, disabled, edit_mode
+	SOAEmail    string   `json:"soa_email,omitempty"`
 	Description string   `json:"description,omitempty"`
-	RetrySec    int      `json:"retry_sec,omitempty"`   //nolint:tagliatelle // Linode API snake_case
-	MasterIPs   []string `json:"master_ips,omitempty"`  //nolint:tagliatelle // Linode API snake_case
-	AXFRIPs     []string `json:"axfr_ips,omitempty"`    //nolint:tagliatelle // Linode API snake_case
-	ExpireSec   int      `json:"expire_sec,omitempty"`  //nolint:tagliatelle // Linode API snake_case
-	RefreshSec  int      `json:"refresh_sec,omitempty"` //nolint:tagliatelle // Linode API snake_case
-	TTLSec      int      `json:"ttl_sec,omitempty"`     //nolint:tagliatelle // Linode API snake_case
+	RetrySec    int      `json:"retry_sec,omitempty"`
+	MasterIPs   []string `json:"master_ips,omitempty"`
+	AXFRIPs     []string `json:"axfr_ips,omitempty"`
+	ExpireSec   int      `json:"expire_sec,omitempty"`
+	RefreshSec  int      `json:"refresh_sec,omitempty"`
+	TTLSec      int      `json:"ttl_sec,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
 	Group       string   `json:"group,omitempty"`
 }
@@ -79,7 +79,7 @@ type CreateDomainRecordRequest struct {
 	Port     int    `json:"port,omitempty"`
 	Service  string `json:"service,omitempty"`
 	Protocol string `json:"protocol,omitempty"`
-	TTLSec   int    `json:"ttl_sec,omitempty"` //nolint:tagliatelle // Linode API snake_case
+	TTLSec   int    `json:"ttl_sec,omitempty"`
 	Tag      string `json:"tag,omitempty"`
 }
 
@@ -92,6 +92,6 @@ type UpdateDomainRecordRequest struct {
 	Port     int    `json:"port,omitempty"`
 	Service  string `json:"service,omitempty"`
 	Protocol string `json:"protocol,omitempty"`
-	TTLSec   int    `json:"ttl_sec,omitempty"` //nolint:tagliatelle // Linode API snake_case
+	TTLSec   int    `json:"ttl_sec,omitempty"`
 	Tag      string `json:"tag,omitempty"`
 }

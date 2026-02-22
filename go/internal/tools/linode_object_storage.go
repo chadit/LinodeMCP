@@ -1,4 +1,3 @@
-//nolint:dupl // Tool implementations have similar structure by design
 package tools
 
 import (
@@ -25,25 +24,17 @@ func NewLinodeObjectStorageBucketsListTool(cfg *config.Config) (mcp.Tool, func(c
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleObjectStorageBucketsListRequest(ctx, request, cfg)
+		return handleObjectStorageBucketsListRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleObjectStorageBucketsListRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
-
-	selectedEnv, err := selectEnvironment(cfg, environment)
+func handleObjectStorageBucketsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	buckets, err := client.ListObjectStorageBuckets(ctx)
 	if err != nil {
@@ -79,14 +70,13 @@ func NewLinodeObjectStorageBucketGetTool(cfg *config.Config) (mcp.Tool, func(ctx
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleObjectStorageBucketGetRequest(ctx, request, cfg)
+		return handleObjectStorageBucketGetRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleObjectStorageBucketGetRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleObjectStorageBucketGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	region := request.GetString("region", "")
 	label := request.GetString("label", "")
 
@@ -98,16 +88,10 @@ func handleObjectStorageBucketGetRequest(ctx context.Context, request mcp.CallTo
 		return mcp.NewToolResultError("label is required"), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	bucket, err := client.GetObjectStorageBucket(ctx, region, label)
 	if err != nil {
@@ -147,14 +131,13 @@ func NewLinodeObjectStorageBucketContentsTool(cfg *config.Config) (mcp.Tool, fun
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleObjectStorageBucketContentsRequest(ctx, request, cfg)
+		return handleObjectStorageBucketContentsRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleObjectStorageBucketContentsRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleObjectStorageBucketContentsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	region := request.GetString("region", "")
 	label := request.GetString("label", "")
 	prefix := request.GetString("prefix", "")
@@ -170,12 +153,8 @@ func handleObjectStorageBucketContentsRequest(ctx context.Context, request mcp.C
 		return mcp.NewToolResultError("label is required"), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
@@ -196,8 +175,6 @@ func handleObjectStorageBucketContentsRequest(ctx context.Context, request mcp.C
 		params["page_size"] = pageSize
 	}
 
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
-
 	objects, isTruncated, nextMarker, err := client.ListObjectStorageBucketContents(ctx, region, label, params)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to list contents of bucket '%s' in region '%s': %v", label, region, err)), nil
@@ -210,8 +187,8 @@ func formatBucketContentsResponse(objects []linode.ObjectStorageObject, isTrunca
 	response := struct {
 		Count       int                          `json:"count"`
 		Filter      string                       `json:"filter,omitempty"`
-		IsTruncated bool                         `json:"is_truncated"`          //nolint:tagliatelle // match Linode API naming
-		NextMarker  string                       `json:"next_marker,omitempty"` //nolint:tagliatelle // match Linode API naming
+		IsTruncated bool                         `json:"is_truncated"`
+		NextMarker  string                       `json:"next_marker,omitempty"`
 		Objects     []linode.ObjectStorageObject `json:"objects"`
 	}{
 		Count:       len(objects),
@@ -246,25 +223,17 @@ func NewLinodeObjectStorageClustersListTool(cfg *config.Config) (mcp.Tool, func(
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleObjectStorageClustersListRequest(ctx, request, cfg)
+		return handleObjectStorageClustersListRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleObjectStorageClustersListRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
-
-	selectedEnv, err := selectEnvironment(cfg, environment)
+func handleObjectStorageClustersListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	clusters, err := client.ListObjectStorageClusters(ctx)
 	if err != nil {
@@ -292,25 +261,17 @@ func NewLinodeObjectStorageTypeListTool(cfg *config.Config) (mcp.Tool, func(ctx 
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleObjectStorageTypeListRequest(ctx, request, cfg)
+		return handleObjectStorageTypeListRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleObjectStorageTypeListRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
-
-	selectedEnv, err := selectEnvironment(cfg, environment)
+func handleObjectStorageTypeListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	types, err := client.ListObjectStorageTypes(ctx)
 	if err != nil {
@@ -340,25 +301,17 @@ func NewLinodeObjectStorageKeysListTool(cfg *config.Config) (mcp.Tool, func(ctx 
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleObjectStorageKeysListRequest(ctx, request, cfg)
+		return handleObjectStorageKeysListRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleObjectStorageKeysListRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
-
-	selectedEnv, err := selectEnvironment(cfg, environment)
+func handleObjectStorageKeysListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	keys, err := client.ListObjectStorageKeys(ctx)
 	if err != nil {
@@ -390,14 +343,13 @@ func NewLinodeObjectStorageKeyGetTool(cfg *config.Config) (mcp.Tool, func(ctx co
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleObjectStorageKeyGetRequest(ctx, request, cfg)
+		return handleObjectStorageKeyGetRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleObjectStorageKeyGetRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleObjectStorageKeyGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	keyIDStr := request.GetString("key_id", "")
 
 	if keyIDStr == "" {
@@ -409,16 +361,10 @@ func handleObjectStorageKeyGetRequest(ctx context.Context, request mcp.CallToolR
 		return mcp.NewToolResultError(fmt.Sprintf("key_id must be a valid integer: %v", err)), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	key, err := client.GetObjectStorageKey(ctx, keyID)
 	if err != nil {
@@ -438,25 +384,17 @@ func NewLinodeObjectStorageTransferTool(cfg *config.Config) (mcp.Tool, func(ctx 
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleObjectStorageTransferRequest(ctx, request, cfg)
+		return handleObjectStorageTransferRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleObjectStorageTransferRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
-
-	selectedEnv, err := selectEnvironment(cfg, environment)
+func handleObjectStorageTransferRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	transfer, err := client.GetObjectStorageTransfer(ctx)
 	if err != nil {
@@ -484,14 +422,13 @@ func NewLinodeObjectStorageBucketAccessGetTool(cfg *config.Config) (mcp.Tool, fu
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleObjectStorageBucketAccessGetRequest(ctx, request, cfg)
+		return handleObjectStorageBucketAccessGetRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleObjectStorageBucketAccessGetRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleObjectStorageBucketAccessGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	region := request.GetString("region", "")
 	label := request.GetString("label", "")
 
@@ -503,16 +440,10 @@ func handleObjectStorageBucketAccessGetRequest(ctx context.Context, request mcp.
 		return mcp.NewToolResultError("label is required"), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	access, err := client.GetObjectStorageBucketAccess(ctx, region, label)
 	if err != nil {
@@ -552,14 +483,13 @@ func NewLinodeObjectStoragePresignedURLTool(cfg *config.Config) (mcp.Tool, func(
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleObjectStoragePresignedURLRequest(ctx, request, cfg)
+		return handleObjectStoragePresignedURLRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleObjectStoragePresignedURLRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleObjectStoragePresignedURLRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	region := request.GetString("region", "")
 	label := request.GetString("label", "")
 	name := request.GetString("name", "")
@@ -586,16 +516,10 @@ func handleObjectStoragePresignedURLRequest(ctx context.Context, request mcp.Cal
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	req := linode.PresignedURLRequest{
 		Method:    strings.ToUpper(method),
@@ -633,14 +557,13 @@ func NewLinodeObjectStorageObjectACLGetTool(cfg *config.Config) (mcp.Tool, func(
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleObjectStorageObjectACLGetRequest(ctx, request, cfg)
+		return handleObjectStorageObjectACLGetRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleObjectStorageObjectACLGetRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleObjectStorageObjectACLGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	region := request.GetString("region", "")
 	label := request.GetString("label", "")
 	name := request.GetString("name", "")
@@ -657,16 +580,10 @@ func handleObjectStorageObjectACLGetRequest(ctx context.Context, request mcp.Cal
 		return mcp.NewToolResultError(ErrObjectNameRequired.Error()), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	acl, err := client.GetObjectACL(ctx, region, label, name)
 	if err != nil {
@@ -694,14 +611,13 @@ func NewLinodeObjectStorageSSLGetTool(cfg *config.Config) (mcp.Tool, func(ctx co
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleObjectStorageSSLGetRequest(ctx, request, cfg)
+		return handleObjectStorageSSLGetRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleObjectStorageSSLGetRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleObjectStorageSSLGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	region := request.GetString("region", "")
 	label := request.GetString("label", "")
 
@@ -713,16 +629,10 @@ func handleObjectStorageSSLGetRequest(ctx context.Context, request mcp.CallToolR
 		return mcp.NewToolResultError("label is required"), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	ssl, err := client.GetBucketSSL(ctx, region, label)
 	if err != nil {

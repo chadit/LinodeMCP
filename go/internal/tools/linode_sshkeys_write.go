@@ -1,4 +1,3 @@
-//nolint:dupl // Tool implementations have similar structure by design
 package tools
 
 import (
@@ -29,14 +28,13 @@ func NewLinodeSSHKeyCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeSSHKeyCreateRequest(ctx, request, cfg)
+		return handleLinodeSSHKeyCreateRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeSSHKeyCreateRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleLinodeSSHKeyCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	label := request.GetString("label", "")
 	sshKey := request.GetString("ssh_key", "")
 
@@ -48,16 +46,10 @@ func handleLinodeSSHKeyCreateRequest(ctx context.Context, request mcp.CallToolRe
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	req := linode.CreateSSHKeyRequest{
 		Label:  label,
@@ -71,7 +63,7 @@ func handleLinodeSSHKeyCreateRequest(ctx context.Context, request mcp.CallToolRe
 
 	response := struct {
 		Message string         `json:"message"`
-		SSHKey  *linode.SSHKey `json:"ssh_key"` //nolint:tagliatelle // snake_case for consistent JSON
+		SSHKey  *linode.SSHKey `json:"ssh_key"`
 	}{
 		Message: fmt.Sprintf("SSH key '%s' created successfully", createdKey.Label),
 		SSHKey:  createdKey,
@@ -94,30 +86,23 @@ func NewLinodeSSHKeyDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeSSHKeyDeleteRequest(ctx, request, cfg)
+		return handleLinodeSSHKeyDeleteRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeSSHKeyDeleteRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleLinodeSSHKeyDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	sshKeyID := request.GetInt("sshkey_id", 0)
 
 	if sshKeyID == 0 {
 		return mcp.NewToolResultError("sshkey_id is required"), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	if err := client.DeleteSSHKey(ctx, sshKeyID); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to delete SSH key %d: %v", sshKeyID, err)), nil
@@ -125,7 +110,7 @@ func handleLinodeSSHKeyDeleteRequest(ctx context.Context, request mcp.CallToolRe
 
 	response := struct {
 		Message  string `json:"message"`
-		SSHKeyID int    `json:"sshkey_id"` //nolint:tagliatelle // snake_case for consistent JSON
+		SSHKeyID int    `json:"sshkey_id"`
 	}{
 		Message:  fmt.Sprintf("SSH key %d deleted successfully", sshKeyID),
 		SSHKeyID: sshKeyID,

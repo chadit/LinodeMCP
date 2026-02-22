@@ -56,13 +56,13 @@ func NewLinodeDomainRecordCreateTool(cfg *config.Config) (mcp.Tool, func(ctx con
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeDomainRecordCreateRequest(ctx, request, cfg)
+		return handleLinodeDomainRecordCreateRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeDomainRecordCreateRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+func handleLinodeDomainRecordCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	environment := request.GetString(paramEnvironment, "")
 	domainID := request.GetInt("domain_id", 0)
 	recordType := request.GetString("type", "")
@@ -116,14 +116,14 @@ func handleLinodeDomainRecordCreateRequest(ctx context.Context, request mcp.Call
 		Tag:      tag,
 	}
 
-	record, err := client.CreateDomainRecord(ctx, domainID, req)
+	record, err := client.CreateDomainRecord(ctx, domainID, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create domain record: %v", err)), nil
 	}
 
 	response := struct {
 		Message  string               `json:"message"`
-		DomainID int                  `json:"domain_id"` //nolint:tagliatelle // snake_case for consistent JSON
+		DomainID int                  `json:"domain_id"`
 		Record   *linode.DomainRecord `json:"record"`
 	}{
 		Message:  fmt.Sprintf("%s record (ID: %d) created successfully", record.Type, record.ID),
@@ -170,13 +170,13 @@ func NewLinodeDomainRecordUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx con
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeDomainRecordUpdateRequest(ctx, request, cfg)
+		return handleLinodeDomainRecordUpdateRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeDomainRecordUpdateRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+func handleLinodeDomainRecordUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	environment := request.GetString(paramEnvironment, "")
 	domainID := request.GetInt("domain_id", 0)
 	recordID := request.GetInt("record_id", 0)
@@ -215,14 +215,14 @@ func handleLinodeDomainRecordUpdateRequest(ctx context.Context, request mcp.Call
 		TTLSec:   ttlSec,
 	}
 
-	record, err := client.UpdateDomainRecord(ctx, domainID, recordID, req)
+	record, err := client.UpdateDomainRecord(ctx, domainID, recordID, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to update record %d: %v", recordID, err)), nil
 	}
 
 	response := struct {
 		Message  string               `json:"message"`
-		DomainID int                  `json:"domain_id"` //nolint:tagliatelle // snake_case for consistent JSON
+		DomainID int                  `json:"domain_id"`
 		Record   *linode.DomainRecord `json:"record"`
 	}{
 		Message:  fmt.Sprintf("Record %d updated successfully", recordID),
@@ -251,13 +251,13 @@ func NewLinodeDomainRecordDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx con
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeDomainRecordDeleteRequest(ctx, request, cfg)
+		return handleLinodeDomainRecordDeleteRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeDomainRecordDeleteRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+func handleLinodeDomainRecordDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	environment := request.GetString(paramEnvironment, "")
 	domainID := request.GetInt("domain_id", 0)
 	recordID := request.GetInt("record_id", 0)
@@ -287,8 +287,8 @@ func handleLinodeDomainRecordDeleteRequest(ctx context.Context, request mcp.Call
 
 	response := struct {
 		Message  string `json:"message"`
-		DomainID int    `json:"domain_id"` //nolint:tagliatelle // snake_case for consistent JSON
-		RecordID int    `json:"record_id"` //nolint:tagliatelle // snake_case for consistent JSON
+		DomainID int    `json:"domain_id"`
+		RecordID int    `json:"record_id"`
 	}{
 		Message:  fmt.Sprintf("Record %d deleted successfully from domain %d", recordID, domainID),
 		DomainID: domainID,

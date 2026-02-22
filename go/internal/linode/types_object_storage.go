@@ -15,10 +15,10 @@ type ObjectStorageBucket struct {
 type ObjectStorageObject struct {
 	Name         string `json:"name"`
 	ETag         string `json:"etag"`
-	LastModified string `json:"last_modified"` //nolint:tagliatelle // Linode API snake_case
+	LastModified string `json:"last_modified"`
 	Owner        string `json:"owner"`
 	Size         int    `json:"size"`
-	IsPrefix     bool   `json:"is_prefix"` //nolint:tagliatelle // Linode API snake_case
+	IsPrefix     bool   `json:"is_prefix"`
 }
 
 // ObjectStorageCluster represents an Object Storage cluster/region.
@@ -28,7 +28,7 @@ type ObjectStorageCluster struct {
 	Domain     string `json:"domain"`
 	StaticSite struct {
 		Domain string `json:"domain"`
-	} `json:"static_site"` //nolint:tagliatelle // Linode API snake_case
+	} `json:"static_site"`
 	Status string `json:"status"`
 }
 
@@ -38,7 +38,7 @@ type ObjectStorageType struct {
 	Label    string `json:"label"`
 	Price    Price  `json:"price"`
 	Transfer int    `json:"transfer"`
-	Region   string `json:"region_prices,omitempty"` //nolint:tagliatelle // Linode API snake_case
+	Region   string `json:"region_prices,omitempty"`
 }
 
 // CreateObjectStorageBucketRequest represents the request body for creating an Object Storage bucket.
@@ -46,18 +46,18 @@ type CreateObjectStorageBucketRequest struct {
 	Label       string `json:"label"`
 	Region      string `json:"region"`
 	ACL         string `json:"acl,omitempty"`
-	CORSEnabled *bool  `json:"cors_enabled,omitempty"` //nolint:tagliatelle // Linode API snake_case
+	CORSEnabled *bool  `json:"cors_enabled,omitempty"`
 }
 
 // UpdateObjectStorageBucketAccessRequest represents the request body for updating bucket access.
 type UpdateObjectStorageBucketAccessRequest struct {
 	ACL         string `json:"acl,omitempty"`
-	CORSEnabled *bool  `json:"cors_enabled,omitempty"` //nolint:tagliatelle // Linode API snake_case
+	CORSEnabled *bool  `json:"cors_enabled,omitempty"`
 }
 
 // ObjectStorageKeyBucketAccess represents bucket-level permissions for an access key.
 type ObjectStorageKeyBucketAccess struct {
-	BucketName  string `json:"bucket_name"` //nolint:tagliatelle // Linode API snake_case
+	BucketName  string `json:"bucket_name"`
 	Region      string `json:"region"`
 	Permissions string `json:"permissions"`
 }
@@ -65,20 +65,20 @@ type ObjectStorageKeyBucketAccess struct {
 // CreateObjectStorageKeyRequest represents the request body for creating an Object Storage key.
 type CreateObjectStorageKeyRequest struct {
 	Label        string                         `json:"label"`
-	BucketAccess []ObjectStorageKeyBucketAccess `json:"bucket_access,omitempty"` //nolint:tagliatelle // Linode API snake_case
+	BucketAccess []ObjectStorageKeyBucketAccess `json:"bucket_access,omitempty"`
 }
 
 // UpdateObjectStorageKeyRequest represents the request body for updating an Object Storage key.
 type UpdateObjectStorageKeyRequest struct {
 	Label        string                         `json:"label,omitempty"`
-	BucketAccess []ObjectStorageKeyBucketAccess `json:"bucket_access,omitempty"` //nolint:tagliatelle // Linode API snake_case
+	BucketAccess []ObjectStorageKeyBucketAccess `json:"bucket_access,omitempty"`
 }
 
 // PresignedURLRequest represents the request body for generating a presigned URL.
 type PresignedURLRequest struct {
 	Method    string `json:"method"`
 	Name      string `json:"name"`
-	ExpiresIn int    `json:"expires_in"` //nolint:tagliatelle // Linode API snake_case
+	ExpiresIn int    `json:"expires_in"`
 }
 
 // PresignedURLResponse represents the response from generating a presigned URL.
@@ -89,7 +89,7 @@ type PresignedURLResponse struct {
 // ObjectACL represents the ACL of an object in Object Storage.
 type ObjectACL struct {
 	ACL    string `json:"acl"`
-	ACLXML string `json:"acl_xml"` //nolint:tagliatelle // Linode API snake_case
+	ACLXML string `json:"acl_xml"`
 }
 
 // ObjectACLUpdateRequest represents the request body for updating an object's ACL.
@@ -106,9 +106,9 @@ type BucketSSL struct {
 // ObjectStorageKey represents a Linode Object Storage access key.
 type ObjectStorageKey struct {
 	Label        string                         `json:"label"`
-	AccessKey    string                         `json:"access_key"`    //nolint:tagliatelle // Linode API snake_case
-	SecretKey    string                         `json:"secret_key"`    //nolint:tagliatelle // Linode API snake_case
-	BucketAccess []ObjectStorageKeyBucketAccess `json:"bucket_access"` //nolint:tagliatelle // Linode API snake_case
+	AccessKey    string                         `json:"access_key"` //nolint:gosec // G117: JSON tag must match Linode API response format
+	SecretKey    string                         `json:"secret_key"`
+	BucketAccess []ObjectStorageKeyBucketAccess `json:"bucket_access"`
 	Regions      []ObjectStorageKeyRegion       `json:"regions"`
 	ID           int                            `json:"id"`
 	Limited      bool                           `json:"limited"`
@@ -117,7 +117,7 @@ type ObjectStorageKey struct {
 // ObjectStorageKeyRegion represents a region associated with an Object Storage key.
 type ObjectStorageKeyRegion struct {
 	ID         string `json:"id"`
-	S3Endpoint string `json:"s3_endpoint"` //nolint:tagliatelle // Linode API snake_case
+	S3Endpoint string `json:"s3_endpoint"`
 }
 
 // ObjectStorageTransfer represents Object Storage transfer usage.
@@ -128,5 +128,5 @@ type ObjectStorageTransfer struct {
 // ObjectStorageBucketAccess represents bucket ACL and CORS settings.
 type ObjectStorageBucketAccess struct {
 	ACL         string `json:"acl"`
-	CORSEnabled bool   `json:"cors_enabled"` //nolint:tagliatelle // Linode API snake_case
+	CORSEnabled bool   `json:"cors_enabled"`
 }

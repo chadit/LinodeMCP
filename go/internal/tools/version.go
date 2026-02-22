@@ -3,10 +3,11 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/chadit/LinodeMCP/internal/version"
+	"github.com/chadit/LinodeMCP/internal/appinfo"
 )
 
 // NewVersionTool creates a version info tool.
@@ -16,12 +17,11 @@ func NewVersionTool() (mcp.Tool, func(ctx context.Context, request mcp.CallToolR
 	)
 
 	handler := func(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		versionInfo := version.Get()
+		versionInfo := appinfo.Get()
 
 		jsonResponse, err := json.MarshalIndent(versionInfo, "", "  ")
 		if err != nil {
-			//nolint:nilerr // fallback to string format
-			return mcp.NewToolResultText(versionInfo.String()), nil
+			return nil, fmt.Errorf("failed to marshal version info: %w", err)
 		}
 
 		return mcp.NewToolResultText(string(jsonResponse)), nil

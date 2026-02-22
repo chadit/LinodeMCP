@@ -10,10 +10,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/chadit/LinodeMCP/internal/appinfo"
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/tools"
-	"github.com/chadit/LinodeMCP/internal/version"
 )
 
 func TestNewHelloTool_ToolDefinition(t *testing.T) {
@@ -84,10 +84,11 @@ func TestVersionTool_ReturnsVersionInfo(t *testing.T) {
 	textContent, ok := result.Content[0].(mcp.TextContent)
 	require.True(t, ok)
 
-	var info version.Info
+	var info appinfo.Info
+
 	err = json.Unmarshal([]byte(textContent.Text), &info)
 	require.NoError(t, err, "version response should be valid JSON.")
-	assert.Equal(t, version.Version, info.Version)
+	assert.Equal(t, appinfo.Version, info.Version)
 }
 
 func TestNewLinodeInstancesTool_ToolDefinition(t *testing.T) {
@@ -159,7 +160,7 @@ func TestLinodeInstancesTool_SuccessfulList(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"data":    instances,
 			"page":    1,
 			"pages":   1,
@@ -223,7 +224,7 @@ func TestLinodeProfileTool_Success(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(profile))
+		assert.NoError(t, json.NewEncoder(w).Encode(profile))
 	}))
 	defer srv.Close()
 
@@ -259,7 +260,7 @@ func TestSelectEnvironment_SpecificEnvironment(t *testing.T) {
 		},
 	}
 
-	env, err := tools.SelectEnvironment(cfg, "prod")
+	env, err := tools.ExportedSelectEnvironment(cfg, "prod")
 	require.NoError(t, err)
 	assert.Equal(t, "Production", env.Label)
 }
@@ -271,7 +272,7 @@ func TestSelectEnvironment_NotFound(t *testing.T) {
 		Environments: map[string]config.EnvironmentConfig{},
 	}
 
-	_, err := tools.SelectEnvironment(cfg, "missing")
+	_, err := tools.ExportedSelectEnvironment(cfg, "missing")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, tools.ErrEnvironmentNotFound)
 }
@@ -282,7 +283,7 @@ func TestValidateLinodeConfig_Complete(t *testing.T) {
 	env := &config.EnvironmentConfig{
 		Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "tok"},
 	}
-	assert.NoError(t, tools.ValidateLinodeConfig(env))
+	assert.NoError(t, tools.ExportedValidateLinodeConfig(env))
 }
 
 func TestValidateLinodeConfig_MissingToken(t *testing.T) {
@@ -291,7 +292,7 @@ func TestValidateLinodeConfig_MissingToken(t *testing.T) {
 	env := &config.EnvironmentConfig{
 		Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4"},
 	}
-	assert.ErrorIs(t, tools.ValidateLinodeConfig(env), tools.ErrLinodeConfigIncomplete)
+	assert.ErrorIs(t, tools.ExportedValidateLinodeConfig(env), tools.ErrLinodeConfigIncomplete)
 }
 
 func TestValidateLinodeConfig_MissingURL(t *testing.T) {
@@ -300,7 +301,7 @@ func TestValidateLinodeConfig_MissingURL(t *testing.T) {
 	env := &config.EnvironmentConfig{
 		Linode: config.LinodeConfig{Token: "tok"},
 	}
-	assert.ErrorIs(t, tools.ValidateLinodeConfig(env), tools.ErrLinodeConfigIncomplete)
+	assert.ErrorIs(t, tools.ExportedValidateLinodeConfig(env), tools.ErrLinodeConfigIncomplete)
 }
 
 func TestFilterInstancesByStatus(t *testing.T) {
@@ -312,7 +313,7 @@ func TestFilterInstancesByStatus(t *testing.T) {
 		{ID: 3, Status: "Running"},
 	}
 
-	filtered := tools.FilterInstancesByStatus(instances, "running")
+	filtered := tools.ExportedFilterInstancesByStatus(instances, "running")
 	assert.Len(t, filtered, 2, "should match case-insensitively.")
 }
 
@@ -323,7 +324,7 @@ func TestFilterInstancesByStatus_NoMatch(t *testing.T) {
 		{ID: 1, Status: "running"},
 	}
 
-	filtered := tools.FilterInstancesByStatus(instances, "stopped")
+	filtered := tools.ExportedFilterInstancesByStatus(instances, "stopped")
 	assert.Empty(t, filtered)
 }
 
@@ -331,9 +332,10 @@ func TestFormatInstancesResponse_WithFilter(t *testing.T) {
 	t.Parallel()
 
 	instances := []linode.Instance{{ID: 1, Label: "test"}}
-	result, err := tools.FormatInstancesResponse(instances, "running")
+	result, err := tools.ExportedFormatInstancesResponse(instances, "running")
 
 	require.NoError(t, err)
+
 	textContent, ok := result.Content[0].(mcp.TextContent)
 	require.True(t, ok)
 	assert.Contains(t, textContent.Text, "status=running")
@@ -344,9 +346,10 @@ func TestFormatInstancesResponse_NoFilter(t *testing.T) {
 	t.Parallel()
 
 	instances := []linode.Instance{{ID: 1}}
-	result, err := tools.FormatInstancesResponse(instances, "")
+	result, err := tools.ExportedFormatInstancesResponse(instances, "")
 
 	require.NoError(t, err)
+
 	textContent, ok := result.Content[0].(mcp.TextContent)
 	require.True(t, ok)
 	assert.NotContains(t, textContent.Text, "filter")
@@ -431,7 +434,7 @@ func TestLinodeInstanceGetTool_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/linode/instances/123", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(instance))
+		assert.NoError(t, json.NewEncoder(w).Encode(instance))
 	}))
 	defer srv.Close()
 
@@ -483,7 +486,7 @@ func TestLinodeAccountTool_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/account", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(account))
+		assert.NoError(t, json.NewEncoder(w).Encode(account))
 	}))
 	defer srv.Close()
 
@@ -532,7 +535,7 @@ func TestLinodeRegionsListTool_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/regions", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"data":    regions,
 			"page":    1,
 			"pages":   1,
@@ -575,7 +578,7 @@ func TestLinodeRegionsListTool_FilterByCountry(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"data":    regions,
 			"page":    1,
 			"pages":   1,
@@ -631,7 +634,7 @@ func TestLinodeTypesListTool_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/linode/types", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"data":    types,
 			"page":    1,
 			"pages":   1,
@@ -674,7 +677,7 @@ func TestLinodeTypesListTool_FilterByClass(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"data":    types,
 			"page":    1,
 			"pages":   1,
@@ -728,7 +731,7 @@ func TestLinodeVolumesListTool_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/volumes", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"data":    volumes,
 			"page":    1,
 			"pages":   1,
@@ -770,7 +773,7 @@ func TestLinodeVolumesListTool_FilterByRegion(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"data":    volumes,
 			"page":    1,
 			"pages":   1,
@@ -814,7 +817,7 @@ func TestLinodeVolumesListTool_FilterByLabel(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"data":    volumes,
 			"page":    1,
 			"pages":   1,
@@ -869,7 +872,7 @@ func TestLinodeImagesListTool_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/images", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"data":    images,
 			"page":    1,
 			"pages":   1,
@@ -911,7 +914,7 @@ func TestLinodeImagesListTool_FilterByPublic(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"data":    images,
 			"page":    1,
 			"pages":   1,
@@ -954,7 +957,7 @@ func TestLinodeImagesListTool_FilterByDeprecated(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"data":    images,
 			"page":    1,
 			"pages":   1,

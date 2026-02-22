@@ -1,9 +1,7 @@
-//nolint:dupl // Tool implementations have similar structure by design
 package tools
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -13,38 +11,10 @@ import (
 
 // NewLinodeProfileTool creates a tool for retrieving Linode profile info.
 func NewLinodeProfileTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_profile",
-		mcp.WithDescription("Retrieves Linode user account profile information"),
-		mcp.WithString(paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
+	return newSimpleGetTool(cfg, "linode_profile",
+		"Retrieves Linode user account profile information",
+		func(ctx context.Context, client *linode.RetryableClient) (any, error) {
+			return client.GetProfile(ctx)
+		},
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeProfileRequest(ctx, request, cfg)
-	}
-
-	return tool, handler
-}
-
-func handleLinodeProfileRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
-
-	selectedEnv, err := selectEnvironment(cfg, environment)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
-
-	profile, err := client.GetProfile(ctx)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Linode profile: %v", err)), nil
-	}
-
-	return marshalToolResponse(profile)
 }

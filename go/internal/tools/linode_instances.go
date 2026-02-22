@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -42,35 +41,22 @@ func NewLinodeInstanceGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Co
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeInstanceGetRequest(ctx, request, cfg)
+		return handleLinodeInstanceGetRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeInstanceGetRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
-	instanceIDStr := request.GetString("instance_id", "")
-
-	if instanceIDStr == "" {
-		return mcp.NewToolResultError(ErrInstanceIDRequired.Error()), nil
-	}
-
-	instanceID, err := strconv.Atoi(instanceIDStr)
-	if err != nil {
-		return mcp.NewToolResultError(ErrInvalidInstanceID.Error()), nil //nolint:nilerr // MCP tool errors are returned as tool results
-	}
-
-	selectedEnv, err := selectEnvironment(cfg, environment)
+func handleLinodeInstanceGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	instanceID, err := parseInstanceID(request.GetString("instance_id", ""))
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	if err := validateLinodeConfig(selectedEnv); err != nil {
+	client, err := prepareClient(request, cfg)
+	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	instance, err := client.GetInstance(ctx, instanceID)
 	if err != nil {
@@ -93,26 +79,19 @@ func NewLinodeInstancesTool(cfg *config.Config) (mcp.Tool, func(ctx context.Cont
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeInstancesRequest(ctx, request, cfg)
+		return handleLinodeInstancesRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeInstancesRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleLinodeInstancesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	statusFilter := request.GetString("status", "")
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	instances, err := client.ListInstances(ctx)
 	if err != nil {
@@ -120,7 +99,9 @@ func handleLinodeInstancesRequest(ctx context.Context, request mcp.CallToolReque
 	}
 
 	if statusFilter != "" {
-		instances = filterInstancesByStatus(instances, statusFilter)
+		instances = filterByField(instances, statusFilter, func(inst linode.Instance) string {
+			return inst.Status
+		})
 	}
 
 	return formatInstancesResponse(instances, statusFilter)
@@ -151,18 +132,18 @@ func validateLinodeConfig(env *config.EnvironmentConfig) error {
 	return nil
 }
 
-func filterInstancesByStatus(instances []linode.Instance, statusFilter string) []linode.Instance {
-	filtered := make([]linode.Instance, 0, len(instances))
-
-	statusFilter = strings.ToLower(statusFilter)
-
-	for _, instance := range instances {
-		if strings.ToLower(instance.Status) == statusFilter {
-			filtered = append(filtered, instance)
-		}
+// parseInstanceID validates and converts the instance ID string to an integer.
+func parseInstanceID(raw string) (int, error) {
+	if raw == "" {
+		return 0, ErrInstanceIDRequired
 	}
 
-	return filtered
+	instanceID, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("%w: %s", ErrInvalidInstanceID, raw)
+	}
+
+	return instanceID, nil
 }
 
 func formatInstancesResponse(instances []linode.Instance, statusFilter string) (*mcp.CallToolResult, error) {

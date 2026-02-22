@@ -70,7 +70,7 @@ func TestNew_ToolsRegistered(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify tools were registered by checking the tool count.
-	assert.Greater(t, srv.GetToolCount(), 0, "should have at least one tool registered.")
+	assert.Positive(t, srv.GetToolCount(), "should have at least one tool registered.")
 }
 
 func TestToolWrapper_Methods(t *testing.T) {

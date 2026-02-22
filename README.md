@@ -114,7 +114,7 @@ Configure multiple Linode environments (production, staging, dev) in a single co
 ### Prerequisites
 
 **Go implementation:**
-- Go 1.24+
+- Go 1.26+
 - A Linode API token ([create one here](https://cloud.linode.com/profile/tokens))
 
 **Python implementation:**

@@ -1,5 +1,5 @@
-// Package version provides build-time version information for LinodeMCP.
-package version
+// Package appinfo provides build-time version information for LinodeMCP.
+package appinfo
 
 import (
 	"fmt"
@@ -13,8 +13,6 @@ const Version = "0.1.0"
 const APIVersion = "0.1.0"
 
 const (
-	defaultBuildDate = "unknown"
-
 	featureKeyTools    = "tools"
 	featureKeyLogging  = "logging"
 	featureKeyProtocol = "protocol"
@@ -24,38 +22,33 @@ const (
 	featureProtocol  = "mcp"
 )
 
-// Build-time variables set via ldflags.
-var (
-	BuildDate = ""     //nolint:gochecknoglobals // Build-time variable set via ldflags
-	GitCommit = "dev"  //nolint:gochecknoglobals // Build-time variable set via ldflags
-	GitBranch = "main" //nolint:gochecknoglobals // Build-time variable set via ldflags
+// Build-time constants for version metadata.
+const (
+	buildDate = "unknown"
+	gitCommit = "dev"
+	gitBranch = "main"
 )
 
 // Info holds build and version metadata for the LinodeMCP server.
 type Info struct {
 	Version    string            `json:"version"`
-	APIVersion string            `json:"api_version"` //nolint:tagliatelle // snake_case for JSON compatibility
-	BuildDate  string            `json:"build_date"`  //nolint:tagliatelle // snake_case for JSON compatibility
-	GitCommit  string            `json:"git_commit"`  //nolint:tagliatelle // snake_case for JSON compatibility
-	GitBranch  string            `json:"git_branch"`  //nolint:tagliatelle // snake_case for JSON compatibility
-	GoVersion  string            `json:"go_version"`  //nolint:tagliatelle // snake_case for JSON compatibility
+	APIVersion string            `json:"api_version"`
+	BuildDate  string            `json:"build_date"`
+	GitCommit  string            `json:"git_commit"`
+	GitBranch  string            `json:"git_branch"`
+	GoVersion  string            `json:"go_version"`
 	Platform   string            `json:"platform"`
 	Features   map[string]string `json:"features"`
 }
 
 // Get returns the current version information.
 func Get() Info {
-	buildDate := BuildDate
-	if buildDate == "" {
-		buildDate = defaultBuildDate
-	}
-
 	return Info{
 		Version:    Version,
 		APIVersion: APIVersion,
 		BuildDate:  buildDate,
-		GitCommit:  GitCommit,
-		GitBranch:  GitBranch,
+		GitCommit:  gitCommit,
+		GitBranch:  gitBranch,
 		GoVersion:  runtime.Version(),
 		Platform:   fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
 		Features: map[string]string{

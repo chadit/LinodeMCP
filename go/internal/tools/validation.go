@@ -58,16 +58,16 @@ var (
 	ErrVolumeSizeTooLarge = errors.New("volume size cannot exceed 10240 GB (10 TB)")
 )
 
-// validSSHKeyPrefixes lists the algorithm prefixes accepted by Linode for SSH keys.
-//
-//nolint:gochecknoglobals // Read-only slice used by validateSSHKey.
-var validSSHKeyPrefixes = []string{
-	"ssh-rsa",
-	"ssh-ed25519",
-	"ecdsa-sha2-nistp256",
-	"ecdsa-sha2-nistp384",
-	"ecdsa-sha2-nistp521",
-	"ssh-dss",
+// validSSHKeyPrefixes returns the algorithm prefixes accepted by Linode for SSH keys.
+func validSSHKeyPrefixes() []string {
+	return []string{
+		"ssh-rsa",
+		"ssh-ed25519",
+		"ecdsa-sha2-nistp256",
+		"ecdsa-sha2-nistp384",
+		"ecdsa-sha2-nistp521",
+		"ssh-dss",
+	}
 }
 
 func validateSSHKey(key string) error {
@@ -78,7 +78,7 @@ func validateSSHKey(key string) error {
 	key = strings.TrimSpace(key)
 	validPrefix := false
 
-	for _, prefix := range validSSHKeyPrefixes {
+	for _, prefix := range validSSHKeyPrefixes() {
 		if strings.HasPrefix(key, prefix+" ") {
 			validPrefix = true
 
@@ -114,13 +114,13 @@ func validateRootPassword(password string) error {
 
 	var hasUpper, hasLower, hasDigit bool
 
-	for _, r := range password {
+	for _, char := range password {
 		switch {
-		case unicode.IsUpper(r):
+		case unicode.IsUpper(char):
 			hasUpper = true
-		case unicode.IsLower(r):
+		case unicode.IsLower(char):
 			hasLower = true
-		case unicode.IsDigit(r):
+		case unicode.IsDigit(char):
 			hasDigit = true
 		}
 	}

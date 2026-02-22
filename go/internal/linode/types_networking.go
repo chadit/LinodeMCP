@@ -14,9 +14,9 @@ type Firewall struct {
 // FirewallRules represents inbound and outbound firewall rules.
 type FirewallRules struct {
 	Inbound        []FirewallRule `json:"inbound"`
-	InboundPolicy  string         `json:"inbound_policy"` //nolint:tagliatelle // Linode API snake_case
+	InboundPolicy  string         `json:"inbound_policy"`
 	Outbound       []FirewallRule `json:"outbound"`
-	OutboundPolicy string         `json:"outbound_policy"` //nolint:tagliatelle // Linode API snake_case
+	OutboundPolicy string         `json:"outbound_policy"`
 }
 
 // FirewallRule represents a single firewall rule.
@@ -43,7 +43,7 @@ type NodeBalancer struct {
 	Hostname           string   `json:"hostname"`
 	IPv4               string   `json:"ipv4"`
 	IPv6               string   `json:"ipv6"`
-	ClientConnThrottle int      `json:"client_conn_throttle"` //nolint:tagliatelle // Linode API snake_case
+	ClientConnThrottle int      `json:"client_conn_throttle"`
 	Transfer           Transfer `json:"transfer"`
 	Tags               []string `json:"tags"`
 	Created            string   `json:"created"`
@@ -83,13 +83,13 @@ type UpdateFirewallRequest struct {
 type CreateNodeBalancerRequest struct {
 	Region             string   `json:"region"`
 	Label              string   `json:"label,omitempty"`
-	ClientConnThrottle int      `json:"client_conn_throttle,omitempty"` //nolint:tagliatelle // Linode API snake_case
+	ClientConnThrottle int      `json:"client_conn_throttle,omitempty"`
 	Tags               []string `json:"tags,omitempty"`
 }
 
 // UpdateNodeBalancerRequest represents the request body for updating a NodeBalancer.
 type UpdateNodeBalancerRequest struct {
 	Label              string   `json:"label,omitempty"`
-	ClientConnThrottle *int     `json:"client_conn_throttle,omitempty"` //nolint:tagliatelle // Linode API snake_case
+	ClientConnThrottle *int     `json:"client_conn_throttle,omitempty"`
 	Tags               []string `json:"tags,omitempty"`
 }

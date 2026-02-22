@@ -14,13 +14,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// dangerousPaths lists system directories that config files must never be loaded from,
+// dangerousPaths returns system directories that config files must never be loaded from,
 // preventing path traversal attacks that could read sensitive OS files or overwrite system configs.
-//
-//nolint:gochecknoglobals // Package-level slice shared by multiple validation functions.
-var dangerousPaths = []string{
-	"/etc/", "/root/", "/proc/", "/sys/", "/dev/", "/bin/", "/sbin/",
-	"/usr/bin/", "/usr/sbin/", "/boot/", "/var/log/", "/var/run/",
+func dangerousPaths() []string {
+	return []string{
+		"/etc/", "/root/", "/proc/", "/sys/", "/dev/", "/bin/", "/sbin/",
+		"/usr/bin/", "/usr/sbin/", "/boot/", "/var/log/", "/var/run/",
+	}
 }
 
 // Static configuration errors.
@@ -42,7 +42,7 @@ var (
 // ServerConfig holds core server settings.
 type ServerConfig struct {
 	Name      string `json:"name"      yaml:"name"`
-	LogLevel  string `json:"logLevel"  yaml:"logLevel"`
+	LogLevel  string `json:"log_level" yaml:"logLevel"`
 	Transport string `json:"transport" yaml:"transport"`
 	Host      string `json:"host"      yaml:"host"`
 	Port      int    `json:"port"      yaml:"port"`
@@ -57,26 +57,26 @@ type MetricsConfig struct {
 
 // TracingConfig holds OpenTelemetry tracing settings.
 type TracingConfig struct {
-	Enabled    bool    `json:"enabled"    yaml:"enabled"`
-	Exporter   string  `json:"exporter"   yaml:"exporter"`
-	Endpoint   string  `json:"endpoint"   yaml:"endpoint"`
-	SampleRate float64 `json:"sampleRate" yaml:"sampleRate"`
+	Enabled    bool    `json:"enabled"     yaml:"enabled"`
+	Exporter   string  `json:"exporter"    yaml:"exporter"`
+	Endpoint   string  `json:"endpoint"    yaml:"endpoint"`
+	SampleRate float64 `json:"sample_rate" yaml:"sampleRate"`
 }
 
 // ResilienceConfig holds retry, rate limit, and circuit breaker settings.
 type ResilienceConfig struct {
-	RateLimitPerMinute      int           `json:"rateLimitPerMinute"      yaml:"rateLimitPerMinute"`
-	CircuitBreakerThreshold int           `json:"circuitBreakerThreshold" yaml:"circuitBreakerThreshold"`
-	CircuitBreakerTimeout   time.Duration `json:"circuitBreakerTimeout"   yaml:"circuitBreakerTimeout"`
-	MaxRetries              int           `json:"maxRetries"              yaml:"maxRetries"`
-	BaseRetryDelay          time.Duration `json:"baseRetryDelay"          yaml:"baseRetryDelay"`
-	MaxRetryDelay           time.Duration `json:"maxRetryDelay"           yaml:"maxRetryDelay"`
+	RateLimitPerMinute      int           `json:"rate_limit_per_minute"     yaml:"rateLimitPerMinute"`
+	CircuitBreakerThreshold int           `json:"circuit_breaker_threshold" yaml:"circuitBreakerThreshold"`
+	CircuitBreakerTimeout   time.Duration `json:"circuit_breaker_timeout"   yaml:"circuitBreakerTimeout"`
+	MaxRetries              int           `json:"max_retries"               yaml:"maxRetries"`
+	BaseRetryDelay          time.Duration `json:"base_retry_delay"          yaml:"baseRetryDelay"`
+	MaxRetryDelay           time.Duration `json:"max_retry_delay"           yaml:"maxRetryDelay"`
 }
 
 // LinodeConfig holds Linode API settings for an environment.
 type LinodeConfig struct {
-	APIURL string `json:"apiUrl" yaml:"apiUrl"`
-	Token  string `json:"token"  yaml:"token"`
+	APIURL string `json:"api_url" yaml:"apiUrl"`
+	Token  string `json:"token"   yaml:"token"`
 }
 
 // EnvironmentConfig holds settings for a named environment.
@@ -127,29 +127,12 @@ func (cm *CacheManager) ResetCaches() {
 	cm.allowedDirsMutex.Unlock()
 }
 
-type packageCacheManager struct {
-	once sync.Once
-	cm   *CacheManager
-}
-
-func (p *packageCacheManager) get() *CacheManager {
-	p.once.Do(func() {
-		p.cm = NewCacheManager()
-	})
-
-	return p.cm
-}
-
-//nolint:gochecknoglobals // Singleton pattern for cache manager
-var pkgCacheManager packageCacheManager
-
-// ResetCaches clears all internal caches (primarily for testing).
-func ResetCaches() {
-	pkgCacheManager.get().ResetCaches()
-}
+// ResetCaches is a no-op retained for backward compatibility with tests.
+// Each Loader owns its own CacheManager; use loader.cacheManager.ResetCaches() instead.
+func ResetCaches() {}
 
 func validatePath(path string) error {
-	return pkgCacheManager.get().validatePath(path)
+	return NewCacheManager().validatePath(path)
 }
 
 func (cm *CacheManager) validatePath(path string) error {
@@ -201,7 +184,7 @@ func (cm *CacheManager) performPathValidation(path string) error {
 }
 
 func containsDangerousPathElements(path string) bool {
-	for _, dangerous := range dangerousPaths {
+	for _, dangerous := range dangerousPaths() {
 		if strings.HasPrefix(path, dangerous) {
 			return true
 		}
@@ -211,7 +194,7 @@ func containsDangerousPathElements(path string) bool {
 }
 
 func (cm *CacheManager) isPathInAllowedDirectory(absPath string) bool {
-	for _, dangerous := range dangerousPaths {
+	for _, dangerous := range dangerousPaths() {
 		if strings.HasPrefix(absPath, dangerous) {
 			return false
 		}
@@ -297,7 +280,7 @@ type OSFileSystem struct{}
 var _ FileSystem = (*OSFileSystem)(nil)
 
 // ReadFile reads the named file and returns its contents.
-func (fs *OSFileSystem) ReadFile(filename string) ([]byte, error) {
+func (*OSFileSystem) ReadFile(filename string) ([]byte, error) {
 	if err := validatePath(filename); err != nil {
 		return nil, fmt.Errorf("invalid file path %s: %w", filename, err)
 	}
@@ -312,7 +295,7 @@ func (fs *OSFileSystem) ReadFile(filename string) ([]byte, error) {
 }
 
 // Stat returns file info for the named file.
-func (fs *OSFileSystem) Stat(name string) (os.FileInfo, error) {
+func (*OSFileSystem) Stat(name string) (os.FileInfo, error) {
 	info, err := os.Stat(name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to stat file %s: %w", name, err)
@@ -322,7 +305,7 @@ func (fs *OSFileSystem) Stat(name string) (os.FileInfo, error) {
 }
 
 // MkdirAll creates a directory path and all parents that don't exist.
-func (fs *OSFileSystem) MkdirAll(path string, perm os.FileMode) error {
+func (*OSFileSystem) MkdirAll(path string, perm os.FileMode) error {
 	if err := os.MkdirAll(path, perm); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", path, err)
 	}
@@ -331,7 +314,7 @@ func (fs *OSFileSystem) MkdirAll(path string, perm os.FileMode) error {
 }
 
 // WriteFile writes data to the named file, creating it if necessary.
-func (fs *OSFileSystem) WriteFile(filename string, data []byte, perm os.FileMode) error {
+func (*OSFileSystem) WriteFile(filename string, data []byte, perm os.FileMode) error {
 	if err := os.WriteFile(filename, data, perm); err != nil {
 		return fmt.Errorf("failed to write file %s: %w", filename, err)
 	}
@@ -366,17 +349,17 @@ func WithCacheManager(cm *CacheManager) LoaderOption {
 
 // NewLoader creates a new Loader with the given options applied.
 func NewLoader(options ...LoaderOption) *Loader {
-	l := &Loader{
+	loader := &Loader{
 		fs:           &OSFileSystem{},
 		configPath:   GetConfigPath(),
-		cacheManager: pkgCacheManager.get(),
+		cacheManager: NewCacheManager(),
 	}
 
 	for _, opt := range options {
-		opt(l)
+		opt(loader)
 	}
 
-	return l
+	return loader
 }
 
 // Load reads and returns the configuration from the configured path.
@@ -476,7 +459,7 @@ func (l *Loader) cacheConfig(path string, config *Config, modTime time.Time) {
 	l.cacheManager.fileMtimeCache[path] = modTime
 }
 
-func (l *Loader) setDefaults(config *Config) {
+func (*Loader) setDefaults(config *Config) {
 	if config.Server.Name == "" {
 		config.Server.Name = DefaultServerName
 	}
@@ -534,7 +517,7 @@ func (l *Loader) setDefaults(config *Config) {
 	}
 }
 
-func (l *Loader) applyEnvironmentOverrides(config *Config) {
+func (*Loader) applyEnvironmentOverrides(config *Config) {
 	originallyNilEnvironments := config.Environments == nil
 
 	anyEnvVarsSet := false
@@ -727,10 +710,10 @@ func (c *Config) SelectEnvironment(userInput string) (*EnvironmentConfig, error)
 		return nil, fmt.Errorf("%w: no provider environments configured", ErrEnvironmentNotFound)
 	}
 
-	userInputLower := strings.ToLower(strings.TrimSpace(userInput))
+	trimmedInput := strings.TrimSpace(userInput)
 
 	for envName, env := range c.Environments {
-		if strings.ToLower(envName) == userInputLower {
+		if strings.EqualFold(envName, trimmedInput) {
 			return &env, nil
 		}
 	}

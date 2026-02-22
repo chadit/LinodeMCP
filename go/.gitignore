@@ -4,8 +4,6 @@
 *.dll
 *.so
 *.dylib
-linodemcp
-
 # Test binary
 *.test
 
@@ -67,3 +65,6 @@ lint_output.txt
 # Security tools
 .security-cache/
 .tools/
+
+# override linting rules
+!.golangci.yml

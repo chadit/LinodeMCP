@@ -7,37 +7,39 @@ import (
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
-// SelectEnvironment exposes selectEnvironment for testing.
-func SelectEnvironment(cfg *config.Config, environment string) (*config.EnvironmentConfig, error) {
+// ExportedSelectEnvironment exposes selectEnvironment for testing.
+func ExportedSelectEnvironment(cfg *config.Config, environment string) (*config.EnvironmentConfig, error) {
 	return selectEnvironment(cfg, environment)
 }
 
-// ValidateLinodeConfig exposes validateLinodeConfig for testing.
-func ValidateLinodeConfig(env *config.EnvironmentConfig) error {
+// ExportedValidateLinodeConfig exposes validateLinodeConfig for testing.
+func ExportedValidateLinodeConfig(env *config.EnvironmentConfig) error {
 	return validateLinodeConfig(env)
 }
 
-// FilterInstancesByStatus exposes filterInstancesByStatus for testing.
-func FilterInstancesByStatus(instances []linode.Instance, statusFilter string) []linode.Instance {
-	return filterInstancesByStatus(instances, statusFilter)
+// ExportedFilterInstancesByStatus exposes the instance status filter for testing.
+func ExportedFilterInstancesByStatus(instances []linode.Instance, statusFilter string) []linode.Instance {
+	return filterByField(instances, statusFilter, func(inst linode.Instance) string {
+		return inst.Status
+	})
 }
 
-// FormatInstancesResponse exposes formatInstancesResponse for testing.
-func FormatInstancesResponse(instances []linode.Instance, statusFilter string) (*mcp.CallToolResult, error) {
+// ExportedFormatInstancesResponse exposes formatInstancesResponse for testing.
+func ExportedFormatInstancesResponse(instances []linode.Instance, statusFilter string) (*mcp.CallToolResult, error) {
 	return formatInstancesResponse(instances, statusFilter)
 }
 
-// ValidateBucketLabel exposes validateBucketLabel for testing.
-func ValidateBucketLabel(label string) error {
+// ExportedValidateBucketLabel exposes validateBucketLabel for testing.
+func ExportedValidateBucketLabel(label string) error {
 	return validateBucketLabel(label)
 }
 
-// ValidateDNSRecordTarget exposes validateDNSRecordTarget for testing.
-func ValidateDNSRecordTarget(recordType, target string) error {
+// ExportedValidateDNSRecordTarget exposes validateDNSRecordTarget for testing.
+func ExportedValidateDNSRecordTarget(recordType, target string) error {
 	return validateDNSRecordTarget(recordType, target)
 }
 
-// ValidateDNSRecordName exposes validateDNSRecordName for testing.
-func ValidateDNSRecordName(name string) error {
+// ExportedValidateDNSRecordName exposes validateDNSRecordName for testing.
+func ExportedValidateDNSRecordName(name string) error {
 	return validateDNSRecordName(name)
 }

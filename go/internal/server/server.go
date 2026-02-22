@@ -10,9 +10,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/chadit/LinodeMCP/internal/appinfo"
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/tools"
-	"github.com/chadit/LinodeMCP/internal/version"
 	"github.com/chadit/LinodeMCP/pkg/contracts"
 )
 
@@ -37,7 +37,7 @@ func New(cfg *config.Config) (*Server, error) {
 
 	mcpServer := server.NewMCPServer(
 		cfg.Server.Name,
-		version.Version,
+		appinfo.Version,
 		server.WithToolCapabilities(true),
 	)
 
@@ -60,7 +60,7 @@ func (tw *toolWrapper) Name() string        { return tw.tool.Name }
 func (tw *toolWrapper) Description() string { return tw.tool.Description }
 func (tw *toolWrapper) InputSchema() any    { return tw.tool.InputSchema }
 
-func (tw *toolWrapper) Execute(_ context.Context, _ map[string]any) (*mcp.CallToolResult, error) {
+func (*toolWrapper) Execute(_ context.Context, _ map[string]any) (*mcp.CallToolResult, error) {
 	return nil, ErrExecuteNotImplemented
 }
 
@@ -86,8 +86,24 @@ func (s *Server) GetToolCount() int {
 	return len(s.tools)
 }
 
-//nolint:maintidx // Tool registration is intentionally a flat list of repetitive calls.
+type toolFactory func(*config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error))
+
+func (s *Server) registerToolFromFactory(factory toolFactory) {
+	tool, handler := factory(s.config)
+	s.mcp.AddTool(tool, handler)
+	s.tools = append(s.tools, &toolWrapper{tool: tool})
+}
+
 func (s *Server) registerTools() {
+	s.registerCoreTools()
+	s.registerComputeTools()
+	s.registerNetworkingTools()
+	s.registerDNSTools()
+	s.registerVolumeTools()
+	s.registerObjectStorageTools()
+}
+
+func (s *Server) registerCoreTools() {
 	helloTool, helloHandler := tools.NewHelloTool()
 	s.mcp.AddTool(helloTool, helloHandler)
 	s.tools = append(s.tools, &toolWrapper{tool: helloTool})
@@ -96,260 +112,104 @@ func (s *Server) registerTools() {
 	s.mcp.AddTool(versionTool, versionHandler)
 	s.tools = append(s.tools, &toolWrapper{tool: versionTool})
 
-	linodeProfileTool, linodeProfileHandler := tools.NewLinodeProfileTool(s.config)
-	s.mcp.AddTool(linodeProfileTool, linodeProfileHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeProfileTool})
+	for _, factory := range []toolFactory{
+		tools.NewLinodeProfileTool,
+		tools.NewLinodeAccountTool,
+	} {
+		s.registerToolFromFactory(factory)
+	}
+}
 
-	linodeAccountTool, linodeAccountHandler := tools.NewLinodeAccountTool(s.config)
-	s.mcp.AddTool(linodeAccountTool, linodeAccountHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeAccountTool})
+func (s *Server) registerComputeTools() {
+	for _, factory := range []toolFactory{
+		tools.NewLinodeInstancesTool,
+		tools.NewLinodeInstanceGetTool,
+		tools.NewLinodeRegionsListTool,
+		tools.NewLinodeTypesListTool,
+		tools.NewLinodeImagesListTool,
+		tools.NewLinodeSSHKeysListTool,
+		tools.NewLinodeStackScriptsListTool,
+		tools.NewLinodeSSHKeyCreateTool,
+		tools.NewLinodeSSHKeyDeleteTool,
+		tools.NewLinodeInstanceBootTool,
+		tools.NewLinodeInstanceRebootTool,
+		tools.NewLinodeInstanceShutdownTool,
+		tools.NewLinodeInstanceCreateTool,
+		tools.NewLinodeInstanceDeleteTool,
+		tools.NewLinodeInstanceResizeTool,
+	} {
+		s.registerToolFromFactory(factory)
+	}
+}
 
-	linodeInstancesTool, linodeInstancesHandler := tools.NewLinodeInstancesTool(s.config)
-	s.mcp.AddTool(linodeInstancesTool, linodeInstancesHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeInstancesTool})
+func (s *Server) registerNetworkingTools() {
+	for _, factory := range []toolFactory{
+		tools.NewLinodeFirewallsListTool,
+		tools.NewLinodeNodeBalancersListTool,
+		tools.NewLinodeNodeBalancerGetTool,
+		tools.NewLinodeFirewallCreateTool,
+		tools.NewLinodeFirewallUpdateTool,
+		tools.NewLinodeFirewallDeleteTool,
+		tools.NewLinodeNodeBalancerCreateTool,
+		tools.NewLinodeNodeBalancerUpdateTool,
+		tools.NewLinodeNodeBalancerDeleteTool,
+	} {
+		s.registerToolFromFactory(factory)
+	}
+}
 
-	linodeInstanceGetTool, linodeInstanceGetHandler := tools.NewLinodeInstanceGetTool(s.config)
-	s.mcp.AddTool(linodeInstanceGetTool, linodeInstanceGetHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeInstanceGetTool})
+func (s *Server) registerDNSTools() {
+	for _, factory := range []toolFactory{
+		tools.NewLinodeDomainsListTool,
+		tools.NewLinodeDomainGetTool,
+		tools.NewLinodeDomainRecordsListTool,
+		tools.NewLinodeDomainCreateTool,
+		tools.NewLinodeDomainUpdateTool,
+		tools.NewLinodeDomainDeleteTool,
+		tools.NewLinodeDomainRecordCreateTool,
+		tools.NewLinodeDomainRecordUpdateTool,
+		tools.NewLinodeDomainRecordDeleteTool,
+	} {
+		s.registerToolFromFactory(factory)
+	}
+}
 
-	linodeRegionsTool, linodeRegionsHandler := tools.NewLinodeRegionsListTool(s.config)
-	s.mcp.AddTool(linodeRegionsTool, linodeRegionsHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeRegionsTool})
+func (s *Server) registerVolumeTools() {
+	for _, factory := range []toolFactory{
+		tools.NewLinodeVolumesListTool,
+		tools.NewLinodeVolumeCreateTool,
+		tools.NewLinodeVolumeAttachTool,
+		tools.NewLinodeVolumeDetachTool,
+		tools.NewLinodeVolumeResizeTool,
+		tools.NewLinodeVolumeDeleteTool,
+	} {
+		s.registerToolFromFactory(factory)
+	}
+}
 
-	linodeTypesTool, linodeTypesHandler := tools.NewLinodeTypesListTool(s.config)
-	s.mcp.AddTool(linodeTypesTool, linodeTypesHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeTypesTool})
-
-	linodeVolumesTool, linodeVolumesHandler := tools.NewLinodeVolumesListTool(s.config)
-	s.mcp.AddTool(linodeVolumesTool, linodeVolumesHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeVolumesTool})
-
-	linodeImagesTool, linodeImagesHandler := tools.NewLinodeImagesListTool(s.config)
-	s.mcp.AddTool(linodeImagesTool, linodeImagesHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeImagesTool})
-
-	// Stage 3: Extended read operations
-	linodeSSHKeysTool, linodeSSHKeysHandler := tools.NewLinodeSSHKeysListTool(s.config)
-	s.mcp.AddTool(linodeSSHKeysTool, linodeSSHKeysHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeSSHKeysTool})
-
-	linodeDomainsTool, linodeDomainsHandler := tools.NewLinodeDomainsListTool(s.config)
-	s.mcp.AddTool(linodeDomainsTool, linodeDomainsHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeDomainsTool})
-
-	linodeDomainGetTool, linodeDomainGetHandler := tools.NewLinodeDomainGetTool(s.config)
-	s.mcp.AddTool(linodeDomainGetTool, linodeDomainGetHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeDomainGetTool})
-
-	linodeDomainRecordsTool, linodeDomainRecordsHandler := tools.NewLinodeDomainRecordsListTool(s.config)
-	s.mcp.AddTool(linodeDomainRecordsTool, linodeDomainRecordsHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeDomainRecordsTool})
-
-	linodeFirewallsTool, linodeFirewallsHandler := tools.NewLinodeFirewallsListTool(s.config)
-	s.mcp.AddTool(linodeFirewallsTool, linodeFirewallsHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeFirewallsTool})
-
-	linodeNodeBalancersTool, linodeNodeBalancersHandler := tools.NewLinodeNodeBalancersListTool(s.config)
-	s.mcp.AddTool(linodeNodeBalancersTool, linodeNodeBalancersHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeNodeBalancersTool})
-
-	linodeNodeBalancerGetTool, linodeNodeBalancerGetHandler := tools.NewLinodeNodeBalancerGetTool(s.config)
-	s.mcp.AddTool(linodeNodeBalancerGetTool, linodeNodeBalancerGetHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeNodeBalancerGetTool})
-
-	linodeStackScriptsTool, linodeStackScriptsHandler := tools.NewLinodeStackScriptsListTool(s.config)
-	s.mcp.AddTool(linodeStackScriptsTool, linodeStackScriptsHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeStackScriptsTool})
-
-	// Stage 4: Write operations - SSH Keys.
-	linodeSSHKeyCreateTool, linodeSSHKeyCreateHandler := tools.NewLinodeSSHKeyCreateTool(s.config)
-	s.mcp.AddTool(linodeSSHKeyCreateTool, linodeSSHKeyCreateHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeSSHKeyCreateTool})
-
-	linodeSSHKeyDeleteTool, linodeSSHKeyDeleteHandler := tools.NewLinodeSSHKeyDeleteTool(s.config)
-	s.mcp.AddTool(linodeSSHKeyDeleteTool, linodeSSHKeyDeleteHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeSSHKeyDeleteTool})
-
-	// Stage 4: Write operations - Instances.
-	linodeInstanceBootTool, linodeInstanceBootHandler := tools.NewLinodeInstanceBootTool(s.config)
-	s.mcp.AddTool(linodeInstanceBootTool, linodeInstanceBootHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeInstanceBootTool})
-
-	linodeInstanceRebootTool, linodeInstanceRebootHandler := tools.NewLinodeInstanceRebootTool(s.config)
-	s.mcp.AddTool(linodeInstanceRebootTool, linodeInstanceRebootHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeInstanceRebootTool})
-
-	linodeInstanceShutdownTool, linodeInstanceShutdownHandler := tools.NewLinodeInstanceShutdownTool(s.config)
-	s.mcp.AddTool(linodeInstanceShutdownTool, linodeInstanceShutdownHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeInstanceShutdownTool})
-
-	linodeInstanceCreateTool, linodeInstanceCreateHandler := tools.NewLinodeInstanceCreateTool(s.config)
-	s.mcp.AddTool(linodeInstanceCreateTool, linodeInstanceCreateHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeInstanceCreateTool})
-
-	linodeInstanceDeleteTool, linodeInstanceDeleteHandler := tools.NewLinodeInstanceDeleteTool(s.config)
-	s.mcp.AddTool(linodeInstanceDeleteTool, linodeInstanceDeleteHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeInstanceDeleteTool})
-
-	linodeInstanceResizeTool, linodeInstanceResizeHandler := tools.NewLinodeInstanceResizeTool(s.config)
-	s.mcp.AddTool(linodeInstanceResizeTool, linodeInstanceResizeHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeInstanceResizeTool})
-
-	// Stage 4: Write operations - Firewalls.
-	linodeFirewallCreateTool, linodeFirewallCreateHandler := tools.NewLinodeFirewallCreateTool(s.config)
-	s.mcp.AddTool(linodeFirewallCreateTool, linodeFirewallCreateHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeFirewallCreateTool})
-
-	linodeFirewallUpdateTool, linodeFirewallUpdateHandler := tools.NewLinodeFirewallUpdateTool(s.config)
-	s.mcp.AddTool(linodeFirewallUpdateTool, linodeFirewallUpdateHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeFirewallUpdateTool})
-
-	linodeFirewallDeleteTool, linodeFirewallDeleteHandler := tools.NewLinodeFirewallDeleteTool(s.config)
-	s.mcp.AddTool(linodeFirewallDeleteTool, linodeFirewallDeleteHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeFirewallDeleteTool})
-
-	// Stage 4: Write operations - Domains.
-	linodeDomainCreateTool, linodeDomainCreateHandler := tools.NewLinodeDomainCreateTool(s.config)
-	s.mcp.AddTool(linodeDomainCreateTool, linodeDomainCreateHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeDomainCreateTool})
-
-	linodeDomainUpdateTool, linodeDomainUpdateHandler := tools.NewLinodeDomainUpdateTool(s.config)
-	s.mcp.AddTool(linodeDomainUpdateTool, linodeDomainUpdateHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeDomainUpdateTool})
-
-	linodeDomainDeleteTool, linodeDomainDeleteHandler := tools.NewLinodeDomainDeleteTool(s.config)
-	s.mcp.AddTool(linodeDomainDeleteTool, linodeDomainDeleteHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeDomainDeleteTool})
-
-	// Stage 4: Write operations - Domain Records.
-	linodeDomainRecordCreateTool, linodeDomainRecordCreateHandler := tools.NewLinodeDomainRecordCreateTool(s.config)
-	s.mcp.AddTool(linodeDomainRecordCreateTool, linodeDomainRecordCreateHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeDomainRecordCreateTool})
-
-	linodeDomainRecordUpdateTool, linodeDomainRecordUpdateHandler := tools.NewLinodeDomainRecordUpdateTool(s.config)
-	s.mcp.AddTool(linodeDomainRecordUpdateTool, linodeDomainRecordUpdateHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeDomainRecordUpdateTool})
-
-	linodeDomainRecordDeleteTool, linodeDomainRecordDeleteHandler := tools.NewLinodeDomainRecordDeleteTool(s.config)
-	s.mcp.AddTool(linodeDomainRecordDeleteTool, linodeDomainRecordDeleteHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeDomainRecordDeleteTool})
-
-	// Stage 4: Write operations - Volumes.
-	linodeVolumeCreateTool, linodeVolumeCreateHandler := tools.NewLinodeVolumeCreateTool(s.config)
-	s.mcp.AddTool(linodeVolumeCreateTool, linodeVolumeCreateHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeVolumeCreateTool})
-
-	linodeVolumeAttachTool, linodeVolumeAttachHandler := tools.NewLinodeVolumeAttachTool(s.config)
-	s.mcp.AddTool(linodeVolumeAttachTool, linodeVolumeAttachHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeVolumeAttachTool})
-
-	linodeVolumeDetachTool, linodeVolumeDetachHandler := tools.NewLinodeVolumeDetachTool(s.config)
-	s.mcp.AddTool(linodeVolumeDetachTool, linodeVolumeDetachHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeVolumeDetachTool})
-
-	linodeVolumeResizeTool, linodeVolumeResizeHandler := tools.NewLinodeVolumeResizeTool(s.config)
-	s.mcp.AddTool(linodeVolumeResizeTool, linodeVolumeResizeHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeVolumeResizeTool})
-
-	linodeVolumeDeleteTool, linodeVolumeDeleteHandler := tools.NewLinodeVolumeDeleteTool(s.config)
-	s.mcp.AddTool(linodeVolumeDeleteTool, linodeVolumeDeleteHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeVolumeDeleteTool})
-
-	// Stage 4: Write operations - NodeBalancers.
-	linodeNodeBalancerCreateTool, linodeNodeBalancerCreateHandler := tools.NewLinodeNodeBalancerCreateTool(s.config)
-	s.mcp.AddTool(linodeNodeBalancerCreateTool, linodeNodeBalancerCreateHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeNodeBalancerCreateTool})
-
-	linodeNodeBalancerUpdateTool, linodeNodeBalancerUpdateHandler := tools.NewLinodeNodeBalancerUpdateTool(s.config)
-	s.mcp.AddTool(linodeNodeBalancerUpdateTool, linodeNodeBalancerUpdateHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeNodeBalancerUpdateTool})
-
-	linodeNodeBalancerDeleteTool, linodeNodeBalancerDeleteHandler := tools.NewLinodeNodeBalancerDeleteTool(s.config)
-	s.mcp.AddTool(linodeNodeBalancerDeleteTool, linodeNodeBalancerDeleteHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: linodeNodeBalancerDeleteTool})
-
-	// Stage 5: Object Storage read operations.
-	objBucketsListTool, objBucketsListHandler := tools.NewLinodeObjectStorageBucketsListTool(s.config)
-	s.mcp.AddTool(objBucketsListTool, objBucketsListHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: objBucketsListTool})
-
-	objBucketGetTool, objBucketGetHandler := tools.NewLinodeObjectStorageBucketGetTool(s.config)
-	s.mcp.AddTool(objBucketGetTool, objBucketGetHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: objBucketGetTool})
-
-	objBucketContentsTool, objBucketContentsHandler := tools.NewLinodeObjectStorageBucketContentsTool(s.config)
-	s.mcp.AddTool(objBucketContentsTool, objBucketContentsHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: objBucketContentsTool})
-
-	objClustersListTool, objClustersListHandler := tools.NewLinodeObjectStorageClustersListTool(s.config)
-	s.mcp.AddTool(objClustersListTool, objClustersListHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: objClustersListTool})
-
-	objTypeListTool, objTypeListHandler := tools.NewLinodeObjectStorageTypeListTool(s.config)
-	s.mcp.AddTool(objTypeListTool, objTypeListHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: objTypeListTool})
-
-	// Stage 5 Phase 2: Object Storage access key & transfer read operations.
-	objKeysListTool, objKeysListHandler := tools.NewLinodeObjectStorageKeysListTool(s.config)
-	s.mcp.AddTool(objKeysListTool, objKeysListHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: objKeysListTool})
-
-	objKeyGetTool, objKeyGetHandler := tools.NewLinodeObjectStorageKeyGetTool(s.config)
-	s.mcp.AddTool(objKeyGetTool, objKeyGetHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: objKeyGetTool})
-
-	objTransferTool, objTransferHandler := tools.NewLinodeObjectStorageTransferTool(s.config)
-	s.mcp.AddTool(objTransferTool, objTransferHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: objTransferTool})
-
-	objBucketAccessGetTool, objBucketAccessGetHandler := tools.NewLinodeObjectStorageBucketAccessGetTool(s.config)
-	s.mcp.AddTool(objBucketAccessGetTool, objBucketAccessGetHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: objBucketAccessGetTool})
-
-	// Stage 5 Phase 3: Object Storage write operations.
-	objBucketCreateTool, objBucketCreateHandler := tools.NewLinodeObjectStorageBucketCreateTool(s.config)
-	s.mcp.AddTool(objBucketCreateTool, objBucketCreateHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: objBucketCreateTool})
-
-	objBucketDeleteTool, objBucketDeleteHandler := tools.NewLinodeObjectStorageBucketDeleteTool(s.config)
-	s.mcp.AddTool(objBucketDeleteTool, objBucketDeleteHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: objBucketDeleteTool})
-
-	objBucketAccessUpdateTool, objBucketAccessUpdateHandler := tools.NewLinodeObjectStorageBucketAccessUpdateTool(s.config)
-	s.mcp.AddTool(objBucketAccessUpdateTool, objBucketAccessUpdateHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: objBucketAccessUpdateTool})
-
-	// Stage 5 Phase 4: Object Storage access key write operations.
-	objKeyCreateTool, objKeyCreateHandler := tools.NewLinodeObjectStorageKeyCreateTool(s.config)
-	s.mcp.AddTool(objKeyCreateTool, objKeyCreateHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: objKeyCreateTool})
-
-	objKeyUpdateTool, objKeyUpdateHandler := tools.NewLinodeObjectStorageKeyUpdateTool(s.config)
-	s.mcp.AddTool(objKeyUpdateTool, objKeyUpdateHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: objKeyUpdateTool})
-
-	objKeyDeleteTool, objKeyDeleteHandler := tools.NewLinodeObjectStorageKeyDeleteTool(s.config)
-	s.mcp.AddTool(objKeyDeleteTool, objKeyDeleteHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: objKeyDeleteTool})
-
-	// Stage 5 Phase 5: Presigned URLs, Object ACL, and SSL.
-	presignedURLTool, presignedURLHandler := tools.NewLinodeObjectStoragePresignedURLTool(s.config)
-	s.mcp.AddTool(presignedURLTool, presignedURLHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: presignedURLTool})
-
-	objectACLGetTool, objectACLGetHandler := tools.NewLinodeObjectStorageObjectACLGetTool(s.config)
-	s.mcp.AddTool(objectACLGetTool, objectACLGetHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: objectACLGetTool})
-
-	objectACLUpdateTool, objectACLUpdateHandler := tools.NewLinodeObjectStorageObjectACLUpdateTool(s.config)
-	s.mcp.AddTool(objectACLUpdateTool, objectACLUpdateHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: objectACLUpdateTool})
-
-	sslGetTool, sslGetHandler := tools.NewLinodeObjectStorageSSLGetTool(s.config)
-	s.mcp.AddTool(sslGetTool, sslGetHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: sslGetTool})
-
-	sslDeleteTool, sslDeleteHandler := tools.NewLinodeObjectStorageSSLDeleteTool(s.config)
-	s.mcp.AddTool(sslDeleteTool, sslDeleteHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: sslDeleteTool})
+func (s *Server) registerObjectStorageTools() {
+	for _, factory := range []toolFactory{
+		tools.NewLinodeObjectStorageBucketsListTool,
+		tools.NewLinodeObjectStorageBucketGetTool,
+		tools.NewLinodeObjectStorageBucketContentsTool,
+		tools.NewLinodeObjectStorageClustersListTool,
+		tools.NewLinodeObjectStorageTypeListTool,
+		tools.NewLinodeObjectStorageKeysListTool,
+		tools.NewLinodeObjectStorageKeyGetTool,
+		tools.NewLinodeObjectStorageTransferTool,
+		tools.NewLinodeObjectStorageBucketAccessGetTool,
+		tools.NewLinodeObjectStorageBucketCreateTool,
+		tools.NewLinodeObjectStorageBucketDeleteTool,
+		tools.NewLinodeObjectStorageBucketAccessUpdateTool,
+		tools.NewLinodeObjectStorageKeyCreateTool,
+		tools.NewLinodeObjectStorageKeyUpdateTool,
+		tools.NewLinodeObjectStorageKeyDeleteTool,
+		tools.NewLinodeObjectStoragePresignedURLTool,
+		tools.NewLinodeObjectStorageObjectACLGetTool,
+		tools.NewLinodeObjectStorageObjectACLUpdateTool,
+		tools.NewLinodeObjectStorageSSLGetTool,
+		tools.NewLinodeObjectStorageSSLDeleteTool,
+	} {
+		s.registerToolFromFactory(factory)
+	}
 }

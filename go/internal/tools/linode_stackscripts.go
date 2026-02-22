@@ -1,4 +1,3 @@
-//nolint:dupl // Tool implementations have similar structure by design
 package tools
 
 import (
@@ -31,28 +30,21 @@ func NewLinodeStackScriptsListTool(cfg *config.Config) (mcp.Tool, func(ctx conte
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeStackScriptsListRequest(ctx, request, cfg)
+		return handleLinodeStackScriptsListRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeStackScriptsListRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleLinodeStackScriptsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	isPublicFilter := request.GetString("is_public", "")
 	mineFilter := request.GetString("mine", "")
 	labelContains := request.GetString("label_contains", "")
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	scripts, err := client.ListStackScripts(ctx)
 	if err != nil {
@@ -60,60 +52,32 @@ func handleLinodeStackScriptsListRequest(ctx context.Context, request mcp.CallTo
 	}
 
 	if isPublicFilter != "" {
-		scripts = filterStackScriptsByPublic(scripts, isPublicFilter)
+		scripts = filterByField(scripts, isPublicFilter, func(s linode.StackScript) string {
+			if s.IsPublic {
+				return boolTrue
+			}
+
+			return "false"
+		})
 	}
 
 	if mineFilter != "" {
-		scripts = filterStackScriptsByMine(scripts, mineFilter)
+		scripts = filterByField(scripts, mineFilter, func(s linode.StackScript) string {
+			if s.Mine {
+				return boolTrue
+			}
+
+			return "false"
+		})
 	}
 
 	if labelContains != "" {
-		scripts = filterStackScriptsByLabel(scripts, labelContains)
+		scripts = filterByContains(scripts, labelContains, func(s linode.StackScript) string {
+			return s.Label
+		})
 	}
 
 	return formatStackScriptsResponse(scripts, isPublicFilter, mineFilter, labelContains)
-}
-
-func filterStackScriptsByPublic(scripts []linode.StackScript, isPublicFilter string) []linode.StackScript {
-	filtered := make([]linode.StackScript, 0, len(scripts))
-
-	wantPublic := strings.ToLower(isPublicFilter) == boolTrue
-
-	for _, script := range scripts {
-		if script.IsPublic == wantPublic {
-			filtered = append(filtered, script)
-		}
-	}
-
-	return filtered
-}
-
-func filterStackScriptsByMine(scripts []linode.StackScript, mineFilter string) []linode.StackScript {
-	filtered := make([]linode.StackScript, 0, len(scripts))
-
-	wantMine := strings.ToLower(mineFilter) == boolTrue
-
-	for _, script := range scripts {
-		if script.Mine == wantMine {
-			filtered = append(filtered, script)
-		}
-	}
-
-	return filtered
-}
-
-func filterStackScriptsByLabel(scripts []linode.StackScript, labelContains string) []linode.StackScript {
-	filtered := make([]linode.StackScript, 0, len(scripts))
-
-	labelContains = strings.ToLower(labelContains)
-
-	for _, script := range scripts {
-		if strings.Contains(strings.ToLower(script.Label), labelContains) {
-			filtered = append(filtered, script)
-		}
-	}
-
-	return filtered
 }
 
 func formatStackScriptsResponse(scripts []linode.StackScript, isPublicFilter, mineFilter, labelContains string) (*mcp.CallToolResult, error) {

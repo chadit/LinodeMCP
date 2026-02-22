@@ -1,4 +1,3 @@
-//nolint:dupl // Tool implementations have similar structure by design
 package tools
 
 import (
@@ -35,37 +34,29 @@ func NewLinodeNodeBalancerCreateTool(cfg *config.Config) (mcp.Tool, func(ctx con
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeNodeBalancerCreateRequest(ctx, request, cfg)
+		return handleLinodeNodeBalancerCreateRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeNodeBalancerCreateRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleLinodeNodeBalancerCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := requireConfirm(request, "This operation creates a billable resource. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
 	region := request.GetString("region", "")
 	label := request.GetString("label", "")
 	clientConnThrottle := request.GetInt("client_conn_throttle", 0)
-	confirm := request.GetBool(paramConfirm, false)
-
-	if !confirm {
-		return mcp.NewToolResultError("This operation creates a billable resource. Set confirm=true to proceed."), nil
-	}
 
 	if region == "" {
 		return mcp.NewToolResultError("region is required"), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	req := linode.CreateNodeBalancerRequest{
 		Region:             region,
@@ -109,14 +100,13 @@ func NewLinodeNodeBalancerUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx con
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeNodeBalancerUpdateRequest(ctx, request, cfg)
+		return handleLinodeNodeBalancerUpdateRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeNodeBalancerUpdateRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleLinodeNodeBalancerUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	nodeBalancerID := request.GetInt("nodebalancer_id", 0)
 	label := request.GetString("label", "")
 	clientConnThrottle := request.GetInt("client_conn_throttle", -1) // -1 indicates not provided
@@ -125,16 +115,10 @@ func handleLinodeNodeBalancerUpdateRequest(ctx context.Context, request mcp.Call
 		return mcp.NewToolResultError("nodebalancer_id is required"), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	req := linode.UpdateNodeBalancerRequest{
 		Label: label,
@@ -178,35 +162,27 @@ func NewLinodeNodeBalancerDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx con
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeNodeBalancerDeleteRequest(ctx, request, cfg)
+		return handleLinodeNodeBalancerDeleteRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeNodeBalancerDeleteRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
-	nodeBalancerID := request.GetInt("nodebalancer_id", 0)
-	confirm := request.GetBool(paramConfirm, false)
-
-	if !confirm {
-		return mcp.NewToolResultError("This operation is destructive. Set confirm=true to proceed."), nil
+func handleLinodeNodeBalancerDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := requireConfirm(request, "This operation is destructive. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
+
+	nodeBalancerID := request.GetInt("nodebalancer_id", 0)
 
 	if nodeBalancerID == 0 {
 		return mcp.NewToolResultError("nodebalancer_id is required"), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	if err := client.DeleteNodeBalancer(ctx, nodeBalancerID); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to delete NodeBalancer %d: %v", nodeBalancerID, err)), nil
@@ -214,7 +190,7 @@ func handleLinodeNodeBalancerDeleteRequest(ctx context.Context, request mcp.Call
 
 	response := struct {
 		Message        string `json:"message"`
-		NodeBalancerID int    `json:"nodebalancer_id"` //nolint:tagliatelle // snake_case for consistent JSON
+		NodeBalancerID int    `json:"nodebalancer_id"`
 	}{
 		Message:        fmt.Sprintf("NodeBalancer %d deleted successfully", nodeBalancerID),
 		NodeBalancerID: nodeBalancerID,

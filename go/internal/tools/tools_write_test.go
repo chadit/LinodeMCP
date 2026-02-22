@@ -96,7 +96,7 @@ func TestLinodeSSHKeyCreateTool_Success(t *testing.T) {
 		assert.Equal(t, "/profile/sshkeys", r.URL.Path)
 		assert.Equal(t, http.MethodPost, r.Method)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(createdKey))
+		assert.NoError(t, json.NewEncoder(w).Encode(createdKey))
 	}))
 	defer srv.Close()
 
@@ -515,7 +515,7 @@ func TestLinodeInstanceCreateTool_Success(t *testing.T) {
 		assert.Equal(t, "/linode/instances", r.URL.Path)
 		assert.Equal(t, http.MethodPost, r.Method)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(instance))
+		assert.NoError(t, json.NewEncoder(w).Encode(instance))
 	}))
 	defer srv.Close()
 
@@ -827,7 +827,7 @@ func TestLinodeFirewallCreateTool_Success(t *testing.T) {
 		assert.Equal(t, "/networking/firewalls", r.URL.Path)
 		assert.Equal(t, http.MethodPost, r.Method)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(firewall))
+		assert.NoError(t, json.NewEncoder(w).Encode(firewall))
 	}))
 	defer srv.Close()
 
@@ -908,7 +908,7 @@ func TestLinodeFirewallUpdateTool_Success(t *testing.T) {
 		assert.Equal(t, "/networking/firewalls/789", r.URL.Path)
 		assert.Equal(t, http.MethodPut, r.Method)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(firewall))
+		assert.NoError(t, json.NewEncoder(w).Encode(firewall))
 	}))
 	defer srv.Close()
 
@@ -1088,7 +1088,7 @@ func TestLinodeDomainCreateTool_Success(t *testing.T) {
 		assert.Equal(t, "/domains", r.URL.Path)
 		assert.Equal(t, http.MethodPost, r.Method)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(domain))
+		assert.NoError(t, json.NewEncoder(w).Encode(domain))
 	}))
 	defer srv.Close()
 
@@ -1171,7 +1171,7 @@ func TestLinodeDomainUpdateTool_Success(t *testing.T) {
 		assert.Equal(t, "/domains/111", r.URL.Path)
 		assert.Equal(t, http.MethodPut, r.Method)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(domain))
+		assert.NoError(t, json.NewEncoder(w).Encode(domain))
 	}))
 	defer srv.Close()
 
@@ -1383,7 +1383,7 @@ func TestLinodeDomainRecordCreateTool_Success(t *testing.T) {
 		assert.Equal(t, "/domains/111/records", r.URL.Path)
 		assert.Equal(t, http.MethodPost, r.Method)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(record))
+		assert.NoError(t, json.NewEncoder(w).Encode(record))
 	}))
 	defer srv.Close()
 
@@ -1494,7 +1494,7 @@ func TestLinodeDomainRecordUpdateTool_Success(t *testing.T) {
 		assert.Equal(t, "/domains/111/records/222", r.URL.Path)
 		assert.Equal(t, http.MethodPut, r.Method)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(record))
+		assert.NoError(t, json.NewEncoder(w).Encode(record))
 	}))
 	defer srv.Close()
 
@@ -1730,7 +1730,7 @@ func TestLinodeVolumeCreateTool_Success(t *testing.T) {
 		assert.Equal(t, "/volumes", r.URL.Path)
 		assert.Equal(t, http.MethodPost, r.Method)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(volume))
+		assert.NoError(t, json.NewEncoder(w).Encode(volume))
 	}))
 	defer srv.Close()
 
@@ -1838,7 +1838,7 @@ func TestLinodeVolumeAttachTool_Success(t *testing.T) {
 		assert.Equal(t, "/volumes/333/attach", r.URL.Path)
 		assert.Equal(t, http.MethodPost, r.Method)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(volume))
+		assert.NoError(t, json.NewEncoder(w).Encode(volume))
 	}))
 	defer srv.Close()
 
@@ -2044,7 +2044,7 @@ func TestLinodeVolumeResizeTool_Success(t *testing.T) {
 		assert.Equal(t, "/volumes/333/resize", r.URL.Path)
 		assert.Equal(t, http.MethodPost, r.Method)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(volume))
+		assert.NoError(t, json.NewEncoder(w).Encode(volume))
 	}))
 	defer srv.Close()
 
@@ -2225,7 +2225,7 @@ func TestLinodeNodeBalancerCreateTool_Success(t *testing.T) {
 		assert.Equal(t, "/nodebalancers", r.URL.Path)
 		assert.Equal(t, http.MethodPost, r.Method)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(nodeBalancer))
+		assert.NoError(t, json.NewEncoder(w).Encode(nodeBalancer))
 	}))
 	defer srv.Close()
 
@@ -2307,7 +2307,7 @@ func TestLinodeNodeBalancerUpdateTool_Success(t *testing.T) {
 		assert.Equal(t, "/nodebalancers/444", r.URL.Path)
 		assert.Equal(t, http.MethodPut, r.Method)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(nodeBalancer))
+		assert.NoError(t, json.NewEncoder(w).Encode(nodeBalancer))
 	}))
 	defer srv.Close()
 
@@ -2446,7 +2446,7 @@ func TestValidateDNSRecordTarget_ValidPublicIPv4(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := tools.ValidateDNSRecordTarget("A", tt.target)
+			err := tools.ExportedValidateDNSRecordTarget("A", tt.target)
 			assert.NoError(t, err)
 		})
 	}
@@ -2473,7 +2473,7 @@ func TestValidateDNSRecordTarget_PrivateIPv4Rejected(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := tools.ValidateDNSRecordTarget("A", tt.target)
+			err := tools.ExportedValidateDNSRecordTarget("A", tt.target)
 			assert.ErrorIs(t, err, tools.ErrDNSTargetPrivateIP)
 		})
 	}
@@ -2498,7 +2498,7 @@ func TestValidateDNSRecordTarget_InvalidIPv4Rejected(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := tools.ValidateDNSRecordTarget("A", tt.target)
+			err := tools.ExportedValidateDNSRecordTarget("A", tt.target)
 			assert.ErrorIs(t, err, tools.ErrDNSTargetInvalidA)
 		})
 	}
@@ -2520,7 +2520,7 @@ func TestValidateDNSRecordTarget_ValidIPv6(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := tools.ValidateDNSRecordTarget("AAAA", tt.target)
+			err := tools.ExportedValidateDNSRecordTarget("AAAA", tt.target)
 			assert.NoError(t, err)
 		})
 	}
@@ -2543,13 +2543,13 @@ func TestValidateDNSRecordTarget_InvalidIPv6Rejected(t *testing.T) {
 			t.Parallel()
 
 			if tt.target == "" {
-				err := tools.ValidateDNSRecordTarget("AAAA", tt.target)
+				err := tools.ExportedValidateDNSRecordTarget("AAAA", tt.target)
 				assert.ErrorIs(t, err, tools.ErrDNSTargetRequired)
 
 				return
 			}
 
-			err := tools.ValidateDNSRecordTarget("AAAA", tt.target)
+			err := tools.ExportedValidateDNSRecordTarget("AAAA", tt.target)
 			assert.ErrorIs(t, err, tools.ErrDNSTargetInvalidAAAA)
 		})
 	}
@@ -2558,6 +2558,6 @@ func TestValidateDNSRecordTarget_InvalidIPv6Rejected(t *testing.T) {
 func TestValidateDNSRecordTarget_EmptyTarget(t *testing.T) {
 	t.Parallel()
 
-	err := tools.ValidateDNSRecordTarget("A", "")
+	err := tools.ExportedValidateDNSRecordTarget("A", "")
 	assert.ErrorIs(t, err, tools.ErrDNSTargetRequired)
 }

@@ -18,7 +18,7 @@ type Instance struct {
 	Updated         string   `json:"updated"`
 	Group           string   `json:"group"`
 	Tags            []string `json:"tags"`
-	WatchdogEnabled bool     `json:"watchdog_enabled"` //nolint:tagliatelle // Linode API snake_case
+	WatchdogEnabled bool     `json:"watchdog_enabled"`
 }
 
 // Specs represents instance hardware specifications.
@@ -33,16 +33,16 @@ type Specs struct {
 // Alerts represents alert settings for an instance.
 type Alerts struct {
 	CPU           int `json:"cpu"`
-	NetworkIn     int `json:"network_in"`     //nolint:tagliatelle // Linode API snake_case
-	NetworkOut    int `json:"network_out"`    //nolint:tagliatelle // Linode API snake_case
-	TransferQuota int `json:"transfer_quota"` //nolint:tagliatelle // Linode API snake_case
+	NetworkIn     int `json:"network_in"`
+	NetworkOut    int `json:"network_out"`
+	TransferQuota int `json:"transfer_quota"`
 	IO            int `json:"io"`
 }
 
 // Backups represents backup settings.
 type Backups struct {
 	Schedule  Schedule `json:"schedule"`
-	Last      *Backup  `json:"last_successful"` //nolint:tagliatelle // Linode API snake_case
+	Last      *Backup  `json:"last_successful"`
 	Enabled   bool     `json:"enabled"`
 	Available bool     `json:"available"`
 }
@@ -73,7 +73,7 @@ type Region struct {
 	Capabilities []string `json:"capabilities"`
 	Status       string   `json:"status"`
 	Resolvers    Resolver `json:"resolvers"`
-	SiteType     string   `json:"site_type"` //nolint:tagliatelle // Linode API snake_case
+	SiteType     string   `json:"site_type"`
 }
 
 // Resolver represents DNS resolvers for a region.
@@ -91,7 +91,7 @@ type InstanceType struct {
 	Memory     int     `json:"memory"`
 	VCPUs      int     `json:"vcpus"`
 	GPUs       int     `json:"gpus"`
-	NetworkOut int     `json:"network_out"` //nolint:tagliatelle // Linode API snake_case
+	NetworkOut int     `json:"network_out"`
 	Transfer   int     `json:"transfer"`
 	Price      Price   `json:"price"`
 	Addons     Addons  `json:"addons"`
@@ -123,32 +123,32 @@ type Image struct {
 	Vendor       string   `json:"vendor"`
 	Status       string   `json:"status"`
 	Created      string   `json:"created"`
-	CreatedBy    string   `json:"created_by"` //nolint:tagliatelle // Linode API snake_case
+	CreatedBy    string   `json:"created_by"`
 	Expiry       *string  `json:"expiry"`
 	EOL          *string  `json:"eol"`
 	Capabilities []string `json:"capabilities"`
 	Tags         []string `json:"tags"`
 	Size         int      `json:"size"`
-	IsPublic     bool     `json:"is_public"` //nolint:tagliatelle // Linode API snake_case
+	IsPublic     bool     `json:"is_public"`
 	Deprecated   bool     `json:"deprecated"`
 }
 
 // StackScript represents a Linode StackScript for automated deployments.
 type StackScript struct {
 	Username          string   `json:"username"`
-	UserGravatarID    string   `json:"user_gravatar_id"` //nolint:tagliatelle // Linode API snake_case
+	UserGravatarID    string   `json:"user_gravatar_id"`
 	Label             string   `json:"label"`
 	Description       string   `json:"description"`
 	Images            []string `json:"images"`
 	Created           string   `json:"created"`
 	Updated           string   `json:"updated"`
-	RevNote           string   `json:"rev_note"` //nolint:tagliatelle // Linode API snake_case
+	RevNote           string   `json:"rev_note"`
 	Script            string   `json:"script"`
-	UserDefinedFields []UDF    `json:"user_defined_fields"` //nolint:tagliatelle // Linode API snake_case
+	UserDefinedFields []UDF    `json:"user_defined_fields"`
 	ID                int      `json:"id"`
-	DeploymentsTotal  int      `json:"deployments_total"`  //nolint:tagliatelle // Linode API snake_case
-	DeploymentsActive int      `json:"deployments_active"` //nolint:tagliatelle // Linode API snake_case
-	IsPublic          bool     `json:"is_public"`          //nolint:tagliatelle // Linode API snake_case
+	DeploymentsTotal  int      `json:"deployments_total"`
+	DeploymentsActive int      `json:"deployments_active"`
+	IsPublic          bool     `json:"is_public"`
 	Mine              bool     `json:"mine"`
 }
 
@@ -168,14 +168,14 @@ type CreateInstanceRequest struct {
 	Type            string   `json:"type"`
 	Label           string   `json:"label,omitempty"`
 	Image           string   `json:"image,omitempty"`
-	RootPass        string   `json:"root_pass,omitempty"`        //nolint:tagliatelle // Linode API snake_case
-	AuthorizedKeys  []string `json:"authorized_keys,omitempty"`  //nolint:tagliatelle // Linode API snake_case
-	AuthorizedUsers []string `json:"authorized_users,omitempty"` //nolint:tagliatelle // Linode API snake_case
-	StackScriptID   *int     `json:"stackscript_id,omitempty"`   //nolint:tagliatelle // Linode API snake_case
-	StackScriptData any      `json:"stackscript_data,omitempty"` //nolint:tagliatelle // Linode API snake_case
-	BackupsEnabled  bool     `json:"backups_enabled,omitempty"`  //nolint:tagliatelle // Linode API snake_case
-	SwapSize        *int     `json:"swap_size,omitempty"`        //nolint:tagliatelle // Linode API snake_case
-	PrivateIP       bool     `json:"private_ip,omitempty"`       //nolint:tagliatelle // Linode API snake_case
+	RootPass        string   `json:"root_pass,omitempty"`
+	AuthorizedKeys  []string `json:"authorized_keys,omitempty"`
+	AuthorizedUsers []string `json:"authorized_users,omitempty"`
+	StackScriptID   *int     `json:"stackscript_id,omitempty"`
+	StackScriptData any      `json:"stackscript_data,omitempty"`
+	BackupsEnabled  bool     `json:"backups_enabled,omitempty"`
+	SwapSize        *int     `json:"swap_size,omitempty"`
+	PrivateIP       bool     `json:"private_ip,omitempty"`
 	Tags            []string `json:"tags,omitempty"`
 	Booted          *bool    `json:"booted,omitempty"`
 }
@@ -183,6 +183,6 @@ type CreateInstanceRequest struct {
 // ResizeInstanceRequest represents the request body for resizing a Linode instance.
 type ResizeInstanceRequest struct {
 	Type          string `json:"type"`
-	MigrationType string `json:"migration_type,omitempty"`  //nolint:tagliatelle // Linode API snake_case (cold, warm)
-	AllowAutoDisk bool   `json:"allow_auto_disk,omitempty"` //nolint:tagliatelle // Linode API snake_case
+	MigrationType string `json:"migration_type,omitempty"`
+	AllowAutoDisk bool   `json:"allow_auto_disk,omitempty"`
 }

@@ -1,4 +1,3 @@
-//nolint:dupl // Tool implementations have similar structure by design
 package tools
 
 import (
@@ -31,14 +30,13 @@ func NewLinodeFirewallCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeFirewallCreateRequest(ctx, request, cfg)
+		return handleLinodeFirewallCreateRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeFirewallCreateRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleLinodeFirewallCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	label := request.GetString("label", "")
 	inboundPolicy := request.GetString("inbound_policy", "ACCEPT")
 	outboundPolicy := request.GetString("outbound_policy", "ACCEPT")
@@ -55,16 +53,10 @@ func handleLinodeFirewallCreateRequest(ctx context.Context, request mcp.CallTool
 		return mcp.NewToolResultError(fmt.Sprintf("outbound_policy: %v", err)), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	req := linode.CreateFirewallRequest{
 		Label: label,
@@ -116,14 +108,13 @@ func NewLinodeFirewallUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeFirewallUpdateRequest(ctx, request, cfg)
+		return handleLinodeFirewallUpdateRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeFirewallUpdateRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleLinodeFirewallUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	firewallID := request.GetInt("firewall_id", 0)
 	label := request.GetString("label", "")
 	status := request.GetString("status", "")
@@ -134,16 +125,10 @@ func handleLinodeFirewallUpdateRequest(ctx context.Context, request mcp.CallTool
 		return mcp.NewToolResultError("firewall_id is required"), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	req := linode.UpdateFirewallRequest{
 		Label:  label,
@@ -191,35 +176,27 @@ func NewLinodeFirewallDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeFirewallDeleteRequest(ctx, request, cfg)
+		return handleLinodeFirewallDeleteRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeFirewallDeleteRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleLinodeFirewallDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	firewallID := request.GetInt("firewall_id", 0)
-	confirm := request.GetBool(paramConfirm, false)
 
-	if !confirm {
-		return mcp.NewToolResultError("This operation is destructive. Set confirm=true to proceed."), nil
+	if result := requireConfirm(request, "This operation is destructive. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	if firewallID == 0 {
 		return mcp.NewToolResultError("firewall_id is required"), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	if err := client.DeleteFirewall(ctx, firewallID); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to delete firewall %d: %v", firewallID, err)), nil
@@ -227,7 +204,7 @@ func handleLinodeFirewallDeleteRequest(ctx context.Context, request mcp.CallTool
 
 	response := struct {
 		Message    string `json:"message"`
-		FirewallID int    `json:"firewall_id"` //nolint:tagliatelle // snake_case for consistent JSON
+		FirewallID int    `json:"firewall_id"`
 	}{
 		Message:    fmt.Sprintf("Firewall %d deleted successfully", firewallID),
 		FirewallID: firewallID,

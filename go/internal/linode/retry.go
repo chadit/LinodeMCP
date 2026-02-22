@@ -375,7 +375,7 @@ func (rc *RetryableClient) ShutdownInstance(ctx context.Context, instanceID int)
 }
 
 // CreateInstance creates a new Linode instance with automatic retry on transient failures.
-func (rc *RetryableClient) CreateInstance(ctx context.Context, req CreateInstanceRequest) (*Instance, error) {
+func (rc *RetryableClient) CreateInstance(ctx context.Context, req *CreateInstanceRequest) (*Instance, error) {
 	var instance *Instance
 
 	err := rc.executeWithRetry(ctx, "CreateInstance", func() error {
@@ -441,7 +441,7 @@ func (rc *RetryableClient) DeleteFirewall(ctx context.Context, firewallID int) e
 }
 
 // CreateDomain creates a new domain with automatic retry on transient failures.
-func (rc *RetryableClient) CreateDomain(ctx context.Context, req CreateDomainRequest) (*Domain, error) {
+func (rc *RetryableClient) CreateDomain(ctx context.Context, req *CreateDomainRequest) (*Domain, error) {
 	var domain *Domain
 
 	err := rc.executeWithRetry(ctx, "CreateDomain", func() error {
@@ -456,7 +456,7 @@ func (rc *RetryableClient) CreateDomain(ctx context.Context, req CreateDomainReq
 }
 
 // UpdateDomain updates a domain with automatic retry on transient failures.
-func (rc *RetryableClient) UpdateDomain(ctx context.Context, domainID int, req UpdateDomainRequest) (*Domain, error) {
+func (rc *RetryableClient) UpdateDomain(ctx context.Context, domainID int, req *UpdateDomainRequest) (*Domain, error) {
 	var domain *Domain
 
 	err := rc.executeWithRetry(ctx, "UpdateDomain", func() error {
@@ -478,7 +478,7 @@ func (rc *RetryableClient) DeleteDomain(ctx context.Context, domainID int) error
 }
 
 // CreateDomainRecord creates a domain record with automatic retry on transient failures.
-func (rc *RetryableClient) CreateDomainRecord(ctx context.Context, domainID int, req CreateDomainRecordRequest) (*DomainRecord, error) {
+func (rc *RetryableClient) CreateDomainRecord(ctx context.Context, domainID int, req *CreateDomainRecordRequest) (*DomainRecord, error) {
 	var record *DomainRecord
 
 	err := rc.executeWithRetry(ctx, "CreateDomainRecord", func() error {
@@ -493,7 +493,7 @@ func (rc *RetryableClient) CreateDomainRecord(ctx context.Context, domainID int,
 }
 
 // UpdateDomainRecord updates a domain record with automatic retry on transient failures.
-func (rc *RetryableClient) UpdateDomainRecord(ctx context.Context, domainID, recordID int, req UpdateDomainRecordRequest) (*DomainRecord, error) {
+func (rc *RetryableClient) UpdateDomainRecord(ctx context.Context, domainID, recordID int, req *UpdateDomainRecordRequest) (*DomainRecord, error) {
 	var record *DomainRecord
 
 	err := rc.executeWithRetry(ctx, "UpdateDomainRecord", func() error {
@@ -515,7 +515,7 @@ func (rc *RetryableClient) DeleteDomainRecord(ctx context.Context, domainID, rec
 }
 
 // CreateVolume creates a new volume with automatic retry on transient failures.
-func (rc *RetryableClient) CreateVolume(ctx context.Context, req CreateVolumeRequest) (*Volume, error) {
+func (rc *RetryableClient) CreateVolume(ctx context.Context, req *CreateVolumeRequest) (*Volume, error) {
 	var volume *Volume
 
 	err := rc.executeWithRetry(ctx, "CreateVolume", func() error {
@@ -552,7 +552,7 @@ func (rc *RetryableClient) DetachVolume(ctx context.Context, volumeID int) error
 }
 
 // ResizeVolume resizes a volume with automatic retry on transient failures.
-func (rc *RetryableClient) ResizeVolume(ctx context.Context, volumeID int, size int) (*Volume, error) {
+func (rc *RetryableClient) ResizeVolume(ctx context.Context, volumeID, size int) (*Volume, error) {
 	var volume *Volume
 
 	err := rc.executeWithRetry(ctx, "ResizeVolume", func() error {
@@ -876,7 +876,7 @@ func (rc *RetryableClient) DeleteBucketSSL(ctx context.Context, region, label st
 	})
 }
 
-func (rc *RetryableClient) executeWithRetry(ctx context.Context, _ string, fn func() error) error {
+func (rc *RetryableClient) executeWithRetry(ctx context.Context, _ string, retryFunc func() error) error {
 	var lastErr error
 
 	for attempt := 0; attempt <= rc.retryConfig.MaxRetries; attempt++ {
@@ -884,12 +884,12 @@ func (rc *RetryableClient) executeWithRetry(ctx context.Context, _ string, fn fu
 			delay := rc.calculateDelay(attempt)
 			select {
 			case <-ctx.Done():
-				return fmt.Errorf("context cancelled: %w", ctx.Err())
+				return fmt.Errorf("context canceled: %w", ctx.Err())
 			case <-time.After(delay):
 			}
 		}
 
-		err := fn()
+		err := retryFunc()
 		if err == nil {
 			return nil
 		}
@@ -928,7 +928,7 @@ func (rc *RetryableClient) calculateDelay(attempt int) time.Duration {
 	return time.Duration(delay)
 }
 
-func (rc *RetryableClient) shouldRetry(err error) bool {
+func (*RetryableClient) shouldRetry(err error) bool {
 	var apiErr *APIError
 	if errors.As(err, &apiErr) {
 		if apiErr.IsRateLimitError() || apiErr.IsServerError() {

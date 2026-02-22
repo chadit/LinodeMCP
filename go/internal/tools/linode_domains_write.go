@@ -1,4 +1,3 @@
-//nolint:dupl // Tool implementations have similar structure by design
 package tools
 
 import (
@@ -38,14 +37,13 @@ func NewLinodeDomainCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeDomainCreateRequest(ctx, request, cfg)
+		return handleLinodeDomainCreateRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeDomainCreateRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleLinodeDomainCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	domain := request.GetString("domain", "")
 	domainType := request.GetString("type", "")
 	soaEmail := request.GetString("soa_email", "")
@@ -60,16 +58,10 @@ func handleLinodeDomainCreateRequest(ctx context.Context, request mcp.CallToolRe
 		return mcp.NewToolResultError("type is required"), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	req := linode.CreateDomainRequest{
 		Domain:      domain,
@@ -79,7 +71,7 @@ func handleLinodeDomainCreateRequest(ctx context.Context, request mcp.CallToolRe
 		TTLSec:      ttlSec,
 	}
 
-	createdDomain, err := client.CreateDomain(ctx, req)
+	createdDomain, err := client.CreateDomain(ctx, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create domain: %v", err)), nil
 	}
@@ -121,14 +113,13 @@ func NewLinodeDomainUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeDomainUpdateRequest(ctx, request, cfg)
+		return handleLinodeDomainUpdateRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeDomainUpdateRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleLinodeDomainUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	domainID := request.GetInt("domain_id", 0)
 	soaEmail := request.GetString("soa_email", "")
 	description := request.GetString("description", "")
@@ -139,16 +130,10 @@ func handleLinodeDomainUpdateRequest(ctx context.Context, request mcp.CallToolRe
 		return mcp.NewToolResultError("domain_id is required"), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	req := linode.UpdateDomainRequest{
 		SOAEmail:    soaEmail,
@@ -157,7 +142,7 @@ func handleLinodeDomainUpdateRequest(ctx context.Context, request mcp.CallToolRe
 		TTLSec:      ttlSec,
 	}
 
-	updatedDomain, err := client.UpdateDomain(ctx, domainID, req)
+	updatedDomain, err := client.UpdateDomain(ctx, domainID, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to update domain %d: %v", domainID, err)), nil
 	}
@@ -191,35 +176,27 @@ func NewLinodeDomainDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeDomainDeleteRequest(ctx, request, cfg)
+		return handleLinodeDomainDeleteRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeDomainDeleteRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleLinodeDomainDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	domainID := request.GetInt("domain_id", 0)
-	confirm := request.GetBool(paramConfirm, false)
 
-	if !confirm {
-		return mcp.NewToolResultError("This operation is destructive and deletes all DNS records. Set confirm=true to proceed."), nil
+	if result := requireConfirm(request, "This operation is destructive and deletes all DNS records. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	if domainID == 0 {
 		return mcp.NewToolResultError("domain_id is required"), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	if err := client.DeleteDomain(ctx, domainID); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to delete domain %d: %v", domainID, err)), nil
@@ -227,7 +204,7 @@ func handleLinodeDomainDeleteRequest(ctx context.Context, request mcp.CallToolRe
 
 	response := struct {
 		Message  string `json:"message"`
-		DomainID int    `json:"domain_id"` //nolint:tagliatelle // snake_case for consistent JSON
+		DomainID int    `json:"domain_id"`
 	}{
 		Message:  fmt.Sprintf("Domain %d and all its records deleted successfully", domainID),
 		DomainID: domainID,

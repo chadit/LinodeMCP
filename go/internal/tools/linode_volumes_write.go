@@ -1,4 +1,3 @@
-//nolint:dupl // Tool implementations have similar structure by design
 package tools
 
 import (
@@ -38,23 +37,21 @@ func NewLinodeVolumeCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeVolumeCreateRequest(ctx, request, cfg)
+		return handleLinodeVolumeCreateRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeVolumeCreateRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleLinodeVolumeCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := requireConfirm(request, "This operation creates a billable resource. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
 	label := request.GetString("label", "")
 	region := request.GetString("region", "")
 	size := request.GetInt("size", 0)
 	linodeID := request.GetInt("linode_id", 0)
-	confirm := request.GetBool(paramConfirm, false)
-
-	if !confirm {
-		return mcp.NewToolResultError("This operation creates a billable resource. Set confirm=true to proceed."), nil
-	}
 
 	if label == "" {
 		return mcp.NewToolResultError("label is required"), nil
@@ -70,16 +67,10 @@ func handleLinodeVolumeCreateRequest(ctx context.Context, request mcp.CallToolRe
 		}
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	req := linode.CreateVolumeRequest{
 		Label:  label,
@@ -91,7 +82,7 @@ func handleLinodeVolumeCreateRequest(ctx context.Context, request mcp.CallToolRe
 		req.LinodeID = &linodeID
 	}
 
-	volume, err := client.CreateVolume(ctx, req)
+	volume, err := client.CreateVolume(ctx, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create volume: %v", err)), nil
 	}
@@ -128,14 +119,13 @@ func NewLinodeVolumeAttachTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeVolumeAttachRequest(ctx, request, cfg)
+		return handleLinodeVolumeAttachRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeVolumeAttachRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleLinodeVolumeAttachRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	volumeID := request.GetInt("volume_id", 0)
 	linodeID := request.GetInt("linode_id", 0)
 	configID := request.GetInt("config_id", 0)
@@ -148,16 +138,10 @@ func handleLinodeVolumeAttachRequest(ctx context.Context, request mcp.CallToolRe
 		return mcp.NewToolResultError("linode_id is required"), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	req := linode.AttachVolumeRequest{
 		LinodeID: linodeID,
@@ -174,7 +158,7 @@ func handleLinodeVolumeAttachRequest(ctx context.Context, request mcp.CallToolRe
 
 	response := struct {
 		Message  string         `json:"message"`
-		LinodeID int            `json:"linode_id"` //nolint:tagliatelle // snake_case for consistent JSON
+		LinodeID int            `json:"linode_id"`
 		Volume   *linode.Volume `json:"volume"`
 	}{
 		Message:  fmt.Sprintf("Volume %d attached to Linode %d successfully", volumeID, linodeID),
@@ -199,30 +183,23 @@ func NewLinodeVolumeDetachTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeVolumeDetachRequest(ctx, request, cfg)
+		return handleLinodeVolumeDetachRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeVolumeDetachRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleLinodeVolumeDetachRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	volumeID := request.GetInt("volume_id", 0)
 
 	if volumeID == 0 {
 		return mcp.NewToolResultError("volume_id is required"), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	if err := client.DetachVolume(ctx, volumeID); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to detach volume %d: %v", volumeID, err)), nil
@@ -230,7 +207,7 @@ func handleLinodeVolumeDetachRequest(ctx context.Context, request mcp.CallToolRe
 
 	response := struct {
 		Message  string `json:"message"`
-		VolumeID int    `json:"volume_id"` //nolint:tagliatelle // snake_case for consistent JSON
+		VolumeID int    `json:"volume_id"`
 	}{
 		Message:  fmt.Sprintf("Volume %d detached successfully", volumeID),
 		VolumeID: volumeID,
@@ -261,21 +238,19 @@ func NewLinodeVolumeResizeTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeVolumeResizeRequest(ctx, request, cfg)
+		return handleLinodeVolumeResizeRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeVolumeResizeRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleLinodeVolumeResizeRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := requireConfirm(request, "This operation may increase billing. Volumes cannot be downsized. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
 	volumeID := request.GetInt("volume_id", 0)
 	size := request.GetInt("size", 0)
-	confirm := request.GetBool(paramConfirm, false)
-
-	if !confirm {
-		return mcp.NewToolResultError("This operation may increase billing. Volumes cannot be downsized. Set confirm=true to proceed."), nil
-	}
 
 	if volumeID == 0 {
 		return mcp.NewToolResultError("volume_id is required"), nil
@@ -285,16 +260,10 @@ func handleLinodeVolumeResizeRequest(ctx context.Context, request mcp.CallToolRe
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	volume, err := client.ResizeVolume(ctx, volumeID, size)
 	if err != nil {
@@ -330,35 +299,27 @@ func NewLinodeVolumeDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeVolumeDeleteRequest(ctx, request, cfg)
+		return handleLinodeVolumeDeleteRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeVolumeDeleteRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
-	volumeID := request.GetInt("volume_id", 0)
-	confirm := request.GetBool(paramConfirm, false)
-
-	if !confirm {
-		return mcp.NewToolResultError("This operation is destructive and irreversible. Set confirm=true to proceed."), nil
+func handleLinodeVolumeDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := requireConfirm(request, "This operation is destructive and irreversible. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
+
+	volumeID := request.GetInt("volume_id", 0)
 
 	if volumeID == 0 {
 		return mcp.NewToolResultError("volume_id is required"), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	if err := client.DeleteVolume(ctx, volumeID); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to delete volume %d: %v", volumeID, err)), nil
@@ -366,7 +327,7 @@ func handleLinodeVolumeDeleteRequest(ctx context.Context, request mcp.CallToolRe
 
 	response := struct {
 		Message  string `json:"message"`
-		VolumeID int    `json:"volume_id"` //nolint:tagliatelle // snake_case for consistent JSON
+		VolumeID int    `json:"volume_id"`
 	}{
 		Message:  fmt.Sprintf("Volume %d deleted successfully", volumeID),
 		VolumeID: volumeID,

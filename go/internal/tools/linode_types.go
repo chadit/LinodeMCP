@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -24,26 +23,19 @@ func NewLinodeTypesListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Cont
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeTypesListRequest(ctx, request, cfg)
+		return handleLinodeTypesListRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeTypesListRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleLinodeTypesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	classFilter := request.GetString("class", "")
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	types, err := client.ListTypes(ctx)
 	if err != nil {
@@ -51,24 +43,12 @@ func handleLinodeTypesListRequest(ctx context.Context, request mcp.CallToolReque
 	}
 
 	if classFilter != "" {
-		types = filterTypesByClass(types, classFilter)
+		types = filterByField(types, classFilter, func(t linode.InstanceType) string {
+			return t.Class
+		})
 	}
 
 	return formatTypesResponse(types, classFilter)
-}
-
-func filterTypesByClass(types []linode.InstanceType, classFilter string) []linode.InstanceType {
-	filtered := make([]linode.InstanceType, 0, len(types))
-
-	classFilter = strings.ToLower(classFilter)
-
-	for _, t := range types {
-		if strings.ToLower(t.Class) == classFilter {
-			filtered = append(filtered, t)
-		}
-	}
-
-	return filtered
 }
 
 func formatTypesResponse(types []linode.InstanceType, classFilter string) (*mcp.CallToolResult, error) {

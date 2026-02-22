@@ -55,7 +55,7 @@ func (c *Client) GetVolume(ctx context.Context, volumeID int) (*Volume, error) {
 }
 
 // CreateVolume creates a new block storage volume.
-func (c *Client) CreateVolume(ctx context.Context, req CreateVolumeRequest) (*Volume, error) {
+func (c *Client) CreateVolume(ctx context.Context, req *CreateVolumeRequest) (*Volume, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
@@ -114,7 +114,7 @@ func (c *Client) DetachVolume(ctx context.Context, volumeID int) error {
 }
 
 // ResizeVolume resizes a volume to a larger size.
-func (c *Client) ResizeVolume(ctx context.Context, volumeID int, size int) (*Volume, error) {
+func (c *Client) ResizeVolume(ctx context.Context, volumeID, size int) (*Volume, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 

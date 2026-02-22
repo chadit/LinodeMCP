@@ -1,4 +1,3 @@
-//nolint:dupl // Tool implementations have similar structure by design
 package tools
 
 import (
@@ -28,14 +27,13 @@ func NewLinodeInstanceBootTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeInstanceBootRequest(ctx, request, cfg)
+		return handleLinodeInstanceBootRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeInstanceBootRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleLinodeInstanceBootRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	instanceID := request.GetInt("instance_id", 0)
 	configID := request.GetInt("config_id", 0)
 
@@ -43,16 +41,10 @@ func handleLinodeInstanceBootRequest(ctx context.Context, request mcp.CallToolRe
 		return mcp.NewToolResultError("instance_id is required"), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	var configIDPtr *int
 	if configID != 0 {
@@ -65,7 +57,7 @@ func handleLinodeInstanceBootRequest(ctx context.Context, request mcp.CallToolRe
 
 	response := struct {
 		Message    string `json:"message"`
-		InstanceID int    `json:"instance_id"` //nolint:tagliatelle // snake_case for consistent JSON
+		InstanceID int    `json:"instance_id"`
 	}{
 		Message:    fmt.Sprintf("Instance %d boot initiated successfully", instanceID),
 		InstanceID: instanceID,
@@ -91,14 +83,13 @@ func NewLinodeInstanceRebootTool(cfg *config.Config) (mcp.Tool, func(ctx context
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeInstanceRebootRequest(ctx, request, cfg)
+		return handleLinodeInstanceRebootRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeInstanceRebootRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleLinodeInstanceRebootRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	instanceID := request.GetInt("instance_id", 0)
 	configID := request.GetInt("config_id", 0)
 
@@ -106,16 +97,10 @@ func handleLinodeInstanceRebootRequest(ctx context.Context, request mcp.CallTool
 		return mcp.NewToolResultError("instance_id is required"), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	var configIDPtr *int
 	if configID != 0 {
@@ -128,7 +113,7 @@ func handleLinodeInstanceRebootRequest(ctx context.Context, request mcp.CallTool
 
 	response := struct {
 		Message    string `json:"message"`
-		InstanceID int    `json:"instance_id"` //nolint:tagliatelle // snake_case for consistent JSON
+		InstanceID int    `json:"instance_id"`
 	}{
 		Message:    fmt.Sprintf("Instance %d reboot initiated successfully", instanceID),
 		InstanceID: instanceID,
@@ -151,30 +136,23 @@ func NewLinodeInstanceShutdownTool(cfg *config.Config) (mcp.Tool, func(ctx conte
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeInstanceShutdownRequest(ctx, request, cfg)
+		return handleLinodeInstanceShutdownRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeInstanceShutdownRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleLinodeInstanceShutdownRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	instanceID := request.GetInt("instance_id", 0)
 
 	if instanceID == 0 {
 		return mcp.NewToolResultError("instance_id is required"), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	if err := client.ShutdownInstance(ctx, instanceID); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to shut down instance %d: %v", instanceID, err)), nil
@@ -182,7 +160,7 @@ func handleLinodeInstanceShutdownRequest(ctx context.Context, request mcp.CallTo
 
 	response := struct {
 		Message    string `json:"message"`
-		InstanceID int    `json:"instance_id"` //nolint:tagliatelle // snake_case for consistent JSON
+		InstanceID int    `json:"instance_id"`
 	}{
 		Message:    fmt.Sprintf("Instance %d shutdown initiated successfully", instanceID),
 		InstanceID: instanceID,
@@ -228,14 +206,13 @@ func NewLinodeInstanceCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeInstanceCreateRequest(ctx, request, cfg)
+		return handleLinodeInstanceCreateRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeInstanceCreateRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleLinodeInstanceCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	region := request.GetString("region", "")
 	instanceType := request.GetString("type", "")
 	label := request.GetString("label", "")
@@ -243,10 +220,9 @@ func handleLinodeInstanceCreateRequest(ctx context.Context, request mcp.CallTool
 	rootPass := request.GetString("root_pass", "")
 	backupsEnabled := request.GetBool("backups_enabled", false)
 	privateIP := request.GetBool("private_ip", false)
-	confirm := request.GetBool(paramConfirm, false)
 
-	if !confirm {
-		return mcp.NewToolResultError("This operation creates a billable resource. Set confirm=true to proceed."), nil
+	if result := requireConfirm(request, "This operation creates a billable resource. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	if region == "" {
@@ -261,16 +237,10 @@ func handleLinodeInstanceCreateRequest(ctx context.Context, request mcp.CallTool
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	req := linode.CreateInstanceRequest{
 		Region:         region,
@@ -282,7 +252,7 @@ func handleLinodeInstanceCreateRequest(ctx context.Context, request mcp.CallTool
 		PrivateIP:      privateIP,
 	}
 
-	instance, err := client.CreateInstance(ctx, req)
+	instance, err := client.CreateInstance(ctx, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create instance: %v", err)), nil
 	}
@@ -316,35 +286,27 @@ func NewLinodeInstanceDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeInstanceDeleteRequest(ctx, request, cfg)
+		return handleLinodeInstanceDeleteRequest(ctx, &request, cfg)
 	}
 
 	return tool, handler
 }
 
-func handleLinodeInstanceDeleteRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleLinodeInstanceDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	instanceID := request.GetInt("instance_id", 0)
-	confirm := request.GetBool(paramConfirm, false)
 
-	if !confirm {
-		return mcp.NewToolResultError("This operation is destructive and irreversible. Set confirm=true to proceed."), nil
+	if result := requireConfirm(request, "This operation is destructive and irreversible. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	if instanceID == 0 {
 		return mcp.NewToolResultError("instance_id is required"), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	if err := client.DeleteInstance(ctx, instanceID); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to delete instance %d: %v", instanceID, err)), nil
@@ -352,7 +314,7 @@ func handleLinodeInstanceDeleteRequest(ctx context.Context, request mcp.CallTool
 
 	response := struct {
 		Message    string `json:"message"`
-		InstanceID int    `json:"instance_id"` //nolint:tagliatelle // snake_case for consistent JSON
+		InstanceID int    `json:"instance_id"`
 	}{
 		Message:    fmt.Sprintf("Instance %d deleted successfully", instanceID),
 		InstanceID: instanceID,
@@ -363,48 +325,33 @@ func handleLinodeInstanceDeleteRequest(ctx context.Context, request mcp.CallTool
 
 // NewLinodeInstanceResizeTool creates a tool for resizing a Linode instance.
 func NewLinodeInstanceResizeTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_instance_resize",
-		mcp.WithDescription("Resizes a Linode instance to a new plan. WARNING: This causes downtime during the migration process and may affect billing."),
-		mcp.WithString(paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithNumber("instance_id",
-			mcp.Required(),
-			mcp.Description("The ID of the Linode instance to resize"),
-		),
-		mcp.WithString("type",
-			mcp.Required(),
-			mcp.Description("The new Linode plan type (e.g., 'g6-standard-1')"),
-		),
-		mcp.WithBoolean("allow_auto_disk",
-			mcp.Description("Automatically resize disks when resizing to a larger plan (optional, default: false)"),
-		),
-		mcp.WithString("migration_type",
-			mcp.Description("Migration type: 'cold' (default) or 'warm' (optional)"),
-		),
-		mcp.WithBoolean(paramConfirm,
-			mcp.Required(),
-			mcp.Description("Must be set to true to confirm resize. This operation causes downtime."),
-		),
+	return newToolWithHandler(cfg,
+		"linode_instance_resize",
+		"Resizes a Linode instance to a new plan. WARNING: This causes downtime during the migration process and may affect billing.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("instance_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance to resize")),
+			mcp.WithString("type", mcp.Required(),
+				mcp.Description("The new Linode plan type (e.g., 'g6-standard-1')")),
+			mcp.WithBoolean("allow_auto_disk",
+				mcp.Description("Automatically resize disks when resizing to a larger plan (optional, default: false)")),
+			mcp.WithString("migration_type",
+				mcp.Description("Migration type: 'cold' (default) or 'warm' (optional)")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be set to true to confirm resize. This operation causes downtime.")),
+		},
+		handleLinodeInstanceResizeRequest,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeInstanceResizeRequest(ctx, request, cfg)
-	}
-
-	return tool, handler
 }
 
-func handleLinodeInstanceResizeRequest(ctx context.Context, request mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
+func handleLinodeInstanceResizeRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	instanceID := request.GetInt("instance_id", 0)
 	instanceType := request.GetString("type", "")
 	allowAutoDisk := request.GetBool("allow_auto_disk", false)
 	migrationType := request.GetString("migration_type", "")
-	confirm := request.GetBool(paramConfirm, false)
 
-	if !confirm {
-		return mcp.NewToolResultError("This operation causes downtime and may affect billing. Set confirm=true to proceed."), nil
+	if result := requireConfirm(request, "This operation causes downtime and may affect billing. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	if instanceID == 0 {
@@ -415,16 +362,10 @@ func handleLinodeInstanceResizeRequest(ctx context.Context, request mcp.CallTool
 		return mcp.NewToolResultError("type is required"), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	req := linode.ResizeInstanceRequest{
 		Type:          instanceType,
@@ -438,8 +379,8 @@ func handleLinodeInstanceResizeRequest(ctx context.Context, request mcp.CallTool
 
 	response := struct {
 		Message    string `json:"message"`
-		InstanceID int    `json:"instance_id"` //nolint:tagliatelle // snake_case for consistent JSON
-		NewType    string `json:"new_type"`    //nolint:tagliatelle // snake_case for consistent JSON
+		InstanceID int    `json:"instance_id"`
+		NewType    string `json:"new_type"`
 	}{
 		Message:    fmt.Sprintf("Instance %d resize to %s initiated successfully", instanceID, instanceType),
 		InstanceID: instanceID,

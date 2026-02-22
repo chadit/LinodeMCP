@@ -3,17 +3,17 @@ package linode
 import "time"
 
 // ClientFields returns the internal fields of a Client for testing.
-func (c *Client) ClientFields() (baseURL, token string, hasHTTPClient bool) {
+func (c *Client) ClientFields() (string, string, bool) {
 	return c.baseURL, c.token, c.httpClient != nil
 }
 
-// ShouldRetry exposes the shouldRetry method for testing.
-func (rc *RetryableClient) ShouldRetry(err error) bool {
+// ExportedShouldRetry exposes the shouldRetry method for testing.
+func (rc *RetryableClient) ExportedShouldRetry(err error) bool {
 	return rc.shouldRetry(err)
 }
 
-// CalculateDelay exposes the calculateDelay method for testing.
-func (rc *RetryableClient) CalculateDelay(attempt int) time.Duration {
+// ExportedCalculateDelay exposes the calculateDelay method for testing.
+func (rc *RetryableClient) ExportedCalculateDelay(attempt int) time.Duration {
 	return rc.calculateDelay(attempt)
 }
 

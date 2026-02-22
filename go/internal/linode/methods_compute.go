@@ -220,7 +220,7 @@ func (c *Client) ShutdownInstance(ctx context.Context, instanceID int) error {
 }
 
 // CreateInstance creates a new Linode instance.
-func (c *Client) CreateInstance(ctx context.Context, req CreateInstanceRequest) (*Instance, error) {
+func (c *Client) CreateInstance(ctx context.Context, req *CreateInstanceRequest) (*Instance, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 

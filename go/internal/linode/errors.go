@@ -10,7 +10,7 @@ import (
 
 // APIError represents an error returned by the Linode API.
 type APIError struct {
-	StatusCode int    `json:"statusCode"`
+	StatusCode int    `json:"status_code"`
 	Message    string `json:"message"`
 	Field      string `json:"field,omitempty"`
 }
