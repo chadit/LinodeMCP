@@ -3014,9 +3014,7 @@ async def test_handle_object_storage_bucket_delete_success(
     """Test bucket delete success."""
     with patch("linodemcp.tools.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.delete_object_storage_bucket.return_value = (
-            None
-        )
+        mock_client.delete_object_storage_bucket.return_value = None
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -3075,23 +3073,19 @@ async def test_handle_object_storage_bucket_access_update_success(
     """Test bucket access update success."""
     with patch("linodemcp.tools.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.update_object_storage_bucket_access.return_value = (
-            None
-        )
+        mock_client.update_object_storage_bucket_access.return_value = None
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
 
-        result = (
-            await handle_linode_object_storage_bucket_access_update(
-                {
-                    "region": "us-east-1",
-                    "label": "my-bucket",
-                    "acl": "public-read",
-                    "confirm": True,
-                },
-                sample_config,
-            )
+        result = await handle_linode_object_storage_bucket_access_update(
+            {
+                "region": "us-east-1",
+                "label": "my-bucket",
+                "acl": "public-read",
+                "confirm": True,
+            },
+            sample_config,
         )
 
         assert len(result) == 1

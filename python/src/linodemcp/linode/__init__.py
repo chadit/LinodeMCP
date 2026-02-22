@@ -845,10 +845,11 @@ class Client:
 
         # Build query string if params provided
         if params:
-            query_parts = []
-            for key in ["prefix", "delimiter", "marker", "page_size"]:
-                if key in params:
-                    query_parts.append(f"{key}={params[key]}")
+            query_parts = [
+                f"{key}={params[key]}"
+                for key in ["prefix", "delimiter", "marker", "page_size"]
+                if key in params
+            ]
             if query_parts:
                 endpoint += "?" + "&".join(query_parts)
 
@@ -939,29 +940,19 @@ class Client:
                 body["acl"] = acl
             if cors_enabled is not None:
                 body["cors_enabled"] = cors_enabled
-            response = await self._make_request(
-                "POST", "/object-storage/buckets", body
-            )
+            response = await self._make_request("POST", "/object-storage/buckets", body)
             bucket: dict[str, Any] = response.json()
             return bucket
         except httpx.HTTPError as e:
-            raise NetworkError(
-                "CreateObjectStorageBucket", e
-            ) from e
+            raise NetworkError("CreateObjectStorageBucket", e) from e
 
-    async def delete_object_storage_bucket(
-        self, region: str, label: str
-    ) -> None:
+    async def delete_object_storage_bucket(self, region: str, label: str) -> None:
         """Delete an Object Storage bucket."""
-        endpoint = (
-            f"/object-storage/buckets/{region}/{label}"
-        )
+        endpoint = f"/object-storage/buckets/{region}/{label}"
         try:
             await self._make_request("DELETE", endpoint)
         except httpx.HTTPError as e:
-            raise NetworkError(
-                "DeleteObjectStorageBucket", e
-            ) from e
+            raise NetworkError("DeleteObjectStorageBucket", e) from e
 
     async def update_object_storage_bucket_access(
         self,
@@ -971,9 +962,7 @@ class Client:
         cors_enabled: bool | None = None,
     ) -> None:
         """Update bucket ACL and CORS settings."""
-        endpoint = (
-            f"/object-storage/buckets/{region}/{label}/access"
-        )
+        endpoint = f"/object-storage/buckets/{region}/{label}/access"
         try:
             body: dict[str, Any] = {}
             if acl is not None:
@@ -982,9 +971,7 @@ class Client:
                 body["cors_enabled"] = cors_enabled
             await self._make_request("PUT", endpoint, body)
         except httpx.HTTPError as e:
-            raise NetworkError(
-                "UpdateObjectStorageBucketAccess", e
-            ) from e
+            raise NetworkError("UpdateObjectStorageBucketAccess", e) from e
 
     # Stage 5 Phase 4: Object Storage access key write operations
 
@@ -998,9 +985,7 @@ class Client:
             body: dict[str, Any] = {"label": label}
             if bucket_access is not None:
                 body["bucket_access"] = bucket_access
-            response = await self._make_request(
-                "POST", "/object-storage/keys", body
-            )
+            response = await self._make_request("POST", "/object-storage/keys", body)
             key: dict[str, Any] = response.json()
             return key
         except httpx.HTTPError as e:
@@ -1043,18 +1028,14 @@ class Client:
         expires_in: int = 3600,
     ) -> dict[str, Any]:
         """Generate a presigned URL for an object."""
-        endpoint = (
-            f"/object-storage/buckets/{region}/{label}/object-url"
-        )
+        endpoint = f"/object-storage/buckets/{region}/{label}/object-url"
         body: dict[str, Any] = {
             "method": method,
             "name": name,
             "expires_in": expires_in,
         }
         try:
-            response = await self._make_request(
-                "POST", endpoint, body
-            )
+            response = await self._make_request("POST", endpoint, body)
             return dict(response.json())
         except httpx.HTTPError as e:
             raise NetworkError("CreatePresignedURL", e) from e
@@ -1063,10 +1044,7 @@ class Client:
         self, region: str, label: str, name: str
     ) -> dict[str, Any]:
         """Get the ACL for an object in Object Storage."""
-        endpoint = (
-            f"/object-storage/buckets/{region}/{label}"
-            f"/object-acl?name={name}"
-        )
+        endpoint = f"/object-storage/buckets/{region}/{label}/object-acl?name={name}"
         try:
             response = await self._make_request("GET", endpoint)
             return dict(response.json())
@@ -1077,38 +1055,26 @@ class Client:
         self, region: str, label: str, name: str, acl: str
     ) -> dict[str, Any]:
         """Update the ACL for an object in Object Storage."""
-        endpoint = (
-            f"/object-storage/buckets/{region}/{label}/object-acl"
-        )
+        endpoint = f"/object-storage/buckets/{region}/{label}/object-acl"
         body = {"acl": acl, "name": name}
         try:
-            response = await self._make_request(
-                "PUT", endpoint, body
-            )
+            response = await self._make_request("PUT", endpoint, body)
             return dict(response.json())
         except httpx.HTTPError as e:
             raise NetworkError("UpdateObjectACL", e) from e
 
-    async def get_bucket_ssl(
-        self, region: str, label: str
-    ) -> dict[str, Any]:
+    async def get_bucket_ssl(self, region: str, label: str) -> dict[str, Any]:
         """Get the SSL/TLS certificate status for a bucket."""
-        endpoint = (
-            f"/object-storage/buckets/{region}/{label}/ssl"
-        )
+        endpoint = f"/object-storage/buckets/{region}/{label}/ssl"
         try:
             response = await self._make_request("GET", endpoint)
             return dict(response.json())
         except httpx.HTTPError as e:
             raise NetworkError("GetBucketSSL", e) from e
 
-    async def delete_bucket_ssl(
-        self, region: str, label: str
-    ) -> None:
+    async def delete_bucket_ssl(self, region: str, label: str) -> None:
         """Delete the SSL/TLS certificate from a bucket."""
-        endpoint = (
-            f"/object-storage/buckets/{region}/{label}/ssl"
-        )
+        endpoint = f"/object-storage/buckets/{region}/{label}/ssl"
         try:
             await self._make_request("DELETE", endpoint)
         except httpx.HTTPError as e:
@@ -1175,7 +1141,7 @@ class Client:
             body: dict[str, Any] = {}
             if config_id is not None:
                 body["config_id"] = config_id
-            await self._make_request("POST", endpoint, body if body else None)
+            await self._make_request("POST", endpoint, body or None)
             logger.info("Instance booted", extra={"instance_id": instance_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout booting instance: %s", e)
@@ -1201,7 +1167,7 @@ class Client:
             body: dict[str, Any] = {}
             if config_id is not None:
                 body["config_id"] = config_id
-            await self._make_request("POST", endpoint, body if body else None)
+            await self._make_request("POST", endpoint, body or None)
             logger.info("Instance rebooted", extra={"instance_id": instance_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout rebooting instance: %s", e)
@@ -1585,23 +1551,20 @@ class Client:
 
         logger.info(
             "Creating domain record",
-            extra={"domain_id": domain_id, "type": record_type, "name": name},
+            extra={"domain_id": domain_id, "type": record_type, "record_name": name},
         )
 
         try:
             body: dict[str, Any] = {"type": record_type}
-            if name is not None:
-                body["name"] = name
-            if target is not None:
-                body["target"] = target
-            if priority is not None:
-                body["priority"] = priority
-            if weight is not None:
-                body["weight"] = weight
-            if port is not None:
-                body["port"] = port
-            if ttl_sec is not None:
-                body["ttl_sec"] = ttl_sec
+            optional_fields: dict[str, Any] = {
+                "name": name,
+                "target": target,
+                "priority": priority,
+                "weight": weight,
+                "port": port,
+                "ttl_sec": ttl_sec,
+            }
+            body.update({k: v for k, v in optional_fields.items() if v is not None})
 
             response = await self._make_request("POST", endpoint, body)
             data = response.json()
@@ -2093,22 +2056,21 @@ class Client:
 
     def _parse_account(self, data: dict[str, Any]) -> Account:
         """Parse account data from API response."""
-        promotions = []
-        for promo_data in data.get("active_promotions", []):
-            promotions.append(
-                Promo(
-                    description=promo_data.get("description", ""),
-                    summary=promo_data.get("summary", ""),
-                    credit_monthly_cap=promo_data.get("credit_monthly_cap", ""),
-                    credit_remaining=promo_data.get("credit_remaining", ""),
-                    expire_dt=promo_data.get("expire_dt", ""),
-                    image_url=promo_data.get("image_url", ""),
-                    service_type=promo_data.get("service_type", ""),
-                    this_month_credit_remaining=promo_data.get(
-                        "this_month_credit_remaining", ""
-                    ),
-                )
+        promotions = [
+            Promo(
+                description=promo_data.get("description", ""),
+                summary=promo_data.get("summary", ""),
+                credit_monthly_cap=promo_data.get("credit_monthly_cap", ""),
+                credit_remaining=promo_data.get("credit_remaining", ""),
+                expire_dt=promo_data.get("expire_dt", ""),
+                image_url=promo_data.get("image_url", ""),
+                service_type=promo_data.get("service_type", ""),
+                this_month_credit_remaining=promo_data.get(
+                    "this_month_credit_remaining", ""
+                ),
             )
+            for promo_data in data.get("active_promotions", [])
+        ]
 
         return Account(
             first_name=data.get("first_name", ""),
@@ -2581,9 +2543,7 @@ class RetryableClient:
         )
         return result
 
-    async def delete_object_storage_bucket(
-        self, region: str, label: str
-    ) -> None:
+    async def delete_object_storage_bucket(self, region: str, label: str) -> None:
         """Delete Object Storage bucket with retry."""
         await self._execute_with_retry(
             self.client.delete_object_storage_bucket,
@@ -2638,9 +2598,7 @@ class RetryableClient:
 
     async def delete_object_storage_key(self, key_id: int) -> None:
         """Delete Object Storage access key with retry."""
-        await self._execute_with_retry(
-            self.client.delete_object_storage_key, key_id
-        )
+        await self._execute_with_retry(self.client.delete_object_storage_key, key_id)
 
     async def create_presigned_url(
         self,
@@ -2679,22 +2637,16 @@ class RetryableClient:
         )
         return result
 
-    async def get_bucket_ssl(
-        self, region: str, label: str
-    ) -> dict[str, Any]:
+    async def get_bucket_ssl(self, region: str, label: str) -> dict[str, Any]:
         """Get bucket SSL status with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_bucket_ssl, region, label
         )
         return result
 
-    async def delete_bucket_ssl(
-        self, region: str, label: str
-    ) -> None:
+    async def delete_bucket_ssl(self, region: str, label: str) -> None:
         """Delete bucket SSL certificate with retry."""
-        await self._execute_with_retry(
-            self.client.delete_bucket_ssl, region, label
-        )
+        await self._execute_with_retry(self.client.delete_bucket_ssl, region, label)
 
     # Stage 4: Write operations with retry
 
@@ -3004,7 +2956,7 @@ class RetryableClient:
                     if not self._should_retry(e):
                         raise
 
-            raise last_error if last_error else LinodeError("Unknown retry error")
+            raise last_error or LinodeError("Unknown retry error")
 
     def _calculate_delay(self, attempt: int) -> float:
         """Calculate delay for retry with exponential backoff and jitter."""

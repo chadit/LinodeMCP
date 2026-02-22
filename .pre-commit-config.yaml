@@ -1,0 +1,66 @@
+# Run `pre-commit autoupdate` to bump all revs to latest.
+repos:
+  # Go linter (managed - auto-installed by pre-commit)
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v2.3.1
+    hooks:
+      - id: golangci-lint
+        args: ['--max-issues-per-linter=0', '--max-same-issues=0']
+
+  # Python linter + formatter (managed - auto-installed by pre-commit)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.2
+    hooks:
+      - id: ruff
+        args: ['check', '--force-exclude']
+        files: ^python/
+      - id: ruff-format
+        args: ['--check', '--force-exclude']
+        files: ^python/
+
+  - repo: local
+    hooks:
+      # Go formatting (managed via language: golang)
+      - id: gofumpt
+        name: gofumpt
+        entry: gofumpt -w
+        files: ^go/.*\.go$
+        types: [go]
+        language: golang
+        additional_dependencies: ['mvdan.cc/gofumpt@latest']
+
+      - id: goimports
+        name: goimports
+        entry: goimports -w
+        files: ^go/.*\.go$
+        types: [go]
+        language: golang
+        additional_dependencies: ['golang.org/x/tools/cmd/goimports@latest']
+
+      # Go tests - language: system because they need project Go modules
+      - id: go-test
+        name: go test
+        entry: bash -c 'cd go && go test -race ./...'
+        files: ^go/
+        types: [go]
+        language: system
+        pass_filenames: false
+
+      # mypy - language: system because it needs project venv dependencies
+      - id: mypy
+        name: mypy
+        entry: bash -c 'cd python && .venv/bin/mypy src/linodemcp'
+        files: ^python/.*\.py$
+        types: [python]
+        language: system
+        pass_filenames: false
+
+      # pytest - language: system because it needs project venv dependencies
+      - id: pytest
+        name: pytest
+        entry: bash -c 'cd python && .venv/bin/pytest -q'
+        files: ^python/
+        types: [python]
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

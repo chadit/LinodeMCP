@@ -5,7 +5,7 @@ RUFF := $(VENV)/bin/ruff
 MYPY := $(VENV)/bin/mypy
 PYTEST := $(VENV)/bin/pytest
 
-.PHONY: help venv install install-dev test test-cov lint format typecheck clean run all
+.PHONY: help venv install install-dev test test-cov lint format typecheck vulture deptry clean run all check
 
 help:
 	@echo "LinodeMCP Python - Available targets:"
@@ -17,8 +17,11 @@ help:
 	@echo "  lint         - Run ruff linter"
 	@echo "  format       - Format code with ruff"
 	@echo "  typecheck    - Run mypy type checker"
+	@echo "  vulture      - Find dead code"
+	@echo "  deptry       - Check for unused dependencies"
 	@echo "  clean        - Remove build artifacts"
 	@echo "  run          - Run the server"
+	@echo "  check        - Run lint, typecheck, and test (pre-commit)"
 
 venv:
 	python3 -m venv $(VENV)
@@ -45,6 +48,12 @@ format:
 typecheck:
 	$(MYPY) src/linodemcp
 
+vulture:
+	vulture src/linodemcp --min-confidence 80
+
+deptry:
+	deptry src/linodemcp
+
 clean:
 	rm -rf build/
 	rm -rf dist/
@@ -59,5 +68,7 @@ clean:
 
 run:
 	$(VENV)/bin/linodemcp
+
+check: lint typecheck test
 
 all: clean install-dev lint typecheck test

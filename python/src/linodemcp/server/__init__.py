@@ -266,15 +266,9 @@ class Server:
                 handle_linode_object_storage_types_list
             ),
             # Phase 2: Object Storage access key & transfer read operations
-            "linode_object_storage_keys_list": (
-                handle_linode_object_storage_keys_list
-            ),
-            "linode_object_storage_key_get": (
-                handle_linode_object_storage_key_get
-            ),
-            "linode_object_storage_transfer": (
-                handle_linode_object_storage_transfer
-            ),
+            "linode_object_storage_keys_list": (handle_linode_object_storage_keys_list),
+            "linode_object_storage_key_get": (handle_linode_object_storage_key_get),
+            "linode_object_storage_transfer": (handle_linode_object_storage_transfer),
             "linode_object_storage_bucket_access_get": (
                 handle_linode_object_storage_bucket_access_get
             ),
@@ -308,9 +302,7 @@ class Server:
             "linode_object_storage_object_acl_update": (
                 handle_linode_object_storage_object_acl_update
             ),
-            "linode_object_storage_ssl_get": (
-                handle_linode_object_storage_ssl_get
-            ),
+            "linode_object_storage_ssl_get": (handle_linode_object_storage_ssl_get),
             "linode_object_storage_ssl_delete": (
                 handle_linode_object_storage_ssl_delete
             ),
