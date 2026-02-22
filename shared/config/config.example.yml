@@ -1,0 +1,53 @@
+# LinodeMCP Configuration
+#
+# Copy this file to ~/.config/linodemcp/config.yml and replace
+# the token placeholder with your Linode API token.
+#
+# The Go server also auto-generates this template on first run
+# if no config file exists.
+#
+# Environment variables override config file values:
+#   LINODEMCP_SERVER_NAME     - Override server name
+#   LINODEMCP_LOG_LEVEL       - Override log level
+#   LINODEMCP_LINODE_API_URL  - Linode API base URL
+#   LINODEMCP_LINODE_TOKEN    - Linode API token
+
+server:
+  name: "LinodeMCP"
+  logLevel: "info"
+  transport: "stdio"
+  host: "127.0.0.1"
+  port: 8080
+
+metrics:
+  enabled: true
+  port: 9090
+  path: "/metrics"
+
+tracing:
+  enabled: false
+  exporter: "otlp"
+  endpoint: "localhost:4317"
+  sampleRate: 1.0
+
+resilience:
+  rateLimitPerMinute: 700
+  circuitBreakerThreshold: 5
+  circuitBreakerTimeout: 30s
+  maxRetries: 3
+  baseRetryDelay: 1s
+  maxRetryDelay: 30s
+
+environments:
+  default:
+    label: "Default"
+    linode:
+      apiUrl: "https://api.linode.com/v4"
+      token: "${LINODEMCP_LINODE_TOKEN}"
+
+  # Example: add a second environment for staging
+  # staging:
+  #   label: "Staging"
+  #   linode:
+  #     apiUrl: "https://api.linode.com/v4"
+  #     token: "${LINODEMCP_STAGING_TOKEN}"
