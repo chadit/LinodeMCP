@@ -1,6 +1,18 @@
-.PHONY: help build build-prod run test test-race test-all clean lint fmt install-tools coverage tidy gopls-check check
+.PHONY: help build build-prod run test test-race test-all clean lint fmt install-tools coverage tidy gopls-check check _ensure-hooks update-hooks
 
-help:
+# Auto-install pre-commit hooks if not already set up
+_ensure-hooks:
+	@if command -v pre-commit >/dev/null 2>&1; then \
+		if [ ! -f ../.git/hooks/pre-commit ] || ! grep -q 'pre-commit' ../.git/hooks/pre-commit 2>/dev/null; then \
+			echo "Installing pre-commit hooks..."; \
+			cd .. && pre-commit install; \
+		fi \
+	fi
+
+update-hooks:
+	@cd .. && pre-commit autoupdate
+
+help: _ensure-hooks
 	@echo "LinodeMCP Development Commands:"
 	@echo ""
 	@echo "Build:"
@@ -22,12 +34,13 @@ help:
 	@echo "  make clean           - Clean artifacts"
 	@echo "  make check           - Run fmt, lint, and test (pre-commit)"
 	@echo "  make install-tools   - Install dev tools"
+	@echo "  make update-hooks    - Update pre-commit hooks to latest versions"
 
-build:
+build: _ensure-hooks
 	@echo "Building linodemcp..."
 	@go build -o bin/linodemcp cmd/linodemcp/main.go
 
-build-prod:
+build-prod: _ensure-hooks
 	@echo "Building linodemcp (production)..."
 	@go build \
 		-ldflags="-s -w -buildid=" \
@@ -39,35 +52,35 @@ build-prod:
 run: build
 	@./bin/linodemcp
 
-test:
+test: _ensure-hooks
 	@echo "Running unit tests..."
 	@go test -race -cover ./...
 
-test-race:
+test-race: _ensure-hooks
 	@go test -race ./...
 
-test-all:
+test-all: _ensure-hooks
 	@go test -race -v ./...
 
 clean:
 	@rm -rf bin/ dist/ coverage.txt coverage.html *.coverprofile
 
-lint:
+lint: _ensure-hooks
 	@golangci-lint run --max-issues-per-linter=0 --max-same-issues=0
 	@gopls check -severity=hint $$(find . -name '*.go' -not -path './vendor/*')
 
-fmt:
+fmt: _ensure-hooks
 	@goimports -w .
 	@gofumpt -w .
 
-gopls-check:
+gopls-check: _ensure-hooks
 	@gopls check -severity=hint $$(find . -name '*.go' -not -path './vendor/*')
 
-tidy:
+tidy: _ensure-hooks
 	@go mod tidy
 	@go mod verify
 
-coverage:
+coverage: _ensure-hooks
 	@go test -coverprofile=coverage.out ./...
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report: coverage.html"

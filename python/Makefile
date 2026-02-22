@@ -5,9 +5,21 @@ RUFF := $(VENV)/bin/ruff
 MYPY := $(VENV)/bin/mypy
 PYTEST := $(VENV)/bin/pytest
 
-.PHONY: help venv install install-dev test test-cov lint format typecheck vulture deptry clean run all check
+.PHONY: help venv install install-dev test test-cov lint format typecheck vulture deptry clean run all check _ensure-hooks update-hooks
 
-help:
+# Auto-install pre-commit hooks if not already set up
+_ensure-hooks:
+	@if command -v pre-commit >/dev/null 2>&1; then \
+		if [ ! -f ../.git/hooks/pre-commit ] || ! grep -q 'pre-commit' ../.git/hooks/pre-commit 2>/dev/null; then \
+			echo "Installing pre-commit hooks..."; \
+			cd .. && pre-commit install; \
+		fi \
+	fi
+
+update-hooks:
+	@cd .. && pre-commit autoupdate
+
+help: _ensure-hooks
 	@echo "LinodeMCP Python - Available targets:"
 	@echo "  venv         - Create virtual environment"
 	@echo "  install      - Install package"
@@ -22,8 +34,9 @@ help:
 	@echo "  clean        - Remove build artifacts"
 	@echo "  run          - Run the server"
 	@echo "  check        - Run lint, typecheck, and test (pre-commit)"
+	@echo "  update-hooks - Update pre-commit hooks to latest versions"
 
-venv:
+venv: _ensure-hooks
 	python3 -m venv $(VENV)
 	$(PIP) install --upgrade pip
 
@@ -33,25 +46,25 @@ install: venv
 install-dev: venv
 	$(PIP) install -e ".[dev]"
 
-test:
+test: _ensure-hooks
 	$(PYTEST)
 
-test-cov:
+test-cov: _ensure-hooks
 	$(PYTEST) --cov=linodemcp --cov-report=term-missing --cov-report=html
 
-lint:
+lint: _ensure-hooks
 	$(RUFF) check src/ tests/
 
-format:
+format: _ensure-hooks
 	$(RUFF) format src/ tests/
 
-typecheck:
+typecheck: _ensure-hooks
 	$(MYPY) src/linodemcp
 
-vulture:
+vulture: _ensure-hooks
 	vulture src/linodemcp --min-confidence 80
 
-deptry:
+deptry: _ensure-hooks
 	deptry src/linodemcp
 
 clean:
@@ -66,7 +79,7 @@ clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
 
-run:
+run: _ensure-hooks
 	$(VENV)/bin/linodemcp
 
 check: lint typecheck test

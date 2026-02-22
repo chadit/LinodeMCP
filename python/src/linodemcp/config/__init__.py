@@ -4,7 +4,7 @@ import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
@@ -217,14 +217,14 @@ def _parse_config_data(data: str) -> dict[str, Any]:
         try:
             parsed: object = json.loads(data_stripped)
             if isinstance(parsed, dict):
-                return parsed
+                return cast("dict[str, Any]", parsed)
         except json.JSONDecodeError:
             pass
 
     try:
         parsed = yaml.safe_load(data_stripped)
         if isinstance(parsed, dict):
-            return parsed
+            return cast("dict[str, Any]", parsed)
         msg = "config must be a YAML mapping, not a scalar or list"
         raise ConfigMalformedError(msg)
     except yaml.YAMLError as e:

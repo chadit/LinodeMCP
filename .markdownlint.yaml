@@ -1,0 +1,8 @@
+# markdownlint configuration
+# https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
+
+# Disable line length - too strict for tables, URLs, and code blocks
+MD013: false
+
+# Disable table column alignment style - let tables be compact or aligned
+MD060: false

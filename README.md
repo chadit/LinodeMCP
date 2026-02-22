@@ -9,18 +9,21 @@ LinodeMCP exposes Linode API operations as MCP tools. AI assistants can use thes
 ### Available Tools (63 total)
 
 **Core Tools:**
+
 | Tool | Description |
 |------|-------------|
 | `hello` | Smoke test -- returns a greeting to confirm the server is running |
 | `version` | Returns build info: version, git commit, platform, feature flags |
 
 **Account & Profile:**
+
 | Tool | Description |
 |------|-------------|
 | `linode_profile` | Fetches your Linode account profile (username, email, 2FA status) |
 | `linode_account` | Fetches account info (balance, billing, capabilities) |
 
 **Compute:**
+
 | Tool | Description |
 |------|-------------|
 | `linode_instances_list` | Lists your Linode instances with optional status filtering |
@@ -37,6 +40,7 @@ LinodeMCP exposes Linode API operations as MCP tools. AI assistants can use thes
 | `linode_stackscripts_list` | Lists StackScripts with is_public/mine/label filtering |
 
 **Storage:**
+
 | Tool | Description |
 |------|-------------|
 | `linode_volumes_list` | Lists block storage volumes with region/label filtering |
@@ -47,6 +51,7 @@ LinodeMCP exposes Linode API operations as MCP tools. AI assistants can use thes
 | `linode_volume_delete` | Deletes a block storage volume (confirm required) |
 
 **Object Storage:**
+
 | Tool | Description |
 |------|-------------|
 | `linode_object_storage_buckets_list` | Lists all Object Storage buckets |
@@ -71,6 +76,7 @@ LinodeMCP exposes Linode API operations as MCP tools. AI assistants can use thes
 | `linode_object_storage_ssl_delete` | Removes a bucket's SSL certificate (confirm required) |
 
 **Networking:**
+
 | Tool | Description |
 |------|-------------|
 | `linode_firewalls_list` | Lists Cloud Firewalls with status/label filtering |
@@ -84,6 +90,7 @@ LinodeMCP exposes Linode API operations as MCP tools. AI assistants can use thes
 | `linode_nodebalancer_delete` | Deletes a NodeBalancer (confirm required) |
 
 **DNS:**
+
 | Tool | Description |
 |------|-------------|
 | `linode_domains_list` | Lists DNS domains |
@@ -97,6 +104,7 @@ LinodeMCP exposes Linode API operations as MCP tools. AI assistants can use thes
 | `linode_domain_record_delete` | Deletes a DNS record |
 
 **Security:**
+
 | Tool | Description |
 |------|-------------|
 | `linode_sshkeys_list` | Lists SSH keys with label filtering |
@@ -114,10 +122,12 @@ Configure multiple Linode environments (production, staging, dev) in a single co
 ### Prerequisites
 
 **Go implementation:**
+
 - Go 1.26+
 - A Linode API token ([create one here](https://cloud.linode.com/profile/tokens))
 
 **Python implementation:**
+
 - Python 3.11+
 - A Linode API token
 
@@ -233,7 +243,7 @@ For the Python version:
 
 ## Development
 
-### Go
+### Go Development
 
 ```bash
 cd go/
@@ -250,7 +260,7 @@ make tidy              # Tidy and verify go.mod
 make build-prod        # Security-hardened production build
 ```
 
-### Python
+### Python Development
 
 ```bash
 cd python/
@@ -266,7 +276,7 @@ make all               # Clean + install-dev + lint + typecheck + test
 
 ### Project Layout
 
-```
+```text
 LinodeMCP/
 ├── go/                              # Go implementation
 │   ├── cmd/linodemcp/main.go        # Entry point
@@ -306,11 +316,13 @@ LinodeMCP/
 ### Dependencies
 
 **Go:**
+
 - [mcp-go](https://github.com/mark3labs/mcp-go) - MCP protocol implementation
 - [yaml.v3](https://pkg.go.dev/gopkg.in/yaml.v3) - YAML config parsing
 - [testify](https://github.com/stretchr/testify) - Test assertions
 
 **Python:**
+
 - [mcp](https://pypi.org/project/mcp/) - MCP protocol SDK
 - [httpx](https://www.python-httpx.org/) - Async HTTP client for Linode API
 - [pyyaml](https://pyyaml.org/) - YAML config parsing
