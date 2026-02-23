@@ -1,0 +1,14 @@
+bin/
+*_test.go
+coverage.*
+*.coverprofile
+.golangci.yml
+Makefile
+*.md
+.git/
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store

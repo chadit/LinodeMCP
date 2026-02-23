@@ -232,6 +232,23 @@ You can also set configuration through environment variables:
    make run
    ```
 
+### Container
+
+Build a container image for either implementation:
+
+```bash
+make docker-build-go      # builds linodemcp:go
+make docker-build-python  # builds linodemcp:python
+```
+
+To use Podman instead of Docker:
+
+```bash
+CONTAINER_ENGINE=podman make docker-build-go
+```
+
+See [Docker / Podman](#docker--podman) below for MCP client configuration with containers.
+
 ## MCP Client Setup
 
 Each MCP client needs to know where the LinodeMCP binary lives and how to pass your Linode API token. Pick your client below -- all examples show both Go and Python variants.
@@ -384,6 +401,117 @@ VS Code prompts you for the token value on first use through the `${input:linode
 ### Cursor / Windsurf
 
 Both Cursor and Windsurf use the same `.mcp.json` format as Claude Code. See the [Claude Code CLI](#claude-code-cli) section and drop that same file in your project root.
+
+### Docker / Podman
+
+Running LinodeMCP in a container avoids installing Go or Python locally. MCP uses stdio transport, so the container needs `-i` (keep stdin open) and `-e` to forward your API token.
+
+**Go image:**
+
+```json
+{
+  "mcpServers": {
+    "linodemcp": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "LINODEMCP_LINODE_TOKEN", "linodemcp:go"],
+      "env": {
+        "LINODEMCP_LINODE_TOKEN": "your-token-here"
+      }
+    }
+  }
+}
+```
+
+**Python image:**
+
+```json
+{
+  "mcpServers": {
+    "linodemcp": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "LINODEMCP_LINODE_TOKEN", "linodemcp:python"],
+      "env": {
+        "LINODEMCP_LINODE_TOKEN": "your-token-here"
+      }
+    }
+  }
+}
+```
+
+For Podman, swap `"docker"` with `"podman"` in the command field.
+
+To mount a config file instead of using environment variables:
+
+```json
+{
+  "mcpServers": {
+    "linodemcp": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-v", "~/.config/linodemcp:/home/linodemcp/.config/linodemcp:ro",
+        "-e", "LINODEMCP_LINODE_TOKEN",
+        "linodemcp:go"
+      ],
+      "env": {
+        "LINODEMCP_LINODE_TOKEN": "your-token-here"
+      }
+    }
+  }
+}
+```
+
+### Context Forge (IBM MCP Gateway)
+
+[Context Forge](https://github.com/IBM/mcp-context-forge) is an MCP gateway that acts as a central registry for MCP servers. Instead of each client connecting to LinodeMCP directly, you register it once with Context Forge and all your clients connect through the gateway.
+
+1. Bridge the container's stdio to HTTP. Context Forge communicates over HTTP, so use `mcpgateway.translate` to wrap the container's stdin/stdout:
+
+   ```bash
+   python3 -m mcpgateway.translate \
+     --stdio "docker run --rm -i -e LINODEMCP_LINODE_TOKEN linodemcp:go" \
+     --expose-sse \
+     --port 8010 &
+   ```
+
+   For Podman, replace `docker` with `podman` in the command string.
+
+2. Register the bridged server with Context Forge:
+
+   ```bash
+   export TOKEN=$(python3 -m mcpgateway.utils.create_jwt_token \
+     --username admin@example.com --exp 10080 --secret your-jwt-secret)
+
+   curl -X POST -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "name": "linodemcp",
+       "url": "http://localhost:8010/sse"
+     }' \
+     http://localhost:4444/gateways
+   ```
+
+3. Add to a virtual server. In the Context Forge UI at `http://localhost:4444`, create or update a virtual server and add the LinodeMCP tools to it. Note the virtual server UUID.
+
+4. Point your clients at Context Forge. Use the `mcpgateway.wrapper` module in your MCP client config. This works with Claude Desktop, Claude Code, Gemini CLI, and any other MCP-compatible client:
+
+```json
+{
+  "mcpServers": {
+    "context-forge": {
+      "command": "python",
+      "args": ["-m", "mcpgateway.wrapper"],
+      "env": {
+        "MCP_SERVER_URL": "http://localhost:4444/servers/YOUR_VIRTUAL_SERVER_UUID/mcp",
+        "MCP_AUTH": "Bearer your-jwt-token",
+        "MCP_TOOL_CALL_TIMEOUT": "120"
+      }
+    }
+  }
+}
+```
+
+This gives you a single gateway endpoint that bundles LinodeMCP with any other MCP servers you've registered. See the [Context Forge docs](https://ibm.github.io/mcp-context-forge/) for the full setup guide.
 
 ## Development
 
