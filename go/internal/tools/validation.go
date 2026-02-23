@@ -325,3 +325,11 @@ func validateKeyPermissions(permissions string) error {
 
 	return nil
 }
+
+// ErrLKEClusterIDRequired and related errors are returned when LKE tool parameters fail validation.
+var (
+	ErrLKEClusterIDRequired = errors.New("cluster_id is required")
+	ErrLKEClusterIDInvalid  = errors.New("cluster_id must be a valid integer")
+	ErrLKEPoolIDRequired    = errors.New("pool_id is required")
+	ErrLKEPoolIDInvalid     = errors.New("pool_id must be a valid integer")
+)

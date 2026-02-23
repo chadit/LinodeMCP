@@ -876,6 +876,348 @@ func (rc *RetryableClient) DeleteBucketSSL(ctx context.Context, region, label st
 	})
 }
 
+// LKE (Kubernetes Engine) operations
+
+// ListLKEClusters retrieves all LKE clusters with automatic retry on transient failures.
+func (rc *RetryableClient) ListLKEClusters(ctx context.Context) ([]LKECluster, error) {
+	var clusters []LKECluster
+
+	err := rc.executeWithRetry(ctx, "ListLKEClusters", func() error {
+		var err error
+
+		clusters, err = rc.Client.ListLKEClusters(ctx)
+
+		return err
+	})
+
+	return clusters, err
+}
+
+// GetLKECluster retrieves a single LKE cluster by ID with automatic retry on transient failures.
+func (rc *RetryableClient) GetLKECluster(ctx context.Context, clusterID int) (*LKECluster, error) {
+	var cluster *LKECluster
+
+	err := rc.executeWithRetry(ctx, "GetLKECluster", func() error {
+		var err error
+
+		cluster, err = rc.Client.GetLKECluster(ctx, clusterID)
+
+		return err
+	})
+
+	return cluster, err
+}
+
+// CreateLKECluster creates a new LKE cluster with automatic retry on transient failures.
+func (rc *RetryableClient) CreateLKECluster(ctx context.Context, req *CreateLKEClusterRequest) (*LKECluster, error) {
+	var cluster *LKECluster
+
+	err := rc.executeWithRetry(ctx, "CreateLKECluster", func() error {
+		var err error
+
+		cluster, err = rc.Client.CreateLKECluster(ctx, req)
+
+		return err
+	})
+
+	return cluster, err
+}
+
+// UpdateLKECluster updates an LKE cluster with automatic retry on transient failures.
+func (rc *RetryableClient) UpdateLKECluster(ctx context.Context, clusterID int, req UpdateLKEClusterRequest) (*LKECluster, error) {
+	var cluster *LKECluster
+
+	err := rc.executeWithRetry(ctx, "UpdateLKECluster", func() error {
+		var err error
+
+		cluster, err = rc.Client.UpdateLKECluster(ctx, clusterID, req)
+
+		return err
+	})
+
+	return cluster, err
+}
+
+// DeleteLKECluster deletes an LKE cluster with automatic retry on transient failures.
+func (rc *RetryableClient) DeleteLKECluster(ctx context.Context, clusterID int) error {
+	return rc.executeWithRetry(ctx, "DeleteLKECluster", func() error {
+		return rc.Client.DeleteLKECluster(ctx, clusterID)
+	})
+}
+
+// RecycleLKECluster recycles all nodes in an LKE cluster with automatic retry on transient failures.
+func (rc *RetryableClient) RecycleLKECluster(ctx context.Context, clusterID int) error {
+	return rc.executeWithRetry(ctx, "RecycleLKECluster", func() error {
+		return rc.Client.RecycleLKECluster(ctx, clusterID)
+	})
+}
+
+// RegenerateLKECluster regenerates the service token for an LKE cluster with automatic retry on transient failures.
+func (rc *RetryableClient) RegenerateLKECluster(ctx context.Context, clusterID int) error {
+	return rc.executeWithRetry(ctx, "RegenerateLKECluster", func() error {
+		return rc.Client.RegenerateLKECluster(ctx, clusterID)
+	})
+}
+
+// ListLKENodePools retrieves all node pools for an LKE cluster with automatic retry on transient failures.
+func (rc *RetryableClient) ListLKENodePools(ctx context.Context, clusterID int) ([]LKENodePool, error) {
+	var pools []LKENodePool
+
+	err := rc.executeWithRetry(ctx, "ListLKENodePools", func() error {
+		var err error
+
+		pools, err = rc.Client.ListLKENodePools(ctx, clusterID)
+
+		return err
+	})
+
+	return pools, err
+}
+
+// GetLKENodePool retrieves a single node pool by ID with automatic retry on transient failures.
+func (rc *RetryableClient) GetLKENodePool(ctx context.Context, clusterID, poolID int) (*LKENodePool, error) {
+	var pool *LKENodePool
+
+	err := rc.executeWithRetry(ctx, "GetLKENodePool", func() error {
+		var err error
+
+		pool, err = rc.Client.GetLKENodePool(ctx, clusterID, poolID)
+
+		return err
+	})
+
+	return pool, err
+}
+
+// CreateLKENodePool creates a new node pool with automatic retry on transient failures.
+func (rc *RetryableClient) CreateLKENodePool(ctx context.Context, clusterID int, req *CreateLKENodePoolRequest) (*LKENodePool, error) {
+	var pool *LKENodePool
+
+	err := rc.executeWithRetry(ctx, "CreateLKENodePool", func() error {
+		var err error
+
+		pool, err = rc.Client.CreateLKENodePool(ctx, clusterID, req)
+
+		return err
+	})
+
+	return pool, err
+}
+
+// UpdateLKENodePool updates a node pool with automatic retry on transient failures.
+func (rc *RetryableClient) UpdateLKENodePool(ctx context.Context, clusterID, poolID int, req UpdateLKENodePoolRequest) (*LKENodePool, error) {
+	var pool *LKENodePool
+
+	err := rc.executeWithRetry(ctx, "UpdateLKENodePool", func() error {
+		var err error
+
+		pool, err = rc.Client.UpdateLKENodePool(ctx, clusterID, poolID, req)
+
+		return err
+	})
+
+	return pool, err
+}
+
+// DeleteLKENodePool deletes a node pool with automatic retry on transient failures.
+func (rc *RetryableClient) DeleteLKENodePool(ctx context.Context, clusterID, poolID int) error {
+	return rc.executeWithRetry(ctx, "DeleteLKENodePool", func() error {
+		return rc.Client.DeleteLKENodePool(ctx, clusterID, poolID)
+	})
+}
+
+// RecycleLKENodePool recycles all nodes in a node pool with automatic retry on transient failures.
+func (rc *RetryableClient) RecycleLKENodePool(ctx context.Context, clusterID, poolID int) error {
+	return rc.executeWithRetry(ctx, "RecycleLKENodePool", func() error {
+		return rc.Client.RecycleLKENodePool(ctx, clusterID, poolID)
+	})
+}
+
+// GetLKENode retrieves a single node by ID with automatic retry on transient failures.
+func (rc *RetryableClient) GetLKENode(ctx context.Context, clusterID int, nodeID string) (*LKENode, error) {
+	var node *LKENode
+
+	err := rc.executeWithRetry(ctx, "GetLKENode", func() error {
+		var err error
+
+		node, err = rc.Client.GetLKENode(ctx, clusterID, nodeID)
+
+		return err
+	})
+
+	return node, err
+}
+
+// DeleteLKENode deletes a node with automatic retry on transient failures.
+func (rc *RetryableClient) DeleteLKENode(ctx context.Context, clusterID int, nodeID string) error {
+	return rc.executeWithRetry(ctx, "DeleteLKENode", func() error {
+		return rc.Client.DeleteLKENode(ctx, clusterID, nodeID)
+	})
+}
+
+// RecycleLKENode recycles a specific node with automatic retry on transient failures.
+func (rc *RetryableClient) RecycleLKENode(ctx context.Context, clusterID int, nodeID string) error {
+	return rc.executeWithRetry(ctx, "RecycleLKENode", func() error {
+		return rc.Client.RecycleLKENode(ctx, clusterID, nodeID)
+	})
+}
+
+// GetLKEKubeconfig retrieves the kubeconfig for an LKE cluster with automatic retry on transient failures.
+func (rc *RetryableClient) GetLKEKubeconfig(ctx context.Context, clusterID int) (*LKEKubeconfig, error) {
+	var kubeconfig *LKEKubeconfig
+
+	err := rc.executeWithRetry(ctx, "GetLKEKubeconfig", func() error {
+		var err error
+
+		kubeconfig, err = rc.Client.GetLKEKubeconfig(ctx, clusterID)
+
+		return err
+	})
+
+	return kubeconfig, err
+}
+
+// DeleteLKEKubeconfig deletes the kubeconfig for an LKE cluster with automatic retry on transient failures.
+func (rc *RetryableClient) DeleteLKEKubeconfig(ctx context.Context, clusterID int) error {
+	return rc.executeWithRetry(ctx, "DeleteLKEKubeconfig", func() error {
+		return rc.Client.DeleteLKEKubeconfig(ctx, clusterID)
+	})
+}
+
+// GetLKEDashboard retrieves the dashboard URL for an LKE cluster with automatic retry on transient failures.
+func (rc *RetryableClient) GetLKEDashboard(ctx context.Context, clusterID int) (*LKEDashboard, error) {
+	var dashboard *LKEDashboard
+
+	err := rc.executeWithRetry(ctx, "GetLKEDashboard", func() error {
+		var err error
+
+		dashboard, err = rc.Client.GetLKEDashboard(ctx, clusterID)
+
+		return err
+	})
+
+	return dashboard, err
+}
+
+// ListLKEAPIEndpoints retrieves API endpoints for an LKE cluster with automatic retry on transient failures.
+func (rc *RetryableClient) ListLKEAPIEndpoints(ctx context.Context, clusterID int) ([]LKEAPIEndpoint, error) {
+	var endpoints []LKEAPIEndpoint
+
+	err := rc.executeWithRetry(ctx, "ListLKEAPIEndpoints", func() error {
+		var err error
+
+		endpoints, err = rc.Client.ListLKEAPIEndpoints(ctx, clusterID)
+
+		return err
+	})
+
+	return endpoints, err
+}
+
+// DeleteLKEServiceToken deletes the service token for an LKE cluster with automatic retry on transient failures.
+func (rc *RetryableClient) DeleteLKEServiceToken(ctx context.Context, clusterID int) error {
+	return rc.executeWithRetry(ctx, "DeleteLKEServiceToken", func() error {
+		return rc.Client.DeleteLKEServiceToken(ctx, clusterID)
+	})
+}
+
+// GetLKEControlPlaneACL retrieves the control plane ACL with automatic retry on transient failures.
+func (rc *RetryableClient) GetLKEControlPlaneACL(ctx context.Context, clusterID int) (*LKEControlPlaneACL, error) {
+	var acl *LKEControlPlaneACL
+
+	err := rc.executeWithRetry(ctx, "GetLKEControlPlaneACL", func() error {
+		var err error
+
+		acl, err = rc.Client.GetLKEControlPlaneACL(ctx, clusterID)
+
+		return err
+	})
+
+	return acl, err
+}
+
+// UpdateLKEControlPlaneACL updates the control plane ACL with automatic retry on transient failures.
+func (rc *RetryableClient) UpdateLKEControlPlaneACL(ctx context.Context, clusterID int, req UpdateLKEControlPlaneACLRequest) (*LKEControlPlaneACL, error) {
+	var acl *LKEControlPlaneACL
+
+	err := rc.executeWithRetry(ctx, "UpdateLKEControlPlaneACL", func() error {
+		var err error
+
+		acl, err = rc.Client.UpdateLKEControlPlaneACL(ctx, clusterID, req)
+
+		return err
+	})
+
+	return acl, err
+}
+
+// DeleteLKEControlPlaneACL deletes the control plane ACL with automatic retry on transient failures.
+func (rc *RetryableClient) DeleteLKEControlPlaneACL(ctx context.Context, clusterID int) error {
+	return rc.executeWithRetry(ctx, "DeleteLKEControlPlaneACL", func() error {
+		return rc.Client.DeleteLKEControlPlaneACL(ctx, clusterID)
+	})
+}
+
+// ListLKEVersions retrieves all LKE versions with automatic retry on transient failures.
+func (rc *RetryableClient) ListLKEVersions(ctx context.Context) ([]LKEVersion, error) {
+	var versions []LKEVersion
+
+	err := rc.executeWithRetry(ctx, "ListLKEVersions", func() error {
+		var err error
+
+		versions, err = rc.Client.ListLKEVersions(ctx)
+
+		return err
+	})
+
+	return versions, err
+}
+
+// GetLKEVersion retrieves a specific LKE version with automatic retry on transient failures.
+func (rc *RetryableClient) GetLKEVersion(ctx context.Context, versionID string) (*LKEVersion, error) {
+	var version *LKEVersion
+
+	err := rc.executeWithRetry(ctx, "GetLKEVersion", func() error {
+		var err error
+
+		version, err = rc.Client.GetLKEVersion(ctx, versionID)
+
+		return err
+	})
+
+	return version, err
+}
+
+// ListLKETypes retrieves all LKE types with automatic retry on transient failures.
+func (rc *RetryableClient) ListLKETypes(ctx context.Context) ([]LKEType, error) {
+	var types []LKEType
+
+	err := rc.executeWithRetry(ctx, "ListLKETypes", func() error {
+		var err error
+
+		types, err = rc.Client.ListLKETypes(ctx)
+
+		return err
+	})
+
+	return types, err
+}
+
+// ListLKETierVersions retrieves all LKE tier versions with automatic retry on transient failures.
+func (rc *RetryableClient) ListLKETierVersions(ctx context.Context) ([]LKETierVersion, error) {
+	var versions []LKETierVersion
+
+	err := rc.executeWithRetry(ctx, "ListLKETierVersions", func() error {
+		var err error
+
+		versions, err = rc.Client.ListLKETierVersions(ctx)
+
+		return err
+	})
+
+	return versions, err
+}
+
 func (rc *RetryableClient) executeWithRetry(ctx context.Context, _ string, retryFunc func() error) error {
 	var lastErr error
 

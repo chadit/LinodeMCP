@@ -101,6 +101,7 @@ func (s *Server) registerTools() {
 	s.registerDNSTools()
 	s.registerVolumeTools()
 	s.registerObjectStorageTools()
+	s.registerLKETools()
 }
 
 func (s *Server) registerCoreTools() {
@@ -209,6 +210,43 @@ func (s *Server) registerObjectStorageTools() {
 		tools.NewLinodeObjectStorageObjectACLUpdateTool,
 		tools.NewLinodeObjectStorageSSLGetTool,
 		tools.NewLinodeObjectStorageSSLDeleteTool,
+	} {
+		s.registerToolFromFactory(factory)
+	}
+}
+
+func (s *Server) registerLKETools() {
+	for _, factory := range []toolFactory{
+		// Read tools
+		tools.NewLinodeLKEClustersListTool,
+		tools.NewLinodeLKEClusterGetTool,
+		tools.NewLinodeLKEPoolsListTool,
+		tools.NewLinodeLKEPoolGetTool,
+		tools.NewLinodeLKENodeGetTool,
+		tools.NewLinodeLKEKubeconfigGetTool,
+		tools.NewLinodeLKEDashboardGetTool,
+		tools.NewLinodeLKEAPIEndpointsListTool,
+		tools.NewLinodeLKEACLGetTool,
+		tools.NewLinodeLKEVersionsListTool,
+		tools.NewLinodeLKEVersionGetTool,
+		tools.NewLinodeLKETypesListTool,
+		tools.NewLinodeLKETierVersionsListTool,
+		// Write tools
+		tools.NewLinodeLKEClusterCreateTool,
+		tools.NewLinodeLKEClusterUpdateTool,
+		tools.NewLinodeLKEClusterDeleteTool,
+		tools.NewLinodeLKEClusterRecycleTool,
+		tools.NewLinodeLKEClusterRegenerateTool,
+		tools.NewLinodeLKEPoolCreateTool,
+		tools.NewLinodeLKEPoolUpdateTool,
+		tools.NewLinodeLKEPoolDeleteTool,
+		tools.NewLinodeLKEPoolRecycleTool,
+		tools.NewLinodeLKENodeDeleteTool,
+		tools.NewLinodeLKENodeRecycleTool,
+		tools.NewLinodeLKEKubeconfigDeleteTool,
+		tools.NewLinodeLKEServiceTokenDeleteTool,
+		tools.NewLinodeLKEACLUpdateTool,
+		tools.NewLinodeLKEACLDeleteTool,
 	} {
 		s.registerToolFromFactory(factory)
 	}

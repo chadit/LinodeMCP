@@ -175,6 +175,22 @@ __all__ = [
     "Image",
     "Instance",
     "InstanceType",
+    "LKEAPIEndpoint",
+    "LKECluster",
+    "LKEControlPlane",
+    "LKEControlPlaneACL",
+    "LKEControlPlaneACLAddresses",
+    "LKEDashboard",
+    "LKEKubeconfig",
+    "LKENode",
+    "LKENodePool",
+    "LKENodePoolAutoscaler",
+    "LKENodePoolDisk",
+    "LKERegionPrice",
+    "LKETierVersion",
+    "LKEType",
+    "LKETypePrice",
+    "LKEVersion",
     "LinodeError",
     "NetworkError",
     "NodeBalancer",
@@ -632,6 +648,151 @@ class StackScript:
     updated: str
     script: str
     user_defined_fields: list[UDF]
+
+
+# LKE (Linode Kubernetes Engine) types
+
+
+@dataclass
+class LKEControlPlane:
+    """Control plane configuration of an LKE cluster."""
+
+    high_availability: bool
+
+
+@dataclass
+class LKECluster:
+    """Linode Kubernetes Engine cluster."""
+
+    id: int
+    label: str
+    region: str
+    k8s_version: str
+    status: str
+    tags: list[str]
+    created: str
+    updated: str
+    control_plane: LKEControlPlane
+
+
+@dataclass
+class LKENodePoolAutoscaler:
+    """Autoscaling settings for a node pool."""
+
+    enabled: bool
+    min: int
+    max: int
+
+
+@dataclass
+class LKENodePoolDisk:
+    """Disk configuration in a node pool."""
+
+    size: int
+    type: str
+
+
+@dataclass
+class LKENode:
+    """Node within an LKE node pool."""
+
+    id: str
+    instance_id: int
+    status: str
+
+
+@dataclass
+class LKENodePool:
+    """Node pool within an LKE cluster."""
+
+    id: int
+    cluster_id: int
+    type: str
+    count: int
+    disks: list[LKENodePoolDisk]
+    autoscaler: LKENodePoolAutoscaler | None
+    nodes: list[LKENode]
+    tags: list[str]
+
+
+@dataclass
+class LKEKubeconfig:
+    """Base64-encoded kubeconfig for an LKE cluster."""
+
+    kubeconfig: str
+
+
+@dataclass
+class LKEDashboard:
+    """Dashboard URL for an LKE cluster."""
+
+    url: str
+
+
+@dataclass
+class LKEAPIEndpoint:
+    """API endpoint for an LKE cluster."""
+
+    endpoint: str
+
+
+@dataclass
+class LKEVersion:
+    """Available Kubernetes version for LKE."""
+
+    id: str
+
+
+@dataclass
+class LKETypePrice:
+    """Pricing for an LKE type."""
+
+    hourly: float
+    monthly: float
+
+
+@dataclass
+class LKERegionPrice:
+    """Region-specific pricing for an LKE type."""
+
+    id: str
+    hourly: float
+    monthly: float
+
+
+@dataclass
+class LKEType:
+    """Node type available for LKE clusters."""
+
+    id: str
+    label: str
+    price: LKETypePrice
+    region_prices: list[LKERegionPrice]
+    transfer: int
+
+
+@dataclass
+class LKETierVersion:
+    """LKE tier version."""
+
+    id: str
+    tier: str
+
+
+@dataclass
+class LKEControlPlaneACLAddresses:
+    """IP addresses in a control plane ACL."""
+
+    ipv4: list[str]
+    ipv6: list[str]
+
+
+@dataclass
+class LKEControlPlaneACL:
+    """Control plane ACL for an LKE cluster."""
+
+    enabled: bool
+    addresses: LKEControlPlaneACLAddresses
 
 
 class Client:
@@ -1927,6 +2088,337 @@ class Client:
             logger.exception("HTTP error deleting NodeBalancer: %s", e)
             raise NetworkError("DeleteNodeBalancer", e) from e
 
+    # LKE (Linode Kubernetes Engine) operations
+
+    async def list_lke_clusters(self) -> list[dict[str, Any]]:
+        """List LKE clusters."""
+        try:
+            response = await self.make_request("GET", "/lke/clusters")
+            data = response.json()
+            clusters: list[dict[str, Any]] = data.get("data", [])
+            return clusters
+        except httpx.HTTPError as e:
+            raise NetworkError("ListLKEClusters", e) from e
+
+    async def get_lke_cluster(self, cluster_id: int) -> dict[str, Any]:
+        """Get a specific LKE cluster."""
+        endpoint = f"/lke/clusters/{cluster_id}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            cluster: dict[str, Any] = response.json()
+            return cluster
+        except httpx.HTTPError as e:
+            raise NetworkError("GetLKECluster", e) from e
+
+    async def create_lke_cluster(
+        self,
+        label: str,
+        region: str,
+        k8s_version: str,
+        node_pools: list[dict[str, Any]],
+        tags: list[str] | None = None,
+        control_plane: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Create a new LKE cluster."""
+        try:
+            body: dict[str, Any] = {
+                "label": label,
+                "region": region,
+                "k8s_version": k8s_version,
+                "node_pools": node_pools,
+            }
+            if tags is not None:
+                body["tags"] = tags
+            if control_plane is not None:
+                body["control_plane"] = control_plane
+            response = await self.make_request("POST", "/lke/clusters", body)
+            cluster: dict[str, Any] = response.json()
+            return cluster
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateLKECluster", e) from e
+
+    async def update_lke_cluster(
+        self,
+        cluster_id: int,
+        label: str | None = None,
+        k8s_version: str | None = None,
+        tags: list[str] | None = None,
+        control_plane: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Update an LKE cluster."""
+        endpoint = f"/lke/clusters/{cluster_id}"
+        try:
+            body: dict[str, Any] = {}
+            if label is not None:
+                body["label"] = label
+            if k8s_version is not None:
+                body["k8s_version"] = k8s_version
+            if tags is not None:
+                body["tags"] = tags
+            if control_plane is not None:
+                body["control_plane"] = control_plane
+            response = await self.make_request("PUT", endpoint, body)
+            cluster: dict[str, Any] = response.json()
+            return cluster
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateLKECluster", e) from e
+
+    async def delete_lke_cluster(self, cluster_id: int) -> None:
+        """Delete an LKE cluster."""
+        endpoint = f"/lke/clusters/{cluster_id}"
+        try:
+            await self.make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteLKECluster", e) from e
+
+    async def recycle_lke_cluster(self, cluster_id: int) -> None:
+        """Recycle all nodes in an LKE cluster."""
+        endpoint = f"/lke/clusters/{cluster_id}/recycle"
+        try:
+            await self.make_request("POST", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("RecycleLKECluster", e) from e
+
+    async def regenerate_lke_cluster(self, cluster_id: int) -> None:
+        """Regenerate the service token for an LKE cluster."""
+        endpoint = f"/lke/clusters/{cluster_id}/regenerate"
+        try:
+            await self.make_request("POST", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("RegenerateLKECluster", e) from e
+
+    async def list_lke_node_pools(self, cluster_id: int) -> list[dict[str, Any]]:
+        """List node pools for an LKE cluster."""
+        endpoint = f"/lke/clusters/{cluster_id}/pools"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data = response.json()
+            pools: list[dict[str, Any]] = data.get("data", [])
+            return pools
+        except httpx.HTTPError as e:
+            raise NetworkError("ListLKENodePools", e) from e
+
+    async def get_lke_node_pool(self, cluster_id: int, pool_id: int) -> dict[str, Any]:
+        """Get a specific node pool."""
+        endpoint = f"/lke/clusters/{cluster_id}/pools/{pool_id}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            pool: dict[str, Any] = response.json()
+            return pool
+        except httpx.HTTPError as e:
+            raise NetworkError("GetLKENodePool", e) from e
+
+    async def create_lke_node_pool(
+        self,
+        cluster_id: int,
+        node_type: str,
+        count: int,
+        autoscaler: dict[str, Any] | None = None,
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Create a new node pool in an LKE cluster."""
+        endpoint = f"/lke/clusters/{cluster_id}/pools"
+        try:
+            body: dict[str, Any] = {
+                "type": node_type,
+                "count": count,
+            }
+            if autoscaler is not None:
+                body["autoscaler"] = autoscaler
+            if tags is not None:
+                body["tags"] = tags
+            response = await self.make_request("POST", endpoint, body)
+            pool: dict[str, Any] = response.json()
+            return pool
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateLKENodePool", e) from e
+
+    async def update_lke_node_pool(
+        self,
+        cluster_id: int,
+        pool_id: int,
+        count: int | None = None,
+        autoscaler: dict[str, Any] | None = None,
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Update a node pool in an LKE cluster."""
+        endpoint = f"/lke/clusters/{cluster_id}/pools/{pool_id}"
+        try:
+            body: dict[str, Any] = {}
+            if count is not None:
+                body["count"] = count
+            if autoscaler is not None:
+                body["autoscaler"] = autoscaler
+            if tags is not None:
+                body["tags"] = tags
+            response = await self.make_request("PUT", endpoint, body)
+            pool: dict[str, Any] = response.json()
+            return pool
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateLKENodePool", e) from e
+
+    async def delete_lke_node_pool(self, cluster_id: int, pool_id: int) -> None:
+        """Delete a node pool from an LKE cluster."""
+        endpoint = f"/lke/clusters/{cluster_id}/pools/{pool_id}"
+        try:
+            await self.make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteLKENodePool", e) from e
+
+    async def recycle_lke_node_pool(self, cluster_id: int, pool_id: int) -> None:
+        """Recycle all nodes in a node pool."""
+        endpoint = f"/lke/clusters/{cluster_id}/pools/{pool_id}/recycle"
+        try:
+            await self.make_request("POST", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("RecycleLKENodePool", e) from e
+
+    async def get_lke_node(self, cluster_id: int, node_id: str) -> dict[str, Any]:
+        """Get a specific node in an LKE cluster."""
+        endpoint = f"/lke/clusters/{cluster_id}/nodes/{node_id}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            node: dict[str, Any] = response.json()
+            return node
+        except httpx.HTTPError as e:
+            raise NetworkError("GetLKENode", e) from e
+
+    async def delete_lke_node(self, cluster_id: int, node_id: str) -> None:
+        """Delete a specific node from an LKE cluster."""
+        endpoint = f"/lke/clusters/{cluster_id}/nodes/{node_id}"
+        try:
+            await self.make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteLKENode", e) from e
+
+    async def recycle_lke_node(self, cluster_id: int, node_id: str) -> None:
+        """Recycle a specific node in an LKE cluster."""
+        endpoint = f"/lke/clusters/{cluster_id}/nodes/{node_id}/recycle"
+        try:
+            await self.make_request("POST", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("RecycleLKENode", e) from e
+
+    async def get_lke_kubeconfig(self, cluster_id: int) -> dict[str, Any]:
+        """Get the kubeconfig for an LKE cluster."""
+        endpoint = f"/lke/clusters/{cluster_id}/kubeconfig"
+        try:
+            response = await self.make_request("GET", endpoint)
+            kubeconfig: dict[str, Any] = response.json()
+            return kubeconfig
+        except httpx.HTTPError as e:
+            raise NetworkError("GetLKEKubeconfig", e) from e
+
+    async def delete_lke_kubeconfig(self, cluster_id: int) -> None:
+        """Delete/regenerate the kubeconfig for an LKE cluster."""
+        endpoint = f"/lke/clusters/{cluster_id}/kubeconfig"
+        try:
+            await self.make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteLKEKubeconfig", e) from e
+
+    async def get_lke_dashboard(self, cluster_id: int) -> dict[str, Any]:
+        """Get the dashboard URL for an LKE cluster."""
+        endpoint = f"/lke/clusters/{cluster_id}/dashboard"
+        try:
+            response = await self.make_request("GET", endpoint)
+            dashboard: dict[str, Any] = response.json()
+            return dashboard
+        except httpx.HTTPError as e:
+            raise NetworkError("GetLKEDashboard", e) from e
+
+    async def list_lke_api_endpoints(self, cluster_id: int) -> list[dict[str, Any]]:
+        """List API endpoints for an LKE cluster."""
+        endpoint = f"/lke/clusters/{cluster_id}/api-endpoints"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data = response.json()
+            endpoints: list[dict[str, Any]] = data.get("data", [])
+            return endpoints
+        except httpx.HTTPError as e:
+            raise NetworkError("ListLKEAPIEndpoints", e) from e
+
+    async def delete_lke_service_token(self, cluster_id: int) -> None:
+        """Delete the service token for an LKE cluster."""
+        endpoint = f"/lke/clusters/{cluster_id}/servicetoken"
+        try:
+            await self.make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteLKEServiceToken", e) from e
+
+    async def get_lke_control_plane_acl(self, cluster_id: int) -> dict[str, Any]:
+        """Get the control plane ACL for an LKE cluster."""
+        endpoint = f"/lke/clusters/{cluster_id}/control_plane_acl"
+        try:
+            response = await self.make_request("GET", endpoint)
+            acl: dict[str, Any] = response.json()
+            return acl
+        except httpx.HTTPError as e:
+            raise NetworkError("GetLKEControlPlaneACL", e) from e
+
+    async def update_lke_control_plane_acl(
+        self,
+        cluster_id: int,
+        acl: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Update the control plane ACL for an LKE cluster."""
+        endpoint = f"/lke/clusters/{cluster_id}/control_plane_acl"
+        try:
+            body: dict[str, Any] = {"acl": acl}
+            response = await self.make_request("PUT", endpoint, body)
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateLKEControlPlaneACL", e) from e
+
+    async def delete_lke_control_plane_acl(self, cluster_id: int) -> None:
+        """Delete the control plane ACL for an LKE cluster."""
+        endpoint = f"/lke/clusters/{cluster_id}/control_plane_acl"
+        try:
+            await self.make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteLKEControlPlaneACL", e) from e
+
+    async def list_lke_versions(self) -> list[dict[str, Any]]:
+        """List available LKE Kubernetes versions."""
+        try:
+            response = await self.make_request("GET", "/lke/versions")
+            data = response.json()
+            versions: list[dict[str, Any]] = data.get("data", [])
+            return versions
+        except httpx.HTTPError as e:
+            raise NetworkError("ListLKEVersions", e) from e
+
+    async def get_lke_version(self, version_id: str) -> dict[str, Any]:
+        """Get a specific LKE Kubernetes version."""
+        endpoint = f"/lke/versions/{version_id}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            version: dict[str, Any] = response.json()
+            return version
+        except httpx.HTTPError as e:
+            raise NetworkError("GetLKEVersion", e) from e
+
+    async def list_lke_types(self) -> list[dict[str, Any]]:
+        """List available LKE node types."""
+        try:
+            response = await self.make_request("GET", "/lke/types")
+            data = response.json()
+            types: list[dict[str, Any]] = data.get("data", [])
+            return types
+        except httpx.HTTPError as e:
+            raise NetworkError("ListLKETypes", e) from e
+
+    async def list_lke_tier_versions(self) -> list[dict[str, Any]]:
+        """List LKE tier versions."""
+        try:
+            response = await self.make_request("GET", "/lke/tiers/versions")
+            data = response.json()
+            versions: list[dict[str, Any]] = data.get("data", [])
+            return versions
+        except httpx.HTTPError as e:
+            raise NetworkError("ListLKETierVersions", e) from e
+
     async def make_request(
         self, method: str, endpoint: str, body: dict[str, Any] | None = None
     ) -> httpx.Response:
@@ -1961,7 +2453,7 @@ class Client:
                     message=errors[0].get("reason", "Unknown error"),
                     field=errors[0].get("field", ""),
                 )
-        except (ValueError, KeyError):
+        except ValueError, KeyError:
             pass
 
         if response.status_code == HTTP_UNAUTHORIZED:
@@ -2936,6 +3428,236 @@ class RetryableClient:
     async def delete_nodebalancer(self, nodebalancer_id: int) -> None:
         """Delete NodeBalancer with retry."""
         await self._execute_with_retry(self.client.delete_nodebalancer, nodebalancer_id)
+
+    # LKE operations with retry
+
+    async def list_lke_clusters(self) -> list[dict[str, Any]]:
+        """List LKE clusters with retry."""
+        result: list[dict[str, Any]] = await self._execute_with_retry(
+            self.client.list_lke_clusters
+        )
+        return result
+
+    async def get_lke_cluster(self, cluster_id: int) -> dict[str, Any]:
+        """Get a specific LKE cluster with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_lke_cluster, cluster_id
+        )
+        return result
+
+    async def create_lke_cluster(
+        self,
+        label: str,
+        region: str,
+        k8s_version: str,
+        node_pools: list[dict[str, Any]],
+        tags: list[str] | None = None,
+        control_plane: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Create LKE cluster with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.create_lke_cluster,
+            label,
+            region,
+            k8s_version,
+            node_pools,
+            tags,
+            control_plane,
+        )
+        return result
+
+    async def update_lke_cluster(
+        self,
+        cluster_id: int,
+        label: str | None = None,
+        k8s_version: str | None = None,
+        tags: list[str] | None = None,
+        control_plane: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Update LKE cluster with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.update_lke_cluster,
+            cluster_id,
+            label,
+            k8s_version,
+            tags,
+            control_plane,
+        )
+        return result
+
+    async def delete_lke_cluster(self, cluster_id: int) -> None:
+        """Delete LKE cluster with retry."""
+        await self._execute_with_retry(self.client.delete_lke_cluster, cluster_id)
+
+    async def recycle_lke_cluster(self, cluster_id: int) -> None:
+        """Recycle LKE cluster nodes with retry."""
+        await self._execute_with_retry(self.client.recycle_lke_cluster, cluster_id)
+
+    async def regenerate_lke_cluster(self, cluster_id: int) -> None:
+        """Regenerate LKE cluster service token with retry."""
+        await self._execute_with_retry(self.client.regenerate_lke_cluster, cluster_id)
+
+    async def list_lke_node_pools(self, cluster_id: int) -> list[dict[str, Any]]:
+        """List LKE node pools with retry."""
+        result: list[dict[str, Any]] = await self._execute_with_retry(
+            self.client.list_lke_node_pools, cluster_id
+        )
+        return result
+
+    async def get_lke_node_pool(self, cluster_id: int, pool_id: int) -> dict[str, Any]:
+        """Get a specific LKE node pool with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_lke_node_pool, cluster_id, pool_id
+        )
+        return result
+
+    async def create_lke_node_pool(
+        self,
+        cluster_id: int,
+        node_type: str,
+        count: int,
+        autoscaler: dict[str, Any] | None = None,
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Create LKE node pool with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.create_lke_node_pool,
+            cluster_id,
+            node_type,
+            count,
+            autoscaler,
+            tags,
+        )
+        return result
+
+    async def update_lke_node_pool(
+        self,
+        cluster_id: int,
+        pool_id: int,
+        count: int | None = None,
+        autoscaler: dict[str, Any] | None = None,
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Update LKE node pool with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.update_lke_node_pool,
+            cluster_id,
+            pool_id,
+            count,
+            autoscaler,
+            tags,
+        )
+        return result
+
+    async def delete_lke_node_pool(self, cluster_id: int, pool_id: int) -> None:
+        """Delete LKE node pool with retry."""
+        await self._execute_with_retry(
+            self.client.delete_lke_node_pool, cluster_id, pool_id
+        )
+
+    async def recycle_lke_node_pool(self, cluster_id: int, pool_id: int) -> None:
+        """Recycle LKE node pool with retry."""
+        await self._execute_with_retry(
+            self.client.recycle_lke_node_pool, cluster_id, pool_id
+        )
+
+    async def get_lke_node(self, cluster_id: int, node_id: str) -> dict[str, Any]:
+        """Get a specific LKE node with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_lke_node, cluster_id, node_id
+        )
+        return result
+
+    async def delete_lke_node(self, cluster_id: int, node_id: str) -> None:
+        """Delete LKE node with retry."""
+        await self._execute_with_retry(self.client.delete_lke_node, cluster_id, node_id)
+
+    async def recycle_lke_node(self, cluster_id: int, node_id: str) -> None:
+        """Recycle LKE node with retry."""
+        await self._execute_with_retry(
+            self.client.recycle_lke_node, cluster_id, node_id
+        )
+
+    async def get_lke_kubeconfig(self, cluster_id: int) -> dict[str, Any]:
+        """Get LKE kubeconfig with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_lke_kubeconfig, cluster_id
+        )
+        return result
+
+    async def delete_lke_kubeconfig(self, cluster_id: int) -> None:
+        """Delete LKE kubeconfig with retry."""
+        await self._execute_with_retry(self.client.delete_lke_kubeconfig, cluster_id)
+
+    async def get_lke_dashboard(self, cluster_id: int) -> dict[str, Any]:
+        """Get LKE dashboard URL with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_lke_dashboard, cluster_id
+        )
+        return result
+
+    async def list_lke_api_endpoints(self, cluster_id: int) -> list[dict[str, Any]]:
+        """List LKE API endpoints with retry."""
+        result: list[dict[str, Any]] = await self._execute_with_retry(
+            self.client.list_lke_api_endpoints, cluster_id
+        )
+        return result
+
+    async def delete_lke_service_token(self, cluster_id: int) -> None:
+        """Delete LKE service token with retry."""
+        await self._execute_with_retry(self.client.delete_lke_service_token, cluster_id)
+
+    async def get_lke_control_plane_acl(self, cluster_id: int) -> dict[str, Any]:
+        """Get LKE control plane ACL with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_lke_control_plane_acl, cluster_id
+        )
+        return result
+
+    async def update_lke_control_plane_acl(
+        self,
+        cluster_id: int,
+        acl: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Update LKE control plane ACL with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.update_lke_control_plane_acl, cluster_id, acl
+        )
+        return result
+
+    async def delete_lke_control_plane_acl(self, cluster_id: int) -> None:
+        """Delete LKE control plane ACL with retry."""
+        await self._execute_with_retry(
+            self.client.delete_lke_control_plane_acl, cluster_id
+        )
+
+    async def list_lke_versions(self) -> list[dict[str, Any]]:
+        """List LKE versions with retry."""
+        result: list[dict[str, Any]] = await self._execute_with_retry(
+            self.client.list_lke_versions
+        )
+        return result
+
+    async def get_lke_version(self, version_id: str) -> dict[str, Any]:
+        """Get a specific LKE version with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_lke_version, version_id
+        )
+        return result
+
+    async def list_lke_types(self) -> list[dict[str, Any]]:
+        """List LKE node types with retry."""
+        result: list[dict[str, Any]] = await self._execute_with_retry(
+            self.client.list_lke_types
+        )
+        return result
+
+    async def list_lke_tier_versions(self) -> list[dict[str, Any]]:
+        """List LKE tier versions with retry."""
+        result: list[dict[str, Any]] = await self._execute_with_retry(
+            self.client.list_lke_tier_versions
+        )
+        return result
 
     async def _execute_with_retry(
         self, func: Callable[..., Awaitable[T]], *args: Any

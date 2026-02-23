@@ -33,6 +33,10 @@ from linodemcp.linode import (
     Volume,
 )
 from linodemcp.tools import (
+    create_linode_lke_cluster_create_tool,
+    create_linode_lke_cluster_delete_tool,
+    create_linode_lke_cluster_get_tool,
+    create_linode_lke_clusters_list_tool,
     handle_hello,
     handle_linode_account,
     handle_linode_domain_create,
@@ -57,6 +61,34 @@ from linodemcp.tools import (
     handle_linode_instance_resize,
     handle_linode_instance_shutdown,
     handle_linode_instances_list,
+    handle_linode_lke_acl_delete,
+    handle_linode_lke_acl_get,
+    handle_linode_lke_acl_update,
+    handle_linode_lke_api_endpoints_list,
+    handle_linode_lke_cluster_create,
+    handle_linode_lke_cluster_delete,
+    handle_linode_lke_cluster_get,
+    handle_linode_lke_cluster_recycle,
+    handle_linode_lke_cluster_regenerate,
+    handle_linode_lke_cluster_update,
+    handle_linode_lke_clusters_list,
+    handle_linode_lke_dashboard_get,
+    handle_linode_lke_kubeconfig_delete,
+    handle_linode_lke_kubeconfig_get,
+    handle_linode_lke_node_delete,
+    handle_linode_lke_node_get,
+    handle_linode_lke_node_recycle,
+    handle_linode_lke_pool_create,
+    handle_linode_lke_pool_delete,
+    handle_linode_lke_pool_get,
+    handle_linode_lke_pool_recycle,
+    handle_linode_lke_pool_update,
+    handle_linode_lke_pools_list,
+    handle_linode_lke_service_token_delete,
+    handle_linode_lke_tier_versions_list,
+    handle_linode_lke_types_list,
+    handle_linode_lke_version_get,
+    handle_linode_lke_versions_list,
     handle_linode_nodebalancer_create,
     handle_linode_nodebalancer_delete,
     handle_linode_nodebalancer_get,
@@ -3682,3 +3714,887 @@ async def test_ssl_delete_missing_env() -> None:
 
     assert len(result) == 1
     assert "Error" in result[0].text
+
+
+# ── LKE Tool Tests ──────────────────────────────────────────────
+
+
+async def test_lke_clusters_list_tool_definition() -> None:
+    """LKE clusters list tool should have correct name."""
+    tool = create_linode_lke_clusters_list_tool()
+    assert tool.name == "linode_lke_clusters_list"
+
+
+async def test_lke_cluster_get_tool_definition() -> None:
+    """LKE cluster get tool should require cluster_id."""
+    tool = create_linode_lke_cluster_get_tool()
+    assert tool.name == "linode_lke_cluster_get"
+    assert "cluster_id" in (tool.inputSchema.get("required") or [])
+
+
+async def test_lke_cluster_create_tool_definition() -> None:
+    """LKE cluster create tool should require label, region, k8s_version."""
+    tool = create_linode_lke_cluster_create_tool()
+    assert tool.name == "linode_lke_cluster_create"
+    required = tool.inputSchema.get("required") or []
+    assert "label" in required
+    assert "region" in required
+    assert "k8s_version" in required
+
+
+async def test_lke_cluster_delete_tool_definition() -> None:
+    """LKE cluster delete tool should require cluster_id and confirm."""
+    tool = create_linode_lke_cluster_delete_tool()
+    assert tool.name == "linode_lke_cluster_delete"
+    required = tool.inputSchema.get("required") or []
+    assert "cluster_id" in required
+    assert "confirm" in required
+
+
+async def test_lke_clusters_list(sample_config: Config) -> None:
+    """LKE clusters list should return cluster data."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.list_lke_clusters.return_value = [
+            {"id": 1, "label": "my-cluster", "region": "us-east", "status": "ready"},
+        ]
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(await handle_linode_lke_clusters_list({}, sample_config))
+
+        assert len(result) == 1
+        assert "my-cluster" in result[0].text
+
+
+async def test_lke_cluster_get(sample_config: Config) -> None:
+    """LKE cluster get should return cluster details."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_lke_cluster.return_value = {
+            "id": 1,
+            "label": "my-cluster",
+            "region": "us-east",
+            "k8s_version": "1.29",
+            "status": "ready",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_cluster_get({"cluster_id": 1}, sample_config)
+        )
+
+        assert len(result) == 1
+        assert "my-cluster" in result[0].text
+
+
+async def test_lke_cluster_get_missing_id(sample_config: Config) -> None:
+    """LKE cluster get should fail without cluster_id."""
+    result = list(await handle_linode_lke_cluster_get({}, sample_config))
+
+    assert len(result) == 1
+    assert "cluster_id" in result[0].text.lower()
+
+
+async def test_lke_cluster_create_confirm_required(sample_config: Config) -> None:
+    """LKE cluster create should require confirm=true."""
+    result = list(
+        await handle_linode_lke_cluster_create(
+            {
+                "label": "new-cluster",
+                "region": "us-east",
+                "k8s_version": "1.29",
+                "node_pools": [{"type": "g6-standard-1", "count": 3}],
+                "confirm": False,
+            },
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_lke_cluster_create_missing_label(sample_config: Config) -> None:
+    """LKE cluster create should fail without label."""
+    result = list(
+        await handle_linode_lke_cluster_create(
+            {
+                "region": "us-east",
+                "k8s_version": "1.29",
+                "node_pools": [{"type": "g6-standard-1", "count": 3}],
+                "confirm": True,
+            },
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "label" in result[0].text.lower()
+
+
+async def test_lke_cluster_create_success(sample_config: Config) -> None:
+    """LKE cluster create should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.create_lke_cluster.return_value = {
+            "id": 10,
+            "label": "new-cluster",
+            "region": "us-east",
+            "k8s_version": "1.29",
+            "status": "ready",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_cluster_create(
+                {
+                    "label": "new-cluster",
+                    "region": "us-east",
+                    "k8s_version": "1.29",
+                    "node_pools": [{"type": "g6-standard-1", "count": 3}],
+                    "confirm": True,
+                },
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "new-cluster" in result[0].text
+
+
+async def test_lke_cluster_update_confirm_required(sample_config: Config) -> None:
+    """LKE cluster update should require confirm=true."""
+    result = list(
+        await handle_linode_lke_cluster_update(
+            {"cluster_id": 1, "label": "updated", "confirm": False},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_lke_cluster_update_success(sample_config: Config) -> None:
+    """LKE cluster update should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.update_lke_cluster.return_value = {
+            "id": 1,
+            "label": "updated",
+            "region": "us-east",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_cluster_update(
+                {"cluster_id": 1, "label": "updated", "confirm": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "updated" in result[0].text
+
+
+async def test_lke_cluster_delete_confirm_required(sample_config: Config) -> None:
+    """LKE cluster delete should require confirm=true."""
+    result = list(
+        await handle_linode_lke_cluster_delete(
+            {"cluster_id": 1, "confirm": False},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_lke_cluster_delete_success(sample_config: Config) -> None:
+    """LKE cluster delete should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.delete_lke_cluster.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_cluster_delete(
+                {"cluster_id": 1, "confirm": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "deleted" in result[0].text.lower()
+
+
+async def test_lke_cluster_recycle_confirm_required(sample_config: Config) -> None:
+    """LKE cluster recycle should require confirm=true."""
+    result = list(
+        await handle_linode_lke_cluster_recycle(
+            {"cluster_id": 1, "confirm": False},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_lke_cluster_recycle_success(sample_config: Config) -> None:
+    """LKE cluster recycle should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.recycle_lke_cluster.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_cluster_recycle(
+                {"cluster_id": 1, "confirm": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "recycle" in result[0].text.lower()
+
+
+async def test_lke_cluster_regenerate_confirm_required(
+    sample_config: Config,
+) -> None:
+    """LKE cluster regenerate should require confirm=true."""
+    result = list(
+        await handle_linode_lke_cluster_regenerate(
+            {"cluster_id": 1, "confirm": False},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_lke_cluster_regenerate_success(sample_config: Config) -> None:
+    """LKE cluster regenerate should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.regenerate_lke_cluster.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_cluster_regenerate(
+                {"cluster_id": 1, "confirm": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "regenerat" in result[0].text.lower()
+
+
+async def test_lke_pools_list(sample_config: Config) -> None:
+    """LKE pools list should return pool data."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.list_lke_node_pools.return_value = [
+            {"id": 100, "type": "g6-standard-1", "count": 3},
+        ]
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_pools_list({"cluster_id": 1}, sample_config)
+        )
+
+        assert len(result) == 1
+        assert "g6-standard-1" in result[0].text
+
+
+async def test_lke_pool_get(sample_config: Config) -> None:
+    """LKE pool get should return pool details."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_lke_node_pool.return_value = {
+            "id": 100,
+            "type": "g6-standard-1",
+            "count": 3,
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_pool_get(
+                {"cluster_id": 1, "pool_id": 100}, sample_config
+            )
+        )
+
+        assert len(result) == 1
+        assert "g6-standard-1" in result[0].text
+
+
+async def test_lke_pool_create_confirm_required(sample_config: Config) -> None:
+    """LKE pool create should require confirm=true."""
+    result = list(
+        await handle_linode_lke_pool_create(
+            {
+                "cluster_id": 1,
+                "type": "g6-standard-1",
+                "count": 3,
+                "confirm": False,
+            },
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_lke_pool_create_success(sample_config: Config) -> None:
+    """LKE pool create should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.create_lke_node_pool.return_value = {
+            "id": 200,
+            "type": "g6-standard-1",
+            "count": 3,
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_pool_create(
+                {
+                    "cluster_id": 1,
+                    "type": "g6-standard-1",
+                    "count": 3,
+                    "confirm": True,
+                },
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "g6-standard-1" in result[0].text
+
+
+async def test_lke_pool_update_confirm_required(sample_config: Config) -> None:
+    """LKE pool update should require confirm=true."""
+    result = list(
+        await handle_linode_lke_pool_update(
+            {"cluster_id": 1, "pool_id": 100, "count": 5, "confirm": False},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_lke_pool_update_success(sample_config: Config) -> None:
+    """LKE pool update should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.update_lke_node_pool.return_value = {
+            "id": 100,
+            "type": "g6-standard-1",
+            "count": 5,
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_pool_update(
+                {"cluster_id": 1, "pool_id": 100, "count": 5, "confirm": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "100" in result[0].text
+
+
+async def test_lke_pool_delete_confirm_required(sample_config: Config) -> None:
+    """LKE pool delete should require confirm=true."""
+    result = list(
+        await handle_linode_lke_pool_delete(
+            {"cluster_id": 1, "pool_id": 100, "confirm": False},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_lke_pool_delete_success(sample_config: Config) -> None:
+    """LKE pool delete should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.delete_lke_node_pool.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_pool_delete(
+                {"cluster_id": 1, "pool_id": 100, "confirm": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "deleted" in result[0].text.lower()
+
+
+async def test_lke_pool_recycle_confirm_required(sample_config: Config) -> None:
+    """LKE pool recycle should require confirm=true."""
+    result = list(
+        await handle_linode_lke_pool_recycle(
+            {"cluster_id": 1, "pool_id": 100, "confirm": False},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_lke_pool_recycle_success(sample_config: Config) -> None:
+    """LKE pool recycle should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.recycle_lke_node_pool.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_pool_recycle(
+                {"cluster_id": 1, "pool_id": 100, "confirm": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "recycle" in result[0].text.lower()
+
+
+async def test_lke_node_get(sample_config: Config) -> None:
+    """LKE node get should return node details."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_lke_node.return_value = {
+            "id": "lke-node-abc",
+            "instance_id": 555,
+            "status": "ready",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_node_get(
+                {"cluster_id": 1, "node_id": "lke-node-abc"}, sample_config
+            )
+        )
+
+        assert len(result) == 1
+        assert "lke-node-abc" in result[0].text
+
+
+async def test_lke_node_get_missing_node_id(sample_config: Config) -> None:
+    """LKE node get should fail without node_id."""
+    result = list(await handle_linode_lke_node_get({"cluster_id": 1}, sample_config))
+
+    assert len(result) == 1
+    assert "node_id" in result[0].text.lower()
+
+
+async def test_lke_node_delete_confirm_required(sample_config: Config) -> None:
+    """LKE node delete should require confirm=true."""
+    result = list(
+        await handle_linode_lke_node_delete(
+            {"cluster_id": 1, "node_id": "lke-node-abc", "confirm": False},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_lke_node_delete_success(sample_config: Config) -> None:
+    """LKE node delete should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.delete_lke_node.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_node_delete(
+                {"cluster_id": 1, "node_id": "lke-node-abc", "confirm": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "deleted" in result[0].text.lower()
+
+
+async def test_lke_node_recycle_confirm_required(sample_config: Config) -> None:
+    """LKE node recycle should require confirm=true."""
+    result = list(
+        await handle_linode_lke_node_recycle(
+            {"cluster_id": 1, "node_id": "lke-node-abc", "confirm": False},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_lke_node_recycle_success(sample_config: Config) -> None:
+    """LKE node recycle should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.recycle_lke_node.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_node_recycle(
+                {"cluster_id": 1, "node_id": "lke-node-abc", "confirm": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "recycle" in result[0].text.lower()
+
+
+async def test_lke_kubeconfig_get(sample_config: Config) -> None:
+    """LKE kubeconfig get should return kubeconfig data."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_lke_kubeconfig.return_value = {
+            "kubeconfig": "YXBpVmVyc2lvbjogdjEK",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_kubeconfig_get({"cluster_id": 1}, sample_config)
+        )
+
+        assert len(result) == 1
+        assert "kubeconfig" in result[0].text.lower()
+
+
+async def test_lke_kubeconfig_delete_confirm_required(
+    sample_config: Config,
+) -> None:
+    """LKE kubeconfig delete should require confirm=true."""
+    result = list(
+        await handle_linode_lke_kubeconfig_delete(
+            {"cluster_id": 1, "confirm": False},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_lke_kubeconfig_delete_success(sample_config: Config) -> None:
+    """LKE kubeconfig delete should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.delete_lke_kubeconfig.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_kubeconfig_delete(
+                {"cluster_id": 1, "confirm": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "regenerated" in result[0].text.lower()
+
+
+async def test_lke_dashboard_get(sample_config: Config) -> None:
+    """LKE dashboard get should return dashboard URL."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_lke_dashboard.return_value = {
+            "url": "https://dashboard.example.com",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_dashboard_get({"cluster_id": 1}, sample_config)
+        )
+
+        assert len(result) == 1
+        assert "dashboard" in result[0].text.lower()
+
+
+async def test_lke_api_endpoints_list(sample_config: Config) -> None:
+    """LKE API endpoints list should return endpoint data."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.list_lke_api_endpoints.return_value = [
+            {"endpoint": "https://api.lke.example.com"},
+        ]
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_api_endpoints_list({"cluster_id": 1}, sample_config)
+        )
+
+        assert len(result) == 1
+        assert "endpoint" in result[0].text.lower()
+
+
+async def test_lke_service_token_delete_confirm_required(
+    sample_config: Config,
+) -> None:
+    """LKE service token delete should require confirm=true."""
+    result = list(
+        await handle_linode_lke_service_token_delete(
+            {"cluster_id": 1, "confirm": False},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_lke_service_token_delete_success(sample_config: Config) -> None:
+    """LKE service token delete should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.delete_lke_service_token.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_service_token_delete(
+                {"cluster_id": 1, "confirm": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "deleted" in result[0].text.lower()
+
+
+async def test_lke_acl_get(sample_config: Config) -> None:
+    """LKE ACL get should return ACL data."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_lke_control_plane_acl.return_value = {
+            "acl": {
+                "enabled": True,
+                "addresses": {"ipv4": ["10.0.0.0/8"], "ipv6": []},
+            },
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(await handle_linode_lke_acl_get({"cluster_id": 1}, sample_config))
+
+        assert len(result) == 1
+        assert "acl" in result[0].text.lower()
+
+
+async def test_lke_acl_update_confirm_required(sample_config: Config) -> None:
+    """LKE ACL update should require confirm=true."""
+    result = list(
+        await handle_linode_lke_acl_update(
+            {
+                "cluster_id": 1,
+                "enabled": True,
+                "addresses": {"ipv4": ["10.0.0.0/8"]},
+                "confirm": False,
+            },
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_lke_acl_update_success(sample_config: Config) -> None:
+    """LKE ACL update should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.update_lke_control_plane_acl.return_value = {
+            "acl": {
+                "enabled": True,
+                "addresses": {"ipv4": ["10.0.0.0/8"], "ipv6": []},
+            },
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_acl_update(
+                {
+                    "cluster_id": 1,
+                    "enabled": True,
+                    "addresses": {"ipv4": ["10.0.0.0/8"]},
+                    "confirm": True,
+                },
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "acl" in result[0].text.lower()
+
+
+async def test_lke_acl_delete_confirm_required(sample_config: Config) -> None:
+    """LKE ACL delete should require confirm=true."""
+    result = list(
+        await handle_linode_lke_acl_delete(
+            {"cluster_id": 1, "confirm": False},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_lke_acl_delete_success(sample_config: Config) -> None:
+    """LKE ACL delete should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.delete_lke_control_plane_acl.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_acl_delete(
+                {"cluster_id": 1, "confirm": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "deleted" in result[0].text.lower()
+
+
+async def test_lke_versions_list(sample_config: Config) -> None:
+    """LKE versions list should return version data."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.list_lke_versions.return_value = [
+            {"id": "1.29"},
+            {"id": "1.28"},
+        ]
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(await handle_linode_lke_versions_list({}, sample_config))
+
+        assert len(result) == 1
+        assert "1.29" in result[0].text
+
+
+async def test_lke_version_get(sample_config: Config) -> None:
+    """LKE version get should return version details."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_lke_version.return_value = {"id": "1.29"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_version_get({"version_id": "1.29"}, sample_config)
+        )
+
+        assert len(result) == 1
+        assert "1.29" in result[0].text
+
+
+async def test_lke_version_get_missing_id(sample_config: Config) -> None:
+    """LKE version get should fail without version_id."""
+    result = list(await handle_linode_lke_version_get({}, sample_config))
+
+    assert len(result) == 1
+    assert "version_id" in result[0].text.lower()
+
+
+async def test_lke_types_list(sample_config: Config) -> None:
+    """LKE types list should return type data."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.list_lke_types.return_value = [
+            {"id": "g6-standard-1", "label": "Linode 2GB"},
+        ]
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(await handle_linode_lke_types_list({}, sample_config))
+
+        assert len(result) == 1
+        assert "g6-standard-1" in result[0].text
+
+
+async def test_lke_tier_versions_list(sample_config: Config) -> None:
+    """LKE tier versions list should return tier version data."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.list_lke_tier_versions.return_value = [
+            {"id": "1.29", "tier": "standard"},
+        ]
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(await handle_linode_lke_tier_versions_list({}, sample_config))
+
+        assert len(result) == 1
+        assert "1.29" in result[0].text
