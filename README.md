@@ -8,7 +8,7 @@ An MCP (Model Context Protocol) server that gives AI assistants like Claude|Gemi
 
 LinodeMCP exposes Linode API operations as MCP tools. AI assistants can use these tools to query and manage your Linode infrastructure -- all through a standard protocol.
 
-### Available Tools (63 total)
+### Available Tools (91 total)
 
 **Core Tools:**
 
@@ -104,6 +104,39 @@ LinodeMCP exposes Linode API operations as MCP tools. AI assistants can use thes
 | `linode_domain_record_create` | Creates a new DNS record |
 | `linode_domain_record_update` | Updates a DNS record |
 | `linode_domain_record_delete` | Deletes a DNS record |
+
+**Kubernetes (LKE):**
+
+| Tool | Description |
+|------|-------------|
+| `linode_lke_clusters_list` | Lists LKE clusters with optional label filtering |
+| `linode_lke_cluster_get` | Gets detailed info about a specific LKE cluster |
+| `linode_lke_cluster_create` | Creates a new LKE cluster with node pools (confirm required) |
+| `linode_lke_cluster_update` | Updates cluster label, version, tags, or HA setting (confirm required) |
+| `linode_lke_cluster_delete` | Deletes an LKE cluster and all its resources (confirm required) |
+| `linode_lke_cluster_recycle` | Recycles all nodes in a cluster (confirm required) |
+| `linode_lke_cluster_regenerate` | Regenerates the cluster service token (confirm required) |
+| `linode_lke_pools_list` | Lists node pools in an LKE cluster |
+| `linode_lke_pool_get` | Gets detailed info about a specific node pool |
+| `linode_lke_pool_create` | Creates a new node pool in a cluster (confirm required) |
+| `linode_lke_pool_update` | Updates node pool count, autoscaler, or tags (confirm required) |
+| `linode_lke_pool_delete` | Deletes a node pool and all its nodes (confirm required) |
+| `linode_lke_pool_recycle` | Recycles all nodes in a pool (confirm required) |
+| `linode_lke_node_get` | Gets status info about a specific node |
+| `linode_lke_node_delete` | Deletes a specific node from a cluster (confirm required) |
+| `linode_lke_node_recycle` | Recycles a specific node, replacing it (confirm required) |
+| `linode_lke_kubeconfig_get` | Gets the kubeconfig for a cluster (base64-encoded) |
+| `linode_lke_kubeconfig_delete` | Deletes and regenerates the kubeconfig (confirm required) |
+| `linode_lke_dashboard_get` | Gets the Kubernetes dashboard URL for a cluster |
+| `linode_lke_api_endpoints_list` | Lists API endpoints for a cluster |
+| `linode_lke_service_token_delete` | Deletes and regenerates the service token (confirm required) |
+| `linode_lke_acl_get` | Gets the control plane ACL configuration |
+| `linode_lke_acl_update` | Updates control plane ACL with allowed IPs (confirm required) |
+| `linode_lke_acl_delete` | Removes all IP restrictions from the API server (confirm required) |
+| `linode_lke_versions_list` | Lists available Kubernetes versions |
+| `linode_lke_version_get` | Gets details about a specific Kubernetes version |
+| `linode_lke_types_list` | Lists available LKE node types and pricing |
+| `linode_lke_tier_versions_list` | Lists Kubernetes versions available per tier |
 
 **Security:**
 
@@ -604,7 +637,7 @@ LinodeMCP/
 
 ## Status
 
-This project is in active development (v0.1.0). The foundation is complete with config management, API client, retry logic, and 63 tools covering compute, block storage, object storage, networking, DNS, and security resources. Both read and write operations are fully implemented across Go and Python.
+This project is in active development (v0.1.0). The foundation is complete with config management, API client, retry logic, and 91 tools covering compute, block storage, object storage, networking, DNS, security, and Kubernetes (LKE) resources. Both read and write operations are fully implemented across Go and Python.
 
 ## License
 
