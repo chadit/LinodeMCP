@@ -1,5 +1,7 @@
 # LinodeMCP
 
+**Note: This is an active weekend project. Tests and edge cases are currently being built out.**
+
 An MCP (Model Context Protocol) server that gives AI assistants like Claude|Gemini|Copilot programmatic access to the Linode cloud platform API. Ships with both Go and Python implementations that share the same configuration format and tool interface.
 
 ## What It Does
