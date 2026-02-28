@@ -158,6 +158,8 @@ HTTP_SERVER_ERROR_MAX = 600
 
 __all__ = [
     "UDF",
+    "VPC",
+    "VPCIP",
     "APIError",
     "Account",
     "Addons",
@@ -207,6 +209,7 @@ __all__ = [
     "Specs",
     "StackScript",
     "Transfer",
+    "VPCSubnet",
     "Volume",
     "is_retryable",
     "validate_dns_record_name",
@@ -793,6 +796,50 @@ class LKEControlPlaneACL:
 
     enabled: bool
     addresses: LKEControlPlaneACLAddresses
+
+
+@dataclass
+class VPCSubnet:
+    """Subnet within a VPC."""
+
+    id: int
+    label: str
+    ipv4: str
+    linodes: list[dict[str, Any]]
+    created: str
+    updated: str
+
+
+@dataclass
+class VPC:
+    """Linode VPC."""
+
+    id: int
+    label: str
+    description: str
+    region: str
+    subnets: list[VPCSubnet]
+    created: str
+    updated: str
+
+
+@dataclass
+class VPCIP:
+    """IP address associated with a VPC."""
+
+    address: str
+    address_range: str | None
+    vpc_id: int
+    subnet_id: int
+    region: str
+    linode_id: int
+    config_id: int
+    interface_id: int
+    active: bool
+    nat_1_1: str | None
+    gateway: str | None
+    prefix: int | None
+    subnet_mask: str | None
 
 
 class Client:
@@ -2419,6 +2466,164 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListLKETierVersions", e) from e
 
+    # VPC operations
+
+    async def list_vpcs(self) -> list[dict[str, Any]]:
+        """List VPCs."""
+        try:
+            response = await self.make_request("GET", "/vpcs")
+            data = response.json()
+            vpcs: list[dict[str, Any]] = data.get("data", [])
+            return vpcs
+        except httpx.HTTPError as e:
+            raise NetworkError("ListVPCs", e) from e
+
+    async def get_vpc(self, vpc_id: int) -> dict[str, Any]:
+        """Get a specific VPC."""
+        endpoint = f"/vpcs/{vpc_id}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            vpc: dict[str, Any] = response.json()
+            return vpc
+        except httpx.HTTPError as e:
+            raise NetworkError("GetVPC", e) from e
+
+    async def create_vpc(
+        self,
+        label: str,
+        region: str,
+        description: str | None = None,
+        subnets: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """Create a new VPC."""
+        try:
+            body: dict[str, Any] = {
+                "label": label,
+                "region": region,
+            }
+            if description is not None:
+                body["description"] = description
+            if subnets is not None:
+                body["subnets"] = subnets
+            response = await self.make_request("POST", "/vpcs", body)
+            vpc: dict[str, Any] = response.json()
+            return vpc
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateVPC", e) from e
+
+    async def update_vpc(
+        self,
+        vpc_id: int,
+        label: str | None = None,
+        description: str | None = None,
+    ) -> dict[str, Any]:
+        """Update a VPC."""
+        endpoint = f"/vpcs/{vpc_id}"
+        try:
+            body: dict[str, Any] = {}
+            if label is not None:
+                body["label"] = label
+            if description is not None:
+                body["description"] = description
+            response = await self.make_request("PUT", endpoint, body)
+            vpc: dict[str, Any] = response.json()
+            return vpc
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateVPC", e) from e
+
+    async def delete_vpc(self, vpc_id: int) -> None:
+        """Delete a VPC."""
+        endpoint = f"/vpcs/{vpc_id}"
+        try:
+            await self.make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteVPC", e) from e
+
+    async def list_vpc_ips(self) -> list[dict[str, Any]]:
+        """List all VPC IP addresses."""
+        try:
+            response = await self.make_request("GET", "/vpcs/ips")
+            data = response.json()
+            ips: list[dict[str, Any]] = data.get("data", [])
+            return ips
+        except httpx.HTTPError as e:
+            raise NetworkError("ListVPCIPs", e) from e
+
+    async def list_vpc_ip(self, vpc_id: int) -> list[dict[str, Any]]:
+        """List IP addresses for a specific VPC."""
+        endpoint = f"/vpcs/{vpc_id}/ips"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data = response.json()
+            ips: list[dict[str, Any]] = data.get("data", [])
+            return ips
+        except httpx.HTTPError as e:
+            raise NetworkError("ListVPCIP", e) from e
+
+    async def list_vpc_subnets(self, vpc_id: int) -> list[dict[str, Any]]:
+        """List subnets for a VPC."""
+        endpoint = f"/vpcs/{vpc_id}/subnets"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data = response.json()
+            subnets: list[dict[str, Any]] = data.get("data", [])
+            return subnets
+        except httpx.HTTPError as e:
+            raise NetworkError("ListVPCSubnets", e) from e
+
+    async def get_vpc_subnet(self, vpc_id: int, subnet_id: int) -> dict[str, Any]:
+        """Get a specific VPC subnet."""
+        endpoint = f"/vpcs/{vpc_id}/subnets/{subnet_id}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            subnet: dict[str, Any] = response.json()
+            return subnet
+        except httpx.HTTPError as e:
+            raise NetworkError("GetVPCSubnet", e) from e
+
+    async def create_vpc_subnet(
+        self,
+        vpc_id: int,
+        label: str,
+        ipv4: str,
+    ) -> dict[str, Any]:
+        """Create a new subnet in a VPC."""
+        endpoint = f"/vpcs/{vpc_id}/subnets"
+        try:
+            body: dict[str, Any] = {
+                "label": label,
+                "ipv4": ipv4,
+            }
+            response = await self.make_request("POST", endpoint, body)
+            subnet: dict[str, Any] = response.json()
+            return subnet
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateVPCSubnet", e) from e
+
+    async def update_vpc_subnet(
+        self,
+        vpc_id: int,
+        subnet_id: int,
+        label: str,
+    ) -> dict[str, Any]:
+        """Update a VPC subnet."""
+        endpoint = f"/vpcs/{vpc_id}/subnets/{subnet_id}"
+        try:
+            body: dict[str, Any] = {"label": label}
+            response = await self.make_request("PUT", endpoint, body)
+            subnet: dict[str, Any] = response.json()
+            return subnet
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateVPCSubnet", e) from e
+
+    async def delete_vpc_subnet(self, vpc_id: int, subnet_id: int) -> None:
+        """Delete a VPC subnet."""
+        endpoint = f"/vpcs/{vpc_id}/subnets/{subnet_id}"
+        try:
+            await self.make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteVPCSubnet", e) from e
+
     async def make_request(
         self, method: str, endpoint: str, body: dict[str, Any] | None = None
     ) -> httpx.Response:
@@ -3658,6 +3863,120 @@ class RetryableClient:
             self.client.list_lke_tier_versions
         )
         return result
+
+    # VPC operations with retry
+
+    async def list_vpcs(self) -> list[dict[str, Any]]:
+        """List VPCs with retry."""
+        result: list[dict[str, Any]] = await self._execute_with_retry(
+            self.client.list_vpcs
+        )
+        return result
+
+    async def get_vpc(self, vpc_id: int) -> dict[str, Any]:
+        """Get a specific VPC with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_vpc, vpc_id
+        )
+        return result
+
+    async def create_vpc(
+        self,
+        label: str,
+        region: str,
+        description: str | None = None,
+        subnets: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """Create VPC with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.create_vpc,
+            label,
+            region,
+            description,
+            subnets,
+        )
+        return result
+
+    async def update_vpc(
+        self,
+        vpc_id: int,
+        label: str | None = None,
+        description: str | None = None,
+    ) -> dict[str, Any]:
+        """Update VPC with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.update_vpc,
+            vpc_id,
+            label,
+            description,
+        )
+        return result
+
+    async def delete_vpc(self, vpc_id: int) -> None:
+        """Delete VPC with retry."""
+        await self._execute_with_retry(self.client.delete_vpc, vpc_id)
+
+    async def list_vpc_ips(self) -> list[dict[str, Any]]:
+        """List all VPC IP addresses with retry."""
+        result: list[dict[str, Any]] = await self._execute_with_retry(
+            self.client.list_vpc_ips
+        )
+        return result
+
+    async def list_vpc_ip(self, vpc_id: int) -> list[dict[str, Any]]:
+        """List IPs for a specific VPC with retry."""
+        result: list[dict[str, Any]] = await self._execute_with_retry(
+            self.client.list_vpc_ip, vpc_id
+        )
+        return result
+
+    async def list_vpc_subnets(self, vpc_id: int) -> list[dict[str, Any]]:
+        """List VPC subnets with retry."""
+        result: list[dict[str, Any]] = await self._execute_with_retry(
+            self.client.list_vpc_subnets, vpc_id
+        )
+        return result
+
+    async def get_vpc_subnet(self, vpc_id: int, subnet_id: int) -> dict[str, Any]:
+        """Get a specific VPC subnet with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_vpc_subnet, vpc_id, subnet_id
+        )
+        return result
+
+    async def create_vpc_subnet(
+        self,
+        vpc_id: int,
+        label: str,
+        ipv4: str,
+    ) -> dict[str, Any]:
+        """Create VPC subnet with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.create_vpc_subnet,
+            vpc_id,
+            label,
+            ipv4,
+        )
+        return result
+
+    async def update_vpc_subnet(
+        self,
+        vpc_id: int,
+        subnet_id: int,
+        label: str,
+    ) -> dict[str, Any]:
+        """Update VPC subnet with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.update_vpc_subnet,
+            vpc_id,
+            subnet_id,
+            label,
+        )
+        return result
+
+    async def delete_vpc_subnet(self, vpc_id: int, subnet_id: int) -> None:
+        """Delete VPC subnet with retry."""
+        await self._execute_with_retry(self.client.delete_vpc_subnet, vpc_id, subnet_id)
 
     async def _execute_with_retry(
         self, func: Callable[..., Awaitable[T]], *args: Any

@@ -1218,6 +1218,172 @@ func (rc *RetryableClient) ListLKETierVersions(ctx context.Context) ([]LKETierVe
 	return versions, err
 }
 
+// VPC operations
+
+// ListVPCs retrieves all VPCs with automatic retry on transient failures.
+func (rc *RetryableClient) ListVPCs(ctx context.Context) ([]VPC, error) {
+	var vpcs []VPC
+
+	err := rc.executeWithRetry(ctx, "ListVPCs", func() error {
+		var retryErr error
+
+		vpcs, retryErr = rc.Client.ListVPCs(ctx)
+
+		return retryErr
+	})
+
+	return vpcs, err
+}
+
+// GetVPC retrieves a single VPC by ID with automatic retry on transient failures.
+func (rc *RetryableClient) GetVPC(ctx context.Context, vpcID int) (*VPC, error) {
+	var vpc *VPC
+
+	err := rc.executeWithRetry(ctx, "GetVPC", func() error {
+		var retryErr error
+
+		vpc, retryErr = rc.Client.GetVPC(ctx, vpcID)
+
+		return retryErr
+	})
+
+	return vpc, err
+}
+
+// CreateVPC creates a new VPC with automatic retry on transient failures.
+func (rc *RetryableClient) CreateVPC(ctx context.Context, req CreateVPCRequest) (*VPC, error) {
+	var vpc *VPC
+
+	err := rc.executeWithRetry(ctx, "CreateVPC", func() error {
+		var retryErr error
+
+		vpc, retryErr = rc.Client.CreateVPC(ctx, req)
+
+		return retryErr
+	})
+
+	return vpc, err
+}
+
+// UpdateVPC updates a VPC with automatic retry on transient failures.
+func (rc *RetryableClient) UpdateVPC(ctx context.Context, vpcID int, req UpdateVPCRequest) (*VPC, error) {
+	var vpc *VPC
+
+	err := rc.executeWithRetry(ctx, "UpdateVPC", func() error {
+		var retryErr error
+
+		vpc, retryErr = rc.Client.UpdateVPC(ctx, vpcID, req)
+
+		return retryErr
+	})
+
+	return vpc, err
+}
+
+// DeleteVPC deletes a VPC with automatic retry on transient failures.
+func (rc *RetryableClient) DeleteVPC(ctx context.Context, vpcID int) error {
+	return rc.executeWithRetry(ctx, "DeleteVPC", func() error {
+		return rc.Client.DeleteVPC(ctx, vpcID)
+	})
+}
+
+// ListVPCIPs retrieves all VPC IP addresses with automatic retry on transient failures.
+func (rc *RetryableClient) ListVPCIPs(ctx context.Context) ([]VPCIP, error) {
+	var ips []VPCIP
+
+	err := rc.executeWithRetry(ctx, "ListVPCIPs", func() error {
+		var retryErr error
+
+		ips, retryErr = rc.Client.ListVPCIPs(ctx)
+
+		return retryErr
+	})
+
+	return ips, err
+}
+
+// ListVPCIPAddresses retrieves IP addresses for a specific VPC with automatic retry on transient failures.
+func (rc *RetryableClient) ListVPCIPAddresses(ctx context.Context, vpcID int) ([]VPCIP, error) {
+	var ips []VPCIP
+
+	err := rc.executeWithRetry(ctx, "ListVPCIPAddresses", func() error {
+		var retryErr error
+
+		ips, retryErr = rc.Client.ListVPCIPAddresses(ctx, vpcID)
+
+		return retryErr
+	})
+
+	return ips, err
+}
+
+// ListVPCSubnets retrieves all subnets for a VPC with automatic retry on transient failures.
+func (rc *RetryableClient) ListVPCSubnets(ctx context.Context, vpcID int) ([]VPCSubnet, error) {
+	var subnets []VPCSubnet
+
+	err := rc.executeWithRetry(ctx, "ListVPCSubnets", func() error {
+		var retryErr error
+
+		subnets, retryErr = rc.Client.ListVPCSubnets(ctx, vpcID)
+
+		return retryErr
+	})
+
+	return subnets, err
+}
+
+// GetVPCSubnet retrieves a single subnet by ID with automatic retry on transient failures.
+func (rc *RetryableClient) GetVPCSubnet(ctx context.Context, vpcID, subnetID int) (*VPCSubnet, error) {
+	var subnet *VPCSubnet
+
+	err := rc.executeWithRetry(ctx, "GetVPCSubnet", func() error {
+		var retryErr error
+
+		subnet, retryErr = rc.Client.GetVPCSubnet(ctx, vpcID, subnetID)
+
+		return retryErr
+	})
+
+	return subnet, err
+}
+
+// CreateVPCSubnet creates a new subnet in a VPC with automatic retry on transient failures.
+func (rc *RetryableClient) CreateVPCSubnet(ctx context.Context, vpcID int, req CreateSubnetRequest) (*VPCSubnet, error) {
+	var subnet *VPCSubnet
+
+	err := rc.executeWithRetry(ctx, "CreateVPCSubnet", func() error {
+		var retryErr error
+
+		subnet, retryErr = rc.Client.CreateVPCSubnet(ctx, vpcID, req)
+
+		return retryErr
+	})
+
+	return subnet, err
+}
+
+// UpdateVPCSubnet updates a subnet in a VPC with automatic retry on transient failures.
+func (rc *RetryableClient) UpdateVPCSubnet(ctx context.Context, vpcID, subnetID int, req UpdateSubnetRequest) (*VPCSubnet, error) {
+	var subnet *VPCSubnet
+
+	err := rc.executeWithRetry(ctx, "UpdateVPCSubnet", func() error {
+		var retryErr error
+
+		subnet, retryErr = rc.Client.UpdateVPCSubnet(ctx, vpcID, subnetID, req)
+
+		return retryErr
+	})
+
+	return subnet, err
+}
+
+// DeleteVPCSubnet deletes a subnet from a VPC with automatic retry on transient failures.
+func (rc *RetryableClient) DeleteVPCSubnet(ctx context.Context, vpcID, subnetID int) error {
+	return rc.executeWithRetry(ctx, "DeleteVPCSubnet", func() error {
+		return rc.Client.DeleteVPCSubnet(ctx, vpcID, subnetID)
+	})
+}
+
 func (rc *RetryableClient) executeWithRetry(ctx context.Context, _ string, retryFunc func() error) error {
 	var lastErr error
 

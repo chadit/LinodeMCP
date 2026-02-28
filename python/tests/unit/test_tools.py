@@ -37,6 +37,12 @@ from linodemcp.tools import (
     create_linode_lke_cluster_delete_tool,
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
+    create_linode_vpc_create_tool,
+    create_linode_vpc_delete_tool,
+    create_linode_vpc_get_tool,
+    create_linode_vpc_subnet_create_tool,
+    create_linode_vpc_subnet_delete_tool,
+    create_linode_vpcs_list_tool,
     handle_hello,
     handle_linode_account,
     handle_linode_domain_create,
@@ -127,6 +133,18 @@ from linodemcp.tools import (
     handle_linode_volume_detach,
     handle_linode_volume_resize,
     handle_linode_volumes_list,
+    handle_linode_vpc_create,
+    handle_linode_vpc_delete,
+    handle_linode_vpc_get,
+    handle_linode_vpc_ip_list,
+    handle_linode_vpc_ips_list,
+    handle_linode_vpc_subnet_create,
+    handle_linode_vpc_subnet_delete,
+    handle_linode_vpc_subnet_get,
+    handle_linode_vpc_subnet_update,
+    handle_linode_vpc_subnets_list,
+    handle_linode_vpc_update,
+    handle_linode_vpcs_list,
     handle_version,
 )
 
@@ -4598,3 +4616,482 @@ async def test_lke_tier_versions_list(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "1.29" in result[0].text
+
+
+# VPC tool definition tests
+
+
+async def test_vpcs_list_tool_definition() -> None:
+    """VPCs list tool should have correct name."""
+    tool = create_linode_vpcs_list_tool()
+    assert tool.name == "linode_vpcs_list"
+
+
+async def test_vpc_get_tool_definition() -> None:
+    """VPC get tool should require vpc_id."""
+    tool = create_linode_vpc_get_tool()
+    assert tool.name == "linode_vpc_get"
+    assert "vpc_id" in (tool.inputSchema.get("required") or [])
+
+
+async def test_vpc_create_tool_definition() -> None:
+    """VPC create tool should require label, region, confirm."""
+    tool = create_linode_vpc_create_tool()
+    assert tool.name == "linode_vpc_create"
+    required = tool.inputSchema.get("required") or []
+    assert "label" in required
+    assert "region" in required
+    assert "confirm" in required
+
+
+async def test_vpc_delete_tool_definition() -> None:
+    """VPC delete tool should require vpc_id and confirm."""
+    tool = create_linode_vpc_delete_tool()
+    assert tool.name == "linode_vpc_delete"
+    required = tool.inputSchema.get("required") or []
+    assert "vpc_id" in required
+    assert "confirm" in required
+
+
+async def test_vpc_subnet_create_tool_definition() -> None:
+    """VPC subnet create tool should require vpc_id, label, ipv4, confirm."""
+    tool = create_linode_vpc_subnet_create_tool()
+    assert tool.name == "linode_vpc_subnet_create"
+    required = tool.inputSchema.get("required") or []
+    assert "vpc_id" in required
+    assert "label" in required
+    assert "ipv4" in required
+    assert "confirm" in required
+
+
+async def test_vpc_subnet_delete_tool_definition() -> None:
+    """VPC subnet delete tool should require vpc_id, subnet_id, confirm."""
+    tool = create_linode_vpc_subnet_delete_tool()
+    assert tool.name == "linode_vpc_subnet_delete"
+    required = tool.inputSchema.get("required") or []
+    assert "vpc_id" in required
+    assert "subnet_id" in required
+    assert "confirm" in required
+
+
+# VPC handler tests
+
+
+async def test_vpcs_list(sample_config: Config) -> None:
+    """VPCs list should return VPC data."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.list_vpcs.return_value = [
+            {"id": 1, "label": "my-vpc", "region": "us-east"},
+        ]
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(await handle_linode_vpcs_list({}, sample_config))
+
+        assert len(result) == 1
+        assert "my-vpc" in result[0].text
+
+
+async def test_vpc_get(sample_config: Config) -> None:
+    """VPC get should return VPC details."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_vpc.return_value = {
+            "id": 1,
+            "label": "my-vpc",
+            "region": "us-east",
+            "description": "test vpc",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(await handle_linode_vpc_get({"vpc_id": 1}, sample_config))
+
+        assert len(result) == 1
+        assert "my-vpc" in result[0].text
+
+
+async def test_vpc_get_missing_id(sample_config: Config) -> None:
+    """VPC get should fail without vpc_id."""
+    result = list(await handle_linode_vpc_get({}, sample_config))
+
+    assert len(result) == 1
+    assert "vpc_id" in result[0].text.lower()
+
+
+async def test_vpc_create_confirm_required(sample_config: Config) -> None:
+    """VPC create should require confirm=true."""
+    result = list(
+        await handle_linode_vpc_create(
+            {
+                "label": "new-vpc",
+                "region": "us-east",
+                "confirm": False,
+            },
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_vpc_create_missing_label(sample_config: Config) -> None:
+    """VPC create should fail without label."""
+    result = list(
+        await handle_linode_vpc_create(
+            {"region": "us-east", "confirm": True},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "label" in result[0].text.lower()
+
+
+async def test_vpc_create_success(sample_config: Config) -> None:
+    """VPC create should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.create_vpc.return_value = {
+            "id": 10,
+            "label": "new-vpc",
+            "region": "us-east",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_vpc_create(
+                {
+                    "label": "new-vpc",
+                    "region": "us-east",
+                    "confirm": True,
+                },
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "new-vpc" in result[0].text
+
+
+async def test_vpc_update_confirm_required(sample_config: Config) -> None:
+    """VPC update should require confirm=true."""
+    result = list(
+        await handle_linode_vpc_update(
+            {"vpc_id": 1, "label": "updated", "confirm": False},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_vpc_update_success(sample_config: Config) -> None:
+    """VPC update should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.update_vpc.return_value = {
+            "id": 1,
+            "label": "updated-vpc",
+            "region": "us-east",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_vpc_update(
+                {"vpc_id": 1, "label": "updated-vpc", "confirm": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "updated-vpc" in result[0].text
+
+
+async def test_vpc_delete_confirm_required(sample_config: Config) -> None:
+    """VPC delete should require confirm=true."""
+    result = list(
+        await handle_linode_vpc_delete(
+            {"vpc_id": 1, "confirm": False},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_vpc_delete_success(sample_config: Config) -> None:
+    """VPC delete should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.delete_vpc.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_vpc_delete(
+                {"vpc_id": 1, "confirm": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "deleted" in result[0].text.lower()
+
+
+async def test_vpc_ips_list(sample_config: Config) -> None:
+    """VPC IPs list should return IP data."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.list_vpc_ips.return_value = [
+            {"address": "10.0.0.1", "vpc_id": 1, "subnet_id": 1},
+        ]
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(await handle_linode_vpc_ips_list({}, sample_config))
+
+        assert len(result) == 1
+        assert "10.0.0.1" in result[0].text
+
+
+async def test_vpc_ip_list(sample_config: Config) -> None:
+    """VPC IP list should return IPs for a specific VPC."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.list_vpc_ip.return_value = [
+            {"address": "10.0.0.2", "vpc_id": 1, "subnet_id": 1},
+        ]
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(await handle_linode_vpc_ip_list({"vpc_id": 1}, sample_config))
+
+        assert len(result) == 1
+        assert "10.0.0.2" in result[0].text
+
+
+async def test_vpc_ip_list_missing_id(sample_config: Config) -> None:
+    """VPC IP list should fail without vpc_id."""
+    result = list(await handle_linode_vpc_ip_list({}, sample_config))
+
+    assert len(result) == 1
+    assert "vpc_id" in result[0].text.lower()
+
+
+async def test_vpc_subnets_list(sample_config: Config) -> None:
+    """VPC subnets list should return subnet data."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.list_vpc_subnets.return_value = [
+            {"id": 1, "label": "my-subnet", "ipv4": "10.0.0.0/24"},
+        ]
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_vpc_subnets_list({"vpc_id": 1}, sample_config)
+        )
+
+        assert len(result) == 1
+        assert "my-subnet" in result[0].text
+
+
+async def test_vpc_subnet_get(sample_config: Config) -> None:
+    """VPC subnet get should return subnet details."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_vpc_subnet.return_value = {
+            "id": 1,
+            "label": "my-subnet",
+            "ipv4": "10.0.0.0/24",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_vpc_subnet_get(
+                {"vpc_id": 1, "subnet_id": 1}, sample_config
+            )
+        )
+
+        assert len(result) == 1
+        assert "my-subnet" in result[0].text
+
+
+async def test_vpc_subnet_get_missing_ids(sample_config: Config) -> None:
+    """VPC subnet get should fail without required IDs."""
+    result = list(await handle_linode_vpc_subnet_get({}, sample_config))
+    assert len(result) == 1
+    assert "vpc_id" in result[0].text.lower()
+
+    result = list(await handle_linode_vpc_subnet_get({"vpc_id": 1}, sample_config))
+    assert len(result) == 1
+    assert "subnet_id" in result[0].text.lower()
+
+
+async def test_vpc_subnet_create_confirm_required(
+    sample_config: Config,
+) -> None:
+    """VPC subnet create should require confirm=true."""
+    result = list(
+        await handle_linode_vpc_subnet_create(
+            {
+                "vpc_id": 1,
+                "label": "new-subnet",
+                "ipv4": "10.0.0.0/24",
+                "confirm": False,
+            },
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_vpc_subnet_create_missing_label(
+    sample_config: Config,
+) -> None:
+    """VPC subnet create should fail without label."""
+    result = list(
+        await handle_linode_vpc_subnet_create(
+            {
+                "vpc_id": 1,
+                "ipv4": "10.0.0.0/24",
+                "confirm": True,
+            },
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "label" in result[0].text.lower()
+
+
+async def test_vpc_subnet_create_success(sample_config: Config) -> None:
+    """VPC subnet create should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.create_vpc_subnet.return_value = {
+            "id": 5,
+            "label": "new-subnet",
+            "ipv4": "10.0.0.0/24",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_vpc_subnet_create(
+                {
+                    "vpc_id": 1,
+                    "label": "new-subnet",
+                    "ipv4": "10.0.0.0/24",
+                    "confirm": True,
+                },
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "new-subnet" in result[0].text
+
+
+async def test_vpc_subnet_update_confirm_required(
+    sample_config: Config,
+) -> None:
+    """VPC subnet update should require confirm=true."""
+    result = list(
+        await handle_linode_vpc_subnet_update(
+            {
+                "vpc_id": 1,
+                "subnet_id": 1,
+                "label": "updated",
+                "confirm": False,
+            },
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_vpc_subnet_update_success(sample_config: Config) -> None:
+    """VPC subnet update should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.update_vpc_subnet.return_value = {
+            "id": 1,
+            "label": "updated-subnet",
+            "ipv4": "10.0.0.0/24",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_vpc_subnet_update(
+                {
+                    "vpc_id": 1,
+                    "subnet_id": 1,
+                    "label": "updated-subnet",
+                    "confirm": True,
+                },
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "updated-subnet" in result[0].text
+
+
+async def test_vpc_subnet_delete_confirm_required(
+    sample_config: Config,
+) -> None:
+    """VPC subnet delete should require confirm=true."""
+    result = list(
+        await handle_linode_vpc_subnet_delete(
+            {"vpc_id": 1, "subnet_id": 1, "confirm": False},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_vpc_subnet_delete_success(sample_config: Config) -> None:
+    """VPC subnet delete should succeed with valid input."""
+    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.delete_vpc_subnet.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_vpc_subnet_delete(
+                {"vpc_id": 1, "subnet_id": 1, "confirm": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "deleted" in result[0].text.lower()

@@ -102,6 +102,7 @@ func (s *Server) registerTools() {
 	s.registerVolumeTools()
 	s.registerObjectStorageTools()
 	s.registerLKETools()
+	s.registerVPCTools()
 }
 
 func (s *Server) registerCoreTools() {
@@ -210,6 +211,27 @@ func (s *Server) registerObjectStorageTools() {
 		tools.NewLinodeObjectStorageObjectACLUpdateTool,
 		tools.NewLinodeObjectStorageSSLGetTool,
 		tools.NewLinodeObjectStorageSSLDeleteTool,
+	} {
+		s.registerToolFromFactory(factory)
+	}
+}
+
+func (s *Server) registerVPCTools() {
+	for _, factory := range []toolFactory{
+		// Read tools
+		tools.NewLinodeVPCsListTool,
+		tools.NewLinodeVPCGetTool,
+		tools.NewLinodeVPCIPsListTool,
+		tools.NewLinodeVPCIPListTool,
+		tools.NewLinodeVPCSubnetsListTool,
+		tools.NewLinodeVPCSubnetGetTool,
+		// Write tools
+		tools.NewLinodeVPCCreateTool,
+		tools.NewLinodeVPCUpdateTool,
+		tools.NewLinodeVPCDeleteTool,
+		tools.NewLinodeVPCSubnetCreateTool,
+		tools.NewLinodeVPCSubnetUpdateTool,
+		tools.NewLinodeVPCSubnetDeleteTool,
 	} {
 		s.registerToolFromFactory(factory)
 	}

@@ -8,7 +8,7 @@ An MCP (Model Context Protocol) server that gives AI assistants like Claude|Gemi
 
 LinodeMCP exposes Linode API operations as MCP tools. AI assistants can use these tools to query and manage your Linode infrastructure -- all through a standard protocol.
 
-### Available Tools (91 total)
+### Available Tools (103 total)
 
 **Core Tools:**
 
@@ -137,6 +137,23 @@ LinodeMCP exposes Linode API operations as MCP tools. AI assistants can use thes
 | `linode_lke_version_get` | Gets details about a specific Kubernetes version |
 | `linode_lke_types_list` | Lists available LKE node types and pricing |
 | `linode_lke_tier_versions_list` | Lists Kubernetes versions available per tier |
+
+**VPCs & Subnets:**
+
+| Tool | Description |
+|------|-------------|
+| `linode_vpcs_list` | Lists VPCs with optional label and region filtering |
+| `linode_vpc_get` | Gets detailed info about a specific VPC |
+| `linode_vpc_create` | Creates a new VPC with optional subnets (confirm required) |
+| `linode_vpc_update` | Updates VPC label or description (confirm required) |
+| `linode_vpc_delete` | Deletes a VPC and all its subnets (confirm required) |
+| `linode_vpc_ips_list` | Lists all VPC IP addresses across all VPCs |
+| `linode_vpc_ip_list` | Lists IP addresses for a specific VPC |
+| `linode_vpc_subnets_list` | Lists subnets in a specific VPC |
+| `linode_vpc_subnet_get` | Gets detailed info about a specific subnet |
+| `linode_vpc_subnet_create` | Creates a new subnet in a VPC (confirm required) |
+| `linode_vpc_subnet_update` | Updates a subnet's label (confirm required) |
+| `linode_vpc_subnet_delete` | Deletes a subnet from a VPC (confirm required) |
 
 **Security:**
 
@@ -637,7 +654,7 @@ LinodeMCP/
 
 ## Status
 
-This project is in active development (v0.1.0). The foundation is complete with config management, API client, retry logic, and 91 tools covering compute, block storage, object storage, networking, DNS, security, and Kubernetes (LKE) resources. Both read and write operations are fully implemented across Go and Python.
+This project is in active development (v0.1.0). The foundation is complete with config management, API client, retry logic, and 103 tools covering compute, block storage, object storage, networking, DNS, security, Kubernetes (LKE), and VPCs/subnets. Both read and write operations are fully implemented across Go and Python.
 
 ## License
 

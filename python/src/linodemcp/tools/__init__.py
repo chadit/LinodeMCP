@@ -165,6 +165,18 @@ __all__ = [
     "create_linode_volume_detach_tool",
     "create_linode_volume_resize_tool",
     "create_linode_volumes_list_tool",
+    "create_linode_vpc_create_tool",
+    "create_linode_vpc_delete_tool",
+    "create_linode_vpc_get_tool",
+    "create_linode_vpc_ip_list_tool",
+    "create_linode_vpc_ips_list_tool",
+    "create_linode_vpc_subnet_create_tool",
+    "create_linode_vpc_subnet_delete_tool",
+    "create_linode_vpc_subnet_get_tool",
+    "create_linode_vpc_subnet_update_tool",
+    "create_linode_vpc_subnets_list_tool",
+    "create_linode_vpc_update_tool",
+    "create_linode_vpcs_list_tool",
     "create_version_tool",
     "handle_hello",
     "handle_linode_account",
@@ -256,6 +268,18 @@ __all__ = [
     "handle_linode_volume_detach",
     "handle_linode_volume_resize",
     "handle_linode_volumes_list",
+    "handle_linode_vpc_create",
+    "handle_linode_vpc_delete",
+    "handle_linode_vpc_get",
+    "handle_linode_vpc_ip_list",
+    "handle_linode_vpc_ips_list",
+    "handle_linode_vpc_subnet_create",
+    "handle_linode_vpc_subnet_delete",
+    "handle_linode_vpc_subnet_get",
+    "handle_linode_vpc_subnet_update",
+    "handle_linode_vpc_subnets_list",
+    "handle_linode_vpc_update",
+    "handle_linode_vpcs_list",
     "handle_version",
 ]
 
@@ -5956,3 +5980,565 @@ async def handle_linode_lke_tier_versions_list(
         return {"count": len(versions), "tier_versions": versions}
 
     return await execute_tool(cfg, arguments, "list LKE tier versions", _call)
+
+
+# VPC tools
+
+_VPC_ID_PROP: dict[str, Any] = {
+    "type": "string",
+    "description": "The ID of the VPC (required)",
+}
+
+_SUBNET_ID_PROP: dict[str, Any] = {
+    "type": "string",
+    "description": "The ID of the subnet (required)",
+}
+
+
+def _parse_vpc_subnet_ids(
+    arguments: dict[str, Any],
+) -> tuple[int, int] | list[TextContent]:
+    """Parse and validate vpc_id and subnet_id from arguments.
+
+    Returns a (vpc_id, subnet_id) tuple on success, or an error
+    response list on failure.
+    """
+    vpc_id_str = arguments.get("vpc_id", "")
+    if not vpc_id_str:
+        return _error_response("vpc_id is required")
+    try:
+        vpc_id = int(vpc_id_str)
+    except ValueError:
+        return _error_response("vpc_id must be a valid integer")
+
+    subnet_id_str = arguments.get("subnet_id", "")
+    if not subnet_id_str:
+        return _error_response("subnet_id is required")
+    try:
+        subnet_id = int(subnet_id_str)
+    except ValueError:
+        return _error_response("subnet_id must be a valid integer")
+
+    return (vpc_id, subnet_id)
+
+
+def create_linode_vpcs_list_tool() -> Tool:
+    """Create the linode_vpcs_list tool."""
+    return Tool(
+        name="linode_vpcs_list",
+        description="Lists all VPCs on the account",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+            },
+        },
+    )
+
+
+async def handle_linode_vpcs_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_vpcs_list tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        vpcs = await client.list_vpcs()
+        return {"count": len(vpcs), "vpcs": vpcs}
+
+    return await execute_tool(cfg, arguments, "list VPCs", _call)
+
+
+def create_linode_vpc_get_tool() -> Tool:
+    """Create the linode_vpc_get tool."""
+    return Tool(
+        name="linode_vpc_get",
+        description="Gets details of a specific VPC by ID",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "vpc_id": _VPC_ID_PROP,
+            },
+            "required": ["vpc_id"],
+        },
+    )
+
+
+async def handle_linode_vpc_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_vpc_get tool request."""
+    vpc_id_str = arguments.get("vpc_id", "")
+    if not vpc_id_str:
+        return _error_response("vpc_id is required")
+    try:
+        vpc_id = int(vpc_id_str)
+    except ValueError:
+        return _error_response("vpc_id must be a valid integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_vpc(vpc_id)
+
+    return await execute_tool(cfg, arguments, "get VPC", _call)
+
+
+def create_linode_vpc_create_tool() -> Tool:
+    """Create the linode_vpc_create tool."""
+    return Tool(
+        name="linode_vpc_create",
+        description="Creates a new VPC",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "label": {
+                    "type": "string",
+                    "description": "Label for the VPC (required)",
+                },
+                "region": {
+                    "type": "string",
+                    "description": "Region for the VPC (required)",
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Description of the VPC",
+                },
+                "subnets": {
+                    "type": "array",
+                    "description": ("Initial subnets: [{label, ipv4}]"),
+                    "items": {"type": "object"},
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": ("Must be true to confirm creation."),
+                },
+            },
+            "required": ["label", "region", "confirm"],
+        },
+    )
+
+
+async def handle_linode_vpc_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_vpc_create tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("Set confirm=true to proceed.")
+
+    label = arguments.get("label", "")
+    region = arguments.get("region", "")
+    if not label:
+        return _error_response("label is required")
+    if not region:
+        return _error_response("region is required")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.create_vpc(
+            label=label,
+            region=region,
+            description=arguments.get("description"),
+            subnets=arguments.get("subnets"),
+        )
+
+    return await execute_tool(cfg, arguments, "create VPC", _call)
+
+
+def create_linode_vpc_update_tool() -> Tool:
+    """Create the linode_vpc_update tool."""
+    return Tool(
+        name="linode_vpc_update",
+        description="Updates an existing VPC",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "vpc_id": _VPC_ID_PROP,
+                "label": {
+                    "type": "string",
+                    "description": "New label for the VPC",
+                },
+                "description": {
+                    "type": "string",
+                    "description": "New description for the VPC",
+                },
+                "confirm": _CONFIRM_PROP,
+            },
+            "required": ["vpc_id", "confirm"],
+        },
+    )
+
+
+async def handle_linode_vpc_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_vpc_update tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("Set confirm=true to proceed.")
+
+    vpc_id_str = arguments.get("vpc_id", "")
+    if not vpc_id_str:
+        return _error_response("vpc_id is required")
+    try:
+        vpc_id = int(vpc_id_str)
+    except ValueError:
+        return _error_response("vpc_id must be a valid integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.update_vpc(
+            vpc_id=vpc_id,
+            label=arguments.get("label"),
+            description=arguments.get("description"),
+        )
+
+    return await execute_tool(cfg, arguments, "update VPC", _call)
+
+
+def create_linode_vpc_delete_tool() -> Tool:
+    """Create the linode_vpc_delete tool."""
+    return Tool(
+        name="linode_vpc_delete",
+        description="Deletes a VPC",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "vpc_id": _VPC_ID_PROP,
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to confirm deletion. This is irreversible."
+                    ),
+                },
+            },
+            "required": ["vpc_id", "confirm"],
+        },
+    )
+
+
+async def handle_linode_vpc_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_vpc_delete tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("This is destructive. Set confirm=true to proceed.")
+
+    vpc_id_str = arguments.get("vpc_id", "")
+    if not vpc_id_str:
+        return _error_response("vpc_id is required")
+    try:
+        vpc_id = int(vpc_id_str)
+    except ValueError:
+        return _error_response("vpc_id must be a valid integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_vpc(vpc_id)
+        return {
+            "message": f"VPC {vpc_id} deleted",
+            "vpc_id": vpc_id,
+        }
+
+    return await execute_tool(cfg, arguments, "delete VPC", _call)
+
+
+def create_linode_vpc_ips_list_tool() -> Tool:
+    """Create the linode_vpc_ips_list tool."""
+    return Tool(
+        name="linode_vpc_ips_list",
+        description="Lists all VPC IP addresses across all VPCs",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+            },
+        },
+    )
+
+
+async def handle_linode_vpc_ips_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_vpc_ips_list tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        ips = await client.list_vpc_ips()
+        return {"count": len(ips), "ips": ips}
+
+    return await execute_tool(cfg, arguments, "list VPC IPs", _call)
+
+
+def create_linode_vpc_ip_list_tool() -> Tool:
+    """Create the linode_vpc_ip_list tool."""
+    return Tool(
+        name="linode_vpc_ip_list",
+        description=("Lists IP addresses for a specific VPC"),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "vpc_id": _VPC_ID_PROP,
+            },
+            "required": ["vpc_id"],
+        },
+    )
+
+
+async def handle_linode_vpc_ip_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_vpc_ip_list tool request."""
+    vpc_id_str = arguments.get("vpc_id", "")
+    if not vpc_id_str:
+        return _error_response("vpc_id is required")
+    try:
+        vpc_id = int(vpc_id_str)
+    except ValueError:
+        return _error_response("vpc_id must be a valid integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        ips = await client.list_vpc_ip(vpc_id)
+        return {"count": len(ips), "ips": ips}
+
+    return await execute_tool(cfg, arguments, "list VPC IPs", _call)
+
+
+def create_linode_vpc_subnets_list_tool() -> Tool:
+    """Create the linode_vpc_subnets_list tool."""
+    return Tool(
+        name="linode_vpc_subnets_list",
+        description="Lists subnets for a specific VPC",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "vpc_id": _VPC_ID_PROP,
+            },
+            "required": ["vpc_id"],
+        },
+    )
+
+
+async def handle_linode_vpc_subnets_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_vpc_subnets_list tool request."""
+    vpc_id_str = arguments.get("vpc_id", "")
+    if not vpc_id_str:
+        return _error_response("vpc_id is required")
+    try:
+        vpc_id = int(vpc_id_str)
+    except ValueError:
+        return _error_response("vpc_id must be a valid integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        subnets = await client.list_vpc_subnets(vpc_id)
+        return {"count": len(subnets), "subnets": subnets}
+
+    return await execute_tool(cfg, arguments, "list VPC subnets", _call)
+
+
+def create_linode_vpc_subnet_get_tool() -> Tool:
+    """Create the linode_vpc_subnet_get tool."""
+    return Tool(
+        name="linode_vpc_subnet_get",
+        description="Gets details of a specific VPC subnet",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "vpc_id": _VPC_ID_PROP,
+                "subnet_id": _SUBNET_ID_PROP,
+            },
+            "required": ["vpc_id", "subnet_id"],
+        },
+    )
+
+
+async def handle_linode_vpc_subnet_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_vpc_subnet_get tool request."""
+    ids = _parse_vpc_subnet_ids(arguments)
+    if isinstance(ids, list):
+        return ids
+    vpc_id, subnet_id = ids
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_vpc_subnet(vpc_id, subnet_id)
+
+    return await execute_tool(cfg, arguments, "get VPC subnet", _call)
+
+
+def create_linode_vpc_subnet_create_tool() -> Tool:
+    """Create the linode_vpc_subnet_create tool."""
+    return Tool(
+        name="linode_vpc_subnet_create",
+        description="Creates a new subnet in a VPC",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "vpc_id": _VPC_ID_PROP,
+                "label": {
+                    "type": "string",
+                    "description": ("Label for the subnet (required)"),
+                },
+                "ipv4": {
+                    "type": "string",
+                    "description": (
+                        "IPv4 range in CIDR format, e.g. 10.0.0.0/24 (required)"
+                    ),
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": ("Must be true to confirm creation."),
+                },
+            },
+            "required": [
+                "vpc_id",
+                "label",
+                "ipv4",
+                "confirm",
+            ],
+        },
+    )
+
+
+async def handle_linode_vpc_subnet_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_vpc_subnet_create tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("Set confirm=true to proceed.")
+
+    vpc_id_str = arguments.get("vpc_id", "")
+    if not vpc_id_str:
+        return _error_response("vpc_id is required")
+    try:
+        vpc_id = int(vpc_id_str)
+    except ValueError:
+        return _error_response("vpc_id must be a valid integer")
+
+    label = arguments.get("label", "")
+    ipv4 = arguments.get("ipv4", "")
+    if not label:
+        return _error_response("label is required")
+    if not ipv4:
+        return _error_response("ipv4 is required")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.create_vpc_subnet(
+            vpc_id=vpc_id,
+            label=label,
+            ipv4=ipv4,
+        )
+
+    return await execute_tool(cfg, arguments, "create VPC subnet", _call)
+
+
+def create_linode_vpc_subnet_update_tool() -> Tool:
+    """Create the linode_vpc_subnet_update tool."""
+    return Tool(
+        name="linode_vpc_subnet_update",
+        description="Updates a VPC subnet",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "vpc_id": _VPC_ID_PROP,
+                "subnet_id": _SUBNET_ID_PROP,
+                "label": {
+                    "type": "string",
+                    "description": ("New label for the subnet (required)"),
+                },
+                "confirm": _CONFIRM_PROP,
+            },
+            "required": [
+                "vpc_id",
+                "subnet_id",
+                "label",
+                "confirm",
+            ],
+        },
+    )
+
+
+async def handle_linode_vpc_subnet_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_vpc_subnet_update tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("Set confirm=true to proceed.")
+
+    ids = _parse_vpc_subnet_ids(arguments)
+    if isinstance(ids, list):
+        return ids
+    vpc_id, subnet_id = ids
+
+    label = arguments.get("label", "")
+    if not label:
+        return _error_response("label is required")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.update_vpc_subnet(
+            vpc_id=vpc_id,
+            subnet_id=subnet_id,
+            label=label,
+        )
+
+    return await execute_tool(cfg, arguments, "update VPC subnet", _call)
+
+
+def create_linode_vpc_subnet_delete_tool() -> Tool:
+    """Create the linode_vpc_subnet_delete tool."""
+    return Tool(
+        name="linode_vpc_subnet_delete",
+        description="Deletes a VPC subnet",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "vpc_id": _VPC_ID_PROP,
+                "subnet_id": _SUBNET_ID_PROP,
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to confirm deletion. This is irreversible."
+                    ),
+                },
+            },
+            "required": [
+                "vpc_id",
+                "subnet_id",
+                "confirm",
+            ],
+        },
+    )
+
+
+async def handle_linode_vpc_subnet_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_vpc_subnet_delete tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("This is destructive. Set confirm=true to proceed.")
+
+    ids = _parse_vpc_subnet_ids(arguments)
+    if isinstance(ids, list):
+        return ids
+    vpc_id, subnet_id = ids
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_vpc_subnet(vpc_id, subnet_id)
+        return {
+            "message": (f"Subnet {subnet_id} deleted from VPC {vpc_id}"),
+            "vpc_id": vpc_id,
+            "subnet_id": subnet_id,
+        }
+
+    return await execute_tool(cfg, arguments, "delete VPC subnet", _call)

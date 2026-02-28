@@ -333,3 +333,11 @@ var (
 	ErrLKEPoolIDRequired    = errors.New("pool_id is required")
 	ErrLKEPoolIDInvalid     = errors.New("pool_id must be a valid integer")
 )
+
+// ErrVPCIDRequired and related errors are returned when VPC tool parameters fail validation.
+var (
+	ErrVPCIDRequired    = errors.New("vpc_id is required")
+	ErrVPCIDInvalid     = errors.New("vpc_id must be a valid integer")
+	ErrSubnetIDRequired = errors.New("subnet_id is required")
+	ErrSubnetIDInvalid  = errors.New("subnet_id must be a valid integer")
+)

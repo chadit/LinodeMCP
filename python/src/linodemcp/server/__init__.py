@@ -101,6 +101,18 @@ from linodemcp.tools import (
     create_linode_volume_detach_tool,
     create_linode_volume_resize_tool,
     create_linode_volumes_list_tool,
+    create_linode_vpc_create_tool,
+    create_linode_vpc_delete_tool,
+    create_linode_vpc_get_tool,
+    create_linode_vpc_ip_list_tool,
+    create_linode_vpc_ips_list_tool,
+    create_linode_vpc_subnet_create_tool,
+    create_linode_vpc_subnet_delete_tool,
+    create_linode_vpc_subnet_get_tool,
+    create_linode_vpc_subnet_update_tool,
+    create_linode_vpc_subnets_list_tool,
+    create_linode_vpc_update_tool,
+    create_linode_vpcs_list_tool,
     create_version_tool,
     handle_hello,
     handle_linode_account,
@@ -192,6 +204,18 @@ from linodemcp.tools import (
     handle_linode_volume_detach,
     handle_linode_volume_resize,
     handle_linode_volumes_list,
+    handle_linode_vpc_create,
+    handle_linode_vpc_delete,
+    handle_linode_vpc_get,
+    handle_linode_vpc_ip_list,
+    handle_linode_vpc_ips_list,
+    handle_linode_vpc_subnet_create,
+    handle_linode_vpc_subnet_delete,
+    handle_linode_vpc_subnet_get,
+    handle_linode_vpc_subnet_update,
+    handle_linode_vpc_subnets_list,
+    handle_linode_vpc_update,
+    handle_linode_vpcs_list,
     handle_version,
 )
 
@@ -332,6 +356,20 @@ class Server:
                 create_linode_lke_service_token_delete_tool(),
                 create_linode_lke_acl_update_tool(),
                 create_linode_lke_acl_delete_tool(),
+                # VPC read operations
+                create_linode_vpcs_list_tool(),
+                create_linode_vpc_get_tool(),
+                create_linode_vpc_ips_list_tool(),
+                create_linode_vpc_ip_list_tool(),
+                create_linode_vpc_subnets_list_tool(),
+                create_linode_vpc_subnet_get_tool(),
+                # VPC write operations
+                create_linode_vpc_create_tool(),
+                create_linode_vpc_update_tool(),
+                create_linode_vpc_delete_tool(),
+                create_linode_vpc_subnet_create_tool(),
+                create_linode_vpc_subnet_update_tool(),
+                create_linode_vpc_subnet_delete_tool(),
             ]
 
         _list_tools_method()(_list_tools)
@@ -468,6 +506,20 @@ class Server:
             "linode_lke_service_token_delete": handle_linode_lke_service_token_delete,
             "linode_lke_acl_update": handle_linode_lke_acl_update,
             "linode_lke_acl_delete": handle_linode_lke_acl_delete,
+            # VPC read operations
+            "linode_vpcs_list": handle_linode_vpcs_list,
+            "linode_vpc_get": handle_linode_vpc_get,
+            "linode_vpc_ips_list": handle_linode_vpc_ips_list,
+            "linode_vpc_ip_list": handle_linode_vpc_ip_list,
+            "linode_vpc_subnets_list": handle_linode_vpc_subnets_list,
+            "linode_vpc_subnet_get": handle_linode_vpc_subnet_get,
+            # VPC write operations
+            "linode_vpc_create": handle_linode_vpc_create,
+            "linode_vpc_update": handle_linode_vpc_update,
+            "linode_vpc_delete": handle_linode_vpc_delete,
+            "linode_vpc_subnet_create": handle_linode_vpc_subnet_create,
+            "linode_vpc_subnet_update": handle_linode_vpc_subnet_update,
+            "linode_vpc_subnet_delete": handle_linode_vpc_subnet_delete,
         }
 
         async def _call_tool(name: str, arguments: dict[str, Any]) -> list[Any]:
