@@ -3,7 +3,6 @@ package linode_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -16,34 +15,9 @@ import (
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
-func TestDefaultRetryConfig(t *testing.T) {
-	t.Parallel()
-
-	cfg := linode.DefaultRetryConfig()
-	assert.Equal(t, 3, cfg.MaxRetries)
-	assert.Equal(t, time.Second, cfg.BaseDelay)
-	assert.Equal(t, 30*time.Second, cfg.MaxDelay)
-	assert.InDelta(t, 2.0, cfg.BackoffFactor, 0.001)
-	assert.True(t, cfg.JitterEnabled)
-}
-
-func TestNewRetryableClient(t *testing.T) {
-	t.Parallel()
-
-	retryClient := linode.NewRetryableClient("https://api.example.com", "tok", linode.DefaultRetryConfig())
-	assert.NotNil(t, retryClient.Client)
-	assert.Equal(t, 3, retryClient.RetryConfigField().MaxRetries)
-}
-
-func TestNewRetryableClientWithDefaults(t *testing.T) {
-	t.Parallel()
-
-	retryClient := linode.NewRetryableClientWithDefaults("https://api.example.com", "tok")
-	assert.NotNil(t, retryClient.Client)
-	assert.Equal(t, linode.DefaultRetryConfig().MaxRetries, retryClient.RetryConfigField().MaxRetries)
-}
-
-func TestRetryableClient_GetProfile_SuccessNoRetry(t *testing.T) {
+// TestRetryableClientGetProfileSuccessNoRetry verifies that a successful
+// first attempt returns immediately without any retries.
+func TestRetryableClientGetProfileSuccessNoRetry(t *testing.T) {
 	t.Parallel()
 
 	var callCount atomic.Int32
@@ -51,24 +25,27 @@ func TestRetryableClient_GetProfile_SuccessNoRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		callCount.Add(1)
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.Profile{Username: "user1"}))
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.Profile{Username: "user1"}), "encoding profile response should not fail")
 	}))
 	defer srv.Close()
 
-	retryClient := linode.NewRetryableClient(srv.URL, "token", linode.RetryConfig{
-		MaxRetries:    3,
-		BaseDelay:     1 * time.Millisecond,
-		MaxDelay:      10 * time.Millisecond,
-		BackoffFactor: 2.0,
-	})
+	client := linode.NewClient(srv.URL, "token", nil,
+		linode.WithMaxRetries(3),
+		linode.WithBaseDelay(1*time.Millisecond),
+		linode.WithMaxDelay(10*time.Millisecond),
+		linode.WithBackoffFactor(2.0),
+		linode.WithJitter(false),
+	)
 
-	profile, err := retryClient.GetProfile(t.Context())
-	require.NoError(t, err)
-	assert.Equal(t, "user1", profile.Username)
-	assert.Equal(t, int32(1), callCount.Load(), "should only call once on success.")
+	profile, err := client.GetProfile(t.Context())
+	require.NoError(t, err, "GetProfile should succeed on first attempt")
+	assert.Equal(t, "user1", profile.Username, "username should match the API response")
+	assert.Equal(t, int32(1), callCount.Load(), "should only call the API once on success")
 }
 
-func TestRetryableClient_RetriesOnServerError(t *testing.T) {
+// TestRetryableClientRetriesOnServerError verifies that the retry client
+// retries on 500 errors and eventually succeeds when the server recovers.
+func TestRetryableClientRetriesOnServerError(t *testing.T) {
 	t.Parallel()
 
 	var callCount atomic.Int32
@@ -83,24 +60,27 @@ func TestRetryableClient_RetriesOnServerError(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.Profile{Username: "recovered"}))
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.Profile{Username: "recovered"}), "encoding recovered profile should not fail")
 	}))
 	defer srv.Close()
 
-	retryClient := linode.NewRetryableClient(srv.URL, "token", linode.RetryConfig{
-		MaxRetries:    3,
-		BaseDelay:     1 * time.Millisecond,
-		MaxDelay:      10 * time.Millisecond,
-		BackoffFactor: 2.0,
-	})
+	client := linode.NewClient(srv.URL, "token", nil,
+		linode.WithMaxRetries(3),
+		linode.WithBaseDelay(1*time.Millisecond),
+		linode.WithMaxDelay(10*time.Millisecond),
+		linode.WithBackoffFactor(2.0),
+		linode.WithJitter(false),
+	)
 
-	profile, err := retryClient.GetProfile(t.Context())
-	require.NoError(t, err)
-	assert.Equal(t, "recovered", profile.Username)
-	assert.Equal(t, int32(3), callCount.Load(), "should retry twice then succeed.")
+	profile, err := client.GetProfile(t.Context())
+	require.NoError(t, err, "GetProfile should succeed after retries")
+	assert.Equal(t, "recovered", profile.Username, "username should match the recovered response")
+	assert.Equal(t, int32(3), callCount.Load(), "should retry twice then succeed on third attempt")
 }
 
-func TestRetryableClient_NoRetryOnAuthError(t *testing.T) {
+// TestRetryableClientNoRetryOnAuthError verifies that authentication errors
+// (401) are not retried, since retrying with the same bad token is pointless.
+func TestRetryableClientNoRetryOnAuthError(t *testing.T) {
 	t.Parallel()
 
 	var callCount atomic.Int32
@@ -112,19 +92,22 @@ func TestRetryableClient_NoRetryOnAuthError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	retryClient := linode.NewRetryableClient(srv.URL, "bad-token", linode.RetryConfig{
-		MaxRetries:    3,
-		BaseDelay:     1 * time.Millisecond,
-		MaxDelay:      10 * time.Millisecond,
-		BackoffFactor: 2.0,
-	})
+	client := linode.NewClient(srv.URL, "bad-token", nil,
+		linode.WithMaxRetries(3),
+		linode.WithBaseDelay(1*time.Millisecond),
+		linode.WithMaxDelay(10*time.Millisecond),
+		linode.WithBackoffFactor(2.0),
+		linode.WithJitter(false),
+	)
 
-	_, err := retryClient.GetProfile(t.Context())
-	require.Error(t, err)
-	assert.Equal(t, int32(1), callCount.Load(), "should not retry auth errors.")
+	_, err := client.GetProfile(t.Context())
+	require.Error(t, err, "GetProfile should fail on auth error")
+	assert.Equal(t, int32(1), callCount.Load(), "should not retry authentication errors")
 }
 
-func TestRetryableClient_ExhaustsRetries(t *testing.T) {
+// TestRetryableClientExhaustsRetries verifies that the retry client gives
+// up after exhausting all configured retries and returns the last error.
+func TestRetryableClientExhaustsRetries(t *testing.T) {
 	t.Parallel()
 
 	var callCount atomic.Int32
@@ -136,20 +119,23 @@ func TestRetryableClient_ExhaustsRetries(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	retryClient := linode.NewRetryableClient(srv.URL, "token", linode.RetryConfig{
-		MaxRetries:    2,
-		BaseDelay:     1 * time.Millisecond,
-		MaxDelay:      10 * time.Millisecond,
-		BackoffFactor: 2.0,
-	})
+	client := linode.NewClient(srv.URL, "token", nil,
+		linode.WithMaxRetries(2),
+		linode.WithBaseDelay(1*time.Millisecond),
+		linode.WithMaxDelay(10*time.Millisecond),
+		linode.WithBackoffFactor(2.0),
+		linode.WithJitter(false),
+	)
 
-	_, err := retryClient.GetProfile(t.Context())
-	require.Error(t, err)
+	_, err := client.GetProfile(t.Context())
+	require.Error(t, err, "GetProfile should fail after exhausting retries")
 	// 1 initial + 2 retries = 3 total calls.
-	assert.Equal(t, int32(3), callCount.Load(), "should exhaust all retries.")
+	assert.Equal(t, int32(3), callCount.Load(), "should exhaust all retries (1 initial + 2 retries)")
 }
 
-func TestRetryableClient_ContextCancelStopsRetry(t *testing.T) {
+// TestRetryableClientContextCancelStopsRetry verifies that canceling the
+// context stops the retry loop before all retries are exhausted.
+func TestRetryableClientContextCancelStopsRetry(t *testing.T) {
 	t.Parallel()
 
 	var callCount atomic.Int32
@@ -162,26 +148,38 @@ func TestRetryableClient_ContextCancelStopsRetry(t *testing.T) {
 	defer srv.Close()
 
 	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
 
-	retryClient := linode.NewRetryableClient(srv.URL, "token", linode.RetryConfig{
-		MaxRetries:    5,
-		BaseDelay:     50 * time.Millisecond,
-		MaxDelay:      100 * time.Millisecond,
-		BackoffFactor: 2.0,
-	})
+	client := linode.NewClient(srv.URL, "token", nil,
+		linode.WithMaxRetries(5),
+		linode.WithBaseDelay(50*time.Millisecond),
+		linode.WithMaxDelay(100*time.Millisecond),
+		linode.WithBackoffFactor(2.0),
+		linode.WithJitter(false),
+	)
+
+	done := make(chan struct{})
 
 	go func() {
-		time.Sleep(10 * time.Millisecond)
-		cancel()
+		defer close(done)
+
+		select {
+		case <-time.After(10 * time.Millisecond):
+			cancel()
+		case <-ctx.Done():
+		}
 	}()
 
-	_, err := retryClient.GetProfile(ctx)
-	require.Error(t, err)
+	_, err := client.GetProfile(ctx)
+	require.Error(t, err, "GetProfile should fail when context is canceled")
 	// Should have been canceled before exhausting all retries.
-	assert.Less(t, callCount.Load(), int32(6), "should stop before exhausting retries.")
+	assert.Less(t, callCount.Load(), int32(6), "should stop before exhausting all retries")
+	<-done
 }
 
-func TestRetryableClient_ListInstances_Retries(t *testing.T) {
+// TestRetryableClientListInstancesRetries verifies that ListInstances
+// retries on a 429 rate-limit response and succeeds on the second attempt.
+func TestRetryableClientListInstancesRetries(t *testing.T) {
 	t.Parallel()
 
 	var callCount atomic.Int32
@@ -201,23 +199,26 @@ func TestRetryableClient_ListInstances_Retries(t *testing.T) {
 			"page":    1,
 			"pages":   1,
 			"results": 1,
-		}))
+		}), "encoding instances response should not fail")
 	}))
 	defer srv.Close()
 
-	retryClient := linode.NewRetryableClient(srv.URL, "token", linode.RetryConfig{
-		MaxRetries:    2,
-		BaseDelay:     1 * time.Millisecond,
-		MaxDelay:      10 * time.Millisecond,
-		BackoffFactor: 2.0,
-	})
+	client := linode.NewClient(srv.URL, "token", nil,
+		linode.WithMaxRetries(2),
+		linode.WithBaseDelay(1*time.Millisecond),
+		linode.WithMaxDelay(10*time.Millisecond),
+		linode.WithBackoffFactor(2.0),
+		linode.WithJitter(false),
+	)
 
-	instances, err := retryClient.ListInstances(t.Context())
-	require.NoError(t, err)
-	assert.Len(t, instances, 1)
+	instances, err := client.ListInstances(t.Context())
+	require.NoError(t, err, "ListInstances should succeed after retry")
+	assert.Len(t, instances, 1, "should return one instance after retry")
 }
 
-func TestRetryableClient_GetInstance_Retries(t *testing.T) {
+// TestRetryableClientGetInstanceRetries verifies that GetInstance retries
+// on a 500 server error and succeeds on the second attempt.
+func TestRetryableClientGetInstanceRetries(t *testing.T) {
 	t.Parallel()
 
 	var callCount atomic.Int32
@@ -232,63 +233,19 @@ func TestRetryableClient_GetInstance_Retries(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.Instance{ID: 99, Label: "recovered"}))
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.Instance{ID: 99, Label: "recovered"}), "encoding instance response should not fail")
 	}))
 	defer srv.Close()
 
-	retryClient := linode.NewRetryableClient(srv.URL, "token", linode.RetryConfig{
-		MaxRetries:    2,
-		BaseDelay:     1 * time.Millisecond,
-		MaxDelay:      10 * time.Millisecond,
-		BackoffFactor: 2.0,
-	})
+	client := linode.NewClient(srv.URL, "token", nil,
+		linode.WithMaxRetries(2),
+		linode.WithBaseDelay(1*time.Millisecond),
+		linode.WithMaxDelay(10*time.Millisecond),
+		linode.WithBackoffFactor(2.0),
+		linode.WithJitter(false),
+	)
 
-	instance, err := retryClient.GetInstance(t.Context(), 99)
-	require.NoError(t, err)
-	assert.Equal(t, 99, instance.ID)
-}
-
-func TestShouldRetry_ForbiddenNotRetryable(t *testing.T) {
-	t.Parallel()
-
-	retryClient := linode.NewRetryableClientWithDefaults("http://x", "t")
-	assert.False(t, retryClient.ExportedShouldRetry(&linode.APIError{StatusCode: 403, Message: "forbidden"}))
-}
-
-func TestShouldRetry_NetworkErrorRetryable(t *testing.T) {
-	t.Parallel()
-
-	retryClient := linode.NewRetryableClientWithDefaults("http://x", "t")
-	assert.True(t, retryClient.ExportedShouldRetry(&linode.NetworkError{Operation: "test", Err: errors.New("conn")}))
-}
-
-func TestCalculateDelay_RespectMaxDelay(t *testing.T) {
-	t.Parallel()
-
-	retryClient := linode.NewRetryableClient("http://x", "t", linode.RetryConfig{
-		MaxRetries:    5,
-		BaseDelay:     10 * time.Second,
-		MaxDelay:      15 * time.Second,
-		BackoffFactor: 10.0,
-		JitterEnabled: false,
-	})
-
-	delay := retryClient.ExportedCalculateDelay(3)
-	assert.LessOrEqual(t, delay, 15*time.Second, "delay should not exceed MaxDelay.")
-}
-
-func TestCalculateDelay_JitterAddsVariance(t *testing.T) {
-	t.Parallel()
-
-	retryClient := linode.NewRetryableClient("http://x", "t", linode.RetryConfig{
-		MaxRetries:    3,
-		BaseDelay:     100 * time.Millisecond,
-		MaxDelay:      10 * time.Second,
-		BackoffFactor: 2.0,
-		JitterEnabled: true,
-	})
-
-	delay := retryClient.ExportedCalculateDelay(1)
-	// With jitter, delay should be >= base delay.
-	assert.GreaterOrEqual(t, delay, 100*time.Millisecond)
+	instance, err := client.GetInstance(t.Context(), 99)
+	require.NoError(t, err, "GetInstance should succeed after retry")
+	assert.Equal(t, 99, instance.ID, "instance ID should match the request")
 }

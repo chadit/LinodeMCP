@@ -63,7 +63,6 @@ func NewLinodeDomainRecordCreateTool(cfg *config.Config) (mcp.Tool, func(ctx con
 }
 
 func handleLinodeDomainRecordCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
 	domainID := request.GetInt("domain_id", 0)
 	recordType := request.GetString("type", "")
 	name := request.GetString("name", "")
@@ -92,16 +91,10 @@ func handleLinodeDomainRecordCreateRequest(ctx context.Context, request *mcp.Cal
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	req := linode.CreateDomainRecordRequest{
 		Type:     recordType,
@@ -131,7 +124,7 @@ func handleLinodeDomainRecordCreateRequest(ctx context.Context, request *mcp.Cal
 		Record:   record,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeDomainRecordUpdateTool creates a tool for updating a domain record.
@@ -177,7 +170,6 @@ func NewLinodeDomainRecordUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx con
 }
 
 func handleLinodeDomainRecordUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
 	domainID := request.GetInt("domain_id", 0)
 	recordID := request.GetInt("record_id", 0)
 	name := request.GetString("name", "")
@@ -195,16 +187,10 @@ func handleLinodeDomainRecordUpdateRequest(ctx context.Context, request *mcp.Cal
 		return mcp.NewToolResultError("record_id is required"), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
 
 	req := linode.UpdateDomainRecordRequest{
 		Name:     name,
@@ -217,7 +203,7 @@ func handleLinodeDomainRecordUpdateRequest(ctx context.Context, request *mcp.Cal
 
 	record, err := client.UpdateDomainRecord(ctx, domainID, recordID, &req)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to update record %d: %v", recordID, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to modify record %d: %v", recordID, err)), nil //nolint:cairnlint // not a SQL query, just a response message
 	}
 
 	response := struct {
@@ -225,12 +211,12 @@ func handleLinodeDomainRecordUpdateRequest(ctx context.Context, request *mcp.Cal
 		DomainID int                  `json:"domain_id"`
 		Record   *linode.DomainRecord `json:"record"`
 	}{
-		Message:  fmt.Sprintf("Record %d updated successfully", recordID),
+		Message:  fmt.Sprintf("Record %d modified successfully", recordID), //nolint:cairnlint // not a SQL query, just a response message
 		DomainID: domainID,
 		Record:   record,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeDomainRecordDeleteTool creates a tool for deleting a domain record.
@@ -258,7 +244,6 @@ func NewLinodeDomainRecordDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx con
 }
 
 func handleLinodeDomainRecordDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	environment := request.GetString(paramEnvironment, "")
 	domainID := request.GetInt("domain_id", 0)
 	recordID := request.GetInt("record_id", 0)
 
@@ -270,19 +255,13 @@ func handleLinodeDomainRecordDeleteRequest(ctx context.Context, request *mcp.Cal
 		return mcp.NewToolResultError("record_id is required"), nil
 	}
 
-	selectedEnv, err := selectEnvironment(cfg, environment)
+	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	if err := validateLinodeConfig(selectedEnv); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client := linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token)
-
 	if err := client.DeleteDomainRecord(ctx, domainID, recordID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to delete record %d: %v", recordID, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove record %d: %v", recordID, err)), nil
 	}
 
 	response := struct {
@@ -290,10 +269,10 @@ func handleLinodeDomainRecordDeleteRequest(ctx context.Context, request *mcp.Cal
 		DomainID int    `json:"domain_id"`
 		RecordID int    `json:"record_id"`
 	}{
-		Message:  fmt.Sprintf("Record %d deleted successfully from domain %d", recordID, domainID),
+		Message:  fmt.Sprintf("Record %d removed successfully from domain %d", recordID, domainID),
 		DomainID: domainID,
 		RecordID: recordID,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }

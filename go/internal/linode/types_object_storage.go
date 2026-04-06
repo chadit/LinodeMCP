@@ -106,7 +106,7 @@ type BucketSSL struct {
 // ObjectStorageKey represents a Linode Object Storage access key.
 type ObjectStorageKey struct {
 	Label        string                         `json:"label"`
-	AccessKey    string                         `json:"access_key"` //nolint:gosec // G117: JSON tag must match Linode API response format
+	AccessKey    string                         `json:"access_key"`
 	SecretKey    string                         `json:"secret_key"`
 	BucketAccess []ObjectStorageKeyBucketAccess `json:"bucket_access"`
 	Regions      []ObjectStorageKeyRegion       `json:"regions"`

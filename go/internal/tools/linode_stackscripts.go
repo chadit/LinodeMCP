@@ -52,27 +52,27 @@ func handleLinodeStackScriptsListRequest(ctx context.Context, request *mcp.CallT
 	}
 
 	if isPublicFilter != "" {
-		scripts = filterByField(scripts, isPublicFilter, func(s linode.StackScript) string {
+		scripts = FilterByField(scripts, isPublicFilter, func(s linode.StackScript) string {
 			if s.IsPublic {
 				return boolTrue
 			}
 
-			return "false"
+			return boolFalse
 		})
 	}
 
 	if mineFilter != "" {
-		scripts = filterByField(scripts, mineFilter, func(s linode.StackScript) string {
+		scripts = FilterByField(scripts, mineFilter, func(s linode.StackScript) string {
 			if s.Mine {
 				return boolTrue
 			}
 
-			return "false"
+			return boolFalse
 		})
 	}
 
 	if labelContains != "" {
-		scripts = filterByContains(scripts, labelContains, func(s linode.StackScript) string {
+		scripts = FilterByContains(scripts, labelContains, func(s linode.StackScript) string {
 			return s.Label
 		})
 	}
@@ -107,5 +107,5 @@ func formatStackScriptsResponse(scripts []linode.StackScript, isPublicFilter, mi
 		response.Filter = strings.Join(filters, ", ")
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }

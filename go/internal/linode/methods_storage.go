@@ -6,24 +6,24 @@ import (
 	"net/http"
 )
 
+const (
+	endpointVolumes = "/volumes"
+	endpointSSHKeys = "/profile/sshkeys"
+)
+
 // ListVolumes retrieves all block storage volumes for the authenticated user.
-func (c *Client) ListVolumes(ctx context.Context) ([]Volume, error) {
+func (c *Client) httpListVolumes(ctx context.Context) ([]Volume, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, "/volumes", nil)
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointVolumes, nil)
 	if err != nil {
 		return nil, &NetworkError{Operation: "ListVolumes", Err: err}
 	}
 
 	defer func() { _ = resp.Body.Close() }()
 
-	var response struct {
-		Data    []Volume `json:"data"`
-		Page    int      `json:"page"`
-		Pages   int      `json:"pages"`
-		Results int      `json:"results"`
-	}
+	var response PaginatedResponse[Volume]
 
 	if err := c.handleResponse(resp, &response); err != nil {
 		return nil, err
@@ -33,11 +33,11 @@ func (c *Client) ListVolumes(ctx context.Context) ([]Volume, error) {
 }
 
 // GetVolume retrieves a single volume by its ID.
-func (c *Client) GetVolume(ctx context.Context, volumeID int) (*Volume, error) {
+func (c *Client) httpGetVolume(ctx context.Context, volumeID int) (*Volume, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/volumes/%d", volumeID)
+	endpoint := fmt.Sprintf(endpointVolumes+"/%d", volumeID)
 
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -55,11 +55,11 @@ func (c *Client) GetVolume(ctx context.Context, volumeID int) (*Volume, error) {
 }
 
 // CreateVolume creates a new block storage volume.
-func (c *Client) CreateVolume(ctx context.Context, req *CreateVolumeRequest) (*Volume, error) {
+func (c *Client) httpCreateVolume(ctx context.Context, req *CreateVolumeRequest) (*Volume, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeJSONRequest(ctx, http.MethodPost, "/volumes", req)
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointVolumes, req)
 	if err != nil {
 		return nil, &NetworkError{Operation: "CreateVolume", Err: err}
 	}
@@ -75,13 +75,13 @@ func (c *Client) CreateVolume(ctx context.Context, req *CreateVolumeRequest) (*V
 }
 
 // AttachVolume attaches a volume to a Linode instance.
-func (c *Client) AttachVolume(ctx context.Context, volumeID int, req AttachVolumeRequest) (*Volume, error) {
+func (c *Client) httpAttachVolume(ctx context.Context, volumeID int, req AttachVolumeRequest) (*Volume, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/volumes/%d/attach", volumeID)
+	endpoint := fmt.Sprintf(endpointVolumes+"/%d/attach", volumeID)
 
-	resp, err := c.makeJSONRequest(ctx, http.MethodPost, endpoint, req)
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
 	if err != nil {
 		return nil, &NetworkError{Operation: "AttachVolume", Err: err}
 	}
@@ -97,13 +97,13 @@ func (c *Client) AttachVolume(ctx context.Context, volumeID int, req AttachVolum
 }
 
 // DetachVolume detaches a volume from a Linode instance.
-func (c *Client) DetachVolume(ctx context.Context, volumeID int) error {
+func (c *Client) httpDetachVolume(ctx context.Context, volumeID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/volumes/%d/detach", volumeID)
+	endpoint := fmt.Sprintf(endpointVolumes+"/%d/detach", volumeID)
 
-	resp, err := c.makeJSONRequest(ctx, http.MethodPost, endpoint, nil)
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
 	if err != nil {
 		return &NetworkError{Operation: "DetachVolume", Err: err}
 	}
@@ -114,14 +114,14 @@ func (c *Client) DetachVolume(ctx context.Context, volumeID int) error {
 }
 
 // ResizeVolume resizes a volume to a larger size.
-func (c *Client) ResizeVolume(ctx context.Context, volumeID, size int) (*Volume, error) {
+func (c *Client) httpResizeVolume(ctx context.Context, volumeID, size int) (*Volume, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/volumes/%d/resize", volumeID)
+	endpoint := fmt.Sprintf(endpointVolumes+"/%d/resize", volumeID)
 	payload := map[string]int{"size": size}
 
-	resp, err := c.makeJSONRequest(ctx, http.MethodPost, endpoint, payload)
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, payload)
 	if err != nil {
 		return nil, &NetworkError{Operation: "ResizeVolume", Err: err}
 	}
@@ -137,11 +137,11 @@ func (c *Client) ResizeVolume(ctx context.Context, volumeID, size int) (*Volume,
 }
 
 // DeleteVolume deletes a block storage volume.
-func (c *Client) DeleteVolume(ctx context.Context, volumeID int) error {
+func (c *Client) httpDeleteVolume(ctx context.Context, volumeID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/volumes/%d", volumeID)
+	endpoint := fmt.Sprintf(endpointVolumes+"/%d", volumeID)
 
 	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
 	if err != nil {
@@ -154,23 +154,18 @@ func (c *Client) DeleteVolume(ctx context.Context, volumeID int) error {
 }
 
 // ListSSHKeys retrieves all SSH keys from the authenticated user's profile.
-func (c *Client) ListSSHKeys(ctx context.Context) ([]SSHKey, error) {
+func (c *Client) httpListSSHKeys(ctx context.Context) ([]SSHKey, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, "/profile/sshkeys", nil)
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointSSHKeys, nil)
 	if err != nil {
 		return nil, &NetworkError{Operation: "ListSSHKeys", Err: err}
 	}
 
 	defer func() { _ = resp.Body.Close() }()
 
-	var response struct {
-		Data    []SSHKey `json:"data"`
-		Page    int      `json:"page"`
-		Pages   int      `json:"pages"`
-		Results int      `json:"results"`
-	}
+	var response PaginatedResponse[SSHKey]
 
 	if err := c.handleResponse(resp, &response); err != nil {
 		return nil, err
@@ -180,11 +175,11 @@ func (c *Client) ListSSHKeys(ctx context.Context) ([]SSHKey, error) {
 }
 
 // CreateSSHKey creates a new SSH key in the user's profile.
-func (c *Client) CreateSSHKey(ctx context.Context, req CreateSSHKeyRequest) (*SSHKey, error) {
+func (c *Client) httpCreateSSHKey(ctx context.Context, req CreateSSHKeyRequest) (*SSHKey, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeJSONRequest(ctx, http.MethodPost, "/profile/sshkeys", req)
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointSSHKeys, req)
 	if err != nil {
 		return nil, &NetworkError{Operation: "CreateSSHKey", Err: err}
 	}
@@ -200,11 +195,11 @@ func (c *Client) CreateSSHKey(ctx context.Context, req CreateSSHKeyRequest) (*SS
 }
 
 // DeleteSSHKey deletes an SSH key from the user's profile.
-func (c *Client) DeleteSSHKey(ctx context.Context, sshKeyID int) error {
+func (c *Client) httpDeleteSSHKey(ctx context.Context, sshKeyID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/profile/sshkeys/%d", sshKeyID)
+	endpoint := fmt.Sprintf(endpointSSHKeys+"/%d", sshKeyID)
 
 	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
 	if err != nil {

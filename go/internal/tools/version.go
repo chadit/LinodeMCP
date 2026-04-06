@@ -16,7 +16,13 @@ func NewVersionTool() (mcp.Tool, func(ctx context.Context, request mcp.CallToolR
 		mcp.WithDescription("Returns LinodeMCP server version and build information"),
 	)
 
-	handler := func(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	handler := func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
 		versionInfo := appinfo.Get()
 
 		jsonResponse, err := json.MarshalIndent(versionInfo, "", "  ")

@@ -15,7 +15,6 @@ type APIError struct {
 	Field      string `json:"field,omitempty"`
 }
 
-// Error returns a formatted string describing the API error.
 func (e *APIError) Error() string {
 	if e.Field != "" {
 		return fmt.Sprintf("Linode API error (status %d): %s (field: %s)", e.StatusCode, e.Message, e.Field)
@@ -24,26 +23,18 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("Linode API error (status %d): %s", e.StatusCode, e.Message)
 }
 
-const (
-	httpUnauthorizedErr = 401
-	httpForbiddenErr    = 403
-	httpTooManyReqsErr  = 429
-	httpServerErrorMin  = 500
-	httpServerErrorMax  = 600
-)
-
 // IsAuthenticationError returns true if the status code is 401 Unauthorized.
-func (e *APIError) IsAuthenticationError() bool { return e.StatusCode == httpUnauthorizedErr }
+func (e *APIError) IsAuthenticationError() bool { return e.StatusCode == httpUnauthorized }
 
 // IsRateLimitError returns true if the status code is 429 Too Many Requests.
-func (e *APIError) IsRateLimitError() bool { return e.StatusCode == httpTooManyReqsErr }
+func (e *APIError) IsRateLimitError() bool { return e.StatusCode == httpTooManyReqs }
 
 // IsForbiddenError returns true if the status code is 403 Forbidden.
-func (e *APIError) IsForbiddenError() bool { return e.StatusCode == httpForbiddenErr }
+func (e *APIError) IsForbiddenError() bool { return e.StatusCode == httpForbidden }
 
 // IsServerError returns true if the status code indicates a server error (5xx).
 func (e *APIError) IsServerError() bool {
-	return e.StatusCode >= httpServerErrorMin && e.StatusCode < httpServerErrorMax
+	return e.StatusCode >= httpServerError && e.StatusCode < httpServerErrorMax
 }
 
 // NetworkError represents a network-related error.
@@ -52,42 +43,35 @@ type NetworkError struct {
 	Err       error
 }
 
-// Error returns a formatted string describing the network error.
 func (e *NetworkError) Error() string {
 	return fmt.Sprintf("network error during %s: %v", e.Operation, e.Err)
 }
 
-// Unwrap returns the underlying error.
 func (e *NetworkError) Unwrap() error { return e.Err }
 
-// IsNetworkError returns true if the error is a network-related error.
-func IsNetworkError(err error) bool {
-	var networkErr *NetworkError
-	if errors.As(err, &networkErr) {
+// isNetworkError returns true if the error is a network-related error.
+func isNetworkError(err error) bool {
+	if _, ok := errors.AsType[*NetworkError](err); ok {
 		return true
 	}
 
-	var netErr net.Error
-	if errors.As(err, &netErr) {
+	if _, ok := errors.AsType[net.Error](err); ok {
 		return true
 	}
 
-	var urlErr *url.Error
+	_, ok := errors.AsType[*url.Error](err)
 
-	return errors.As(err, &urlErr)
+	return ok
 }
 
-// IsTimeoutError returns true if the error is a timeout error.
-func IsTimeoutError(err error) bool {
-	var netErr net.Error
-	if errors.As(err, &netErr) {
+// isTimeoutError returns true if the error is a timeout error.
+func isTimeoutError(err error) bool {
+	if netErr, ok := errors.AsType[net.Error](err); ok {
 		return netErr.Timeout()
 	}
 
-	var urlErr *url.Error
-	if errors.As(err, &urlErr) {
-		var innerNetErr net.Error
-		if errors.As(urlErr.Err, &innerNetErr) {
+	if urlErr, ok := errors.AsType[*url.Error](err); ok {
+		if innerNetErr, ok := errors.AsType[net.Error](urlErr.Err); ok {
 			return innerNetErr.Timeout()
 		}
 	}
@@ -101,7 +85,6 @@ type RetryableError struct {
 	RetryAfter time.Duration
 }
 
-// Error returns a formatted string describing the retryable error.
 func (e *RetryableError) Error() string {
 	if e.RetryAfter > 0 {
 		return fmt.Sprintf("retryable error (retry after %v): %v", e.RetryAfter, e.Err)
@@ -110,20 +93,16 @@ func (e *RetryableError) Error() string {
 	return fmt.Sprintf("retryable error: %v", e.Err)
 }
 
-// Unwrap returns the underlying error.
 func (e *RetryableError) Unwrap() error { return e.Err }
 
-// IsRetryable returns true if the error is eligible for retry.
-func IsRetryable(err error) bool {
-	var retryableErr *RetryableError
-	if errors.As(err, &retryableErr) {
+func isRetryable(err error) bool {
+	if _, ok := errors.AsType[*RetryableError](err); ok {
 		return true
 	}
 
-	var apiErr *APIError
-	if errors.As(err, &apiErr) {
+	if apiErr, ok := errors.AsType[*APIError](err); ok {
 		return apiErr.IsRateLimitError() || apiErr.IsServerError()
 	}
 
-	return IsNetworkError(err) || IsTimeoutError(err)
+	return isNetworkError(err) || isTimeoutError(err)
 }

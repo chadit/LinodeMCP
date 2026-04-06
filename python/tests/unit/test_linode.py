@@ -14,6 +14,7 @@ from linodemcp.linode import (
     RetryableClient,
     RetryConfig,
     is_retryable,
+    validate_disk_size,
     validate_dns_record_name,
     validate_dns_record_target,
     validate_firewall_policy,
@@ -800,3 +801,469 @@ class TestValidateLabel:
         """Test invalid characters raise error."""
         with pytest.raises(ValueError, match="invalid character"):
             validate_label("label with spaces")
+
+
+# ---------------------------------------------------------------------------
+# Client.make_request HTTP mechanics
+# ---------------------------------------------------------------------------
+
+
+class TestMakeRequestURLConstruction:
+    """Verify that make_request builds the full URL from base_url + endpoint."""
+
+    async def test_url_is_base_plus_endpoint(self) -> None:
+        """The request URL should be base_url concatenated with the endpoint."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = mock_response
+
+            await client.make_request("GET", "/linode/instances")
+
+            call_args = mock_req.call_args
+            assert call_args[0][0] == "GET"
+            assert call_args[0][1] == "https://api.linode.com/v4/linode/instances"
+
+        await client.close()
+
+
+class TestMakeRequestHeaders:
+    """Verify that make_request sets the correct headers."""
+
+    async def test_authorization_header(self) -> None:
+        """Authorization header should be Bearer + the token."""
+        client = Client("https://api.linode.com/v4", "my-secret-token")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = mock_response
+
+            await client.make_request("GET", "/profile")
+
+            headers = mock_req.call_args[1]["headers"]
+            assert headers["Authorization"] == "Bearer my-secret-token"
+
+        await client.close()
+
+    async def test_content_type_header(self) -> None:
+        """Content-Type header should be application/json."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = mock_response
+
+            await client.make_request("GET", "/profile")
+
+            headers = mock_req.call_args[1]["headers"]
+            assert headers["Content-Type"] == "application/json"
+
+        await client.close()
+
+    async def test_user_agent_header(self) -> None:
+        """User-Agent header should identify the LinodeMCP client."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = mock_response
+
+            await client.make_request("GET", "/profile")
+
+            headers = mock_req.call_args[1]["headers"]
+            assert "LinodeMCP" in headers["User-Agent"]
+
+        await client.close()
+
+
+class TestMakeRequestBody:
+    """Verify body handling for different HTTP methods."""
+
+    async def test_post_sends_json_body(self) -> None:
+        """POST with body should pass json= to the underlying client."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = mock_response
+
+            await client.make_request(
+                "POST", "/linode/instances", body={"label": "test"}
+            )
+
+            assert mock_req.call_args[1]["json"] == {"label": "test"}
+
+        await client.close()
+
+    async def test_get_has_no_json_body(self) -> None:
+        """GET without body should not pass json= to the underlying client."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = mock_response
+
+            await client.make_request("GET", "/linode/instances")
+
+            assert "json" not in mock_req.call_args[1]
+
+        await client.close()
+
+
+class TestMakeRequestErrorCodes:
+    """Verify that error status codes raise APIError."""
+
+    async def test_400_raises_api_error(self) -> None:
+        """400 Bad Request should raise APIError."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 400
+        mock_response.json.return_value = {}
+        mock_response.headers = {}
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = mock_response
+
+            with pytest.raises(APIError) as exc_info:
+                await client.make_request("GET", "/bad")
+
+            assert exc_info.value.status_code == 400
+
+        await client.close()
+
+    async def test_401_raises_authentication_error(self) -> None:
+        """401 should raise APIError flagged as authentication error."""
+        client = Client("https://api.linode.com/v4", "bad-token")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 401
+        mock_response.json.return_value = {}
+        mock_response.headers = {}
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = mock_response
+
+            with pytest.raises(APIError) as exc_info:
+                await client.make_request("GET", "/profile")
+
+            assert exc_info.value.is_authentication_error()
+
+        await client.close()
+
+    async def test_429_raises_rate_limit_error(self) -> None:
+        """429 should raise APIError flagged as rate limit error."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 429
+        mock_response.json.return_value = {}
+        mock_response.headers = {"Retry-After": "30"}
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = mock_response
+
+            with pytest.raises(APIError) as exc_info:
+                await client.make_request("GET", "/profile")
+
+            assert exc_info.value.is_rate_limit_error()
+
+        await client.close()
+
+    async def test_500_raises_server_error(self) -> None:
+        """500 should raise APIError flagged as server error."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_response.json.return_value = {}
+        mock_response.headers = {}
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = mock_response
+
+            with pytest.raises(APIError) as exc_info:
+                await client.make_request("GET", "/profile")
+
+            assert exc_info.value.is_server_error()
+
+        await client.close()
+
+
+class TestMakeRequestErrorResponseParsing:
+    """Verify that structured error responses are parsed into APIError fields."""
+
+    async def test_structured_error_extracts_reason(self) -> None:
+        """When the API returns {errors: [{reason, field}]}, those get extracted."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 400
+        mock_response.json.return_value = {
+            "errors": [{"reason": "label is required", "field": "label"}]
+        }
+        mock_response.headers = {}
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = mock_response
+
+            with pytest.raises(APIError) as exc_info:
+                await client.make_request("POST", "/linode/instances")
+
+            assert "label is required" in str(exc_info.value)
+            assert exc_info.value.field == "label"
+
+        await client.close()
+
+
+class TestValidateDiskSize:
+    """Tests for disk size validation."""
+
+    def test_valid_size(self) -> None:
+        """Test a typical valid disk size."""
+        validate_disk_size(100)
+
+    def test_minimum_boundary(self) -> None:
+        """Test the minimum allowed size (1 MB)."""
+        validate_disk_size(1)
+
+    def test_maximum_boundary(self) -> None:
+        """Test the maximum allowed size (524288 MB)."""
+        validate_disk_size(524288)
+
+    def test_too_small(self) -> None:
+        """Test that 0 MB is rejected."""
+        with pytest.raises(ValueError, match="disk size"):
+            validate_disk_size(0)
+
+    def test_too_large(self) -> None:
+        """Test that exceeding 524288 MB is rejected."""
+        with pytest.raises(ValueError, match="disk size"):
+            validate_disk_size(524289)
+
+    def test_negative(self) -> None:
+        """Test that negative values are rejected."""
+        with pytest.raises(ValueError, match="disk size"):
+            validate_disk_size(-1)
+
+
+class TestRetryableClientRetryScenarios:
+    """Tests for retry behavior across different HTTP error codes."""
+
+    async def test_retry_on_server_error(self) -> None:
+        """500 then 200 should retry once and succeed."""
+        client = RetryableClient(
+            "https://api.linode.com/v4",
+            "test-token",
+            RetryConfig(max_retries=2, base_delay=0.01),
+        )
+
+        mock_error_response = MagicMock()
+        mock_error_response.status_code = 500
+        mock_error_response.json.return_value = {}
+        mock_error_response.headers = {}
+
+        mock_success_response = MagicMock()
+        mock_success_response.status_code = 200
+        mock_success_response.json.return_value = {
+            "username": "retryuser",
+            "email": "retry@test.com",
+            "timezone": "UTC",
+            "email_notifications": False,
+            "restricted": False,
+            "two_factor_auth": False,
+            "uid": 1,
+        }
+
+        call_count = 0
+
+        async def mock_request(*args: Any, **kwargs: Any) -> MagicMock:
+            nonlocal call_count
+            call_count += 1
+            _ = args, kwargs
+            if call_count == 1:
+                return mock_error_response
+            return mock_success_response
+
+        with patch.object(
+            client.client.client, "request", new_callable=AsyncMock
+        ) as mock_req:
+            mock_req.side_effect = mock_request
+
+            profile = await client.get_profile()
+
+            assert profile.username == "retryuser"
+            assert call_count == 2
+
+        await client.close()
+
+    async def test_no_retry_on_auth_error(self) -> None:
+        """401 should not be retried."""
+        client = RetryableClient(
+            "https://api.linode.com/v4",
+            "bad-token",
+            RetryConfig(max_retries=3, base_delay=0.01),
+        )
+
+        mock_response = MagicMock()
+        mock_response.status_code = 401
+        mock_response.json.return_value = {}
+        mock_response.headers = {}
+
+        with patch.object(
+            client.client.client, "request", new_callable=AsyncMock
+        ) as mock_req:
+            mock_req.return_value = mock_response
+
+            with pytest.raises(APIError) as exc_info:
+                await client.get_profile()
+
+            assert exc_info.value.status_code == 401
+            assert mock_req.call_count == 1
+
+        await client.close()
+
+    async def test_no_retry_on_forbidden(self) -> None:
+        """403 should not be retried."""
+        client = RetryableClient(
+            "https://api.linode.com/v4",
+            "test-token",
+            RetryConfig(max_retries=3, base_delay=0.01),
+        )
+
+        mock_response = MagicMock()
+        mock_response.status_code = 403
+        mock_response.json.return_value = {}
+        mock_response.headers = {}
+
+        with patch.object(
+            client.client.client, "request", new_callable=AsyncMock
+        ) as mock_req:
+            mock_req.return_value = mock_response
+
+            with pytest.raises(APIError) as exc_info:
+                await client.get_profile()
+
+            assert exc_info.value.status_code == 403
+            assert mock_req.call_count == 1
+
+        await client.close()
+
+    async def test_retry_on_network_error(self) -> None:
+        """NetworkError then success should retry once and succeed."""
+        client = RetryableClient(
+            "https://api.linode.com/v4",
+            "test-token",
+            RetryConfig(max_retries=2, base_delay=0.01),
+        )
+
+        mock_success_response = MagicMock()
+        mock_success_response.status_code = 200
+        mock_success_response.json.return_value = {
+            "username": "retryuser",
+            "email": "retry@test.com",
+            "timezone": "UTC",
+            "email_notifications": False,
+            "restricted": False,
+            "two_factor_auth": False,
+            "uid": 1,
+        }
+
+        call_count = 0
+
+        async def mock_request(*args: Any, **kwargs: Any) -> MagicMock:
+            nonlocal call_count
+            call_count += 1
+            _ = args, kwargs
+            if call_count == 1:
+                raise httpx.ConnectError("Connection failed")
+            return mock_success_response
+
+        with patch.object(
+            client.client.client, "request", new_callable=AsyncMock
+        ) as mock_req:
+            mock_req.side_effect = mock_request
+
+            profile = await client.get_profile()
+
+            assert profile.username == "retryuser"
+            assert call_count == 2
+
+        await client.close()
+
+    async def test_backoff_timing(self) -> None:
+        """Backoff delays should increase exponentially."""
+        client = RetryableClient(
+            "https://api.linode.com/v4",
+            "test-token",
+            RetryConfig(max_retries=3, base_delay=1.0, backoff_factor=2.0),
+        )
+
+        mock_response = MagicMock()
+        mock_response.status_code = 429
+        mock_response.json.return_value = {}
+        mock_response.headers = {}
+
+        with patch.object(
+            client.client.client, "request", new_callable=AsyncMock
+        ) as mock_req:
+            mock_req.return_value = mock_response
+
+            with patch(
+                "linodemcp.linode.asyncio.sleep",
+                new_callable=AsyncMock,
+            ) as mock_sleep:
+                with pytest.raises(APIError) as exc_info:
+                    await client.get_profile()
+
+                assert exc_info.value.status_code == 429
+
+                assert mock_sleep.call_count == 3
+                delays = [call.args[0] for call in mock_sleep.call_args_list]
+                # base_delay * backoff_factor^(attempt-1) plus up to 10% jitter
+                assert delays[0] >= 1.0, f"first delay {delays[0]} should be >= 1.0"
+                assert delays[0] <= 1.2, f"first delay {delays[0]} should be <= 1.2"
+                assert delays[1] > delays[0], "second delay should be larger than first"
+                assert delays[2] > delays[1], "third delay should be larger than second"
+
+        await client.close()
+
+    async def test_retry_exhaustion_with_rate_limit(self) -> None:
+        """429 three times should exhaust retries and raise."""
+        client = RetryableClient(
+            "https://api.linode.com/v4",
+            "test-token",
+            RetryConfig(max_retries=2, base_delay=0.01),
+        )
+
+        mock_response = MagicMock()
+        mock_response.status_code = 429
+        mock_response.json.return_value = {}
+        mock_response.headers = {}
+
+        with patch.object(
+            client.client.client, "request", new_callable=AsyncMock
+        ) as mock_req:
+            mock_req.return_value = mock_response
+
+            with pytest.raises(APIError) as exc_info:
+                await client.get_profile()
+
+            assert exc_info.value.status_code == 429
+            # max_retries=2 means 1 initial + 2 retries = 3 total calls
+            assert mock_req.call_count == 3
+
+        await client.close()

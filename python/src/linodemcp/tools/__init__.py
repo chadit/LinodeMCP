@@ -1,66 +1,31 @@
 """MCP tools for LinodeMCP."""
 
-import json
-import re
-from collections.abc import Awaitable, Callable
-from typing import Any, NotRequired, TypedDict
+from __future__ import annotations
 
+import json
+import logging
+import re
+from typing import TYPE_CHECKING, Any
+
+import httpx
 from mcp.types import TextContent, Tool
 
-from linodemcp.config import Config, EnvironmentConfig, EnvironmentNotFoundError
-from linodemcp.linode import RetryableClient, RetryConfig
+from linodemcp.config import EnvironmentNotFoundError
+from linodemcp.linode import (
+    APIError,
+    NetworkError,
+    RetryableClient,
+    RetryableError,
+    RetryConfig,
+)
 from linodemcp.version import get_version_info
 
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
-class EnvironmentArgs(TypedDict):
-    """Common arguments with environment field."""
+    from linodemcp.config import Config, EnvironmentConfig
 
-    environment: NotRequired[str]
-
-
-class HelloArgs(TypedDict):
-    """Arguments for hello tool."""
-
-    name: NotRequired[str]
-
-
-class InstanceFilterArgs(EnvironmentArgs):
-    """Arguments for instance listing with filters."""
-
-    status: NotRequired[str]
-
-
-class InstanceIDArgs(EnvironmentArgs):
-    """Arguments requiring instance_id."""
-
-    instance_id: int
-
-
-class RegionFilterArgs(EnvironmentArgs):
-    """Arguments for region listing with filters."""
-
-    capabilities: NotRequired[str]
-
-
-class TypeFilterArgs(EnvironmentArgs):
-    """Arguments for type listing with filters."""
-
-    type_class: NotRequired[str]
-
-
-class VolumeFilterArgs(EnvironmentArgs):
-    """Arguments for volume listing with filters."""
-
-    region: NotRequired[str]
-    label: NotRequired[str]
-
-
-class ImageFilterArgs(EnvironmentArgs):
-    """Arguments for image listing with filters."""
-
-    is_public: NotRequired[bool]
-    include_deprecated: NotRequired[bool]
-
+logger = logging.getLogger(__name__)
 
 # Constants for truncation limits
 SSH_KEY_TRUNCATE_LIMIT = 50
@@ -91,11 +56,33 @@ __all__ = [
     "create_linode_firewall_update_tool",
     "create_linode_firewalls_list_tool",
     "create_linode_images_list_tool",
+    "create_linode_instance_backup_create_tool",
+    "create_linode_instance_backup_get_tool",
+    "create_linode_instance_backup_restore_tool",
+    "create_linode_instance_backups_cancel_tool",
+    "create_linode_instance_backups_enable_tool",
+    "create_linode_instance_backups_list_tool",
     "create_linode_instance_boot_tool",
+    "create_linode_instance_clone_tool",
     "create_linode_instance_create_tool",
     "create_linode_instance_delete_tool",
+    "create_linode_instance_disk_clone_tool",
+    "create_linode_instance_disk_create_tool",
+    "create_linode_instance_disk_delete_tool",
+    "create_linode_instance_disk_get_tool",
+    "create_linode_instance_disk_resize_tool",
+    "create_linode_instance_disk_update_tool",
+    "create_linode_instance_disks_list_tool",
     "create_linode_instance_get_tool",
+    "create_linode_instance_ip_allocate_tool",
+    "create_linode_instance_ip_delete_tool",
+    "create_linode_instance_ip_get_tool",
+    "create_linode_instance_ips_list_tool",
+    "create_linode_instance_migrate_tool",
+    "create_linode_instance_password_reset_tool",
     "create_linode_instance_reboot_tool",
+    "create_linode_instance_rebuild_tool",
+    "create_linode_instance_rescue_tool",
     "create_linode_instance_resize_tool",
     "create_linode_instance_shutdown_tool",
     "create_linode_instances_list_tool",
@@ -194,11 +181,33 @@ __all__ = [
     "handle_linode_firewall_update",
     "handle_linode_firewalls_list",
     "handle_linode_images_list",
+    "handle_linode_instance_backup_create",
+    "handle_linode_instance_backup_get",
+    "handle_linode_instance_backup_restore",
+    "handle_linode_instance_backups_cancel",
+    "handle_linode_instance_backups_enable",
+    "handle_linode_instance_backups_list",
     "handle_linode_instance_boot",
+    "handle_linode_instance_clone",
     "handle_linode_instance_create",
     "handle_linode_instance_delete",
+    "handle_linode_instance_disk_clone",
+    "handle_linode_instance_disk_create",
+    "handle_linode_instance_disk_delete",
+    "handle_linode_instance_disk_get",
+    "handle_linode_instance_disk_resize",
+    "handle_linode_instance_disk_update",
+    "handle_linode_instance_disks_list",
     "handle_linode_instance_get",
+    "handle_linode_instance_ip_allocate",
+    "handle_linode_instance_ip_delete",
+    "handle_linode_instance_ip_get",
+    "handle_linode_instance_ips_list",
+    "handle_linode_instance_migrate",
+    "handle_linode_instance_password_reset",
     "handle_linode_instance_reboot",
+    "handle_linode_instance_rebuild",
+    "handle_linode_instance_rescue",
     "handle_linode_instance_resize",
     "handle_linode_instance_shutdown",
     "handle_linode_instances_list",
@@ -469,14 +478,11 @@ def _validate_linode_config(env: EnvironmentConfig) -> None:
         raise ValueError(msg)
 
 
-ToolCallback = Callable[[RetryableClient], Awaitable[dict[str, Any]]]
-
-
 async def execute_tool(
     cfg: Config,
     arguments: dict[str, Any],
     error_action: str,
-    callback: ToolCallback,
+    callback: Callable[[RetryableClient], Awaitable[dict[str, Any]]],
 ) -> list[TextContent]:
     """Run a tool handler with standard environment/client/error boilerplate."""
     environment = arguments.get("environment", "")
@@ -492,7 +498,10 @@ async def execute_tool(
             return [TextContent(type="text", text=json.dumps(response, indent=2))]
     except (EnvironmentNotFoundError, ValueError) as e:
         return [TextContent(type="text", text=f"Error: {e}")]
+    except (APIError, NetworkError, RetryableError, httpx.HTTPError) as e:
+        return [TextContent(type="text", text=f"Failed to {error_action}: {e}")]
     except Exception as e:
+        logger.exception("Unexpected error in tool handler")
         return [TextContent(type="text", text=f"Failed to {error_action}: {e}")]
 
 
@@ -6542,3 +6551,1173 @@ async def handle_linode_vpc_subnet_delete(
         }
 
     return await execute_tool(cfg, arguments, "delete VPC subnet", _call)
+
+
+# ── Instance Deep shared properties ──
+
+_INSTANCE_ID_PROP: dict[str, Any] = {
+    "type": "string",
+    "description": "The ID of the Linode instance (required)",
+}
+
+_BACKUP_ID_PROP: dict[str, Any] = {
+    "type": "string",
+    "description": "The ID of the backup (required)",
+}
+
+_DISK_ID_PROP: dict[str, Any] = {
+    "type": "string",
+    "description": "The ID of the disk (required)",
+}
+
+
+def _parse_instance_id(
+    arguments: dict[str, Any],
+) -> int | list[TextContent]:
+    """Parse and validate instance_id from arguments."""
+    raw = arguments.get("instance_id", "")
+    if not raw:
+        return _error_response("instance_id is required")
+    try:
+        return int(raw)
+    except (ValueError, TypeError):
+        return _error_response("instance_id must be a valid integer")
+
+
+def _parse_instance_and_backup_ids(
+    arguments: dict[str, Any],
+) -> tuple[int, int] | list[TextContent]:
+    """Parse instance_id and backup_id from arguments."""
+    iid = _parse_instance_id(arguments)
+    if isinstance(iid, list):
+        return iid
+    raw = arguments.get("backup_id", "")
+    if not raw:
+        return _error_response("backup_id is required")
+    try:
+        backup_id = int(raw)
+    except (ValueError, TypeError):
+        return _error_response("backup_id must be a valid integer")
+    return iid, backup_id
+
+
+def _parse_instance_and_disk_ids(
+    arguments: dict[str, Any],
+) -> tuple[int, int] | list[TextContent]:
+    """Parse instance_id and disk_id from arguments."""
+    iid = _parse_instance_id(arguments)
+    if isinstance(iid, list):
+        return iid
+    raw = arguments.get("disk_id", "")
+    if not raw:
+        return _error_response("disk_id is required")
+    try:
+        disk_id = int(raw)
+    except (ValueError, TypeError):
+        return _error_response("disk_id must be a valid integer")
+    return iid, disk_id
+
+
+# ── Instance Backups tools ──
+
+
+def create_linode_instance_backups_list_tool() -> Tool:
+    """Create the linode_instance_backups_list tool."""
+    return Tool(
+        name="linode_instance_backups_list",
+        description=("Lists backups for a Linode instance"),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+            },
+            "required": ["instance_id"],
+        },
+    )
+
+
+async def handle_linode_instance_backups_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_backups_list tool request."""
+    iid = _parse_instance_id(arguments)
+    if isinstance(iid, list):
+        return iid
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        return await client.list_instance_backups(iid)
+
+    return await execute_tool(cfg, arguments, "list instance backups", _call)
+
+
+def create_linode_instance_backup_get_tool() -> Tool:
+    """Create the linode_instance_backup_get tool."""
+    return Tool(
+        name="linode_instance_backup_get",
+        description=("Gets details of a specific backup for an instance"),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+                "backup_id": _BACKUP_ID_PROP,
+            },
+            "required": ["instance_id", "backup_id"],
+        },
+    )
+
+
+async def handle_linode_instance_backup_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_backup_get tool request."""
+    ids = _parse_instance_and_backup_ids(arguments)
+    if isinstance(ids, list):
+        return ids
+    instance_id, backup_id = ids
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        return await client.get_instance_backup(instance_id, backup_id)
+
+    return await execute_tool(cfg, arguments, "get instance backup", _call)
+
+
+def create_linode_instance_backup_create_tool() -> Tool:
+    """Create the linode_instance_backup_create tool."""
+    return Tool(
+        name="linode_instance_backup_create",
+        description=("Creates a snapshot backup of a Linode instance"),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+                "label": {
+                    "type": "string",
+                    "description": "Label for the snapshot",
+                },
+                "confirm": _CONFIRM_PROP,
+            },
+            "required": ["instance_id", "confirm"],
+        },
+    )
+
+
+async def handle_linode_instance_backup_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_backup_create tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("Set confirm=true to proceed.")
+
+    iid = _parse_instance_id(arguments)
+    if isinstance(iid, list):
+        return iid
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        return await client.create_instance_backup(iid, label=arguments.get("label"))
+
+    return await execute_tool(cfg, arguments, "create instance backup", _call)
+
+
+def create_linode_instance_backup_restore_tool() -> Tool:
+    """Create the linode_instance_backup_restore tool."""
+    return Tool(
+        name="linode_instance_backup_restore",
+        description="Restores a backup to a Linode instance",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+                "backup_id": _BACKUP_ID_PROP,
+                "linode_id": {
+                    "type": "integer",
+                    "description": ("Target instance ID for restore"),
+                },
+                "overwrite": {
+                    "type": "boolean",
+                    "description": ("Overwrite existing data on target"),
+                },
+                "confirm": _CONFIRM_PROP,
+            },
+            "required": [
+                "instance_id",
+                "backup_id",
+                "linode_id",
+                "confirm",
+            ],
+        },
+    )
+
+
+async def handle_linode_instance_backup_restore(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_backup_restore request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("Set confirm=true to proceed.")
+
+    ids = _parse_instance_and_backup_ids(arguments)
+    if isinstance(ids, list):
+        return ids
+    instance_id, backup_id = ids
+
+    linode_id = arguments.get("linode_id")
+    if not linode_id:
+        return _error_response("linode_id is required")
+    overwrite = arguments.get("overwrite", False)
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        await client.restore_instance_backup(
+            instance_id,
+            backup_id,
+            int(linode_id),
+            overwrite=overwrite,
+        )
+        return {
+            "message": (f"Backup {backup_id} restored to instance {linode_id}"),
+            "instance_id": instance_id,
+            "backup_id": backup_id,
+        }
+
+    return await execute_tool(cfg, arguments, "restore instance backup", _call)
+
+
+def create_linode_instance_backups_enable_tool() -> Tool:
+    """Create the linode_instance_backups_enable tool."""
+    return Tool(
+        name="linode_instance_backups_enable",
+        description=("Enables backups for a Linode instance (billing charges apply)"),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+                "confirm": _CONFIRM_PROP,
+            },
+            "required": ["instance_id", "confirm"],
+        },
+    )
+
+
+async def handle_linode_instance_backups_enable(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_backups_enable request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("Set confirm=true to proceed.")
+
+    iid = _parse_instance_id(arguments)
+    if isinstance(iid, list):
+        return iid
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        await client.enable_instance_backups(iid)
+        return {
+            "message": (f"Backups enabled for instance {iid}"),
+            "instance_id": iid,
+        }
+
+    return await execute_tool(cfg, arguments, "enable instance backups", _call)
+
+
+def create_linode_instance_backups_cancel_tool() -> Tool:
+    """Create the linode_instance_backups_cancel tool."""
+    return Tool(
+        name="linode_instance_backups_cancel",
+        description=(
+            "Cancels backups for a Linode instance."
+            " All existing backups will be deleted."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to confirm. Existing backups will be deleted."
+                    ),
+                },
+            },
+            "required": ["instance_id", "confirm"],
+        },
+    )
+
+
+async def handle_linode_instance_backups_cancel(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_backups_cancel request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("This is destructive. Set confirm=true to proceed.")
+
+    iid = _parse_instance_id(arguments)
+    if isinstance(iid, list):
+        return iid
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        await client.cancel_instance_backups(iid)
+        return {
+            "message": (f"Backups cancelled for instance {iid}"),
+            "instance_id": iid,
+        }
+
+    return await execute_tool(cfg, arguments, "cancel instance backups", _call)
+
+
+# ── Instance Disks tools ──
+
+
+def create_linode_instance_disks_list_tool() -> Tool:
+    """Create the linode_instance_disks_list tool."""
+    return Tool(
+        name="linode_instance_disks_list",
+        description="Lists disks for a Linode instance",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+            },
+            "required": ["instance_id"],
+        },
+    )
+
+
+async def handle_linode_instance_disks_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_disks_list tool request."""
+    iid = _parse_instance_id(arguments)
+    if isinstance(iid, list):
+        return iid
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        disks = await client.list_instance_disks(iid)
+        return {"count": len(disks), "disks": disks}
+
+    return await execute_tool(cfg, arguments, "list instance disks", _call)
+
+
+def create_linode_instance_disk_get_tool() -> Tool:
+    """Create the linode_instance_disk_get tool."""
+    return Tool(
+        name="linode_instance_disk_get",
+        description=("Gets details of a specific disk on an instance"),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+                "disk_id": _DISK_ID_PROP,
+            },
+            "required": ["instance_id", "disk_id"],
+        },
+    )
+
+
+async def handle_linode_instance_disk_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_disk_get tool request."""
+    ids = _parse_instance_and_disk_ids(arguments)
+    if isinstance(ids, list):
+        return ids
+    instance_id, disk_id = ids
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        return await client.get_instance_disk(instance_id, disk_id)
+
+    return await execute_tool(cfg, arguments, "get instance disk", _call)
+
+
+def create_linode_instance_disk_create_tool() -> Tool:
+    """Create the linode_instance_disk_create tool."""
+    return Tool(
+        name="linode_instance_disk_create",
+        description="Creates a disk on a Linode instance",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+                "label": {
+                    "type": "string",
+                    "description": "Label for the disk",
+                },
+                "size": {
+                    "type": "integer",
+                    "description": "Disk size in MB",
+                },
+                "filesystem": {
+                    "type": "string",
+                    "description": ("Filesystem type (ext4, swap, raw, etc.)"),
+                },
+                "image": {
+                    "type": "string",
+                    "description": "Image to deploy",
+                },
+                "root_pass": {
+                    "type": "string",
+                    "description": ("Root password (required with image)"),
+                },
+                "confirm": _CONFIRM_PROP,
+            },
+            "required": [
+                "instance_id",
+                "label",
+                "size",
+                "confirm",
+            ],
+        },
+    )
+
+
+async def handle_linode_instance_disk_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_disk_create tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("Set confirm=true to proceed.")
+
+    iid = _parse_instance_id(arguments)
+    if isinstance(iid, list):
+        return iid
+
+    label = arguments.get("label", "")
+    if not label:
+        return _error_response("label is required")
+
+    size = arguments.get("size")
+    if not size:
+        return _error_response("size is required")
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        return await client.create_instance_disk(
+            iid,
+            label=label,
+            size=int(size),
+            filesystem=arguments.get("filesystem"),
+            image=arguments.get("image"),
+            root_pass=arguments.get("root_pass"),
+        )
+
+    return await execute_tool(cfg, arguments, "create instance disk", _call)
+
+
+def create_linode_instance_disk_update_tool() -> Tool:
+    """Create the linode_instance_disk_update tool."""
+    return Tool(
+        name="linode_instance_disk_update",
+        description="Updates a disk on a Linode instance",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+                "disk_id": _DISK_ID_PROP,
+                "label": {
+                    "type": "string",
+                    "description": "New label for the disk",
+                },
+                "confirm": _CONFIRM_PROP,
+            },
+            "required": [
+                "instance_id",
+                "disk_id",
+                "confirm",
+            ],
+        },
+    )
+
+
+async def handle_linode_instance_disk_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_disk_update tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("Set confirm=true to proceed.")
+
+    ids = _parse_instance_and_disk_ids(arguments)
+    if isinstance(ids, list):
+        return ids
+    instance_id, disk_id = ids
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        return await client.update_instance_disk(
+            instance_id,
+            disk_id,
+            label=arguments.get("label"),
+        )
+
+    return await execute_tool(cfg, arguments, "update instance disk", _call)
+
+
+def create_linode_instance_disk_delete_tool() -> Tool:
+    """Create the linode_instance_disk_delete tool."""
+    return Tool(
+        name="linode_instance_disk_delete",
+        description="Deletes a disk from a Linode instance",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+                "disk_id": _DISK_ID_PROP,
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to confirm deletion. This is irreversible."
+                    ),
+                },
+            },
+            "required": [
+                "instance_id",
+                "disk_id",
+                "confirm",
+            ],
+        },
+    )
+
+
+async def handle_linode_instance_disk_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_disk_delete tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("This is destructive. Set confirm=true to proceed.")
+
+    ids = _parse_instance_and_disk_ids(arguments)
+    if isinstance(ids, list):
+        return ids
+    instance_id, disk_id = ids
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        await client.delete_instance_disk(instance_id, disk_id)
+        return {
+            "message": (f"Disk {disk_id} deleted from instance {instance_id}"),
+            "instance_id": instance_id,
+            "disk_id": disk_id,
+        }
+
+    return await execute_tool(cfg, arguments, "delete instance disk", _call)
+
+
+def create_linode_instance_disk_clone_tool() -> Tool:
+    """Create the linode_instance_disk_clone tool."""
+    return Tool(
+        name="linode_instance_disk_clone",
+        description="Clones a disk on a Linode instance",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+                "disk_id": _DISK_ID_PROP,
+                "confirm": _CONFIRM_PROP,
+            },
+            "required": [
+                "instance_id",
+                "disk_id",
+                "confirm",
+            ],
+        },
+    )
+
+
+async def handle_linode_instance_disk_clone(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_disk_clone tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("Set confirm=true to proceed.")
+
+    ids = _parse_instance_and_disk_ids(arguments)
+    if isinstance(ids, list):
+        return ids
+    instance_id, disk_id = ids
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        return await client.clone_instance_disk(instance_id, disk_id)
+
+    return await execute_tool(cfg, arguments, "clone instance disk", _call)
+
+
+def create_linode_instance_disk_resize_tool() -> Tool:
+    """Create the linode_instance_disk_resize tool."""
+    return Tool(
+        name="linode_instance_disk_resize",
+        description="Resizes a disk on a Linode instance",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+                "disk_id": _DISK_ID_PROP,
+                "size": {
+                    "type": "integer",
+                    "description": "New size in MB",
+                },
+                "confirm": _CONFIRM_PROP,
+            },
+            "required": [
+                "instance_id",
+                "disk_id",
+                "size",
+                "confirm",
+            ],
+        },
+    )
+
+
+async def handle_linode_instance_disk_resize(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_disk_resize tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("Set confirm=true to proceed.")
+
+    ids = _parse_instance_and_disk_ids(arguments)
+    if isinstance(ids, list):
+        return ids
+    instance_id, disk_id = ids
+
+    size = arguments.get("size")
+    if not size:
+        return _error_response("size is required")
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        await client.resize_instance_disk(instance_id, disk_id, int(size))
+        return {
+            "message": (f"Disk {disk_id} resized to {size} MB"),
+            "instance_id": instance_id,
+            "disk_id": disk_id,
+            "size": int(size),
+        }
+
+    return await execute_tool(cfg, arguments, "resize instance disk", _call)
+
+
+# ── Instance IPs tools ──
+
+
+def create_linode_instance_ips_list_tool() -> Tool:
+    """Create the linode_instance_ips_list tool."""
+    return Tool(
+        name="linode_instance_ips_list",
+        description=("Lists IP addresses for a Linode instance"),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+            },
+            "required": ["instance_id"],
+        },
+    )
+
+
+async def handle_linode_instance_ips_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_ips_list tool request."""
+    iid = _parse_instance_id(arguments)
+    if isinstance(iid, list):
+        return iid
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        return await client.list_instance_ips(iid)
+
+    return await execute_tool(cfg, arguments, "list instance IPs", _call)
+
+
+def create_linode_instance_ip_get_tool() -> Tool:
+    """Create the linode_instance_ip_get tool."""
+    return Tool(
+        name="linode_instance_ip_get",
+        description=("Gets details of a specific IP for an instance"),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+                "address": {
+                    "type": "string",
+                    "description": ("The IP address to look up (required)"),
+                },
+            },
+            "required": ["instance_id", "address"],
+        },
+    )
+
+
+async def handle_linode_instance_ip_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_ip_get tool request."""
+    iid = _parse_instance_id(arguments)
+    if isinstance(iid, list):
+        return iid
+
+    address = arguments.get("address", "")
+    if not address:
+        return _error_response("address is required")
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        return await client.get_instance_ip(iid, address)
+
+    return await execute_tool(cfg, arguments, "get instance IP", _call)
+
+
+def create_linode_instance_ip_allocate_tool() -> Tool:
+    """Create the linode_instance_ip_allocate tool."""
+    return Tool(
+        name="linode_instance_ip_allocate",
+        description=("Allocates a new IP address for a Linode instance"),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+                "type": {
+                    "type": "string",
+                    "description": ("IP type: ipv4 or ipv6 (required)"),
+                },
+                "public": {
+                    "type": "boolean",
+                    "description": ("Whether the IP is public (default true)"),
+                },
+                "confirm": _CONFIRM_PROP,
+            },
+            "required": [
+                "instance_id",
+                "type",
+                "confirm",
+            ],
+        },
+    )
+
+
+async def handle_linode_instance_ip_allocate(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_ip_allocate tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("Set confirm=true to proceed.")
+
+    iid = _parse_instance_id(arguments)
+    if isinstance(iid, list):
+        return iid
+
+    ip_type = arguments.get("type", "")
+    if not ip_type:
+        return _error_response("type is required")
+
+    public = arguments.get("public", True)
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        return await client.allocate_instance_ip(iid, ip_type=ip_type, public=public)
+
+    return await execute_tool(cfg, arguments, "allocate instance IP", _call)
+
+
+def create_linode_instance_ip_delete_tool() -> Tool:
+    """Create the linode_instance_ip_delete tool."""
+    return Tool(
+        name="linode_instance_ip_delete",
+        description=("Deletes an IP address from a Linode instance"),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+                "address": {
+                    "type": "string",
+                    "description": ("The IP address to delete (required)"),
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to confirm deletion. This is irreversible."
+                    ),
+                },
+            },
+            "required": [
+                "instance_id",
+                "address",
+                "confirm",
+            ],
+        },
+    )
+
+
+async def handle_linode_instance_ip_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_ip_delete tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("This is destructive. Set confirm=true to proceed.")
+
+    iid = _parse_instance_id(arguments)
+    if isinstance(iid, list):
+        return iid
+
+    address = arguments.get("address", "")
+    if not address:
+        return _error_response("address is required")
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        await client.delete_instance_ip(iid, address)
+        return {
+            "message": (f"IP {address} deleted from instance {iid}"),
+            "instance_id": iid,
+            "address": address,
+        }
+
+    return await execute_tool(cfg, arguments, "delete instance IP", _call)
+
+
+# ── Instance Actions tools ──
+
+
+def create_linode_instance_clone_tool() -> Tool:
+    """Create the linode_instance_clone tool."""
+    return Tool(
+        name="linode_instance_clone",
+        description="Clones a Linode instance",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+                "region": {
+                    "type": "string",
+                    "description": "Target region for clone",
+                },
+                "type": {
+                    "type": "string",
+                    "description": ("Instance type for the clone"),
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Label for cloned instance",
+                },
+                "disks": {
+                    "type": "array",
+                    "description": "Disk IDs to include",
+                    "items": {"type": "integer"},
+                },
+                "configs": {
+                    "type": "array",
+                    "description": "Config IDs to include",
+                    "items": {"type": "integer"},
+                },
+                "confirm": _CONFIRM_PROP,
+            },
+            "required": ["instance_id", "confirm"],
+        },
+    )
+
+
+async def handle_linode_instance_clone(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_clone tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("Set confirm=true to proceed.")
+
+    iid = _parse_instance_id(arguments)
+    if isinstance(iid, list):
+        return iid
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        return await client.clone_instance(
+            iid,
+            region=arguments.get("region"),
+            instance_type=arguments.get("type"),
+            label=arguments.get("label"),
+            disks=arguments.get("disks"),
+            configs=arguments.get("configs"),
+        )
+
+    return await execute_tool(cfg, arguments, "clone instance", _call)
+
+
+def create_linode_instance_migrate_tool() -> Tool:
+    """Create the linode_instance_migrate tool."""
+    return Tool(
+        name="linode_instance_migrate",
+        description=("Migrates a Linode instance to a new region"),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+                "region": {
+                    "type": "string",
+                    "description": ("Target region for migration"),
+                },
+                "confirm": _CONFIRM_PROP,
+            },
+            "required": ["instance_id", "confirm"],
+        },
+    )
+
+
+async def handle_linode_instance_migrate(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_migrate tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("Set confirm=true to proceed.")
+
+    iid = _parse_instance_id(arguments)
+    if isinstance(iid, list):
+        return iid
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        await client.migrate_instance(iid, region=arguments.get("region"))
+        return {
+            "message": (f"Migration initiated for instance {iid}"),
+            "instance_id": iid,
+        }
+
+    return await execute_tool(cfg, arguments, "migrate instance", _call)
+
+
+def create_linode_instance_rebuild_tool() -> Tool:
+    """Create the linode_instance_rebuild tool."""
+    return Tool(
+        name="linode_instance_rebuild",
+        description=(
+            "Rebuilds a Linode instance with a new image."
+            " All data on existing disks will be destroyed."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+                "image": {
+                    "type": "string",
+                    "description": ("Image ID to rebuild with (required)"),
+                },
+                "root_pass": {
+                    "type": "string",
+                    "description": (
+                        "Root password for the rebuilt instance (required)"
+                    ),
+                },
+                "authorized_keys": {
+                    "type": "array",
+                    "description": "SSH public keys",
+                    "items": {"type": "string"},
+                },
+                "authorized_users": {
+                    "type": "array",
+                    "description": ("Usernames with SSH keys on profile"),
+                    "items": {"type": "string"},
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to confirm rebuild."
+                        " Destroys all existing disk data."
+                    ),
+                },
+            },
+            "required": [
+                "instance_id",
+                "image",
+                "root_pass",
+                "confirm",
+            ],
+        },
+    )
+
+
+async def handle_linode_instance_rebuild(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_rebuild tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("This is destructive. Set confirm=true to proceed.")
+
+    iid = _parse_instance_id(arguments)
+    if isinstance(iid, list):
+        return iid
+
+    image = arguments.get("image", "")
+    if not image:
+        return _error_response("image is required")
+
+    root_pass = arguments.get("root_pass", "")
+    if not root_pass:
+        return _error_response("root_pass is required")
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        return await client.rebuild_instance(
+            iid,
+            image=image,
+            root_pass=root_pass,
+            authorized_keys=arguments.get("authorized_keys"),
+            authorized_users=arguments.get("authorized_users"),
+        )
+
+    return await execute_tool(cfg, arguments, "rebuild instance", _call)
+
+
+def create_linode_instance_rescue_tool() -> Tool:
+    """Create the linode_instance_rescue tool."""
+    return Tool(
+        name="linode_instance_rescue",
+        description=("Boots a Linode instance into rescue mode"),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+                "devices": {
+                    "type": "object",
+                    "description": ("Device mappings for rescue mode"),
+                },
+                "confirm": _CONFIRM_PROP,
+            },
+            "required": ["instance_id", "confirm"],
+        },
+    )
+
+
+async def handle_linode_instance_rescue(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_rescue tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("Set confirm=true to proceed.")
+
+    iid = _parse_instance_id(arguments)
+    if isinstance(iid, list):
+        return iid
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        await client.rescue_instance(iid, devices=arguments.get("devices"))
+        return {
+            "message": (f"Rescue mode initiated for instance {iid}"),
+            "instance_id": iid,
+        }
+
+    return await execute_tool(cfg, arguments, "rescue instance", _call)
+
+
+def create_linode_instance_password_reset_tool() -> Tool:
+    """Create the linode_instance_password_reset tool."""
+    return Tool(
+        name="linode_instance_password_reset",
+        description=("Resets the root password for a Linode instance"),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+                "root_pass": {
+                    "type": "string",
+                    "description": ("New root password (required)"),
+                },
+                "confirm": _CONFIRM_PROP,
+            },
+            "required": [
+                "instance_id",
+                "root_pass",
+                "confirm",
+            ],
+        },
+    )
+
+
+async def handle_linode_instance_password_reset(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_password_reset request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("Set confirm=true to proceed.")
+
+    iid = _parse_instance_id(arguments)
+    if isinstance(iid, list):
+        return iid
+
+    root_pass = arguments.get("root_pass", "")
+    if not root_pass:
+        return _error_response("root_pass is required")
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        await client.reset_instance_password(iid, root_pass)
+        return {
+            "message": (f"Password reset for instance {iid}"),
+            "instance_id": iid,
+        }
+
+    return await execute_tool(cfg, arguments, "reset instance password", _call)

@@ -44,7 +44,7 @@ func NewLinodeVolumeCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 }
 
 func handleLinodeVolumeCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This operation creates a billable resource. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This operation creates a billable resource. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -95,7 +95,7 @@ func handleLinodeVolumeCreateRequest(ctx context.Context, request *mcp.CallToolR
 		Volume:  volume,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeVolumeAttachTool creates a tool for attaching a volume to a Linode.
@@ -166,7 +166,7 @@ func handleLinodeVolumeAttachRequest(ctx context.Context, request *mcp.CallToolR
 		Volume:   volume,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeVolumeDetachTool creates a tool for detaching a volume from a Linode.
@@ -213,7 +213,7 @@ func handleLinodeVolumeDetachRequest(ctx context.Context, request *mcp.CallToolR
 		VolumeID: volumeID,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeVolumeResizeTool creates a tool for resizing a volume.
@@ -245,7 +245,7 @@ func NewLinodeVolumeResizeTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 }
 
 func handleLinodeVolumeResizeRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This operation may increase billing. Volumes cannot be downsized. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This operation may increase billing. Volumes cannot be downsized. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -278,7 +278,7 @@ func handleLinodeVolumeResizeRequest(ctx context.Context, request *mcp.CallToolR
 		Volume:  volume,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeVolumeDeleteTool creates a tool for deleting a volume.
@@ -306,7 +306,7 @@ func NewLinodeVolumeDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 }
 
 func handleLinodeVolumeDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This operation is destructive and irreversible. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This operation is destructive and irreversible. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -322,16 +322,16 @@ func handleLinodeVolumeDeleteRequest(ctx context.Context, request *mcp.CallToolR
 	}
 
 	if err := client.DeleteVolume(ctx, volumeID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to delete volume %d: %v", volumeID, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove volume %d: %v", volumeID, err)), nil
 	}
 
 	response := struct {
 		Message  string `json:"message"`
 		VolumeID int    `json:"volume_id"`
 	}{
-		Message:  fmt.Sprintf("Volume %d deleted successfully", volumeID),
+		Message:  fmt.Sprintf("Volume %d removed successfully", volumeID),
 		VolumeID: volumeID,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }

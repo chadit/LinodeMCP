@@ -43,7 +43,7 @@ func handleLinodeTypesListRequest(ctx context.Context, request *mcp.CallToolRequ
 	}
 
 	if classFilter != "" {
-		types = filterByField(types, classFilter, func(t linode.InstanceType) string {
+		types = FilterByField(types, classFilter, func(t linode.InstanceType) string {
 			return t.Class
 		})
 	}
@@ -65,5 +65,5 @@ func formatTypesResponse(types []linode.InstanceType, classFilter string) (*mcp.
 		response.Filter = "class=" + classFilter
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }

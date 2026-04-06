@@ -1,9 +1,9 @@
 """Shared test fixtures for LinodeMCP."""
 
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from collections.abc import Generator
+from pathlib import Path
+from typing import Any
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import yaml
@@ -168,3 +168,14 @@ def sample_instance_data() -> dict[str, Any]:
         "watchdog_enabled": True,
         "host_uuid": "test-host-uuid-123",
     }
+
+
+@pytest.fixture
+def mock_linode_client() -> Generator[AsyncMock]:
+    """Mock RetryableClient with async context manager support."""
+    with patch("linodemcp.tools.RetryableClient") as mock_class:
+        client = AsyncMock()
+        client.__aenter__.return_value = client
+        client.__aexit__.return_value = None
+        mock_class.return_value = client
+        yield client

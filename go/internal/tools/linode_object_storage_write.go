@@ -34,7 +34,7 @@ func NewLinodeObjectStorageBucketCreateTool(cfg *config.Config) (mcp.Tool, func(
 }
 
 func handleObjectStorageBucketCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This operation creates a billable resource. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This operation creates a billable resource. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -85,7 +85,7 @@ func handleObjectStorageBucketCreateRequest(ctx context.Context, request *mcp.Ca
 		Bucket:  bucket,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeObjectStorageBucketDeleteTool creates a tool for deleting an Object Storage bucket.
@@ -117,7 +117,7 @@ func NewLinodeObjectStorageBucketDeleteTool(cfg *config.Config) (mcp.Tool, func(
 }
 
 func handleObjectStorageBucketDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This operation is destructive and irreversible. All objects must be removed first. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This operation is destructive and irreversible. All objects must be removed first. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -138,7 +138,7 @@ func handleObjectStorageBucketDeleteRequest(ctx context.Context, request *mcp.Ca
 	}
 
 	if err := client.DeleteObjectStorageBucket(ctx, region, label); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to delete bucket '%s' in %s: %v", label, region, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove bucket '%s' in %s: %v", label, region, err)), nil
 	}
 
 	response := struct {
@@ -146,12 +146,12 @@ func handleObjectStorageBucketDeleteRequest(ctx context.Context, request *mcp.Ca
 		Region  string `json:"region"`
 		Label   string `json:"label"`
 	}{
-		Message: fmt.Sprintf("Bucket '%s' in %s deleted successfully", label, region),
+		Message: fmt.Sprintf("Bucket '%s' in %s removed successfully", label, region),
 		Region:  region,
 		Label:   label,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeObjectStorageBucketAccessUpdateTool creates a tool for updating bucket access controls.
@@ -176,7 +176,7 @@ func NewLinodeObjectStorageBucketAccessUpdateTool(cfg *config.Config) (mcp.Tool,
 }
 
 func handleObjectStorageBucketAccessUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This operation changes bucket access controls. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This operation changes bucket access controls. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -213,7 +213,7 @@ func handleObjectStorageBucketAccessUpdateRequest(ctx context.Context, request *
 	}
 
 	if err := client.UpdateObjectStorageBucketAccess(ctx, region, label, req); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to update access for bucket '%s' in %s: %v", label, region, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to modify access for bucket '%s' in %s: %v", label, region, err)), nil
 	}
 
 	response := struct {
@@ -222,13 +222,13 @@ func handleObjectStorageBucketAccessUpdateRequest(ctx context.Context, request *
 		Label   string `json:"label"`
 		ACL     string `json:"acl,omitempty"`
 	}{
-		Message: fmt.Sprintf("Access settings for bucket '%s' in %s updated successfully", label, region),
+		Message: fmt.Sprintf("Access settings for bucket '%s' in %s modified successfully", label, region),
 		Region:  region,
 		Label:   label,
 		ACL:     acl,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeObjectStorageKeyCreateTool creates a tool for creating an Object Storage access key.
@@ -259,7 +259,7 @@ func NewLinodeObjectStorageKeyCreateTool(cfg *config.Config) (mcp.Tool, func(ctx
 }
 
 func handleObjectStorageKeyCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This creates an access key. The secret_key is only shown ONCE in the response. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This creates an access key. The secret_key is only shown ONCE in the response. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -309,7 +309,7 @@ func handleObjectStorageKeyCreateRequest(ctx context.Context, request *mcp.CallT
 		Key:     key,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeObjectStorageKeyUpdateTool creates a tool for updating an Object Storage access key.
@@ -343,7 +343,7 @@ func NewLinodeObjectStorageKeyUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx
 }
 
 func handleObjectStorageKeyUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This modifies access key permissions. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This modifies access key permissions. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -386,18 +386,18 @@ func handleObjectStorageKeyUpdateRequest(ctx context.Context, request *mcp.CallT
 	}
 
 	if err := client.UpdateObjectStorageKey(ctx, keyID, req); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to update access key %d: %v", keyID, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to modify access key %d: %v", keyID, err)), nil
 	}
 
 	response := struct {
 		Message string `json:"message"`
 		KeyID   int    `json:"key_id"`
 	}{
-		Message: fmt.Sprintf("Access key %d updated successfully", keyID),
+		Message: fmt.Sprintf("Access key %d modified successfully", keyID),
 		KeyID:   keyID,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeObjectStorageKeyDeleteTool creates a tool for revoking an Object Storage access key.
@@ -425,7 +425,7 @@ func NewLinodeObjectStorageKeyDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx
 }
 
 func handleObjectStorageKeyDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This revokes the access key permanently. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This revokes the access key permanently. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -452,7 +452,7 @@ func handleObjectStorageKeyDeleteRequest(ctx context.Context, request *mcp.CallT
 		KeyID:   keyID,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeObjectStorageObjectACLUpdateTool creates a tool for updating an object's ACL.
@@ -493,7 +493,7 @@ func NewLinodeObjectStorageObjectACLUpdateTool(cfg *config.Config) (mcp.Tool, fu
 }
 
 func handleObjectStorageObjectACLUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This modifies the object's access permissions. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This modifies the object's access permissions. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -530,10 +530,10 @@ func handleObjectStorageObjectACLUpdateRequest(ctx context.Context, request *mcp
 
 	result, err := client.UpdateObjectACL(ctx, region, label, req)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to update ACL for object '%s' in bucket '%s': %v", name, label, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to modify ACL for object '%s' in bucket '%s': %v", name, label, err)), nil
 	}
 
-	return marshalToolResponse(result)
+	return MarshalToolResponse(result)
 }
 
 // NewLinodeObjectStorageSSLDeleteTool creates a tool for deleting a bucket's SSL certificate.
@@ -566,7 +566,7 @@ func NewLinodeObjectStorageSSLDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx
 }
 
 func handleObjectStorageSSLDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This removes the SSL certificate from the bucket. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This removes the SSL certificate from the bucket. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -587,7 +587,7 @@ func handleObjectStorageSSLDeleteRequest(ctx context.Context, request *mcp.CallT
 	}
 
 	if err := client.DeleteBucketSSL(ctx, region, label); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to delete SSL certificate for bucket '%s' in region '%s': %v", label, region, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove SSL certificate for bucket '%s' in region '%s': %v", label, region, err)), nil
 	}
 
 	response := struct {
@@ -600,7 +600,7 @@ func handleObjectStorageSSLDeleteRequest(ctx context.Context, request *mcp.CallT
 		Bucket:  label,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // validateBucketAccessEntries validates each entry in a bucket_access array.

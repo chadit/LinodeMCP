@@ -53,7 +53,14 @@ test-cov: _ensure-hooks
 	$(PYTEST) --cov=linodemcp --cov-report=term-missing --cov-report=html
 
 lint: _ensure-hooks
-	$(RUFF) check src/ tests/
+	@echo "Running ruff check..."
+	@$(RUFF) check src/ tests/
+	@echo "Running mypy type check..."
+	@if [ -x "$(MYPY)" ]; then \
+		$(MYPY) --ignore-missing-imports src/ tests/; \
+	else \
+		echo "[warn] mypy not installed, skipping type check"; \
+	fi
 
 format: _ensure-hooks
 	$(RUFF) format src/ tests/

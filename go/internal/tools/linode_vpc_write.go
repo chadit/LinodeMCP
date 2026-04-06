@@ -34,7 +34,7 @@ func NewLinodeVPCCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Cont
 }
 
 func handleVPCCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This creates a billable VPC resource. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This creates a billable VPC resource. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -84,7 +84,7 @@ func handleVPCCreateRequest(ctx context.Context, request *mcp.CallToolRequest, c
 		VPC:     vpc,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeVPCUpdateTool creates a tool for updating an existing VPC.
@@ -107,7 +107,7 @@ func NewLinodeVPCUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Cont
 }
 
 func handleVPCUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This modifies the VPC configuration. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This modifies the VPC configuration. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -133,18 +133,18 @@ func handleVPCUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, c
 
 	vpc, err := client.UpdateVPC(ctx, vpcID, req)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to update VPC %d: %v", vpcID, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to modify VPC %d: %v", vpcID, err)), nil
 	}
 
 	response := struct {
 		Message string      `json:"message"`
 		VPC     *linode.VPC `json:"vpc"`
 	}{
-		Message: fmt.Sprintf("VPC %d updated successfully", vpcID),
+		Message: fmt.Sprintf("VPC %d modified successfully", vpcID),
 		VPC:     vpc,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeVPCDeleteTool creates a tool for deleting a VPC.
@@ -163,7 +163,7 @@ func NewLinodeVPCDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Cont
 }
 
 func handleVPCDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This is irreversible. All subnets in the VPC will also be deleted. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This is irreversible. All subnets in the VPC will also be deleted. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -178,18 +178,18 @@ func handleVPCDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, c
 	}
 
 	if err := client.DeleteVPC(ctx, vpcID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to delete VPC %d: %v", vpcID, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove VPC %d: %v", vpcID, err)), nil
 	}
 
 	response := struct {
 		Message string `json:"message"`
 		VPCID   int    `json:"vpc_id"`
 	}{
-		Message: fmt.Sprintf("VPC %d deleted successfully", vpcID),
+		Message: fmt.Sprintf("VPC %d removed successfully", vpcID),
 		VPCID:   vpcID,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeVPCSubnetCreateTool creates a tool for creating a subnet within a VPC.
@@ -212,7 +212,7 @@ func NewLinodeVPCSubnetCreateTool(cfg *config.Config) (mcp.Tool, func(ctx contex
 }
 
 func handleVPCSubnetCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This creates a new subnet in the VPC. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This creates a new subnet in the VPC. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -254,7 +254,7 @@ func handleVPCSubnetCreateRequest(ctx context.Context, request *mcp.CallToolRequ
 		Subnet:  subnet,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeVPCSubnetUpdateTool creates a tool for updating a subnet within a VPC.
@@ -277,7 +277,7 @@ func NewLinodeVPCSubnetUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx contex
 }
 
 func handleVPCSubnetUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This modifies the subnet configuration. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This modifies the subnet configuration. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -307,18 +307,18 @@ func handleVPCSubnetUpdateRequest(ctx context.Context, request *mcp.CallToolRequ
 
 	subnet, err := client.UpdateVPCSubnet(ctx, vpcID, subnetID, req)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to update subnet %d in VPC %d: %v", subnetID, vpcID, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to modify subnet %d in VPC %d: %v", subnetID, vpcID, err)), nil
 	}
 
 	response := struct {
 		Message string            `json:"message"`
 		Subnet  *linode.VPCSubnet `json:"subnet"`
 	}{
-		Message: fmt.Sprintf("Subnet %d in VPC %d updated successfully", subnetID, vpcID),
+		Message: fmt.Sprintf("Subnet %d in VPC %d modified successfully", subnetID, vpcID),
 		Subnet:  subnet,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeVPCSubnetDeleteTool creates a tool for deleting a subnet from a VPC.
@@ -339,7 +339,7 @@ func NewLinodeVPCSubnetDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx contex
 }
 
 func handleVPCSubnetDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This is irreversible. The subnet will be permanently deleted. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This is irreversible. The subnet will be permanently deleted. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -359,7 +359,7 @@ func handleVPCSubnetDeleteRequest(ctx context.Context, request *mcp.CallToolRequ
 	}
 
 	if err := client.DeleteVPCSubnet(ctx, vpcID, subnetID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to delete subnet %d from VPC %d: %v", subnetID, vpcID, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove subnet %d from VPC %d: %v", subnetID, vpcID, err)), nil
 	}
 
 	response := struct {
@@ -372,5 +372,5 @@ func handleVPCSubnetDeleteRequest(ctx context.Context, request *mcp.CallToolRequ
 		SubnetID: subnetID,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }

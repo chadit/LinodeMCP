@@ -8,7 +8,7 @@ An MCP (Model Context Protocol) server that gives AI assistants like Claude|Gemi
 
 LinodeMCP exposes Linode API operations as MCP tools. AI assistants can use these tools to query and manage your Linode infrastructure -- all through a standard protocol.
 
-### Available Tools (103 total)
+### Available Tools (125 total)
 
 **Core Tools:**
 
@@ -154,6 +154,48 @@ LinodeMCP exposes Linode API operations as MCP tools. AI assistants can use thes
 | `linode_vpc_subnet_create` | Creates a new subnet in a VPC (confirm required) |
 | `linode_vpc_subnet_update` | Updates a subnet's label (confirm required) |
 | `linode_vpc_subnet_delete` | Deletes a subnet from a VPC (confirm required) |
+
+**Instance Backups:**
+
+| Tool | Description |
+|------|-------------|
+| `linode_instance_backups_list` | Lists all backups for an instance (automatic + manual snapshots) |
+| `linode_instance_backup_get` | Gets detailed info about a specific backup |
+| `linode_instance_backup_create` | Creates a manual snapshot of an instance (confirm required) |
+| `linode_instance_backup_restore` | Restores a backup to an instance (confirm required) |
+| `linode_instance_backups_enable` | Enables the backups service for an instance (confirm required) |
+| `linode_instance_backups_cancel` | Cancels the backups service for an instance (confirm required) |
+
+**Instance Disks:**
+
+| Tool | Description |
+|------|-------------|
+| `linode_instance_disks_list` | Lists all disks attached to an instance |
+| `linode_instance_disk_get` | Gets detailed info about a specific disk |
+| `linode_instance_disk_create` | Creates a new disk on an instance (confirm required) |
+| `linode_instance_disk_update` | Updates a disk's label (confirm required) |
+| `linode_instance_disk_delete` | Deletes a disk from an instance (confirm required) |
+| `linode_instance_disk_clone` | Clones a disk on an instance (confirm required) |
+| `linode_instance_disk_resize` | Resizes a disk on an instance (confirm required) |
+
+**Instance IPs:**
+
+| Tool | Description |
+|------|-------------|
+| `linode_instance_ips_list` | Lists all IP addresses (IPv4 and IPv6) for an instance |
+| `linode_instance_ip_get` | Gets detailed info about a specific IP address |
+| `linode_instance_ip_allocate` | Allocates a new IP address for an instance (confirm required) |
+| `linode_instance_ip_delete` | Removes an IP address from an instance (confirm required) |
+
+**Instance Actions:**
+
+| Tool | Description |
+|------|-------------|
+| `linode_instance_clone` | Clones an instance to a new one (confirm required) |
+| `linode_instance_migrate` | Migrates an instance to a new region (confirm required) |
+| `linode_instance_rebuild` | Rebuilds an instance with a new image (confirm required) |
+| `linode_instance_rescue` | Boots an instance into rescue mode (confirm required) |
+| `linode_instance_password_reset` | Resets the root password on an instance (confirm required) |
 
 **Security:**
 

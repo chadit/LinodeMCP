@@ -14,7 +14,7 @@ func NewLinodeFirewallsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.
 	return newListTool(cfg,
 		"linode_firewalls_list",
 		"Lists all Cloud Firewalls on your account. Can filter by status or label.",
-		func(ctx context.Context, client *linode.RetryableClient) ([]linode.Firewall, error) {
+		func(ctx context.Context, client *linode.Client) ([]linode.Firewall, error) {
 			return client.ListFirewalls(ctx)
 		},
 		[]listFilterParam[linode.Firewall]{

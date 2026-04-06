@@ -20,7 +20,7 @@ func main() {
 }
 
 func run() int {
-	cfg, err := config.Load()
+	cfg, err := config.Load(config.GetConfigPath())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load configuration: %v\n", err)
 
@@ -33,7 +33,6 @@ func run() int {
 	log.Printf("Version: %s", versionInfo.Version)
 	log.Printf("Server: %s", cfg.Server.Name)
 	log.Printf("Platform: %s", versionInfo.Platform)
-	log.Printf("Git Commit: %s", versionInfo.GitCommit)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

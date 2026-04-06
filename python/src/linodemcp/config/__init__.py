@@ -1,12 +1,15 @@
 """Configuration management for LinodeMCP."""
 
 import json
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 
 class ConfigError(Exception):
@@ -181,8 +184,12 @@ def get_config_dir() -> Path:
         try:
             path = Path(custom_path)
             validate_path(path)
-        except PathValidationError:
-            pass
+        except PathValidationError as e:
+            logger.warning(
+                "Config path %s failed validation, using default: %s",
+                custom_path,
+                e,
+            )
         else:
             return path.parent
 
@@ -197,8 +204,12 @@ def get_config_path() -> Path:
         try:
             path = Path(custom_path)
             validate_path(path)
-        except PathValidationError:
-            pass
+        except PathValidationError as e:
+            logger.warning(
+                "Config path %s failed validation, using default: %s",
+                custom_path,
+                e,
+            )
         else:
             return path
 

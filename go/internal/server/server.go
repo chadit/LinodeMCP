@@ -3,7 +3,6 @@ package server
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 
@@ -22,12 +21,6 @@ type Server struct {
 	mcp    *server.MCPServer
 	tools  []contracts.Tool
 }
-
-// ErrConfigNil is returned when a nil config is passed to New.
-var ErrConfigNil = errors.New("config cannot be nil")
-
-// ErrExecuteNotImplemented is returned when Execute is called on a toolWrapper.
-var ErrExecuteNotImplemented = errors.New("execute method not implemented for wrapper")
 
 // New creates a new LinodeMCP server.
 func New(cfg *config.Config) (*Server, error) {
@@ -60,12 +53,22 @@ func (tw *toolWrapper) Name() string        { return tw.tool.Name }
 func (tw *toolWrapper) Description() string { return tw.tool.Description }
 func (tw *toolWrapper) InputSchema() any    { return tw.tool.InputSchema }
 
-func (*toolWrapper) Execute(_ context.Context, _ map[string]any) (*mcp.CallToolResult, error) {
-	return nil, ErrExecuteNotImplemented
+func (*toolWrapper) Execute(ctx context.Context, _ map[string]any) (*mcp.CallToolResult, error) {
+	select {
+	case <-ctx.Done():
+		return nil, fmt.Errorf("context canceled: %w", ctx.Err())
+	default:
+		return nil, ErrExecuteNotImplemented
+	}
+}
+
+// Tools returns the registered tool list.
+func (s *Server) Tools() []contracts.Tool {
+	return s.tools
 }
 
 // Start starts the LinodeMCP server using stdio transport.
-func (s *Server) Start(_ context.Context) error {
+func (s *Server) Start(ctx context.Context) error {
 	log.Printf("Starting LinodeMCP server with %d tools", len(s.tools))
 
 	for _, tool := range s.tools {
@@ -74,16 +77,22 @@ func (s *Server) Start(_ context.Context) error {
 
 	log.Printf("LinodeMCP server started")
 
-	if err := server.ServeStdio(s.mcp); err != nil {
-		return fmt.Errorf("failed to start server: %w", err)
+	errCh := make(chan error, 1)
+
+	go func() {
+		errCh <- server.ServeStdio(s.mcp)
+	}()
+
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("context canceled: %w", ctx.Err())
+	case err := <-errCh:
+		if err != nil {
+			return fmt.Errorf("failed to start server: %w", err)
+		}
+
+		return nil
 	}
-
-	return nil
-}
-
-// GetToolCount returns the number of registered tools.
-func (s *Server) GetToolCount() int {
-	return len(s.tools)
 }
 
 type toolFactory func(*config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error))
@@ -103,6 +112,7 @@ func (s *Server) registerTools() {
 	s.registerObjectStorageTools()
 	s.registerLKETools()
 	s.registerVPCTools()
+	s.registerInstanceDeepTools()
 }
 
 func (s *Server) registerCoreTools() {
@@ -232,6 +242,39 @@ func (s *Server) registerVPCTools() {
 		tools.NewLinodeVPCSubnetCreateTool,
 		tools.NewLinodeVPCSubnetUpdateTool,
 		tools.NewLinodeVPCSubnetDeleteTool,
+	} {
+		s.registerToolFromFactory(factory)
+	}
+}
+
+func (s *Server) registerInstanceDeepTools() {
+	for _, factory := range []toolFactory{
+		// Backups
+		tools.NewLinodeInstanceBackupsListTool,
+		tools.NewLinodeInstanceBackupGetTool,
+		tools.NewLinodeInstanceBackupCreateTool,
+		tools.NewLinodeInstanceBackupRestoreTool,
+		tools.NewLinodeInstanceBackupsEnableTool,
+		tools.NewLinodeInstanceBackupsCancelTool,
+		// Disks
+		tools.NewLinodeInstanceDisksListTool,
+		tools.NewLinodeInstanceDiskGetTool,
+		tools.NewLinodeInstanceDiskCreateTool,
+		tools.NewLinodeInstanceDiskUpdateTool,
+		tools.NewLinodeInstanceDiskDeleteTool,
+		tools.NewLinodeInstanceDiskCloneTool,
+		tools.NewLinodeInstanceDiskResizeTool,
+		// IPs
+		tools.NewLinodeInstanceIPsListTool,
+		tools.NewLinodeInstanceIPGetTool,
+		tools.NewLinodeInstanceIPAllocateTool,
+		tools.NewLinodeInstanceIPDeleteTool,
+		// Actions
+		tools.NewLinodeInstanceCloneTool,
+		tools.NewLinodeInstanceMigrateTool,
+		tools.NewLinodeInstanceRebuildTool,
+		tools.NewLinodeInstanceRescueTool,
+		tools.NewLinodeInstancePasswordResetTool,
 	} {
 		s.registerToolFromFactory(factory)
 	}

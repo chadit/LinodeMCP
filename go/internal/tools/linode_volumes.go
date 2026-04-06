@@ -14,7 +14,7 @@ func NewLinodeVolumesListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Co
 	return newListTool(cfg,
 		"linode_volumes_list",
 		"Lists all block storage volumes for the authenticated user with optional filtering by region or label",
-		func(ctx context.Context, client *linode.RetryableClient) ([]linode.Volume, error) {
+		func(ctx context.Context, client *linode.Client) ([]linode.Volume, error) {
 			return client.ListVolumes(ctx)
 		},
 		[]listFilterParam[linode.Volume]{

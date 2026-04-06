@@ -16,7 +16,7 @@ func NewLinodeVPCsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Conte
 	return newListTool(cfg,
 		"linode_vpcs_list",
 		"Lists all VPCs. Can filter by label or region.",
-		func(ctx context.Context, client *linode.RetryableClient) ([]linode.VPC, error) {
+		func(ctx context.Context, client *linode.Client) ([]linode.VPC, error) {
 			return client.ListVPCs(ctx)
 		},
 		[]listFilterParam[linode.VPC]{
@@ -60,7 +60,7 @@ func handleVPCGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg 
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve VPC %d: %v", vpcID, err)), nil
 	}
 
-	return marshalToolResponse(vpc)
+	return MarshalToolResponse(vpc)
 }
 
 // NewLinodeVPCIPsListTool creates a tool for listing all VPC IP addresses across all VPCs.
@@ -68,7 +68,7 @@ func NewLinodeVPCIPsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Con
 	return newListTool(cfg,
 		"linode_vpc_ips_list",
 		"Lists all IP addresses across all VPCs",
-		func(ctx context.Context, client *linode.RetryableClient) ([]linode.VPCIP, error) {
+		func(ctx context.Context, client *linode.Client) ([]linode.VPCIP, error) {
 			return client.ListVPCIPs(ctx)
 		},
 		nil,
@@ -115,7 +115,7 @@ func handleVPCIPListRequest(ctx context.Context, request *mcp.CallToolRequest, c
 		IPs:   ips,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeVPCSubnetsListTool creates a tool for listing subnets in a specific VPC.
@@ -157,7 +157,7 @@ func handleVPCSubnetsListRequest(ctx context.Context, request *mcp.CallToolReque
 		Subnets: subnets,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeVPCSubnetGetTool creates a tool for getting a specific subnet within a VPC.
@@ -200,7 +200,7 @@ func handleVPCSubnetGetRequest(ctx context.Context, request *mcp.CallToolRequest
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve subnet %d for VPC %d: %v", subnetID, vpcID, err)), nil
 	}
 
-	return marshalToolResponse(subnet)
+	return MarshalToolResponse(subnet)
 }
 
 // parseVPCID validates and converts the VPC ID string to an integer.

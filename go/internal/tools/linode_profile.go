@@ -13,7 +13,7 @@ import (
 func NewLinodeProfileTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	return newSimpleGetTool(cfg, "linode_profile",
 		"Retrieves Linode user account profile information",
-		func(ctx context.Context, client *linode.RetryableClient) (any, error) {
+		func(ctx context.Context, client *linode.Client) (any, error) {
 			return client.GetProfile(ctx)
 		},
 	)

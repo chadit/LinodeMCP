@@ -22,18 +22,18 @@ func NewLinodeImagesListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Con
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return handleListRequest(ctx, &request, cfg,
-			func(ctx context.Context, client *linode.RetryableClient) ([]linode.Image, error) {
+			func(ctx context.Context, client *linode.Client) ([]linode.Image, error) {
 				return client.ListImages(ctx)
 			},
 			[]filterDef[linode.Image]{
 				{"type", func(items []linode.Image, v string) []linode.Image {
-					return filterByField(items, v, func(img linode.Image) string { return img.Type })
+					return FilterByField(items, v, func(img linode.Image) string { return img.Type })
 				}},
 				{"is_public", filterImagesByPublic},
 				{"deprecated", filterImagesByDeprecated},
 			},
 			func(items []linode.Image, appliedFilters []string) (*mcp.CallToolResult, error) {
-				return formatListResponse(items, appliedFilters, "images")
+				return FormatListResponse(items, appliedFilters, "images")
 			},
 		)
 	}

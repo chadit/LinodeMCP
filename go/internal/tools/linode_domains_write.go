@@ -84,7 +84,7 @@ func handleLinodeDomainCreateRequest(ctx context.Context, request *mcp.CallToolR
 		Domain:  createdDomain,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeDomainUpdateTool creates a tool for updating a domain.
@@ -144,18 +144,18 @@ func handleLinodeDomainUpdateRequest(ctx context.Context, request *mcp.CallToolR
 
 	updatedDomain, err := client.UpdateDomain(ctx, domainID, &req)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to update domain %d: %v", domainID, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to modify domain %d: %v", domainID, err)), nil
 	}
 
 	response := struct {
 		Message string         `json:"message"`
 		Domain  *linode.Domain `json:"domain"`
 	}{
-		Message: fmt.Sprintf("Domain %d updated successfully", domainID),
+		Message: fmt.Sprintf("Domain %d modified successfully", domainID),
 		Domain:  updatedDomain,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeDomainDeleteTool creates a tool for deleting a domain.
@@ -185,7 +185,7 @@ func NewLinodeDomainDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 func handleLinodeDomainDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	domainID := request.GetInt("domain_id", 0)
 
-	if result := requireConfirm(request, "This operation is destructive and deletes all DNS records. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This operation is destructive and deletes all DNS records. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -199,16 +199,16 @@ func handleLinodeDomainDeleteRequest(ctx context.Context, request *mcp.CallToolR
 	}
 
 	if err := client.DeleteDomain(ctx, domainID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to delete domain %d: %v", domainID, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove domain %d: %v", domainID, err)), nil
 	}
 
 	response := struct {
 		Message  string `json:"message"`
 		DomainID int    `json:"domain_id"`
 	}{
-		Message:  fmt.Sprintf("Domain %d and all its records deleted successfully", domainID),
+		Message:  fmt.Sprintf("Domain %d and all its records removed successfully", domainID),
 		DomainID: domainID,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }

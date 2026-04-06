@@ -9,84 +9,99 @@ _ensure-hooks:
 		fi \
 	fi
 
+## help: Show this help message
+help: _ensure-hooks
+	@echo "LinodeMCP Go Development Commands:"
+	@echo ""
+	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/^## //' | awk -F': ' '{printf "  make %-18s %s\n", $$1, $$2}'
+
+## update-hooks: Update pre-commit hooks to latest versions
 update-hooks:
 	@cd .. && pre-commit autoupdate
 
-help: _ensure-hooks
-	@echo "LinodeMCP Development Commands:"
-	@echo ""
-	@echo "Build:"
-	@echo "  make build           - Build development binary"
-	@echo "  make build-prod      - Build security-hardened binary"
-	@echo "  make run             - Build and run"
-	@echo ""
-	@echo "Test:"
-	@echo "  make test            - Run unit tests"
-	@echo "  make test-race       - Run tests with race detector"
-	@echo "  make test-all        - Run all tests"
-	@echo "  make coverage        - Generate coverage report"
-	@echo ""
-	@echo "Tools:"
-	@echo "  make lint            - Run golangci-lint"
-	@echo "  make fmt             - Format with goimports and gofumpt"
-	@echo "  make gopls-check     - Run gopls diagnostics"
-	@echo "  make tidy            - Tidy dependencies"
-	@echo "  make clean           - Clean artifacts"
-	@echo "  make check           - Run fmt, lint, and test (pre-commit)"
-	@echo "  make install-tools   - Install dev tools"
-	@echo "  make update-hooks    - Update pre-commit hooks to latest versions"
-
+## build: Build development binary
 build: _ensure-hooks
 	@echo "Building linodemcp..."
 	@go build -o bin/linodemcp cmd/linodemcp/main.go
 
+APPINFO_PKG := github.com/chadit/LinodeMCP/internal/appinfo
+LDFLAGS := -s -w -buildid= \
+	-X '$(APPINFO_PKG).buildDate=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)'
+
+## build-prod: Build security-hardened binary
 build-prod: _ensure-hooks
 	@echo "Building linodemcp (production)..."
 	@go build \
-		-ldflags="-s -w -buildid=" \
+		-ldflags="$(LDFLAGS)" \
 		-trimpath \
 		-buildmode=pie \
 		-tags=netgo,osusergo \
 		-o bin/linodemcp cmd/linodemcp/main.go
 
+## run: Build and run
 run: build
 	@./bin/linodemcp
 
+## test: Run unit tests with coverage
 test: _ensure-hooks
 	@echo "Running unit tests..."
 	@go test -race -cover ./...
 
+## test-race: Run tests with race detector
 test-race: _ensure-hooks
 	@go test -race ./...
 
+## test-all: Run all tests verbose with race detector
 test-all: _ensure-hooks
 	@go test -race -v ./...
 
+## clean: Clean build artifacts
 clean:
 	@rm -rf bin/ dist/ coverage.txt coverage.html *.coverprofile
 
+## lint: Run golangci-lint, gosec, and cairnlint
 lint: _ensure-hooks
-	@golangci-lint run --max-issues-per-linter=0 --max-same-issues=0
-	@gopls check -severity=hint $$(find . -name '*.go' -not -path './vendor/*')
+	@echo "Running golangci-lint..."
+	@golangci-lint run --allow-parallel-runners --max-issues-per-linter=0 --max-same-issues=0 ./...
+	@echo "Running gosec..."
+	@if command -v gosec >/dev/null 2>&1; then \
+		gosec -quiet ./...; \
+	else \
+		echo "[warn] gosec not installed, skipping security scan"; \
+	fi
+	@echo "Running cairnlint..."
+	@if command -v cairnlint >/dev/null 2>&1; then \
+		cairnlint ./...; \
+	elif command -v go >/dev/null 2>&1; then \
+		go run github.com/chadit/cairnlint@latest ./...; \
+	else \
+		echo "[warn] cairnlint not installed, skipping custom rules check"; \
+	fi
 
+## fmt: Format with goimports and gofumpt
 fmt: _ensure-hooks
 	@goimports -w .
 	@gofumpt -w .
 
+## gopls-check: Run gopls diagnostics
 gopls-check: _ensure-hooks
 	@gopls check -severity=hint $$(find . -name '*.go' -not -path './vendor/*')
 
+## tidy: Tidy and verify dependencies
 tidy: _ensure-hooks
 	@go mod tidy
 	@go mod verify
 
+## coverage: Generate HTML coverage report
 coverage: _ensure-hooks
 	@go test -coverprofile=coverage.out ./...
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report: coverage.html"
 
+## check: Run fmt, lint, and test
 check: fmt lint test
 
+## install-tools: Install dev tools (goimports, gofumpt, gopls, golangci-lint)
 install-tools:
 	@go install golang.org/x/tools/cmd/goimports@latest
 	@go install mvdan.cc/gofumpt@latest

@@ -21,17 +21,17 @@ func NewLinodeRegionsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Co
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return handleListRequest(ctx, &request, cfg,
-			func(ctx context.Context, client *linode.RetryableClient) ([]linode.Region, error) {
+			func(ctx context.Context, client *linode.Client) ([]linode.Region, error) {
 				return client.ListRegions(ctx)
 			},
 			[]filterDef[linode.Region]{
 				{"country", func(items []linode.Region, v string) []linode.Region {
-					return filterByField(items, v, func(r linode.Region) string { return r.Country })
+					return FilterByField(items, v, func(r linode.Region) string { return r.Country })
 				}},
 				{"capability", filterRegionsByCapability},
 			},
 			func(items []linode.Region, appliedFilters []string) (*mcp.CallToolResult, error) {
-				return formatListResponse(items, appliedFilters, "regions")
+				return FormatListResponse(items, appliedFilters, "regions")
 			},
 		)
 	}

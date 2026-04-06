@@ -7,24 +7,27 @@ import (
 	"net/url"
 )
 
+const (
+	endpointObjBuckets  = "/object-storage/buckets"
+	endpointObjClusters = "/object-storage/clusters"
+	endpointObjTypes    = "/object-storage/types"
+	endpointObjKeys     = "/object-storage/keys"
+	endpointObjTransfer = "/object-storage/transfer"
+)
+
 // ListObjectStorageBuckets retrieves all Object Storage buckets.
-func (c *Client) ListObjectStorageBuckets(ctx context.Context) ([]ObjectStorageBucket, error) {
+func (c *Client) httpListObjectStorageBuckets(ctx context.Context) ([]ObjectStorageBucket, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, "/object-storage/buckets", nil)
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointObjBuckets, nil)
 	if err != nil {
 		return nil, &NetworkError{Operation: "ListObjectStorageBuckets", Err: err}
 	}
 
 	defer func() { _ = resp.Body.Close() }()
 
-	var response struct {
-		Data    []ObjectStorageBucket `json:"data"`
-		Page    int                   `json:"page"`
-		Pages   int                   `json:"pages"`
-		Results int                   `json:"results"`
-	}
+	var response PaginatedResponse[ObjectStorageBucket]
 
 	if err := c.handleResponse(resp, &response); err != nil {
 		return nil, err
@@ -34,11 +37,11 @@ func (c *Client) ListObjectStorageBuckets(ctx context.Context) ([]ObjectStorageB
 }
 
 // GetObjectStorageBucket retrieves a specific Object Storage bucket.
-func (c *Client) GetObjectStorageBucket(ctx context.Context, region, label string) (*ObjectStorageBucket, error) {
+func (c *Client) httpGetObjectStorageBucket(ctx context.Context, region, label string) (*ObjectStorageBucket, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/object-storage/buckets/%s/%s", region, label)
+	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s", url.PathEscape(region), url.PathEscape(label))
 
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -57,11 +60,11 @@ func (c *Client) GetObjectStorageBucket(ctx context.Context, region, label strin
 
 // ListObjectStorageBucketContents lists objects in a bucket.
 // Returns objects, isTruncated flag, and nextMarker for pagination.
-func (c *Client) ListObjectStorageBucketContents(ctx context.Context, region, label string, params map[string]string) ([]ObjectStorageObject, bool, string, error) {
+func (c *Client) httpListObjectStorageBucketContents(ctx context.Context, region, label string, params map[string]string) ([]ObjectStorageObject, bool, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/object-storage/buckets/%s/%s/object-list", region, label)
+	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/object-list", url.PathEscape(region), url.PathEscape(label))
 
 	if len(params) > 0 {
 		vals := url.Values{}
@@ -93,23 +96,18 @@ func (c *Client) ListObjectStorageBucketContents(ctx context.Context, region, la
 }
 
 // ListObjectStorageClusters retrieves available Object Storage clusters.
-func (c *Client) ListObjectStorageClusters(ctx context.Context) ([]ObjectStorageCluster, error) {
+func (c *Client) httpListObjectStorageClusters(ctx context.Context) ([]ObjectStorageCluster, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, "/object-storage/clusters", nil)
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointObjClusters, nil)
 	if err != nil {
 		return nil, &NetworkError{Operation: "ListObjectStorageClusters", Err: err}
 	}
 
 	defer func() { _ = resp.Body.Close() }()
 
-	var response struct {
-		Data    []ObjectStorageCluster `json:"data"`
-		Page    int                    `json:"page"`
-		Pages   int                    `json:"pages"`
-		Results int                    `json:"results"`
-	}
+	var response PaginatedResponse[ObjectStorageCluster]
 
 	if err := c.handleResponse(resp, &response); err != nil {
 		return nil, err
@@ -119,23 +117,18 @@ func (c *Client) ListObjectStorageClusters(ctx context.Context) ([]ObjectStorage
 }
 
 // ListObjectStorageTypes retrieves Object Storage types and pricing.
-func (c *Client) ListObjectStorageTypes(ctx context.Context) ([]ObjectStorageType, error) {
+func (c *Client) httpListObjectStorageTypes(ctx context.Context) ([]ObjectStorageType, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, "/object-storage/types", nil)
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointObjTypes, nil)
 	if err != nil {
 		return nil, &NetworkError{Operation: "ListObjectStorageTypes", Err: err}
 	}
 
 	defer func() { _ = resp.Body.Close() }()
 
-	var response struct {
-		Data    []ObjectStorageType `json:"data"`
-		Page    int                 `json:"page"`
-		Pages   int                 `json:"pages"`
-		Results int                 `json:"results"`
-	}
+	var response PaginatedResponse[ObjectStorageType]
 
 	if err := c.handleResponse(resp, &response); err != nil {
 		return nil, err
@@ -145,23 +138,18 @@ func (c *Client) ListObjectStorageTypes(ctx context.Context) ([]ObjectStorageTyp
 }
 
 // ListObjectStorageKeys retrieves all Object Storage access keys.
-func (c *Client) ListObjectStorageKeys(ctx context.Context) ([]ObjectStorageKey, error) {
+func (c *Client) httpListObjectStorageKeys(ctx context.Context) ([]ObjectStorageKey, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, "/object-storage/keys", nil)
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointObjKeys, nil)
 	if err != nil {
 		return nil, &NetworkError{Operation: "ListObjectStorageKeys", Err: err}
 	}
 
 	defer func() { _ = resp.Body.Close() }()
 
-	var response struct {
-		Data    []ObjectStorageKey `json:"data"`
-		Page    int                `json:"page"`
-		Pages   int                `json:"pages"`
-		Results int                `json:"results"`
-	}
+	var response PaginatedResponse[ObjectStorageKey]
 
 	if err := c.handleResponse(resp, &response); err != nil {
 		return nil, err
@@ -171,11 +159,11 @@ func (c *Client) ListObjectStorageKeys(ctx context.Context) ([]ObjectStorageKey,
 }
 
 // GetObjectStorageKey retrieves a specific Object Storage access key by ID.
-func (c *Client) GetObjectStorageKey(ctx context.Context, keyID int) (*ObjectStorageKey, error) {
+func (c *Client) httpGetObjectStorageKey(ctx context.Context, keyID int) (*ObjectStorageKey, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/object-storage/keys/%d", keyID)
+	endpoint := fmt.Sprintf(endpointObjKeys+"/%d", keyID)
 
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -193,11 +181,11 @@ func (c *Client) GetObjectStorageKey(ctx context.Context, keyID int) (*ObjectSto
 }
 
 // GetObjectStorageTransfer retrieves Object Storage outbound data transfer usage.
-func (c *Client) GetObjectStorageTransfer(ctx context.Context) (*ObjectStorageTransfer, error) {
+func (c *Client) httpGetObjectStorageTransfer(ctx context.Context) (*ObjectStorageTransfer, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, "/object-storage/transfer", nil)
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointObjTransfer, nil)
 	if err != nil {
 		return nil, &NetworkError{Operation: "GetObjectStorageTransfer", Err: err}
 	}
@@ -213,11 +201,11 @@ func (c *Client) GetObjectStorageTransfer(ctx context.Context) (*ObjectStorageTr
 }
 
 // GetObjectStorageBucketAccess retrieves ACL and CORS settings for a bucket.
-func (c *Client) GetObjectStorageBucketAccess(ctx context.Context, region, label string) (*ObjectStorageBucketAccess, error) {
+func (c *Client) httpGetObjectStorageBucketAccess(ctx context.Context, region, label string) (*ObjectStorageBucketAccess, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/object-storage/buckets/%s/%s/access", region, label)
+	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/access", url.PathEscape(region), url.PathEscape(label))
 
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -235,11 +223,11 @@ func (c *Client) GetObjectStorageBucketAccess(ctx context.Context, region, label
 }
 
 // CreateObjectStorageBucket creates a new Object Storage bucket.
-func (c *Client) CreateObjectStorageBucket(ctx context.Context, req CreateObjectStorageBucketRequest) (*ObjectStorageBucket, error) {
+func (c *Client) httpCreateObjectStorageBucket(ctx context.Context, req CreateObjectStorageBucketRequest) (*ObjectStorageBucket, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeJSONRequest(ctx, http.MethodPost, "/object-storage/buckets", req)
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointObjBuckets, req)
 	if err != nil {
 		return nil, &NetworkError{Operation: "CreateObjectStorageBucket", Err: err}
 	}
@@ -255,11 +243,11 @@ func (c *Client) CreateObjectStorageBucket(ctx context.Context, req CreateObject
 }
 
 // DeleteObjectStorageBucket deletes an Object Storage bucket.
-func (c *Client) DeleteObjectStorageBucket(ctx context.Context, region, label string) error {
+func (c *Client) httpDeleteObjectStorageBucket(ctx context.Context, region, label string) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/object-storage/buckets/%s/%s", region, label)
+	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s", url.PathEscape(region), url.PathEscape(label))
 
 	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
 	if err != nil {
@@ -272,13 +260,13 @@ func (c *Client) DeleteObjectStorageBucket(ctx context.Context, region, label st
 }
 
 // UpdateObjectStorageBucketAccess updates bucket ACL and CORS settings.
-func (c *Client) UpdateObjectStorageBucketAccess(ctx context.Context, region, label string, req UpdateObjectStorageBucketAccessRequest) error {
+func (c *Client) httpUpdateObjectStorageBucketAccess(ctx context.Context, region, label string, req UpdateObjectStorageBucketAccessRequest) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/object-storage/buckets/%s/%s/access", region, label)
+	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/access", url.PathEscape(region), url.PathEscape(label))
 
-	resp, err := c.makeJSONRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
 	if err != nil {
 		return &NetworkError{Operation: "UpdateObjectStorageBucketAccess", Err: err}
 	}
@@ -289,11 +277,11 @@ func (c *Client) UpdateObjectStorageBucketAccess(ctx context.Context, region, la
 }
 
 // CreateObjectStorageKey creates a new Object Storage access key.
-func (c *Client) CreateObjectStorageKey(ctx context.Context, req CreateObjectStorageKeyRequest) (*ObjectStorageKey, error) {
+func (c *Client) httpCreateObjectStorageKey(ctx context.Context, req CreateObjectStorageKeyRequest) (*ObjectStorageKey, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeJSONRequest(ctx, http.MethodPost, "/object-storage/keys", req)
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointObjKeys, req)
 	if err != nil {
 		return nil, &NetworkError{Operation: "CreateObjectStorageKey", Err: err}
 	}
@@ -309,13 +297,13 @@ func (c *Client) CreateObjectStorageKey(ctx context.Context, req CreateObjectSto
 }
 
 // UpdateObjectStorageKey updates an Object Storage access key.
-func (c *Client) UpdateObjectStorageKey(ctx context.Context, keyID int, req UpdateObjectStorageKeyRequest) error {
+func (c *Client) httpUpdateObjectStorageKey(ctx context.Context, keyID int, req UpdateObjectStorageKeyRequest) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/object-storage/keys/%d", keyID)
+	endpoint := fmt.Sprintf(endpointObjKeys+"/%d", keyID)
 
-	resp, err := c.makeJSONRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
 	if err != nil {
 		return &NetworkError{Operation: "UpdateObjectStorageKey", Err: err}
 	}
@@ -326,11 +314,11 @@ func (c *Client) UpdateObjectStorageKey(ctx context.Context, keyID int, req Upda
 }
 
 // DeleteObjectStorageKey revokes an Object Storage access key.
-func (c *Client) DeleteObjectStorageKey(ctx context.Context, keyID int) error {
+func (c *Client) httpDeleteObjectStorageKey(ctx context.Context, keyID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/object-storage/keys/%d", keyID)
+	endpoint := fmt.Sprintf(endpointObjKeys+"/%d", keyID)
 
 	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
 	if err != nil {
@@ -343,13 +331,13 @@ func (c *Client) DeleteObjectStorageKey(ctx context.Context, keyID int) error {
 }
 
 // CreatePresignedURL generates a presigned URL for an object in Object Storage.
-func (c *Client) CreatePresignedURL(ctx context.Context, region, label string, req PresignedURLRequest) (*PresignedURLResponse, error) {
+func (c *Client) httpCreatePresignedURL(ctx context.Context, region, label string, req PresignedURLRequest) (*PresignedURLResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/object-storage/buckets/%s/%s/object-url", region, label)
+	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/object-url", url.PathEscape(region), url.PathEscape(label))
 
-	resp, err := c.makeJSONRequest(ctx, http.MethodPost, endpoint, req)
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
 	if err != nil {
 		return nil, &NetworkError{Operation: "CreatePresignedURL", Err: err}
 	}
@@ -365,11 +353,11 @@ func (c *Client) CreatePresignedURL(ctx context.Context, region, label string, r
 }
 
 // GetObjectACL retrieves the ACL of an object in Object Storage.
-func (c *Client) GetObjectACL(ctx context.Context, region, label, name string) (*ObjectACL, error) {
+func (c *Client) httpGetObjectACL(ctx context.Context, region, label, name string) (*ObjectACL, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/object-storage/buckets/%s/%s/object-acl?name=%s", region, label, name)
+	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/object-acl?name=%s", url.PathEscape(region), url.PathEscape(label), url.QueryEscape(name))
 
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -387,13 +375,13 @@ func (c *Client) GetObjectACL(ctx context.Context, region, label, name string) (
 }
 
 // UpdateObjectACL updates the ACL of an object in Object Storage.
-func (c *Client) UpdateObjectACL(ctx context.Context, region, label string, req ObjectACLUpdateRequest) (*ObjectACL, error) {
+func (c *Client) httpUpdateObjectACL(ctx context.Context, region, label string, req ObjectACLUpdateRequest) (*ObjectACL, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/object-storage/buckets/%s/%s/object-acl", region, label)
+	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/object-acl", url.PathEscape(region), url.PathEscape(label))
 
-	resp, err := c.makeJSONRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
 	if err != nil {
 		return nil, &NetworkError{Operation: "UpdateObjectACL", Err: err}
 	}
@@ -409,11 +397,11 @@ func (c *Client) UpdateObjectACL(ctx context.Context, region, label string, req 
 }
 
 // GetBucketSSL retrieves the SSL/TLS certificate status for an Object Storage bucket.
-func (c *Client) GetBucketSSL(ctx context.Context, region, label string) (*BucketSSL, error) {
+func (c *Client) httpGetBucketSSL(ctx context.Context, region, label string) (*BucketSSL, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/object-storage/buckets/%s/%s/ssl", region, label)
+	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/ssl", url.PathEscape(region), url.PathEscape(label))
 
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -431,11 +419,11 @@ func (c *Client) GetBucketSSL(ctx context.Context, region, label string) (*Bucke
 }
 
 // DeleteBucketSSL deletes the SSL/TLS certificate from an Object Storage bucket.
-func (c *Client) DeleteBucketSSL(ctx context.Context, region, label string) error {
+func (c *Client) httpDeleteBucketSSL(ctx context.Context, region, label string) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/object-storage/buckets/%s/%s/ssl", region, label)
+	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/ssl", url.PathEscape(region), url.PathEscape(label))
 
 	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
 	if err != nil {

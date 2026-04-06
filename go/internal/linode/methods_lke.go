@@ -4,26 +4,29 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
+)
+
+const (
+	endpointLKEClusters     = "/lke/clusters"
+	endpointLKEVersions     = "/lke/versions"
+	endpointLKETypes        = "/lke/types"
+	endpointLKETierVersions = "/lke/tiers/versions"
 )
 
 // ListLKEClusters retrieves all LKE clusters for the authenticated user.
-func (c *Client) ListLKEClusters(ctx context.Context) ([]LKECluster, error) {
+func (c *Client) httpListLKEClusters(ctx context.Context) ([]LKECluster, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, "/lke/clusters", nil)
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointLKEClusters, nil)
 	if err != nil {
 		return nil, &NetworkError{Operation: "ListLKEClusters", Err: err}
 	}
 
 	defer func() { _ = resp.Body.Close() }()
 
-	var response struct {
-		Data    []LKECluster `json:"data"`
-		Page    int          `json:"page"`
-		Pages   int          `json:"pages"`
-		Results int          `json:"results"`
-	}
+	var response PaginatedResponse[LKECluster]
 
 	if err := c.handleResponse(resp, &response); err != nil {
 		return nil, err
@@ -33,11 +36,11 @@ func (c *Client) ListLKEClusters(ctx context.Context) ([]LKECluster, error) {
 }
 
 // GetLKECluster retrieves a single LKE cluster by its ID.
-func (c *Client) GetLKECluster(ctx context.Context, clusterID int) (*LKECluster, error) {
+func (c *Client) httpGetLKECluster(ctx context.Context, clusterID int) (*LKECluster, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/lke/clusters/%d", clusterID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d", clusterID)
 
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -55,11 +58,11 @@ func (c *Client) GetLKECluster(ctx context.Context, clusterID int) (*LKECluster,
 }
 
 // CreateLKECluster creates a new LKE cluster.
-func (c *Client) CreateLKECluster(ctx context.Context, req *CreateLKEClusterRequest) (*LKECluster, error) {
+func (c *Client) httpCreateLKECluster(ctx context.Context, req *CreateLKEClusterRequest) (*LKECluster, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeJSONRequest(ctx, http.MethodPost, "/lke/clusters", req)
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointLKEClusters, req)
 	if err != nil {
 		return nil, &NetworkError{Operation: "CreateLKECluster", Err: err}
 	}
@@ -75,13 +78,13 @@ func (c *Client) CreateLKECluster(ctx context.Context, req *CreateLKEClusterRequ
 }
 
 // UpdateLKECluster updates an existing LKE cluster.
-func (c *Client) UpdateLKECluster(ctx context.Context, clusterID int, req UpdateLKEClusterRequest) (*LKECluster, error) {
+func (c *Client) httpUpdateLKECluster(ctx context.Context, clusterID int, req UpdateLKEClusterRequest) (*LKECluster, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/lke/clusters/%d", clusterID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d", clusterID)
 
-	resp, err := c.makeJSONRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
 	if err != nil {
 		return nil, &NetworkError{Operation: "UpdateLKECluster", Err: err}
 	}
@@ -97,11 +100,11 @@ func (c *Client) UpdateLKECluster(ctx context.Context, clusterID int, req Update
 }
 
 // DeleteLKECluster deletes an LKE cluster.
-func (c *Client) DeleteLKECluster(ctx context.Context, clusterID int) error {
+func (c *Client) httpDeleteLKECluster(ctx context.Context, clusterID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/lke/clusters/%d", clusterID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d", clusterID)
 
 	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
 	if err != nil {
@@ -114,13 +117,13 @@ func (c *Client) DeleteLKECluster(ctx context.Context, clusterID int) error {
 }
 
 // RecycleLKECluster recycles all nodes in an LKE cluster.
-func (c *Client) RecycleLKECluster(ctx context.Context, clusterID int) error {
+func (c *Client) httpRecycleLKECluster(ctx context.Context, clusterID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/lke/clusters/%d/recycle", clusterID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/recycle", clusterID)
 
-	resp, err := c.makeJSONRequest(ctx, http.MethodPost, endpoint, nil)
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
 	if err != nil {
 		return &NetworkError{Operation: "RecycleLKECluster", Err: err}
 	}
@@ -131,13 +134,13 @@ func (c *Client) RecycleLKECluster(ctx context.Context, clusterID int) error {
 }
 
 // RegenerateLKECluster regenerates the service token for an LKE cluster.
-func (c *Client) RegenerateLKECluster(ctx context.Context, clusterID int) error {
+func (c *Client) httpRegenerateLKECluster(ctx context.Context, clusterID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/lke/clusters/%d/regenerate", clusterID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/regenerate", clusterID)
 
-	resp, err := c.makeJSONRequest(ctx, http.MethodPost, endpoint, nil)
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
 	if err != nil {
 		return &NetworkError{Operation: "RegenerateLKECluster", Err: err}
 	}
@@ -148,11 +151,11 @@ func (c *Client) RegenerateLKECluster(ctx context.Context, clusterID int) error 
 }
 
 // ListLKENodePools retrieves all node pools for an LKE cluster.
-func (c *Client) ListLKENodePools(ctx context.Context, clusterID int) ([]LKENodePool, error) {
+func (c *Client) httpListLKENodePools(ctx context.Context, clusterID int) ([]LKENodePool, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/lke/clusters/%d/pools", clusterID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/pools", clusterID)
 
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -161,12 +164,7 @@ func (c *Client) ListLKENodePools(ctx context.Context, clusterID int) ([]LKENode
 
 	defer func() { _ = resp.Body.Close() }()
 
-	var response struct {
-		Data    []LKENodePool `json:"data"`
-		Page    int           `json:"page"`
-		Pages   int           `json:"pages"`
-		Results int           `json:"results"`
-	}
+	var response PaginatedResponse[LKENodePool]
 
 	if err := c.handleResponse(resp, &response); err != nil {
 		return nil, err
@@ -176,11 +174,11 @@ func (c *Client) ListLKENodePools(ctx context.Context, clusterID int) ([]LKENode
 }
 
 // GetLKENodePool retrieves a single node pool by its ID.
-func (c *Client) GetLKENodePool(ctx context.Context, clusterID, poolID int) (*LKENodePool, error) {
+func (c *Client) httpGetLKENodePool(ctx context.Context, clusterID, poolID int) (*LKENodePool, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/lke/clusters/%d/pools/%d", clusterID, poolID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/pools/%d", clusterID, poolID)
 
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -198,13 +196,13 @@ func (c *Client) GetLKENodePool(ctx context.Context, clusterID, poolID int) (*LK
 }
 
 // CreateLKENodePool creates a new node pool for an LKE cluster.
-func (c *Client) CreateLKENodePool(ctx context.Context, clusterID int, req *CreateLKENodePoolRequest) (*LKENodePool, error) {
+func (c *Client) httpCreateLKENodePool(ctx context.Context, clusterID int, req *CreateLKENodePoolRequest) (*LKENodePool, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/lke/clusters/%d/pools", clusterID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/pools", clusterID)
 
-	resp, err := c.makeJSONRequest(ctx, http.MethodPost, endpoint, req)
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
 	if err != nil {
 		return nil, &NetworkError{Operation: "CreateLKENodePool", Err: err}
 	}
@@ -220,13 +218,13 @@ func (c *Client) CreateLKENodePool(ctx context.Context, clusterID int, req *Crea
 }
 
 // UpdateLKENodePool updates an existing node pool.
-func (c *Client) UpdateLKENodePool(ctx context.Context, clusterID, poolID int, req UpdateLKENodePoolRequest) (*LKENodePool, error) {
+func (c *Client) httpUpdateLKENodePool(ctx context.Context, clusterID, poolID int, req UpdateLKENodePoolRequest) (*LKENodePool, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/lke/clusters/%d/pools/%d", clusterID, poolID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/pools/%d", clusterID, poolID)
 
-	resp, err := c.makeJSONRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
 	if err != nil {
 		return nil, &NetworkError{Operation: "UpdateLKENodePool", Err: err}
 	}
@@ -242,11 +240,11 @@ func (c *Client) UpdateLKENodePool(ctx context.Context, clusterID, poolID int, r
 }
 
 // DeleteLKENodePool deletes a node pool from an LKE cluster.
-func (c *Client) DeleteLKENodePool(ctx context.Context, clusterID, poolID int) error {
+func (c *Client) httpDeleteLKENodePool(ctx context.Context, clusterID, poolID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/lke/clusters/%d/pools/%d", clusterID, poolID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/pools/%d", clusterID, poolID)
 
 	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
 	if err != nil {
@@ -259,13 +257,13 @@ func (c *Client) DeleteLKENodePool(ctx context.Context, clusterID, poolID int) e
 }
 
 // RecycleLKENodePool recycles all nodes in a specific node pool.
-func (c *Client) RecycleLKENodePool(ctx context.Context, clusterID, poolID int) error {
+func (c *Client) httpRecycleLKENodePool(ctx context.Context, clusterID, poolID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/lke/clusters/%d/pools/%d/recycle", clusterID, poolID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/pools/%d/recycle", clusterID, poolID)
 
-	resp, err := c.makeJSONRequest(ctx, http.MethodPost, endpoint, nil)
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
 	if err != nil {
 		return &NetworkError{Operation: "RecycleLKENodePool", Err: err}
 	}
@@ -276,11 +274,11 @@ func (c *Client) RecycleLKENodePool(ctx context.Context, clusterID, poolID int) 
 }
 
 // GetLKENode retrieves a single node by its ID within an LKE cluster.
-func (c *Client) GetLKENode(ctx context.Context, clusterID int, nodeID string) (*LKENode, error) {
+func (c *Client) httpGetLKENode(ctx context.Context, clusterID int, nodeID string) (*LKENode, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/lke/clusters/%d/nodes/%s", clusterID, nodeID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/nodes/%s", clusterID, url.PathEscape(nodeID))
 
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -298,11 +296,11 @@ func (c *Client) GetLKENode(ctx context.Context, clusterID int, nodeID string) (
 }
 
 // DeleteLKENode deletes a specific node from an LKE cluster.
-func (c *Client) DeleteLKENode(ctx context.Context, clusterID int, nodeID string) error {
+func (c *Client) httpDeleteLKENode(ctx context.Context, clusterID int, nodeID string) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/lke/clusters/%d/nodes/%s", clusterID, nodeID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/nodes/%s", clusterID, url.PathEscape(nodeID))
 
 	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
 	if err != nil {
@@ -315,13 +313,13 @@ func (c *Client) DeleteLKENode(ctx context.Context, clusterID int, nodeID string
 }
 
 // RecycleLKENode recycles a specific node in an LKE cluster.
-func (c *Client) RecycleLKENode(ctx context.Context, clusterID int, nodeID string) error {
+func (c *Client) httpRecycleLKENode(ctx context.Context, clusterID int, nodeID string) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/lke/clusters/%d/nodes/%s/recycle", clusterID, nodeID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/nodes/%s/recycle", clusterID, url.PathEscape(nodeID))
 
-	resp, err := c.makeJSONRequest(ctx, http.MethodPost, endpoint, nil)
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
 	if err != nil {
 		return &NetworkError{Operation: "RecycleLKENode", Err: err}
 	}
@@ -332,11 +330,11 @@ func (c *Client) RecycleLKENode(ctx context.Context, clusterID int, nodeID strin
 }
 
 // GetLKEKubeconfig retrieves the kubeconfig for an LKE cluster.
-func (c *Client) GetLKEKubeconfig(ctx context.Context, clusterID int) (*LKEKubeconfig, error) {
+func (c *Client) httpGetLKEKubeconfig(ctx context.Context, clusterID int) (*LKEKubeconfig, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/lke/clusters/%d/kubeconfig", clusterID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/kubeconfig", clusterID)
 
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -354,11 +352,11 @@ func (c *Client) GetLKEKubeconfig(ctx context.Context, clusterID int) (*LKEKubec
 }
 
 // DeleteLKEKubeconfig deletes and regenerates the kubeconfig for an LKE cluster.
-func (c *Client) DeleteLKEKubeconfig(ctx context.Context, clusterID int) error {
+func (c *Client) httpDeleteLKEKubeconfig(ctx context.Context, clusterID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/lke/clusters/%d/kubeconfig", clusterID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/kubeconfig", clusterID)
 
 	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
 	if err != nil {
@@ -371,11 +369,11 @@ func (c *Client) DeleteLKEKubeconfig(ctx context.Context, clusterID int) error {
 }
 
 // GetLKEDashboard retrieves the dashboard URL for an LKE cluster.
-func (c *Client) GetLKEDashboard(ctx context.Context, clusterID int) (*LKEDashboard, error) {
+func (c *Client) httpGetLKEDashboard(ctx context.Context, clusterID int) (*LKEDashboard, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/lke/clusters/%d/dashboard", clusterID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/dashboard", clusterID)
 
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -393,11 +391,11 @@ func (c *Client) GetLKEDashboard(ctx context.Context, clusterID int) (*LKEDashbo
 }
 
 // ListLKEAPIEndpoints retrieves the API endpoints for an LKE cluster.
-func (c *Client) ListLKEAPIEndpoints(ctx context.Context, clusterID int) ([]LKEAPIEndpoint, error) {
+func (c *Client) httpListLKEAPIEndpoints(ctx context.Context, clusterID int) ([]LKEAPIEndpoint, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/lke/clusters/%d/api-endpoints", clusterID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/api-endpoints", clusterID)
 
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -406,12 +404,7 @@ func (c *Client) ListLKEAPIEndpoints(ctx context.Context, clusterID int) ([]LKEA
 
 	defer func() { _ = resp.Body.Close() }()
 
-	var response struct {
-		Data    []LKEAPIEndpoint `json:"data"`
-		Page    int              `json:"page"`
-		Pages   int              `json:"pages"`
-		Results int              `json:"results"`
-	}
+	var response PaginatedResponse[LKEAPIEndpoint]
 
 	if err := c.handleResponse(resp, &response); err != nil {
 		return nil, err
@@ -421,11 +414,11 @@ func (c *Client) ListLKEAPIEndpoints(ctx context.Context, clusterID int) ([]LKEA
 }
 
 // DeleteLKEServiceToken deletes and regenerates the service token for an LKE cluster.
-func (c *Client) DeleteLKEServiceToken(ctx context.Context, clusterID int) error {
+func (c *Client) httpDeleteLKEServiceToken(ctx context.Context, clusterID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/lke/clusters/%d/service-token", clusterID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/service-token", clusterID)
 
 	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
 	if err != nil {
@@ -438,11 +431,11 @@ func (c *Client) DeleteLKEServiceToken(ctx context.Context, clusterID int) error
 }
 
 // GetLKEControlPlaneACL retrieves the control plane ACL for an LKE cluster.
-func (c *Client) GetLKEControlPlaneACL(ctx context.Context, clusterID int) (*LKEControlPlaneACL, error) {
+func (c *Client) httpGetLKEControlPlaneACL(ctx context.Context, clusterID int) (*LKEControlPlaneACL, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/lke/clusters/%d/control-plane-acl", clusterID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/control-plane-acl", clusterID)
 
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -460,13 +453,13 @@ func (c *Client) GetLKEControlPlaneACL(ctx context.Context, clusterID int) (*LKE
 }
 
 // UpdateLKEControlPlaneACL updates the control plane ACL for an LKE cluster.
-func (c *Client) UpdateLKEControlPlaneACL(ctx context.Context, clusterID int, req UpdateLKEControlPlaneACLRequest) (*LKEControlPlaneACL, error) {
+func (c *Client) httpUpdateLKEControlPlaneACL(ctx context.Context, clusterID int, req UpdateLKEControlPlaneACLRequest) (*LKEControlPlaneACL, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/lke/clusters/%d/control-plane-acl", clusterID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/control-plane-acl", clusterID)
 
-	resp, err := c.makeJSONRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
 	if err != nil {
 		return nil, &NetworkError{Operation: "UpdateLKEControlPlaneACL", Err: err}
 	}
@@ -482,11 +475,11 @@ func (c *Client) UpdateLKEControlPlaneACL(ctx context.Context, clusterID int, re
 }
 
 // DeleteLKEControlPlaneACL deletes the control plane ACL for an LKE cluster.
-func (c *Client) DeleteLKEControlPlaneACL(ctx context.Context, clusterID int) error {
+func (c *Client) httpDeleteLKEControlPlaneACL(ctx context.Context, clusterID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/lke/clusters/%d/control-plane-acl", clusterID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/control-plane-acl", clusterID)
 
 	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
 	if err != nil {
@@ -499,23 +492,18 @@ func (c *Client) DeleteLKEControlPlaneACL(ctx context.Context, clusterID int) er
 }
 
 // ListLKEVersions retrieves all available Kubernetes versions for LKE.
-func (c *Client) ListLKEVersions(ctx context.Context) ([]LKEVersion, error) {
+func (c *Client) httpListLKEVersions(ctx context.Context) ([]LKEVersion, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, "/lke/versions", nil)
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointLKEVersions, nil)
 	if err != nil {
 		return nil, &NetworkError{Operation: "ListLKEVersions", Err: err}
 	}
 
 	defer func() { _ = resp.Body.Close() }()
 
-	var response struct {
-		Data    []LKEVersion `json:"data"`
-		Page    int          `json:"page"`
-		Pages   int          `json:"pages"`
-		Results int          `json:"results"`
-	}
+	var response PaginatedResponse[LKEVersion]
 
 	if err := c.handleResponse(resp, &response); err != nil {
 		return nil, err
@@ -525,11 +513,11 @@ func (c *Client) ListLKEVersions(ctx context.Context) ([]LKEVersion, error) {
 }
 
 // GetLKEVersion retrieves a specific Kubernetes version for LKE.
-func (c *Client) GetLKEVersion(ctx context.Context, versionID string) (*LKEVersion, error) {
+func (c *Client) httpGetLKEVersion(ctx context.Context, versionID string) (*LKEVersion, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := "/lke/versions/" + versionID
+	endpoint := fmt.Sprintf("%s/%s", endpointLKEVersions, url.PathEscape(versionID))
 
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -547,23 +535,18 @@ func (c *Client) GetLKEVersion(ctx context.Context, versionID string) (*LKEVersi
 }
 
 // ListLKETypes retrieves all available node types for LKE clusters.
-func (c *Client) ListLKETypes(ctx context.Context) ([]LKEType, error) {
+func (c *Client) httpListLKETypes(ctx context.Context) ([]LKEType, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, "/lke/types", nil)
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointLKETypes, nil)
 	if err != nil {
 		return nil, &NetworkError{Operation: "ListLKETypes", Err: err}
 	}
 
 	defer func() { _ = resp.Body.Close() }()
 
-	var response struct {
-		Data    []LKEType `json:"data"`
-		Page    int       `json:"page"`
-		Pages   int       `json:"pages"`
-		Results int       `json:"results"`
-	}
+	var response PaginatedResponse[LKEType]
 
 	if err := c.handleResponse(resp, &response); err != nil {
 		return nil, err
@@ -573,23 +556,18 @@ func (c *Client) ListLKETypes(ctx context.Context) ([]LKEType, error) {
 }
 
 // ListLKETierVersions retrieves all available LKE tier versions.
-func (c *Client) ListLKETierVersions(ctx context.Context) ([]LKETierVersion, error) {
+func (c *Client) httpListLKETierVersions(ctx context.Context) ([]LKETierVersion, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, "/lke/tiers/versions", nil)
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointLKETierVersions, nil)
 	if err != nil {
 		return nil, &NetworkError{Operation: "ListLKETierVersions", Err: err}
 	}
 
 	defer func() { _ = resp.Body.Close() }()
 
-	var response struct {
-		Data    []LKETierVersion `json:"data"`
-		Page    int              `json:"page"`
-		Pages   int              `json:"pages"`
-		Results int              `json:"results"`
-	}
+	var response PaginatedResponse[LKETierVersion]
 
 	if err := c.handleResponse(resp, &response); err != nil {
 		return nil, err

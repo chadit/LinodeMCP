@@ -79,7 +79,7 @@ func handleLinodeFirewallCreateRequest(ctx context.Context, request *mcp.CallToo
 		Firewall: firewall,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeFirewallUpdateTool creates a tool for updating a firewall.
@@ -125,6 +125,18 @@ func handleLinodeFirewallUpdateRequest(ctx context.Context, request *mcp.CallToo
 		return mcp.NewToolResultError("firewall_id is required"), nil
 	}
 
+	if inboundPolicy != "" {
+		if err := validateFirewallPolicy(inboundPolicy); err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("inbound_policy: %v", err)), nil
+		}
+	}
+
+	if outboundPolicy != "" {
+		if err := validateFirewallPolicy(outboundPolicy); err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("outbound_policy: %v", err)), nil
+		}
+	}
+
 	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -144,18 +156,18 @@ func handleLinodeFirewallUpdateRequest(ctx context.Context, request *mcp.CallToo
 
 	firewall, err := client.UpdateFirewall(ctx, firewallID, req)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to update firewall %d: %v", firewallID, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to modify firewall %d: %v", firewallID, err)), nil
 	}
 
 	response := struct {
 		Message  string           `json:"message"`
 		Firewall *linode.Firewall `json:"firewall"`
 	}{
-		Message:  fmt.Sprintf("Firewall %d updated successfully", firewallID),
+		Message:  fmt.Sprintf("Firewall %d modified successfully", firewallID),
 		Firewall: firewall,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeFirewallDeleteTool creates a tool for deleting a firewall.
@@ -185,7 +197,7 @@ func NewLinodeFirewallDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context
 func handleLinodeFirewallDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	firewallID := request.GetInt("firewall_id", 0)
 
-	if result := requireConfirm(request, "This operation is destructive. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This operation is destructive. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -199,16 +211,16 @@ func handleLinodeFirewallDeleteRequest(ctx context.Context, request *mcp.CallToo
 	}
 
 	if err := client.DeleteFirewall(ctx, firewallID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to delete firewall %d: %v", firewallID, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove firewall %d: %v", firewallID, err)), nil
 	}
 
 	response := struct {
 		Message    string `json:"message"`
 		FirewallID int    `json:"firewall_id"`
 	}{
-		Message:    fmt.Sprintf("Firewall %d deleted successfully", firewallID),
+		Message:    fmt.Sprintf("Firewall %d removed successfully", firewallID),
 		FirewallID: firewallID,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }

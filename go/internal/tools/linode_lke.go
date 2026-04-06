@@ -16,7 +16,7 @@ func NewLinodeLKEClustersListTool(cfg *config.Config) (mcp.Tool, func(ctx contex
 	return newListTool(cfg,
 		"linode_lke_clusters_list",
 		"Lists all Linode Kubernetes Engine (LKE) clusters. Can filter by label.",
-		func(ctx context.Context, client *linode.RetryableClient) ([]linode.LKECluster, error) {
+		func(ctx context.Context, client *linode.Client) ([]linode.LKECluster, error) {
 			return client.ListLKEClusters(ctx)
 		},
 		[]listFilterParam[linode.LKECluster]{
@@ -61,7 +61,7 @@ func handleLKEClusterGetRequest(ctx context.Context, request *mcp.CallToolReques
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve LKE cluster: %v", err)), nil
 	}
 
-	return marshalToolResponse(cluster)
+	return MarshalToolResponse(cluster)
 }
 
 // NewLinodeLKEPoolsListTool creates a tool for listing node pools in an LKE cluster.
@@ -106,7 +106,7 @@ func handleLKEPoolsListRequest(ctx context.Context, request *mcp.CallToolRequest
 		Pools: pools,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeLKEPoolGetTool creates a tool for getting a specific node pool.
@@ -152,7 +152,7 @@ func handleLKEPoolGetRequest(ctx context.Context, request *mcp.CallToolRequest, 
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve node pool %d for cluster %d: %v", poolID, clusterID, err)), nil
 	}
 
-	return marshalToolResponse(pool)
+	return MarshalToolResponse(pool)
 }
 
 // NewLinodeLKENodeGetTool creates a tool for getting a specific node in an LKE cluster.
@@ -198,7 +198,7 @@ func handleLKENodeGetRequest(ctx context.Context, request *mcp.CallToolRequest, 
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve node '%s' for cluster %d: %v", nodeID, clusterID, err)), nil
 	}
 
-	return marshalToolResponse(node)
+	return MarshalToolResponse(node)
 }
 
 // NewLinodeLKEKubeconfigGetTool creates a tool for retrieving the kubeconfig of an LKE cluster.
@@ -235,7 +235,7 @@ func handleLKEKubeconfigGetRequest(ctx context.Context, request *mcp.CallToolReq
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve kubeconfig for cluster %d: %v", clusterID, err)), nil
 	}
 
-	return marshalToolResponse(kubeconfig)
+	return MarshalToolResponse(kubeconfig)
 }
 
 // NewLinodeLKEDashboardGetTool creates a tool for retrieving the dashboard URL of an LKE cluster.
@@ -272,7 +272,7 @@ func handleLKEDashboardGetRequest(ctx context.Context, request *mcp.CallToolRequ
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve dashboard URL for cluster %d: %v", clusterID, err)), nil
 	}
 
-	return marshalToolResponse(dashboard)
+	return MarshalToolResponse(dashboard)
 }
 
 // NewLinodeLKEAPIEndpointsListTool creates a tool for listing API endpoints of an LKE cluster.
@@ -317,7 +317,7 @@ func handleLKEAPIEndpointsListRequest(ctx context.Context, request *mcp.CallTool
 		Endpoints: endpoints,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeLKEACLGetTool creates a tool for getting the control plane ACL of an LKE cluster.
@@ -354,7 +354,7 @@ func handleLKEACLGetRequest(ctx context.Context, request *mcp.CallToolRequest, c
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve control plane ACL for cluster %d: %v", clusterID, err)), nil
 	}
 
-	return marshalToolResponse(acl)
+	return MarshalToolResponse(acl)
 }
 
 // NewLinodeLKEVersionsListTool creates a tool for listing available Kubernetes versions.
@@ -362,7 +362,7 @@ func NewLinodeLKEVersionsListTool(cfg *config.Config) (mcp.Tool, func(ctx contex
 	return newListTool(cfg,
 		"linode_lke_versions_list",
 		"Lists available Kubernetes versions for LKE clusters",
-		func(ctx context.Context, client *linode.RetryableClient) ([]linode.LKEVersion, error) {
+		func(ctx context.Context, client *linode.Client) ([]linode.LKEVersion, error) {
 			return client.ListLKEVersions(ctx)
 		},
 		nil,
@@ -404,7 +404,7 @@ func handleLKEVersionGetRequest(ctx context.Context, request *mcp.CallToolReques
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve LKE version '%s': %v", versionID, err)), nil
 	}
 
-	return marshalToolResponse(version)
+	return MarshalToolResponse(version)
 }
 
 // NewLinodeLKETypesListTool creates a tool for listing available LKE node types.
@@ -412,7 +412,7 @@ func NewLinodeLKETypesListTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 	return newListTool(cfg,
 		"linode_lke_types_list",
 		"Lists available node types for LKE clusters with pricing information",
-		func(ctx context.Context, client *linode.RetryableClient) ([]linode.LKEType, error) {
+		func(ctx context.Context, client *linode.Client) ([]linode.LKEType, error) {
 			return client.ListLKETypes(ctx)
 		},
 		nil,
@@ -425,7 +425,7 @@ func NewLinodeLKETierVersionsListTool(cfg *config.Config) (mcp.Tool, func(ctx co
 	return newListTool(cfg,
 		"linode_lke_tier_versions_list",
 		"Lists available LKE tier versions",
-		func(ctx context.Context, client *linode.RetryableClient) ([]linode.LKETierVersion, error) {
+		func(ctx context.Context, client *linode.Client) ([]linode.LKETierVersion, error) {
 			return client.ListLKETierVersions(ctx)
 		},
 		nil,

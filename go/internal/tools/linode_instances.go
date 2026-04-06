@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 
@@ -12,20 +11,11 @@ import (
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
-// boolTrue is used for boolean string comparison in filter functions.
-const boolTrue = "true"
-
-// ErrEnvironmentNotFound is returned when the requested environment is not in the config.
-var ErrEnvironmentNotFound = errors.New("environment not found in configuration")
-
-// ErrLinodeConfigIncomplete is returned when API URL or token is missing.
-var ErrLinodeConfigIncomplete = errors.New("linode configuration is incomplete: check your API URL and token")
-
-// ErrInstanceIDRequired is returned when an instance ID is required but not provided.
-var ErrInstanceIDRequired = errors.New("instance_id is required")
-
-// ErrInvalidInstanceID is returned when the instance ID is not a valid integer.
-var ErrInvalidInstanceID = errors.New("instance_id must be a valid integer")
+// boolTrue and boolFalse are used for boolean string comparison in filter functions.
+const (
+	boolTrue  = "true"
+	boolFalse = "false"
+)
 
 // NewLinodeInstanceGetTool creates a tool for getting a single Linode instance by ID.
 func NewLinodeInstanceGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
@@ -63,7 +53,7 @@ func handleLinodeInstanceGetRequest(ctx context.Context, request *mcp.CallToolRe
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Linode instance: %v", err)), nil
 	}
 
-	return marshalToolResponse(instance)
+	return MarshalToolResponse(instance)
 }
 
 // NewLinodeInstancesTool creates a tool for listing Linode instances.
@@ -99,7 +89,7 @@ func handleLinodeInstancesRequest(ctx context.Context, request *mcp.CallToolRequ
 	}
 
 	if statusFilter != "" {
-		instances = filterByField(instances, statusFilter, func(inst linode.Instance) string {
+		instances = FilterByField(instances, statusFilter, func(inst linode.Instance) string {
 			return inst.Status
 		})
 	}
@@ -160,5 +150,5 @@ func formatInstancesResponse(instances []linode.Instance, statusFilter string) (
 		response.Filter = "status=" + statusFilter
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }

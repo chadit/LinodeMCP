@@ -6,24 +6,24 @@ import (
 	"net/http"
 )
 
+const (
+	endpointFirewalls     = "/networking/firewalls"
+	endpointNodeBalancers = "/nodebalancers"
+)
+
 // ListFirewalls retrieves all Cloud Firewalls for the authenticated user.
-func (c *Client) ListFirewalls(ctx context.Context) ([]Firewall, error) {
+func (c *Client) httpListFirewalls(ctx context.Context) ([]Firewall, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, "/networking/firewalls", nil)
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointFirewalls, nil)
 	if err != nil {
 		return nil, &NetworkError{Operation: "ListFirewalls", Err: err}
 	}
 
 	defer func() { _ = resp.Body.Close() }()
 
-	var response struct {
-		Data    []Firewall `json:"data"`
-		Page    int        `json:"page"`
-		Pages   int        `json:"pages"`
-		Results int        `json:"results"`
-	}
+	var response PaginatedResponse[Firewall]
 
 	if err := c.handleResponse(resp, &response); err != nil {
 		return nil, err
@@ -33,11 +33,11 @@ func (c *Client) ListFirewalls(ctx context.Context) ([]Firewall, error) {
 }
 
 // GetFirewall retrieves a single firewall by its ID.
-func (c *Client) GetFirewall(ctx context.Context, firewallID int) (*Firewall, error) {
+func (c *Client) httpGetFirewall(ctx context.Context, firewallID int) (*Firewall, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/networking/firewalls/%d", firewallID)
+	endpoint := fmt.Sprintf(endpointFirewalls+"/%d", firewallID)
 
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -55,11 +55,11 @@ func (c *Client) GetFirewall(ctx context.Context, firewallID int) (*Firewall, er
 }
 
 // CreateFirewall creates a new Cloud Firewall.
-func (c *Client) CreateFirewall(ctx context.Context, req CreateFirewallRequest) (*Firewall, error) {
+func (c *Client) httpCreateFirewall(ctx context.Context, req CreateFirewallRequest) (*Firewall, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeJSONRequest(ctx, http.MethodPost, "/networking/firewalls", req)
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointFirewalls, req)
 	if err != nil {
 		return nil, &NetworkError{Operation: "CreateFirewall", Err: err}
 	}
@@ -75,13 +75,13 @@ func (c *Client) CreateFirewall(ctx context.Context, req CreateFirewallRequest) 
 }
 
 // UpdateFirewall updates an existing Cloud Firewall.
-func (c *Client) UpdateFirewall(ctx context.Context, firewallID int, req UpdateFirewallRequest) (*Firewall, error) {
+func (c *Client) httpUpdateFirewall(ctx context.Context, firewallID int, req UpdateFirewallRequest) (*Firewall, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/networking/firewalls/%d", firewallID)
+	endpoint := fmt.Sprintf(endpointFirewalls+"/%d", firewallID)
 
-	resp, err := c.makeJSONRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
 	if err != nil {
 		return nil, &NetworkError{Operation: "UpdateFirewall", Err: err}
 	}
@@ -97,11 +97,11 @@ func (c *Client) UpdateFirewall(ctx context.Context, firewallID int, req UpdateF
 }
 
 // DeleteFirewall deletes a Cloud Firewall.
-func (c *Client) DeleteFirewall(ctx context.Context, firewallID int) error {
+func (c *Client) httpDeleteFirewall(ctx context.Context, firewallID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/networking/firewalls/%d", firewallID)
+	endpoint := fmt.Sprintf(endpointFirewalls+"/%d", firewallID)
 
 	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
 	if err != nil {
@@ -114,23 +114,18 @@ func (c *Client) DeleteFirewall(ctx context.Context, firewallID int) error {
 }
 
 // ListNodeBalancers retrieves all NodeBalancers for the authenticated user.
-func (c *Client) ListNodeBalancers(ctx context.Context) ([]NodeBalancer, error) {
+func (c *Client) httpListNodeBalancers(ctx context.Context) ([]NodeBalancer, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, "/nodebalancers", nil)
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointNodeBalancers, nil)
 	if err != nil {
 		return nil, &NetworkError{Operation: "ListNodeBalancers", Err: err}
 	}
 
 	defer func() { _ = resp.Body.Close() }()
 
-	var response struct {
-		Data    []NodeBalancer `json:"data"`
-		Page    int            `json:"page"`
-		Pages   int            `json:"pages"`
-		Results int            `json:"results"`
-	}
+	var response PaginatedResponse[NodeBalancer]
 
 	if err := c.handleResponse(resp, &response); err != nil {
 		return nil, err
@@ -140,11 +135,11 @@ func (c *Client) ListNodeBalancers(ctx context.Context) ([]NodeBalancer, error) 
 }
 
 // GetNodeBalancer retrieves a single NodeBalancer by its ID.
-func (c *Client) GetNodeBalancer(ctx context.Context, nodeBalancerID int) (*NodeBalancer, error) {
+func (c *Client) httpGetNodeBalancer(ctx context.Context, nodeBalancerID int) (*NodeBalancer, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/nodebalancers/%d", nodeBalancerID)
+	endpoint := fmt.Sprintf(endpointNodeBalancers+"/%d", nodeBalancerID)
 
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -162,11 +157,11 @@ func (c *Client) GetNodeBalancer(ctx context.Context, nodeBalancerID int) (*Node
 }
 
 // CreateNodeBalancer creates a new NodeBalancer.
-func (c *Client) CreateNodeBalancer(ctx context.Context, req CreateNodeBalancerRequest) (*NodeBalancer, error) {
+func (c *Client) httpCreateNodeBalancer(ctx context.Context, req CreateNodeBalancerRequest) (*NodeBalancer, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeJSONRequest(ctx, http.MethodPost, "/nodebalancers", req)
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointNodeBalancers, req)
 	if err != nil {
 		return nil, &NetworkError{Operation: "CreateNodeBalancer", Err: err}
 	}
@@ -182,13 +177,13 @@ func (c *Client) CreateNodeBalancer(ctx context.Context, req CreateNodeBalancerR
 }
 
 // UpdateNodeBalancer updates an existing NodeBalancer.
-func (c *Client) UpdateNodeBalancer(ctx context.Context, nodeBalancerID int, req UpdateNodeBalancerRequest) (*NodeBalancer, error) {
+func (c *Client) httpUpdateNodeBalancer(ctx context.Context, nodeBalancerID int, req UpdateNodeBalancerRequest) (*NodeBalancer, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/nodebalancers/%d", nodeBalancerID)
+	endpoint := fmt.Sprintf(endpointNodeBalancers+"/%d", nodeBalancerID)
 
-	resp, err := c.makeJSONRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
 	if err != nil {
 		return nil, &NetworkError{Operation: "UpdateNodeBalancer", Err: err}
 	}
@@ -204,11 +199,11 @@ func (c *Client) UpdateNodeBalancer(ctx context.Context, nodeBalancerID int, req
 }
 
 // DeleteNodeBalancer deletes a NodeBalancer.
-func (c *Client) DeleteNodeBalancer(ctx context.Context, nodeBalancerID int) error {
+func (c *Client) httpDeleteNodeBalancer(ctx context.Context, nodeBalancerID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf("/nodebalancers/%d", nodeBalancerID)
+	endpoint := fmt.Sprintf(endpointNodeBalancers+"/%d", nodeBalancerID)
 
 	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
 	if err != nil {

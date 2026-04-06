@@ -16,7 +16,7 @@ func NewLinodeDomainsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Co
 	return newListTool(cfg,
 		"linode_domains_list",
 		"Lists all domains managed by your Linode account. Can filter by domain name or type (master/slave).",
-		func(ctx context.Context, client *linode.RetryableClient) ([]linode.Domain, error) {
+		func(ctx context.Context, client *linode.Client) ([]linode.Domain, error) {
 			return client.ListDomains(ctx)
 		},
 		[]listFilterParam[linode.Domain]{
@@ -66,7 +66,7 @@ func handleLinodeDomainGetRequest(ctx context.Context, request *mcp.CallToolRequ
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve domain %d: %v", domainID, err)), nil
 	}
 
-	return marshalToolResponse(domain)
+	return MarshalToolResponse(domain)
 }
 
 // NewLinodeDomainRecordsListTool creates a tool for listing domain records.
@@ -115,11 +115,11 @@ func handleLinodeDomainRecordsListRequest(ctx context.Context, request *mcp.Call
 	}
 
 	if typeFilter != "" {
-		records = filterByField(records, typeFilter, func(r linode.DomainRecord) string { return r.Type })
+		records = FilterByField(records, typeFilter, func(r linode.DomainRecord) string { return r.Type })
 	}
 
 	if nameContains != "" {
-		records = filterByContains(records, nameContains, func(r linode.DomainRecord) string { return r.Name })
+		records = FilterByContains(records, nameContains, func(r linode.DomainRecord) string { return r.Name })
 	}
 
 	return formatDomainRecordsResponse(records, domainID, typeFilter, nameContains)
@@ -150,5 +150,5 @@ func formatDomainRecordsResponse(records []linode.DomainRecord, domainID int, ty
 		response.Filter = strings.Join(filters, ", ")
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }

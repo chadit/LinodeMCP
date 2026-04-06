@@ -5,11 +5,10 @@ import ipaddress
 import logging
 import re
 import secrets
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, TypeVar
-
-if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+from typing import Any, TypeVar
+from urllib.parse import urlencode
 
 import httpx
 
@@ -41,6 +40,18 @@ MAX_DNS_NAME_LENGTH = 253
 MIN_VOLUME_SIZE_GB = 10
 MAX_VOLUME_SIZE_GB = 10240
 MAX_LABEL_LENGTH = 64
+MIN_DISK_SIZE_MB = 1
+MAX_DISK_SIZE_MB = 524288
+
+
+def validate_disk_size(size: int) -> None:
+    """Validate disk size in MB."""
+    if size < MIN_DISK_SIZE_MB:
+        msg = "disk size must be at least 1 MB"
+        raise ValueError(msg)
+    if size > MAX_DISK_SIZE_MB:
+        msg = "disk size cannot exceed 524288 MB (512 GB)"
+        raise ValueError(msg)
 
 
 def validate_ssh_key(key: str) -> None:
@@ -212,6 +223,7 @@ __all__ = [
     "VPCSubnet",
     "Volume",
     "is_retryable",
+    "validate_disk_size",
     "validate_dns_record_name",
     "validate_dns_record_target",
     "validate_firewall_policy",
@@ -857,7 +869,7 @@ class Client:
         """Close the HTTP client."""
         await self.client.aclose()
 
-    async def __aenter__(self) -> Client:
+    async def __aenter__(self) -> "Client":
         """Async context manager entry."""
         return self
 
@@ -1053,15 +1065,14 @@ class Client:
         """List contents of an Object Storage bucket."""
         endpoint = f"/object-storage/buckets/{region}/{label}/object-list"
 
-        # Build query string if params provided
         if params:
-            query_parts = [
-                f"{key}={params[key]}"
-                for key in ["prefix", "delimiter", "marker", "page_size"]
+            filtered = {
+                key: params[key]
+                for key in ("prefix", "delimiter", "marker", "page_size")
                 if key in params
-            ]
-            if query_parts:
-                endpoint += "?" + "&".join(query_parts)
+            }
+            if filtered:
+                endpoint += "?" + urlencode(filtered)
 
         try:
             response = await self.make_request("GET", endpoint)
@@ -1254,7 +1265,10 @@ class Client:
         self, region: str, label: str, name: str
     ) -> dict[str, Any]:
         """Get the ACL for an object in Object Storage."""
-        endpoint = f"/object-storage/buckets/{region}/{label}/object-acl?name={name}"
+        endpoint = (
+            f"/object-storage/buckets/{region}/{label}/object-acl?"
+            + urlencode({"name": name})
+        )
         try:
             response = await self.make_request("GET", endpoint)
             return dict(response.json())
@@ -2624,6 +2638,323 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("DeleteVPCSubnet", e) from e
 
+    # ── Instance Backups ──
+
+    async def list_instance_backups(self, instance_id: int) -> dict[str, Any]:
+        """List backups for an instance."""
+        endpoint = f"/linode/instances/{instance_id}/backups"
+        try:
+            response = await self.make_request("GET", endpoint)
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("ListInstanceBackups", e) from e
+
+    async def get_instance_backup(
+        self, instance_id: int, backup_id: int
+    ) -> dict[str, Any]:
+        """Get a specific backup for an instance."""
+        endpoint = f"/linode/instances/{instance_id}/backups/{backup_id}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("GetInstanceBackup", e) from e
+
+    async def create_instance_backup(
+        self, instance_id: int, label: str | None = None
+    ) -> dict[str, Any]:
+        """Create a snapshot backup of an instance."""
+        endpoint = f"/linode/instances/{instance_id}/backups"
+        try:
+            body: dict[str, Any] = {}
+            if label is not None:
+                body["label"] = label
+            response = await self.make_request("POST", endpoint, body)
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateInstanceBackup", e) from e
+
+    async def restore_instance_backup(
+        self,
+        instance_id: int,
+        backup_id: int,
+        linode_id: int,
+        overwrite: bool = False,
+    ) -> None:
+        """Restore a backup to an instance."""
+        endpoint = f"/linode/instances/{instance_id}/backups/{backup_id}/restore"
+        try:
+            body: dict[str, Any] = {
+                "linode_id": linode_id,
+                "overwrite": overwrite,
+            }
+            await self.make_request("POST", endpoint, body)
+        except httpx.HTTPError as e:
+            raise NetworkError("RestoreInstanceBackup", e) from e
+
+    async def enable_instance_backups(self, instance_id: int) -> None:
+        """Enable backups for an instance."""
+        endpoint = f"/linode/instances/{instance_id}/backups/enable"
+        try:
+            await self.make_request("POST", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("EnableInstanceBackups", e) from e
+
+    async def cancel_instance_backups(self, instance_id: int) -> None:
+        """Cancel backups for an instance."""
+        endpoint = f"/linode/instances/{instance_id}/backups/cancel"
+        try:
+            await self.make_request("POST", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("CancelInstanceBackups", e) from e
+
+    # ── Instance Disks ──
+
+    async def list_instance_disks(self, instance_id: int) -> list[dict[str, Any]]:
+        """List disks for an instance."""
+        endpoint = f"/linode/instances/{instance_id}/disks"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data = response.json()
+            disks: list[dict[str, Any]] = data.get("data", [])
+            return disks
+        except httpx.HTTPError as e:
+            raise NetworkError("ListInstanceDisks", e) from e
+
+    async def get_instance_disk(self, instance_id: int, disk_id: int) -> dict[str, Any]:
+        """Get a specific disk for an instance."""
+        endpoint = f"/linode/instances/{instance_id}/disks/{disk_id}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("GetInstanceDisk", e) from e
+
+    async def create_instance_disk(
+        self,
+        instance_id: int,
+        label: str,
+        size: int,
+        filesystem: str | None = None,
+        image: str | None = None,
+        root_pass: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a disk for an instance."""
+        endpoint = f"/linode/instances/{instance_id}/disks"
+        try:
+            body: dict[str, Any] = {
+                "label": label,
+                "size": size,
+            }
+            if filesystem is not None:
+                body["filesystem"] = filesystem
+            if image is not None:
+                body["image"] = image
+            if root_pass is not None:
+                body["root_pass"] = root_pass
+            response = await self.make_request("POST", endpoint, body)
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateInstanceDisk", e) from e
+
+    async def update_instance_disk(
+        self,
+        instance_id: int,
+        disk_id: int,
+        label: str | None = None,
+    ) -> dict[str, Any]:
+        """Update a disk for an instance."""
+        endpoint = f"/linode/instances/{instance_id}/disks/{disk_id}"
+        try:
+            body: dict[str, Any] = {}
+            if label is not None:
+                body["label"] = label
+            response = await self.make_request("PUT", endpoint, body)
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateInstanceDisk", e) from e
+
+    async def delete_instance_disk(self, instance_id: int, disk_id: int) -> None:
+        """Delete a disk from an instance."""
+        endpoint = f"/linode/instances/{instance_id}/disks/{disk_id}"
+        try:
+            await self.make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteInstanceDisk", e) from e
+
+    async def clone_instance_disk(
+        self, instance_id: int, disk_id: int
+    ) -> dict[str, Any]:
+        """Clone a disk on an instance."""
+        endpoint = f"/linode/instances/{instance_id}/disks/{disk_id}/clone"
+        try:
+            response = await self.make_request("POST", endpoint)
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("CloneInstanceDisk", e) from e
+
+    async def resize_instance_disk(
+        self, instance_id: int, disk_id: int, size: int
+    ) -> None:
+        """Resize a disk on an instance."""
+        endpoint = f"/linode/instances/{instance_id}/disks/{disk_id}/resize"
+        try:
+            body: dict[str, Any] = {"size": size}
+            await self.make_request("POST", endpoint, body)
+        except httpx.HTTPError as e:
+            raise NetworkError("ResizeInstanceDisk", e) from e
+
+    # ── Instance IPs ──
+
+    async def list_instance_ips(self, instance_id: int) -> dict[str, Any]:
+        """List IP addresses for an instance."""
+        endpoint = f"/linode/instances/{instance_id}/ips"
+        try:
+            response = await self.make_request("GET", endpoint)
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("ListInstanceIPs", e) from e
+
+    async def get_instance_ip(self, instance_id: int, address: str) -> dict[str, Any]:
+        """Get a specific IP address for an instance."""
+        endpoint = f"/linode/instances/{instance_id}/ips/{address}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("GetInstanceIP", e) from e
+
+    async def allocate_instance_ip(
+        self,
+        instance_id: int,
+        ip_type: str,
+        public: bool = True,
+    ) -> dict[str, Any]:
+        """Allocate a new IP address for an instance."""
+        endpoint = f"/linode/instances/{instance_id}/ips"
+        try:
+            body: dict[str, Any] = {
+                "type": ip_type,
+                "public": public,
+            }
+            response = await self.make_request("POST", endpoint, body)
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("AllocateInstanceIP", e) from e
+
+    async def delete_instance_ip(self, instance_id: int, address: str) -> None:
+        """Delete an IP address from an instance."""
+        endpoint = f"/linode/instances/{instance_id}/ips/{address}"
+        try:
+            await self.make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteInstanceIP", e) from e
+
+    # ── Instance Actions ──
+
+    async def clone_instance(
+        self,
+        instance_id: int,
+        region: str | None = None,
+        instance_type: str | None = None,
+        label: str | None = None,
+        disks: list[int] | None = None,
+        configs: list[int] | None = None,
+    ) -> dict[str, Any]:
+        """Clone an instance."""
+        endpoint = f"/linode/instances/{instance_id}/clone"
+        try:
+            body: dict[str, Any] = {}
+            if region is not None:
+                body["region"] = region
+            if instance_type is not None:
+                body["type"] = instance_type
+            if label is not None:
+                body["label"] = label
+            if disks is not None:
+                body["disks"] = disks
+            if configs is not None:
+                body["configs"] = configs
+            response = await self.make_request("POST", endpoint, body)
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("CloneInstance", e) from e
+
+    async def migrate_instance(
+        self,
+        instance_id: int,
+        region: str | None = None,
+    ) -> None:
+        """Migrate an instance to a new region."""
+        endpoint = f"/linode/instances/{instance_id}/migrate"
+        try:
+            body: dict[str, Any] = {}
+            if region is not None:
+                body["region"] = region
+            await self.make_request("POST", endpoint, body)
+        except httpx.HTTPError as e:
+            raise NetworkError("MigrateInstance", e) from e
+
+    async def rebuild_instance(
+        self,
+        instance_id: int,
+        image: str,
+        root_pass: str,
+        authorized_keys: list[str] | None = None,
+        authorized_users: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Rebuild an instance with a new image."""
+        endpoint = f"/linode/instances/{instance_id}/rebuild"
+        try:
+            body: dict[str, Any] = {
+                "image": image,
+                "root_pass": root_pass,
+            }
+            if authorized_keys is not None:
+                body["authorized_keys"] = authorized_keys
+            if authorized_users is not None:
+                body["authorized_users"] = authorized_users
+            response = await self.make_request("POST", endpoint, body)
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("RebuildInstance", e) from e
+
+    async def rescue_instance(
+        self,
+        instance_id: int,
+        devices: dict[str, Any] | None = None,
+    ) -> None:
+        """Boot an instance into rescue mode."""
+        endpoint = f"/linode/instances/{instance_id}/rescue"
+        try:
+            body: dict[str, Any] = {}
+            if devices is not None:
+                body["devices"] = devices
+            await self.make_request("POST", endpoint, body)
+        except httpx.HTTPError as e:
+            raise NetworkError("RescueInstance", e) from e
+
+    async def reset_instance_password(self, instance_id: int, root_pass: str) -> None:
+        """Reset the root password for an instance."""
+        endpoint = f"/linode/instances/{instance_id}/password"
+        try:
+            body: dict[str, Any] = {"root_pass": root_pass}
+            await self.make_request("POST", endpoint, body)
+        except httpx.HTTPError as e:
+            raise NetworkError("ResetInstancePassword", e) from e
+
     async def make_request(
         self, method: str, endpoint: str, body: dict[str, Any] | None = None
     ) -> httpx.Response:
@@ -2658,8 +2989,8 @@ class Client:
                     message=errors[0].get("reason", "Unknown error"),
                     field=errors[0].get("field", ""),
                 )
-        except ValueError, KeyError:
-            pass
+        except (ValueError, KeyError) as e:
+            logger.debug("Failed to parse error response body: %s", e)
 
         if response.status_code == HTTP_UNAUTHORIZED:
             raise APIError(
@@ -3044,7 +3375,7 @@ class RetryableClient:
         """Close the HTTP client."""
         await self.client.close()
 
-    async def __aenter__(self) -> RetryableClient:
+    async def __aenter__(self) -> "RetryableClient":
         """Async context manager entry."""
         return self
 
@@ -3977,6 +4308,258 @@ class RetryableClient:
     async def delete_vpc_subnet(self, vpc_id: int, subnet_id: int) -> None:
         """Delete VPC subnet with retry."""
         await self._execute_with_retry(self.client.delete_vpc_subnet, vpc_id, subnet_id)
+
+    # ── Instance Backups (retry wrappers) ──
+
+    async def list_instance_backups(self, instance_id: int) -> dict[str, Any]:
+        """List instance backups with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.list_instance_backups, instance_id
+        )
+        return result
+
+    async def get_instance_backup(
+        self, instance_id: int, backup_id: int
+    ) -> dict[str, Any]:
+        """Get instance backup with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_instance_backup,
+            instance_id,
+            backup_id,
+        )
+        return result
+
+    async def create_instance_backup(
+        self, instance_id: int, label: str | None = None
+    ) -> dict[str, Any]:
+        """Create instance backup with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.create_instance_backup,
+            instance_id,
+            label,
+        )
+        return result
+
+    async def restore_instance_backup(
+        self,
+        instance_id: int,
+        backup_id: int,
+        linode_id: int,
+        overwrite: bool = False,
+    ) -> None:
+        """Restore instance backup with retry."""
+        await self._execute_with_retry(
+            self.client.restore_instance_backup,
+            instance_id,
+            backup_id,
+            linode_id,
+            overwrite,
+        )
+
+    async def enable_instance_backups(self, instance_id: int) -> None:
+        """Enable instance backups with retry."""
+        await self._execute_with_retry(self.client.enable_instance_backups, instance_id)
+
+    async def cancel_instance_backups(self, instance_id: int) -> None:
+        """Cancel instance backups with retry."""
+        await self._execute_with_retry(self.client.cancel_instance_backups, instance_id)
+
+    # ── Instance Disks (retry wrappers) ──
+
+    async def list_instance_disks(self, instance_id: int) -> list[dict[str, Any]]:
+        """List instance disks with retry."""
+        result: list[dict[str, Any]] = await self._execute_with_retry(
+            self.client.list_instance_disks, instance_id
+        )
+        return result
+
+    async def get_instance_disk(self, instance_id: int, disk_id: int) -> dict[str, Any]:
+        """Get instance disk with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_instance_disk,
+            instance_id,
+            disk_id,
+        )
+        return result
+
+    async def create_instance_disk(
+        self,
+        instance_id: int,
+        label: str,
+        size: int,
+        filesystem: str | None = None,
+        image: str | None = None,
+        root_pass: str | None = None,
+    ) -> dict[str, Any]:
+        """Create instance disk with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.create_instance_disk,
+            instance_id,
+            label,
+            size,
+            filesystem,
+            image,
+            root_pass,
+        )
+        return result
+
+    async def update_instance_disk(
+        self,
+        instance_id: int,
+        disk_id: int,
+        label: str | None = None,
+    ) -> dict[str, Any]:
+        """Update instance disk with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.update_instance_disk,
+            instance_id,
+            disk_id,
+            label,
+        )
+        return result
+
+    async def delete_instance_disk(self, instance_id: int, disk_id: int) -> None:
+        """Delete instance disk with retry."""
+        await self._execute_with_retry(
+            self.client.delete_instance_disk,
+            instance_id,
+            disk_id,
+        )
+
+    async def clone_instance_disk(
+        self, instance_id: int, disk_id: int
+    ) -> dict[str, Any]:
+        """Clone instance disk with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.clone_instance_disk,
+            instance_id,
+            disk_id,
+        )
+        return result
+
+    async def resize_instance_disk(
+        self, instance_id: int, disk_id: int, size: int
+    ) -> None:
+        """Resize instance disk with retry."""
+        await self._execute_with_retry(
+            self.client.resize_instance_disk,
+            instance_id,
+            disk_id,
+            size,
+        )
+
+    # ── Instance IPs (retry wrappers) ──
+
+    async def list_instance_ips(self, instance_id: int) -> dict[str, Any]:
+        """List instance IPs with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.list_instance_ips, instance_id
+        )
+        return result
+
+    async def get_instance_ip(self, instance_id: int, address: str) -> dict[str, Any]:
+        """Get instance IP with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_instance_ip, instance_id, address
+        )
+        return result
+
+    async def allocate_instance_ip(
+        self,
+        instance_id: int,
+        ip_type: str,
+        public: bool = True,
+    ) -> dict[str, Any]:
+        """Allocate instance IP with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.allocate_instance_ip,
+            instance_id,
+            ip_type,
+            public,
+        )
+        return result
+
+    async def delete_instance_ip(self, instance_id: int, address: str) -> None:
+        """Delete instance IP with retry."""
+        await self._execute_with_retry(
+            self.client.delete_instance_ip,
+            instance_id,
+            address,
+        )
+
+    # ── Instance Actions (retry wrappers) ──
+
+    async def clone_instance(
+        self,
+        instance_id: int,
+        region: str | None = None,
+        instance_type: str | None = None,
+        label: str | None = None,
+        disks: list[int] | None = None,
+        configs: list[int] | None = None,
+    ) -> dict[str, Any]:
+        """Clone instance with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.clone_instance,
+            instance_id,
+            region,
+            instance_type,
+            label,
+            disks,
+            configs,
+        )
+        return result
+
+    async def migrate_instance(
+        self,
+        instance_id: int,
+        region: str | None = None,
+    ) -> None:
+        """Migrate instance with retry."""
+        await self._execute_with_retry(
+            self.client.migrate_instance,
+            instance_id,
+            region,
+        )
+
+    async def rebuild_instance(
+        self,
+        instance_id: int,
+        image: str,
+        root_pass: str,
+        authorized_keys: list[str] | None = None,
+        authorized_users: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Rebuild instance with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.rebuild_instance,
+            instance_id,
+            image,
+            root_pass,
+            authorized_keys,
+            authorized_users,
+        )
+        return result
+
+    async def rescue_instance(
+        self,
+        instance_id: int,
+        devices: dict[str, Any] | None = None,
+    ) -> None:
+        """Rescue instance with retry."""
+        await self._execute_with_retry(
+            self.client.rescue_instance,
+            instance_id,
+            devices,
+        )
+
+    async def reset_instance_password(self, instance_id: int, root_pass: str) -> None:
+        """Reset instance password with retry."""
+        await self._execute_with_retry(
+            self.client.reset_instance_password,
+            instance_id,
+            root_pass,
+        )
 
     async def _execute_with_retry(
         self, func: Callable[..., Awaitable[T]], *args: Any

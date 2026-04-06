@@ -13,14 +13,8 @@ import (
 	"time"
 
 	"github.com/chadit/LinodeMCP/internal/appinfo"
+	"github.com/chadit/LinodeMCP/internal/config"
 )
-
-// Client represents a Linode API client.
-type Client struct {
-	httpClient *http.Client
-	baseURL    string
-	token      string
-}
 
 const (
 	defaultTimeout     = 30 * time.Second
@@ -31,19 +25,74 @@ const (
 	httpForbidden      = 403
 	httpTooManyReqs    = 429
 	httpServerError    = 500
+	httpServerErrorMax = 600
 	authHeaderPrefix   = "Bearer "
 	contentTypeJSON    = "application/json"
+
 	// requestTimeout is the per-request context timeout for API calls.
 	requestTimeout = 30 * time.Second
-
-	errMsgAuthentication = "Authentication failed. Please check your API token."
-	errMsgForbidden      = "Access forbidden. Your API token may not have sufficient permissions."
-	errMsgRateLimit      = "Rate limit exceeded. Please try again later."
-	errMsgServerError    = "Internal server error. Please try again later."
 )
 
-// NewClient creates a new Linode API client.
-func NewClient(apiURL, token string) *Client {
+// Option configures a Client.
+type Option func(*retryConfig)
+
+// Client is the Linode API client with built-in retry logic.
+type Client struct {
+	httpClient *http.Client
+	baseURL    string
+	token      string
+	retryCfg   retryConfig
+}
+
+// WithMaxRetries sets the maximum number of retry attempts.
+func WithMaxRetries(n int) Option {
+	return func(rc *retryConfig) { rc.MaxRetries = n }
+}
+
+// WithBaseDelay sets the initial delay between retries.
+func WithBaseDelay(d time.Duration) Option {
+	return func(rc *retryConfig) { rc.BaseDelay = d }
+}
+
+// WithMaxDelay sets the upper bound on retry delay.
+func WithMaxDelay(d time.Duration) Option {
+	return func(rc *retryConfig) { rc.MaxDelay = d }
+}
+
+// WithBackoffFactor sets the exponential backoff multiplier.
+func WithBackoffFactor(f float64) Option {
+	return func(rc *retryConfig) { rc.BackoffFactor = f }
+}
+
+// WithJitter enables or disables jitter on retry delays.
+func WithJitter(enabled bool) Option {
+	return func(rc *retryConfig) { rc.JitterEnabled = enabled }
+}
+
+// NewClient creates a Linode API client.
+// Retry settings layer: hardcoded defaults, then cfg.Resilience values
+// (if cfg is non-nil), then caller-supplied options.
+func NewClient(apiURL, token string, cfg *config.Config, opts ...Option) *Client {
+	retryCfg := defaultRetryConfig()
+
+	if cfg != nil {
+		if cfg.Resilience.MaxRetries > 0 {
+			retryCfg.MaxRetries = cfg.Resilience.MaxRetries
+		}
+
+		if cfg.Resilience.BaseRetryDelay > 0 {
+			retryCfg.BaseDelay = cfg.Resilience.BaseRetryDelay
+		}
+
+		if cfg.Resilience.MaxRetryDelay > 0 {
+			retryCfg.MaxDelay = cfg.Resilience.MaxRetryDelay
+		}
+	}
+
+	for _, opt := range opts {
+		opt(&retryCfg)
+	}
+
 	return &Client{
 		httpClient: &http.Client{
 			Timeout: defaultTimeout,
@@ -53,13 +102,26 @@ func NewClient(apiURL, token string) *Client {
 				IdleConnTimeout:     defaultIdleTimeout,
 			},
 		},
-		baseURL: apiURL,
-		token:   token,
+		baseURL:  apiURL,
+		token:    token,
+		retryCfg: retryCfg,
 	}
 }
 
 // makeRequest builds and executes an authenticated HTTP request against the Linode API.
-func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body io.Reader) (*http.Response, error) {
+// A non-nil payload is marshaled as JSON; nil sends no body.
+func (c *Client) makeRequest(ctx context.Context, method, endpoint string, payload any) (*http.Response, error) {
+	var body io.Reader
+
+	if payload != nil {
+		jsonData, err := json.Marshal(payload)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal request body: %w", err)
+		}
+
+		body = bytes.NewReader(jsonData)
+	}
+
 	rawURL := c.baseURL + endpoint
 
 	parsedURL, err := url.Parse(rawURL)
@@ -76,7 +138,7 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 	req.Header.Set("Content-Type", contentTypeJSON)
 	req.Header.Set("User-Agent", "LinodeMCP/"+appinfo.Version)
 
-	resp, err := c.httpClient.Do(req) //nolint:gosec // G704: baseURL comes from operator config, not from MCP tool parameters — no SSRF risk
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
@@ -84,24 +146,6 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 	return resp, nil
 }
 
-// makeJSONRequest marshals payload as JSON and delegates to makeRequest. A nil payload sends no body.
-func (c *Client) makeJSONRequest(ctx context.Context, method, endpoint string, payload any) (*http.Response, error) {
-	var body io.Reader
-
-	if payload != nil {
-		jsonData, err := json.Marshal(payload)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal request body: %w", err)
-		}
-
-		body = bytes.NewReader(jsonData)
-	}
-
-	return c.makeRequest(ctx, method, endpoint, body)
-}
-
-// handleResponse reads the full response body, checks for error status codes, and unmarshals into target.
-// The caller is responsible for closing resp.Body before calling this method.
 func (c *Client) handleResponse(resp *http.Response, target any) error {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -121,7 +165,7 @@ func (c *Client) handleResponse(resp *http.Response, target any) error {
 	return nil
 }
 
-func (c *Client) handleErrorResponse(statusCode int, body []byte, resp *http.Response) error {
+func (*Client) handleErrorResponse(statusCode int, body []byte, resp *http.Response) error {
 	var apiError struct {
 		Errors []struct {
 			Field  string `json:"field"`
@@ -139,26 +183,24 @@ func (c *Client) handleErrorResponse(statusCode int, body []byte, resp *http.Res
 
 	switch statusCode {
 	case httpUnauthorized:
-		return &APIError{StatusCode: statusCode, Message: errMsgAuthentication}
+		return &APIError{StatusCode: statusCode, Message: "authentication failed, check your API token"}
 	case httpForbidden:
-		return &APIError{StatusCode: statusCode, Message: errMsgForbidden}
+		return &APIError{StatusCode: statusCode, Message: "access forbidden, your token may lack permissions"}
 	case httpTooManyReqs:
-		retryAfter := c.parseRetryAfter(resp)
-
-		message := errMsgRateLimit
-		if retryAfter > 0 {
-			message = fmt.Sprintf("Rate limit exceeded. Retry after %v.", retryAfter)
+		message := "rate limit exceeded, try again later"
+		if retryAfter := parseRetryAfter(resp); retryAfter > 0 {
+			message = fmt.Sprintf("rate limit exceeded, retry after %v", retryAfter)
 		}
 
 		return &APIError{StatusCode: statusCode, Message: message}
 	case httpServerError:
-		return &APIError{StatusCode: statusCode, Message: errMsgServerError}
+		return &APIError{StatusCode: statusCode, Message: "internal server error, try again later"}
 	default:
 		return &APIError{StatusCode: statusCode, Message: fmt.Sprintf("API request failed with status %d", statusCode)}
 	}
 }
 
-func (*Client) parseRetryAfter(resp *http.Response) time.Duration {
+func parseRetryAfter(resp *http.Response) time.Duration {
 	retryAfter := resp.Header.Get("Retry-After")
 	if retryAfter == "" {
 		return 0

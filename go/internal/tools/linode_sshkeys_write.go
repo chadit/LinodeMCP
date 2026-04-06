@@ -69,7 +69,7 @@ func handleLinodeSSHKeyCreateRequest(ctx context.Context, request *mcp.CallToolR
 		SSHKey:  createdKey,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeSSHKeyDeleteTool creates a tool for deleting an SSH key.
@@ -105,16 +105,16 @@ func handleLinodeSSHKeyDeleteRequest(ctx context.Context, request *mcp.CallToolR
 	}
 
 	if err := client.DeleteSSHKey(ctx, sshKeyID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to delete SSH key %d: %v", sshKeyID, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove SSH key %d: %v", sshKeyID, err)), nil
 	}
 
 	response := struct {
 		Message  string `json:"message"`
 		SSHKeyID int    `json:"sshkey_id"`
 	}{
-		Message:  fmt.Sprintf("SSH key %d deleted successfully", sshKeyID),
+		Message:  fmt.Sprintf("SSH key %d removed successfully", sshKeyID),
 		SSHKeyID: sshKeyID,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }

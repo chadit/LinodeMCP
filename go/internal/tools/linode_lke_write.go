@@ -22,10 +22,10 @@ func handleLKESubResourceAction[ID int | string](
 	confirmMsg string,
 	idParam string,
 	extractID func(*mcp.CallToolRequest) (ID, bool),
-	action func(context.Context, *linode.RetryableClient, int, ID) error,
+	action func(context.Context, *linode.Client, int, ID) error,
 	errFmt, successFmt string,
 ) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, confirmMsg); result != nil {
+	if result := RequireConfirm(request, confirmMsg); result != nil {
 		return result, nil
 	}
 
@@ -48,7 +48,7 @@ func handleLKESubResourceAction[ID int | string](
 		return mcp.NewToolResultError(fmt.Sprintf(errFmt, subID, clusterID, err)), nil
 	}
 
-	return marshalToolResponse(map[string]any{
+	return MarshalToolResponse(map[string]any{
 		"message":    fmt.Sprintf(successFmt, subID, clusterID),
 		"cluster_id": clusterID,
 		idParam:      subID,
@@ -84,7 +84,7 @@ func NewLinodeLKEClusterCreateTool(cfg *config.Config) (mcp.Tool, func(ctx conte
 }
 
 func handleLKEClusterCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This creates billable Kubernetes resources. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This creates billable Kubernetes resources. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -151,7 +151,7 @@ func handleLKEClusterCreateRequest(ctx context.Context, request *mcp.CallToolReq
 		Cluster: cluster,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeLKEClusterUpdateTool creates a tool for updating an LKE cluster.
@@ -178,7 +178,7 @@ func NewLinodeLKEClusterUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx conte
 }
 
 func handleLKEClusterUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This modifies the LKE cluster configuration. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This modifies the LKE cluster configuration. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -213,18 +213,18 @@ func handleLKEClusterUpdateRequest(ctx context.Context, request *mcp.CallToolReq
 
 	cluster, err := client.UpdateLKECluster(ctx, clusterID, req)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to update LKE cluster %d: %v", clusterID, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to modify LKE cluster %d: %v", clusterID, err)), nil
 	}
 
 	response := struct {
 		Message string             `json:"message"`
 		Cluster *linode.LKECluster `json:"cluster"`
 	}{
-		Message: fmt.Sprintf("LKE cluster %d updated successfully", clusterID),
+		Message: fmt.Sprintf("LKE cluster %d modified successfully", clusterID),
 		Cluster: cluster,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeLKEClusterDeleteTool creates a tool for deleting an LKE cluster.
@@ -243,7 +243,7 @@ func NewLinodeLKEClusterDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx conte
 }
 
 func handleLKEClusterDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This is irreversible. All node pools, nodes, and associated resources will be deleted. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This is irreversible. All node pools, nodes, and associated resources will be deleted. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -258,18 +258,18 @@ func handleLKEClusterDeleteRequest(ctx context.Context, request *mcp.CallToolReq
 	}
 
 	if err := client.DeleteLKECluster(ctx, clusterID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to delete LKE cluster %d: %v", clusterID, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove LKE cluster %d: %v", clusterID, err)), nil
 	}
 
 	response := struct {
 		Message   string `json:"message"`
 		ClusterID int    `json:"cluster_id"`
 	}{
-		Message:   fmt.Sprintf("LKE cluster %d deleted successfully", clusterID),
+		Message:   fmt.Sprintf("LKE cluster %d removed successfully", clusterID),
 		ClusterID: clusterID,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeLKEClusterRecycleTool creates a tool for recycling all nodes in an LKE cluster.
@@ -288,7 +288,7 @@ func NewLinodeLKEClusterRecycleTool(cfg *config.Config) (mcp.Tool, func(ctx cont
 }
 
 func handleLKEClusterRecycleRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "Recycles all nodes in the cluster. This causes temporary disruption. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "Recycles all nodes in the cluster. This causes temporary disruption. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -314,7 +314,7 @@ func handleLKEClusterRecycleRequest(ctx context.Context, request *mcp.CallToolRe
 		ClusterID: clusterID,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeLKEClusterRegenerateTool creates a tool for regenerating an LKE cluster's service token.
@@ -333,7 +333,7 @@ func NewLinodeLKEClusterRegenerateTool(cfg *config.Config) (mcp.Tool, func(ctx c
 }
 
 func handleLKEClusterRegenerateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This regenerates the cluster service token. Existing tokens will stop working. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This regenerates the cluster service token. Existing tokens will stop working. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -359,7 +359,7 @@ func handleLKEClusterRegenerateRequest(ctx context.Context, request *mcp.CallToo
 		ClusterID: clusterID,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeLKEPoolCreateTool creates a tool for adding a node pool to an LKE cluster.
@@ -390,7 +390,7 @@ func NewLinodeLKEPoolCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.
 }
 
 func handleLKEPoolCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This creates billable compute resources. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This creates billable compute resources. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -445,7 +445,7 @@ func handleLKEPoolCreateRequest(ctx context.Context, request *mcp.CallToolReques
 		Pool:    pool,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeLKEPoolUpdateTool creates a tool for updating an LKE node pool.
@@ -476,7 +476,7 @@ func NewLinodeLKEPoolUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.
 }
 
 func handleLKEPoolUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This modifies the node pool configuration. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This modifies the node pool configuration. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -517,18 +517,18 @@ func handleLKEPoolUpdateRequest(ctx context.Context, request *mcp.CallToolReques
 
 	pool, err := client.UpdateLKENodePool(ctx, clusterID, poolID, req)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to update node pool %d in cluster %d: %v", poolID, clusterID, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to modify node pool %d in cluster %d: %v", poolID, clusterID, err)), nil
 	}
 
 	response := struct {
 		Message string              `json:"message"`
 		Pool    *linode.LKENodePool `json:"pool"`
 	}{
-		Message: fmt.Sprintf("Node pool %d in cluster %d updated successfully", poolID, clusterID),
+		Message: fmt.Sprintf("Node pool %d in cluster %d modified successfully", poolID, clusterID),
 		Pool:    pool,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeLKEPoolDeleteTool creates a tool for deleting a node pool from an LKE cluster.
@@ -557,10 +557,10 @@ func handleLKEPoolDeleteRequest(ctx context.Context, request *mcp.CallToolReques
 
 			return id, id != 0
 		},
-		func(ctx context.Context, c *linode.RetryableClient, clusterID, poolID int) error {
+		func(ctx context.Context, c *linode.Client, clusterID, poolID int) error {
 			return c.DeleteLKENodePool(ctx, clusterID, poolID)
 		},
-		"Failed to delete node pool %d from cluster %d: %v",
+		"Failed to remove node pool %d from cluster %d: %v",
 		"Node pool %d deleted from cluster %d successfully",
 	)
 }
@@ -591,7 +591,7 @@ func handleLKEPoolRecycleRequest(ctx context.Context, request *mcp.CallToolReque
 
 			return id, id != 0
 		},
-		func(ctx context.Context, c *linode.RetryableClient, clusterID, poolID int) error {
+		func(ctx context.Context, c *linode.Client, clusterID, poolID int) error {
 			return c.RecycleLKENodePool(ctx, clusterID, poolID)
 		},
 		"Failed to recycle node pool %d in cluster %d: %v",
@@ -625,10 +625,10 @@ func handleLKENodeDeleteRequest(ctx context.Context, request *mcp.CallToolReques
 
 			return id, id != ""
 		},
-		func(ctx context.Context, c *linode.RetryableClient, clusterID int, nodeID string) error {
+		func(ctx context.Context, c *linode.Client, clusterID int, nodeID string) error {
 			return c.DeleteLKENode(ctx, clusterID, nodeID)
 		},
-		"Failed to delete node %s from cluster %d: %v",
+		"Failed to remove node %s from cluster %d: %v",
 		"Node %s deleted from cluster %d successfully",
 	)
 }
@@ -659,7 +659,7 @@ func handleLKENodeRecycleRequest(ctx context.Context, request *mcp.CallToolReque
 
 			return id, id != ""
 		},
-		func(ctx context.Context, c *linode.RetryableClient, clusterID int, nodeID string) error {
+		func(ctx context.Context, c *linode.Client, clusterID int, nodeID string) error {
 			return c.RecycleLKENode(ctx, clusterID, nodeID)
 		},
 		"Failed to recycle node %s in cluster %d: %v",
@@ -683,7 +683,7 @@ func NewLinodeLKEKubeconfigDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx co
 }
 
 func handleLKEKubeconfigDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This deletes the kubeconfig. Existing kubeconfig files will stop working. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This deletes the kubeconfig. Existing kubeconfig files will stop working. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -698,7 +698,7 @@ func handleLKEKubeconfigDeleteRequest(ctx context.Context, request *mcp.CallTool
 	}
 
 	if err := client.DeleteLKEKubeconfig(ctx, clusterID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to delete kubeconfig for LKE cluster %d: %v", clusterID, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove kubeconfig for LKE cluster %d: %v", clusterID, err)), nil
 	}
 
 	response := struct {
@@ -709,7 +709,7 @@ func handleLKEKubeconfigDeleteRequest(ctx context.Context, request *mcp.CallTool
 		ClusterID: clusterID,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeLKEServiceTokenDeleteTool creates a tool for deleting and regenerating an LKE cluster's service token.
@@ -728,7 +728,7 @@ func NewLinodeLKEServiceTokenDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx 
 }
 
 func handleLKEServiceTokenDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This deletes the service token. Existing tokens will stop working. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This deletes the service token. Existing tokens will stop working. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -743,7 +743,7 @@ func handleLKEServiceTokenDeleteRequest(ctx context.Context, request *mcp.CallTo
 	}
 
 	if err := client.DeleteLKEServiceToken(ctx, clusterID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to delete service token for LKE cluster %d: %v", clusterID, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove service token for LKE cluster %d: %v", clusterID, err)), nil
 	}
 
 	response := struct {
@@ -754,7 +754,7 @@ func handleLKEServiceTokenDeleteRequest(ctx context.Context, request *mcp.CallTo
 		ClusterID: clusterID,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeLKEACLUpdateTool creates a tool for updating the control plane ACL of an LKE cluster.
@@ -779,7 +779,7 @@ func NewLinodeLKEACLUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 }
 
 func handleLKEACLUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This modifies the control plane ACL, which controls API server access. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This modifies the control plane ACL, which controls API server access. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -813,18 +813,18 @@ func handleLKEACLUpdateRequest(ctx context.Context, request *mcp.CallToolRequest
 
 	result, err := client.UpdateLKEControlPlaneACL(ctx, clusterID, req)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to update control plane ACL for cluster %d: %v", clusterID, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to modify control plane ACL for cluster %d: %v", clusterID, err)), nil
 	}
 
 	response := struct {
 		Message string                     `json:"message"`
 		ACL     *linode.LKEControlPlaneACL `json:"acl"`
 	}{
-		Message: fmt.Sprintf("Control plane ACL for cluster %d updated successfully", clusterID),
+		Message: fmt.Sprintf("Control plane ACL for cluster %d modified successfully", clusterID),
 		ACL:     result,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeLKEACLDeleteTool creates a tool for deleting the control plane ACL of an LKE cluster.
@@ -843,7 +843,7 @@ func NewLinodeLKEACLDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 }
 
 func handleLKEACLDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This removes all IP restrictions from the API server. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This removes all IP restrictions from the API server. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -858,18 +858,18 @@ func handleLKEACLDeleteRequest(ctx context.Context, request *mcp.CallToolRequest
 	}
 
 	if err := client.DeleteLKEControlPlaneACL(ctx, clusterID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to delete control plane ACL for cluster %d: %v", clusterID, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove control plane ACL for cluster %d: %v", clusterID, err)), nil
 	}
 
 	response := struct {
 		Message   string `json:"message"`
 		ClusterID int    `json:"cluster_id"`
 	}{
-		Message:   fmt.Sprintf("Control plane ACL for cluster %d deleted successfully", clusterID),
+		Message:   fmt.Sprintf("Control plane ACL for cluster %d removed successfully", clusterID),
 		ClusterID: clusterID,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // splitTags splits a comma-separated tags string into a trimmed slice.

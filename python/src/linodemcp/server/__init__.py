@@ -2,14 +2,13 @@
 
 import logging
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 from mcp.server import Server as MCPServer
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool
 
-if TYPE_CHECKING:
-    from linodemcp.config import Config
+from linodemcp.config import Config
 from linodemcp.tools import (
     create_hello_tool,
     create_linode_account_tool,
@@ -27,11 +26,33 @@ from linodemcp.tools import (
     create_linode_firewall_update_tool,
     create_linode_firewalls_list_tool,
     create_linode_images_list_tool,
+    create_linode_instance_backup_create_tool,
+    create_linode_instance_backup_get_tool,
+    create_linode_instance_backup_restore_tool,
+    create_linode_instance_backups_cancel_tool,
+    create_linode_instance_backups_enable_tool,
+    create_linode_instance_backups_list_tool,
     create_linode_instance_boot_tool,
+    create_linode_instance_clone_tool,
     create_linode_instance_create_tool,
     create_linode_instance_delete_tool,
+    create_linode_instance_disk_clone_tool,
+    create_linode_instance_disk_create_tool,
+    create_linode_instance_disk_delete_tool,
+    create_linode_instance_disk_get_tool,
+    create_linode_instance_disk_resize_tool,
+    create_linode_instance_disk_update_tool,
+    create_linode_instance_disks_list_tool,
     create_linode_instance_get_tool,
+    create_linode_instance_ip_allocate_tool,
+    create_linode_instance_ip_delete_tool,
+    create_linode_instance_ip_get_tool,
+    create_linode_instance_ips_list_tool,
+    create_linode_instance_migrate_tool,
+    create_linode_instance_password_reset_tool,
     create_linode_instance_reboot_tool,
+    create_linode_instance_rebuild_tool,
+    create_linode_instance_rescue_tool,
     create_linode_instance_resize_tool,
     create_linode_instance_shutdown_tool,
     create_linode_instances_list_tool,
@@ -130,11 +151,33 @@ from linodemcp.tools import (
     handle_linode_firewall_update,
     handle_linode_firewalls_list,
     handle_linode_images_list,
+    handle_linode_instance_backup_create,
+    handle_linode_instance_backup_get,
+    handle_linode_instance_backup_restore,
+    handle_linode_instance_backups_cancel,
+    handle_linode_instance_backups_enable,
+    handle_linode_instance_backups_list,
     handle_linode_instance_boot,
+    handle_linode_instance_clone,
     handle_linode_instance_create,
     handle_linode_instance_delete,
+    handle_linode_instance_disk_clone,
+    handle_linode_instance_disk_create,
+    handle_linode_instance_disk_delete,
+    handle_linode_instance_disk_get,
+    handle_linode_instance_disk_resize,
+    handle_linode_instance_disk_update,
+    handle_linode_instance_disks_list,
     handle_linode_instance_get,
+    handle_linode_instance_ip_allocate,
+    handle_linode_instance_ip_delete,
+    handle_linode_instance_ip_get,
+    handle_linode_instance_ips_list,
+    handle_linode_instance_migrate,
+    handle_linode_instance_password_reset,
     handle_linode_instance_reboot,
+    handle_linode_instance_rebuild,
+    handle_linode_instance_rescue,
     handle_linode_instance_resize,
     handle_linode_instance_shutdown,
     handle_linode_instances_list,
@@ -370,6 +413,32 @@ class Server:
                 create_linode_vpc_subnet_create_tool(),
                 create_linode_vpc_subnet_update_tool(),
                 create_linode_vpc_subnet_delete_tool(),
+                # Instance Deep: Backups
+                create_linode_instance_backups_list_tool(),
+                create_linode_instance_backup_get_tool(),
+                create_linode_instance_backup_create_tool(),
+                create_linode_instance_backup_restore_tool(),
+                create_linode_instance_backups_enable_tool(),
+                create_linode_instance_backups_cancel_tool(),
+                # Instance Deep: Disks
+                create_linode_instance_disks_list_tool(),
+                create_linode_instance_disk_get_tool(),
+                create_linode_instance_disk_create_tool(),
+                create_linode_instance_disk_update_tool(),
+                create_linode_instance_disk_delete_tool(),
+                create_linode_instance_disk_clone_tool(),
+                create_linode_instance_disk_resize_tool(),
+                # Instance Deep: IPs
+                create_linode_instance_ips_list_tool(),
+                create_linode_instance_ip_get_tool(),
+                create_linode_instance_ip_allocate_tool(),
+                create_linode_instance_ip_delete_tool(),
+                # Instance Deep: Actions
+                create_linode_instance_clone_tool(),
+                create_linode_instance_migrate_tool(),
+                create_linode_instance_rebuild_tool(),
+                create_linode_instance_rescue_tool(),
+                create_linode_instance_password_reset_tool(),
             ]
 
         _list_tools_method()(_list_tools)
@@ -520,6 +589,32 @@ class Server:
             "linode_vpc_subnet_create": handle_linode_vpc_subnet_create,
             "linode_vpc_subnet_update": handle_linode_vpc_subnet_update,
             "linode_vpc_subnet_delete": handle_linode_vpc_subnet_delete,
+            # Instance Deep: Backups
+            "linode_instance_backups_list": (handle_linode_instance_backups_list),
+            "linode_instance_backup_get": (handle_linode_instance_backup_get),
+            "linode_instance_backup_create": (handle_linode_instance_backup_create),
+            "linode_instance_backup_restore": (handle_linode_instance_backup_restore),
+            "linode_instance_backups_enable": (handle_linode_instance_backups_enable),
+            "linode_instance_backups_cancel": (handle_linode_instance_backups_cancel),
+            # Instance Deep: Disks
+            "linode_instance_disks_list": (handle_linode_instance_disks_list),
+            "linode_instance_disk_get": (handle_linode_instance_disk_get),
+            "linode_instance_disk_create": (handle_linode_instance_disk_create),
+            "linode_instance_disk_update": (handle_linode_instance_disk_update),
+            "linode_instance_disk_delete": (handle_linode_instance_disk_delete),
+            "linode_instance_disk_clone": (handle_linode_instance_disk_clone),
+            "linode_instance_disk_resize": (handle_linode_instance_disk_resize),
+            # Instance Deep: IPs
+            "linode_instance_ips_list": (handle_linode_instance_ips_list),
+            "linode_instance_ip_get": (handle_linode_instance_ip_get),
+            "linode_instance_ip_allocate": (handle_linode_instance_ip_allocate),
+            "linode_instance_ip_delete": (handle_linode_instance_ip_delete),
+            # Instance Deep: Actions
+            "linode_instance_clone": (handle_linode_instance_clone),
+            "linode_instance_migrate": (handle_linode_instance_migrate),
+            "linode_instance_rebuild": (handle_linode_instance_rebuild),
+            "linode_instance_rescue": (handle_linode_instance_rescue),
+            "linode_instance_password_reset": (handle_linode_instance_password_reset),
         }
 
         async def _call_tool(name: str, arguments: dict[str, Any]) -> list[Any]:
@@ -540,15 +635,7 @@ class Server:
     async def start(self) -> None:
         """Start the MCP server using stdio transport."""
         logger.info("Starting LinodeMCP server")
-        logger.info(
-            "Registered tools: hello, version, linode_profile, linode_account, "
-            "linode_instances_list, linode_instance_get, linode_regions_list, "
-            "linode_types_list, linode_volumes_list, linode_images_list, "
-            "linode_sshkeys_list, linode_domains_list, linode_domain_get, "
-            "linode_domain_records_list, linode_firewalls_list, "
-            "linode_nodebalancers_list, linode_nodebalancer_get, "
-            "linode_stackscripts_list"
-        )
+        logger.info("Registered 125 tools")
 
         async with stdio_server() as (read_stream, write_stream):
             await self.mcp.run(

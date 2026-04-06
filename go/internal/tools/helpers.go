@@ -19,8 +19,8 @@ const (
 	paramConfirm         = "confirm"
 )
 
-// marshalToolResponse serializes v as indented JSON and wraps it in an MCP text result.
-func marshalToolResponse(v any) (*mcp.CallToolResult, error) {
+// MarshalToolResponse serializes v as indented JSON and wraps it in an MCP text result.
+func MarshalToolResponse(v any) (*mcp.CallToolResult, error) {
 	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal response: %w", err)
@@ -30,7 +30,7 @@ func marshalToolResponse(v any) (*mcp.CallToolResult, error) {
 }
 
 // prepareClient extracts the environment parameter, validates the config, and returns a ready-to-use API client.
-func prepareClient(request *mcp.CallToolRequest, cfg *config.Config) (*linode.RetryableClient, error) {
+func prepareClient(request *mcp.CallToolRequest, cfg *config.Config) (*linode.Client, error) {
 	environment := request.GetString(paramEnvironment, "")
 
 	selectedEnv, err := selectEnvironment(cfg, environment)
@@ -42,11 +42,11 @@ func prepareClient(request *mcp.CallToolRequest, cfg *config.Config) (*linode.Re
 		return nil, err
 	}
 
-	return linode.NewRetryableClientWithDefaults(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token), nil
+	return linode.NewClient(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token, nil), nil
 }
 
-// requireConfirm checks the confirm parameter and returns an error result if not set.
-func requireConfirm(request *mcp.CallToolRequest, message string) *mcp.CallToolResult {
+// RequireConfirm checks the confirm parameter and returns an error result if not set.
+func RequireConfirm(request *mcp.CallToolRequest, message string) *mcp.CallToolResult {
 	if !request.GetBool(paramConfirm, false) {
 		return mcp.NewToolResultError(message)
 	}
@@ -58,7 +58,7 @@ func requireConfirm(request *mcp.CallToolRequest, message string) *mcp.CallToolR
 func newSimpleGetTool(
 	cfg *config.Config,
 	toolName, description string,
-	apiCall func(context.Context, *linode.RetryableClient) (any, error),
+	apiCall func(context.Context, *linode.Client) (any, error),
 ) (mcp.Tool, func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(toolName,
 		mcp.WithDescription(description),
@@ -76,14 +76,14 @@ func newSimpleGetTool(
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve %s: %v", toolName, err)), nil
 		}
 
-		return marshalToolResponse(result)
+		return MarshalToolResponse(result)
 	}
 
 	return tool, handler
 }
 
-// filterByField returns items where getField matches filter (case-insensitive).
-func filterByField[T any](items []T, filter string, getField func(T) string) []T {
+// FilterByField returns items where getField matches filter (case-insensitive).
+func FilterByField[T any](items []T, filter string, getField func(T) string) []T {
 	filtered := make([]T, 0, len(items))
 
 	for i := range items {
@@ -95,8 +95,8 @@ func filterByField[T any](items []T, filter string, getField func(T) string) []T
 	return filtered
 }
 
-// filterByContains returns items where getField contains substr (case-insensitive).
-func filterByContains[T any](items []T, substr string, getField func(T) string) []T {
+// FilterByContains returns items where getField contains substr (case-insensitive).
+func FilterByContains[T any](items []T, substr string, getField func(T) string) []T {
 	filtered := make([]T, 0, len(items))
 
 	lower := strings.ToLower(substr)
@@ -110,8 +110,8 @@ func filterByContains[T any](items []T, substr string, getField func(T) string) 
 	return filtered
 }
 
-// formatListResponse builds a standard list response with count, optional filter, and items under the given JSON key.
-func formatListResponse[T any](items []T, appliedFilters []string, key string) (*mcp.CallToolResult, error) {
+// FormatListResponse builds a standard list response with count, optional filter, and items under the given JSON key.
+func FormatListResponse[T any](items []T, appliedFilters []string, key string) (*mcp.CallToolResult, error) {
 	response := map[string]any{
 		"count": len(items),
 		key:     items,
@@ -121,7 +121,7 @@ func formatListResponse[T any](items []T, appliedFilters []string, key string) (
 		response["filter"] = strings.Join(appliedFilters, ", ")
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // filterDef describes a filter parameter for list tools.
@@ -136,7 +136,7 @@ func handleListRequest[T any](
 	ctx context.Context,
 	request *mcp.CallToolRequest,
 	cfg *config.Config,
-	apiCall func(context.Context, *linode.RetryableClient) ([]T, error),
+	apiCall func(context.Context, *linode.Client) ([]T, error),
 	filters []filterDef[T],
 	formatResponse func(items []T, appliedFilters []string) (*mcp.CallToolResult, error),
 ) (*mcp.CallToolResult, error) {
@@ -176,7 +176,7 @@ func fieldFilter[T any](paramName, description string, getField func(T) string) 
 		paramName:   paramName,
 		description: description,
 		matchFunc: func(items []T, value string) []T {
-			return filterByField(items, value, getField)
+			return FilterByField(items, value, getField)
 		},
 	}
 }
@@ -187,7 +187,7 @@ func containsFilter[T any](paramName, description string, getField func(T) strin
 		paramName:   paramName,
 		description: description,
 		matchFunc: func(items []T, value string) []T {
-			return filterByContains(items, value, getField)
+			return FilterByContains(items, value, getField)
 		},
 	}
 }
@@ -197,7 +197,7 @@ func containsFilter[T any](paramName, description string, getField func(T) strin
 func newListTool[T any](
 	cfg *config.Config,
 	toolName, description string,
-	apiCall func(context.Context, *linode.RetryableClient) ([]T, error),
+	apiCall func(context.Context, *linode.Client) ([]T, error),
 	filterParams []listFilterParam[T],
 	responseKey string,
 ) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
@@ -219,7 +219,7 @@ func newListTool[T any](
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return handleListRequest(ctx, &request, cfg, apiCall, filters,
 			func(items []T, appliedFilters []string) (*mcp.CallToolResult, error) {
-				return formatListResponse(items, appliedFilters, responseKey)
+				return FormatListResponse(items, appliedFilters, responseKey)
 			},
 		)
 	}

@@ -15,7 +15,7 @@ func NewLinodeNodeBalancersListTool(cfg *config.Config) (mcp.Tool, func(ctx cont
 	return newListTool(cfg,
 		"linode_nodebalancers_list",
 		"Lists all NodeBalancers on your account. Can filter by region or label.",
-		func(ctx context.Context, client *linode.RetryableClient) ([]linode.NodeBalancer, error) {
+		func(ctx context.Context, client *linode.Client) ([]linode.NodeBalancer, error) {
 			return client.ListNodeBalancers(ctx)
 		},
 		[]listFilterParam[linode.NodeBalancer]{
@@ -65,5 +65,5 @@ func handleLinodeNodeBalancerGetRequest(ctx context.Context, request *mcp.CallTo
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve NodeBalancer %d: %v", nodeBalancerID, err)), nil
 	}
 
-	return marshalToolResponse(nodeBalancer)
+	return MarshalToolResponse(nodeBalancer)
 }

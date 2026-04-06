@@ -5,12 +5,17 @@ import (
 	"net/http"
 )
 
+const (
+	endpointProfile = "/profile"
+	endpointAccount = "/account"
+)
+
 // GetProfile retrieves the authenticated user's profile from the Linode API.
-func (c *Client) GetProfile(ctx context.Context) (*Profile, error) {
+func (c *Client) httpGetProfile(ctx context.Context) (*Profile, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, "/profile", nil)
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointProfile, nil)
 	if err != nil {
 		return nil, &NetworkError{Operation: "GetProfile", Err: err}
 	}
@@ -26,11 +31,11 @@ func (c *Client) GetProfile(ctx context.Context) (*Profile, error) {
 }
 
 // GetAccount retrieves the authenticated user's account information from the Linode API.
-func (c *Client) GetAccount(ctx context.Context) (*Account, error) {
+func (c *Client) httpGetAccount(ctx context.Context) (*Account, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, "/account", nil)
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointAccount, nil)
 	if err != nil {
 		return nil, &NetworkError{Operation: "GetAccount", Err: err}
 	}

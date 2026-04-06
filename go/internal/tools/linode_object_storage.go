@@ -49,7 +49,7 @@ func handleObjectStorageBucketsListRequest(ctx context.Context, request *mcp.Cal
 		Buckets: buckets,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeObjectStorageBucketGetTool creates a tool for getting a specific bucket.
@@ -98,7 +98,7 @@ func handleObjectStorageBucketGetRequest(ctx context.Context, request *mcp.CallT
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve bucket '%s' in region '%s': %v", label, region, err)), nil
 	}
 
-	return marshalToolResponse(bucket)
+	return MarshalToolResponse(bucket)
 }
 
 // NewLinodeObjectStorageBucketContentsTool creates a tool for listing objects in a bucket.
@@ -210,7 +210,7 @@ func formatBucketContentsResponse(objects []linode.ObjectStorageObject, isTrunca
 		response.Filter = strings.Join(filters, ", ")
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeObjectStorageClustersListTool creates a tool for listing Object Storage clusters.
@@ -248,7 +248,7 @@ func handleObjectStorageClustersListRequest(ctx context.Context, request *mcp.Ca
 		Clusters: clusters,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeObjectStorageTypeListTool creates a tool for listing Object Storage types and pricing.
@@ -286,10 +286,8 @@ func handleObjectStorageTypeListRequest(ctx context.Context, request *mcp.CallTo
 		Types: types,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
-
-// Phase 2: Read-Only Access Key & Transfer Tools
 
 // NewLinodeObjectStorageKeysListTool creates a tool for listing Object Storage access keys.
 func NewLinodeObjectStorageKeysListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
@@ -326,7 +324,7 @@ func handleObjectStorageKeysListRequest(ctx context.Context, request *mcp.CallTo
 		Keys:  keys,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeObjectStorageKeyGetTool creates a tool for getting a specific access key.
@@ -371,7 +369,7 @@ func handleObjectStorageKeyGetRequest(ctx context.Context, request *mcp.CallTool
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve access key %d: %v", keyID, err)), nil
 	}
 
-	return marshalToolResponse(key)
+	return MarshalToolResponse(key)
 }
 
 // NewLinodeObjectStorageTransferTool creates a tool for getting Object Storage transfer usage.
@@ -401,7 +399,7 @@ func handleObjectStorageTransferRequest(ctx context.Context, request *mcp.CallTo
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Object Storage transfer usage: %v", err)), nil
 	}
 
-	return marshalToolResponse(transfer)
+	return MarshalToolResponse(transfer)
 }
 
 // NewLinodeObjectStorageBucketAccessGetTool creates a tool for getting bucket ACL/CORS settings.
@@ -450,7 +448,7 @@ func handleObjectStorageBucketAccessGetRequest(ctx context.Context, request *mcp
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve bucket access for '%s' in region '%s': %v", label, region, err)), nil
 	}
 
-	return marshalToolResponse(access)
+	return MarshalToolResponse(access)
 }
 
 // NewLinodeObjectStoragePresignedURLTool creates a tool for generating presigned URLs for objects.
@@ -532,7 +530,7 @@ func handleObjectStoragePresignedURLRequest(ctx context.Context, request *mcp.Ca
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to generate presigned URL for '%s' in bucket '%s': %v", name, label, err)), nil
 	}
 
-	return marshalToolResponse(result)
+	return MarshalToolResponse(result)
 }
 
 // NewLinodeObjectStorageObjectACLGetTool creates a tool for getting an object's ACL.
@@ -590,7 +588,7 @@ func handleObjectStorageObjectACLGetRequest(ctx context.Context, request *mcp.Ca
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve ACL for object '%s' in bucket '%s': %v", name, label, err)), nil
 	}
 
-	return marshalToolResponse(acl)
+	return MarshalToolResponse(acl)
 }
 
 // NewLinodeObjectStorageSSLGetTool creates a tool for checking a bucket's SSL certificate status.
@@ -639,5 +637,5 @@ func handleObjectStorageSSLGetRequest(ctx context.Context, request *mcp.CallTool
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve SSL status for bucket '%s' in region '%s': %v", label, region, err)), nil
 	}
 
-	return marshalToolResponse(ssl)
+	return MarshalToolResponse(ssl)
 }

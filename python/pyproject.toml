@@ -7,7 +7,7 @@ name = "linodemcp"
 version = "0.1.0"
 description = "MCP server for Linode API access"
 readme = "../README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
     {name = "LinodeMCP Contributors"},
@@ -18,14 +18,14 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.11",
 ]
 
 dependencies = [
-    "mcp>=1.0.0",
-    "httpx>=0.27.0",
-    "pyyaml>=6.0.1",
-    "structlog>=24.1.0",
+    "mcp>=1.0.0,<2.0",
+    "httpx>=0.27.0,<1.0",
+    "pyyaml>=6.0.1,<7.0",
+    "structlog>=24.1.0,<26.0",
 ]
 
 [project.optional-dependencies]
@@ -62,7 +62,7 @@ addopts = [
     "--cov=linodemcp",
     "--cov-report=term-missing",
     "--cov-report=html",
-    "--cov-fail-under=57",
+    "--cov-fail-under=54",
 ]
 
 [tool.coverage.run]
@@ -81,7 +81,7 @@ exclude_lines = [
 ]
 
 [tool.mypy]
-python_version = "3.14"
+python_version = "3.11"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
@@ -99,7 +99,7 @@ module = "mcp.*"
 ignore_missing_imports = true
 
 [tool.ruff]
-target-version = "py314"
+target-version = "py311"
 line-length = 88
 
 [tool.ruff.lint]

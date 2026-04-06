@@ -63,7 +63,7 @@ func handleLinodeInstanceBootRequest(ctx context.Context, request *mcp.CallToolR
 		InstanceID: instanceID,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeInstanceRebootTool creates a tool for rebooting a Linode instance.
@@ -119,7 +119,7 @@ func handleLinodeInstanceRebootRequest(ctx context.Context, request *mcp.CallToo
 		InstanceID: instanceID,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeInstanceShutdownTool creates a tool for shutting down a Linode instance.
@@ -166,7 +166,7 @@ func handleLinodeInstanceShutdownRequest(ctx context.Context, request *mcp.CallT
 		InstanceID: instanceID,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeInstanceCreateTool creates a tool for creating a new Linode instance.
@@ -221,7 +221,7 @@ func handleLinodeInstanceCreateRequest(ctx context.Context, request *mcp.CallToo
 	backupsEnabled := request.GetBool("backups_enabled", false)
 	privateIP := request.GetBool("private_ip", false)
 
-	if result := requireConfirm(request, "This operation creates a billable resource. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This operation creates a billable resource. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -265,7 +265,7 @@ func handleLinodeInstanceCreateRequest(ctx context.Context, request *mcp.CallToo
 		Instance: instance,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeInstanceDeleteTool creates a tool for deleting a Linode instance.
@@ -295,7 +295,7 @@ func NewLinodeInstanceDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context
 func handleLinodeInstanceDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	instanceID := request.GetInt("instance_id", 0)
 
-	if result := requireConfirm(request, "This operation is destructive and irreversible. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This operation is destructive and irreversible. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -309,18 +309,18 @@ func handleLinodeInstanceDeleteRequest(ctx context.Context, request *mcp.CallToo
 	}
 
 	if err := client.DeleteInstance(ctx, instanceID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to delete instance %d: %v", instanceID, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove instance %d: %v", instanceID, err)), nil
 	}
 
 	response := struct {
 		Message    string `json:"message"`
 		InstanceID int    `json:"instance_id"`
 	}{
-		Message:    fmt.Sprintf("Instance %d deleted successfully", instanceID),
+		Message:    fmt.Sprintf("Instance %d removed successfully", instanceID),
 		InstanceID: instanceID,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeInstanceResizeTool creates a tool for resizing a Linode instance.
@@ -350,7 +350,7 @@ func handleLinodeInstanceResizeRequest(ctx context.Context, request *mcp.CallToo
 	allowAutoDisk := request.GetBool("allow_auto_disk", false)
 	migrationType := request.GetString("migration_type", "")
 
-	if result := requireConfirm(request, "This operation causes downtime and may affect billing. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This operation causes downtime and may affect billing. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -387,5 +387,5 @@ func handleLinodeInstanceResizeRequest(ctx context.Context, request *mcp.CallToo
 		NewType:    instanceType,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }

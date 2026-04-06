@@ -43,7 +43,7 @@ func handleLinodeSSHKeysListRequest(ctx context.Context, request *mcp.CallToolRe
 	}
 
 	if labelContains != "" {
-		keys = filterByContains(keys, labelContains, func(k linode.SSHKey) string {
+		keys = FilterByContains(keys, labelContains, func(k linode.SSHKey) string {
 			return k.Label
 		})
 	}
@@ -61,5 +61,5 @@ func handleLinodeSSHKeysListRequest(ctx context.Context, request *mcp.CallToolRe
 		response.Filter = "label_contains=" + labelContains
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }

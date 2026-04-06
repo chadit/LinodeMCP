@@ -24,14 +24,6 @@ linters:
           - err113
           - gosec
           - dupl
-          - testpackage
-      # export_test.go files use the standard Go pattern of exporting unexported
-      # functions for testing. revive confusing-naming flags these by design, but
-      # the pattern is intentional and idiomatic.
-      - path: export_test\.go
-        text: "confusing-naming"
-        linters:
-          - revive
 
   settings:
     staticcheck:
@@ -75,31 +67,8 @@ linters:
         - return
       # Allow common patterns
       ignored-numbers:
-        - "0"
-        - "1"
-        - "2"
-        - "3"
-        - "4"
-        - "5"
-        - "6"
-        - "7"
-        - "8"
-        - "9"
-        - "10"
-        - "11"
-        - "12"
-        - "13"
-        - "14"
-        - "15"
-        - "16"
-        - "17"
-        - "18"
-        - "19"
-        - "20"
         - "60" # seconds/minutes
-        - "100"
         - "130" # SIGINT exit code
-        - "1000"
         - "1024" # common buffer size
         - "4096" # common buffer size
       ignored-functions:

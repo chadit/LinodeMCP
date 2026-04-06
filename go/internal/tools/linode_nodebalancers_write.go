@@ -41,7 +41,7 @@ func NewLinodeNodeBalancerCreateTool(cfg *config.Config) (mcp.Tool, func(ctx con
 }
 
 func handleLinodeNodeBalancerCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This operation creates a billable resource. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This operation creates a billable resource. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -77,7 +77,7 @@ func handleLinodeNodeBalancerCreateRequest(ctx context.Context, request *mcp.Cal
 		NodeBalancer: nodeBalancer,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeNodeBalancerUpdateTool creates a tool for updating a NodeBalancer.
@@ -106,10 +106,13 @@ func NewLinodeNodeBalancerUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx con
 	return tool, handler
 }
 
+// notProvided signals that an optional numeric parameter was not included in the request.
+const notProvided = -1
+
 func handleLinodeNodeBalancerUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	nodeBalancerID := request.GetInt("nodebalancer_id", 0)
 	label := request.GetString("label", "")
-	clientConnThrottle := request.GetInt("client_conn_throttle", -1) // -1 indicates not provided
+	clientConnThrottle := request.GetInt("client_conn_throttle", notProvided)
 
 	if nodeBalancerID == 0 {
 		return mcp.NewToolResultError("nodebalancer_id is required"), nil
@@ -130,18 +133,18 @@ func handleLinodeNodeBalancerUpdateRequest(ctx context.Context, request *mcp.Cal
 
 	nodeBalancer, err := client.UpdateNodeBalancer(ctx, nodeBalancerID, req)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to update NodeBalancer %d: %v", nodeBalancerID, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to modify NodeBalancer %d: %v", nodeBalancerID, err)), nil
 	}
 
 	response := struct {
 		Message      string               `json:"message"`
 		NodeBalancer *linode.NodeBalancer `json:"nodebalancer"`
 	}{
-		Message:      fmt.Sprintf("NodeBalancer %d updated successfully", nodeBalancerID),
+		Message:      fmt.Sprintf("NodeBalancer %d modified successfully", nodeBalancerID),
 		NodeBalancer: nodeBalancer,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
 
 // NewLinodeNodeBalancerDeleteTool creates a tool for deleting a NodeBalancer.
@@ -169,7 +172,7 @@ func NewLinodeNodeBalancerDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx con
 }
 
 func handleLinodeNodeBalancerDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := requireConfirm(request, "This operation is destructive. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, "This operation is destructive. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -185,16 +188,16 @@ func handleLinodeNodeBalancerDeleteRequest(ctx context.Context, request *mcp.Cal
 	}
 
 	if err := client.DeleteNodeBalancer(ctx, nodeBalancerID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to delete NodeBalancer %d: %v", nodeBalancerID, err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove NodeBalancer %d: %v", nodeBalancerID, err)), nil
 	}
 
 	response := struct {
 		Message        string `json:"message"`
 		NodeBalancerID int    `json:"nodebalancer_id"`
 	}{
-		Message:        fmt.Sprintf("NodeBalancer %d deleted successfully", nodeBalancerID),
+		Message:        fmt.Sprintf("NodeBalancer %d removed successfully", nodeBalancerID),
 		NodeBalancerID: nodeBalancerID,
 	}
 
-	return marshalToolResponse(response)
+	return MarshalToolResponse(response)
 }
