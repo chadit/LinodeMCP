@@ -38,6 +38,18 @@ dev = [
     "types-PyYAML>=6.0.12",
 ]
 
+observability = [
+    "opentelemetry-api>=1.28.0",
+    "opentelemetry-sdk>=1.28.0",
+    "opentelemetry-exporter-otlp>=1.28.0",
+    "opentelemetry-exporter-prometheus>=0.49b0",
+    "opentelemetry-instrumentation-runtime>=0.49b0",
+    "opentelemetry-instrumentation-system-metrics>=0.49b0",
+    "opentelemetry-instrumentation-mcp>=0.1.0",
+    "opentelemetry-instrumentation-httpx>=0.49b0",
+    "prometheus-client>=0.21.0",
+]
+
 [project.scripts]
 linodemcp = "linodemcp.main:main"
 
@@ -96,6 +108,14 @@ strict_equality = true
 
 [[tool.mypy.overrides]]
 module = "mcp.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "opentelemetry.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "yaml"
 ignore_missing_imports = true
 
 [tool.ruff]

@@ -32,7 +32,7 @@ def test_config_defaults() -> None:
     assert cfg.server.log_level == "info"
     assert cfg.server.transport == "stdio"
     assert cfg.server.port == 8080
-    assert cfg.metrics.port == 9090
+    assert cfg.observability.metrics.prometheus_port == 8888
     assert cfg.resilience.max_retries == 3
 
 

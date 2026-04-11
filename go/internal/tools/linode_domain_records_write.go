@@ -203,7 +203,7 @@ func handleLinodeDomainRecordUpdateRequest(ctx context.Context, request *mcp.Cal
 
 	record, err := client.UpdateDomainRecord(ctx, domainID, recordID, &req)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to modify record %d: %v", recordID, err)), nil //nolint:cairnlint // not a SQL query, just a response message
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to modify record %d: %v", recordID, err)), nil
 	}
 
 	response := struct {
@@ -211,7 +211,7 @@ func handleLinodeDomainRecordUpdateRequest(ctx context.Context, request *mcp.Cal
 		DomainID int                  `json:"domain_id"`
 		Record   *linode.DomainRecord `json:"record"`
 	}{
-		Message:  fmt.Sprintf("Record %d modified successfully", recordID), //nolint:cairnlint // not a SQL query, just a response message
+		Message:  fmt.Sprintf("Record %d modified successfully", recordID),
 		DomainID: domainID,
 		Record:   record,
 	}

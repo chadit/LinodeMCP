@@ -13,6 +13,7 @@ from linodemcp.config import (
     EnvironmentConfig,
     LinodeConfig,
     MetricsConfig,
+    ObservabilityConfig,
     ResilienceConfig,
     ServerConfig,
     TracingConfig,
@@ -72,16 +73,21 @@ def sample_config() -> Config:
             host="127.0.0.1",
             port=8080,
         ),
-        metrics=MetricsConfig(
-            enabled=True,
-            port=9090,
-            path="/metrics",
-        ),
-        tracing=TracingConfig(
-            enabled=False,
-            exporter="otlp",
-            endpoint="localhost:4317",
-            sample_rate=1.0,
+        observability=ObservabilityConfig(
+            metrics=MetricsConfig(
+                enabled=True,
+                runtime=True,
+                host=True,
+                prometheus_port=8888,
+                prometheus_path="/metrics",
+            ),
+            tracing=TracingConfig(
+                enabled=False,
+                exporter="otlp",
+                endpoint="localhost:4317",
+                sample_rate=1.0,
+                insecure=True,
+            ),
         ),
         resilience=ResilienceConfig(
             rate_limit_per_minute=700,

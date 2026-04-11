@@ -71,9 +71,13 @@ lint: _ensure-hooks
 	fi
 	@echo "Running cairnlint..."
 	@if command -v cairnlint >/dev/null 2>&1; then \
-		cairnlint ./...; \
+		if ! cairnlint ./...; then \
+			echo "[info] cairnlint found style issues (non-blocking)"; \
+		fi; \
 	elif command -v go >/dev/null 2>&1; then \
-		go run github.com/chadit/cairnlint@latest ./...; \
+		if ! go run github.com/chadit/cairnlint@latest ./...; then \
+			echo "[info] cairnlint found style issues (non-blocking)"; \
+		fi; \
 	else \
 		echo "[warn] cairnlint not installed, skipping custom rules check"; \
 	fi

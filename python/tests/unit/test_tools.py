@@ -5815,8 +5815,7 @@ async def test_execute_tool_empty_token(sample_config: Config) -> None:
 
     bad_config = Config(
         server=sample_config.server,
-        metrics=sample_config.metrics,
-        tracing=sample_config.tracing,
+        observability=sample_config.observability,
         resilience=sample_config.resilience,
         environments={
             "default": EnvironmentConfig(

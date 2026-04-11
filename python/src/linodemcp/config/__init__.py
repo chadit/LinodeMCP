@@ -52,8 +52,10 @@ class MetricsConfig:
     """Prometheus metrics settings."""
 
     enabled: bool = True
-    port: int = 9090
-    path: str = "/metrics"
+    runtime: bool = True
+    host: bool = True
+    prometheus_port: int = 8888
+    prometheus_path: str = "/metrics"
 
 
 @dataclass
@@ -64,6 +66,8 @@ class TracingConfig:
     exporter: str = "otlp"
     endpoint: str = "localhost:4317"
     sample_rate: float = 1.0
+    insecure: bool = True
+    headers: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -76,6 +80,33 @@ class ResilienceConfig:
     max_retries: int = 3
     base_retry_delay: int = 1
     max_retry_delay: int = 30
+
+
+@dataclass
+class LoggingConfig:
+    """Logging configuration."""
+
+    level: str = "info"
+    format: str = "json"
+
+
+@dataclass
+class HealthConfig:
+    """Health check configuration."""
+
+    enabled: bool = True
+    port: int = 8889
+    path: str = "/healthz"
+
+
+@dataclass
+class ObservabilityConfig:
+    """Observability settings combining tracing, metrics, logging, and health."""
+
+    tracing: TracingConfig = field(default_factory=TracingConfig)
+    metrics: MetricsConfig = field(default_factory=MetricsConfig)
+    logging: LoggingConfig = field(default_factory=LoggingConfig)
+    health: HealthConfig = field(default_factory=HealthConfig)
 
 
 @dataclass
@@ -99,8 +130,7 @@ class Config:
     """Full LinodeMCP configuration."""
 
     server: ServerConfig = field(default_factory=ServerConfig)
-    metrics: MetricsConfig = field(default_factory=MetricsConfig)
-    tracing: TracingConfig = field(default_factory=TracingConfig)
+    observability: ObservabilityConfig = field(default_factory=ObservabilityConfig)
     resilience: ResilienceConfig = field(default_factory=ResilienceConfig)
     environments: dict[str, EnvironmentConfig] = field(
         default_factory=dict[str, EnvironmentConfig]
@@ -342,17 +372,33 @@ def _data_to_config(data: dict[str, Any]) -> Config:
         port=data.get("server", {}).get("port", 8080),
     )
 
-    metrics = MetricsConfig(
-        enabled=data.get("metrics", {}).get("enabled", True),
-        port=data.get("metrics", {}).get("port", 9090),
-        path=data.get("metrics", {}).get("path", "/metrics"),
-    )
+    tracing_data = data.get("observability", {}).get("tracing", {})
+    metrics_data = data.get("observability", {}).get("metrics", {})
+    logging_data = data.get("observability", {}).get("logging", {})
+    health_data = data.get("observability", {}).get("health", {})
 
-    tracing = TracingConfig(
-        enabled=data.get("tracing", {}).get("enabled", False),
-        exporter=data.get("tracing", {}).get("exporter", "otlp"),
-        endpoint=data.get("tracing", {}).get("endpoint", "localhost:4317"),
-        sample_rate=data.get("tracing", {}).get("sampleRate", 1.0),
+    observability = ObservabilityConfig(
+        tracing=TracingConfig(
+            enabled=tracing_data.get("enabled", False),
+            endpoint=tracing_data.get("endpoint", "localhost:4317"),
+            sample_rate=tracing_data.get("sampleRate", 1.0),
+        ),
+        metrics=MetricsConfig(
+            enabled=metrics_data.get("enabled", True),
+            runtime=metrics_data.get("runtime", True),
+            host=metrics_data.get("host", True),
+            prometheus_port=metrics_data.get("prometheusPort", 8888),
+            prometheus_path=metrics_data.get("prometheusPath", "/metrics"),
+        ),
+        logging=LoggingConfig(
+            level=logging_data.get("level", "info"),
+            format=logging_data.get("format", "json"),
+        ),
+        health=HealthConfig(
+            enabled=health_data.get("enabled", True),
+            port=health_data.get("port", 8889),
+            path=health_data.get("path", "/healthz"),
+        ),
     )
 
     resilience = ResilienceConfig(
@@ -382,8 +428,7 @@ def _data_to_config(data: dict[str, Any]) -> Config:
 
     return Config(
         server=server,
-        metrics=metrics,
-        tracing=tracing,
+        observability=observability,
         resilience=resilience,
         environments=environments,
     )

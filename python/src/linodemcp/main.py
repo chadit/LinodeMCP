@@ -7,6 +7,15 @@ import sys
 import structlog
 
 from linodemcp.config import ConfigError, load
+from linodemcp.observability import (
+    get_logger,
+)
+from linodemcp.observability import (
+    init as init_observability,
+)
+from linodemcp.observability import (
+    shutdown as shutdown_observability,
+)
 from linodemcp.server import Server
 from linodemcp.version import get_version_info
 
@@ -18,7 +27,7 @@ structlog.configure(
         structlog.processors.StackInfoRenderer(),
         structlog.dev.set_exc_info,
         structlog.processors.TimeStamper(fmt="iso"),
-        structlog.dev.ConsoleRenderer(),
+        structlog.processors.JSONRenderer(),
     ],
     wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
     context_class=dict,
@@ -37,10 +46,18 @@ async def async_main() -> int:
         logger.exception("failed to load configuration", error=str(e))
         return 1
 
+    # Initialize observability (tracing, metrics, logging, health)
+    try:
+        init_observability(cfg.observability)
+    except Exception as e:
+        logger.warning("failed to initialize observability", error=str(e))
+        # Continue without observability
+
     version_info = get_version_info()
 
-    logger.info("starting LinodeMCP server")
-    logger.info(
+    log = get_logger()
+    log.info("starting LinodeMCP server")
+    log.info(
         "server configuration",
         version=version_info.version,
         server=cfg.server.name,
@@ -52,10 +69,16 @@ async def async_main() -> int:
         server = Server(cfg)
         await server.start()
     except Exception as e:
-        logger.exception("server error", error=str(e))
+        log.exception("server error", error=str(e))
         return 1
 
-    logger.info("server shutdown complete")
+    # Shutdown observability
+    try:
+        shutdown_observability()
+    except Exception as e:
+        log.warning("observability shutdown error", error=str(e))
+
+    log.info("server shutdown complete")
     return 0
 
 

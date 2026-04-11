@@ -4,14 +4,19 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/chadit/LinodeMCP/internal/appinfo"
 	"github.com/chadit/LinodeMCP/internal/config"
+	"github.com/chadit/LinodeMCP/internal/observability"
 	"github.com/chadit/LinodeMCP/internal/server"
+)
+
+const (
+	shutdownTimeout = 10 * time.Second
 )
 
 func main() {
@@ -27,12 +32,17 @@ func run() int {
 		return 1
 	}
 
+	// Initialize observability (tracing, metrics, logging, health)
+	if err := observability.Init(&cfg.Observability); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize observability: %v\n", err)
+		// Continue without observability
+	}
+
 	versionInfo := appinfo.Get()
 
-	log.Printf("Starting LinodeMCP Server")
-	log.Printf("Version: %s", versionInfo.Version)
-	log.Printf("Server: %s", cfg.Server.Name)
-	log.Printf("Platform: %s", versionInfo.Platform)
+	observability.Logger().Info("starting LinodeMCP Server")
+	observability.Logger().Info("version info", "version", versionInfo.Version, "platform", versionInfo.Platform)
+	observability.Logger().Info("server config", "name", cfg.Server.Name)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -42,24 +52,32 @@ func run() int {
 
 	go func() {
 		<-sigChan
-		log.Printf("Shutdown signal received")
+		observability.Logger().Info("shutdown signal received")
 		cancel()
 	}()
 
 	srv, err := server.New(cfg)
 	if err != nil {
-		log.Printf("Failed to create server: %v", err)
+		observability.Logger().Error("failed to create server", "error", err)
 
 		return 1
 	}
 
 	if err := srv.Start(ctx); err != nil {
-		log.Printf("Server error: %v", err)
+		observability.Logger().Error("server error", "error", err)
 
 		return 1
 	}
 
-	log.Printf("Server shutdown complete")
+	// Shutdown observability
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer shutdownCancel()
+
+	if err := observability.Shutdown(shutdownCtx); err != nil {
+		observability.Logger().Error("observability shutdown error", "error", err)
+	}
+
+	observability.Logger().Info("server shutdown complete")
 
 	return 0
 }
