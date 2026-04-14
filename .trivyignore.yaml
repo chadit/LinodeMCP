@@ -1,0 +1,12 @@
+# Trivy misconfiguration ignore rules.
+# Format: https://aquasecurity.github.io/trivy/latest/docs/references/configuration/config-file/#ignore
+#
+# We intentionally use `alpine:latest` for the runtime stage because the binary
+# is statically linked (CGO_ENABLED=0) and only needs ca-certificates. Pinning
+# to a specific digest would block us from picking up Alpine security patches
+# automatically.
+misconfigurations:
+  - id: DS-0001
+    paths:
+      - "go/Dockerfile"
+    statement: "Alpine latest is intentional for static binary - picks up patches automatically"

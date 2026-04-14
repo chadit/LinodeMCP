@@ -231,7 +231,7 @@ async def test_handle_linode_profile(
         uid=sample_profile_data["uid"],
     )
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.get_profile.return_value = mock_profile
         mock_client.__aenter__.return_value = mock_client
@@ -257,7 +257,7 @@ async def test_handle_linode_profile_with_environment(sample_config: Config) -> 
         uid=99999,
     )
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.get_profile.return_value = mock_profile
         mock_client.__aenter__.return_value = mock_client
@@ -307,7 +307,7 @@ async def test_handle_linode_instances_list(
         watchdog_enabled=sample_instance_data["watchdog_enabled"],
     )
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_instances.return_value = [mock_instance]
         mock_client.__aenter__.return_value = mock_client
@@ -377,7 +377,7 @@ async def test_handle_linode_instances_list_with_status_filter(
         watchdog_enabled=False,
     )
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_instances.return_value = [running_instance, stopped_instance]
         mock_client.__aenter__.return_value = mock_client
@@ -397,7 +397,7 @@ async def test_handle_linode_instances_list_with_status_filter(
 
 async def test_handle_linode_instances_list_error(sample_config: Config) -> None:
     """Test linode_instances_list tool error handling."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_instances.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
@@ -444,7 +444,7 @@ async def test_handle_linode_instance_get(
         watchdog_enabled=sample_instance_data["watchdog_enabled"],
     )
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.get_instance.return_value = mock_instance
         mock_client.__aenter__.return_value = mock_client
@@ -502,7 +502,7 @@ async def test_handle_linode_account(sample_config: Config) -> None:
         active_promotions=[],
     )
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.get_account.return_value = mock_account
         mock_client.__aenter__.return_value = mock_client
@@ -540,7 +540,7 @@ async def test_handle_linode_regions_list(sample_config: Config) -> None:
         ),
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_regions.return_value = mock_regions
         mock_client.__aenter__.return_value = mock_client
@@ -587,7 +587,7 @@ async def test_handle_linode_regions_list_filter_country(sample_config: Config) 
         ),
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_regions.return_value = mock_regions
         mock_client.__aenter__.return_value = mock_client
@@ -636,7 +636,7 @@ async def test_handle_linode_types_list(sample_config: Config) -> None:
         ),
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_types.return_value = mock_types
         mock_client.__aenter__.return_value = mock_client
@@ -684,7 +684,7 @@ async def test_handle_linode_types_list_filter_class(sample_config: Config) -> N
         ),
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_types.return_value = mock_types
         mock_client.__aenter__.return_value = mock_client
@@ -732,7 +732,7 @@ async def test_handle_linode_volumes_list(sample_config: Config) -> None:
         ),
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_volumes.return_value = mock_volumes
         mock_client.__aenter__.return_value = mock_client
@@ -780,7 +780,7 @@ async def test_handle_linode_volumes_list_filter_region(sample_config: Config) -
         ),
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_volumes.return_value = mock_volumes
         mock_client.__aenter__.return_value = mock_client
@@ -834,7 +834,7 @@ async def test_handle_linode_images_list(sample_config: Config) -> None:
         ),
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_images.return_value = mock_images
         mock_client.__aenter__.return_value = mock_client
@@ -888,7 +888,7 @@ async def test_handle_linode_images_list_filter_public(sample_config: Config) ->
         ),
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_images.return_value = mock_images
         mock_client.__aenter__.return_value = mock_client
@@ -905,7 +905,7 @@ async def test_handle_linode_images_list_filter_public(sample_config: Config) ->
 
 async def test_handle_linode_account_error(sample_config: Config) -> None:
     """Test linode_account tool error handling."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.get_account.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
@@ -920,7 +920,7 @@ async def test_handle_linode_account_error(sample_config: Config) -> None:
 
 async def test_handle_linode_regions_list_error(sample_config: Config) -> None:
     """Test linode_regions_list tool error handling."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_regions.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
@@ -935,7 +935,7 @@ async def test_handle_linode_regions_list_error(sample_config: Config) -> None:
 
 async def test_handle_linode_types_list_error(sample_config: Config) -> None:
     """Test linode_types_list tool error handling."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_types.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
@@ -950,7 +950,7 @@ async def test_handle_linode_types_list_error(sample_config: Config) -> None:
 
 async def test_handle_linode_volumes_list_error(sample_config: Config) -> None:
     """Test linode_volumes_list tool error handling."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_volumes.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
@@ -965,7 +965,7 @@ async def test_handle_linode_volumes_list_error(sample_config: Config) -> None:
 
 async def test_handle_linode_images_list_error(sample_config: Config) -> None:
     """Test linode_images_list tool error handling."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_images.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
@@ -980,7 +980,7 @@ async def test_handle_linode_images_list_error(sample_config: Config) -> None:
 
 async def test_handle_linode_instance_get_error(sample_config: Config) -> None:
     """Test linode_instance_get tool error handling."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.get_instance.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
@@ -1042,7 +1042,7 @@ async def test_handle_linode_volumes_list_filter_label(sample_config: Config) ->
         ),
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_volumes.return_value = mock_volumes
         mock_client.__aenter__.return_value = mock_client
@@ -1084,7 +1084,7 @@ async def test_handle_linode_regions_list_filter_capability(
         ),
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_regions.return_value = mock_regions
         mock_client.__aenter__.return_value = mock_client
@@ -1121,7 +1121,7 @@ async def test_handle_linode_sshkeys_list(sample_config: Config) -> None:
         ),
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_ssh_keys.return_value = mock_keys
         mock_client.__aenter__.return_value = mock_client
@@ -1153,7 +1153,7 @@ async def test_handle_linode_sshkeys_list_filter_label(sample_config: Config) ->
         ),
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_ssh_keys.return_value = mock_keys
         mock_client.__aenter__.return_value = mock_client
@@ -1171,7 +1171,7 @@ async def test_handle_linode_sshkeys_list_filter_label(sample_config: Config) ->
 
 async def test_handle_linode_sshkeys_list_error(sample_config: Config) -> None:
     """Test linode_sshkeys_list tool error handling."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_ssh_keys.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
@@ -1211,7 +1211,7 @@ async def test_handle_linode_domains_list(sample_config: Config) -> None:
         ),
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_domains.return_value = mock_domains
         mock_client.__aenter__.return_value = mock_client
@@ -1228,7 +1228,7 @@ async def test_handle_linode_domains_list(sample_config: Config) -> None:
 
 async def test_handle_linode_domains_list_error(sample_config: Config) -> None:
     """Test linode_domains_list tool error handling."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_domains.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
@@ -1255,7 +1255,7 @@ async def test_handle_linode_domain_get(sample_config: Config) -> None:
         updated="2024-01-15T12:00:00",
     )
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.get_domain.return_value = mock_domain
         mock_client.__aenter__.return_value = mock_client
@@ -1279,7 +1279,7 @@ async def test_handle_linode_domain_get_missing_id(sample_config: Config) -> Non
 
 async def test_handle_linode_domain_get_error(sample_config: Config) -> None:
     """Test linode_domain_get tool error handling."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.get_domain.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
@@ -1321,7 +1321,7 @@ async def test_handle_linode_domain_records_list(sample_config: Config) -> None:
         ),
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_domain_records.return_value = mock_records
         mock_client.__aenter__.return_value = mock_client
@@ -1369,7 +1369,7 @@ async def test_handle_linode_domain_records_list_filter_type(
         ),
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_domain_records.return_value = mock_records
         mock_client.__aenter__.return_value = mock_client
@@ -1397,7 +1397,7 @@ async def test_handle_linode_domain_records_list_missing_id(
 
 async def test_handle_linode_domain_records_list_error(sample_config: Config) -> None:
     """Test linode_domain_records_list tool error handling."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_domain_records.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
@@ -1440,7 +1440,7 @@ async def test_handle_linode_firewalls_list(sample_config: Config) -> None:
         ),
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_firewalls.return_value = mock_firewalls
         mock_client.__aenter__.return_value = mock_client
@@ -1489,7 +1489,7 @@ async def test_handle_linode_firewalls_list_filter_status(
         ),
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_firewalls.return_value = mock_firewalls
         mock_client.__aenter__.return_value = mock_client
@@ -1507,7 +1507,7 @@ async def test_handle_linode_firewalls_list_filter_status(
 
 async def test_handle_linode_firewalls_list_error(sample_config: Config) -> None:
     """Test linode_firewalls_list tool error handling."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_firewalls.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
@@ -1538,7 +1538,7 @@ async def test_handle_linode_nodebalancers_list(sample_config: Config) -> None:
         ),
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_nodebalancers.return_value = mock_nodebalancers
         mock_client.__aenter__.return_value = mock_client
@@ -1585,7 +1585,7 @@ async def test_handle_linode_nodebalancers_list_filter_region(
         ),
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_nodebalancers.return_value = mock_nodebalancers
         mock_client.__aenter__.return_value = mock_client
@@ -1603,7 +1603,7 @@ async def test_handle_linode_nodebalancers_list_filter_region(
 
 async def test_handle_linode_nodebalancers_list_error(sample_config: Config) -> None:
     """Test linode_nodebalancers_list tool error handling."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_nodebalancers.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
@@ -1632,7 +1632,7 @@ async def test_handle_linode_nodebalancer_get(sample_config: Config) -> None:
         updated="2024-01-15T12:00:00",
     )
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.get_nodebalancer.return_value = mock_nodebalancer
         mock_client.__aenter__.return_value = mock_client
@@ -1660,7 +1660,7 @@ async def test_handle_linode_nodebalancer_get_missing_id(
 
 async def test_handle_linode_nodebalancer_get_error(sample_config: Config) -> None:
     """Test linode_nodebalancer_get tool error handling."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.get_nodebalancer.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
@@ -1704,7 +1704,7 @@ async def test_handle_linode_stackscripts_list(sample_config: Config) -> None:
         ),
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_stackscripts.return_value = mock_stackscripts
         mock_client.__aenter__.return_value = mock_client
@@ -1757,7 +1757,7 @@ async def test_handle_linode_stackscripts_list_filter_mine(
         ),
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_stackscripts.return_value = mock_stackscripts
         mock_client.__aenter__.return_value = mock_client
@@ -1773,7 +1773,7 @@ async def test_handle_linode_stackscripts_list_filter_mine(
 
 async def test_handle_linode_stackscripts_list_error(sample_config: Config) -> None:
     """Test linode_stackscripts_list tool error handling."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_stackscripts.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
@@ -1798,7 +1798,7 @@ async def test_handle_linode_sshkey_create(sample_config: Config) -> None:
         created="2024-01-15T10:00:00",
     )
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.create_ssh_key.return_value = mock_key
         mock_client.__aenter__.return_value = mock_client
@@ -1825,7 +1825,7 @@ async def test_handle_linode_sshkey_create_missing_params(
 
 async def test_handle_linode_sshkey_delete(sample_config: Config) -> None:
     """Test linode_sshkey_delete tool."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.delete_ssh_key.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -1840,7 +1840,7 @@ async def test_handle_linode_sshkey_delete(sample_config: Config) -> None:
 
 async def test_handle_linode_instance_boot(sample_config: Config) -> None:
     """Test linode_instance_boot tool."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.boot_instance.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -1857,7 +1857,7 @@ async def test_handle_linode_instance_boot(sample_config: Config) -> None:
 
 async def test_handle_linode_instance_reboot(sample_config: Config) -> None:
     """Test linode_instance_reboot tool."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.reboot_instance.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -1874,7 +1874,7 @@ async def test_handle_linode_instance_reboot(sample_config: Config) -> None:
 
 async def test_handle_linode_instance_shutdown(sample_config: Config) -> None:
     """Test linode_instance_shutdown tool."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.shutdown_instance.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -1940,7 +1940,7 @@ async def test_handle_linode_instance_create(
         watchdog_enabled=sample_instance_data["watchdog_enabled"],
     )
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.create_instance.return_value = mock_instance
         mock_client.__aenter__.return_value = mock_client
@@ -1970,7 +1970,7 @@ async def test_handle_linode_instance_delete_no_confirm(sample_config: Config) -
 
 async def test_handle_linode_instance_delete(sample_config: Config) -> None:
     """Test linode_instance_delete tool."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.delete_instance.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -1997,7 +1997,7 @@ async def test_handle_linode_instance_resize_no_confirm(sample_config: Config) -
 
 async def test_handle_linode_instance_resize(sample_config: Config) -> None:
     """Test linode_instance_resize tool."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.resize_instance.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -2030,7 +2030,7 @@ async def test_handle_linode_firewall_create(sample_config: Config) -> None:
         updated="2024-01-15T10:00:00",
     )
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.create_firewall.return_value = mock_firewall
         mock_client.__aenter__.return_value = mock_client
@@ -2062,7 +2062,7 @@ async def test_handle_linode_firewall_update(sample_config: Config) -> None:
         updated="2024-01-15T12:00:00",
     )
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.update_firewall.return_value = mock_firewall
         mock_client.__aenter__.return_value = mock_client
@@ -2079,7 +2079,7 @@ async def test_handle_linode_firewall_update(sample_config: Config) -> None:
 
 async def test_handle_linode_firewall_delete(sample_config: Config) -> None:
     """Test linode_firewall_delete tool."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.delete_firewall.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -2108,7 +2108,7 @@ async def test_handle_linode_domain_create(sample_config: Config) -> None:
         updated="2024-01-15T10:00:00",
     )
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.create_domain.return_value = mock_domain
         mock_client.__aenter__.return_value = mock_client
@@ -2137,7 +2137,7 @@ async def test_handle_linode_domain_update(sample_config: Config) -> None:
         updated="2024-01-15T12:00:00",
     )
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.update_domain.return_value = mock_domain
         mock_client.__aenter__.return_value = mock_client
@@ -2154,7 +2154,7 @@ async def test_handle_linode_domain_update(sample_config: Config) -> None:
 
 async def test_handle_linode_domain_delete(sample_config: Config) -> None:
     """Test linode_domain_delete tool."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.delete_domain.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -2184,7 +2184,7 @@ async def test_handle_linode_domain_record_create(sample_config: Config) -> None
         updated="2024-01-15T10:00:00",
     )
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.create_domain_record.return_value = mock_record
         mock_client.__aenter__.return_value = mock_client
@@ -2220,7 +2220,7 @@ async def test_handle_linode_domain_record_update(sample_config: Config) -> None
         updated="2024-01-15T12:00:00",
     )
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.update_domain_record.return_value = mock_record
         mock_client.__aenter__.return_value = mock_client
@@ -2238,7 +2238,7 @@ async def test_handle_linode_domain_record_update(sample_config: Config) -> None
 
 async def test_handle_linode_domain_record_delete(sample_config: Config) -> None:
     """Test linode_domain_record_delete tool."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.delete_domain_record.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -2280,7 +2280,7 @@ async def test_handle_linode_volume_create(sample_config: Config) -> None:
         hardware_type="nvme",
     )
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.create_volume.return_value = mock_volume
         mock_client.__aenter__.return_value = mock_client
@@ -2312,7 +2312,7 @@ async def test_handle_linode_volume_attach(sample_config: Config) -> None:
         hardware_type="nvme",
     )
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.attach_volume.return_value = mock_volume
         mock_client.__aenter__.return_value = mock_client
@@ -2329,7 +2329,7 @@ async def test_handle_linode_volume_attach(sample_config: Config) -> None:
 
 async def test_handle_linode_volume_detach(sample_config: Config) -> None:
     """Test linode_volume_detach tool."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.detach_volume.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -2369,7 +2369,7 @@ async def test_handle_linode_volume_resize(sample_config: Config) -> None:
         hardware_type="nvme",
     )
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.resize_volume.return_value = mock_volume
         mock_client.__aenter__.return_value = mock_client
@@ -2394,7 +2394,7 @@ async def test_handle_linode_volume_delete_no_confirm(sample_config: Config) -> 
 
 async def test_handle_linode_volume_delete(sample_config: Config) -> None:
     """Test linode_volume_delete tool."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.delete_volume.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -2437,7 +2437,7 @@ async def test_handle_linode_nodebalancer_create(sample_config: Config) -> None:
         tags=[],
     )
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.create_nodebalancer.return_value = mock_nodebalancer
         mock_client.__aenter__.return_value = mock_client
@@ -2468,7 +2468,7 @@ async def test_handle_linode_nodebalancer_update(sample_config: Config) -> None:
         tags=[],
     )
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.update_nodebalancer.return_value = mock_nodebalancer
         mock_client.__aenter__.return_value = mock_client
@@ -2485,7 +2485,7 @@ async def test_handle_linode_nodebalancer_update(sample_config: Config) -> None:
 
 async def test_handle_linode_nodebalancer_delete(sample_config: Config) -> None:
     """Test linode_nodebalancer_delete tool."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.delete_nodebalancer.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -2519,7 +2519,7 @@ async def test_handle_linode_object_storage_buckets_list(
         },
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_object_storage_buckets.return_value = mock_buckets
         mock_client.__aenter__.return_value = mock_client
@@ -2538,7 +2538,7 @@ async def test_handle_linode_object_storage_buckets_list_error(
     sample_config: Config,
 ) -> None:
     """Test linode_object_storage_buckets_list tool error handling."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_object_storage_buckets.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
@@ -2564,7 +2564,7 @@ async def test_handle_linode_object_storage_bucket_get(
         "size": 1024000,
     }
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.get_object_storage_bucket.return_value = mock_bucket
         mock_client.__aenter__.return_value = mock_client
@@ -2625,7 +2625,7 @@ async def test_handle_linode_object_storage_bucket_contents(
         "next_marker": "",
     }
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_object_storage_bucket_contents.return_value = mock_response
         mock_client.__aenter__.return_value = mock_client
@@ -2660,7 +2660,7 @@ async def test_handle_linode_object_storage_bucket_contents_with_prefix(
         "next_marker": "images/next.png",
     }
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_object_storage_bucket_contents.return_value = mock_response
         mock_client.__aenter__.return_value = mock_client
@@ -2709,7 +2709,7 @@ async def test_handle_linode_object_storage_clusters_list(
         },
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_object_storage_clusters.return_value = mock_clusters
         mock_client.__aenter__.return_value = mock_client
@@ -2728,7 +2728,7 @@ async def test_handle_linode_object_storage_clusters_list_error(
     sample_config: Config,
 ) -> None:
     """Test linode_object_storage_clusters_list tool error handling."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_object_storage_clusters.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
@@ -2755,7 +2755,7 @@ async def test_handle_linode_object_storage_types_list(
         },
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_object_storage_types.return_value = mock_types
         mock_client.__aenter__.return_value = mock_client
@@ -2774,7 +2774,7 @@ async def test_handle_linode_object_storage_types_list_error(
     sample_config: Config,
 ) -> None:
     """Test linode_object_storage_types_list tool error handling."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_object_storage_types.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
@@ -2805,7 +2805,7 @@ async def test_handle_linode_object_storage_keys_list(
         },
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_object_storage_keys.return_value = mock_keys
         mock_client.__aenter__.return_value = mock_client
@@ -2824,7 +2824,7 @@ async def test_handle_linode_object_storage_keys_list_error(
     sample_config: Config,
 ) -> None:
     """Test linode_object_storage_keys_list tool error handling."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_object_storage_keys.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
@@ -2856,7 +2856,7 @@ async def test_handle_linode_object_storage_key_get(
         ],
     }
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.get_object_storage_key.return_value = mock_key
         mock_client.__aenter__.return_value = mock_client
@@ -2889,7 +2889,7 @@ async def test_handle_linode_object_storage_transfer(
     """Test linode_object_storage_transfer tool."""
     mock_transfer = {"used": 1073741824}
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.get_object_storage_transfer.return_value = mock_transfer
         mock_client.__aenter__.return_value = mock_client
@@ -2907,7 +2907,7 @@ async def test_handle_linode_object_storage_transfer_error(
     sample_config: Config,
 ) -> None:
     """Test linode_object_storage_transfer tool error handling."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.get_object_storage_transfer.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
@@ -2926,7 +2926,7 @@ async def test_handle_linode_object_storage_bucket_access_get(
     """Test linode_object_storage_bucket_access_get tool."""
     mock_access = {"acl": "public-read", "cors_enabled": True}
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.get_object_storage_bucket_access.return_value = mock_access
         mock_client.__aenter__.return_value = mock_client
@@ -2972,7 +2972,7 @@ async def test_handle_linode_object_storage_bucket_access_get_error(
     sample_config: Config,
 ) -> None:
     """Test linode_object_storage_bucket_access_get tool error handling."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.get_object_storage_bucket_access.side_effect = Exception(
             "API error"
@@ -3053,7 +3053,7 @@ async def test_handle_object_storage_bucket_create_success(
     sample_config: Config,
 ) -> None:
     """Test bucket create success."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.create_object_storage_bucket.return_value = {
             "label": "my-bucket",
@@ -3107,7 +3107,7 @@ async def test_handle_object_storage_bucket_delete_success(
     sample_config: Config,
 ) -> None:
     """Test bucket delete success."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.delete_object_storage_bucket.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -3166,7 +3166,7 @@ async def test_handle_object_storage_bucket_access_update_success(
     sample_config: Config,
 ) -> None:
     """Test bucket access update success."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.update_object_storage_bucket_access.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -3288,7 +3288,7 @@ async def test_object_storage_key_create_success(
     sample_config: Config,
 ) -> None:
     """Key create should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.create_object_storage_key.return_value = {
             "id": 42,
@@ -3363,7 +3363,7 @@ async def test_object_storage_key_update_success(
     sample_config: Config,
 ) -> None:
     """Key update should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.update_object_storage_key.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -3419,7 +3419,7 @@ async def test_object_storage_key_delete_success(
     sample_config: Config,
 ) -> None:
     """Key delete should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.delete_object_storage_key.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -3515,7 +3515,7 @@ async def test_presigned_url_success(
     sample_config: Config,
 ) -> None:
     """Presigned URL should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.create_presigned_url.return_value = {
             "url": "https://bucket.example.com/photo.jpg?signed=abc",
@@ -3578,7 +3578,7 @@ async def test_object_acl_get_success(
     sample_config: Config,
 ) -> None:
     """Object ACL get should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.get_object_acl.return_value = {
             "acl": "public-read",
@@ -3649,7 +3649,7 @@ async def test_object_acl_update_success(
     sample_config: Config,
 ) -> None:
     """Object ACL update should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.update_object_acl.return_value = {
             "acl": "public-read",
@@ -3680,7 +3680,7 @@ async def test_ssl_get_success(
     sample_config: Config,
 ) -> None:
     """SSL get should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.get_bucket_ssl.return_value = {
             "ssl": True,
@@ -3737,7 +3737,7 @@ async def test_ssl_delete_success(
     sample_config: Config,
 ) -> None:
     """SSL delete should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.delete_bucket_ssl.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -3814,7 +3814,7 @@ async def test_lke_cluster_delete_tool_definition() -> None:
 
 async def test_lke_clusters_list(sample_config: Config) -> None:
     """LKE clusters list should return cluster data."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.list_lke_clusters.return_value = [
             {"id": 1, "label": "my-cluster", "region": "us-east", "status": "ready"},
@@ -3831,7 +3831,7 @@ async def test_lke_clusters_list(sample_config: Config) -> None:
 
 async def test_lke_cluster_get(sample_config: Config) -> None:
     """LKE cluster get should return cluster details."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.get_lke_cluster.return_value = {
             "id": 1,
@@ -3899,7 +3899,7 @@ async def test_lke_cluster_create_missing_label(sample_config: Config) -> None:
 
 async def test_lke_cluster_create_success(sample_config: Config) -> None:
     """LKE cluster create should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.create_lke_cluster.return_value = {
             "id": 10,
@@ -3944,7 +3944,7 @@ async def test_lke_cluster_update_confirm_required(sample_config: Config) -> Non
 
 async def test_lke_cluster_update_success(sample_config: Config) -> None:
     """LKE cluster update should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.update_lke_cluster.return_value = {
             "id": 1,
@@ -3981,7 +3981,7 @@ async def test_lke_cluster_delete_confirm_required(sample_config: Config) -> Non
 
 async def test_lke_cluster_delete_success(sample_config: Config) -> None:
     """LKE cluster delete should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.delete_lke_cluster.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -4014,7 +4014,7 @@ async def test_lke_cluster_recycle_confirm_required(sample_config: Config) -> No
 
 async def test_lke_cluster_recycle_success(sample_config: Config) -> None:
     """LKE cluster recycle should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.recycle_lke_cluster.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -4049,7 +4049,7 @@ async def test_lke_cluster_regenerate_confirm_required(
 
 async def test_lke_cluster_regenerate_success(sample_config: Config) -> None:
     """LKE cluster regenerate should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.regenerate_lke_cluster.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -4069,7 +4069,7 @@ async def test_lke_cluster_regenerate_success(sample_config: Config) -> None:
 
 async def test_lke_pools_list(sample_config: Config) -> None:
     """LKE pools list should return pool data."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.list_lke_node_pools.return_value = [
             {"id": 100, "type": "g6-standard-1", "count": 3},
@@ -4088,7 +4088,7 @@ async def test_lke_pools_list(sample_config: Config) -> None:
 
 async def test_lke_pool_get(sample_config: Config) -> None:
     """LKE pool get should return pool details."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.get_lke_node_pool.return_value = {
             "id": 100,
@@ -4129,7 +4129,7 @@ async def test_lke_pool_create_confirm_required(sample_config: Config) -> None:
 
 async def test_lke_pool_create_success(sample_config: Config) -> None:
     """LKE pool create should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.create_lke_node_pool.return_value = {
             "id": 200,
@@ -4171,7 +4171,7 @@ async def test_lke_pool_update_confirm_required(sample_config: Config) -> None:
 
 async def test_lke_pool_update_success(sample_config: Config) -> None:
     """LKE pool update should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.update_lke_node_pool.return_value = {
             "id": 100,
@@ -4208,7 +4208,7 @@ async def test_lke_pool_delete_confirm_required(sample_config: Config) -> None:
 
 async def test_lke_pool_delete_success(sample_config: Config) -> None:
     """LKE pool delete should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.delete_lke_node_pool.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -4241,7 +4241,7 @@ async def test_lke_pool_recycle_confirm_required(sample_config: Config) -> None:
 
 async def test_lke_pool_recycle_success(sample_config: Config) -> None:
     """LKE pool recycle should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.recycle_lke_node_pool.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -4261,7 +4261,7 @@ async def test_lke_pool_recycle_success(sample_config: Config) -> None:
 
 async def test_lke_node_get(sample_config: Config) -> None:
     """LKE node get should return node details."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.get_lke_node.return_value = {
             "id": "lke-node-abc",
@@ -4305,7 +4305,7 @@ async def test_lke_node_delete_confirm_required(sample_config: Config) -> None:
 
 async def test_lke_node_delete_success(sample_config: Config) -> None:
     """LKE node delete should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.delete_lke_node.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -4338,7 +4338,7 @@ async def test_lke_node_recycle_confirm_required(sample_config: Config) -> None:
 
 async def test_lke_node_recycle_success(sample_config: Config) -> None:
     """LKE node recycle should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.recycle_lke_node.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -4358,7 +4358,7 @@ async def test_lke_node_recycle_success(sample_config: Config) -> None:
 
 async def test_lke_kubeconfig_get(sample_config: Config) -> None:
     """LKE kubeconfig get should return kubeconfig data."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.get_lke_kubeconfig.return_value = {
             "kubeconfig": "YXBpVmVyc2lvbjogdjEK",
@@ -4392,7 +4392,7 @@ async def test_lke_kubeconfig_delete_confirm_required(
 
 async def test_lke_kubeconfig_delete_success(sample_config: Config) -> None:
     """LKE kubeconfig delete should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.delete_lke_kubeconfig.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -4412,7 +4412,7 @@ async def test_lke_kubeconfig_delete_success(sample_config: Config) -> None:
 
 async def test_lke_dashboard_get(sample_config: Config) -> None:
     """LKE dashboard get should return dashboard URL."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.get_lke_dashboard.return_value = {
             "url": "https://dashboard.example.com",
@@ -4431,7 +4431,7 @@ async def test_lke_dashboard_get(sample_config: Config) -> None:
 
 async def test_lke_api_endpoints_list(sample_config: Config) -> None:
     """LKE API endpoints list should return endpoint data."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.list_lke_api_endpoints.return_value = [
             {"endpoint": "https://api.lke.example.com"},
@@ -4465,7 +4465,7 @@ async def test_lke_service_token_delete_confirm_required(
 
 async def test_lke_service_token_delete_success(sample_config: Config) -> None:
     """LKE service token delete should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.delete_lke_service_token.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -4485,7 +4485,7 @@ async def test_lke_service_token_delete_success(sample_config: Config) -> None:
 
 async def test_lke_acl_get(sample_config: Config) -> None:
     """LKE ACL get should return ACL data."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.get_lke_control_plane_acl.return_value = {
             "acl": {
@@ -4523,7 +4523,7 @@ async def test_lke_acl_update_confirm_required(sample_config: Config) -> None:
 
 async def test_lke_acl_update_success(sample_config: Config) -> None:
     """LKE ACL update should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.update_lke_control_plane_acl.return_value = {
             "acl": {
@@ -4566,7 +4566,7 @@ async def test_lke_acl_delete_confirm_required(sample_config: Config) -> None:
 
 async def test_lke_acl_delete_success(sample_config: Config) -> None:
     """LKE ACL delete should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.delete_lke_control_plane_acl.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -4586,7 +4586,7 @@ async def test_lke_acl_delete_success(sample_config: Config) -> None:
 
 async def test_lke_versions_list(sample_config: Config) -> None:
     """LKE versions list should return version data."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.list_lke_versions.return_value = [
             {"id": "1.29"},
@@ -4604,7 +4604,7 @@ async def test_lke_versions_list(sample_config: Config) -> None:
 
 async def test_lke_version_get(sample_config: Config) -> None:
     """LKE version get should return version details."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.get_lke_version.return_value = {"id": "1.29"}
         mock_client.__aenter__.return_value = mock_client
@@ -4629,7 +4629,7 @@ async def test_lke_version_get_missing_id(sample_config: Config) -> None:
 
 async def test_lke_types_list(sample_config: Config) -> None:
     """LKE types list should return type data."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.list_lke_types.return_value = [
             {"id": "g6-standard-1", "label": "Linode 2GB"},
@@ -4646,7 +4646,7 @@ async def test_lke_types_list(sample_config: Config) -> None:
 
 async def test_lke_tier_versions_list(sample_config: Config) -> None:
     """LKE tier versions list should return tier version data."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.list_lke_tier_versions.return_value = [
             {"id": "1.29", "tier": "standard"},
@@ -4722,7 +4722,7 @@ async def test_vpc_subnet_delete_tool_definition() -> None:
 
 async def test_vpcs_list(sample_config: Config) -> None:
     """VPCs list should return VPC data."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.list_vpcs.return_value = [
             {"id": 1, "label": "my-vpc", "region": "us-east"},
@@ -4739,7 +4739,7 @@ async def test_vpcs_list(sample_config: Config) -> None:
 
 async def test_vpc_get(sample_config: Config) -> None:
     """VPC get should return VPC details."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.get_vpc.return_value = {
             "id": 1,
@@ -4797,7 +4797,7 @@ async def test_vpc_create_missing_label(sample_config: Config) -> None:
 
 async def test_vpc_create_success(sample_config: Config) -> None:
     """VPC create should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.create_vpc.return_value = {
             "id": 10,
@@ -4838,7 +4838,7 @@ async def test_vpc_update_confirm_required(sample_config: Config) -> None:
 
 async def test_vpc_update_success(sample_config: Config) -> None:
     """VPC update should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.update_vpc.return_value = {
             "id": 1,
@@ -4875,7 +4875,7 @@ async def test_vpc_delete_confirm_required(sample_config: Config) -> None:
 
 async def test_vpc_delete_success(sample_config: Config) -> None:
     """VPC delete should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.delete_vpc.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -4895,7 +4895,7 @@ async def test_vpc_delete_success(sample_config: Config) -> None:
 
 async def test_vpc_ips_list(sample_config: Config) -> None:
     """VPC IPs list should return IP data."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.list_vpc_ips.return_value = [
             {"address": "10.0.0.1", "vpc_id": 1, "subnet_id": 1},
@@ -4912,7 +4912,7 @@ async def test_vpc_ips_list(sample_config: Config) -> None:
 
 async def test_vpc_ip_list(sample_config: Config) -> None:
     """VPC IP list should return IPs for a specific VPC."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.list_vpc_ip.return_value = [
             {"address": "10.0.0.2", "vpc_id": 1, "subnet_id": 1},
@@ -4937,7 +4937,7 @@ async def test_vpc_ip_list_missing_id(sample_config: Config) -> None:
 
 async def test_vpc_subnets_list(sample_config: Config) -> None:
     """VPC subnets list should return subnet data."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.list_vpc_subnets.return_value = [
             {"id": 1, "label": "my-subnet", "ipv4": "10.0.0.0/24"},
@@ -4956,7 +4956,7 @@ async def test_vpc_subnets_list(sample_config: Config) -> None:
 
 async def test_vpc_subnet_get(sample_config: Config) -> None:
     """VPC subnet get should return subnet details."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.get_vpc_subnet.return_value = {
             "id": 1,
@@ -5029,7 +5029,7 @@ async def test_vpc_subnet_create_missing_label(
 
 async def test_vpc_subnet_create_success(sample_config: Config) -> None:
     """VPC subnet create should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.create_vpc_subnet.return_value = {
             "id": 5,
@@ -5078,7 +5078,7 @@ async def test_vpc_subnet_update_confirm_required(
 
 async def test_vpc_subnet_update_success(sample_config: Config) -> None:
     """VPC subnet update should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.update_vpc_subnet.return_value = {
             "id": 1,
@@ -5122,7 +5122,7 @@ async def test_vpc_subnet_delete_confirm_required(
 
 async def test_vpc_subnet_delete_success(sample_config: Config) -> None:
     """VPC subnet delete should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mock_cls:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.delete_vpc_subnet.return_value = None
         mock_client.__aenter__.return_value = mock_client
@@ -5213,7 +5213,7 @@ async def test_instance_backups_list_success(
     sample_config: Config,
 ) -> None:
     """Backups list should return backup data."""
-    with patch("linodemcp.tools.RetryableClient") as mc:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mc:
         mock_client = AsyncMock()
         mock_client.list_instance_backups.return_value = {
             "automatic": [],
@@ -5250,7 +5250,7 @@ async def test_instance_backup_create_success(
     sample_config: Config,
 ) -> None:
     """Backup create should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mc:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mc:
         mock_client = AsyncMock()
         mock_client.create_instance_backup.return_value = {
             "id": 456,
@@ -5404,7 +5404,7 @@ async def test_instance_disks_list_success(
     sample_config: Config,
 ) -> None:
     """Disks list should return disk data."""
-    with patch("linodemcp.tools.RetryableClient") as mc:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mc:
         mock_client = AsyncMock()
         mock_client.list_instance_disks.return_value = [
             {"id": 1, "label": "boot", "size": 25000},
@@ -5555,7 +5555,7 @@ async def test_instance_ips_list_success(
     sample_config: Config,
 ) -> None:
     """IPs list should return IP data."""
-    with patch("linodemcp.tools.RetryableClient") as mc:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mc:
         mock_client = AsyncMock()
         mock_client.list_instance_ips.return_value = {
             "ipv4": {
@@ -5687,7 +5687,7 @@ async def test_instance_clone_success(
     sample_config: Config,
 ) -> None:
     """Clone should succeed with valid input."""
-    with patch("linodemcp.tools.RetryableClient") as mc:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mc:
         mock_client = AsyncMock()
         mock_client.clone_instance.return_value = {
             "id": 999,
@@ -5844,7 +5844,7 @@ async def test_execute_tool_client_lifecycle(sample_config: Config) -> None:
         uid=1,
     )
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.get_profile.return_value = mock_profile
         mock_client.__aenter__.return_value = mock_client
@@ -5859,7 +5859,7 @@ async def test_execute_tool_client_lifecycle(sample_config: Config) -> None:
 
 async def test_execute_tool_callback_exception(sample_config: Config) -> None:
     """execute_tool catches handler exceptions and wraps them in error text."""
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.get_profile.side_effect = RuntimeError("boom")
         mock_client.__aenter__.return_value = mock_client
@@ -5922,7 +5922,7 @@ async def test_instance_status_filter_returns_matching(
         _make_instance(3, "web-2", "running", sample_instance_data),
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_instances.return_value = instances
         mock_client.__aenter__.return_value = mock_client
@@ -5951,7 +5951,7 @@ async def test_instance_no_filter_returns_all(
         _make_instance(2, "db-1", "offline", sample_instance_data),
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_instances.return_value = instances
         mock_client.__aenter__.return_value = mock_client
@@ -6001,7 +6001,7 @@ async def test_region_capability_filter(sample_config: Config) -> None:
         ),
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_regions.return_value = regions
         mock_client.__aenter__.return_value = mock_client
@@ -6043,7 +6043,7 @@ async def test_region_no_filter_returns_all(sample_config: Config) -> None:
         ),
     ]
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_regions.return_value = regions
         mock_client.__aenter__.return_value = mock_client

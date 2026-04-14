@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # hadolint ignore=DL3007
-FROM golang:1.23 AS builder
+FROM golang:alpine AS builder
 
 WORKDIR /build
 
@@ -16,7 +16,7 @@ RUN CGO_ENABLED=0 go build \
     -o linodemcp cmd/linodemcp/main.go
 
 # hadolint ignore=DL3007
-FROM alpine:3.21
+FROM alpine:latest
 
 # hadolint ignore=DL3018
 RUN apk add --no-cache ca-certificates && \

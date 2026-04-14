@@ -67,7 +67,7 @@ async def test_config_handler_profile_dispatch(
         uid=sample_profile_data["uid"],
     )
 
-    with patch("linodemcp.tools.RetryableClient") as mock_client_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.get_profile.return_value = mock_profile
         mock_client.__aenter__.return_value = mock_client

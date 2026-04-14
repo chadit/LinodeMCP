@@ -222,7 +222,7 @@ Configure multiple Linode environments (production, staging, dev) in a single co
 
 **Python implementation:**
 
-- Python 3.14+
+- Python 3.13+
 - A Linode API token
 
 ### Configuration

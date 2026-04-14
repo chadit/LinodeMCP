@@ -179,7 +179,7 @@ def sample_instance_data() -> dict[str, Any]:
 @pytest.fixture
 def mock_linode_client() -> Generator[AsyncMock]:
     """Mock RetryableClient with async context manager support."""
-    with patch("linodemcp.tools.RetryableClient") as mock_class:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_class:
         client = AsyncMock()
         client.__aenter__.return_value = client
         client.__aexit__.return_value = None
