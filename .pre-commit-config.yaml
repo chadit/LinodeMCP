@@ -6,17 +6,29 @@ repos:
     hooks:
       - id: golangci-lint
         args: ['--max-issues-per-linter=0', '--max-same-issues=0']
+        # golangci-lint picks up ~/.golangci.yml automatically. The hook runs
+        # from the repo root by default, but go.mod lives in go/ — tell it
+        # where to run so GCI's localModule check finds the module file.
+        entry: bash -c 'cd go && golangci-lint run "$@"' --
 
   # Python linter + formatter (managed - auto-installed by pre-commit)
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.2
+  # Use language: system to use the project's venv-installed ruff.
+  - repo: local
     hooks:
       - id: ruff
-        args: ['check', '--force-exclude']
+        name: ruff
+        entry: bash -c 'cd python && .venv/bin/ruff check'
         files: ^python/
+        types: [python]
+        language: system
+        pass_filenames: false
       - id: ruff-format
-        args: ['--check', '--force-exclude']
+        name: ruff format
+        entry: bash -c 'cd python && .venv/bin/ruff format --check'
         files: ^python/
+        types: [python]
+        language: system
+        pass_filenames: false
 
   # Markdown linter (managed - auto-installed by pre-commit)
   - repo: https://github.com/DavidAnson/markdownlint-cli2

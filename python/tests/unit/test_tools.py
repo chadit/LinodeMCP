@@ -6331,9 +6331,7 @@ async def test_handle_linode_instance_migrate_success(
     data = json.loads(result[0].text)
     assert data["message"] == "Migration initiated for instance 123"
     assert data["instance_id"] == 123
-    mock_linode_client.migrate_instance.assert_called_once_with(
-        123, region="eu-west"
-    )
+    mock_linode_client.migrate_instance.assert_called_once_with(123, region="eu-west")
 
 
 async def test_handle_linode_instance_rebuild_success(

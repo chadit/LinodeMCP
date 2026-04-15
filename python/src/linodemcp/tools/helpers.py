@@ -32,9 +32,7 @@ DESCRIPTION_TRUNCATE_LIMIT = 100
 ENV_PARAM_SCHEMA = {
     "environment": {
         "type": "string",
-        "description": (
-            "Linode environment to use (optional, defaults to 'default')"
-        ),
+        "description": ("Linode environment to use (optional, defaults to 'default')"),
     },
 }
 
@@ -46,9 +44,7 @@ def _truncate_string(value: str, limit: int) -> str:
     return value
 
 
-def _select_environment(
-    cfg: Config, environment: str
-) -> EnvironmentConfig:
+def _select_environment(cfg: Config, environment: str) -> EnvironmentConfig:
     """Select an environment from configuration."""
     if environment:
         if environment in cfg.environments:

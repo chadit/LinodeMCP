@@ -112,35 +112,25 @@ async def test_all_listed_tools_have_handlers(
     assert not duplicates, f"Duplicate tool names: {duplicates}"
 
     # Collect all handle_* functions from the tools module.
-    handle_funcs = {
-        name
-        for name in dir(tools_mod)
-        if name.startswith("handle_")
-    }
+    handle_funcs = {name for name in dir(tools_mod) if name.startswith("handle_")}
     # "hello" and "version" handlers don't follow the linode_ pattern
     config_handles = {
-        n
-        for n in handle_funcs
-        if n not in ("handle_hello", "handle_version")
+        n for n in handle_funcs if n not in ("handle_hello", "handle_version")
     }
 
     # Direction 1: Every handler must have a matching tool.
     for handler_name in config_handles:
         tool_name = handler_name.replace("handle_", "", 1)
         assert tool_name in seen, (
-            f"Handler {handler_name} has no matching tool"
-            f" '{tool_name}'"
+            f"Handler {handler_name} has no matching tool '{tool_name}'"
         )
 
     # Direction 2: Every tool (except hello/version) must have a handler.
-    non_utility_tools = {
-        t for t in seen if t not in ("hello", "version")
-    }
+    non_utility_tools = {t for t in seen if t not in ("hello", "version")}
     for tool_name in non_utility_tools:
         handler_name = f"handle_{tool_name}"
         assert handler_name in handle_funcs, (
-            f"Tool '{tool_name}' has no matching handler"
-            f" '{handler_name}'"
+            f"Tool '{tool_name}' has no matching handler '{handler_name}'"
         )
 
     # The number of config-based tools must match the number of

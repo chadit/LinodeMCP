@@ -186,8 +186,8 @@ def create_linode_vpc_delete_tool() -> Tool:
                 "confirm": {
                     "type": "boolean",
                     "description": (
-                    "Must be true to confirm deletion. This is irreversible."
-                ),
+                        "Must be true to confirm deletion. This is irreversible."
+                    ),
                 },
             },
             "required": ["vpc_id", "confirm"],
@@ -238,8 +238,8 @@ def create_linode_vpc_subnet_create_tool() -> Tool:
                 "ipv4": {
                     "type": "string",
                     "description": (
-                    "IPv4 range in CIDR format, e.g. 10.0.0.0/24 (required)"
-                ),
+                        "IPv4 range in CIDR format, e.g. 10.0.0.0/24 (required)"
+                    ),
                 },
                 "confirm": {
                     "type": "boolean",
@@ -357,8 +357,8 @@ def create_linode_vpc_subnet_delete_tool() -> Tool:
                 "confirm": {
                     "type": "boolean",
                     "description": (
-                    "Must be true to confirm deletion. This is irreversible."
-                ),
+                        "Must be true to confirm deletion. This is irreversible."
+                    ),
                 },
             },
             "required": [

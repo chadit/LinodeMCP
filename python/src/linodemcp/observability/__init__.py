@@ -142,15 +142,19 @@ def _init_tracing(config: TracingConfig) -> None:
 
     try:
         # Apply OTEL environment variables
-        otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
+        otlp_endpoint = os.getenv(
+            "OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317"
+        )
         endpoint = config.endpoint or otlp_endpoint
         sampler_arg = os.getenv("OTEL_TRACES_SAMPLER_ARG", "1.0")
         sample_rate = config.sample_rate or float(sampler_arg)
 
-        resource = Resource.create({
-            "service.name": "linodemcp",
-            "service.version": _get_version(),
-        })
+        resource = Resource.create(
+            {
+                "service.name": "linodemcp",
+                "service.version": _get_version(),
+            }
+        )
 
         # Configure sampler
         sampler = None
@@ -159,6 +163,7 @@ def _init_tracing(config: TracingConfig) -> None:
                 ParentBased,
                 TraceIdRatioBased,
             )
+
             sampler = ParentBased(TraceIdRatioBased(sample_rate))
 
         _tracer_provider = TracerProvider(
@@ -173,9 +178,7 @@ def _init_tracing(config: TracingConfig) -> None:
                 insecure=config.insecure,
                 headers=config.headers,
             )
-            _tracer_provider.add_span_processor(
-                BatchSpanProcessor(exporter)
-            )
+            _tracer_provider.add_span_processor(BatchSpanProcessor(exporter))
 
         trace.set_tracer_provider(_tracer_provider)
 
@@ -197,10 +200,12 @@ def _init_metrics(config: MetricsConfig) -> None:
     global _meter_provider  # noqa: PLW0603 - Singleton pattern
 
     try:
-        resource = Resource.create({
-            "service.name": "linodemcp",
-            "service.version": _get_version(),
-        })
+        resource = Resource.create(
+            {
+                "service.name": "linodemcp",
+                "service.version": _get_version(),
+            }
+        )
 
         _meter_provider = MeterProvider(resource=resource)
 
@@ -220,9 +225,7 @@ def _init_metrics(config: MetricsConfig) -> None:
                 SystemMetricsInstrumentor().instrument()
             except Exception as e:
                 if _logger_instance:
-                    _logger_instance.error(
-                        "failed to start host metrics", error=str(e)
-                    )
+                    _logger_instance.error("failed to start host metrics", error=str(e))
 
         metrics.set_meter_provider(_meter_provider)
 
@@ -248,6 +251,7 @@ def _init_health(config: HealthConfig) -> None:
     health_server_ref: list[Any] = [None]
 
     try:
+
         class HealthHandler(BaseHTTPRequestHandler):
             """HTTP handler for health check endpoints."""
 
@@ -296,6 +300,7 @@ def _init_health(config: HealthConfig) -> None:
         if _logger_instance:
             _logger_instance.error("failed to start health server", error=str(e))
         # Continue without health endpoint
+
 
 def _get_version() -> str:
     """Get application version."""

@@ -101,7 +101,6 @@ func TestToolExecution(t *testing.T) {
 
 	ctx := t.Context()
 
-	// Test successful execution
 	err := observability.ToolExecution(ctx, "test_tool", func(_ context.Context) error {
 		return nil
 	})
@@ -109,7 +108,6 @@ func TestToolExecution(t *testing.T) {
 		t.Errorf("ToolExecution() with successful function should return nil: %v", err)
 	}
 
-	// Test failed execution
 	testErr := errors.New("test error")
 
 	err = observability.ToolExecution(ctx, "test_tool", func(_ context.Context) error {
@@ -125,7 +123,6 @@ func TestAPICall(t *testing.T) {
 
 	ctx := t.Context()
 
-	// Test successful execution
 	err := observability.APICall(ctx, "/v4/linode/instances", "GET", func(_ context.Context) error {
 		return nil
 	})
@@ -133,7 +130,6 @@ func TestAPICall(t *testing.T) {
 		t.Errorf("APICall() with successful function should return nil: %v", err)
 	}
 
-	// Test failed execution
 	testErr := errors.New("test error")
 
 	err = observability.APICall(ctx, "/v4/linode/instances", "GET", func(_ context.Context) error {

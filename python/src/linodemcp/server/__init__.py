@@ -80,9 +80,7 @@ def _build_tool_registry() -> list[ToolEntry]:
             logger.warning("No handler found for tool: %s", tool_name)
             continue
         entries.append(
-            ToolEntry(
-                name=tool_name, create_fn=create_fn, handle_fn=handle_fn
-            )
+            ToolEntry(name=tool_name, create_fn=create_fn, handle_fn=handle_fn)
         )
 
     return entries
@@ -115,9 +113,7 @@ class Server:
         _list_tools_method()(_list_tools)
 
         # Build handler map for config-requiring tools
-        config_handlers = {
-            entry.name: entry.handle_fn for entry in _TOOL_REGISTRY
-        }
+        config_handlers = {entry.name: entry.handle_fn for entry in _TOOL_REGISTRY}
 
         async def _call_tool(name: str, arguments: dict[str, Any]) -> list[Any]:
             """Handle tool calls."""

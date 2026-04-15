@@ -68,8 +68,8 @@ def create_linode_lke_cluster_create_tool() -> Tool:
                 "confirm": {
                     "type": "boolean",
                     "description": (
-                    "Must be true to confirm creation. This incurs billing."
-                ),
+                        "Must be true to confirm creation. This incurs billing."
+                    ),
                 },
             },
             "required": ["label", "region", "k8s_version", "node_pools", "confirm"],
@@ -197,8 +197,8 @@ def create_linode_lke_cluster_delete_tool() -> Tool:
                 "confirm": {
                     "type": "boolean",
                     "description": (
-                    "Must be true to confirm deletion. This is irreversible."
-                ),
+                        "Must be true to confirm deletion. This is irreversible."
+                    ),
                 },
             },
             "required": ["cluster_id", "confirm"],
@@ -353,8 +353,8 @@ def create_linode_lke_pool_create_tool() -> Tool:
                 "confirm": {
                     "type": "boolean",
                     "description": (
-                    "Must be true to confirm creation. This incurs billing."
-                ),
+                        "Must be true to confirm creation. This incurs billing."
+                    ),
                 },
             },
             "required": ["cluster_id", "type", "count", "confirm"],
@@ -492,8 +492,8 @@ def create_linode_lke_pool_delete_tool() -> Tool:
                 "confirm": {
                     "type": "boolean",
                     "description": (
-                    "Must be true to confirm deletion. This is irreversible."
-                ),
+                        "Must be true to confirm deletion. This is irreversible."
+                    ),
                 },
             },
             "required": ["cluster_id", "pool_id", "confirm"],
@@ -612,8 +612,8 @@ def create_linode_lke_node_delete_tool() -> Tool:
                 "confirm": {
                     "type": "boolean",
                     "description": (
-                    "Must be true to confirm deletion. This is irreversible."
-                ),
+                        "Must be true to confirm deletion. This is irreversible."
+                    ),
                 },
             },
             "required": ["cluster_id", "node_id", "confirm"],
@@ -806,8 +806,9 @@ def create_linode_lke_acl_update_tool() -> Tool:
                 "acl": {
                     "type": "object",
                     "description": (
-                    "ACL config: {enabled: bool, addresses: {ipv4: [...], ipv6: [...]}}"
-                ),
+                        "ACL config: {enabled: bool, addresses: "
+                        "{ipv4: [...], ipv6: [...]}}"
+                    ),
                 },
                 "confirm": _CONFIRM_PROP,
             },
@@ -855,8 +856,8 @@ def create_linode_lke_acl_delete_tool() -> Tool:
                 "confirm": {
                     "type": "boolean",
                     "description": (
-                    "Must be true to confirm deletion. This is irreversible."
-                ),
+                        "Must be true to confirm deletion. This is irreversible."
+                    ),
                 },
             },
             "required": ["cluster_id", "confirm"],

@@ -1265,9 +1265,8 @@ class Client:
         self, region: str, label: str, name: str
     ) -> dict[str, Any]:
         """Get the ACL for an object in Object Storage."""
-        endpoint = (
-            f"/object-storage/buckets/{region}/{label}/object-acl?"
-            + urlencode({"name": name})
+        endpoint = f"/object-storage/buckets/{region}/{label}/object-acl?" + urlencode(
+            {"name": name}
         )
         try:
             response = await self.make_request("GET", endpoint)
