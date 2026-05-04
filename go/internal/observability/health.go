@@ -6,22 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 )
-
-// healthState holds health check state.
-type healthState struct {
-	mu          sync.RWMutex
-	checks      map[string]HealthCheck
-	server      *http.Server
-	initialized bool
-}
-
-//nolint:gochecknoglobals // Singleton pattern required for health check infrastructure
-var health healthState
 
 // HealthCheck is a function that checks the health of a dependency.
 type HealthCheck func(context.Context) error
@@ -43,86 +31,85 @@ const (
 	healthCheckTimeout = 5 * time.Second
 )
 
-// initHealth sets up health check endpoints.
-func initHealth(cfg config.HealthConfig) {
+// initHealth sets up health check endpoints if enabled.
+func (o *Observability) initHealth(cfg config.HealthConfig) {
 	if !cfg.Enabled {
 		return
 	}
 
-	health.mu.Lock()
-	defer health.mu.Unlock()
+	o.healthMu.Lock()
+	defer o.healthMu.Unlock()
 
-	if health.initialized {
+	if o.healthServer != nil {
 		return
 	}
 
-	health.checks = make(map[string]HealthCheck)
+	if o.healthChecks == nil {
+		o.healthChecks = make(map[string]HealthCheck)
+	}
 
-	// Register built-in health checks
-	RegisterHealthCheck("config", func(ctx context.Context) error {
-		// Check for context cancellation
+	// Built-in config check: if we got this far, config loaded successfully.
+	o.healthChecks["config"] = func(ctx context.Context) error {
 		if err := ctx.Err(); err != nil {
 			return fmt.Errorf("health check context error: %w", err)
 		}
 
-		// Config is loaded at startup, so if we're here, it's loaded
 		return nil
-	})
+	}
 
-	// Start health check server
 	mux := http.NewServeMux()
-	mux.HandleFunc(cfg.Path+"/live", handleLive)
-	mux.HandleFunc(cfg.Path+"/ready", handleReady)
-	mux.HandleFunc(cfg.Path+"/healthz", handleHealthz)
+	mux.HandleFunc(cfg.Path+"/live", o.handleLive)
+	mux.HandleFunc(cfg.Path+"/ready", o.handleReady)
+	mux.HandleFunc(cfg.Path+"/healthz", o.handleReady)
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
-	health.server = &http.Server{
+	o.healthServer = &http.Server{
 		Addr:              addr,
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	go func() {
-		Logger().Info("starting health server", "address", addr)
+		o.logger.Info("starting health server", "address", addr)
 
-		if err := health.server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-			Logger().Error("health server failed", "error", err)
+		if err := o.healthServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+			o.logger.Error("health server failed", "error", err)
 		}
 	}()
 
-	registerShutdown(func(shutdownCtx context.Context) error {
-		if health.server != nil {
-			return health.server.Shutdown(shutdownCtx)
+	o.registerShutdown(func(shutdownCtx context.Context) error {
+		if o.healthServer != nil {
+			return o.healthServer.Shutdown(shutdownCtx)
 		}
 
 		return nil
 	})
-
-	health.initialized = true
 }
 
-// RegisterHealthCheck registers a new health check.
-func RegisterHealthCheck(name string, check HealthCheck) {
-	health.mu.Lock()
-	defer health.mu.Unlock()
+// RegisterHealthCheck registers a new health check by name.
+func (o *Observability) RegisterHealthCheck(name string, check HealthCheck) {
+	o.healthMu.Lock()
+	defer o.healthMu.Unlock()
 
-	if health.checks == nil {
-		health.checks = make(map[string]HealthCheck)
+	if o.healthChecks == nil {
+		o.healthChecks = make(map[string]HealthCheck)
 	}
 
-	health.checks[name] = check
+	o.healthChecks[name] = check
 }
 
-// UnregisterHealthCheck removes a health check.
-func UnregisterHealthCheck(name string) {
-	health.mu.Lock()
-	defer health.mu.Unlock()
+// UnregisterHealthCheck removes a health check by name.
+func (o *Observability) UnregisterHealthCheck(name string) {
+	o.healthMu.Lock()
+	defer o.healthMu.Unlock()
 
-	delete(health.checks, name)
+	delete(o.healthChecks, name)
 }
 
-// handleLive handles the /live endpoint (is the process alive?).
-func handleLive(w http.ResponseWriter, _ *http.Request) {
+// handleLive serves /live: is the process alive?
+// Receiver-less (no instance state needed) so the linter is satisfied; kept on
+// the type as a method so route wiring stays consistent with handleReady.
+func (*Observability) handleLive(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
@@ -134,12 +121,12 @@ func handleLive(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
-// handleReady handles the /ready endpoint (are all dependencies healthy?).
-func handleReady(w http.ResponseWriter, r *http.Request) {
+// handleReady serves /ready and /healthz: are all dependencies healthy?
+func (o *Observability) handleReady(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), healthCheckTimeout)
 	defer cancel()
 
-	response := checkAllHealth(ctx)
+	response := o.checkAllHealth(ctx)
 
 	w.Header().Set("Content-Type", "application/json")
 
@@ -156,15 +143,10 @@ func handleReady(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleHealthz handles the /healthz endpoint (combined health check).
-func handleHealthz(w http.ResponseWriter, r *http.Request) {
-	handleReady(w, r)
-}
-
-// checkAllHealth runs all health checks and returns the status.
-func checkAllHealth(ctx context.Context) HealthResponse {
-	health.mu.RLock()
-	defer health.mu.RUnlock()
+// checkAllHealth runs every registered check under one read lock.
+func (o *Observability) checkAllHealth(ctx context.Context) HealthResponse {
+	o.healthMu.RLock()
+	defer o.healthMu.RUnlock()
 
 	response := HealthResponse{
 		Status:    "healthy",
@@ -172,7 +154,7 @@ func checkAllHealth(ctx context.Context) HealthResponse {
 		Checks:    make(map[string]HealthStatus),
 	}
 
-	for name, check := range health.checks {
+	for name, check := range o.healthChecks {
 		status := HealthStatus{Status: "healthy"}
 
 		if err := check(ctx); err != nil {

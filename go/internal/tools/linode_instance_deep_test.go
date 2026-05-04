@@ -156,20 +156,7 @@ func TestLinodeInstanceBackupGetTool(t *testing.T) {
 	})
 }
 
-// TestLinodeInstanceBackupCreateTool verifies the instance backup creation tool
-// registers correctly, validates required fields, and creates snapshots.
-//
-// Workflow:
-//  1. Definition: Verify tool name, description, and schema
-//  2. Validation: Missing confirm or linode_id returns descriptive error
-//  3. Success: Create snapshot through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_instance_backup_create" with required params
-//   - Missing required fields return descriptive errors
-//   - Successful creation returns snapshot details from API
-//
-// Purpose: End-to-end verification of instance backup creation workflow.
+// End-to-end verification of instance backup creation workflow.
 func TestLinodeInstanceBackupCreateTool(t *testing.T) {
 	t.Parallel()
 
@@ -246,20 +233,7 @@ func TestLinodeInstanceBackupCreateTool(t *testing.T) {
 	})
 }
 
-// TestLinodeInstanceBackupRestoreTool verifies the instance backup restore tool
-// registers correctly, validates required fields, and restores backups.
-//
-// Workflow:
-//  1. Definition: Verify tool name, description, and schema
-//  2. Validation: Missing confirm, linode_id, or backup_id returns descriptive error
-//  3. Success: Restore backup through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_instance_backup_restore" with required params
-//   - Missing required fields return descriptive errors
-//   - Successful restore returns confirmation message
-//
-// Purpose: End-to-end verification of instance backup restore workflow.
+// End-to-end verification of instance backup restore workflow.
 func TestLinodeInstanceBackupRestoreTool(t *testing.T) {
 	t.Parallel()
 
@@ -616,20 +590,7 @@ func TestLinodeInstanceDiskGetTool(t *testing.T) {
 	})
 }
 
-// TestLinodeInstanceDiskCreateTool verifies the instance disk creation tool
-// registers correctly, validates required fields, and creates disks.
-//
-// Workflow:
-//  1. Definition: Verify tool name, description, and schema
-//  2. Validation: Missing confirm, linode_id, or label returns descriptive error
-//  3. Success: Create disk through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_instance_disk_create" with required params
-//   - Missing required fields return descriptive errors
-//   - Successful creation returns disk details from API
-//
-// Purpose: End-to-end verification of instance disk creation workflow.
+// End-to-end verification of instance disk creation workflow.
 func TestLinodeInstanceDiskCreateTool(t *testing.T) {
 	t.Parallel()
 
@@ -1418,20 +1379,7 @@ func TestLinodeInstanceMigrateTool(t *testing.T) {
 	})
 }
 
-// TestLinodeInstanceRebuildTool verifies the instance rebuild tool
-// registers correctly, validates required fields, and rebuilds instances.
-//
-// Workflow:
-//  1. Definition: Verify tool name, description, and schema
-//  2. Validation: Missing confirm, image, or root_pass returns descriptive error
-//  3. Success: Rebuild instance through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_instance_rebuild" with required params
-//   - Missing required fields return descriptive errors
-//   - Successful rebuild returns instance details from API
-//
-// Purpose: End-to-end verification of instance rebuild workflow.
+// End-to-end verification of instance rebuild workflow.
 func TestLinodeInstanceRebuildTool(t *testing.T) {
 	t.Parallel()
 

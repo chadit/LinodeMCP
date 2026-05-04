@@ -19,20 +19,7 @@ import (
 // It has the correct prefix and length to pass validation.
 const validTestSSHKey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 user@example.com"
 
-// TestLinodeSSHKeyCreateTool verifies the SSH key creation tool registers
-// correctly, validates required parameters, and creates keys through the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and schema
-//  2. **Validation**: Test missing label and ssh_key produce clear errors
-//  3. **Success**: Create key through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_sshkey_create" with required parameters
-//   - Missing required fields return descriptive error messages
-//   - Successful creation returns key details from the API
-//
-// Purpose: End-to-end verification of the SSH key creation workflow.
+// End-to-end verification of the SSH key creation workflow.
 func TestLinodeSSHKeyCreateTool(t *testing.T) {
 	t.Parallel()
 
@@ -111,21 +98,7 @@ func TestLinodeSSHKeyCreateTool(t *testing.T) {
 	})
 }
 
-// TestLinodeSSHKeyDeleteTool verifies the SSH key deletion tool registers
-// correctly, validates the required sshkey_id parameter, and deletes keys
-// through the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and schema
-//  2. **Validation**: Test missing sshkey_id produces a clear error
-//  3. **Success**: Delete key through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_sshkey_delete" with required parameters
-//   - Missing sshkey_id returns a descriptive error message
-//   - Successful deletion returns confirmation from the API
-//
-// Purpose: End-to-end verification of the SSH key deletion workflow.
+// End-to-end verification of the SSH key deletion workflow.
 func TestLinodeSSHKeyDeleteTool(t *testing.T) {
 	t.Parallel()
 
@@ -182,20 +155,7 @@ func TestLinodeSSHKeyDeleteTool(t *testing.T) {
 	})
 }
 
-// TestLinodeInstanceBootTool verifies the instance boot tool registers correctly,
-// validates the required instance_id parameter, and boots instances through the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and schema
-//  2. **Validation**: Test missing instance_id produces a clear error
-//  3. **Success**: Boot instance through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_instance_boot" with required parameters
-//   - Missing instance_id returns a descriptive error message
-//   - Successful boot returns confirmation from the API
-//
-// Purpose: End-to-end verification of the instance boot workflow.
+// End-to-end verification of the instance boot workflow.
 func TestLinodeInstanceBootTool(t *testing.T) {
 	t.Parallel()
 
@@ -254,21 +214,7 @@ func TestLinodeInstanceBootTool(t *testing.T) {
 	})
 }
 
-// TestLinodeInstanceRebootTool verifies the instance reboot tool registers
-// correctly, validates the required instance_id parameter, and reboots
-// instances through the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and schema
-//  2. **Validation**: Test missing instance_id produces a clear error
-//  3. **Success**: Reboot instance through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_instance_reboot" with required parameters
-//   - Missing instance_id returns a descriptive error message
-//   - Successful reboot returns confirmation from the API
-//
-// Purpose: End-to-end verification of the instance reboot workflow.
+// End-to-end verification of the instance reboot workflow.
 func TestLinodeInstanceRebootTool(t *testing.T) {
 	t.Parallel()
 
@@ -327,21 +273,7 @@ func TestLinodeInstanceRebootTool(t *testing.T) {
 	})
 }
 
-// TestLinodeInstanceShutdownTool verifies the instance shutdown tool registers
-// correctly, validates the required instance_id parameter, and shuts down
-// instances through the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and schema
-//  2. **Validation**: Test missing instance_id produces a clear error
-//  3. **Success**: Shutdown instance through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_instance_shutdown" with required parameters
-//   - Missing instance_id returns a descriptive error message
-//   - Successful shutdown returns confirmation from the API
-//
-// Purpose: End-to-end verification of the instance shutdown workflow.
+// End-to-end verification of the instance shutdown workflow.
 func TestLinodeInstanceShutdownTool(t *testing.T) {
 	t.Parallel()
 
@@ -399,22 +331,7 @@ func TestLinodeInstanceShutdownTool(t *testing.T) {
 	})
 }
 
-// TestLinodeInstanceCreateTool verifies the instance creation tool registers
-// correctly, enforces the confirm flag, validates required parameters, and
-// creates instances through the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, schema, and WARNING in description
-//  2. **Validation**: Test missing confirm, missing region, and missing type
-//  3. **Success**: Create instance through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_instance_create" with WARNING in description
-//   - Missing confirm=true returns a clear error
-//   - Missing required fields (region, type) return descriptive errors
-//   - Successful creation returns instance details from the API
-//
-// Purpose: End-to-end verification of the instance creation workflow.
+// End-to-end verification of the instance creation workflow.
 func TestLinodeInstanceCreateTool(t *testing.T) {
 	t.Parallel()
 
@@ -513,22 +430,7 @@ func TestLinodeInstanceCreateTool(t *testing.T) {
 	})
 }
 
-// TestLinodeInstanceDeleteTool verifies the instance deletion tool registers
-// correctly, enforces the confirm flag, validates the required instance_id,
-// and deletes instances through the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, schema, and WARNING in description
-//  2. **Validation**: Test missing confirm and missing instance_id
-//  3. **Success**: Delete instance through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_instance_delete" with WARNING in description
-//   - Missing confirm=true returns a clear error
-//   - Missing instance_id returns a descriptive error message
-//   - Successful deletion returns confirmation from the API
-//
-// Purpose: End-to-end verification of the instance deletion workflow.
+// End-to-end verification of the instance deletion workflow.
 func TestLinodeInstanceDeleteTool(t *testing.T) {
 	t.Parallel()
 
@@ -608,22 +510,7 @@ func TestLinodeInstanceDeleteTool(t *testing.T) {
 	})
 }
 
-// TestLinodeInstanceResizeTool verifies the instance resize tool registers
-// correctly, enforces the confirm flag, validates required parameters, and
-// resizes instances through the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, schema, and WARNING in description
-//  2. **Validation**: Test missing confirm, missing instance_id, and missing type
-//  3. **Success**: Resize instance through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_instance_resize" with WARNING in description
-//   - Missing confirm=true returns a clear error
-//   - Missing required fields (instance_id, type) return descriptive errors
-//   - Successful resize returns confirmation with the new plan type
-//
-// Purpose: End-to-end verification of the instance resize workflow.
+// End-to-end verification of the instance resize workflow.
 func TestLinodeInstanceResizeTool(t *testing.T) {
 	t.Parallel()
 
@@ -712,20 +599,7 @@ func TestLinodeInstanceResizeTool(t *testing.T) {
 	})
 }
 
-// TestLinodeFirewallCreateTool verifies the firewall creation tool registers
-// correctly, validates required parameters, and creates firewalls through the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and schema
-//  2. **Validation**: Test missing label produces a clear error
-//  3. **Success**: Create firewall through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_firewall_create" with required parameters
-//   - Missing label returns a descriptive error message
-//   - Successful creation returns firewall details from the API
-//
-// Purpose: End-to-end verification of the firewall creation workflow.
+// End-to-end verification of the firewall creation workflow.
 func TestLinodeFirewallCreateTool(t *testing.T) {
 	t.Parallel()
 
@@ -795,21 +669,7 @@ func TestLinodeFirewallCreateTool(t *testing.T) {
 	})
 }
 
-// TestLinodeFirewallUpdateTool verifies the firewall update tool registers
-// correctly, validates the required firewall_id parameter, and updates
-// firewalls through the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and schema
-//  2. **Validation**: Test missing firewall_id produces a clear error
-//  3. **Success**: Update firewall through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_firewall_update" with required parameters
-//   - Missing firewall_id returns a descriptive error message
-//   - Successful update returns updated firewall details from the API
-//
-// Purpose: End-to-end verification of the firewall update workflow.
+// End-to-end verification of the firewall update workflow.
 func TestLinodeFirewallUpdateTool(t *testing.T) {
 	t.Parallel()
 
@@ -878,21 +738,7 @@ func TestLinodeFirewallUpdateTool(t *testing.T) {
 	})
 }
 
-// TestLinodeFirewallDeleteTool verifies the firewall deletion tool registers
-// correctly, enforces the confirm flag, validates the required firewall_id,
-// and deletes firewalls through the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, schema, and WARNING in description
-//  2. **Validation**: Test missing confirm and missing firewall_id
-//  3. **Success**: Delete firewall through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_firewall_delete" with WARNING in description
-//   - Missing confirm=true returns a clear error
-//   - Successful deletion returns confirmation from the API
-//
-// Purpose: End-to-end verification of the firewall deletion workflow.
+// End-to-end verification of the firewall deletion workflow.
 func TestLinodeFirewallDeleteTool(t *testing.T) {
 	t.Parallel()
 
@@ -954,20 +800,7 @@ func TestLinodeFirewallDeleteTool(t *testing.T) {
 	})
 }
 
-// TestLinodeDomainCreateTool verifies the domain creation tool registers
-// correctly, validates required parameters, and creates domains through the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and schema
-//  2. **Validation**: Test missing domain and missing type produce clear errors
-//  3. **Success**: Create domain through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_domain_create" with required parameters
-//   - Missing required fields return descriptive error messages
-//   - Successful creation returns domain details from the API
-//
-// Purpose: End-to-end verification of the domain creation workflow.
+// End-to-end verification of the domain creation workflow.
 func TestLinodeDomainCreateTool(t *testing.T) {
 	t.Parallel()
 
@@ -1049,21 +882,7 @@ func TestLinodeDomainCreateTool(t *testing.T) {
 	})
 }
 
-// TestLinodeDomainUpdateTool verifies the domain update tool registers
-// correctly, validates the required domain_id parameter, and updates
-// domains through the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and schema
-//  2. **Validation**: Test missing domain_id produces a clear error
-//  3. **Success**: Update domain through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_domain_update" with required parameters
-//   - Missing domain_id returns a descriptive error message
-//   - Successful update returns updated domain details from the API
-//
-// Purpose: End-to-end verification of the domain update workflow.
+// End-to-end verification of the domain update workflow.
 func TestLinodeDomainUpdateTool(t *testing.T) {
 	t.Parallel()
 
@@ -1133,20 +952,7 @@ func TestLinodeDomainUpdateTool(t *testing.T) {
 	})
 }
 
-// TestLinodeDomainDeleteTool verifies the domain deletion tool registers
-// correctly, enforces the confirm flag, and deletes domains through the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, schema, and WARNING in description
-//  2. **Validation**: Test missing confirm produces a clear error
-//  3. **Success**: Delete domain through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_domain_delete" with WARNING in description
-//   - Missing confirm=true returns a clear error
-//   - Successful deletion returns confirmation from the API
-//
-// Purpose: End-to-end verification of the domain deletion workflow.
+// End-to-end verification of the domain deletion workflow.
 func TestLinodeDomainDeleteTool(t *testing.T) {
 	t.Parallel()
 
@@ -1208,21 +1014,7 @@ func TestLinodeDomainDeleteTool(t *testing.T) {
 	})
 }
 
-// TestLinodeDomainRecordCreateTool verifies the domain record creation tool
-// registers correctly, validates required parameters, and creates records
-// through the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and schema
-//  2. **Validation**: Test missing domain_id, type, and target produce clear errors
-//  3. **Success**: Create record through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_domain_record_create" with required parameters
-//   - Missing required fields return descriptive error messages
-//   - Successful creation returns record details from the API
-//
-// Purpose: End-to-end verification of the domain record creation workflow.
+// End-to-end verification of the domain record creation workflow.
 func TestLinodeDomainRecordCreateTool(t *testing.T) {
 	t.Parallel()
 
@@ -1318,21 +1110,7 @@ func TestLinodeDomainRecordCreateTool(t *testing.T) {
 	})
 }
 
-// TestLinodeDomainRecordUpdateTool verifies the domain record update tool
-// registers correctly, validates required parameters, and updates records
-// through the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and schema
-//  2. **Validation**: Test missing domain_id and missing record_id produce clear errors
-//  3. **Success**: Update record through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_domain_record_update" with required parameters
-//   - Missing required fields return descriptive error messages
-//   - Successful update returns updated record details from the API
-//
-// Purpose: End-to-end verification of the domain record update workflow.
+// End-to-end verification of the domain record update workflow.
 func TestLinodeDomainRecordUpdateTool(t *testing.T) {
 	t.Parallel()
 
@@ -1421,21 +1199,7 @@ func TestLinodeDomainRecordUpdateTool(t *testing.T) {
 	})
 }
 
-// TestLinodeDomainRecordDeleteTool verifies the domain record deletion tool
-// registers correctly, validates required parameters, and deletes records
-// through the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and schema
-//  2. **Validation**: Test missing domain_id and missing record_id produce clear errors
-//  3. **Success**: Delete record through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_domain_record_delete" with required parameters
-//   - Missing required fields return descriptive error messages
-//   - Successful deletion returns confirmation from the API
-//
-// Purpose: End-to-end verification of the domain record deletion workflow.
+// End-to-end verification of the domain record deletion workflow.
 func TestLinodeDomainRecordDeleteTool(t *testing.T) {
 	t.Parallel()
 
@@ -1514,22 +1278,7 @@ func TestLinodeDomainRecordDeleteTool(t *testing.T) {
 	})
 }
 
-// TestLinodeVolumeCreateTool verifies the volume creation tool registers
-// correctly, enforces the confirm flag, validates required parameters, and
-// creates volumes through the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, schema, and WARNING in description
-//  2. **Validation**: Test missing confirm, missing label, and missing region/linode_id
-//  3. **Success**: Create volume through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_volume_create" with WARNING in description
-//   - Missing confirm=true returns a clear error
-//   - Missing required fields (label, region or linode_id) return descriptive errors
-//   - Successful creation returns volume details from the API
-//
-// Purpose: End-to-end verification of the volume creation workflow.
+// End-to-end verification of the volume creation workflow.
 func TestLinodeVolumeCreateTool(t *testing.T) {
 	t.Parallel()
 
@@ -1628,20 +1377,7 @@ func TestLinodeVolumeCreateTool(t *testing.T) {
 	})
 }
 
-// TestLinodeVolumeAttachTool verifies the volume attach tool registers
-// correctly, validates required parameters, and attaches volumes through the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and schema
-//  2. **Validation**: Test missing volume_id and missing linode_id produce clear errors
-//  3. **Success**: Attach volume through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_volume_attach" with required parameters
-//   - Missing required fields return descriptive error messages
-//   - Successful attachment returns volume details from the API
-//
-// Purpose: End-to-end verification of the volume attach workflow.
+// End-to-end verification of the volume attach workflow.
 func TestLinodeVolumeAttachTool(t *testing.T) {
 	t.Parallel()
 
@@ -1731,21 +1467,7 @@ func TestLinodeVolumeAttachTool(t *testing.T) {
 	})
 }
 
-// TestLinodeVolumeDetachTool verifies the volume detach tool registers
-// correctly, validates the required volume_id parameter, and detaches
-// volumes through the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and schema
-//  2. **Validation**: Test missing volume_id produces a clear error
-//  3. **Success**: Detach volume through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_volume_detach" with required parameters
-//   - Missing volume_id returns a descriptive error message
-//   - Successful detachment returns confirmation from the API
-//
-// Purpose: End-to-end verification of the volume detach workflow.
+// End-to-end verification of the volume detach workflow.
 func TestLinodeVolumeDetachTool(t *testing.T) {
 	t.Parallel()
 
@@ -1803,22 +1525,7 @@ func TestLinodeVolumeDetachTool(t *testing.T) {
 	})
 }
 
-// TestLinodeVolumeResizeTool verifies the volume resize tool registers
-// correctly, enforces the confirm flag, validates required parameters, and
-// resizes volumes through the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, schema, and WARNING in description
-//  2. **Validation**: Test missing confirm, missing volume_id, and missing size
-//  3. **Success**: Resize volume through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_volume_resize" with WARNING in description
-//   - Missing confirm=true returns a clear error
-//   - Missing required fields (volume_id, size) return descriptive errors
-//   - Successful resize returns confirmation from the API
-//
-// Purpose: End-to-end verification of the volume resize workflow.
+// End-to-end verification of the volume resize workflow.
 func TestLinodeVolumeResizeTool(t *testing.T) {
 	t.Parallel()
 
@@ -1915,20 +1622,7 @@ func TestLinodeVolumeResizeTool(t *testing.T) {
 	})
 }
 
-// TestLinodeVolumeDeleteTool verifies the volume deletion tool registers
-// correctly, enforces the confirm flag, and deletes volumes through the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, schema, and WARNING in description
-//  2. **Validation**: Test missing confirm produces a clear error
-//  3. **Success**: Delete volume through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_volume_delete" with WARNING in description
-//   - Missing confirm=true returns a clear error
-//   - Successful deletion returns confirmation from the API
-//
-// Purpose: End-to-end verification of the volume deletion workflow.
+// End-to-end verification of the volume deletion workflow.
 func TestLinodeVolumeDeleteTool(t *testing.T) {
 	t.Parallel()
 
@@ -1990,22 +1684,7 @@ func TestLinodeVolumeDeleteTool(t *testing.T) {
 	})
 }
 
-// TestLinodeNodeBalancerCreateTool verifies the NodeBalancer creation tool
-// registers correctly, enforces the confirm flag, validates required
-// parameters, and creates NodeBalancers through the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, schema, and WARNING in description
-//  2. **Validation**: Test missing confirm and missing region produce clear errors
-//  3. **Success**: Create NodeBalancer through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_nodebalancer_create" with WARNING in description
-//   - Missing confirm=true returns a clear error
-//   - Missing region returns a descriptive error message
-//   - Successful creation returns NodeBalancer details from the API
-//
-// Purpose: End-to-end verification of the NodeBalancer creation workflow.
+// End-to-end verification of the NodeBalancer creation workflow.
 func TestLinodeNodeBalancerCreateTool(t *testing.T) {
 	t.Parallel()
 
@@ -2095,21 +1774,7 @@ func TestLinodeNodeBalancerCreateTool(t *testing.T) {
 	})
 }
 
-// TestLinodeNodeBalancerUpdateTool verifies the NodeBalancer update tool
-// registers correctly, validates the required nodebalancer_id parameter,
-// and updates NodeBalancers through the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and schema
-//  2. **Validation**: Test missing nodebalancer_id produces a clear error
-//  3. **Success**: Update NodeBalancer through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_nodebalancer_update" with required parameters
-//   - Missing nodebalancer_id returns a descriptive error message
-//   - Successful update returns updated NodeBalancer details from the API
-//
-// Purpose: End-to-end verification of the NodeBalancer update workflow.
+// End-to-end verification of the NodeBalancer update workflow.
 func TestLinodeNodeBalancerUpdateTool(t *testing.T) {
 	t.Parallel()
 
@@ -2178,21 +1843,7 @@ func TestLinodeNodeBalancerUpdateTool(t *testing.T) {
 	})
 }
 
-// TestLinodeNodeBalancerDeleteTool verifies the NodeBalancer deletion tool
-// registers correctly, enforces the confirm flag, and deletes NodeBalancers
-// through the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, schema, and WARNING in description
-//  2. **Validation**: Test missing confirm produces a clear error
-//  3. **Success**: Delete NodeBalancer through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_nodebalancer_delete" with WARNING in description
-//   - Missing confirm=true returns a clear error
-//   - Successful deletion returns confirmation from the API
-//
-// Purpose: End-to-end verification of the NodeBalancer deletion workflow.
+// End-to-end verification of the NodeBalancer deletion workflow.
 func TestLinodeNodeBalancerDeleteTool(t *testing.T) {
 	t.Parallel()
 

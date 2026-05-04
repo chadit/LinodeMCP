@@ -16,20 +16,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-// TestHelloTool verifies the hello tool registers correctly, uses a default
-// name when none is provided, and echoes back a custom name.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and handler
-//  2. **Default name**: Call with no arguments, expect "World" in greeting
-//  3. **Custom name**: Call with "Alice", expect "Alice" in greeting
-//
-// Expected Behavior:
-//   - Tool registers as "hello" with a non-empty description
-//   - Missing name defaults to "World"
-//   - Provided name appears in the greeting
-//
-// Purpose: End-to-end verification of the hello tool.
+// End-to-end verification of the hello tool.
 func TestHelloTool(t *testing.T) {
 	t.Parallel()
 
@@ -75,18 +62,7 @@ func TestHelloTool(t *testing.T) {
 	})
 }
 
-// TestVersionTool verifies the version tool registers correctly and returns
-// valid JSON containing the current version string.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and handler
-//  2. **Success**: Call handler and verify JSON response contains the version
-//
-// Expected Behavior:
-//   - Tool registers as "version" with a non-empty description
-//   - Response is valid JSON with the correct version field
-//
-// Purpose: End-to-end verification of the version tool.
+// End-to-end verification of the version tool.
 func TestVersionTool(t *testing.T) {
 	t.Parallel()
 
@@ -120,23 +96,7 @@ func TestVersionTool(t *testing.T) {
 	})
 }
 
-// TestLinodeInstancesListTool verifies the instances list tool registers
-// correctly, handles missing environments, incomplete configs, and returns
-// paginated instance data on success.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and schema
-//  2. **Missing environment**: Confirm error result for nonexistent environment
-//  3. **Incomplete config**: Confirm error result for empty API URL and token
-//  4. **Success**: Mock API returns instances, verify response format
-//
-// Expected Behavior:
-//   - Tool registers as "linode_instances_list"
-//   - Nonexistent environment returns an error result
-//   - Empty API config returns an error result
-//   - Populated response includes instance labels
-//
-// Purpose: End-to-end verification of the instance listing workflow.
+// End-to-end verification of the instance listing workflow.
 func TestLinodeInstancesListTool(t *testing.T) {
 	t.Parallel()
 
@@ -231,20 +191,7 @@ func TestLinodeInstancesListTool(t *testing.T) {
 	})
 }
 
-// TestLinodeProfileTool verifies the profile tool registers correctly, handles
-// incomplete config, and returns profile data on success.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and handler
-//  2. **Incomplete config**: Confirm error result for empty API config
-//  3. **Success**: Mock API returns profile, verify response contains username
-//
-// Expected Behavior:
-//   - Tool registers as "linode_profile"
-//   - Empty API config returns an error result
-//   - Populated response includes the username
-//
-// Purpose: End-to-end verification of the profile tool.
+// End-to-end verification of the profile tool.
 func TestLinodeProfileTool(t *testing.T) {
 	t.Parallel()
 
@@ -318,22 +265,7 @@ func TestLinodeProfileTool(t *testing.T) {
 	})
 }
 
-// TestLinodeInstanceGetTool verifies the instance get tool registers correctly,
-// validates required parameters, and returns instance details on success.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and handler
-//  2. **Missing instance ID**: Confirm error result when no ID is provided
-//  3. **Invalid instance ID**: Confirm error result for non-numeric ID
-//  4. **Success**: Mock API returns instance, verify response format
-//
-// Expected Behavior:
-//   - Tool registers as "linode_instance_get"
-//   - Missing instance_id returns an error result
-//   - Non-numeric instance_id returns an error result
-//   - Valid request returns instance label and status
-//
-// Purpose: End-to-end verification of the instance get workflow.
+// End-to-end verification of the instance get workflow.
 func TestLinodeInstanceGetTool(t *testing.T) {
 	t.Parallel()
 
@@ -431,18 +363,7 @@ func TestLinodeInstanceGetTool(t *testing.T) {
 	})
 }
 
-// TestLinodeAccountTool verifies the account tool registers correctly and
-// returns account information from the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and handler
-//  2. **Success**: Mock API returns account data, verify response format
-//
-// Expected Behavior:
-//   - Tool registers as "linode_account" with correct schema
-//   - API response includes account name and email
-//
-// Purpose: End-to-end verification of account info retrieval.
+// End-to-end verification of account info retrieval.
 func TestLinodeAccountTool(t *testing.T) {
 	t.Parallel()
 
@@ -499,20 +420,7 @@ func TestLinodeAccountTool(t *testing.T) {
 	})
 }
 
-// TestLinodeRegionsListTool verifies the regions list tool registers correctly,
-// returns region data, and supports country filtering.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and handler
-//  2. **Success**: Mock API returns regions, verify response format
-//  3. **Filter by country**: Verify only matching regions are returned
-//
-// Expected Behavior:
-//   - Tool registers as "linode_regions_list"
-//   - Unfiltered response includes all regions
-//   - Country filter excludes non-matching regions
-//
-// Purpose: End-to-end verification of region listing and filtering.
+// End-to-end verification of region listing and filtering.
 func TestLinodeRegionsListTool(t *testing.T) {
 	t.Parallel()
 
@@ -616,20 +524,7 @@ func TestLinodeRegionsListTool(t *testing.T) {
 	})
 }
 
-// TestLinodeTypesListTool verifies the types list tool registers correctly,
-// returns instance type data, and supports class filtering.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and handler
-//  2. **Success**: Mock API returns types, verify response format
-//  3. **Filter by class**: Verify only matching types are returned
-//
-// Expected Behavior:
-//   - Tool registers as "linode_types_list"
-//   - Unfiltered response includes all instance types
-//   - Class filter excludes non-matching types
-//
-// Purpose: End-to-end verification of type listing and filtering.
+// End-to-end verification of type listing and filtering.
 func TestLinodeTypesListTool(t *testing.T) {
 	t.Parallel()
 
@@ -731,22 +626,7 @@ func TestLinodeTypesListTool(t *testing.T) {
 	})
 }
 
-// TestLinodeVolumesListTool verifies the volumes list tool registers correctly,
-// returns volume data, and supports region and label filtering.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and handler
-//  2. **Success**: Mock API returns volumes, verify response format
-//  3. **Filter by region**: Verify only matching volumes are returned
-//  4. **Filter by label**: Verify substring label matching works
-//
-// Expected Behavior:
-//   - Tool registers as "linode_volumes_list"
-//   - Unfiltered response includes all volumes
-//   - Region filter excludes non-matching volumes
-//   - Label filter matches partial strings
-//
-// Purpose: End-to-end verification of volume listing and filtering.
+// End-to-end verification of volume listing and filtering.
 func TestLinodeVolumesListTool(t *testing.T) {
 	t.Parallel()
 
@@ -892,23 +772,7 @@ func TestLinodeVolumesListTool(t *testing.T) {
 	})
 }
 
-// TestLinodeImagesListTool verifies the images list tool registers correctly,
-// returns image data, and supports filtering by public visibility and
-// deprecation status.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and handler
-//  2. **Success**: Mock API returns images, verify response format
-//  3. **Filter by public**: Verify only private images returned when filtered
-//  4. **Filter by deprecated**: Verify only deprecated images returned
-//
-// Expected Behavior:
-//   - Tool registers as "linode_images_list"
-//   - Unfiltered response includes all images
-//   - Public filter excludes public images when set to false
-//   - Deprecated filter returns only deprecated images
-//
-// Purpose: End-to-end verification of image listing and filtering.
+// End-to-end verification of image listing and filtering.
 func TestLinodeImagesListTool(t *testing.T) {
 	t.Parallel()
 

@@ -7,19 +7,13 @@ import sys
 import structlog
 
 from linodemcp.config import ConfigError, load
-from linodemcp.observability import (
-    get_logger,
-)
-from linodemcp.observability import (
-    init as init_observability,
-)
-from linodemcp.observability import (
-    shutdown as shutdown_observability,
-)
+from linodemcp.observability import Observability
 from linodemcp.server import Server
 from linodemcp.version import get_version_info
 
-# Configure structlog for production-ready logging
+# Bootstrap logger for startup. The Observability constructor reconfigures
+# structlog once it knows the configured level/format, so this is just for
+# any output before that happens.
 structlog.configure(
     processors=[
         structlog.contextvars.merge_contextvars,
@@ -42,20 +36,19 @@ async def async_main() -> int:
     """Async main function."""
     try:
         cfg = load()
-    except ConfigError as e:
-        logger.exception("failed to load configuration", error=str(e))
+    except ConfigError as exc:
+        logger.exception("failed to load configuration", error=str(exc))
         return 1
 
-    # Initialize observability (tracing, metrics, logging, health)
     try:
-        init_observability(cfg.observability)
-    except Exception as e:
-        logger.warning("failed to initialize observability", error=str(e))
-        # Continue without observability
+        obs = Observability(cfg.observability)
+    except Exception as exc:
+        logger.exception("failed to initialize observability", error=str(exc))
+        obs = Observability(None)
 
+    log = obs.logger
     version_info = get_version_info()
 
-    log = get_logger()
     log.info("starting LinodeMCP server")
     log.info(
         "server configuration",
@@ -68,15 +61,14 @@ async def async_main() -> int:
     try:
         server = Server(cfg)
         await server.start()
-    except Exception as e:
-        log.exception("server error", error=str(e))
+    except Exception as exc:
+        log.exception("server error", error=str(exc))
         return 1
-
-    # Shutdown observability
-    try:
-        shutdown_observability()
-    except Exception as e:
-        log.warning("observability shutdown error", error=str(e))
+    finally:
+        try:
+            obs.shutdown()
+        except Exception as exc:
+            log.exception("observability shutdown error", error=str(exc))
 
     log.info("server shutdown complete")
     return 0

@@ -43,3 +43,8 @@ coverage.xml
 .env
 .env.*
 !.env.example
+
+# Override: the global ~/.gitignore excludes /.github/ broadly, but this
+# repo ships its own CI workflows. Re-include them here.
+!/.github/
+!/.github/**

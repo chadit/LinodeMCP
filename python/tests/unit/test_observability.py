@@ -20,7 +20,6 @@ sys.modules["opentelemetry.sdk.resources"] = MagicMock()
 sys.modules["opentelemetry.sdk.trace"] = MagicMock()
 sys.modules["opentelemetry.sdk.trace.export"] = MagicMock()
 sys.modules["opentelemetry.instrumentation"] = MagicMock()
-sys.modules["opentelemetry.instrumentation.runtime"] = MagicMock()
 sys.modules["opentelemetry.instrumentation.system_metrics"] = MagicMock()
 
 from linodemcp.config import (  # noqa: E402 - imports after sys.modules mocking
@@ -31,90 +30,103 @@ from linodemcp.config import (  # noqa: E402 - imports after sys.modules mocking
     TracingConfig,
 )
 from linodemcp.observability import (  # noqa: E402 - imports after sys.modules mocking
-    api_call,
-    get_logger,
-    get_tracer,
-    init,
-    shutdown,
-    tool_execution,
+    Observability,
 )
 
 
-class TestInit:
-    """Tests for init() function."""
-
-    def test_init_with_disabled_components(self) -> None:
-        """Test init with all components disabled."""
-        cfg = ObservabilityConfig(
+def _make_obs() -> Observability:
+    """Construct an Observability with all subsystems off so tests don't open ports."""
+    return Observability(
+        ObservabilityConfig(
             tracing=TracingConfig(enabled=False),
             metrics=MetricsConfig(enabled=False),
             health=HealthConfig(enabled=False),
             logging=LoggingConfig(level="info", format="json"),
         )
+    )
 
-        # Should not raise
-        init(cfg)
 
-    def test_init_with_nil_config(self) -> None:
-        """Test init with None config uses defaults."""
-        # Should not raise
-        init(None)
+class TestConstruction:
+    """Constructor accepts disabled config and None."""
+
+    def test_construct_with_disabled_components(self) -> None:
+        obs = _make_obs()
+        try:
+            assert obs.logger is not None
+            assert obs.tracer is not None
+        finally:
+            obs.shutdown()
+
+    def test_construct_with_none_config(self) -> None:
+        obs = Observability(None)
+        try:
+            assert obs.logger is not None
+        finally:
+            obs.shutdown()
 
 
 class TestShutdown:
-    """Tests for shutdown() function."""
+    """Shutdown is idempotent and safe to call twice."""
 
-    def test_shutdown(self) -> None:
-        """Test shutdown completes without error."""
-        # Should not raise
-        shutdown()
-
-
-class TestGetLogger:
-    """Tests for get_logger() function."""
-
-    def test_get_logger_returns_logger(self) -> None:
-        """Test get_logger returns a valid logger."""
-        logger = get_logger()
-        assert logger is not None
-
-
-class TestGetTracer:
-    """Tests for get_tracer() function."""
-
-    def test_get_tracer_returns_tracer(self) -> None:
-        """Test get_tracer returns a valid tracer."""
-        tracer = get_tracer()
-        assert tracer is not None
+    def test_shutdown_runs(self) -> None:
+        obs = _make_obs()
+        obs.shutdown()
+        # Second call must not raise.
+        obs.shutdown()
 
 
 class TestToolExecution:
-    """Tests for tool_execution() context manager."""
+    """tool_execution context manager."""
 
     def test_tool_execution_success(self) -> None:
-        """Test tool_execution with successful function."""
-        with tool_execution("test_tool") as span:
-            assert span is not None
+        obs = _make_obs()
+        try:
+            with obs.tool_execution("test_tool") as span:
+                assert span is not None
+        finally:
+            obs.shutdown()
 
     def test_tool_execution_failure(self) -> None:
-        """Test tool_execution with failing function."""
-        # Note: nested with required - pytest.raises must wrap context manager
-        with pytest.raises(ValueError, match="test error"):  # noqa: SIM117
-            with tool_execution("test_tool"):
-                raise ValueError("test error")
+        obs = _make_obs()
+        try:
+            with pytest.raises(ValueError, match="test error"):  # noqa: SIM117
+                with obs.tool_execution("test_tool"):
+                    raise ValueError("test error")
+        finally:
+            obs.shutdown()
 
 
 class TestAPICall:
-    """Tests for api_call() context manager."""
+    """api_call context manager."""
 
     def test_api_call_success(self) -> None:
-        """Test api_call with successful function."""
-        with api_call("/v4/test", "GET") as span:
-            assert span is not None
+        obs = _make_obs()
+        try:
+            with obs.api_call("/v4/test", "GET") as span:
+                assert span is not None
+        finally:
+            obs.shutdown()
 
     def test_api_call_failure(self) -> None:
-        """Test api_call with failing function."""
-        # Note: nested with required - pytest.raises must wrap context manager
-        with pytest.raises(RuntimeError, match="API error"):  # noqa: SIM117
-            with api_call("/v4/test", "POST"):
-                raise RuntimeError("API error")
+        obs = _make_obs()
+        try:
+            with pytest.raises(RuntimeError, match="API error"):  # noqa: SIM117
+                with obs.api_call("/v4/test", "POST"):
+                    raise RuntimeError("API error")
+        finally:
+            obs.shutdown()
+
+
+class TestIndependence:
+    """Two Observability instances do not share state."""
+
+    def test_two_instances_independent(self) -> None:
+        a = _make_obs()
+        b = _make_obs()
+        try:
+            assert a is not b
+            assert a.logger is not None
+            assert b.logger is not None
+        finally:
+            a.shutdown()
+            b.shutdown()

@@ -9,14 +9,10 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// ToolExecution records the execution of an MCP tool with tracing and metrics.
-func ToolExecution(ctx context.Context, toolName string, executeFn func(ctx context.Context) error) error {
-	tracer := Tracer()
-
-	ctx, span := tracer.Start(ctx, "mcp.tool.execute",
-		trace.WithAttributes(
-			ToolAttr(toolName),
-		),
+// ToolExecution wraps tool execution with tracing and metric recording.
+func (o *Observability) ToolExecution(ctx context.Context, toolName string, executeFn func(ctx context.Context) error) error {
+	ctx, span := o.tracer.Start(ctx, "mcp.tool.execute",
+		trace.WithAttributes(ToolAttr(toolName)),
 		trace.WithSpanKind(trace.SpanKindServer),
 	)
 	defer span.End()
@@ -28,23 +24,21 @@ func ToolExecution(ctx context.Context, toolName string, executeFn func(ctx cont
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		span.RecordError(err)
-		RecordError(ctx, toolName, "execution_error")
-		RecordRequest(ctx, toolName, "execute", "error", duration)
+		o.RecordError(ctx, toolName, "execution_error")
+		o.RecordRequest(ctx, toolName, "execute", "error", duration)
 
 		return err
 	}
 
 	span.SetStatus(codes.Ok, "")
-	RecordRequest(ctx, toolName, "execute", "success", duration)
+	o.RecordRequest(ctx, toolName, "execute", "success", duration)
 
-	return err
+	return nil
 }
 
-// APICall records a Linode API call with tracing and metrics.
-func APICall(ctx context.Context, endpoint, method string, apiFn func(ctx context.Context) error) error {
-	tracer := Tracer()
-
-	ctx, span := tracer.Start(ctx, "linode.api.call",
+// APICall wraps a Linode API call with tracing and metric recording.
+func (o *Observability) APICall(ctx context.Context, endpoint, method string, apiFn func(ctx context.Context) error) error {
+	ctx, span := o.tracer.Start(ctx, "linode.api.call",
 		trace.WithAttributes(
 			LinodeEndpointAttr(endpoint),
 			LinodeMethodAttr(method),
@@ -60,18 +54,21 @@ func APICall(ctx context.Context, endpoint, method string, apiFn func(ctx contex
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		span.RecordError(err)
-		RecordAPIRequest(ctx, endpoint, method, 0, duration)
+		o.RecordAPIRequest(ctx, endpoint, method, 0, duration)
 
 		return err
 	}
 
 	span.SetStatus(codes.Ok, "")
-	RecordAPIRequest(ctx, endpoint, method, 0, duration)
+	o.RecordAPIRequest(ctx, endpoint, method, 0, duration)
 
-	return err
+	return nil
 }
 
-// WithEnvironment adds the environment attribute to the context.
+// Span helpers below are pure context-mutation utilities. They operate only
+// on the span carried by ctx, so no observability state is needed.
+
+// WithEnvironment annotates the current span with the environment name.
 func WithEnvironment(ctx context.Context, env string) context.Context {
 	span := trace.SpanFromContext(ctx)
 	if span.IsRecording() {
@@ -81,7 +78,7 @@ func WithEnvironment(ctx context.Context, env string) context.Context {
 	return ctx
 }
 
-// WithToolArgument adds a tool argument as a span attribute.
+// WithToolArgument annotates the current span with a tool argument.
 func WithToolArgument(ctx context.Context, name, value string) context.Context {
 	span := trace.SpanFromContext(ctx)
 	if span.IsRecording() {
@@ -91,7 +88,7 @@ func WithToolArgument(ctx context.Context, name, value string) context.Context {
 	return ctx
 }
 
-// WithToolResultSize adds the result size as a span attribute.
+// WithToolResultSize annotates the current span with the tool result size.
 func WithToolResultSize(ctx context.Context, size int) context.Context {
 	span := trace.SpanFromContext(ctx)
 	if span.IsRecording() {
@@ -101,7 +98,7 @@ func WithToolResultSize(ctx context.Context, size int) context.Context {
 	return ctx
 }
 
-// RecordEvent records an event in the current span.
+// RecordEvent adds an event to the current span.
 func RecordEvent(ctx context.Context, eventName string, attrs ...attribute.KeyValue) {
 	span := trace.SpanFromContext(ctx)
 	if span.IsRecording() {

@@ -11,19 +11,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
-// TestAPIErrorMessage verifies that APIError produces clear error strings
-// with and without the Field property set.
-//
-// Workflow:
-//  1. **Setup**: Create APIError instances with various field combinations
-//  2. **Execute**: Call Error() on each
-//  3. **Verify**: Check formatted string matches expected output
-//
-// Expected Behavior:
-//   - Errors with Field include it in the message
-//   - Errors without Field omit the field portion
-//
-// Purpose: Ensures API error messages are informative for debugging.
+// Ensures API error messages are informative for debugging.
 func TestAPIErrorMessage(t *testing.T) {
 	t.Parallel()
 
@@ -62,24 +50,7 @@ func TestAPIErrorMessage(t *testing.T) {
 	}
 }
 
-// TestAPIErrorStatusChecks verifies that status-code classification methods
-// on APIError correctly identify authentication, rate-limit, forbidden,
-// and server error responses.
-//
-// Workflow:
-//  1. **Setup**: Create APIError instances with various HTTP status codes
-//  2. **Execute**: Call each classification method
-//  3. **Verify**: Only the expected classification returns true
-//
-// Expected Behavior:
-//   - 401 is an authentication error only
-//   - 403 is a forbidden error only
-//   - 429 is a rate-limit error only
-//   - 500 and 503 are server errors only
-//   - 404 matches none of the above
-//
-// Purpose: Confirms status code categorization drives correct retry and
-// error-handling decisions.
+// Confirms status code categorization drives correct retry and error-handling decisions.
 func TestAPIErrorStatusChecks(t *testing.T) {
 	t.Parallel()
 
@@ -126,21 +97,7 @@ func TestNetworkErrorErrorAndUnwrap(t *testing.T) {
 	assert.Equal(t, inner, err.Unwrap(), "Unwrap should return the original inner error")
 }
 
-// TestRetryableError verifies that RetryableError formats its message
-// correctly (with and without RetryAfter) and that Unwrap exposes the
-// underlying cause for errors.Is/As chains.
-//
-// Workflow:
-//  1. **Setup**: Create RetryableError with and without RetryAfter
-//  2. **Execute**: Call Error() and check Unwrap behavior
-//  3. **Verify**: Messages include expected substrings, Unwrap returns inner
-//
-// Expected Behavior:
-//   - With RetryAfter set, message contains "retry after" and the cause
-//   - Without RetryAfter, message contains "retryable error" and the cause
-//   - Unwrap returns the original inner error via errors.Is
-//
-// Purpose: Confirms retryable error formatting and unwrap chain integrity.
+// Confirms retryable error formatting and unwrap chain integrity.
 func TestRetryableError(t *testing.T) {
 	t.Parallel()
 

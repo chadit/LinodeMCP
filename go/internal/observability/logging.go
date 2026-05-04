@@ -11,23 +11,19 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 )
 
-// initLogging configures the global slog logger with JSON or text output.
-func initLogging(cfg config.LoggingConfig) {
-	opts := &slog.HandlerOptions{
-		Level: parseLogLevel(cfg.Level),
-	}
+// initLogging builds the logger and stores it on the instance. Also wires
+// slog.SetDefault so callers that reach for slog.Default() see the same
+// configuration without having to thread *Observability through.
+func (o *Observability) initLogging(cfg config.LoggingConfig) {
+	opts := &slog.HandlerOptions{Level: parseLogLevel(cfg.Level)}
 
+	handler := slog.Handler(slog.NewTextHandler(os.Stderr, opts))
 	if strings.EqualFold(cfg.Format, "json") {
-		handler := slog.NewJSONHandler(os.Stderr, opts)
-		state.logger.Store(slog.New(handler))
-		slog.SetDefault(Logger())
-
-		return
+		handler = slog.NewJSONHandler(os.Stderr, opts)
 	}
 
-	handler := slog.NewTextHandler(os.Stderr, opts)
-	state.logger.Store(slog.New(handler))
-	slog.SetDefault(Logger())
+	o.logger = slog.New(handler)
+	slog.SetDefault(o.logger)
 }
 
 // parseLogLevel converts a string log level to slog.Level.
@@ -46,32 +42,30 @@ func parseLogLevel(level string) slog.Level {
 	}
 }
 
-// NewLogger creates a new logger with context-aware fields.
-func NewLogger(ctx context.Context) *slog.Logger {
-	base := Logger()
-
-	// Add trace ID if available
+// NewLogger returns a logger derived from the instance logger with trace
+// context attached when ctx carries an active span.
+func (o *Observability) NewLogger(ctx context.Context) *slog.Logger {
 	if span := trace.SpanFromContext(ctx); span.SpanContext().HasTraceID() {
-		traceID := span.SpanContext().TraceID().String()
-
-		return base.With("trace_id", traceID)
+		return o.logger.With("trace_id", span.SpanContext().TraceID().String())
 	}
 
-	return base
+	return o.logger
 }
 
-// WithContext returns a logger with trace context from the span.
+// WithContext attaches trace and span IDs from ctx to the supplied logger.
+// Pure helper, no observability state required.
 func WithContext(ctx context.Context, log *slog.Logger) *slog.Logger {
 	if log == nil {
-		log = Logger()
+		log = slog.Default()
 	}
 
-	if span := trace.SpanFromContext(ctx); span.SpanContext().HasTraceID() {
-		traceID := span.SpanContext().TraceID().String()
-		spanID := span.SpanContext().SpanID().String()
-
-		return log.With("trace_id", traceID, "span_id", spanID)
+	span := trace.SpanFromContext(ctx)
+	if !span.SpanContext().HasTraceID() {
+		return log
 	}
 
-	return log
+	return log.With(
+		"trace_id", span.SpanContext().TraceID().String(),
+		"span_id", span.SpanContext().SpanID().String(),
+	)
 }

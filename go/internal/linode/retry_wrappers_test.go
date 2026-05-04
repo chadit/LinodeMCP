@@ -27,28 +27,7 @@ func fastRetryOpts() []linode.Option {
 	}
 }
 
-// TestRetryWrappersDelegationPatterns verifies that the generated retry
-// wrappers correctly delegate to the underlying client for each return-type
-// pattern (slice, pointer, error-only, create-request, update-request) and
-// that retries work across all patterns.
-//
-// Workflow:
-//  1. **Setup**: Create httptest servers that fail on the first request then succeed
-//  2. **Execute**: Call each wrapper method through the retryable client
-//  3. **Verify**: Confirm successful results after retry and correct request counts
-//
-// Expected Behavior:
-//   - Slice-returning methods retry on 500 and return data on success
-//   - Pointer-returning methods retry on 500 and return populated structs
-//   - Error-only methods retry on 500 and return nil on success
-//   - Create methods with request bodies retry and return created resources
-//   - Update methods with ID + request body retry and return updated resources
-//   - Persistent 500s exhaust all retries and return an error
-//   - 401 errors are not retried
-//   - Two-ID delete methods retry correctly
-//
-// Purpose: Ensures the retry wrapper generator produces correct delegation
-// for all method signatures used by the Linode client.
+// Ensures the retry wrapper generator produces correct delegation for all method signatures used by the Linode client.
 func TestRetryWrappersDelegationPatterns(t *testing.T) {
 	t.Parallel()
 

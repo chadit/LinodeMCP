@@ -1,138 +1,144 @@
 // Package observability provides tracing, metrics, logging, and health check
 // functionality for LinodeMCP using OpenTelemetry and Prometheus.
+//
+// Construct an *Observability with New, defer Shutdown, and inject the value
+// into anything that needs it. The package holds no global state so multiple
+// instances can coexist (production, test harnesses, multi-tenant).
 package observability
 
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"os"
 	"sync"
-	"sync/atomic"
 
-	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/metric"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 )
 
-// state holds all observability package state.
-// This avoids scattered global variables.
-//
-//nolint:gochecknoglobals // Singleton pattern required for observability infrastructure
-var state struct {
-	mu            sync.RWMutex
-	initialized   atomic.Bool
-	logger        atomic.Value // stores *slog.Logger
-	tracer        atomic.Value // stores trace.Tracer
+// Observability bundles tracing, metrics, logging, and health endpoints.
+// All fields are owned by the instance; nothing leaks to package globals.
+type Observability struct {
+	logger *slog.Logger
+	tracer trace.Tracer
+
+	traceProvider *sdktrace.TracerProvider
+	meterProvider *sdkmetric.MeterProvider
+
+	requestsTotal   metric.Int64Counter
+	requestDuration metric.Float64Histogram
+	errorsTotal     metric.Int64Counter
+	apiRequests     metric.Int64Counter
+	apiRequestDur   metric.Float64Histogram
+	metricsServer   *http.Server
+
+	healthMu     sync.RWMutex
+	healthChecks map[string]HealthCheck
+	healthServer *http.Server
+
+	shutdownMu    sync.Mutex
 	shutdownFuncs []func(context.Context) error
 }
 
-// Logger returns the configured slog logger.
-func Logger() *slog.Logger {
-	logger := state.logger.Load()
-	if logger == nil {
-		return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-			Level: slog.LevelInfo,
-		}))
-	}
-
-	return logger.(*slog.Logger) //nolint:forcetypeassert // State is always initialized with *slog.Logger
-}
-
-// Tracer returns the configured OpenTelemetry tracer.
-func Tracer() trace.Tracer {
-	t := state.tracer.Load()
-	if t == nil {
-		return noop.NewTracerProvider().Tracer("linodemcp")
-	}
-
-	return t.(trace.Tracer) //nolint:forcetypeassert // State is always initialized with trace.Tracer
-}
-
-// Init initializes all observability components (tracing, metrics, logging, health).
-// It respects OTEL_* environment variables for configuration.
-func Init(cfg *config.ObservabilityConfig) error {
-	if state.initialized.Load() {
-		return errAlreadyInitialized
-	}
-
-	// Use defaults if config is nil
+// New constructs and starts an Observability stack.
+// A nil cfg uses sensible defaults (info-level JSON logs, all subsystems off).
+func New(cfg *config.ObservabilityConfig) (*Observability, error) {
 	if cfg == nil {
 		cfg = &config.ObservabilityConfig{
-			Logging: config.LoggingConfig{
-				Level:  "info",
-				Format: "json",
-			},
+			Logging: config.LoggingConfig{Level: "info", Format: "json"},
 		}
 	}
 
-	state.mu.Lock()
-	defer state.mu.Unlock()
+	obs := &Observability{
+		logger:       defaultLogger(),
+		tracer:       noop.NewTracerProvider().Tracer("linodemcp"),
+		healthChecks: make(map[string]HealthCheck),
+	}
 
-	// Initialize logging first so we can log during setup
-	initLogging(cfg.Logging)
+	obs.initLogging(cfg.Logging)
+	obs.logger.Info("initializing observability")
 
-	Logger().Info("initializing observability")
-
-	// Initialize tracing
 	if cfg.Tracing.Enabled {
-		if err := initTracing(cfg.Tracing); err != nil {
-			Logger().Error("tracing initialization failed", "error", err)
-			// Continue without tracing
-			return nil
+		if err := obs.initTracing(cfg.Tracing); err != nil {
+			obs.logger.Error("tracing initialization failed", "error", err)
 		}
 
-		state.tracer.Store(otel.Tracer("github.com/chadit/LinodeMCP"))
-		Logger().Info("tracing initialized")
+		if obs.traceProvider != nil {
+			obs.logger.Info("tracing initialized")
+		}
 	}
 
-	// Initialize metrics
 	if cfg.Metrics.Enabled {
-		if err := initMetrics(&cfg.Metrics); err != nil {
-			Logger().Error("metrics initialization failed", "error", err)
-			// Continue without metrics
-			return nil
+		if err := obs.initMetrics(&cfg.Metrics); err != nil {
+			obs.logger.Error("metrics initialization failed", "error", err)
 		}
 
-		Logger().Info("metrics initialized")
+		if obs.meterProvider != nil {
+			obs.logger.Info("metrics initialized")
+		}
 	}
 
-	// Initialize health checks
-	initHealth(cfg.Health)
-	Logger().Info("health checks initialized")
+	obs.initHealth(cfg.Health)
 
-	state.initialized.Store(true)
-	Logger().Info("observability initialization complete")
+	if cfg.Health.Enabled {
+		obs.logger.Info("health checks initialized")
+	}
 
-	return nil
+	obs.logger.Info("observability initialization complete")
+
+	return obs, nil
 }
 
-// Shutdown gracefully shuts down all observability components.
-func Shutdown(ctx context.Context) error {
-	if !state.initialized.Load() {
+// Logger returns the configured slog logger.
+func (o *Observability) Logger() *slog.Logger { return o.logger }
+
+// Tracer returns the configured OpenTelemetry tracer.
+func (o *Observability) Tracer() trace.Tracer { return o.tracer }
+
+// Shutdown runs all registered shutdown hooks in LIFO order.
+// Safe to call once per instance; subsequent calls are no-ops.
+func (o *Observability) Shutdown(ctx context.Context) error {
+	o.shutdownMu.Lock()
+	defer o.shutdownMu.Unlock()
+
+	if len(o.shutdownFuncs) == 0 {
 		return nil
 	}
 
-	state.mu.Lock()
-	defer state.mu.Unlock()
-
-	Logger().Info("shutting down observability")
+	o.logger.Info("shutting down observability")
 
 	var lastErr error
 
-	for i := len(state.shutdownFuncs) - 1; i >= 0; i-- {
-		if err := state.shutdownFuncs[i](ctx); err != nil {
+	for i := len(o.shutdownFuncs) - 1; i >= 0; i-- {
+		if err := o.shutdownFuncs[i](ctx); err != nil {
 			lastErr = err
-			Logger().Error("shutdown error", "error", err)
+
+			o.logger.Error("shutdown error", "error", err)
 		}
 	}
+
+	o.shutdownFuncs = nil
 
 	return lastErr
 }
 
-// registerShutdown registers a shutdown function to be called on Shutdown().
-// Must be called with state.mu held.
-func registerShutdown(fn func(context.Context) error) {
-	state.shutdownFuncs = append(state.shutdownFuncs, fn)
+// registerShutdown queues a shutdown hook. Caller must hold no locks the hook
+// will reacquire.
+func (o *Observability) registerShutdown(fn func(context.Context) error) {
+	o.shutdownMu.Lock()
+	defer o.shutdownMu.Unlock()
+
+	o.shutdownFuncs = append(o.shutdownFuncs, fn)
+}
+
+// defaultLogger returns a stderr text logger used until initLogging configures
+// the real one. Keeps Logger() non-nil during early init.
+func defaultLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 }

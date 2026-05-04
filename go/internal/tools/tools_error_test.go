@@ -13,23 +13,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-// TestToolHandlersAPIErrorResponses verifies that tool handlers gracefully
-// handle various HTTP error status codes from the Linode API by returning
-// structured error results instead of Go errors.
-//
-// Workflow:
-//  1. **ListInstances**: Test 500, 401, 403, 429 responses
-//  2. **GetInstance**: Test 500, 401, 403, 429 responses
-//  3. **CreateInstance**: Test 500, 401, 403, 429 responses
-//  4. **ListDomainRecords**: Test 500, 401, 403, 429 responses
-//
-// Expected Behavior:
-//   - All tools return result.IsError=true for API errors
-//   - Error message from the API is included in the result
-//   - No Go-level errors are returned (errors are result-level)
-//
-// Purpose: Confirm that API failures are surfaced as user-visible error
-// results across multiple tool handlers.
+// Confirm that API failures are surfaced as user-visible error results across multiple tool handlers.
 func TestToolHandlersAPIErrorResponses(t *testing.T) {
 	t.Parallel()
 

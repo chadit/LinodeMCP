@@ -1,0 +1,73 @@
+name: Renovate
+
+# Self-hosted Renovate runner. Runs on a weekly schedule against this repo.
+#
+# Required secret (Settings -> Secrets and variables -> Actions):
+#   RENOVATE_TOKEN  PAT created at https://github.com/settings/tokens
+#                   Scopes: repo, workflow
+#                   Used for cloning, branch push, PR open/comment, and
+#                   public release-metadata lookups (Go releases, action
+#                   tags, PyPI versions). One token suffices because the
+#                   repo and metadata are both on github.com.
+#
+# A PAT (rather than the built-in GITHUB_TOKEN) is required so PRs that
+# Renovate opens trigger CI workflows. PRs authored via GITHUB_TOKEN do
+# not fire other workflows by design.
+
+on:
+  schedule:
+    # Mondays 04:00 UTC. Adjust if you want a different cadence.
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: "Log level"
+        type: choice
+        default: info
+        options: [info, debug]
+      dryRun:
+        description: "Dry run mode (no PRs created)"
+        type: choice
+        default: "disabled"
+        options: [disabled, extract, lookup, full]
+
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check required secret
+        id: secrets
+        env:
+          # GitHub masks secret values inside if-conditions, but a boolean
+          # comparison done in env (`secret != ''`) yields a plain
+          # 'true'/'false' string we can branch on without leaking anything.
+          HAS_RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          skip=false
+          if [[ "${HAS_RENOVATE_TOKEN}" != "true" ]]; then
+            echo "::warning title=Renovate skipped::RENOVATE_TOKEN secret is not configured. Add it under Settings -> Secrets and variables -> Actions to enable scheduled dependency updates."
+            skip=true
+          fi
+          echo "skip=${skip}" >> "${GITHUB_OUTPUT}"
+
+      - uses: actions/checkout@v4
+        if: steps.secrets.outputs.skip != 'true'
+
+      - uses: renovatebot/github-action@v40
+        if: steps.secrets.outputs.skip != 'true'
+        with:
+          configurationFile: renovate.json5
+          token: ${{ secrets.RENOVATE_TOKEN }}
+        env:
+          LOG_LEVEL: ${{ inputs.logLevel || 'info' }}
+          RENOVATE_DRY_RUN: ${{ inputs.dryRun == 'disabled' && 'null' || inputs.dryRun }}
+          RENOVATE_REPOSITORIES: ${{ github.repository }}

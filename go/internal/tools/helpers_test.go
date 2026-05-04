@@ -16,21 +16,7 @@ type testItem struct {
 	Status string
 }
 
-// TestMarshalToolResponse verifies JSON serialization of various input types
-// into MCP text results, including valid structs, nil, and unmarshalable types.
-//
-// Workflow:
-//  1. **Setup**: Prepare each input value (map, nil, channel)
-//  2. **Execute**: Call MarshalToolResponse for each case
-//  3. **Verify**: Check that valid inputs produce correct JSON text content
-//     and unmarshalable types return an error
-//
-// Expected Behavior:
-//   - Valid struct produces indented JSON wrapped in TextContent
-//   - Nil input produces "null" text content
-//   - Unmarshalable type (channel) returns an error with "failed to marshal response"
-//
-// Purpose: Ensures all tool response serialization paths work correctly.
+// Ensures all tool response serialization paths work correctly.
 func TestMarshalToolResponse(t *testing.T) {
 	t.Parallel()
 
@@ -78,23 +64,7 @@ func TestMarshalToolResponse(t *testing.T) {
 	})
 }
 
-// TestRequireConfirm verifies that the confirm parameter gate correctly allows
-// or blocks write operations based on boolean-coercible argument values.
-//
-// Workflow:
-//  1. **Setup**: Build CallToolRequest with various confirm argument types
-//  2. **Execute**: Call RequireConfirm for each case
-//  3. **Verify**: Check nil (allowed) vs non-nil error result (blocked)
-//
-// Expected Behavior:
-//   - Boolean true returns nil (operation proceeds)
-//   - Boolean false returns an error result
-//   - Missing confirm key returns an error result
-//   - String "true" is coerced to true via strconv.ParseBool
-//   - Integer 1 is coerced to true via GetBool
-//   - String "yes" is not recognized by GetBool and treated as false
-//
-// Purpose: Validates the safety gate for destructive write operations.
+// Validates the safety gate for destructive write operations.
 func TestRequireConfirm(t *testing.T) {
 	t.Parallel()
 
@@ -167,21 +137,7 @@ func TestRequireConfirm(t *testing.T) {
 	}
 }
 
-// TestFilterByField verifies exact case-insensitive field matching across
-// various scenarios including matches, misses, empty filters, and empty slices.
-//
-// Workflow:
-//  1. **Setup**: Define test items and filter values for each case
-//  2. **Execute**: Call FilterByField with a Status field extractor
-//  3. **Verify**: Check the returned slice length and content
-//
-// Expected Behavior:
-//   - Exact status match returns matching items (case-insensitive)
-//   - Non-matching filter returns empty slice
-//   - Empty filter value only matches items with empty field values
-//   - Empty input slice returns empty result
-//
-// Purpose: Ensures list filtering by exact field value works for all edge cases.
+// Ensures list filtering by exact field value works for all edge cases.
 func TestFilterByField(t *testing.T) {
 	t.Parallel()
 
@@ -252,21 +208,7 @@ func TestFilterByField(t *testing.T) {
 	}
 }
 
-// TestFilterByContains verifies substring-based case-insensitive matching
-// across various scenarios including partial matches and empty substrings.
-//
-// Workflow:
-//  1. **Setup**: Define test items and substring values for each case
-//  2. **Execute**: Call FilterByContains with a Name field extractor
-//  3. **Verify**: Check the returned slice length and content
-//
-// Expected Behavior:
-//   - Substring present in name returns matching items
-//   - Matching is case-insensitive
-//   - Non-matching substring returns empty slice
-//   - Empty substring matches all items (every string contains "")
-//
-// Purpose: Ensures list filtering by substring containment works for all edge cases.
+// Ensures list filtering by substring containment works for all edge cases.
 func TestFilterByContains(t *testing.T) {
 	t.Parallel()
 
@@ -334,21 +276,7 @@ func TestFilterByContains(t *testing.T) {
 	}
 }
 
-// TestFormatListResponse verifies that list responses are correctly formatted
-// with item counts, applied filters, and JSON structure.
-//
-// Workflow:
-//  1. **Setup**: Prepare items and optional filter slices for each case
-//  2. **Execute**: Call FormatListResponse with the test data
-//  3. **Verify**: Check the JSON text content for expected fields and values
-//
-// Expected Behavior:
-//   - Non-empty items produce correct count and item names in output
-//   - Empty items produce count of zero
-//   - Applied filters appear in the output text
-//   - Nil filters produce no filter key in the output
-//
-// Purpose: Ensures the standard list response envelope is built correctly.
+// Ensures the standard list response envelope is built correctly.
 func TestFormatListResponse(t *testing.T) {
 	t.Parallel()
 

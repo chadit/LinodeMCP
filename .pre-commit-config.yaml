@@ -7,7 +7,7 @@ repos:
       - id: golangci-lint
         args: ['--max-issues-per-linter=0', '--max-same-issues=0']
         # golangci-lint picks up ~/.golangci.yml automatically. The hook runs
-        # from the repo root by default, but go.mod lives in go/ — tell it
+        # from the repo root by default, but go.mod lives in go/, so tell it
         # where to run so GCI's localModule check finds the module file.
         entry: bash -c 'cd go && golangci-lint run "$@"' --
 
@@ -81,4 +81,17 @@ repos:
         types: [python]
         language: system
         pass_filenames: false
+        stages: [pre-push]
+
+      # Final lint gate before push. Mirrors the CI workflow so anything
+      # that bypassed commit-time hooks (e.g. via --no-verify) still gets
+      # caught locally before it reaches the remote. Run:
+      #   pre-commit install --hook-type pre-push
+      # so this hook actually fires on `git push`.
+      - id: make-lint
+        name: make lint (full, both languages)
+        entry: bash -c 'cd go && make lint && cd ../python && make lint && make typecheck'
+        language: system
+        pass_filenames: false
+        always_run: true
         stages: [pre-push]

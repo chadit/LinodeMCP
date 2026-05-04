@@ -25,13 +25,13 @@ const (
 	tracingMaxExportBatchSize = 512
 )
 
-// initTracing sets up OpenTelemetry tracing with OTLP export.
-// Configuration is primarily via OTEL_* environment variables.
-func initTracing(cfg config.TracingConfig) error {
+// initTracing constructs the tracer provider and stores the tracer on the
+// instance. Honors OTEL_* environment variables via the SDK's auto-config
+// when no endpoint is set in the local config.
+func (o *Observability) initTracing(cfg config.TracingConfig) error {
 	ctx, cancel := context.WithTimeout(context.Background(), tracingInitTimeout)
 	defer cancel()
 
-	// Build resource with service info
 	res, err := resource.New(ctx,
 		resource.WithAttributes(
 			semconv.ServiceName("linodemcp"),
@@ -45,69 +45,17 @@ func initTracing(cfg config.TracingConfig) error {
 		return fmt.Errorf("failed to create resource: %w", err)
 	}
 
-	// Create exporter based on protocol
-	var exporter sdktrace.SpanExporter
-
-	switch cfg.Protocol {
-	case "http", "http/protobuf":
-		opts := []otlptracehttp.Option{
-			otlptracehttp.WithEndpoint(cfg.Endpoint),
-		}
-		if cfg.Insecure {
-			opts = append(opts, otlptracehttp.WithInsecure())
-		}
-
-		if len(cfg.Headers) > 0 {
-			opts = append(opts, otlptracehttp.WithHeaders(cfg.Headers))
-		}
-
-		exporter, err = otlptracehttp.New(ctx, opts...)
-	case "grpc", "grpc/protobuf":
-		opts := []otlptracegrpc.Option{
-			otlptracegrpc.WithEndpoint(cfg.Endpoint),
-		}
-		if cfg.Insecure {
-			opts = append(opts, otlptracegrpc.WithInsecure())
-		}
-
-		if len(cfg.Headers) > 0 {
-			opts = append(opts, otlptracegrpc.WithHeaders(cfg.Headers))
-		}
-
-		exporter, err = otlptracegrpc.New(ctx, opts...)
-	default:
-		// Try to detect from endpoint
-		if cfg.Endpoint != "" {
-			// Default to gRPC
-			opts := []otlptracegrpc.Option{
-				otlptracegrpc.WithEndpoint(cfg.Endpoint),
-			}
-			if cfg.Insecure {
-				opts = append(opts, otlptracegrpc.WithInsecure())
-			}
-
-			if len(cfg.Headers) > 0 {
-				opts = append(opts, otlptracegrpc.WithHeaders(cfg.Headers))
-			}
-
-			exporter, err = otlptracegrpc.New(ctx, opts...)
-		}
-	}
-
+	exporter, err := buildTraceExporter(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to create exporter: %w", err)
 	}
 
-	// Configure sampler based on sample rate
 	sampler := sdktrace.AlwaysSample()
 	if cfg.SampleRate < 1.0 && cfg.SampleRate >= 0 {
-		sampler = sdktrace.ParentBased(
-			sdktrace.TraceIDRatioBased(cfg.SampleRate),
-		)
+		sampler = sdktrace.ParentBased(sdktrace.TraceIDRatioBased(cfg.SampleRate))
 	}
 
-	// Create trace provider
-	traceProvider := sdktrace.NewTracerProvider(
+	o.traceProvider = sdktrace.NewTracerProvider(
 		sdktrace.WithResource(res),
 		sdktrace.WithSampler(sampler),
 		sdktrace.WithBatcher(exporter,
@@ -116,28 +64,66 @@ func initTracing(cfg config.TracingConfig) error {
 		),
 	)
 
-	// Set global tracer provider
-	otel.SetTracerProvider(traceProvider)
-
-	// Set global propagator (tracecontext + baggage)
+	otel.SetTracerProvider(o.traceProvider)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{},
 		propagation.Baggage{},
 	))
 
-	// Register shutdown
-	registerShutdown(func(ctx context.Context) error {
-		return traceProvider.Shutdown(ctx)
+	o.tracer = o.traceProvider.Tracer("github.com/chadit/LinodeMCP")
+
+	o.registerShutdown(func(shutdownCtx context.Context) error {
+		return o.traceProvider.Shutdown(shutdownCtx)
 	})
 
-	// Also respect OTEL_EXPORTER_OTLP_* environment variables
-	// by using the SDK's automatic configuration if endpoint not set
 	if cfg.Endpoint == "" {
-		// Reset to noop if no configuration provided
+		// No endpoint -> reset to noop so we don't try to export to nowhere.
+		// The provider above is registered for completeness; flipping the
+		// tracer here means the rest of the app sees a no-op.
+		o.tracer = noop.NewTracerProvider().Tracer("linodemcp")
 		otel.SetTracerProvider(noop.NewTracerProvider())
 	}
 
 	return nil
+}
+
+// buildTraceExporter selects the right OTLP exporter for the configured
+// protocol. Defaults to gRPC when only an endpoint is provided.
+func buildTraceExporter(ctx context.Context, cfg config.TracingConfig) (sdktrace.SpanExporter, error) {
+	switch cfg.Protocol {
+	case "http", "http/protobuf":
+		opts := []otlptracehttp.Option{otlptracehttp.WithEndpoint(cfg.Endpoint)}
+		if cfg.Insecure {
+			opts = append(opts, otlptracehttp.WithInsecure())
+		}
+
+		if len(cfg.Headers) > 0 {
+			opts = append(opts, otlptracehttp.WithHeaders(cfg.Headers))
+		}
+
+		exp, err := otlptracehttp.New(ctx, opts...)
+		if err != nil {
+			return nil, fmt.Errorf("otlptracehttp.New: %w", err)
+		}
+
+		return exp, nil
+	default:
+		opts := []otlptracegrpc.Option{otlptracegrpc.WithEndpoint(cfg.Endpoint)}
+		if cfg.Insecure {
+			opts = append(opts, otlptracegrpc.WithInsecure())
+		}
+
+		if len(cfg.Headers) > 0 {
+			opts = append(opts, otlptracegrpc.WithHeaders(cfg.Headers))
+		}
+
+		exp, err := otlptracegrpc.New(ctx, opts...)
+		if err != nil {
+			return nil, fmt.Errorf("otlptracegrpc.New: %w", err)
+		}
+
+		return exp, nil
+	}
 }
 
 // getVersion returns the application version from build info or env.
@@ -149,70 +135,34 @@ func getVersion() string {
 	return "dev"
 }
 
-// SpanAttributes contains common attribute builders for LinodeMCP spans.
-type SpanAttributes struct{}
-
-// Tool creates an attribute for the tool name.
-func (SpanAttributes) Tool(name string) attribute.KeyValue {
-	return attribute.String("mcp.tool.name", name)
-}
-
-// ToolArgument creates an attribute for a tool argument.
-func (SpanAttributes) ToolArgument(name, value string) attribute.KeyValue {
-	return attribute.String("mcp.tool.argument."+name, value)
-}
-
-// ToolResult creates an attribute for the tool result size.
-func (SpanAttributes) ToolResult(size int) attribute.KeyValue {
-	return attribute.Int("mcp.tool.result.size", size)
-}
-
-// LinodeEndpoint creates an attribute for the Linode API endpoint.
-func (SpanAttributes) LinodeEndpoint(endpoint string) attribute.KeyValue {
-	return attribute.String("linode.api.endpoint", endpoint)
-}
-
-// LinodeMethod creates an attribute for the Linode API method.
-func (SpanAttributes) LinodeMethod(method string) attribute.KeyValue {
-	return attribute.String("linode.api.method", method)
-}
-
-// Environment creates an attribute for the environment name.
-func (SpanAttributes) Environment(name string) attribute.KeyValue {
-	return attribute.String("linode.environment", name)
-}
-
-// spanAttrs provides common span attribute builders.
-//
-//nolint:gochecknoglobals // Singleton pattern for span attribute builders
-var spanAttrs = SpanAttributes{}
+// Span attribute constructors. Pure functions, no observability state needed.
 
 // ToolAttr creates an attribute for the tool name.
 func ToolAttr(name string) attribute.KeyValue {
-	return spanAttrs.Tool(name)
+	return attribute.String("mcp.tool.name", name)
 }
 
 // ToolArgumentAttr creates an attribute for a tool argument.
 func ToolArgumentAttr(name, value string) attribute.KeyValue {
-	return spanAttrs.ToolArgument(name, value)
+	return attribute.String("mcp.tool.argument."+name, value)
 }
 
 // ToolResultAttr creates an attribute for the tool result size.
 func ToolResultAttr(size int) attribute.KeyValue {
-	return spanAttrs.ToolResult(size)
+	return attribute.Int("mcp.tool.result.size", size)
 }
 
 // LinodeEndpointAttr creates an attribute for the Linode API endpoint.
 func LinodeEndpointAttr(endpoint string) attribute.KeyValue {
-	return spanAttrs.LinodeEndpoint(endpoint)
+	return attribute.String("linode.api.endpoint", endpoint)
 }
 
 // LinodeMethodAttr creates an attribute for the Linode API method.
 func LinodeMethodAttr(method string) attribute.KeyValue {
-	return spanAttrs.LinodeMethod(method)
+	return attribute.String("linode.api.method", method)
 }
 
 // EnvironmentAttr creates an attribute for the environment name.
 func EnvironmentAttr(name string) attribute.KeyValue {
-	return spanAttrs.Environment(name)
+	return attribute.String("linode.environment", name)
 }

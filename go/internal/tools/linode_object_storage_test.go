@@ -16,20 +16,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-// TestLinodeObjectStorageBucketsListTool verifies the bucket listing tool
-// registers correctly, handles missing environments, and returns bucket data.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and handler
-//  2. **Success**: Mock API returns buckets, verify response format
-//  3. **Missing environment**: Confirm error when environment does not exist
-//
-// Expected Behavior:
-//   - Tool registers as "linode_object_storage_buckets_list"
-//   - Populated response includes bucket details and count
-//   - Missing environment returns an error result
-//
-// Purpose: End-to-end verification of object storage bucket listing.
+// End-to-end verification of object storage bucket listing.
 func TestLinodeObjectStorageBucketsListTool(t *testing.T) {
 	t.Parallel()
 
@@ -106,20 +93,7 @@ func TestLinodeObjectStorageBucketsListTool(t *testing.T) {
 	})
 }
 
-// TestLinodeObjectStorageBucketGetTool verifies the bucket get tool
-// registers correctly, validates required fields, and returns bucket details.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and handler
-//  2. **Success**: Mock API returns bucket, verify response format
-//  3. **Validation**: Confirm errors for missing region and missing label
-//
-// Expected Behavior:
-//   - Tool registers as "linode_object_storage_bucket_get"
-//   - Missing region or label returns validation error
-//   - Populated response includes bucket details
-//
-// Purpose: End-to-end verification of object storage bucket retrieval.
+// End-to-end verification of object storage bucket retrieval.
 func TestLinodeObjectStorageBucketGetTool(t *testing.T) {
 	t.Parallel()
 
@@ -202,23 +176,7 @@ func TestLinodeObjectStorageBucketGetTool(t *testing.T) {
 	})
 }
 
-// TestLinodeObjectStorageBucketContentsTool verifies the bucket contents listing
-// tool registers correctly, handles prefix filtering, truncation, and validation.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and handler
-//  2. **Success**: Mock API returns objects, verify response format
-//  3. **With prefix**: Confirm prefix query parameter is forwarded
-//  4. **Truncated**: Verify truncation indicator and next_marker
-//  5. **Validation**: Confirm errors for missing region
-//
-// Expected Behavior:
-//   - Tool registers as "linode_object_storage_bucket_contents"
-//   - Prefix filtering passes query params to the API
-//   - Truncated responses include next_marker for pagination
-//   - Missing region returns validation error
-//
-// Purpose: End-to-end verification of object listing within a bucket.
+// End-to-end verification of object listing within a bucket.
 func TestLinodeObjectStorageBucketContentsTool(t *testing.T) {
 	t.Parallel()
 
@@ -368,18 +326,7 @@ func TestLinodeObjectStorageBucketContentsTool(t *testing.T) {
 	})
 }
 
-// TestLinodeObjectStorageClustersListTool verifies the clusters listing tool
-// registers correctly and returns cluster data from the API.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and handler
-//  2. **Success**: Mock API returns clusters, verify response format
-//
-// Expected Behavior:
-//   - Tool registers as "linode_object_storage_clusters_list"
-//   - Populated response includes cluster details and count
-//
-// Purpose: End-to-end verification of object storage cluster listing.
+// End-to-end verification of object storage cluster listing.
 func TestLinodeObjectStorageClustersListTool(t *testing.T) {
 	t.Parallel()
 
@@ -436,20 +383,7 @@ func TestLinodeObjectStorageClustersListTool(t *testing.T) {
 	})
 }
 
-// TestLinodeObjectStorageTypeListTool verifies the type listing tool
-// registers correctly, handles success, and returns errors for incomplete config.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and handler
-//  2. **Success**: Mock API returns types, verify response format
-//  3. **Incomplete config**: Confirm error for empty API URL and token
-//
-// Expected Behavior:
-//   - Tool registers as "linode_object_storage_type_list"
-//   - Populated response includes type details and count
-//   - Incomplete config returns an error result
-//
-// Purpose: End-to-end verification of object storage type listing.
+// End-to-end verification of object storage type listing.
 func TestLinodeObjectStorageTypeListTool(t *testing.T) {
 	t.Parallel()
 
@@ -522,20 +456,7 @@ func TestLinodeObjectStorageTypeListTool(t *testing.T) {
 	})
 }
 
-// TestLinodeObjectStorageKeysListTool verifies the access keys listing tool
-// registers correctly, handles success, and returns errors for incomplete config.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and handler
-//  2. **Success**: Mock API returns keys, verify response format
-//  3. **Incomplete config**: Confirm error for empty API URL and token
-//
-// Expected Behavior:
-//   - Tool registers as "linode_object_storage_keys_list"
-//   - Populated response includes key details and count
-//   - Incomplete config returns an error result
-//
-// Purpose: End-to-end verification of object storage access key listing.
+// End-to-end verification of object storage access key listing.
 func TestLinodeObjectStorageKeysListTool(t *testing.T) {
 	t.Parallel()
 
@@ -613,21 +534,7 @@ func TestLinodeObjectStorageKeysListTool(t *testing.T) {
 	})
 }
 
-// TestLinodeObjectStorageKeyGetTool verifies the key get tool
-// registers correctly, validates required fields, and returns key details.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and handler
-//  2. **Success**: Mock API returns key, verify response format
-//  3. **Validation**: Confirm errors for missing and invalid key_id
-//
-// Expected Behavior:
-//   - Tool registers as "linode_object_storage_key_get"
-//   - Missing key_id returns validation error
-//   - Invalid key_id returns descriptive error message
-//   - Populated response includes key details
-//
-// Purpose: End-to-end verification of object storage access key retrieval.
+// End-to-end verification of object storage access key retrieval.
 func TestLinodeObjectStorageKeyGetTool(t *testing.T) {
 	t.Parallel()
 
@@ -713,20 +620,7 @@ func TestLinodeObjectStorageKeyGetTool(t *testing.T) {
 	})
 }
 
-// TestLinodeObjectStorageTransferTool verifies the transfer usage tool
-// registers correctly, handles success, and returns errors for incomplete config.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and handler
-//  2. **Success**: Mock API returns transfer data, verify response format
-//  3. **Incomplete config**: Confirm error for empty API URL and token
-//
-// Expected Behavior:
-//   - Tool registers as "linode_object_storage_transfer"
-//   - Response includes used bytes value
-//   - Incomplete config returns an error result
-//
-// Purpose: End-to-end verification of object storage transfer usage retrieval.
+// End-to-end verification of object storage transfer usage retrieval.
 func TestLinodeObjectStorageTransferTool(t *testing.T) {
 	t.Parallel()
 
@@ -791,20 +685,7 @@ func TestLinodeObjectStorageTransferTool(t *testing.T) {
 	})
 }
 
-// TestLinodeObjectStorageBucketAccessGetTool verifies the bucket access get tool
-// registers correctly, validates required fields, and returns access settings.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and handler
-//  2. **Success**: Mock API returns access data, verify response format
-//  3. **Validation**: Confirm errors for missing region, label, and environment
-//
-// Expected Behavior:
-//   - Tool registers as "linode_object_storage_bucket_access_get"
-//   - Missing region, label, or environment returns validation error
-//   - Response includes ACL and CORS settings
-//
-// Purpose: End-to-end verification of bucket access settings retrieval.
+// End-to-end verification of bucket access settings retrieval.
 func TestLinodeObjectStorageBucketAccessGetTool(t *testing.T) {
 	t.Parallel()
 
@@ -900,23 +781,7 @@ func TestLinodeObjectStorageBucketAccessGetTool(t *testing.T) {
 	})
 }
 
-// TestLinodeObjectStorageBucketCreateTool verifies the bucket create tool
-// registers correctly, validates all input fields, and creates buckets.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, schema, and WARNING
-//  2. **Validation**: Table-driven subtests for missing confirm, invalid labels,
-//     invalid ACL, and missing region
-//  3. **Success**: Mock API creates bucket, verify response format
-//
-// Expected Behavior:
-//   - Tool registers as "linode_object_storage_bucket_create" with WARNING
-//   - Missing confirm returns confirm=true prompt
-//   - Invalid labels (too short, uppercase, hyphen start) return errors
-//   - Invalid ACL and missing region return descriptive errors
-//   - Successful creation returns bucket details
-//
-// Purpose: End-to-end verification of object storage bucket creation.
+// End-to-end verification of object storage bucket creation.
 func TestLinodeObjectStorageBucketCreateTool(t *testing.T) {
 	t.Parallel()
 
@@ -1051,20 +916,7 @@ func TestLinodeObjectStorageBucketCreateTool(t *testing.T) {
 	})
 }
 
-// TestLinodeObjectStorageBucketDeleteTool verifies the bucket delete tool
-// registers correctly, validates required fields, and deletes buckets.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, schema, and WARNING
-//  2. **Validation**: Table-driven subtests for missing confirm, region, and label
-//  3. **Success**: Mock API deletes bucket, verify response format
-//
-// Expected Behavior:
-//   - Tool registers as "linode_object_storage_bucket_delete" with WARNING
-//   - Missing confirm, region, or label returns descriptive errors
-//   - Successful deletion returns confirmation message
-//
-// Purpose: End-to-end verification of object storage bucket deletion.
+// End-to-end verification of object storage bucket deletion.
 func TestLinodeObjectStorageBucketDeleteTool(t *testing.T) {
 	t.Parallel()
 
@@ -1163,22 +1015,7 @@ func TestLinodeObjectStorageBucketDeleteTool(t *testing.T) {
 	})
 }
 
-// TestLinodeObjectStorageBucketAccessUpdateTool verifies the bucket access update
-// tool registers correctly, validates fields, and updates access settings.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and schema
-//  2. **Validation**: Table-driven subtests for missing confirm and invalid ACL
-//  3. **Success**: Mock API updates access, verify response format
-//  4. **Missing environment**: Confirm error when environment is absent
-//
-// Expected Behavior:
-//   - Tool registers as "linode_object_storage_bucket_access_update"
-//   - Missing confirm and invalid ACL return descriptive errors
-//   - Successful update returns confirmation message
-//   - Missing environment returns error result
-//
-// Purpose: End-to-end verification of bucket access settings update.
+// End-to-end verification of bucket access settings update.
 func TestLinodeObjectStorageBucketAccessUpdateTool(t *testing.T) {
 	t.Parallel()
 
@@ -1295,23 +1132,7 @@ func TestLinodeObjectStorageBucketAccessUpdateTool(t *testing.T) {
 	})
 }
 
-// TestLinodeObjectStorageKeyCreateTool verifies the key create tool
-// registers correctly, validates all input fields, and creates access keys.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, schema, and WARNING
-//  2. **Validation**: Table-driven subtests for missing confirm, empty label,
-//     label too long, invalid JSON, invalid permissions, and missing bucket name
-//  3. **Success**: Mock API creates key, verify response includes secret_key
-//  4. **Missing environment**: Confirm error when environment is absent
-//
-// Expected Behavior:
-//   - Tool registers as "linode_object_storage_key_create" with WARNING and secret_key
-//   - Various validation failures return descriptive error messages
-//   - Successful creation returns key with IMPORTANT secret_key notice
-//   - Missing environment returns error result
-//
-// Purpose: End-to-end verification of object storage access key creation.
+// End-to-end verification of object storage access key creation.
 func TestLinodeObjectStorageKeyCreateTool(t *testing.T) {
 	t.Parallel()
 
@@ -1464,20 +1285,7 @@ func TestLinodeObjectStorageKeyCreateTool(t *testing.T) {
 	})
 }
 
-// TestLinodeObjectStorageKeyUpdateTool verifies the key update tool
-// registers correctly, validates required fields, and updates access keys.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and schema
-//  2. **Validation**: Table-driven subtests for missing confirm and invalid key_id
-//  3. **Success**: Mock API updates key, verify response format
-//
-// Expected Behavior:
-//   - Tool registers as "linode_object_storage_key_update"
-//   - Missing confirm and invalid key_id return descriptive errors
-//   - Successful update returns confirmation message
-//
-// Purpose: End-to-end verification of object storage access key update.
+// End-to-end verification of object storage access key update.
 func TestLinodeObjectStorageKeyUpdateTool(t *testing.T) {
 	t.Parallel()
 
@@ -1573,22 +1381,7 @@ func TestLinodeObjectStorageKeyUpdateTool(t *testing.T) {
 	})
 }
 
-// TestLinodeObjectStorageKeyDeleteTool verifies the key delete tool
-// registers correctly, validates required fields, and revokes access keys.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and schema
-//  2. **Validation**: Table-driven subtests for missing confirm and invalid key_id
-//  3. **Success**: Mock API revokes key, verify response format
-//  4. **Missing environment**: Confirm error when environment is absent
-//
-// Expected Behavior:
-//   - Tool registers as "linode_object_storage_key_delete"
-//   - Missing confirm and invalid key_id return descriptive errors
-//   - Successful revocation returns confirmation message
-//   - Missing environment returns error result
-//
-// Purpose: End-to-end verification of object storage access key revocation.
+// End-to-end verification of object storage access key revocation.
 func TestLinodeObjectStorageKeyDeleteTool(t *testing.T) {
 	t.Parallel()
 
@@ -1698,23 +1491,7 @@ func TestLinodeObjectStorageKeyDeleteTool(t *testing.T) {
 	})
 }
 
-// TestLinodeObjectStoragePresignedURLTool verifies the presigned URL tool
-// registers correctly, validates all input fields, and generates presigned URLs.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and schema
-//  2. **Validation**: Confirm errors for missing name, invalid method, and
-//     out-of-range expires_in
-//  3. **Success**: Mock API returns presigned URL, verify response format
-//  4. **Missing environment**: Confirm error when environment is absent
-//
-// Expected Behavior:
-//   - Tool registers as "linode_object_storage_presigned_url"
-//   - Missing name, invalid method, and invalid expires_in return errors
-//   - Successful generation returns signed URL
-//   - Missing environment returns error result
-//
-// Purpose: End-to-end verification of presigned URL generation.
+// End-to-end verification of presigned URL generation.
 func TestLinodeObjectStoragePresignedURLTool(t *testing.T) {
 	t.Parallel()
 
@@ -1862,20 +1639,7 @@ func TestLinodeObjectStoragePresignedURLTool(t *testing.T) {
 	})
 }
 
-// TestLinodeObjectStorageObjectACLGetTool verifies the object ACL get tool
-// registers correctly, validates required fields, and returns ACL data.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and schema
-//  2. **Missing name**: Confirm error when object name is missing
-//  3. **Success**: Mock API returns ACL, verify response format
-//
-// Expected Behavior:
-//   - Tool registers as "linode_object_storage_object_acl_get"
-//   - Missing name returns validation error
-//   - Response includes ACL value and XML
-//
-// Purpose: End-to-end verification of object ACL retrieval.
+// End-to-end verification of object ACL retrieval.
 func TestLinodeObjectStorageObjectACLGetTool(t *testing.T) {
 	t.Parallel()
 
@@ -1957,20 +1721,7 @@ func TestLinodeObjectStorageObjectACLGetTool(t *testing.T) {
 	})
 }
 
-// TestLinodeObjectStorageObjectACLUpdateTool verifies the object ACL update tool
-// registers correctly, validates all input fields, and updates object ACLs.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and schema
-//  2. **Validation**: Confirm errors for missing confirm, name, and invalid ACL
-//  3. **Success**: Mock API updates ACL, verify response format
-//
-// Expected Behavior:
-//   - Tool registers as "linode_object_storage_object_acl_update"
-//   - Missing confirm, name, and invalid ACL return descriptive errors
-//   - Successful update returns updated ACL data
-//
-// Purpose: End-to-end verification of object ACL update.
+// End-to-end verification of object ACL update.
 func TestLinodeObjectStorageObjectACLUpdateTool(t *testing.T) {
 	t.Parallel()
 
@@ -2089,20 +1840,7 @@ func TestLinodeObjectStorageObjectACLUpdateTool(t *testing.T) {
 	})
 }
 
-// TestLinodeObjectStorageSSLGetTool verifies the SSL get tool
-// registers correctly, returns SSL status, and handles missing environments.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and schema
-//  2. **Success**: Mock API returns SSL status, verify response format
-//  3. **Missing environment**: Confirm error when environment is absent
-//
-// Expected Behavior:
-//   - Tool registers as "linode_object_storage_ssl_get"
-//   - Response includes SSL boolean status
-//   - Missing environment returns error result
-//
-// Purpose: End-to-end verification of bucket SSL certificate status retrieval.
+// End-to-end verification of bucket SSL certificate status retrieval.
 func TestLinodeObjectStorageSSLGetTool(t *testing.T) {
 	t.Parallel()
 
@@ -2178,22 +1916,7 @@ func TestLinodeObjectStorageSSLGetTool(t *testing.T) {
 	})
 }
 
-// TestLinodeObjectStorageSSLDeleteTool verifies the SSL delete tool
-// registers correctly, validates confirmation, and deletes SSL certificates.
-//
-// Workflow:
-//  1. **Definition**: Verify tool name, description, and schema
-//  2. **Validation**: Confirm error when confirm is false
-//  3. **Success**: Mock API deletes SSL cert, verify response format
-//  4. **Missing environment**: Confirm error when environment is absent
-//
-// Expected Behavior:
-//   - Tool registers as "linode_object_storage_ssl_delete"
-//   - Missing confirm returns confirm=true prompt
-//   - Successful deletion returns confirmation message
-//   - Missing environment returns error result
-//
-// Purpose: End-to-end verification of bucket SSL certificate deletion.
+// End-to-end verification of bucket SSL certificate deletion.
 func TestLinodeObjectStorageSSLDeleteTool(t *testing.T) {
 	t.Parallel()
 

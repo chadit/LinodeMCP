@@ -43,7 +43,6 @@ observability = [
     "opentelemetry-sdk>=1.28.0",
     "opentelemetry-exporter-otlp>=1.28.0",
     "opentelemetry-exporter-prometheus>=0.49b0",
-    "opentelemetry-instrumentation-runtime>=0.49b0",
     "opentelemetry-instrumentation-system-metrics>=0.49b0",
     "opentelemetry-instrumentation-mcp>=0.1.0",
     "opentelemetry-instrumentation-httpx>=0.49b0",

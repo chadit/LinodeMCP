@@ -12,20 +12,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-// TestNew verifies server creation under various conditions including
-// nil config, valid config, and tool registration.
-//
-// Workflow:
-//  1. **nil config**: Confirm that a nil config returns ErrConfigNil
-//  2. **valid config**: Confirm that a valid config creates a functional server
-//  3. **tools registered**: Confirm that tool registration populates the tool list
-//
-// Expected Behavior:
-//   - Nil config returns error and nil server
-//   - Valid config returns initialized server with MCP and config
-//   - Tool count matches the expected 125 registered tools
-//
-// Purpose: End-to-end verification of server construction and initialization.
+// End-to-end verification of server construction and initialization.
 func TestNew(t *testing.T) {
 	t.Parallel()
 

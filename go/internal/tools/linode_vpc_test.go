@@ -15,20 +15,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-// TestLinodeVPCsListTool verifies the VPCs list tool
-// registers correctly, returns VPC data, and supports label filtering.
-//
-// Workflow:
-//  1. Definition: Verify tool name, description, and handler
-//  2. Success: List VPCs through mock API and verify response
-//  3. FilterByLabel: Filter VPCs by label substring
-//
-// Expected Behavior:
-//   - Tool registers as "linode_vpcs_list" with a valid handler
-//   - Successful list returns all VPC names in the response
-//   - Label filter returns only matching VPCs
-//
-// Purpose: End-to-end verification of VPC listing and filtering.
+// End-to-end verification of VPC listing and filtering.
 func TestLinodeVPCsListTool(t *testing.T) {
 	t.Parallel()
 
@@ -118,21 +105,7 @@ func TestLinodeVPCsListTool(t *testing.T) {
 	})
 }
 
-// TestLinodeVPCGetTool verifies the VPC get tool
-// registers correctly, validates required fields, and retrieves VPC details.
-//
-// Workflow:
-//  1. Definition: Verify tool name, description, and handler
-//  2. Validation: Missing or invalid vpc_id produces clear errors
-//  3. Success: Get VPC through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_vpc_get" with required params
-//   - Missing vpc_id returns descriptive error
-//   - Invalid vpc_id returns descriptive error
-//   - Successful get returns VPC details from API
-//
-// Purpose: End-to-end verification of VPC get workflow.
+// End-to-end verification of VPC get workflow.
 func TestLinodeVPCGetTool(t *testing.T) {
 	t.Parallel()
 
@@ -463,20 +436,7 @@ func TestLinodeVPCSubnetGetTool(t *testing.T) {
 	})
 }
 
-// TestLinodeVPCCreateTool verifies the VPC creation tool
-// registers correctly, validates required fields, and creates VPCs.
-//
-// Workflow:
-//  1. Definition: Verify tool name, description, and schema
-//  2. Validation: Missing confirm, label, or region returns descriptive error
-//  3. Success: Create VPC through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_vpc_create" with required params
-//   - Missing required fields return descriptive errors
-//   - Successful creation returns VPC details from API
-//
-// Purpose: End-to-end verification of VPC creation workflow.
+// End-to-end verification of VPC creation workflow.
 func TestLinodeVPCCreateTool(t *testing.T) {
 	t.Parallel()
 
@@ -702,20 +662,7 @@ func TestLinodeVPCDeleteTool(t *testing.T) {
 	})
 }
 
-// TestLinodeVPCSubnetCreateTool verifies the VPC subnet creation tool
-// registers correctly, validates required fields, and creates subnets.
-//
-// Workflow:
-//  1. Definition: Verify tool name, description, and schema
-//  2. Validation: Missing confirm, vpc_id, label, or ipv4 returns descriptive error
-//  3. Success: Create subnet through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_vpc_subnet_create" with required params
-//   - Missing required fields return descriptive errors
-//   - Successful creation returns subnet details from API
-//
-// Purpose: End-to-end verification of VPC subnet creation workflow.
+// End-to-end verification of VPC subnet creation workflow.
 func TestLinodeVPCSubnetCreateTool(t *testing.T) {
 	t.Parallel()
 
@@ -797,20 +744,7 @@ func TestLinodeVPCSubnetCreateTool(t *testing.T) {
 	})
 }
 
-// TestLinodeVPCSubnetUpdateTool verifies the VPC subnet update tool
-// registers correctly, validates required fields, and updates subnets.
-//
-// Workflow:
-//  1. Definition: Verify tool name, description, and schema
-//  2. Validation: Missing confirm, vpc_id, subnet_id, or label returns descriptive error
-//  3. Success: Update subnet through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_vpc_subnet_update" with required params
-//   - Missing required fields return descriptive errors
-//   - Successful update returns confirmation message
-//
-// Purpose: End-to-end verification of VPC subnet update workflow.
+// End-to-end verification of VPC subnet update workflow.
 func TestLinodeVPCSubnetUpdateTool(t *testing.T) {
 	t.Parallel()
 

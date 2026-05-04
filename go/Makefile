@@ -71,15 +71,12 @@ lint: _ensure-hooks
 	fi
 	@echo "Running cairnlint..."
 	@if command -v cairnlint >/dev/null 2>&1; then \
-		if ! cairnlint ./...; then \
-			echo "[info] cairnlint found style issues (non-blocking)"; \
-		fi; \
+		cairnlint ./...; \
 	elif command -v go >/dev/null 2>&1; then \
-		if ! go run github.com/chadit/cairnlint@latest ./...; then \
-			echo "[info] cairnlint found style issues (non-blocking)"; \
-		fi; \
+		go run github.com/chadit/cairnlint@latest ./...; \
 	else \
-		echo "[warn] cairnlint not installed, skipping custom rules check"; \
+		echo "[error] cairnlint not installed and go unavailable to fetch it"; \
+		exit 1; \
 	fi
 
 ## fmt: Format with goimports and gofumpt

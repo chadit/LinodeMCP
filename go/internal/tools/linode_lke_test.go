@@ -15,20 +15,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-// TestLinodeLKEClustersListTool verifies the LKE clusters list tool
-// registers correctly, returns cluster data, and supports label filtering.
-//
-// Workflow:
-//  1. Definition: Verify tool name, description, and handler
-//  2. Success: List clusters through mock API and verify response
-//  3. FilterByLabel: Filter clusters by label substring
-//
-// Expected Behavior:
-//   - Tool registers as "linode_lke_clusters_list" with a valid handler
-//   - Successful list returns all cluster names in the response
-//   - Label filter returns only matching clusters
-//
-// Purpose: End-to-end verification of LKE cluster listing and filtering.
+// End-to-end verification of LKE cluster listing and filtering.
 func TestLinodeLKEClustersListTool(t *testing.T) {
 	t.Parallel()
 
@@ -124,21 +111,7 @@ func TestLinodeLKEClustersListTool(t *testing.T) {
 	})
 }
 
-// TestLinodeLKEClusterGetTool verifies the LKE cluster get tool
-// registers correctly, validates required fields, and retrieves cluster details.
-//
-// Workflow:
-//  1. Definition: Verify tool name, description, and schema
-//  2. Validation: Missing or invalid cluster_id produces clear errors
-//  3. Success: Get cluster through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_lke_cluster_get" with required params
-//   - Missing cluster_id returns descriptive error
-//   - Invalid cluster_id returns descriptive error
-//   - Successful get returns cluster details from API
-//
-// Purpose: End-to-end verification of LKE cluster get workflow.
+// End-to-end verification of LKE cluster get workflow.
 func TestLinodeLKEClusterGetTool(t *testing.T) {
 	t.Parallel()
 
@@ -855,20 +828,7 @@ func TestLinodeLKETierVersionsListTool(t *testing.T) {
 	})
 }
 
-// TestLinodeLKEClusterCreateTool verifies the LKE cluster creation tool
-// registers correctly, validates required fields, and creates clusters.
-//
-// Workflow:
-//  1. Definition: Verify tool name, description, and schema
-//  2. Validation: Missing required fields produce clear errors
-//  3. Success: Create cluster through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_lke_cluster_create" with required params
-//   - Missing confirm, label, region, or invalid node_pools returns descriptive error
-//   - Successful creation returns cluster details from API
-//
-// Purpose: End-to-end verification of LKE cluster creation workflow.
+// End-to-end verification of LKE cluster creation workflow.
 func TestLinodeLKEClusterCreateTool(t *testing.T) {
 	t.Parallel()
 
@@ -1240,20 +1200,7 @@ func TestLinodeLKEClusterRegenerateTool(t *testing.T) {
 	})
 }
 
-// TestLinodeLKEPoolCreateTool verifies the LKE pool creation tool
-// registers correctly, validates required fields, and creates node pools.
-//
-// Workflow:
-//  1. Definition: Verify tool name, description, and schema
-//  2. Validation: Missing confirm, type, or count returns descriptive error
-//  3. Success: Create pool through mock API and verify response
-//
-// Expected Behavior:
-//   - Tool registers as "linode_lke_pool_create" with required params
-//   - Missing required fields return descriptive errors
-//   - Successful creation returns pool details from API
-//
-// Purpose: End-to-end verification of LKE pool creation workflow.
+// End-to-end verification of LKE pool creation workflow.
 func TestLinodeLKEPoolCreateTool(t *testing.T) {
 	t.Parallel()
 

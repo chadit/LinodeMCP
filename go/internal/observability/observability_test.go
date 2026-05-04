@@ -10,60 +10,62 @@ import (
 	"github.com/chadit/LinodeMCP/internal/observability"
 )
 
-func TestInitWithDisabledComponents(t *testing.T) {
-	t.Parallel()
+// newTestObservability constructs a fresh instance with all subsystems off
+// (so tests don't open ports or talk to OTLP collectors).
+func newTestObservability(t *testing.T) *observability.Observability {
+	t.Helper()
 
-	cfg := config.ObservabilityConfig{
-		Tracing: config.TracingConfig{
-			Enabled: false,
-		},
-		Metrics: config.MetricsConfig{
-			Enabled: false,
-		},
-		Health: config.HealthConfig{
-			Enabled: false,
-		},
-		Logging: config.LoggingConfig{
-			Level:  "info",
-			Format: "json",
-		},
-	}
-
-	err := observability.Init(&cfg)
+	obs, err := observability.New(&config.ObservabilityConfig{
+		Tracing: config.TracingConfig{Enabled: false},
+		Metrics: config.MetricsConfig{Enabled: false},
+		Health:  config.HealthConfig{Enabled: false},
+		Logging: config.LoggingConfig{Level: "info", Format: "json"},
+	})
 	if err != nil {
-		t.Fatalf("Init() failed: %v", err)
+		t.Fatalf("New() failed: %v", err)
 	}
+
+	t.Cleanup(func() {
+		_ = obs.Shutdown(t.Context())
+	})
+
+	return obs
 }
 
-func TestInitNilConfig(t *testing.T) {
+func TestNewWithDisabledComponents(t *testing.T) {
+	t.Parallel()
+	_ = newTestObservability(t)
+}
+
+func TestNewNilConfig(t *testing.T) {
 	t.Parallel()
 
-	// Init with nil config should use defaults
-	err := observability.Init(nil)
+	obs, err := observability.New(nil)
 	if err != nil {
-		t.Fatalf("Init(nil) failed: %v", err)
+		t.Fatalf("New(nil) failed: %v", err)
 	}
+
+	t.Cleanup(func() { _ = obs.Shutdown(t.Context()) })
 }
 
 func TestLogger(t *testing.T) {
 	t.Parallel()
 
-	// Logger should always return a valid logger
-	logger := observability.Logger()
+	obs := newTestObservability(t)
+	logger := obs.Logger()
+
 	if logger == nil {
-		t.Error("Logger() should never return nil")
+		t.Fatal("Logger() should never return nil")
 	}
 
-	// Log something to verify it works
 	logger.Info("test log message")
 }
 
 func TestTracer(t *testing.T) {
 	t.Parallel()
 
-	// Tracer should always return a valid tracer
-	tracer := observability.Tracer()
-	if tracer == nil {
+	obs := newTestObservability(t)
+	if obs.Tracer() == nil {
 		t.Error("Tracer() should never return nil")
 	}
 }
@@ -71,82 +73,76 @@ func TestTracer(t *testing.T) {
 func TestRecordRequest(t *testing.T) {
 	t.Parallel()
 
+	obs := newTestObservability(t)
 	ctx := t.Context()
 
-	// Should not panic when metrics not initialized
-	observability.RecordRequest(ctx, "test_tool", "execute", "success", 0.1)
-	observability.RecordRequest(ctx, "test_tool", "execute", "error", 0.2)
+	// Counters are nil when metrics disabled; calls must not panic.
+	obs.RecordRequest(ctx, "test_tool", "execute", "success", 0.1)
+	obs.RecordRequest(ctx, "test_tool", "execute", "error", 0.2)
 }
 
 func TestRecordError(t *testing.T) {
 	t.Parallel()
 
-	ctx := t.Context()
-
-	// Should not panic when metrics not initialized
-	observability.RecordError(ctx, "test_tool", "test_error")
+	obs := newTestObservability(t)
+	obs.RecordError(t.Context(), "test_tool", "test_error")
 }
 
 func TestRecordAPIRequest(t *testing.T) {
 	t.Parallel()
 
-	ctx := t.Context()
-
-	// Should not panic when metrics not initialized
-	observability.RecordAPIRequest(ctx, "/v4/linode/instances", "GET", 200, 0.05)
+	obs := newTestObservability(t)
+	obs.RecordAPIRequest(t.Context(), "/v4/linode/instances", "GET", 200, 0.05)
 }
 
 func TestToolExecution(t *testing.T) {
 	t.Parallel()
 
+	obs := newTestObservability(t)
 	ctx := t.Context()
 
-	err := observability.ToolExecution(ctx, "test_tool", func(_ context.Context) error {
+	if err := obs.ToolExecution(ctx, "test_tool", func(_ context.Context) error {
 		return nil
-	})
-	if err != nil {
+	}); err != nil {
 		t.Errorf("ToolExecution() with successful function should return nil: %v", err)
 	}
 
 	testErr := errors.New("test error")
 
-	err = observability.ToolExecution(ctx, "test_tool", func(_ context.Context) error {
+	err := obs.ToolExecution(ctx, "test_tool", func(_ context.Context) error {
 		return testErr
 	})
 	if !errors.Is(err, testErr) {
-		t.Errorf("ToolExecution() should return original error")
+		t.Errorf("ToolExecution() should return original error, got %v", err)
 	}
 }
 
 func TestAPICall(t *testing.T) {
 	t.Parallel()
 
+	obs := newTestObservability(t)
 	ctx := t.Context()
 
-	err := observability.APICall(ctx, "/v4/linode/instances", "GET", func(_ context.Context) error {
+	if err := obs.APICall(ctx, "/v4/linode/instances", "GET", func(_ context.Context) error {
 		return nil
-	})
-	if err != nil {
+	}); err != nil {
 		t.Errorf("APICall() with successful function should return nil: %v", err)
 	}
 
 	testErr := errors.New("test error")
 
-	err = observability.APICall(ctx, "/v4/linode/instances", "GET", func(_ context.Context) error {
+	err := obs.APICall(ctx, "/v4/linode/instances", "GET", func(_ context.Context) error {
 		return testErr
 	})
 	if !errors.Is(err, testErr) {
-		t.Errorf("APICall() should return original error")
+		t.Errorf("APICall() should return original error, got %v", err)
 	}
 }
 
 func TestWithEnvironment(t *testing.T) {
 	t.Parallel()
 
-	ctx := t.Context()
-
-	newCtx := observability.WithEnvironment(ctx, "test-env")
-	if newCtx == nil {
+	if observability.WithEnvironment(t.Context(), "test-env") == nil {
 		t.Error("WithEnvironment() should return valid context")
 	}
 }
@@ -154,10 +150,7 @@ func TestWithEnvironment(t *testing.T) {
 func TestWithToolArgument(t *testing.T) {
 	t.Parallel()
 
-	ctx := t.Context()
-
-	newCtx := observability.WithToolArgument(ctx, "test_arg", "test_value")
-	if newCtx == nil {
+	if observability.WithToolArgument(t.Context(), "test_arg", "test_value") == nil {
 		t.Error("WithToolArgument() should return valid context")
 	}
 }
@@ -165,10 +158,7 @@ func TestWithToolArgument(t *testing.T) {
 func TestWithToolResultSize(t *testing.T) {
 	t.Parallel()
 
-	ctx := t.Context()
-
-	newCtx := observability.WithToolResultSize(ctx, 1024)
-	if newCtx == nil {
+	if observability.WithToolResultSize(t.Context(), 1024) == nil {
 		t.Error("WithToolResultSize() should return valid context")
 	}
 }
@@ -176,30 +166,37 @@ func TestWithToolResultSize(t *testing.T) {
 func TestRecordEvent(t *testing.T) {
 	t.Parallel()
 
-	ctx := t.Context()
-
-	// Should not panic
-	observability.RecordEvent(ctx, "test_event")
+	observability.RecordEvent(t.Context(), "test_event")
 }
 
 func TestShutdown(t *testing.T) {
 	t.Parallel()
 
-	// Shutdown with background context should succeed
-	ctx := t.Context()
-	err := observability.Shutdown(ctx)
-	// May return nil or context errors depending on state
-	_ = err
+	obs, err := observability.New(nil)
+	if err != nil {
+		t.Fatalf("New(nil) failed: %v", err)
+	}
+
+	if err := obs.Shutdown(t.Context()); err != nil {
+		t.Errorf("Shutdown() should succeed, got %v", err)
+	}
+
+	// Second call is a no-op.
+	if err := obs.Shutdown(t.Context()); err != nil {
+		t.Errorf("Shutdown() second call should be a no-op, got %v", err)
+	}
 }
 
 func TestShutdownWithTimeout(t *testing.T) {
 	t.Parallel()
 
-	// Shutdown with timeout should handle gracefully
+	obs, err := observability.New(nil)
+	if err != nil {
+		t.Fatalf("New(nil) failed: %v", err)
+	}
+
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 
-	err := observability.Shutdown(ctx)
-	// May return nil or context errors depending on state
-	_ = err
+	_ = obs.Shutdown(ctx)
 }
