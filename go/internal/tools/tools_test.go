@@ -49,7 +49,7 @@ func TestHelloTool(t *testing.T) {
 	t.Run("custom name", func(t *testing.T) {
 		t.Parallel()
 
-		req := createRequestWithArgs(t, map[string]any{"name": "Alice"})
+		req := createRequestWithArgs(t, map[string]any{keyName: "Alice"})
 		result, err := handler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return an error")
@@ -132,8 +132,8 @@ func TestLinodeInstancesListTool(t *testing.T) {
 
 		cfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {
-					Label:  "Default",
+				envKeyDefault: {
+					Label:  envLabelDefault,
 					Linode: config.LinodeConfig{APIURL: "", Token: ""},
 				},
 			},
@@ -159,19 +159,19 @@ func TestLinodeInstancesListTool(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"data":    instances,
-				"page":    1,
-				"pages":   1,
-				"results": 2,
+				keyData:    instances,
+				keyPage:    1,
+				keyPages:   1,
+				keyResults: 2,
 			}))
 		}))
 		defer srv.Close()
 
 		cfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {
-					Label:  "Default",
-					Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
 				},
 			},
 		}
@@ -211,8 +211,8 @@ func TestLinodeProfileTool(t *testing.T) {
 
 		cfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {
-					Label:  "Default",
+				envKeyDefault: {
+					Label:  envLabelDefault,
 					Linode: config.LinodeConfig{},
 				},
 			},
@@ -244,9 +244,9 @@ func TestLinodeProfileTool(t *testing.T) {
 
 		cfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {
-					Label:  "Default",
-					Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
 				},
 			},
 		}
@@ -285,9 +285,9 @@ func TestLinodeInstanceGetTool(t *testing.T) {
 
 		cfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {
-					Label:  "Default",
-					Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest},
 				},
 			},
 		}
@@ -306,15 +306,15 @@ func TestLinodeInstanceGetTool(t *testing.T) {
 
 		cfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {
-					Label:  "Default",
-					Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"},
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest},
 				},
 			},
 		}
 		_, handler := tools.NewLinodeInstanceGetTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{"instance_id": "not-a-number"})
+		req := createRequestWithArgs(t, map[string]any{keyInstanceID: notANumber})
 		result, err := handler(t.Context(), req)
 
 		require.NoError(t, err, "tool errors are returned as error results, not Go errors")
@@ -329,7 +329,7 @@ func TestLinodeInstanceGetTool(t *testing.T) {
 			ID:     123,
 			Label:  "test-instance",
 			Status: "running",
-			Region: "us-east",
+			Region: regionUSEast,
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -341,15 +341,15 @@ func TestLinodeInstanceGetTool(t *testing.T) {
 
 		cfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {
-					Label:  "Default",
-					Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
 				},
 			},
 		}
 		_, handler := tools.NewLinodeInstanceGetTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{"instance_id": "123"})
+		req := createRequestWithArgs(t, map[string]any{keyInstanceID: "123"})
 		result, err := handler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return an error")
@@ -398,9 +398,9 @@ func TestLinodeAccountTool(t *testing.T) {
 
 		cfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {
-					Label:  "Default",
-					Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
 				},
 			},
 		}
@@ -439,27 +439,27 @@ func TestLinodeRegionsListTool(t *testing.T) {
 		t.Parallel()
 
 		regions := []linode.Region{
-			{ID: "us-east", Label: "Newark, NJ", Country: "us", Capabilities: []string{"Linodes", "Block Storage"}, Status: "ok"},
-			{ID: "eu-west", Label: "London, UK", Country: "uk", Capabilities: []string{"Linodes"}, Status: "ok"},
+			{ID: regionUSEast, Label: "Newark, NJ", Country: countryUS, Capabilities: []string{"Linodes", "Block Storage"}, Status: statusOK},
+			{ID: regionEUWest, Label: "London, UK", Country: "uk", Capabilities: []string{"Linodes"}, Status: statusOK},
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/regions", r.URL.Path, "request path should be /regions")
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"data":    regions,
-				"page":    1,
-				"pages":   1,
-				"results": 2,
+				keyData:    regions,
+				keyPage:    1,
+				keyPages:   1,
+				keyResults: 2,
 			}))
 		}))
 		defer srv.Close()
 
 		cfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {
-					Label:  "Default",
-					Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
 				},
 			},
 		}
@@ -474,41 +474,41 @@ func TestLinodeRegionsListTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "us-east", "response should contain us-east region")
-		assert.Contains(t, textContent.Text, "eu-west", "response should contain eu-west region")
+		assert.Contains(t, textContent.Text, regionUSEast, "response should contain us-east region")
+		assert.Contains(t, textContent.Text, regionEUWest, "response should contain eu-west region")
 	})
 
 	t.Run("filter by country", func(t *testing.T) {
 		t.Parallel()
 
 		regions := []linode.Region{
-			{ID: "us-east", Label: "Newark, NJ", Country: "us", Status: "ok"},
-			{ID: "us-west", Label: "Fremont, CA", Country: "us", Status: "ok"},
-			{ID: "eu-west", Label: "London, UK", Country: "uk", Status: "ok"},
+			{ID: regionUSEast, Label: "Newark, NJ", Country: countryUS, Status: statusOK},
+			{ID: regionUSWest, Label: "Fremont, CA", Country: countryUS, Status: statusOK},
+			{ID: regionEUWest, Label: "London, UK", Country: "uk", Status: statusOK},
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"data":    regions,
-				"page":    1,
-				"pages":   1,
-				"results": 3,
+				keyData:    regions,
+				keyPage:    1,
+				keyPages:   1,
+				keyResults: 3,
 			}))
 		}))
 		defer srv.Close()
 
 		cfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {
-					Label:  "Default",
-					Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
 				},
 			},
 		}
 		_, handler := tools.NewLinodeRegionsListTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{"country": "us"})
+		req := createRequestWithArgs(t, map[string]any{"country": countryUS})
 		result, err := handler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return an error")
@@ -518,9 +518,9 @@ func TestLinodeRegionsListTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, `"count": 2`, "filtered count should be 2")
-		assert.Contains(t, textContent.Text, "us-east", "response should contain us-east")
-		assert.Contains(t, textContent.Text, "us-west", "response should contain us-west")
-		assert.NotContains(t, textContent.Text, "eu-west", "response should not contain eu-west")
+		assert.Contains(t, textContent.Text, regionUSEast, "response should contain us-east")
+		assert.Contains(t, textContent.Text, regionUSWest, "response should contain us-west")
+		assert.NotContains(t, textContent.Text, regionEUWest, "response should not contain eu-west")
 	})
 }
 
@@ -543,27 +543,27 @@ func TestLinodeTypesListTool(t *testing.T) {
 		t.Parallel()
 
 		types := []linode.InstanceType{
-			{ID: "g6-nanode-1", Label: "Nanode 1GB", Class: "nanode", Disk: 25600, Memory: 1024, VCPUs: 1},
-			{ID: "g6-standard-2", Label: "Linode 4GB", Class: "standard", Disk: 81920, Memory: 4096, VCPUs: 2},
+			{ID: typeG6Nanode1, Label: "Nanode 1GB", Class: "nanode", Disk: 25600, Memory: 1024, VCPUs: 1},
+			{ID: typeG6Standard2, Label: typeLinode4GB, Class: classStandard, Disk: 81920, Memory: 4096, VCPUs: 2},
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/linode/types", r.URL.Path, "request path should be /linode/types")
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"data":    types,
-				"page":    1,
-				"pages":   1,
-				"results": 2,
+				keyData:    types,
+				keyPage:    1,
+				keyPages:   1,
+				keyResults: 2,
 			}))
 		}))
 		defer srv.Close()
 
 		cfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {
-					Label:  "Default",
-					Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
 				},
 			},
 		}
@@ -578,41 +578,41 @@ func TestLinodeTypesListTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "g6-nanode-1", "response should contain nanode type")
-		assert.Contains(t, textContent.Text, "g6-standard-2", "response should contain standard type")
+		assert.Contains(t, textContent.Text, typeG6Nanode1, "response should contain nanode type")
+		assert.Contains(t, textContent.Text, typeG6Standard2, "response should contain standard type")
 	})
 
 	t.Run("filter by class", func(t *testing.T) {
 		t.Parallel()
 
 		types := []linode.InstanceType{
-			{ID: "g6-nanode-1", Label: "Nanode 1GB", Class: "nanode"},
-			{ID: "g6-standard-2", Label: "Linode 4GB", Class: "standard"},
-			{ID: "g6-standard-4", Label: "Linode 8GB", Class: "standard"},
+			{ID: typeG6Nanode1, Label: "Nanode 1GB", Class: "nanode"},
+			{ID: typeG6Standard2, Label: typeLinode4GB, Class: classStandard},
+			{ID: "g6-standard-4", Label: "Linode 8GB", Class: classStandard},
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"data":    types,
-				"page":    1,
-				"pages":   1,
-				"results": 3,
+				keyData:    types,
+				keyPage:    1,
+				keyPages:   1,
+				keyResults: 3,
 			}))
 		}))
 		defer srv.Close()
 
 		cfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {
-					Label:  "Default",
-					Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
 				},
 			},
 		}
 		_, handler := tools.NewLinodeTypesListTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{"class": "standard"})
+		req := createRequestWithArgs(t, map[string]any{"class": classStandard})
 		result, err := handler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return an error")
@@ -622,7 +622,7 @@ func TestLinodeTypesListTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, `"count": 2`, "filtered count should be 2")
-		assert.NotContains(t, textContent.Text, "g6-nanode-1", "response should not contain nanode type")
+		assert.NotContains(t, textContent.Text, typeG6Nanode1, "response should not contain nanode type")
 	})
 }
 
@@ -645,27 +645,27 @@ func TestLinodeVolumesListTool(t *testing.T) {
 		t.Parallel()
 
 		volumes := []linode.Volume{
-			{ID: 1, Label: "data-vol", Status: "active", Size: 100, Region: "us-east"},
-			{ID: 2, Label: "backup-vol", Status: "active", Size: 50, Region: "eu-west"},
+			{ID: 1, Label: labelDataVol, Status: statusActive, Size: 100, Region: regionUSEast},
+			{ID: 2, Label: labelBackupVol, Status: statusActive, Size: 50, Region: regionEUWest},
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/volumes", r.URL.Path, "request path should be /volumes")
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"data":    volumes,
-				"page":    1,
-				"pages":   1,
-				"results": 2,
+				keyData:    volumes,
+				keyPage:    1,
+				keyPages:   1,
+				keyResults: 2,
 			}))
 		}))
 		defer srv.Close()
 
 		cfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {
-					Label:  "Default",
-					Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
 				},
 			},
 		}
@@ -680,40 +680,40 @@ func TestLinodeVolumesListTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "data-vol", "response should contain first volume label")
-		assert.Contains(t, textContent.Text, "backup-vol", "response should contain second volume label")
+		assert.Contains(t, textContent.Text, labelDataVol, "response should contain first volume label")
+		assert.Contains(t, textContent.Text, labelBackupVol, "response should contain second volume label")
 	})
 
 	t.Run("filter by region", func(t *testing.T) {
 		t.Parallel()
 
 		volumes := []linode.Volume{
-			{ID: 1, Label: "data-vol", Region: "us-east"},
-			{ID: 2, Label: "backup-vol", Region: "eu-west"},
+			{ID: 1, Label: labelDataVol, Region: regionUSEast},
+			{ID: 2, Label: labelBackupVol, Region: regionEUWest},
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"data":    volumes,
-				"page":    1,
-				"pages":   1,
-				"results": 2,
+				keyData:    volumes,
+				keyPage:    1,
+				keyPages:   1,
+				keyResults: 2,
 			}))
 		}))
 		defer srv.Close()
 
 		cfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {
-					Label:  "Default",
-					Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
 				},
 			},
 		}
 		_, handler := tools.NewLinodeVolumesListTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{"region": "us-east"})
+		req := createRequestWithArgs(t, map[string]any{keyRegion: regionUSEast})
 		result, err := handler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return an error")
@@ -723,35 +723,35 @@ func TestLinodeVolumesListTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, `"count": 1`, "filtered count should be 1")
-		assert.Contains(t, textContent.Text, "data-vol", "response should contain matching volume")
-		assert.NotContains(t, textContent.Text, "backup-vol", "response should not contain non-matching volume")
+		assert.Contains(t, textContent.Text, labelDataVol, "response should contain matching volume")
+		assert.NotContains(t, textContent.Text, labelBackupVol, "response should not contain non-matching volume")
 	})
 
 	t.Run("filter by label", func(t *testing.T) {
 		t.Parallel()
 
 		volumes := []linode.Volume{
-			{ID: 1, Label: "data-vol", Region: "us-east"},
-			{ID: 2, Label: "backup-vol", Region: "eu-west"},
-			{ID: 3, Label: "data-backup", Region: "us-west"},
+			{ID: 1, Label: labelDataVol, Region: regionUSEast},
+			{ID: 2, Label: labelBackupVol, Region: regionEUWest},
+			{ID: 3, Label: "data-backup", Region: regionUSWest},
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"data":    volumes,
-				"page":    1,
-				"pages":   1,
-				"results": 3,
+				keyData:    volumes,
+				keyPage:    1,
+				keyPages:   1,
+				keyResults: 3,
 			}))
 		}))
 		defer srv.Close()
 
 		cfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {
-					Label:  "Default",
-					Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
 				},
 			},
 		}
@@ -767,7 +767,7 @@ func TestLinodeVolumesListTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, `"count": 2`, "filtered count should be 2")
-		assert.Contains(t, textContent.Text, "backup-vol", "response should contain backup-vol")
+		assert.Contains(t, textContent.Text, labelBackupVol, "response should contain backup-vol")
 		assert.Contains(t, textContent.Text, "data-backup", "response should contain data-backup")
 	})
 }
@@ -791,7 +791,7 @@ func TestLinodeImagesListTool(t *testing.T) {
 		t.Parallel()
 
 		images := []linode.Image{
-			{ID: "linode/ubuntu22.04", Label: "Ubuntu 22.04", Type: "manual", IsPublic: true, Deprecated: false},
+			{ID: imageIDUbuntu2204, Label: imageUbuntu2204, Type: "manual", IsPublic: true, Deprecated: false},
 			{ID: "private/12345", Label: "Custom Image", Type: "manual", IsPublic: false, Deprecated: false},
 		}
 
@@ -799,19 +799,19 @@ func TestLinodeImagesListTool(t *testing.T) {
 			assert.Equal(t, "/images", r.URL.Path, "request path should be /images")
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"data":    images,
-				"page":    1,
-				"pages":   1,
-				"results": 2,
+				keyData:    images,
+				keyPage:    1,
+				keyPages:   1,
+				keyResults: 2,
 			}))
 		}))
 		defer srv.Close()
 
 		cfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {
-					Label:  "Default",
-					Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
 				},
 			},
 		}
@@ -826,7 +826,7 @@ func TestLinodeImagesListTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "linode/ubuntu22.04", "response should contain public image")
+		assert.Contains(t, textContent.Text, imageIDUbuntu2204, "response should contain public image")
 		assert.Contains(t, textContent.Text, "private/12345", "response should contain private image")
 	})
 
@@ -834,26 +834,26 @@ func TestLinodeImagesListTool(t *testing.T) {
 		t.Parallel()
 
 		images := []linode.Image{
-			{ID: "linode/ubuntu22.04", Label: "Ubuntu 22.04", IsPublic: true},
+			{ID: imageIDUbuntu2204, Label: imageUbuntu2204, IsPublic: true},
 			{ID: "private/12345", Label: "Custom Image", IsPublic: false},
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"data":    images,
-				"page":    1,
-				"pages":   1,
-				"results": 2,
+				keyData:    images,
+				keyPage:    1,
+				keyPages:   1,
+				keyResults: 2,
 			}))
 		}))
 		defer srv.Close()
 
 		cfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {
-					Label:  "Default",
-					Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
 				},
 			},
 		}
@@ -870,33 +870,33 @@ func TestLinodeImagesListTool(t *testing.T) {
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, `"count": 1`, "filtered count should be 1")
 		assert.Contains(t, textContent.Text, "private/12345", "response should contain private image")
-		assert.NotContains(t, textContent.Text, "linode/ubuntu22.04", "response should not contain public image")
+		assert.NotContains(t, textContent.Text, imageIDUbuntu2204, "response should not contain public image")
 	})
 
 	t.Run("filter by deprecated", func(t *testing.T) {
 		t.Parallel()
 
 		images := []linode.Image{
-			{ID: "linode/ubuntu22.04", Label: "Ubuntu 22.04", Deprecated: false},
+			{ID: imageIDUbuntu2204, Label: imageUbuntu2204, Deprecated: false},
 			{ID: "linode/ubuntu18.04", Label: "Ubuntu 18.04", Deprecated: true},
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"data":    images,
-				"page":    1,
-				"pages":   1,
-				"results": 2,
+				keyData:    images,
+				keyPage:    1,
+				keyPages:   1,
+				keyResults: 2,
 			}))
 		}))
 		defer srv.Close()
 
 		cfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {
-					Label:  "Default",
-					Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"},
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
 				},
 			},
 		}
@@ -913,7 +913,7 @@ func TestLinodeImagesListTool(t *testing.T) {
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, `"count": 1`, "filtered count should be 1")
 		assert.Contains(t, textContent.Text, "linode/ubuntu18.04", "response should contain deprecated image")
-		assert.NotContains(t, textContent.Text, "linode/ubuntu22.04", "response should not contain non-deprecated image")
+		assert.NotContains(t, textContent.Text, imageIDUbuntu2204, "response should not contain non-deprecated image")
 	})
 }
 

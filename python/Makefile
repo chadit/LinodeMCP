@@ -55,6 +55,8 @@ test-cov: _ensure-hooks
 lint: _ensure-hooks
 	@echo "Running ruff check..."
 	@$(RUFF) check src/ tests/
+	@echo "Running ruff format --check..."
+	@$(RUFF) format --check src/ tests/
 	@echo "Running mypy type check..."
 	@if [ -x "$(MYPY)" ]; then \
 		$(MYPY) --ignore-missing-imports src/ tests/; \

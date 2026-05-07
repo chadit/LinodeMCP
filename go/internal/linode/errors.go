@@ -8,11 +8,19 @@ import (
 	"time"
 )
 
+// ErrCircuitOpen is returned when the circuit breaker is open and rejecting
+// requests. Callers can check this sentinel to distinguish "we never tried"
+// from "we tried and the upstream failed".
+var ErrCircuitOpen = errors.New("circuit breaker open")
+
 // APIError represents an error returned by the Linode API.
+// RetryAfter carries the server's Retry-After hint when present so the retry
+// loop can honor it instead of computing its own backoff.
 type APIError struct {
-	StatusCode int    `json:"status_code"`
-	Message    string `json:"message"`
-	Field      string `json:"field,omitempty"`
+	StatusCode int           `json:"status_code"`
+	Message    string        `json:"message"`
+	Field      string        `json:"field,omitempty"`
+	RetryAfter time.Duration `json:"retry_after,omitempty"`
 }
 
 func (e *APIError) Error() string {

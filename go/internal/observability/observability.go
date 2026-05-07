@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"slices"
 	"sync"
 
 	"go.opentelemetry.io/otel/metric"
@@ -115,8 +116,10 @@ func (o *Observability) Shutdown(ctx context.Context) error {
 
 	var lastErr error
 
-	for i := len(o.shutdownFuncs) - 1; i >= 0; i-- {
-		if err := o.shutdownFuncs[i](ctx); err != nil {
+	// LIFO: tear down in reverse construction order so dependent components
+	// shut down before what they depend on.
+	for _, fn := range slices.Backward(o.shutdownFuncs) {
+		if err := fn(ctx); err != nil {
 			lastErr = err
 
 			o.logger.Error("shutdown error", "error", err)

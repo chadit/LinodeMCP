@@ -10,9 +10,11 @@ import (
 
 // NewHelloTool creates a hello tool for smoke testing.
 func NewHelloTool() (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("hello",
+	tool := mcp.NewTool(
+		"hello",
 		mcp.WithDescription("Responds with a friendly greeting from LinodeMCP"),
-		mcp.WithString("name",
+		mcp.WithString(
+			"name",
 			mcp.Description("Name to include in the greeting (optional)"),
 		),
 	)

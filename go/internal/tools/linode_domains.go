@@ -13,7 +13,8 @@ import (
 
 // NewLinodeDomainsListTool creates a tool for listing domains.
 func NewLinodeDomainsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newListTool(cfg,
+	return newListTool(
+		cfg,
 		"linode_domains_list",
 		"Lists all domains managed by your Linode account. Can filter by domain name or type (master/slave).",
 		func(ctx context.Context, client *linode.Client) ([]linode.Domain, error) {
@@ -31,12 +32,15 @@ func NewLinodeDomainsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Co
 
 // NewLinodeDomainGetTool creates a tool for getting a single domain.
 func NewLinodeDomainGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_domain_get",
+	tool := mcp.NewTool(
+		"linode_domain_get",
 		mcp.WithDescription("Gets detailed information about a specific domain by its ID."),
-		mcp.WithString(paramEnvironment,
+		mcp.WithString(
+			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithNumber("domain_id",
+		mcp.WithNumber(
+			"domain_id",
 			mcp.Required(),
 			mcp.Description("The ID of the domain to retrieve"),
 		),
@@ -71,19 +75,24 @@ func handleLinodeDomainGetRequest(ctx context.Context, request *mcp.CallToolRequ
 
 // NewLinodeDomainRecordsListTool creates a tool for listing domain records.
 func NewLinodeDomainRecordsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_domain_records_list",
+	tool := mcp.NewTool(
+		"linode_domain_records_list",
 		mcp.WithDescription("Lists all DNS records for a specific domain. Can filter by record type or name."),
-		mcp.WithString(paramEnvironment,
+		mcp.WithString(
+			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithNumber("domain_id",
+		mcp.WithNumber(
+			"domain_id",
 			mcp.Required(),
 			mcp.Description("The ID of the domain to list records for"),
 		),
-		mcp.WithString("type",
+		mcp.WithString(
+			"type",
 			mcp.Description("Filter by record type (A, AAAA, NS, MX, CNAME, TXT, SRV, CAA)"),
 		),
-		mcp.WithString("name_contains",
+		mcp.WithString(
+			"name_contains",
 			mcp.Description("Filter records by name containing this string (case-insensitive)"),
 		),
 	)

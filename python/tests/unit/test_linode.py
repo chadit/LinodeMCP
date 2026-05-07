@@ -8,6 +8,8 @@ import pytest
 
 from linodemcp.linode import (
     APIError,
+    CircuitBreaker,
+    CircuitOpenError,
     Client,
     NetworkError,
     Profile,
@@ -1265,5 +1267,246 @@ class TestRetryableClientRetryScenarios:
             assert exc_info.value.status_code == 429
             # max_retries=2 means 1 initial + 2 retries = 3 total calls
             assert mock_req.call_count == 3
+
+        await client.close()
+
+
+class TestCircuitBreaker:
+    """Tests for the CircuitBreaker state machine.
+
+    These cover the contract: trip after threshold consecutive failures,
+    reject while open until cooldown elapses, admit one probe in half-open,
+    close on probe success, re-open on probe failure, reset on success.
+    """
+
+    def test_disabled_when_threshold_zero(self) -> None:
+        """A non-positive threshold disables the breaker entirely."""
+        breaker = CircuitBreaker(0, 1.0)
+        for _ in range(100):
+            breaker.record_failure()
+        # Must not raise: threshold 0 means allow always returns.
+        breaker.allow()
+
+    def test_trips_at_threshold(self) -> None:
+        """Breaker opens exactly when consecutive failures reach threshold."""
+        breaker = CircuitBreaker(3, 60.0)
+
+        breaker.record_failure()
+        breaker.record_failure()
+        # Two failures (below threshold) must not trip.
+        breaker.allow()
+
+        breaker.record_failure()
+        with pytest.raises(CircuitOpenError):
+            breaker.allow()
+
+    def test_half_open_after_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """After cooldown elapses, exactly one probe is admitted."""
+        clock = [0.0]
+        monkeypatch.setattr("linodemcp.linode.time.monotonic", lambda: clock[0])
+
+        breaker = CircuitBreaker(2, timeout=10.0)
+
+        breaker.record_failure()
+        breaker.record_failure()
+        with pytest.raises(CircuitOpenError):
+            breaker.allow()
+
+        # Advance synthetic time past the cooldown.
+        clock[0] = 11.0
+
+        # First call after cooldown: probe admitted (half-open).
+        breaker.allow()
+
+        # Subsequent concurrent calls during in-flight probe: rejected.
+        with pytest.raises(CircuitOpenError):
+            breaker.allow()
+
+    def test_closes_on_successful_probe(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A successful probe in half-open closes the breaker fully."""
+        clock = [0.0]
+        monkeypatch.setattr("linodemcp.linode.time.monotonic", lambda: clock[0])
+
+        breaker = CircuitBreaker(2, timeout=5.0)
+
+        breaker.record_failure()
+        breaker.record_failure()
+        clock[0] = 6.0
+        breaker.allow()  # half-open probe admitted
+
+        breaker.record_success()
+
+        # Closed: subsequent calls all pass.
+        breaker.allow()
+        breaker.allow()
+
+    def test_reopens_on_failed_probe(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A failed probe in half-open re-opens the breaker."""
+        clock = [0.0]
+        monkeypatch.setattr("linodemcp.linode.time.monotonic", lambda: clock[0])
+
+        breaker = CircuitBreaker(2, timeout=5.0)
+
+        breaker.record_failure()
+        breaker.record_failure()
+        clock[0] = 6.0
+        breaker.allow()  # probe admitted
+
+        breaker.record_failure()  # probe failed
+
+        with pytest.raises(CircuitOpenError):
+            breaker.allow()
+
+    def test_success_resets_failure_count(self) -> None:
+        """A success between failures restarts the failure counter."""
+        breaker = CircuitBreaker(3, 60.0)
+
+        breaker.record_failure()
+        breaker.record_failure()
+        breaker.record_success()
+
+        # Two more failures alone (below threshold from zero) must not trip.
+        breaker.record_failure()
+        breaker.record_failure()
+        breaker.allow()
+
+
+class TestRetryableClientCircuitBreaker:
+    """Tests for the breaker's integration with RetryableClient."""
+
+    async def test_breaker_trips_after_repeated_exhaustion(self) -> None:
+        """After threshold retry exhaustions, calls fail fast with CircuitOpenError."""
+        client = RetryableClient(
+            "https://api.linode.com/v4",
+            "test-token",
+            RetryConfig(
+                max_retries=1,
+                base_delay=0.001,
+                max_delay=0.001,
+                circuit_breaker_threshold=2,
+                circuit_breaker_timeout=60.0,
+            ),
+        )
+
+        mock_error_response = MagicMock()
+        mock_error_response.status_code = 500
+        mock_error_response.json.return_value = {}
+        mock_error_response.headers = {}
+
+        with patch.object(
+            client.client.client, "request", new_callable=AsyncMock
+        ) as mock_req:
+            mock_req.return_value = mock_error_response
+
+            # First exhaustion: 1 initial + 1 retry = 2 upstream calls.
+            with pytest.raises(APIError):
+                await client.get_profile()
+            assert mock_req.call_count == 2
+
+            # Second exhaustion: another 2 calls. Breaker trips after.
+            with pytest.raises(APIError):
+                await client.get_profile()
+            assert mock_req.call_count == 4
+
+            # Third call: breaker open. Upstream must NOT be touched.
+            with pytest.raises(CircuitOpenError):
+                await client.get_profile()
+            assert mock_req.call_count == 4
+
+        await client.close()
+
+    async def test_breaker_disabled_with_zero_threshold(self) -> None:
+        """Threshold 0 keeps the breaker dormant: failures don't trip."""
+        client = RetryableClient(
+            "https://api.linode.com/v4",
+            "test-token",
+            RetryConfig(
+                max_retries=1,
+                base_delay=0.001,
+                max_delay=0.001,
+                circuit_breaker_threshold=0,
+                circuit_breaker_timeout=60.0,
+            ),
+        )
+
+        mock_error_response = MagicMock()
+        mock_error_response.status_code = 500
+        mock_error_response.json.return_value = {}
+        mock_error_response.headers = {}
+
+        with patch.object(
+            client.client.client, "request", new_callable=AsyncMock
+        ) as mock_req:
+            mock_req.return_value = mock_error_response
+
+            # Three exhaustions, breaker disabled, every call hits upstream.
+            for _ in range(3):
+                with pytest.raises(APIError):
+                    await client.get_profile()
+
+            # 3 * (1 initial + 1 retry) = 6 total calls.
+            assert mock_req.call_count == 6
+
+        await client.close()
+
+    async def test_breaker_resets_on_success(self) -> None:
+        """A success between failures clears the consecutive-failure counter."""
+        client = RetryableClient(
+            "https://api.linode.com/v4",
+            "test-token",
+            RetryConfig(
+                max_retries=0,
+                base_delay=0.001,
+                circuit_breaker_threshold=3,
+                circuit_breaker_timeout=60.0,
+            ),
+        )
+
+        mock_error_response = MagicMock()
+        mock_error_response.status_code = 500
+        mock_error_response.json.return_value = {}
+        mock_error_response.headers = {}
+
+        mock_success_response = MagicMock()
+        mock_success_response.status_code = 200
+        mock_success_response.json.return_value = {
+            "username": "ok",
+            "email": "ok@test.com",
+            "timezone": "UTC",
+            "email_notifications": False,
+            "restricted": False,
+            "two_factor_auth": False,
+            "uid": 1,
+        }
+
+        responses = [
+            mock_error_response,
+            mock_error_response,
+            mock_success_response,
+            mock_error_response,
+            mock_error_response,
+        ]
+
+        with patch.object(
+            client.client.client, "request", new_callable=AsyncMock
+        ) as mock_req:
+            mock_req.side_effect = responses
+
+            # 2 failures
+            for _ in range(2):
+                with pytest.raises(APIError):
+                    await client.get_profile()
+
+            # Success in between resets counter.
+            profile = await client.get_profile()
+            assert profile.username == "ok"
+
+            # 2 more failures: still below threshold (3) thanks to reset.
+            for _ in range(2):
+                with pytest.raises(APIError):
+                    await client.get_profile()
+
+            # Breaker should still be closed.
+            assert mock_req.call_count == 5
 
         await client.close()

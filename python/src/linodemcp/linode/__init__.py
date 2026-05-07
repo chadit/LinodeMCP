@@ -1,10 +1,13 @@
 """Linode API client."""
 
 import asyncio
+import enum
 import ipaddress
 import logging
 import re
 import secrets
+import threading
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, TypeVar
@@ -236,6 +239,14 @@ __all__ = [
 
 class LinodeError(Exception):
     """Base Linode error."""
+
+
+class CircuitOpenError(LinodeError):
+    """Raised when the circuit breaker is open and rejecting requests.
+
+    Callers can catch this specifically to distinguish "we never tried"
+    from "we tried and the upstream failed".
+    """
 
 
 class APIError(LinodeError):
@@ -3358,10 +3369,84 @@ class RetryConfig:
     max_delay: float = 30.0
     backoff_factor: float = 2.0
     jitter_enabled: bool = True
+    circuit_breaker_threshold: int = 5
+    circuit_breaker_timeout: float = 30.0
+
+
+class _CircuitState(enum.Enum):
+    """Lifecycle position of the circuit breaker."""
+
+    CLOSED = "closed"
+    OPEN = "open"
+    HALF_OPEN = "half_open"
+
+
+class CircuitBreaker:
+    """Counting circuit breaker.
+
+    Trips after `threshold` consecutive failures, stays open for `timeout`
+    seconds, then admits one probe (half-open). A successful probe closes;
+    a failing probe re-opens the timer. A non-positive threshold disables
+    the breaker entirely (`allow` is always a no-op).
+    """
+
+    def __init__(self, threshold: int, timeout: float) -> None:
+        self._threshold = threshold
+        self._timeout = timeout
+        self._state = _CircuitState.CLOSED
+        self._consecutive_failures = 0
+        self._opened_at = 0.0
+        self._lock = threading.Lock()
+
+    def allow(self) -> None:
+        """Raise CircuitOpenError if the breaker is rejecting requests.
+
+        Transitions OPEN -> HALF_OPEN once the cooldown elapses, admitting
+        exactly one probe. Concurrent calls during the in-flight probe see
+        HALF_OPEN and are rejected.
+        """
+        if self._threshold <= 0:
+            return
+
+        with self._lock:
+            if self._state is _CircuitState.CLOSED:
+                return
+            if self._state is _CircuitState.OPEN:
+                if time.monotonic() - self._opened_at >= self._timeout:
+                    self._state = _CircuitState.HALF_OPEN
+                    return
+                raise CircuitOpenError("circuit breaker open")
+            # HALF_OPEN: a probe is already in flight; reject.
+            raise CircuitOpenError("circuit breaker open")
+
+    def record_success(self) -> None:
+        """Close the breaker and reset the failure counter."""
+        if self._threshold <= 0:
+            return
+
+        with self._lock:
+            self._consecutive_failures = 0
+            self._state = _CircuitState.CLOSED
+
+    def record_failure(self) -> None:
+        """Increment the failure counter; trip once threshold is reached.
+
+        Callers should invoke this only for upstream-health failures (5xx,
+        network, 429). Auth errors and caller cancellations are not the
+        breaker's concern.
+        """
+        if self._threshold <= 0:
+            return
+
+        with self._lock:
+            self._consecutive_failures += 1
+            if self._consecutive_failures >= self._threshold:
+                self._state = _CircuitState.OPEN
+                self._opened_at = time.monotonic()
 
 
 class RetryableClient:
-    """Linode API client with retry functionality."""
+    """Linode API client with retry functionality and a circuit breaker."""
 
     def __init__(
         self, api_url: str, token: str, retry_config: RetryConfig | None = None
@@ -3369,6 +3454,10 @@ class RetryableClient:
         self.client = Client(api_url, token)
         self.retry_config = retry_config or RetryConfig()
         self._request_semaphore = asyncio.Semaphore(10)
+        self._circuit = CircuitBreaker(
+            self.retry_config.circuit_breaker_threshold,
+            self.retry_config.circuit_breaker_timeout,
+        )
 
     async def close(self) -> None:
         """Close the HTTP client."""
@@ -4563,7 +4652,15 @@ class RetryableClient:
     async def _execute_with_retry(
         self, func: Callable[..., Awaitable[T]], *args: Any
     ) -> T:
-        """Execute a function with retry logic."""
+        """Execute a function with retry logic and circuit breaker.
+
+        Raises CircuitOpenError if the breaker is rejecting requests so
+        callers can fail fast instead of waiting on the upstream.
+        """
+        # Fail fast when the breaker is open. Done before the semaphore so
+        # we don't hold a slot while rejecting.
+        self._circuit.allow()
+
         async with self._request_semaphore:
             last_error: Exception | None = None
 
@@ -4573,14 +4670,21 @@ class RetryableClient:
                     await asyncio.sleep(delay)
 
                 try:
-                    return await func(*args)
-                except Exception as e:
-                    last_error = e
+                    result = await func(*args)
+                except Exception as exc:
+                    last_error = exc
+                    if not self._should_retry(exc):
+                        # Non-retryable (auth, etc.) is not the breaker's concern.
+                        raise
                     if attempt == self.retry_config.max_retries:
                         break
-                    if not self._should_retry(e):
-                        raise
+                else:
+                    self._circuit.record_success()
+                    return result
 
+            # Retries exhausted on a retryable failure: this is the signal
+            # the breaker tracks.
+            self._circuit.record_failure()
             raise last_error or LinodeError("Unknown retry error")
 
     def _calculate_delay(self, attempt: int) -> float:

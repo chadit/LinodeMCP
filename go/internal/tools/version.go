@@ -12,7 +12,8 @@ import (
 
 // NewVersionTool creates a version info tool.
 func NewVersionTool() (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("version",
+	tool := mcp.NewTool(
+		"version",
 		mcp.WithDescription("Returns LinodeMCP server version and build information"),
 	)
 

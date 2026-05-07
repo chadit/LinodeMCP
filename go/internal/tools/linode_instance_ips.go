@@ -12,7 +12,8 @@ import (
 
 // NewLinodeInstanceIPsListTool creates a tool for listing all IP addresses for a Linode instance.
 func NewLinodeInstanceIPsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(cfg,
+	return newToolWithHandler(
+		cfg,
 		"linode_instance_ips_list",
 		"Lists all IP addresses (IPv4 and IPv6) for a Linode instance",
 		[]mcp.ToolOption{
@@ -44,7 +45,8 @@ func handleInstanceIPsListRequest(ctx context.Context, request *mcp.CallToolRequ
 
 // NewLinodeInstanceIPGetTool creates a tool for retrieving a specific IP address for a Linode instance.
 func NewLinodeInstanceIPGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(cfg,
+	return newToolWithHandler(
+		cfg,
 		"linode_instance_ip_get",
 		"Retrieves details of a specific IP address for a Linode instance",
 		[]mcp.ToolOption{
@@ -83,7 +85,8 @@ func handleInstanceIPGetRequest(ctx context.Context, request *mcp.CallToolReques
 
 // NewLinodeInstanceIPAllocateTool creates a tool for allocating a new IP address for a Linode instance.
 func NewLinodeInstanceIPAllocateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(cfg,
+	return newToolWithHandler(
+		cfg,
 		"linode_instance_ip_allocate",
 		"Allocates a new IP address for a Linode instance. WARNING: Additional IPs may incur charges.",
 		[]mcp.ToolOption{
@@ -145,7 +148,8 @@ func handleInstanceIPAllocateRequest(ctx context.Context, request *mcp.CallToolR
 
 // NewLinodeInstanceIPDeleteTool creates a tool for removing an IP address from a Linode instance.
 func NewLinodeInstanceIPDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(cfg,
+	return newToolWithHandler(
+		cfg,
 		"linode_instance_ip_delete",
 		"Removes an IP address from a Linode instance. WARNING: This permanently removes the IP and is irreversible.",
 		[]mcp.ToolOption{

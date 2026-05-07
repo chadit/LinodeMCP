@@ -13,7 +13,8 @@ import (
 
 // NewLinodeVPCsListTool creates a tool for listing all VPCs with optional label and region filtering.
 func NewLinodeVPCsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newListTool(cfg,
+	return newListTool(
+		cfg,
 		"linode_vpcs_list",
 		"Lists all VPCs. Can filter by label or region.",
 		func(ctx context.Context, client *linode.Client) ([]linode.VPC, error) {
@@ -31,11 +32,13 @@ func NewLinodeVPCsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Conte
 
 // NewLinodeVPCGetTool creates a tool for getting a single VPC by ID.
 func NewLinodeVPCGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(cfg,
+	return newToolWithHandler(
+		cfg,
 		"linode_vpc_get",
 		"Retrieves details of a single VPC by its ID",
 		[]mcp.ToolOption{
-			mcp.WithString("vpc_id",
+			mcp.WithString(
+				"vpc_id",
 				mcp.Required(),
 				mcp.Description("The ID of the VPC to retrieve"),
 			),
@@ -65,7 +68,8 @@ func handleVPCGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg 
 
 // NewLinodeVPCIPsListTool creates a tool for listing all VPC IP addresses across all VPCs.
 func NewLinodeVPCIPsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newListTool(cfg,
+	return newListTool(
+		cfg,
 		"linode_vpc_ips_list",
 		"Lists all IP addresses across all VPCs",
 		func(ctx context.Context, client *linode.Client) ([]linode.VPCIP, error) {
@@ -78,11 +82,13 @@ func NewLinodeVPCIPsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Con
 
 // NewLinodeVPCIPListTool creates a tool for listing IP addresses for a specific VPC.
 func NewLinodeVPCIPListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(cfg,
+	return newToolWithHandler(
+		cfg,
 		"linode_vpc_ip_list",
 		"Lists all IP addresses for a specific VPC",
 		[]mcp.ToolOption{
-			mcp.WithString("vpc_id",
+			mcp.WithString(
+				"vpc_id",
 				mcp.Required(),
 				mcp.Description("The ID of the VPC"),
 			),
@@ -120,11 +126,13 @@ func handleVPCIPListRequest(ctx context.Context, request *mcp.CallToolRequest, c
 
 // NewLinodeVPCSubnetsListTool creates a tool for listing subnets in a specific VPC.
 func NewLinodeVPCSubnetsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(cfg,
+	return newToolWithHandler(
+		cfg,
 		"linode_vpc_subnets_list",
 		"Lists all subnets for a specific VPC",
 		[]mcp.ToolOption{
-			mcp.WithString("vpc_id",
+			mcp.WithString(
+				"vpc_id",
 				mcp.Required(),
 				mcp.Description("The ID of the VPC"),
 			),
@@ -162,15 +170,18 @@ func handleVPCSubnetsListRequest(ctx context.Context, request *mcp.CallToolReque
 
 // NewLinodeVPCSubnetGetTool creates a tool for getting a specific subnet within a VPC.
 func NewLinodeVPCSubnetGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(cfg,
+	return newToolWithHandler(
+		cfg,
 		"linode_vpc_subnet_get",
 		"Retrieves details of a specific subnet within a VPC",
 		[]mcp.ToolOption{
-			mcp.WithString("vpc_id",
+			mcp.WithString(
+				"vpc_id",
 				mcp.Required(),
 				mcp.Description("The ID of the VPC"),
 			),
-			mcp.WithString("subnet_id",
+			mcp.WithString(
+				"subnet_id",
 				mcp.Required(),
 				mcp.Description("The ID of the subnet to retrieve"),
 			),

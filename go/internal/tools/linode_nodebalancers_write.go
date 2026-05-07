@@ -12,22 +12,28 @@ import (
 
 // NewLinodeNodeBalancerCreateTool creates a tool for creating a NodeBalancer.
 func NewLinodeNodeBalancerCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_nodebalancer_create",
+	tool := mcp.NewTool(
+		"linode_nodebalancer_create",
 		mcp.WithDescription("Creates a new NodeBalancer (load balancer). WARNING: Billing starts immediately. Use linode_regions_list to find valid regions."),
-		mcp.WithString(paramEnvironment,
+		mcp.WithString(
+			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithString("region",
+		mcp.WithString(
+			"region",
 			mcp.Required(),
 			mcp.Description("Region where the NodeBalancer will be created (e.g., 'us-east')"),
 		),
-		mcp.WithString("label",
+		mcp.WithString(
+			"label",
 			mcp.Description("A label for the NodeBalancer (optional)"),
 		),
-		mcp.WithNumber("client_conn_throttle",
+		mcp.WithNumber(
+			"client_conn_throttle",
 			mcp.Description("Connections per second throttle limit (0-20). Default is 0 (no throttle)."),
 		),
-		mcp.WithBoolean(paramConfirm,
+		mcp.WithBoolean(
+			paramConfirm,
 			mcp.Required(),
 			mcp.Description("Must be set to true to confirm creation. This operation incurs billing charges."),
 		),
@@ -82,19 +88,24 @@ func handleLinodeNodeBalancerCreateRequest(ctx context.Context, request *mcp.Cal
 
 // NewLinodeNodeBalancerUpdateTool creates a tool for updating a NodeBalancer.
 func NewLinodeNodeBalancerUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_nodebalancer_update",
+	tool := mcp.NewTool(
+		"linode_nodebalancer_update",
 		mcp.WithDescription("Updates an existing NodeBalancer. Can modify label and connection throttle."),
-		mcp.WithString(paramEnvironment,
+		mcp.WithString(
+			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithNumber("nodebalancer_id",
+		mcp.WithNumber(
+			"nodebalancer_id",
 			mcp.Required(),
 			mcp.Description("The ID of the NodeBalancer to update"),
 		),
-		mcp.WithString("label",
+		mcp.WithString(
+			"label",
 			mcp.Description("New label for the NodeBalancer (optional)"),
 		),
-		mcp.WithNumber("client_conn_throttle",
+		mcp.WithNumber(
+			"client_conn_throttle",
 			mcp.Description("New connections per second throttle limit (0-20) (optional)"),
 		),
 	)
@@ -149,16 +160,20 @@ func handleLinodeNodeBalancerUpdateRequest(ctx context.Context, request *mcp.Cal
 
 // NewLinodeNodeBalancerDeleteTool creates a tool for deleting a NodeBalancer.
 func NewLinodeNodeBalancerDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_nodebalancer_delete",
+	tool := mcp.NewTool(
+		"linode_nodebalancer_delete",
 		mcp.WithDescription("Deletes a NodeBalancer. WARNING: This will remove the load balancer and all its configurations."),
-		mcp.WithString(paramEnvironment,
+		mcp.WithString(
+			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithNumber("nodebalancer_id",
+		mcp.WithNumber(
+			"nodebalancer_id",
 			mcp.Required(),
 			mcp.Description("The ID of the NodeBalancer to delete"),
 		),
-		mcp.WithBoolean(paramConfirm,
+		mcp.WithBoolean(
+			paramConfirm,
 			mcp.Required(),
 			mcp.Description("Must be set to true to confirm deletion."),
 		),

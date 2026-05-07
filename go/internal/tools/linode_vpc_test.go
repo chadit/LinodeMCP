@@ -33,22 +33,22 @@ func TestLinodeVPCsListTool(t *testing.T) {
 		t.Parallel()
 
 		vpcs := []linode.VPC{
-			{ID: 1, Label: "prod-vpc", Region: "us-east", Description: "Production VPC"},
-			{ID: 2, Label: "dev-vpc", Region: "eu-west", Description: "Development VPC"},
+			{ID: 1, Label: labelProdVPC, Region: regionUSEast, Description: "Production VPC"},
+			{ID: 2, Label: "dev-vpc", Region: regionEUWest, Description: "Development VPC"},
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/vpcs", r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"data": vpcs, "page": 1, "pages": 1, "results": 2,
+				keyData: vpcs, keyPage: 1, keyPages: 1, keyResults: 2,
 			}), "encoding response should not fail")
 		}))
 		defer srv.Close()
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeVPCsListTool(srvCfg)
@@ -62,7 +62,7 @@ func TestLinodeVPCsListTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "prod-vpc", "response should contain prod-vpc")
+		assert.Contains(t, textContent.Text, labelProdVPC, "response should contain prod-vpc")
 		assert.Contains(t, textContent.Text, "dev-vpc", "response should contain dev-vpc")
 	})
 
@@ -70,27 +70,27 @@ func TestLinodeVPCsListTool(t *testing.T) {
 		t.Parallel()
 
 		vpcs := []linode.VPC{
-			{ID: 1, Label: "prod-vpc", Region: "us-east"},
-			{ID: 2, Label: "dev-vpc", Region: "eu-west"},
-			{ID: 3, Label: "staging-prod", Region: "us-west"},
+			{ID: 1, Label: labelProdVPC, Region: regionUSEast},
+			{ID: 2, Label: "dev-vpc", Region: regionEUWest},
+			{ID: 3, Label: "staging-prod", Region: regionUSWest},
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"data": vpcs, "page": 1, "pages": 1, "results": 3,
+				keyData: vpcs, keyPage: 1, keyPages: 1, keyResults: 3,
 			}), "encoding response should not fail")
 		}))
 		defer srv.Close()
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeVPCsListTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"label": "prod"})
+		req := createRequestWithArgs(t, map[string]any{keyLabel: "prod"})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -99,7 +99,7 @@ func TestLinodeVPCsListTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "prod-vpc", "response should contain prod-vpc")
+		assert.Contains(t, textContent.Text, labelProdVPC, "response should contain prod-vpc")
 		assert.Contains(t, textContent.Text, "staging-prod", "response should contain staging-prod")
 		assert.NotContains(t, textContent.Text, "dev-vpc", "response should not contain dev-vpc")
 	})
@@ -111,7 +111,7 @@ func TestLinodeVPCGetTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeVPCGetTool(cfg)
@@ -128,8 +128,8 @@ func TestLinodeVPCGetTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing vpc id", args: map[string]any{}, wantContains: "vpc_id is required"},
-		{name: "invalid vpc id", args: map[string]any{"vpc_id": "not-a-number"}, wantContains: "vpc_id must be a valid integer"},
+		{name: caseMissingVPCID, args: map[string]any{}, wantContains: errVPCIDRequired},
+		{name: "invalid vpc id", args: map[string]any{keyVPCID: notANumber}, wantContains: "vpc_id must be a valid integer"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -146,7 +146,7 @@ func TestLinodeVPCGetTool(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		vpc := linode.VPC{ID: 123, Label: "prod-vpc", Region: "us-east", Description: "Production VPC"}
+		vpc := linode.VPC{ID: 123, Label: labelProdVPC, Region: regionUSEast, Description: "Production VPC"}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/vpcs/123", r.URL.Path, "request path should match")
@@ -157,12 +157,12 @@ func TestLinodeVPCGetTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeVPCGetTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"vpc_id": "123"})
+		req := createRequestWithArgs(t, map[string]any{keyVPCID: "123"})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -171,8 +171,8 @@ func TestLinodeVPCGetTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "prod-vpc", "response should contain VPC label")
-		assert.Contains(t, textContent.Text, "us-east", "response should contain VPC region")
+		assert.Contains(t, textContent.Text, labelProdVPC, "response should contain VPC label")
+		assert.Contains(t, textContent.Text, regionUSEast, "response should contain VPC region")
 	})
 }
 
@@ -197,22 +197,22 @@ func TestLinodeVPCIPsListTool(t *testing.T) {
 		addr1 := "10.0.0.1"
 		addr2 := "10.0.1.1"
 		ips := []linode.VPCIP{
-			{Address: &addr1, VPCID: 1, SubnetID: 10, Region: "us-east", Active: true},
-			{Address: &addr2, VPCID: 1, SubnetID: 11, Region: "us-east", Active: false},
+			{Address: &addr1, VPCID: 1, SubnetID: 10, Region: regionUSEast, Active: true},
+			{Address: &addr2, VPCID: 1, SubnetID: 11, Region: regionUSEast, Active: false},
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/vpcs/ips", r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"data": ips, "page": 1, "pages": 1, "results": 2,
+				keyData: ips, keyPage: 1, keyPages: 1, keyResults: 2,
 			}), "encoding response should not fail")
 		}))
 		defer srv.Close()
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeVPCIPsListTool(srvCfg)
@@ -238,7 +238,7 @@ func TestLinodeVPCIPListTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeVPCIPListTool(cfg)
@@ -250,14 +250,14 @@ func TestLinodeVPCIPListTool(t *testing.T) {
 		require.NotNil(t, handler, "handler should not be nil")
 	})
 
-	t.Run("missing vpc id", func(t *testing.T) {
+	t.Run(caseMissingVPCID, func(t *testing.T) {
 		t.Parallel()
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "vpc_id is required")
+		assertErrorContains(t, result, errVPCIDRequired)
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -265,26 +265,26 @@ func TestLinodeVPCIPListTool(t *testing.T) {
 
 		addr := "10.0.0.5"
 		ips := []linode.VPCIP{
-			{Address: &addr, VPCID: 456, SubnetID: 20, Region: "us-east", Active: true},
+			{Address: &addr, VPCID: 456, SubnetID: 20, Region: regionUSEast, Active: true},
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/vpcs/456/ips", r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"data": ips, "page": 1, "pages": 1, "results": 1,
+				keyData: ips, keyPage: 1, keyPages: 1, keyResults: 1,
 			}), "encoding response should not fail")
 		}))
 		defer srv.Close()
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeVPCIPListTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"vpc_id": "456"})
+		req := createRequestWithArgs(t, map[string]any{keyVPCID: "456"})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -304,7 +304,7 @@ func TestLinodeVPCSubnetsListTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeVPCSubnetsListTool(cfg)
@@ -316,21 +316,21 @@ func TestLinodeVPCSubnetsListTool(t *testing.T) {
 		require.NotNil(t, handler, "handler should not be nil")
 	})
 
-	t.Run("missing vpc id", func(t *testing.T) {
+	t.Run(caseMissingVPCID, func(t *testing.T) {
 		t.Parallel()
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "vpc_id is required")
+		assertErrorContains(t, result, errVPCIDRequired)
 	})
 
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
 		subnets := []linode.VPCSubnet{
-			{ID: 10, Label: "web-subnet", IPv4: "10.0.0.0/24"},
+			{ID: 10, Label: labelWebSubnet, IPv4: cidrV4},
 			{ID: 11, Label: "db-subnet", IPv4: "10.0.1.0/24"},
 		}
 
@@ -338,19 +338,19 @@ func TestLinodeVPCSubnetsListTool(t *testing.T) {
 			assert.Equal(t, "/vpcs/123/subnets", r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"data": subnets, "page": 1, "pages": 1, "results": 2,
+				keyData: subnets, keyPage: 1, keyPages: 1, keyResults: 2,
 			}), "encoding response should not fail")
 		}))
 		defer srv.Close()
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeVPCSubnetsListTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"vpc_id": "123"})
+		req := createRequestWithArgs(t, map[string]any{keyVPCID: "123"})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -359,7 +359,7 @@ func TestLinodeVPCSubnetsListTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "web-subnet", "response should contain web-subnet")
+		assert.Contains(t, textContent.Text, labelWebSubnet, "response should contain web-subnet")
 		assert.Contains(t, textContent.Text, "db-subnet", "response should contain db-subnet")
 	})
 }
@@ -371,7 +371,7 @@ func TestLinodeVPCSubnetGetTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeVPCSubnetGetTool(cfg)
@@ -388,8 +388,8 @@ func TestLinodeVPCSubnetGetTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing vpc id", args: map[string]any{"subnet_id": "10"}, wantContains: "vpc_id is required"},
-		{name: "missing subnet id", args: map[string]any{"vpc_id": "123"}, wantContains: "subnet_id is required"},
+		{name: caseMissingVPCID, args: map[string]any{keySubnetID: "10"}, wantContains: errVPCIDRequired},
+		{name: caseMissingSubnetID, args: map[string]any{keyVPCID: "123"}, wantContains: errSubnetIDRequired},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -406,7 +406,7 @@ func TestLinodeVPCSubnetGetTool(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		subnet := linode.VPCSubnet{ID: 10, Label: "web-subnet", IPv4: "10.0.0.0/24"}
+		subnet := linode.VPCSubnet{ID: 10, Label: labelWebSubnet, IPv4: cidrV4}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/vpcs/123/subnets/10", r.URL.Path, "request path should match")
@@ -417,12 +417,12 @@ func TestLinodeVPCSubnetGetTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeVPCSubnetGetTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"vpc_id": "123", "subnet_id": "10"})
+		req := createRequestWithArgs(t, map[string]any{keyVPCID: "123", keySubnetID: "10"})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -431,8 +431,8 @@ func TestLinodeVPCSubnetGetTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "web-subnet", "response should contain subnet label")
-		assert.Contains(t, textContent.Text, "10.0.0.0/24", "response should contain subnet CIDR")
+		assert.Contains(t, textContent.Text, labelWebSubnet, "response should contain subnet label")
+		assert.Contains(t, textContent.Text, cidrV4, "response should contain subnet CIDR")
 	})
 }
 
@@ -442,7 +442,7 @@ func TestLinodeVPCCreateTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeVPCCreateTool(cfg)
@@ -465,9 +465,9 @@ func TestLinodeVPCCreateTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing confirm", args: map[string]any{"label": "test-vpc", "region": "us-east"}, wantContains: "confirm=true"},
-		{name: "missing label", args: map[string]any{"region": "us-east", "confirm": true}, wantContains: "label is required"},
-		{name: "missing region", args: map[string]any{"label": "test-vpc", "confirm": true}, wantContains: "region is required"},
+		{name: caseMissingConfirm, args: map[string]any{keyLabel: labelTestVPC, keyRegion: regionUSEast}, wantContains: errConfirmEqualsTrue},
+		{name: caseMissingLabel, args: map[string]any{keyRegion: regionUSEast, keyConfirm: true}, wantContains: errLabelRequired},
+		{name: caseMissingRegion, args: map[string]any{keyLabel: labelTestVPC, keyConfirm: true}, wantContains: errRegionRequired},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -484,7 +484,7 @@ func TestLinodeVPCCreateTool(t *testing.T) {
 	t.Run("successful creation", func(t *testing.T) {
 		t.Parallel()
 
-		vpc := linode.VPC{ID: 999, Label: "test-vpc", Region: "us-east", Description: "Test VPC"}
+		vpc := linode.VPC{ID: 999, Label: labelTestVPC, Region: regionUSEast, Description: "Test VPC"}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/vpcs", r.URL.Path, "request path should match")
@@ -496,12 +496,12 @@ func TestLinodeVPCCreateTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeVPCCreateTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"label": "test-vpc", "region": "us-east", "confirm": true})
+		req := createRequestWithArgs(t, map[string]any{keyLabel: labelTestVPC, keyRegion: regionUSEast, keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -510,7 +510,7 @@ func TestLinodeVPCCreateTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "test-vpc", "response should contain VPC label")
+		assert.Contains(t, textContent.Text, labelTestVPC, "response should contain VPC label")
 		assert.Contains(t, textContent.Text, "999", "response should contain VPC ID")
 	})
 }
@@ -522,7 +522,7 @@ func TestLinodeVPCUpdateTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeVPCUpdateTool(cfg)
@@ -544,8 +544,8 @@ func TestLinodeVPCUpdateTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing confirm", args: map[string]any{"vpc_id": float64(123), "label": "new-label"}, wantContains: "confirm=true"},
-		{name: "missing vpc id", args: map[string]any{"label": "new-label", "confirm": true}, wantContains: "vpc_id is required"},
+		{name: caseMissingConfirm, args: map[string]any{keyVPCID: float64(123), keyLabel: labelNew}, wantContains: errConfirmEqualsTrue},
+		{name: caseMissingVPCID, args: map[string]any{keyLabel: labelNew, keyConfirm: true}, wantContains: errVPCIDRequired},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -562,7 +562,7 @@ func TestLinodeVPCUpdateTool(t *testing.T) {
 	t.Run("successful update", func(t *testing.T) {
 		t.Parallel()
 
-		vpc := linode.VPC{ID: 123, Label: "updated-vpc", Region: "us-east", Description: "Updated VPC"}
+		vpc := linode.VPC{ID: 123, Label: "updated-vpc", Region: regionUSEast, Description: "Updated VPC"}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/vpcs/123", r.URL.Path, "request path should match")
@@ -574,12 +574,12 @@ func TestLinodeVPCUpdateTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeVPCUpdateTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"vpc_id": float64(123), "label": "updated-vpc", "confirm": true})
+		req := createRequestWithArgs(t, map[string]any{keyVPCID: float64(123), keyLabel: "updated-vpc", keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -599,7 +599,7 @@ func TestLinodeVPCDeleteTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeVPCDeleteTool(cfg)
@@ -617,8 +617,8 @@ func TestLinodeVPCDeleteTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing confirm", args: map[string]any{"vpc_id": float64(123)}, wantContains: "confirm=true"},
-		{name: "missing vpc id", args: map[string]any{"confirm": true}, wantContains: "vpc_id is required"},
+		{name: caseMissingConfirm, args: map[string]any{keyVPCID: float64(123)}, wantContains: errConfirmEqualsTrue},
+		{name: caseMissingVPCID, args: map[string]any{keyConfirm: true}, wantContains: errVPCIDRequired},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -644,12 +644,12 @@ func TestLinodeVPCDeleteTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeVPCDeleteTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"vpc_id": float64(123), "confirm": true})
+		req := createRequestWithArgs(t, map[string]any{keyVPCID: float64(123), keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -668,7 +668,7 @@ func TestLinodeVPCSubnetCreateTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeVPCSubnetCreateTool(cfg)
@@ -682,7 +682,7 @@ func TestLinodeVPCSubnetCreateTool(t *testing.T) {
 		props := tool.InputSchema.Properties
 		assert.Contains(t, props, "vpc_id", "schema should include vpc_id")
 		assert.Contains(t, props, "label", "schema should include label")
-		assert.Contains(t, props, "ipv4", "schema should include ipv4")
+		assert.Contains(t, props, keyIPv4, "schema should include ipv4")
 		assert.Contains(t, props, "confirm", "schema should include confirm")
 	})
 
@@ -691,10 +691,10 @@ func TestLinodeVPCSubnetCreateTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing confirm", args: map[string]any{"vpc_id": float64(123), "label": "web-subnet", "ipv4": "10.0.0.0/24"}, wantContains: "confirm=true"},
-		{name: "missing vpc id", args: map[string]any{"label": "web-subnet", "ipv4": "10.0.0.0/24", "confirm": true}, wantContains: "vpc_id is required"},
-		{name: "missing label", args: map[string]any{"vpc_id": float64(123), "ipv4": "10.0.0.0/24", "confirm": true}, wantContains: "label is required"},
-		{name: "missing ipv4", args: map[string]any{"vpc_id": float64(123), "label": "web-subnet", "confirm": true}, wantContains: "ipv4 is required"},
+		{name: caseMissingConfirm, args: map[string]any{keyVPCID: float64(123), keyLabel: labelWebSubnet, keyIPv4: cidrV4}, wantContains: errConfirmEqualsTrue},
+		{name: caseMissingVPCID, args: map[string]any{keyLabel: labelWebSubnet, keyIPv4: cidrV4, keyConfirm: true}, wantContains: errVPCIDRequired},
+		{name: caseMissingLabel, args: map[string]any{keyVPCID: float64(123), keyIPv4: cidrV4, keyConfirm: true}, wantContains: errLabelRequired},
+		{name: "missing ipv4", args: map[string]any{keyVPCID: float64(123), keyLabel: labelWebSubnet, keyConfirm: true}, wantContains: "ipv4 is required"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -711,7 +711,7 @@ func TestLinodeVPCSubnetCreateTool(t *testing.T) {
 	t.Run("successful creation", func(t *testing.T) {
 		t.Parallel()
 
-		subnet := linode.VPCSubnet{ID: 50, Label: "web-subnet", IPv4: "10.0.0.0/24"}
+		subnet := linode.VPCSubnet{ID: 50, Label: labelWebSubnet, IPv4: cidrV4}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/vpcs/123/subnets", r.URL.Path, "request path should match")
@@ -723,13 +723,13 @@ func TestLinodeVPCSubnetCreateTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeVPCSubnetCreateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			"vpc_id": float64(123), "label": "web-subnet", "ipv4": "10.0.0.0/24", "confirm": true,
+			keyVPCID: float64(123), keyLabel: labelWebSubnet, keyIPv4: cidrV4, keyConfirm: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 
@@ -739,7 +739,7 @@ func TestLinodeVPCSubnetCreateTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "web-subnet", "response should contain subnet label")
+		assert.Contains(t, textContent.Text, labelWebSubnet, "response should contain subnet label")
 		assert.Contains(t, textContent.Text, "50", "response should contain subnet ID")
 	})
 }
@@ -750,7 +750,7 @@ func TestLinodeVPCSubnetUpdateTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeVPCSubnetUpdateTool(cfg)
@@ -773,10 +773,10 @@ func TestLinodeVPCSubnetUpdateTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing confirm", args: map[string]any{"vpc_id": float64(123), "subnet_id": float64(10), "label": "updated-subnet"}, wantContains: "confirm=true"},
-		{name: "missing vpc id", args: map[string]any{"subnet_id": float64(10), "label": "updated-subnet", "confirm": true}, wantContains: "vpc_id is required"},
-		{name: "missing subnet id", args: map[string]any{"vpc_id": float64(123), "label": "updated-subnet", "confirm": true}, wantContains: "subnet_id is required"},
-		{name: "missing label", args: map[string]any{"vpc_id": float64(123), "subnet_id": float64(10), "confirm": true}, wantContains: "label is required"},
+		{name: caseMissingConfirm, args: map[string]any{keyVPCID: float64(123), keySubnetID: float64(10), keyLabel: labelUpdatedSubnet}, wantContains: errConfirmEqualsTrue},
+		{name: caseMissingVPCID, args: map[string]any{keySubnetID: float64(10), keyLabel: labelUpdatedSubnet, keyConfirm: true}, wantContains: errVPCIDRequired},
+		{name: caseMissingSubnetID, args: map[string]any{keyVPCID: float64(123), keyLabel: labelUpdatedSubnet, keyConfirm: true}, wantContains: errSubnetIDRequired},
+		{name: caseMissingLabel, args: map[string]any{keyVPCID: float64(123), keySubnetID: float64(10), keyConfirm: true}, wantContains: errLabelRequired},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -793,7 +793,7 @@ func TestLinodeVPCSubnetUpdateTool(t *testing.T) {
 	t.Run("successful update", func(t *testing.T) {
 		t.Parallel()
 
-		subnet := linode.VPCSubnet{ID: 10, Label: "updated-subnet", IPv4: "10.0.0.0/24"}
+		subnet := linode.VPCSubnet{ID: 10, Label: labelUpdatedSubnet, IPv4: cidrV4}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/vpcs/123/subnets/10", r.URL.Path, "request path should match")
@@ -805,13 +805,13 @@ func TestLinodeVPCSubnetUpdateTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeVPCSubnetUpdateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			"vpc_id": float64(123), "subnet_id": float64(10), "label": "updated-subnet", "confirm": true,
+			keyVPCID: float64(123), keySubnetID: float64(10), keyLabel: labelUpdatedSubnet, keyConfirm: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 
@@ -832,7 +832,7 @@ func TestLinodeVPCSubnetDeleteTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeVPCSubnetDeleteTool(cfg)
@@ -850,9 +850,9 @@ func TestLinodeVPCSubnetDeleteTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing confirm", args: map[string]any{"vpc_id": float64(123), "subnet_id": float64(10)}, wantContains: "confirm=true"},
-		{name: "missing vpc id", args: map[string]any{"subnet_id": float64(10), "confirm": true}, wantContains: "vpc_id is required"},
-		{name: "missing subnet id", args: map[string]any{"vpc_id": float64(123), "confirm": true}, wantContains: "subnet_id is required"},
+		{name: caseMissingConfirm, args: map[string]any{keyVPCID: float64(123), keySubnetID: float64(10)}, wantContains: errConfirmEqualsTrue},
+		{name: caseMissingVPCID, args: map[string]any{keySubnetID: float64(10), keyConfirm: true}, wantContains: errVPCIDRequired},
+		{name: caseMissingSubnetID, args: map[string]any{keyVPCID: float64(123), keyConfirm: true}, wantContains: errSubnetIDRequired},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -878,13 +878,13 @@ func TestLinodeVPCSubnetDeleteTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeVPCSubnetDeleteTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			"vpc_id": float64(123), "subnet_id": float64(10), "confirm": true,
+			keyVPCID: float64(123), keySubnetID: float64(10), keyConfirm: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 

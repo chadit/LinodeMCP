@@ -12,12 +12,15 @@ import (
 
 // NewLinodeTypesListTool creates a tool for listing Linode instance types.
 func NewLinodeTypesListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_types_list",
+	tool := mcp.NewTool(
+		"linode_types_list",
 		mcp.WithDescription("Lists all available Linode instance types (plans) with pricing information. Can filter by class (standard, dedicated, gpu, highmem, premium)."),
-		mcp.WithString(paramEnvironment,
+		mcp.WithString(
+			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithString("class",
+		mcp.WithString(
+			"class",
 			mcp.Description("Filter types by class (standard, dedicated, gpu, highmem, premium)"),
 		),
 	)

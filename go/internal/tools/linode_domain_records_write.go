@@ -12,45 +12,58 @@ import (
 
 // NewLinodeDomainRecordCreateTool creates a tool for creating a domain record.
 func NewLinodeDomainRecordCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_domain_record_create",
+	tool := mcp.NewTool(
+		"linode_domain_record_create",
 		mcp.WithDescription("Creates a new DNS record within a domain. Supports A, AAAA, NS, MX, CNAME, TXT, SRV, CAA, and PTR record types."),
-		mcp.WithString(paramEnvironment,
+		mcp.WithString(
+			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithNumber("domain_id",
+		mcp.WithNumber(
+			"domain_id",
 			mcp.Required(),
 			mcp.Description("The ID of the domain to add the record to"),
 		),
-		mcp.WithString("type",
+		mcp.WithString(
+			"type",
 			mcp.Required(),
 			mcp.Description("Record type: A, AAAA, NS, MX, CNAME, TXT, SRV, CAA, or PTR"),
 		),
-		mcp.WithString("name",
+		mcp.WithString(
+			"name",
 			mcp.Description("The hostname or subdomain (e.g., 'www', 'mail'). Leave empty for root domain."),
 		),
-		mcp.WithString("target",
+		mcp.WithString(
+			"target",
 			mcp.Required(),
 			mcp.Description("The target value (e.g., IP address for A records, hostname for CNAME)"),
 		),
-		mcp.WithNumber("priority",
+		mcp.WithNumber(
+			"priority",
 			mcp.Description("Priority for MX and SRV records (optional)"),
 		),
-		mcp.WithNumber("weight",
+		mcp.WithNumber(
+			"weight",
 			mcp.Description("Weight for SRV records (optional)"),
 		),
-		mcp.WithNumber("port",
+		mcp.WithNumber(
+			"port",
 			mcp.Description("Port for SRV records (optional)"),
 		),
-		mcp.WithString("service",
+		mcp.WithString(
+			"service",
 			mcp.Description("Service name for SRV records (e.g., '_http')"),
 		),
-		mcp.WithString("protocol",
+		mcp.WithString(
+			"protocol",
 			mcp.Description("Protocol for SRV records (e.g., '_tcp', '_udp')"),
 		),
-		mcp.WithNumber("ttl_sec",
+		mcp.WithNumber(
+			"ttl_sec",
 			mcp.Description("TTL in seconds (optional, uses domain default if not specified)"),
 		),
-		mcp.WithString("tag",
+		mcp.WithString(
+			"tag",
 			mcp.Description("Tag for CAA records: 'issue', 'issuewild', or 'iodef' (optional)"),
 		),
 	)
@@ -129,35 +142,45 @@ func handleLinodeDomainRecordCreateRequest(ctx context.Context, request *mcp.Cal
 
 // NewLinodeDomainRecordUpdateTool creates a tool for updating a domain record.
 func NewLinodeDomainRecordUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_domain_record_update",
+	tool := mcp.NewTool(
+		"linode_domain_record_update",
 		mcp.WithDescription("Updates an existing DNS record. Note: Record type cannot be changed."),
-		mcp.WithString(paramEnvironment,
+		mcp.WithString(
+			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithNumber("domain_id",
+		mcp.WithNumber(
+			"domain_id",
 			mcp.Required(),
 			mcp.Description("The ID of the domain containing the record"),
 		),
-		mcp.WithNumber("record_id",
+		mcp.WithNumber(
+			"record_id",
 			mcp.Required(),
 			mcp.Description("The ID of the record to update"),
 		),
-		mcp.WithString("name",
+		mcp.WithString(
+			"name",
 			mcp.Description("New hostname or subdomain (optional)"),
 		),
-		mcp.WithString("target",
+		mcp.WithString(
+			"target",
 			mcp.Description("New target value (optional)"),
 		),
-		mcp.WithNumber("priority",
+		mcp.WithNumber(
+			"priority",
 			mcp.Description("New priority for MX and SRV records (optional)"),
 		),
-		mcp.WithNumber("weight",
+		mcp.WithNumber(
+			"weight",
 			mcp.Description("New weight for SRV records (optional)"),
 		),
-		mcp.WithNumber("port",
+		mcp.WithNumber(
+			"port",
 			mcp.Description("New port for SRV records (optional)"),
 		),
-		mcp.WithNumber("ttl_sec",
+		mcp.WithNumber(
+			"ttl_sec",
 			mcp.Description("New TTL in seconds (optional)"),
 		),
 	)
@@ -221,16 +244,20 @@ func handleLinodeDomainRecordUpdateRequest(ctx context.Context, request *mcp.Cal
 
 // NewLinodeDomainRecordDeleteTool creates a tool for deleting a domain record.
 func NewLinodeDomainRecordDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_domain_record_delete",
+	tool := mcp.NewTool(
+		"linode_domain_record_delete",
 		mcp.WithDescription("Deletes a DNS record from a domain."),
-		mcp.WithString(paramEnvironment,
+		mcp.WithString(
+			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithNumber("domain_id",
+		mcp.WithNumber(
+			"domain_id",
 			mcp.Required(),
 			mcp.Description("The ID of the domain containing the record"),
 		),
-		mcp.WithNumber("record_id",
+		mcp.WithNumber(
+			"record_id",
 			mcp.Required(),
 			mcp.Description("The ID of the record to delete"),
 		),

@@ -12,7 +12,8 @@ import (
 
 // NewLinodeInstanceBackupsListTool creates a tool for listing all backups for a Linode instance.
 func NewLinodeInstanceBackupsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(cfg,
+	return newToolWithHandler(
+		cfg,
 		"linode_instance_backups_list",
 		"Lists all backups for a Linode instance, including automatic backups and manual snapshots.",
 		[]mcp.ToolOption{
@@ -44,7 +45,8 @@ func handleInstanceBackupsListRequest(ctx context.Context, request *mcp.CallTool
 
 // NewLinodeInstanceBackupGetTool creates a tool for retrieving a specific backup for a Linode instance.
 func NewLinodeInstanceBackupGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(cfg,
+	return newToolWithHandler(
+		cfg,
 		"linode_instance_backup_get",
 		"Retrieves details of a specific backup for a Linode instance.",
 		[]mcp.ToolOption{
@@ -83,7 +85,8 @@ func handleInstanceBackupGetRequest(ctx context.Context, request *mcp.CallToolRe
 
 // NewLinodeInstanceBackupCreateTool creates a tool for taking a manual snapshot of a Linode instance.
 func NewLinodeInstanceBackupCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(cfg,
+	return newToolWithHandler(
+		cfg,
 		"linode_instance_backup_create",
 		"Creates a manual snapshot of a Linode instance. "+
 			"WARNING: This overwrites any existing manual snapshot for the instance.",
@@ -130,7 +133,8 @@ func handleInstanceBackupCreateRequest(ctx context.Context, request *mcp.CallToo
 
 // NewLinodeInstanceBackupRestoreTool creates a tool for restoring a backup to a Linode instance.
 func NewLinodeInstanceBackupRestoreTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(cfg,
+	return newToolWithHandler(
+		cfg,
 		"linode_instance_backup_restore",
 		"Restores a backup to a Linode instance. "+
 			"WARNING: When overwrite is true, this destroys all disks and configs on the target instance.",
@@ -208,7 +212,8 @@ func handleInstanceBackupRestoreRequest(ctx context.Context, request *mcp.CallTo
 
 // NewLinodeInstanceBackupsEnableTool creates a tool for enabling the backup service on a Linode instance.
 func NewLinodeInstanceBackupsEnableTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(cfg,
+	return newToolWithHandler(
+		cfg,
 		"linode_instance_backups_enable",
 		"Enables the backup service for a Linode instance. "+
 			"WARNING: This adds a recurring charge to your account based on the instance plan.",
@@ -254,7 +259,8 @@ func handleInstanceBackupsEnableRequest(ctx context.Context, request *mcp.CallTo
 
 // NewLinodeInstanceBackupsCancelTool creates a tool for canceling the backup service on a Linode instance.
 func NewLinodeInstanceBackupsCancelTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(cfg,
+	return newToolWithHandler(
+		cfg,
 		"linode_instance_backups_cancel",
 		"Cancels the backup service for a Linode instance. "+
 			"WARNING: This permanently deletes all existing backups for the instance.",

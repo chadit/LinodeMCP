@@ -33,25 +33,25 @@ func TestLinodeLKEClustersListTool(t *testing.T) {
 		t.Parallel()
 
 		clusters := []linode.LKECluster{
-			{ID: 1, Label: "prod-cluster", Region: "us-east", K8sVersion: "1.29", Status: "ready"},
-			{ID: 2, Label: "dev-cluster", Region: "eu-west", K8sVersion: "1.28", Status: "ready"},
+			{ID: 1, Label: labelProdCluster, Region: regionUSEast, K8sVersion: lkeVersion129, Status: statusReady},
+			{ID: 2, Label: "dev-cluster", Region: regionEUWest, K8sVersion: lkeVersion128, Status: statusReady},
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/lke/clusters", r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"data":    clusters,
-				"page":    1,
-				"pages":   1,
-				"results": 2,
+				keyData:    clusters,
+				keyPage:    1,
+				keyPages:   1,
+				keyResults: 2,
 			}), "encoding response should not fail")
 		}))
 		defer srv.Close()
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKEClustersListTool(srvCfg)
@@ -65,7 +65,7 @@ func TestLinodeLKEClustersListTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "prod-cluster", "response should contain prod-cluster")
+		assert.Contains(t, textContent.Text, labelProdCluster, "response should contain prod-cluster")
 		assert.Contains(t, textContent.Text, "dev-cluster", "response should contain dev-cluster")
 	})
 
@@ -73,30 +73,30 @@ func TestLinodeLKEClustersListTool(t *testing.T) {
 		t.Parallel()
 
 		clusters := []linode.LKECluster{
-			{ID: 1, Label: "prod-cluster", Region: "us-east", K8sVersion: "1.29", Status: "ready"},
-			{ID: 2, Label: "dev-cluster", Region: "eu-west", K8sVersion: "1.28", Status: "ready"},
-			{ID: 3, Label: "staging-prod", Region: "us-west", K8sVersion: "1.29", Status: "ready"},
+			{ID: 1, Label: labelProdCluster, Region: regionUSEast, K8sVersion: lkeVersion129, Status: statusReady},
+			{ID: 2, Label: "dev-cluster", Region: regionEUWest, K8sVersion: lkeVersion128, Status: statusReady},
+			{ID: 3, Label: "staging-prod", Region: regionUSWest, K8sVersion: lkeVersion129, Status: statusReady},
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"data":    clusters,
-				"page":    1,
-				"pages":   1,
-				"results": 3,
+				keyData:    clusters,
+				keyPage:    1,
+				keyPages:   1,
+				keyResults: 3,
 			}), "encoding response should not fail")
 		}))
 		defer srv.Close()
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKEClustersListTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"label": "prod"})
+		req := createRequestWithArgs(t, map[string]any{keyLabel: "prod"})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -105,7 +105,7 @@ func TestLinodeLKEClustersListTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "prod-cluster", "response should contain prod-cluster")
+		assert.Contains(t, textContent.Text, labelProdCluster, "response should contain prod-cluster")
 		assert.Contains(t, textContent.Text, "staging-prod", "response should contain staging-prod")
 		assert.NotContains(t, textContent.Text, "dev-cluster", "response should not contain dev-cluster")
 	})
@@ -117,7 +117,7 @@ func TestLinodeLKEClusterGetTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeLKEClusterGetTool(cfg)
@@ -134,8 +134,8 @@ func TestLinodeLKEClusterGetTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing cluster id", args: map[string]any{}, wantContains: "cluster_id is required"},
-		{name: "invalid cluster id", args: map[string]any{"cluster_id": "not-a-number"}, wantContains: "cluster_id must be a valid integer"},
+		{name: caseMissingClusterID, args: map[string]any{}, wantContains: errClusterIDRequired},
+		{name: "invalid cluster id", args: map[string]any{keyClusterID: notANumber}, wantContains: "cluster_id must be a valid integer"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -153,7 +153,7 @@ func TestLinodeLKEClusterGetTool(t *testing.T) {
 		t.Parallel()
 
 		cluster := linode.LKECluster{
-			ID: 123, Label: "prod-cluster", Region: "us-east", K8sVersion: "1.29", Status: "ready",
+			ID: 123, Label: labelProdCluster, Region: regionUSEast, K8sVersion: lkeVersion129, Status: statusReady,
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -165,12 +165,12 @@ func TestLinodeLKEClusterGetTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKEClusterGetTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": "123"})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -179,8 +179,8 @@ func TestLinodeLKEClusterGetTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "prod-cluster", "response should contain cluster label")
-		assert.Contains(t, textContent.Text, "1.29", "response should contain k8s version")
+		assert.Contains(t, textContent.Text, labelProdCluster, "response should contain cluster label")
+		assert.Contains(t, textContent.Text, lkeVersion129, "response should contain k8s version")
 	})
 }
 
@@ -191,7 +191,7 @@ func TestLinodeLKEPoolsListTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeLKEPoolsListTool(cfg)
@@ -203,21 +203,21 @@ func TestLinodeLKEPoolsListTool(t *testing.T) {
 		require.NotNil(t, handler, "handler should not be nil")
 	})
 
-	t.Run("missing cluster id", func(t *testing.T) {
+	t.Run(caseMissingClusterID, func(t *testing.T) {
 		t.Parallel()
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "cluster_id is required")
+		assertErrorContains(t, result, errClusterIDRequired)
 	})
 
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
 		pools := []linode.LKENodePool{
-			{ID: 10, ClusterID: 123, Type: "g6-standard-2", Count: 3},
+			{ID: 10, ClusterID: 123, Type: typeG6Standard2, Count: 3},
 			{ID: 11, ClusterID: 123, Type: "g6-standard-4", Count: 2},
 		}
 
@@ -225,19 +225,19 @@ func TestLinodeLKEPoolsListTool(t *testing.T) {
 			assert.Equal(t, "/lke/clusters/123/pools", r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"data": pools, "page": 1, "pages": 1, "results": 2,
+				keyData: pools, keyPage: 1, keyPages: 1, keyResults: 2,
 			}), "encoding response should not fail")
 		}))
 		defer srv.Close()
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKEPoolsListTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": "123"})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -246,7 +246,7 @@ func TestLinodeLKEPoolsListTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "g6-standard-2", "response should contain pool type")
+		assert.Contains(t, textContent.Text, typeG6Standard2, "response should contain pool type")
 		assert.Contains(t, textContent.Text, "g6-standard-4", "response should contain pool type")
 		assert.Contains(t, textContent.Text, `"count": 2`, "response should contain pool count")
 	})
@@ -259,7 +259,7 @@ func TestLinodeLKEPoolGetTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeLKEPoolGetTool(cfg)
@@ -276,8 +276,8 @@ func TestLinodeLKEPoolGetTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing cluster id", args: map[string]any{"pool_id": "10"}, wantContains: "cluster_id is required"},
-		{name: "missing pool id", args: map[string]any{"cluster_id": "123"}, wantContains: "pool_id is required"},
+		{name: caseMissingClusterID, args: map[string]any{keyPoolID: "10"}, wantContains: errClusterIDRequired},
+		{name: "missing pool id", args: map[string]any{keyClusterID: "123"}, wantContains: "pool_id is required"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -294,7 +294,7 @@ func TestLinodeLKEPoolGetTool(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		pool := linode.LKENodePool{ID: 10, ClusterID: 123, Type: "g6-standard-2", Count: 3}
+		pool := linode.LKENodePool{ID: 10, ClusterID: 123, Type: typeG6Standard2, Count: 3}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/lke/clusters/123/pools/10", r.URL.Path, "request path should match")
@@ -305,12 +305,12 @@ func TestLinodeLKEPoolGetTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKEPoolGetTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": "123", "pool_id": "10"})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123", keyPoolID: "10"})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -319,7 +319,7 @@ func TestLinodeLKEPoolGetTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "g6-standard-2", "response should contain pool type")
+		assert.Contains(t, textContent.Text, typeG6Standard2, "response should contain pool type")
 	})
 }
 
@@ -330,7 +330,7 @@ func TestLinodeLKENodeGetTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeLKENodeGetTool(cfg)
@@ -347,8 +347,8 @@ func TestLinodeLKENodeGetTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing cluster id", args: map[string]any{"node_id": "abc-123"}, wantContains: "cluster_id is required"},
-		{name: "missing node id", args: map[string]any{"cluster_id": "123"}, wantContains: "node_id is required"},
+		{name: caseMissingClusterID, args: map[string]any{keyNodeID: idAbc123}, wantContains: errClusterIDRequired},
+		{name: "missing node id", args: map[string]any{keyClusterID: "123"}, wantContains: "node_id is required"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -365,7 +365,7 @@ func TestLinodeLKENodeGetTool(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		node := linode.LKENode{ID: "abc-123", InstanceID: 456, Status: "ready"}
+		node := linode.LKENode{ID: idAbc123, InstanceID: 456, Status: statusReady}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/lke/clusters/123/nodes/abc-123", r.URL.Path, "request path should match")
@@ -376,12 +376,12 @@ func TestLinodeLKENodeGetTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKENodeGetTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": "123", "node_id": "abc-123"})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123", keyNodeID: idAbc123})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -390,8 +390,8 @@ func TestLinodeLKENodeGetTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "abc-123", "response should contain node ID")
-		assert.Contains(t, textContent.Text, "ready", "response should contain node status")
+		assert.Contains(t, textContent.Text, idAbc123, "response should contain node ID")
+		assert.Contains(t, textContent.Text, statusReady, "response should contain node status")
 	})
 }
 
@@ -402,7 +402,7 @@ func TestLinodeLKEKubeconfigGetTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeLKEKubeconfigGetTool(cfg)
@@ -414,14 +414,14 @@ func TestLinodeLKEKubeconfigGetTool(t *testing.T) {
 		require.NotNil(t, handler, "handler should not be nil")
 	})
 
-	t.Run("missing cluster id", func(t *testing.T) {
+	t.Run(caseMissingClusterID, func(t *testing.T) {
 		t.Parallel()
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "cluster_id is required")
+		assertErrorContains(t, result, errClusterIDRequired)
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -440,12 +440,12 @@ func TestLinodeLKEKubeconfigGetTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKEKubeconfigGetTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": "123"})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -487,12 +487,12 @@ func TestLinodeLKEDashboardGetTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKEDashboardGetTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": "123"})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -531,19 +531,19 @@ func TestLinodeLKEAPIEndpointsListTool(t *testing.T) {
 			assert.Equal(t, "/lke/clusters/123/api-endpoints", r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"data": endpoints, "page": 1, "pages": 1, "results": 1,
+				keyData: endpoints, keyPage: 1, keyPages: 1, keyResults: 1,
 			}), "encoding response should not fail")
 		}))
 		defer srv.Close()
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKEAPIEndpointsListTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": "123"})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -578,7 +578,7 @@ func TestLinodeLKEACLGetTool(t *testing.T) {
 			Enabled: true,
 			Addresses: linode.LKEControlPlaneACLAddresses{
 				IPv4: []string{"10.0.0.1/32"},
-				IPv6: []string{"2001:db8::1/128"},
+				IPv6: []string{cidrV6},
 			},
 		}
 
@@ -591,12 +591,12 @@ func TestLinodeLKEACLGetTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKEACLGetTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": "123"})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -606,7 +606,7 @@ func TestLinodeLKEACLGetTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, "10.0.0.1/32", "response should contain IPv4 address")
-		assert.Contains(t, textContent.Text, "2001:db8::1/128", "response should contain IPv6 address")
+		assert.Contains(t, textContent.Text, cidrV6, "response should contain IPv6 address")
 	})
 }
 
@@ -628,20 +628,20 @@ func TestLinodeLKEVersionsListTool(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		versions := []linode.LKEVersion{{ID: "1.29"}, {ID: "1.28"}, {ID: "1.27"}}
+		versions := []linode.LKEVersion{{ID: lkeVersion129}, {ID: lkeVersion128}, {ID: "1.27"}}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/lke/versions", r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"data": versions, "page": 1, "pages": 1, "results": 3,
+				keyData: versions, keyPage: 1, keyPages: 1, keyResults: 3,
 			}), "encoding response should not fail")
 		}))
 		defer srv.Close()
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKEVersionsListTool(srvCfg)
@@ -655,8 +655,8 @@ func TestLinodeLKEVersionsListTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "1.29", "response should contain version 1.29")
-		assert.Contains(t, textContent.Text, "1.28", "response should contain version 1.28")
+		assert.Contains(t, textContent.Text, lkeVersion129, "response should contain version 1.29")
+		assert.Contains(t, textContent.Text, lkeVersion128, "response should contain version 1.28")
 	})
 }
 
@@ -667,7 +667,7 @@ func TestLinodeLKEVersionGetTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeLKEVersionGetTool(cfg)
@@ -692,7 +692,7 @@ func TestLinodeLKEVersionGetTool(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		version := linode.LKEVersion{ID: "1.29"}
+		version := linode.LKEVersion{ID: lkeVersion129}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/lke/versions/1.29", r.URL.Path, "request path should match")
@@ -703,12 +703,12 @@ func TestLinodeLKEVersionGetTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKEVersionGetTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"version": "1.29"})
+		req := createRequestWithArgs(t, map[string]any{"version": lkeVersion129})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -717,7 +717,7 @@ func TestLinodeLKEVersionGetTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "1.29", "response should contain version")
+		assert.Contains(t, textContent.Text, lkeVersion129, "response should contain version")
 	})
 }
 
@@ -741,7 +741,7 @@ func TestLinodeLKETypesListTool(t *testing.T) {
 
 		types := []linode.LKEType{
 			{
-				ID: "g6-standard-2", Label: "Linode 4GB", Transfer: 4000,
+				ID: typeG6Standard2, Label: typeLinode4GB, Transfer: 4000,
 				Price: linode.LKETypePrice{Hourly: 0.036, Monthly: 24.0},
 			},
 		}
@@ -750,14 +750,14 @@ func TestLinodeLKETypesListTool(t *testing.T) {
 			assert.Equal(t, "/lke/types", r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"data": types, "page": 1, "pages": 1, "results": 1,
+				keyData: types, keyPage: 1, keyPages: 1, keyResults: 1,
 			}), "encoding response should not fail")
 		}))
 		defer srv.Close()
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKETypesListTool(srvCfg)
@@ -771,7 +771,7 @@ func TestLinodeLKETypesListTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "g6-standard-2", "response should contain type ID")
+		assert.Contains(t, textContent.Text, typeG6Standard2, "response should contain type ID")
 	})
 }
 
@@ -794,22 +794,22 @@ func TestLinodeLKETierVersionsListTool(t *testing.T) {
 		t.Parallel()
 
 		tierVersions := []linode.LKETierVersion{
-			{ID: "1.29", Tier: "standard"},
-			{ID: "1.28", Tier: "enterprise"},
+			{ID: lkeVersion129, Tier: classStandard},
+			{ID: lkeVersion128, Tier: "enterprise"},
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/lke/tiers/versions", r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"data": tierVersions, "page": 1, "pages": 1, "results": 2,
+				keyData: tierVersions, keyPage: 1, keyPages: 1, keyResults: 2,
 			}), "encoding response should not fail")
 		}))
 		defer srv.Close()
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKETierVersionsListTool(srvCfg)
@@ -823,7 +823,7 @@ func TestLinodeLKETierVersionsListTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "standard", "response should contain standard tier")
+		assert.Contains(t, textContent.Text, classStandard, "response should contain standard tier")
 		assert.Contains(t, textContent.Text, "enterprise", "response should contain enterprise tier")
 	})
 }
@@ -834,7 +834,7 @@ func TestLinodeLKEClusterCreateTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeLKEClusterCreateTool(cfg)
@@ -860,23 +860,23 @@ func TestLinodeLKEClusterCreateTool(t *testing.T) {
 		wantContains string
 	}{
 		{
-			name:         "missing confirm",
-			args:         map[string]any{"label": "test-cluster", "region": "us-east", "k8s_version": "1.29", "node_pools": `[{"type":"g6-standard-2","count":3}]`},
-			wantContains: "confirm=true",
+			name:         caseMissingConfirm,
+			args:         map[string]any{keyLabel: labelTestCluster, keyRegion: regionUSEast, keyK8sVersion: lkeVersion129, keyNodePools: lkePoolSnapshot},
+			wantContains: errConfirmEqualsTrue,
 		},
 		{
-			name:         "missing label",
-			args:         map[string]any{"region": "us-east", "k8s_version": "1.29", "node_pools": `[{"type":"g6-standard-2","count":3}]`, "confirm": true},
-			wantContains: "label is required",
+			name:         caseMissingLabel,
+			args:         map[string]any{keyRegion: regionUSEast, keyK8sVersion: lkeVersion129, keyNodePools: lkePoolSnapshot, keyConfirm: true},
+			wantContains: errLabelRequired,
 		},
 		{
-			name:         "missing region",
-			args:         map[string]any{"label": "test-cluster", "k8s_version": "1.29", "node_pools": `[{"type":"g6-standard-2","count":3}]`, "confirm": true},
-			wantContains: "region is required",
+			name:         caseMissingRegion,
+			args:         map[string]any{keyLabel: labelTestCluster, keyK8sVersion: lkeVersion129, keyNodePools: lkePoolSnapshot, keyConfirm: true},
+			wantContains: errRegionRequired,
 		},
 		{
 			name:         "invalid node pools JSON",
-			args:         map[string]any{"label": "test-cluster", "region": "us-east", "k8s_version": "1.29", "node_pools": "not-valid-json", "confirm": true},
+			args:         map[string]any{keyLabel: labelTestCluster, keyRegion: regionUSEast, keyK8sVersion: lkeVersion129, keyNodePools: "not-valid-json", keyConfirm: true},
 			wantContains: "invalid node_pools JSON",
 		},
 	}
@@ -896,7 +896,7 @@ func TestLinodeLKEClusterCreateTool(t *testing.T) {
 		t.Parallel()
 
 		cluster := linode.LKECluster{
-			ID: 999, Label: "test-cluster", Region: "us-east", K8sVersion: "1.29", Status: "ready",
+			ID: 999, Label: labelTestCluster, Region: regionUSEast, K8sVersion: lkeVersion129, Status: statusReady,
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -909,14 +909,14 @@ func TestLinodeLKEClusterCreateTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKEClusterCreateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			"label": "test-cluster", "region": "us-east", "k8s_version": "1.29",
-			"node_pools": `[{"type":"g6-standard-2","count":3}]`, "confirm": true,
+			keyLabel: labelTestCluster, keyRegion: regionUSEast, keyK8sVersion: lkeVersion129,
+			keyNodePools: lkePoolSnapshot, keyConfirm: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 
@@ -926,7 +926,7 @@ func TestLinodeLKEClusterCreateTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "test-cluster", "response should contain cluster label")
+		assert.Contains(t, textContent.Text, labelTestCluster, "response should contain cluster label")
 		assert.Contains(t, textContent.Text, "999", "response should contain cluster ID")
 	})
 }
@@ -938,7 +938,7 @@ func TestLinodeLKEClusterUpdateTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeLKEClusterUpdateTool(cfg)
@@ -960,8 +960,8 @@ func TestLinodeLKEClusterUpdateTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing confirm", args: map[string]any{"cluster_id": float64(123), "label": "new-label"}, wantContains: "confirm=true"},
-		{name: "missing cluster id", args: map[string]any{"label": "new-label", "confirm": true}, wantContains: "cluster_id is required"},
+		{name: caseMissingConfirm, args: map[string]any{keyClusterID: float64(123), keyLabel: labelNew}, wantContains: errConfirmEqualsTrue},
+		{name: caseMissingClusterID, args: map[string]any{keyLabel: labelNew, keyConfirm: true}, wantContains: errClusterIDRequired},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -979,7 +979,7 @@ func TestLinodeLKEClusterUpdateTool(t *testing.T) {
 		t.Parallel()
 
 		cluster := linode.LKECluster{
-			ID: 123, Label: "updated-cluster", Region: "us-east", K8sVersion: "1.29", Status: "ready",
+			ID: 123, Label: "updated-cluster", Region: regionUSEast, K8sVersion: lkeVersion129, Status: statusReady,
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -992,12 +992,12 @@ func TestLinodeLKEClusterUpdateTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKEClusterUpdateTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": float64(123), "label": "updated-cluster", "confirm": true})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyLabel: "updated-cluster", keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -1017,7 +1017,7 @@ func TestLinodeLKEClusterDeleteTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeLKEClusterDeleteTool(cfg)
@@ -1035,8 +1035,8 @@ func TestLinodeLKEClusterDeleteTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing confirm", args: map[string]any{"cluster_id": float64(123)}, wantContains: "confirm=true"},
-		{name: "missing cluster id", args: map[string]any{"confirm": true}, wantContains: "cluster_id is required"},
+		{name: caseMissingConfirm, args: map[string]any{keyClusterID: float64(123)}, wantContains: errConfirmEqualsTrue},
+		{name: caseMissingClusterID, args: map[string]any{keyConfirm: true}, wantContains: errClusterIDRequired},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1062,12 +1062,12 @@ func TestLinodeLKEClusterDeleteTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKEClusterDeleteTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": float64(123), "confirm": true})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -1087,7 +1087,7 @@ func TestLinodeLKEClusterRecycleTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeLKEClusterRecycleTool(cfg)
@@ -1099,14 +1099,14 @@ func TestLinodeLKEClusterRecycleTool(t *testing.T) {
 		require.NotNil(t, handler, "handler should not be nil")
 	})
 
-	t.Run("missing confirm", func(t *testing.T) {
+	t.Run(caseMissingConfirm, func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": float64(123)})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123)})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "confirm=true")
+		assertErrorContains(t, result, errConfirmEqualsTrue)
 	})
 
 	t.Run("successful recycle", func(t *testing.T) {
@@ -1122,12 +1122,12 @@ func TestLinodeLKEClusterRecycleTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKEClusterRecycleTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": float64(123), "confirm": true})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -1147,7 +1147,7 @@ func TestLinodeLKEClusterRegenerateTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeLKEClusterRegenerateTool(cfg)
@@ -1159,14 +1159,14 @@ func TestLinodeLKEClusterRegenerateTool(t *testing.T) {
 		require.NotNil(t, handler, "handler should not be nil")
 	})
 
-	t.Run("missing confirm", func(t *testing.T) {
+	t.Run(caseMissingConfirm, func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": float64(123)})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123)})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "confirm=true")
+		assertErrorContains(t, result, errConfirmEqualsTrue)
 	})
 
 	t.Run("successful regenerate", func(t *testing.T) {
@@ -1182,12 +1182,12 @@ func TestLinodeLKEClusterRegenerateTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKEClusterRegenerateTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": float64(123), "confirm": true})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -1206,7 +1206,7 @@ func TestLinodeLKEPoolCreateTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeLKEPoolCreateTool(cfg)
@@ -1229,9 +1229,9 @@ func TestLinodeLKEPoolCreateTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing confirm", args: map[string]any{"cluster_id": float64(123), "type": "g6-standard-2", "count": float64(3)}, wantContains: "confirm=true"},
-		{name: "missing type", args: map[string]any{"cluster_id": float64(123), "count": float64(3), "confirm": true}, wantContains: "type is required"},
-		{name: "missing count", args: map[string]any{"cluster_id": float64(123), "type": "g6-standard-2", "confirm": true}, wantContains: "count is required"},
+		{name: caseMissingConfirm, args: map[string]any{keyClusterID: float64(123), keyType: typeG6Standard2, keyCount: float64(3)}, wantContains: errConfirmEqualsTrue},
+		{name: caseMissingType, args: map[string]any{keyClusterID: float64(123), keyCount: float64(3), keyConfirm: true}, wantContains: errTypeRequired},
+		{name: "missing count", args: map[string]any{keyClusterID: float64(123), keyType: typeG6Standard2, keyConfirm: true}, wantContains: "count is required"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1248,7 +1248,7 @@ func TestLinodeLKEPoolCreateTool(t *testing.T) {
 	t.Run("successful creation", func(t *testing.T) {
 		t.Parallel()
 
-		pool := linode.LKENodePool{ID: 50, ClusterID: 123, Type: "g6-standard-2", Count: 3}
+		pool := linode.LKENodePool{ID: 50, ClusterID: 123, Type: typeG6Standard2, Count: 3}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/lke/clusters/123/pools", r.URL.Path, "request path should match")
@@ -1260,13 +1260,13 @@ func TestLinodeLKEPoolCreateTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKEPoolCreateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			"cluster_id": float64(123), "type": "g6-standard-2", "count": float64(3), "confirm": true,
+			keyClusterID: float64(123), keyType: typeG6Standard2, keyCount: float64(3), keyConfirm: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 
@@ -1276,7 +1276,7 @@ func TestLinodeLKEPoolCreateTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "g6-standard-2", "response should contain pool type")
+		assert.Contains(t, textContent.Text, typeG6Standard2, "response should contain pool type")
 	})
 }
 
@@ -1287,7 +1287,7 @@ func TestLinodeLKEPoolUpdateTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeLKEPoolUpdateTool(cfg)
@@ -1299,20 +1299,20 @@ func TestLinodeLKEPoolUpdateTool(t *testing.T) {
 		require.NotNil(t, handler, "handler should not be nil")
 	})
 
-	t.Run("missing confirm", func(t *testing.T) {
+	t.Run(caseMissingConfirm, func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": float64(123), "pool_id": float64(10), "count": float64(5)})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyPoolID: float64(10), keyCount: float64(5)})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "confirm=true")
+		assertErrorContains(t, result, errConfirmEqualsTrue)
 	})
 
 	t.Run("successful update", func(t *testing.T) {
 		t.Parallel()
 
-		pool := linode.LKENodePool{ID: 10, ClusterID: 123, Type: "g6-standard-2", Count: 5}
+		pool := linode.LKENodePool{ID: 10, ClusterID: 123, Type: typeG6Standard2, Count: 5}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/lke/clusters/123/pools/10", r.URL.Path, "request path should match")
@@ -1324,13 +1324,13 @@ func TestLinodeLKEPoolUpdateTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKEPoolUpdateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			"cluster_id": float64(123), "pool_id": float64(10), "count": float64(5), "confirm": true,
+			keyClusterID: float64(123), keyPoolID: float64(10), keyCount: float64(5), keyConfirm: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 
@@ -1351,7 +1351,7 @@ func TestLinodeLKEPoolDeleteTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeLKEPoolDeleteTool(cfg)
@@ -1363,14 +1363,14 @@ func TestLinodeLKEPoolDeleteTool(t *testing.T) {
 		require.NotNil(t, handler, "handler should not be nil")
 	})
 
-	t.Run("missing confirm", func(t *testing.T) {
+	t.Run(caseMissingConfirm, func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": float64(123), "pool_id": float64(10)})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyPoolID: float64(10)})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "confirm=true")
+		assertErrorContains(t, result, errConfirmEqualsTrue)
 	})
 
 	t.Run("successful deletion", func(t *testing.T) {
@@ -1385,12 +1385,12 @@ func TestLinodeLKEPoolDeleteTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKEPoolDeleteTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": float64(123), "pool_id": float64(10), "confirm": true})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyPoolID: float64(10), keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -1410,7 +1410,7 @@ func TestLinodeLKEPoolRecycleTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeLKEPoolRecycleTool(cfg)
@@ -1422,14 +1422,14 @@ func TestLinodeLKEPoolRecycleTool(t *testing.T) {
 		require.NotNil(t, handler, "handler should not be nil")
 	})
 
-	t.Run("missing confirm", func(t *testing.T) {
+	t.Run(caseMissingConfirm, func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": float64(123), "pool_id": float64(10)})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyPoolID: float64(10)})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "confirm=true")
+		assertErrorContains(t, result, errConfirmEqualsTrue)
 	})
 
 	t.Run("successful recycle", func(t *testing.T) {
@@ -1445,12 +1445,12 @@ func TestLinodeLKEPoolRecycleTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKEPoolRecycleTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": float64(123), "pool_id": float64(10), "confirm": true})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyPoolID: float64(10), keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -1470,7 +1470,7 @@ func TestLinodeLKENodeDeleteTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeLKENodeDeleteTool(cfg)
@@ -1487,8 +1487,8 @@ func TestLinodeLKENodeDeleteTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing confirm", args: map[string]any{"cluster_id": float64(123), "node_id": "abc-123"}, wantContains: "confirm=true"},
-		{name: "missing node id", args: map[string]any{"cluster_id": float64(123), "confirm": true}, wantContains: "node_id is required"},
+		{name: caseMissingConfirm, args: map[string]any{keyClusterID: float64(123), keyNodeID: idAbc123}, wantContains: errConfirmEqualsTrue},
+		{name: "missing node id", args: map[string]any{keyClusterID: float64(123), keyConfirm: true}, wantContains: "node_id is required"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1514,12 +1514,12 @@ func TestLinodeLKENodeDeleteTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKENodeDeleteTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": float64(123), "node_id": "abc-123", "confirm": true})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyNodeID: idAbc123, keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -1529,7 +1529,7 @@ func TestLinodeLKENodeDeleteTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, "deleted", "response should confirm deletion")
-		assert.Contains(t, textContent.Text, "abc-123", "response should contain node ID")
+		assert.Contains(t, textContent.Text, idAbc123, "response should contain node ID")
 	})
 }
 
@@ -1540,7 +1540,7 @@ func TestLinodeLKENodeRecycleTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeLKENodeRecycleTool(cfg)
@@ -1552,14 +1552,14 @@ func TestLinodeLKENodeRecycleTool(t *testing.T) {
 		require.NotNil(t, handler, "handler should not be nil")
 	})
 
-	t.Run("missing confirm", func(t *testing.T) {
+	t.Run(caseMissingConfirm, func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": float64(123), "node_id": "abc-123"})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyNodeID: idAbc123})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "confirm=true")
+		assertErrorContains(t, result, errConfirmEqualsTrue)
 	})
 
 	t.Run("successful recycle", func(t *testing.T) {
@@ -1575,12 +1575,12 @@ func TestLinodeLKENodeRecycleTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKENodeRecycleTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": float64(123), "node_id": "abc-123", "confirm": true})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyNodeID: idAbc123, keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -1600,7 +1600,7 @@ func TestLinodeLKEKubeconfigDeleteTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeLKEKubeconfigDeleteTool(cfg)
@@ -1612,14 +1612,14 @@ func TestLinodeLKEKubeconfigDeleteTool(t *testing.T) {
 		require.NotNil(t, handler, "handler should not be nil")
 	})
 
-	t.Run("missing confirm", func(t *testing.T) {
+	t.Run(caseMissingConfirm, func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": float64(123)})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123)})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "confirm=true")
+		assertErrorContains(t, result, errConfirmEqualsTrue)
 	})
 
 	t.Run("successful deletion", func(t *testing.T) {
@@ -1634,12 +1634,12 @@ func TestLinodeLKEKubeconfigDeleteTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKEKubeconfigDeleteTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": float64(123), "confirm": true})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -1659,7 +1659,7 @@ func TestLinodeLKEServiceTokenDeleteTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeLKEServiceTokenDeleteTool(cfg)
@@ -1671,14 +1671,14 @@ func TestLinodeLKEServiceTokenDeleteTool(t *testing.T) {
 		require.NotNil(t, handler, "handler should not be nil")
 	})
 
-	t.Run("missing confirm", func(t *testing.T) {
+	t.Run(caseMissingConfirm, func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": float64(123)})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123)})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "confirm=true")
+		assertErrorContains(t, result, errConfirmEqualsTrue)
 	})
 
 	t.Run("successful deletion", func(t *testing.T) {
@@ -1693,12 +1693,12 @@ func TestLinodeLKEServiceTokenDeleteTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKEServiceTokenDeleteTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": float64(123), "confirm": true})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -1718,7 +1718,7 @@ func TestLinodeLKEACLUpdateTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeLKEACLUpdateTool(cfg)
@@ -1731,20 +1731,20 @@ func TestLinodeLKEACLUpdateTool(t *testing.T) {
 
 		props := tool.InputSchema.Properties
 		assert.Contains(t, props, "cluster_id", "schema should include cluster_id")
-		assert.Contains(t, props, "enabled", "schema should include enabled")
-		assert.Contains(t, props, "ipv4", "schema should include ipv4")
+		assert.Contains(t, props, statusEnabled, "schema should include enabled")
+		assert.Contains(t, props, keyIPv4, "schema should include ipv4")
 		assert.Contains(t, props, "ipv6", "schema should include ipv6")
 		assert.Contains(t, props, "confirm", "schema should include confirm")
 	})
 
-	t.Run("missing confirm", func(t *testing.T) {
+	t.Run(caseMissingConfirm, func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": float64(123), "enabled": true})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), statusEnabled: true})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "confirm=true")
+		assertErrorContains(t, result, errConfirmEqualsTrue)
 	})
 
 	t.Run("successful update", func(t *testing.T) {
@@ -1754,7 +1754,7 @@ func TestLinodeLKEACLUpdateTool(t *testing.T) {
 			Enabled: true,
 			Addresses: linode.LKEControlPlaneACLAddresses{
 				IPv4: []string{"10.0.0.1/32", "192.168.1.0/24"},
-				IPv6: []string{"2001:db8::1/128"},
+				IPv6: []string{cidrV6},
 			},
 		}
 
@@ -1768,14 +1768,14 @@ func TestLinodeLKEACLUpdateTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKEACLUpdateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			"cluster_id": float64(123), "enabled": true,
-			"ipv4": "10.0.0.1/32, 192.168.1.0/24", "ipv6": "2001:db8::1/128", "confirm": true,
+			keyClusterID: float64(123), statusEnabled: true,
+			keyIPv4: "10.0.0.1/32, 192.168.1.0/24", "ipv6": cidrV6, keyConfirm: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 
@@ -1796,7 +1796,7 @@ func TestLinodeLKEACLDeleteTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeLKEACLDeleteTool(cfg)
@@ -1808,14 +1808,14 @@ func TestLinodeLKEACLDeleteTool(t *testing.T) {
 		require.NotNil(t, handler, "handler should not be nil")
 	})
 
-	t.Run("missing confirm", func(t *testing.T) {
+	t.Run(caseMissingConfirm, func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": float64(123)})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123)})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "confirm=true")
+		assertErrorContains(t, result, errConfirmEqualsTrue)
 	})
 
 	t.Run("successful deletion", func(t *testing.T) {
@@ -1830,12 +1830,12 @@ func TestLinodeLKEACLDeleteTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeLKEACLDeleteTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"cluster_id": float64(123), "confirm": true})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")

@@ -29,7 +29,8 @@ func TestRetryableClientGetProfileSuccessNoRetry(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := linode.NewClient(srv.URL, "token", nil,
+	client := linode.NewClient(
+		srv.URL, "token", nil,
 		linode.WithMaxRetries(3),
 		linode.WithBaseDelay(1*time.Millisecond),
 		linode.WithMaxDelay(10*time.Millisecond),
@@ -64,7 +65,8 @@ func TestRetryableClientRetriesOnServerError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := linode.NewClient(srv.URL, "token", nil,
+	client := linode.NewClient(
+		srv.URL, "token", nil,
 		linode.WithMaxRetries(3),
 		linode.WithBaseDelay(1*time.Millisecond),
 		linode.WithMaxDelay(10*time.Millisecond),
@@ -92,7 +94,8 @@ func TestRetryableClientNoRetryOnAuthError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := linode.NewClient(srv.URL, "bad-token", nil,
+	client := linode.NewClient(
+		srv.URL, "bad-token", nil,
 		linode.WithMaxRetries(3),
 		linode.WithBaseDelay(1*time.Millisecond),
 		linode.WithMaxDelay(10*time.Millisecond),
@@ -119,7 +122,8 @@ func TestRetryableClientExhaustsRetries(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := linode.NewClient(srv.URL, "token", nil,
+	client := linode.NewClient(
+		srv.URL, "token", nil,
 		linode.WithMaxRetries(2),
 		linode.WithBaseDelay(1*time.Millisecond),
 		linode.WithMaxDelay(10*time.Millisecond),
@@ -150,7 +154,8 @@ func TestRetryableClientContextCancelStopsRetry(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
-	client := linode.NewClient(srv.URL, "token", nil,
+	client := linode.NewClient(
+		srv.URL, "token", nil,
 		linode.WithMaxRetries(5),
 		linode.WithBaseDelay(50*time.Millisecond),
 		linode.WithMaxDelay(100*time.Millisecond),
@@ -177,6 +182,94 @@ func TestRetryableClientContextCancelStopsRetry(t *testing.T) {
 	<-done
 }
 
+// TestRetryHonorsRetryAfterHint verifies that when the API returns 429 with
+// a Retry-After hint, the retry loop waits that long instead of running its
+// own exponential backoff. The hint is set well above BaseDelay so a retry
+// that ran the default backoff would clearly fail this timing assertion.
+func TestRetryHonorsRetryAfterHint(t *testing.T) {
+	t.Parallel()
+
+	var callCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		count := callCount.Add(1)
+		if count == 1 {
+			w.Header().Set("Retry-After", "1")
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte(`{"errors":[{"reason":"slow down"}]}`))
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.Profile{Username: "ok"}), "encoding should not fail")
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(
+		srv.URL, "token", nil,
+		linode.WithMaxRetries(2),
+		linode.WithBaseDelay(1*time.Millisecond),
+		linode.WithMaxDelay(5*time.Second),
+		linode.WithBackoffFactor(2.0),
+		linode.WithJitter(false),
+	)
+
+	start := time.Now()
+	profile, err := client.GetProfile(t.Context())
+	elapsed := time.Since(start)
+
+	require.NoError(t, err, "GetProfile should succeed after honoring Retry-After")
+	assert.Equal(t, "ok", profile.Username, "should return the recovered profile")
+	assert.Equal(t, int32(2), callCount.Load(), "should call API twice (one 429, one OK)")
+	// Retry-After of 1s honored; pure exponential with BaseDelay=1ms would
+	// have completed in microseconds. >=900ms tolerates timer slop while
+	// clearly distinguishing from the backoff path.
+	assert.GreaterOrEqual(t, elapsed, 900*time.Millisecond, "should wait the Retry-After hint, not the BaseDelay backoff")
+}
+
+// TestRetryClampsRetryAfterToMaxDelay verifies that an absurdly large
+// Retry-After hint is clamped to MaxDelay so a hostile or buggy server
+// can't make us wait forever.
+func TestRetryClampsRetryAfterToMaxDelay(t *testing.T) {
+	t.Parallel()
+
+	var callCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		count := callCount.Add(1)
+		if count == 1 {
+			w.Header().Set("Retry-After", "3600")
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte(`{"errors":[{"reason":"slow down"}]}`))
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.Profile{Username: "ok"}), "encoding should not fail")
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(
+		srv.URL, "token", nil,
+		linode.WithMaxRetries(1),
+		linode.WithBaseDelay(1*time.Millisecond),
+		linode.WithMaxDelay(50*time.Millisecond),
+		linode.WithBackoffFactor(2.0),
+		linode.WithJitter(false),
+	)
+
+	start := time.Now()
+	_, err := client.GetProfile(t.Context())
+	elapsed := time.Since(start)
+
+	require.NoError(t, err, "GetProfile should succeed within clamped delay")
+	// 3600s hint must be clamped to 50ms MaxDelay; 200ms ceiling allows
+	// generous CI headroom without admitting an unclamped wait.
+	assert.Less(t, elapsed, 200*time.Millisecond, "Retry-After should be clamped to MaxDelay")
+}
+
 // TestRetryableClientListInstancesRetries verifies that ListInstances
 // retries on a 429 rate-limit response and succeeds on the second attempt.
 func TestRetryableClientListInstancesRetries(t *testing.T) {
@@ -195,15 +288,16 @@ func TestRetryableClientListInstancesRetries(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-			"data":    []linode.Instance{{ID: 1, Label: "srv-1"}},
-			"page":    1,
-			"pages":   1,
-			"results": 1,
+			keyData:    []linode.Instance{{ID: 1, Label: "srv-1"}},
+			keyPage:    1,
+			keyPages:   1,
+			keyResults: 1,
 		}), "encoding instances response should not fail")
 	}))
 	defer srv.Close()
 
-	client := linode.NewClient(srv.URL, "token", nil,
+	client := linode.NewClient(
+		srv.URL, "token", nil,
 		linode.WithMaxRetries(2),
 		linode.WithBaseDelay(1*time.Millisecond),
 		linode.WithMaxDelay(10*time.Millisecond),
@@ -237,7 +331,8 @@ func TestRetryableClientGetInstanceRetries(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := linode.NewClient(srv.URL, "token", nil,
+	client := linode.NewClient(
+		srv.URL, "token", nil,
 		linode.WithMaxRetries(2),
 		linode.WithBaseDelay(1*time.Millisecond),
 		linode.WithMaxDelay(10*time.Millisecond),

@@ -12,19 +12,24 @@ import (
 
 // NewLinodeFirewallCreateTool creates a tool for creating a firewall.
 func NewLinodeFirewallCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_firewall_create",
+	tool := mcp.NewTool(
+		"linode_firewall_create",
 		mcp.WithDescription("Creates a new Cloud Firewall. The firewall is created with no rules by default."),
-		mcp.WithString(paramEnvironment,
+		mcp.WithString(
+			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithString("label",
+		mcp.WithString(
+			"label",
 			mcp.Required(),
 			mcp.Description("A label for the firewall (must be unique)"),
 		),
-		mcp.WithString("inbound_policy",
+		mcp.WithString(
+			"inbound_policy",
 			mcp.Description("Default policy for inbound traffic: 'ACCEPT' or 'DROP' (optional, default: 'ACCEPT')"),
 		),
-		mcp.WithString("outbound_policy",
+		mcp.WithString(
+			"outbound_policy",
 			mcp.Description("Default policy for outbound traffic: 'ACCEPT' or 'DROP' (optional, default: 'ACCEPT')"),
 		),
 	)
@@ -84,25 +89,32 @@ func handleLinodeFirewallCreateRequest(ctx context.Context, request *mcp.CallToo
 
 // NewLinodeFirewallUpdateTool creates a tool for updating a firewall.
 func NewLinodeFirewallUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_firewall_update",
+	tool := mcp.NewTool(
+		"linode_firewall_update",
 		mcp.WithDescription("Updates an existing Cloud Firewall. Can modify label, status, and default policies."),
-		mcp.WithString(paramEnvironment,
+		mcp.WithString(
+			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithNumber("firewall_id",
+		mcp.WithNumber(
+			"firewall_id",
 			mcp.Required(),
 			mcp.Description("The ID of the firewall to update"),
 		),
-		mcp.WithString("label",
+		mcp.WithString(
+			"label",
 			mcp.Description("New label for the firewall (optional)"),
 		),
-		mcp.WithString("status",
+		mcp.WithString(
+			"status",
 			mcp.Description("New status: 'enabled' or 'disabled' (optional)"),
 		),
-		mcp.WithString("inbound_policy",
+		mcp.WithString(
+			"inbound_policy",
 			mcp.Description("Default policy for inbound traffic: 'ACCEPT' or 'DROP' (optional)"),
 		),
-		mcp.WithString("outbound_policy",
+		mcp.WithString(
+			"outbound_policy",
 			mcp.Description("Default policy for outbound traffic: 'ACCEPT' or 'DROP' (optional)"),
 		),
 	)
@@ -172,16 +184,20 @@ func handleLinodeFirewallUpdateRequest(ctx context.Context, request *mcp.CallToo
 
 // NewLinodeFirewallDeleteTool creates a tool for deleting a firewall.
 func NewLinodeFirewallDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_firewall_delete",
+	tool := mcp.NewTool(
+		"linode_firewall_delete",
 		mcp.WithDescription("Deletes a Cloud Firewall. WARNING: This will remove all firewall rules and unassign all attached devices."),
-		mcp.WithString(paramEnvironment,
+		mcp.WithString(
+			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithNumber("firewall_id",
+		mcp.WithNumber(
+			"firewall_id",
 			mcp.Required(),
 			mcp.Description("The ID of the firewall to delete"),
 		),
-		mcp.WithBoolean(paramConfirm,
+		mcp.WithBoolean(
+			paramConfirm,
 			mcp.Required(),
 			mcp.Description("Must be set to true to confirm deletion."),
 		),

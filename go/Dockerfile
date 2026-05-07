@@ -28,6 +28,6 @@ COPY --from=builder /build/linodemcp /usr/local/bin/linodemcp
 USER linodemcp
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD ["/usr/local/bin/linodemcp", "--help"] || exit 1
+    CMD ["/usr/local/bin/linodemcp", "--help"]
 
 ENTRYPOINT ["linodemcp"]

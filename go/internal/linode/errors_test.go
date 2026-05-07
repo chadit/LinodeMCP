@@ -23,7 +23,7 @@ func TestAPIErrorMessage(t *testing.T) {
 	}{
 		{
 			name:        "with field",
-			apiErr:      &linode.APIError{StatusCode: 400, Message: "bad value", Field: "label"},
+			apiErr:      &linode.APIError{StatusCode: 400, Message: "bad value", Field: keyLabel},
 			mustContain: []string{"field: label", "status 400", "bad value"},
 		},
 		{

@@ -60,7 +60,8 @@ func newSimpleGetTool(
 	toolName, description string,
 	apiCall func(context.Context, *linode.Client) (any, error),
 ) (mcp.Tool, func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(toolName,
+	tool := mcp.NewTool(
+		toolName,
 		mcp.WithDescription(description),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 	)
@@ -202,7 +203,8 @@ func newListTool[T any](
 	responseKey string,
 ) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	options := make([]mcp.ToolOption, 0, 2+len(filterParams))
-	options = append(options,
+	options = append(
+		options,
 		mcp.WithDescription(description),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 	)
@@ -217,7 +219,8 @@ func newListTool[T any](
 	tool := mcp.NewTool(toolName, options...)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleListRequest(ctx, &request, cfg, apiCall, filters,
+		return handleListRequest(
+			ctx, &request, cfg, apiCall, filters,
 			func(items []T, appliedFilters []string) (*mcp.CallToolResult, error) {
 				return FormatListResponse(items, appliedFilters, responseKey)
 			},
@@ -239,7 +242,8 @@ func newToolWithHandler(
 	handler toolHandlerFunc,
 ) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	allOptions := make([]mcp.ToolOption, 0, len(options)+2)
-	allOptions = append(allOptions,
+	allOptions = append(
+		allOptions,
 		mcp.WithDescription(description),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 	)

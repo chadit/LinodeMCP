@@ -12,7 +12,8 @@ import (
 
 // NewLinodeRegionsListTool creates a tool for listing Linode regions.
 func NewLinodeRegionsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_regions_list",
+	tool := mcp.NewTool(
+		"linode_regions_list",
 		mcp.WithDescription("Lists all available Linode regions (datacenters) with optional filtering by country or capabilities"),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithString("country", mcp.Description("Filter regions by country code (e.g., 'us', 'de', 'jp')")),
@@ -20,7 +21,8 @@ func NewLinodeRegionsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Co
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleListRequest(ctx, &request, cfg,
+		return handleListRequest(
+			ctx, &request, cfg,
 			func(ctx context.Context, client *linode.Client) ([]linode.Region, error) {
 				return client.ListRegions(ctx)
 			},

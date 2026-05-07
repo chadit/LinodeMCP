@@ -12,12 +12,15 @@ import (
 
 // NewLinodeSSHKeysListTool creates a tool for listing SSH keys.
 func NewLinodeSSHKeysListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_sshkeys_list",
+	tool := mcp.NewTool(
+		"linode_sshkeys_list",
 		mcp.WithDescription("Lists all SSH keys associated with your Linode profile. Can filter by label."),
-		mcp.WithString(paramEnvironment,
+		mcp.WithString(
+			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithString("label_contains",
+		mcp.WithString(
+			"label_contains",
 			mcp.Description("Filter SSH keys by label containing this string (case-insensitive)"),
 		),
 	)

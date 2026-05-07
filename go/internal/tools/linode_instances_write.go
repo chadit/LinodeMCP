@@ -12,16 +12,20 @@ import (
 
 // NewLinodeInstanceBootTool creates a tool for booting a Linode instance.
 func NewLinodeInstanceBootTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_instance_boot",
+	tool := mcp.NewTool(
+		"linode_instance_boot",
 		mcp.WithDescription("Boots a Linode instance that is currently offline. If the instance is already running, this has no effect."),
-		mcp.WithString(paramEnvironment,
+		mcp.WithString(
+			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithNumber("instance_id",
+		mcp.WithNumber(
+			"instance_id",
 			mcp.Required(),
 			mcp.Description("The ID of the Linode instance to boot"),
 		),
-		mcp.WithNumber("config_id",
+		mcp.WithNumber(
+			"config_id",
 			mcp.Description("The ID of the configuration profile to boot with (optional)"),
 		),
 	)
@@ -68,16 +72,20 @@ func handleLinodeInstanceBootRequest(ctx context.Context, request *mcp.CallToolR
 
 // NewLinodeInstanceRebootTool creates a tool for rebooting a Linode instance.
 func NewLinodeInstanceRebootTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_instance_reboot",
+	tool := mcp.NewTool(
+		"linode_instance_reboot",
 		mcp.WithDescription("Reboots a running Linode instance. This is equivalent to pressing the reset button on a physical computer."),
-		mcp.WithString(paramEnvironment,
+		mcp.WithString(
+			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithNumber("instance_id",
+		mcp.WithNumber(
+			"instance_id",
 			mcp.Required(),
 			mcp.Description("The ID of the Linode instance to reboot"),
 		),
-		mcp.WithNumber("config_id",
+		mcp.WithNumber(
+			"config_id",
 			mcp.Description("The ID of the configuration profile to boot with after reboot (optional)"),
 		),
 	)
@@ -124,12 +132,15 @@ func handleLinodeInstanceRebootRequest(ctx context.Context, request *mcp.CallToo
 
 // NewLinodeInstanceShutdownTool creates a tool for shutting down a Linode instance.
 func NewLinodeInstanceShutdownTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_instance_shutdown",
+	tool := mcp.NewTool(
+		"linode_instance_shutdown",
 		mcp.WithDescription("Gracefully shuts down a running Linode instance. The instance will attempt to shut down cleanly."),
-		mcp.WithString(paramEnvironment,
+		mcp.WithString(
+			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithNumber("instance_id",
+		mcp.WithNumber(
+			"instance_id",
 			mcp.Required(),
 			mcp.Description("The ID of the Linode instance to shut down"),
 		),
@@ -171,35 +182,45 @@ func handleLinodeInstanceShutdownRequest(ctx context.Context, request *mcp.CallT
 
 // NewLinodeInstanceCreateTool creates a tool for creating a new Linode instance.
 func NewLinodeInstanceCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_instance_create",
+	tool := mcp.NewTool(
+		"linode_instance_create",
 		mcp.WithDescription("Creates a new Linode instance. WARNING: Billing starts immediately upon creation. Use linode_regions_list and linode_types_list to find valid region and type values."),
-		mcp.WithString(paramEnvironment,
+		mcp.WithString(
+			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithString("region",
+		mcp.WithString(
+			"region",
 			mcp.Required(),
 			mcp.Description("The region where the instance will be created (e.g., 'us-east')"),
 		),
-		mcp.WithString("type",
+		mcp.WithString(
+			"type",
 			mcp.Required(),
 			mcp.Description("The Linode plan type (e.g., 'g6-nanode-1')"),
 		),
-		mcp.WithString("label",
+		mcp.WithString(
+			"label",
 			mcp.Description("A label for the instance (optional)"),
 		),
-		mcp.WithString("image",
+		mcp.WithString(
+			"image",
 			mcp.Description("The image ID to deploy (e.g., 'linode/debian11'). Required for provisioned instances."),
 		),
-		mcp.WithString("root_pass",
+		mcp.WithString(
+			"root_pass",
 			mcp.Description("The root password for the instance. Required if image is provided."),
 		),
-		mcp.WithBoolean("backups_enabled",
+		mcp.WithBoolean(
+			"backups_enabled",
 			mcp.Description("Enable backups for this instance (optional, default: false)"),
 		),
-		mcp.WithBoolean("private_ip",
+		mcp.WithBoolean(
+			"private_ip",
 			mcp.Description("Add a private IP address to this instance (optional, default: false)"),
 		),
-		mcp.WithBoolean(paramConfirm,
+		mcp.WithBoolean(
+			paramConfirm,
 			mcp.Required(),
 			mcp.Description("Must be set to true to confirm instance creation. This operation incurs billing charges."),
 		),
@@ -270,16 +291,20 @@ func handleLinodeInstanceCreateRequest(ctx context.Context, request *mcp.CallToo
 
 // NewLinodeInstanceDeleteTool creates a tool for deleting a Linode instance.
 func NewLinodeInstanceDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_instance_delete",
+	tool := mcp.NewTool(
+		"linode_instance_delete",
 		mcp.WithDescription("Deletes a Linode instance. WARNING: This action is irreversible and all data will be permanently lost."),
-		mcp.WithString(paramEnvironment,
+		mcp.WithString(
+			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithNumber("instance_id",
+		mcp.WithNumber(
+			"instance_id",
 			mcp.Required(),
 			mcp.Description("The ID of the Linode instance to delete"),
 		),
-		mcp.WithBoolean(paramConfirm,
+		mcp.WithBoolean(
+			paramConfirm,
 			mcp.Required(),
 			mcp.Description("Must be set to true to confirm deletion. This action is irreversible."),
 		),
@@ -325,7 +350,8 @@ func handleLinodeInstanceDeleteRequest(ctx context.Context, request *mcp.CallToo
 
 // NewLinodeInstanceResizeTool creates a tool for resizing a Linode instance.
 func NewLinodeInstanceResizeTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(cfg,
+	return newToolWithHandler(
+		cfg,
 		"linode_instance_resize",
 		"Resizes a Linode instance to a new plan. WARNING: This causes downtime during the migration process and may affect billing.",
 		[]mcp.ToolOption{

@@ -49,10 +49,10 @@ func TestRetryWrappersDelegationPatterns(t *testing.T) {
 
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"data":    []map[string]string{{"id": "us-east"}},
-				"page":    1,
-				"pages":   1,
-				"results": 1,
+				keyData:    []map[string]string{{keyID: "us-east"}},
+				keyPage:    1,
+				keyPages:   1,
+				keyResults: 1,
 			}), "encoding regions response should not fail")
 		}))
 		defer srv.Close()
@@ -84,8 +84,8 @@ func TestRetryWrappersDelegationPatterns(t *testing.T) {
 
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"id":     1,
-				"label":  "my-fw",
+				keyID:    1,
+				keyLabel: "my-fw",
 				"status": "enabled",
 			}), "encoding firewall response should not fail")
 		}))
@@ -144,8 +144,8 @@ func TestRetryWrappersDelegationPatterns(t *testing.T) {
 
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"id":    1,
-				"label": "new-fw",
+				keyID:    1,
+				keyLabel: "new-fw",
 			}), "encoding created firewall response should not fail")
 		}))
 		defer srv.Close()
@@ -177,8 +177,8 @@ func TestRetryWrappersDelegationPatterns(t *testing.T) {
 
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"id":    1,
-				"label": "updated-fw",
+				keyID:    1,
+				keyLabel: "updated-fw",
 			}), "encoding updated firewall response should not fail")
 		}))
 		defer srv.Close()
@@ -314,8 +314,8 @@ func TestRetryWrappersBodyForwardedOnRetry(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-			"id":    1,
-			"label": "test-fw",
+			keyID:    1,
+			keyLabel: "test-fw",
 		}), "encoding firewall response should not fail")
 	}))
 	defer srv.Close()

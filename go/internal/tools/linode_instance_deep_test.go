@@ -22,7 +22,7 @@ func TestLinodeInstanceBackupsListTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeInstanceBackupsListTool(cfg)
@@ -34,14 +34,14 @@ func TestLinodeInstanceBackupsListTool(t *testing.T) {
 		require.NotNil(t, handler, "handler should not be nil")
 	})
 
-	t.Run("missing linode id", func(t *testing.T) {
+	t.Run(caseMissingLinodeID, func(t *testing.T) {
 		t.Parallel()
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "linode_id is required")
+		assertErrorContains(t, result, errLinodeIDRequired)
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -49,10 +49,10 @@ func TestLinodeInstanceBackupsListTool(t *testing.T) {
 
 		backupsResp := linode.InstanceBackupsResponse{
 			Automatic: []linode.InstanceBackup{
-				{ID: 100, Label: "auto-2024-01-01", Status: "successful", Type: "auto"},
+				{ID: 100, Label: "auto-2024-01-01", Status: statusSuccessful, Type: "auto"},
 			},
 			Snapshot: linode.InstanceBackupSnapshots{
-				Current: &linode.InstanceBackup{ID: 200, Label: "my-snapshot", Status: "successful", Type: "snapshot"},
+				Current: &linode.InstanceBackup{ID: 200, Label: "my-snapshot", Status: statusSuccessful, Type: wordSnapshot},
 			},
 		}
 
@@ -65,12 +65,12 @@ func TestLinodeInstanceBackupsListTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeInstanceBackupsListTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"linode_id": "123"})
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: "123"})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -91,7 +91,7 @@ func TestLinodeInstanceBackupGetTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeInstanceBackupGetTool(cfg)
@@ -108,8 +108,8 @@ func TestLinodeInstanceBackupGetTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing linode id", args: map[string]any{"backup_id": "100"}, wantContains: "linode_id is required"},
-		{name: "missing backup id", args: map[string]any{"linode_id": "123"}, wantContains: "backup_id is required"},
+		{name: caseMissingLinodeID, args: map[string]any{keyBackupID: "100"}, wantContains: errLinodeIDRequired},
+		{name: "missing backup id", args: map[string]any{keyLinodeID: "123"}, wantContains: "backup_id is required"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -126,7 +126,7 @@ func TestLinodeInstanceBackupGetTool(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		backup := linode.InstanceBackup{ID: 100, Label: "my-backup", Status: "successful", Type: "snapshot"}
+		backup := linode.InstanceBackup{ID: 100, Label: "my-backup", Status: statusSuccessful, Type: wordSnapshot}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/linode/instances/123/backups/100", r.URL.Path, "request path should match")
@@ -137,12 +137,12 @@ func TestLinodeInstanceBackupGetTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeInstanceBackupGetTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"linode_id": "123", "backup_id": "100"})
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: "123", keyBackupID: "100"})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -152,7 +152,7 @@ func TestLinodeInstanceBackupGetTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, "my-backup", "response should contain backup label")
-		assert.Contains(t, textContent.Text, "successful", "response should contain backup status")
+		assert.Contains(t, textContent.Text, statusSuccessful, "response should contain backup status")
 	})
 }
 
@@ -162,7 +162,7 @@ func TestLinodeInstanceBackupCreateTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeInstanceBackupCreateTool(cfg)
@@ -184,8 +184,8 @@ func TestLinodeInstanceBackupCreateTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing confirm", args: map[string]any{"linode_id": "123"}, wantContains: "confirm=true"},
-		{name: "missing linode id", args: map[string]any{"confirm": true}, wantContains: "linode_id is required"},
+		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: "123"}, wantContains: errConfirmEqualsTrue},
+		{name: caseMissingLinodeID, args: map[string]any{keyConfirm: true}, wantContains: errLinodeIDRequired},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -202,7 +202,7 @@ func TestLinodeInstanceBackupCreateTool(t *testing.T) {
 	t.Run("successful creation", func(t *testing.T) {
 		t.Parallel()
 
-		backup := linode.InstanceBackup{ID: 300, Label: "snapshot-manual", Status: "pending", Type: "snapshot"}
+		backup := linode.InstanceBackup{ID: 300, Label: "snapshot-manual", Status: "pending", Type: wordSnapshot}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/linode/instances/123/backups", r.URL.Path, "request path should match")
@@ -214,12 +214,12 @@ func TestLinodeInstanceBackupCreateTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeInstanceBackupCreateTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"linode_id": "123", "confirm": true})
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: "123", keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -239,7 +239,7 @@ func TestLinodeInstanceBackupRestoreTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeInstanceBackupRestoreTool(cfg)
@@ -263,9 +263,9 @@ func TestLinodeInstanceBackupRestoreTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing confirm", args: map[string]any{"linode_id": "123", "backup_id": "100", "target_linode_id": float64(456)}, wantContains: "confirm=true"},
-		{name: "missing linode id", args: map[string]any{"backup_id": "100", "target_linode_id": float64(456), "confirm": true}, wantContains: "linode_id is required"},
-		{name: "missing backup id", args: map[string]any{"linode_id": "123", "target_linode_id": float64(456), "confirm": true}, wantContains: "backup_id is required"},
+		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: "123", keyBackupID: "100", keyTargetLinodeID: float64(456)}, wantContains: errConfirmEqualsTrue},
+		{name: caseMissingLinodeID, args: map[string]any{keyBackupID: "100", keyTargetLinodeID: float64(456), keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: "missing backup id", args: map[string]any{keyLinodeID: "123", keyTargetLinodeID: float64(456), keyConfirm: true}, wantContains: "backup_id is required"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -291,13 +291,13 @@ func TestLinodeInstanceBackupRestoreTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeInstanceBackupRestoreTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			"linode_id": "123", "backup_id": "100", "target_linode_id": float64(456), "confirm": true,
+			keyLinodeID: "123", keyBackupID: "100", keyTargetLinodeID: float64(456), keyConfirm: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 
@@ -318,7 +318,7 @@ func TestLinodeInstanceBackupsEnableTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeInstanceBackupsEnableTool(cfg)
@@ -336,8 +336,8 @@ func TestLinodeInstanceBackupsEnableTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing confirm", args: map[string]any{"linode_id": "123"}, wantContains: "confirm=true"},
-		{name: "missing linode id", args: map[string]any{"confirm": true}, wantContains: "linode_id is required"},
+		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: "123"}, wantContains: errConfirmEqualsTrue},
+		{name: caseMissingLinodeID, args: map[string]any{keyConfirm: true}, wantContains: errLinodeIDRequired},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -363,12 +363,12 @@ func TestLinodeInstanceBackupsEnableTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeInstanceBackupsEnableTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"linode_id": "123", "confirm": true})
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: "123", keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -388,7 +388,7 @@ func TestLinodeInstanceBackupsCancelTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeInstanceBackupsCancelTool(cfg)
@@ -406,8 +406,8 @@ func TestLinodeInstanceBackupsCancelTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing confirm", args: map[string]any{"linode_id": "123"}, wantContains: "confirm=true"},
-		{name: "missing linode id", args: map[string]any{"confirm": true}, wantContains: "linode_id is required"},
+		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: "123"}, wantContains: errConfirmEqualsTrue},
+		{name: caseMissingLinodeID, args: map[string]any{keyConfirm: true}, wantContains: errLinodeIDRequired},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -433,12 +433,12 @@ func TestLinodeInstanceBackupsCancelTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeInstanceBackupsCancelTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"linode_id": "123", "confirm": true})
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: "123", keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -458,7 +458,7 @@ func TestLinodeInstanceDisksListTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeInstanceDisksListTool(cfg)
@@ -470,41 +470,41 @@ func TestLinodeInstanceDisksListTool(t *testing.T) {
 		require.NotNil(t, handler, "handler should not be nil")
 	})
 
-	t.Run("missing linode id", func(t *testing.T) {
+	t.Run(caseMissingLinodeID, func(t *testing.T) {
 		t.Parallel()
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "linode_id is required")
+		assertErrorContains(t, result, errLinodeIDRequired)
 	})
 
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
 		disks := []linode.InstanceDisk{
-			{ID: 10, Label: "Ubuntu 24.04 Disk", Size: 51200, Filesystem: "ext4", Status: "ready"},
-			{ID: 11, Label: "512 MB Swap Image", Size: 512, Filesystem: "swap", Status: "ready"},
+			{ID: 10, Label: imageUbuntu2404, Size: 51200, Filesystem: filesystemExt4, Status: statusReady},
+			{ID: 11, Label: "512 MB Swap Image", Size: 512, Filesystem: "swap", Status: statusReady},
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/linode/instances/123/disks", r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"data": disks, "page": 1, "pages": 1, "results": 2,
+				keyData: disks, keyPage: 1, keyPages: 1, keyResults: 2,
 			}), "encoding response should not fail")
 		}))
 		defer srv.Close()
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeInstanceDisksListTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"linode_id": float64(123)})
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -513,7 +513,7 @@ func TestLinodeInstanceDisksListTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Ubuntu 24.04 Disk", "response should contain disk label")
+		assert.Contains(t, textContent.Text, imageUbuntu2404, "response should contain disk label")
 		assert.Contains(t, textContent.Text, "512 MB Swap Image", "response should contain swap disk label")
 	})
 }
@@ -525,7 +525,7 @@ func TestLinodeInstanceDiskGetTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeInstanceDiskGetTool(cfg)
@@ -542,8 +542,8 @@ func TestLinodeInstanceDiskGetTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing linode id", args: map[string]any{"disk_id": float64(10)}, wantContains: "linode_id is required"},
-		{name: "missing disk id", args: map[string]any{"linode_id": float64(123)}, wantContains: "disk_id is required"},
+		{name: caseMissingLinodeID, args: map[string]any{keyDiskID: float64(10)}, wantContains: errLinodeIDRequired},
+		{name: "missing disk id", args: map[string]any{keyLinodeID: float64(123)}, wantContains: "disk_id is required"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -560,7 +560,7 @@ func TestLinodeInstanceDiskGetTool(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		disk := linode.InstanceDisk{ID: 10, Label: "Ubuntu 24.04 Disk", Size: 51200, Filesystem: "ext4", Status: "ready"}
+		disk := linode.InstanceDisk{ID: 10, Label: imageUbuntu2404, Size: 51200, Filesystem: filesystemExt4, Status: statusReady}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/linode/instances/123/disks/10", r.URL.Path, "request path should match")
@@ -571,12 +571,12 @@ func TestLinodeInstanceDiskGetTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeInstanceDiskGetTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"linode_id": float64(123), "disk_id": float64(10)})
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyDiskID: float64(10)})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -585,8 +585,8 @@ func TestLinodeInstanceDiskGetTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Ubuntu 24.04 Disk", "response should contain disk label")
-		assert.Contains(t, textContent.Text, "ext4", "response should contain filesystem type")
+		assert.Contains(t, textContent.Text, imageUbuntu2404, "response should contain disk label")
+		assert.Contains(t, textContent.Text, filesystemExt4, "response should contain filesystem type")
 	})
 }
 
@@ -596,7 +596,7 @@ func TestLinodeInstanceDiskCreateTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeInstanceDiskCreateTool(cfg)
@@ -620,9 +620,9 @@ func TestLinodeInstanceDiskCreateTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing confirm", args: map[string]any{"linode_id": float64(123), "label": "my-disk", "size": float64(1024)}, wantContains: "confirm=true"},
-		{name: "missing linode id", args: map[string]any{"label": "my-disk", "size": float64(1024), "confirm": true}, wantContains: "linode_id is required"},
-		{name: "missing label", args: map[string]any{"linode_id": float64(123), "size": float64(1024), "confirm": true}, wantContains: "label is required"},
+		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyLabel: labelMyDisk, keySize: float64(1024)}, wantContains: errConfirmEqualsTrue},
+		{name: caseMissingLinodeID, args: map[string]any{keyLabel: labelMyDisk, keySize: float64(1024), keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: caseMissingLabel, args: map[string]any{keyLinodeID: float64(123), keySize: float64(1024), keyConfirm: true}, wantContains: errLabelRequired},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -639,7 +639,7 @@ func TestLinodeInstanceDiskCreateTool(t *testing.T) {
 	t.Run("successful creation", func(t *testing.T) {
 		t.Parallel()
 
-		disk := linode.InstanceDisk{ID: 50, Label: "my-disk", Size: 1024, Filesystem: "ext4", Status: "ready"}
+		disk := linode.InstanceDisk{ID: 50, Label: labelMyDisk, Size: 1024, Filesystem: filesystemExt4, Status: statusReady}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/linode/instances/123/disks", r.URL.Path, "request path should match")
@@ -651,13 +651,13 @@ func TestLinodeInstanceDiskCreateTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeInstanceDiskCreateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			"linode_id": float64(123), "label": "my-disk", "size": float64(1024), "confirm": true,
+			keyLinodeID: float64(123), keyLabel: labelMyDisk, keySize: float64(1024), keyConfirm: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 
@@ -667,7 +667,7 @@ func TestLinodeInstanceDiskCreateTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "my-disk", "response should contain disk label")
+		assert.Contains(t, textContent.Text, labelMyDisk, "response should contain disk label")
 		assert.Contains(t, textContent.Text, "50", "response should contain disk ID")
 	})
 }
@@ -679,7 +679,7 @@ func TestLinodeInstanceDiskUpdateTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeInstanceDiskUpdateTool(cfg)
@@ -697,20 +697,20 @@ func TestLinodeInstanceDiskUpdateTool(t *testing.T) {
 		assert.Contains(t, props, "confirm", "schema should include confirm")
 	})
 
-	t.Run("missing confirm", func(t *testing.T) {
+	t.Run(caseMissingConfirm, func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{"linode_id": float64(123), "disk_id": float64(10), "label": "new-label"})
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyDiskID: float64(10), keyLabel: labelNew})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "confirm=true")
+		assertErrorContains(t, result, errConfirmEqualsTrue)
 	})
 
 	t.Run("successful update", func(t *testing.T) {
 		t.Parallel()
 
-		disk := linode.InstanceDisk{ID: 10, Label: "renamed-disk", Size: 51200, Filesystem: "ext4", Status: "ready"}
+		disk := linode.InstanceDisk{ID: 10, Label: "renamed-disk", Size: 51200, Filesystem: filesystemExt4, Status: statusReady}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/linode/instances/123/disks/10", r.URL.Path, "request path should match")
@@ -722,13 +722,13 @@ func TestLinodeInstanceDiskUpdateTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeInstanceDiskUpdateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			"linode_id": float64(123), "disk_id": float64(10), "label": "renamed-disk", "confirm": true,
+			keyLinodeID: float64(123), keyDiskID: float64(10), keyLabel: "renamed-disk", keyConfirm: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 
@@ -749,7 +749,7 @@ func TestLinodeInstanceDiskDeleteTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeInstanceDiskDeleteTool(cfg)
@@ -762,14 +762,14 @@ func TestLinodeInstanceDiskDeleteTool(t *testing.T) {
 		assert.Contains(t, tool.Description, "WARNING", "tool description should contain WARNING")
 	})
 
-	t.Run("missing confirm", func(t *testing.T) {
+	t.Run(caseMissingConfirm, func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{"linode_id": float64(123), "disk_id": float64(10)})
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyDiskID: float64(10)})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "confirm=true")
+		assertErrorContains(t, result, errConfirmEqualsTrue)
 	})
 
 	t.Run("successful deletion", func(t *testing.T) {
@@ -784,12 +784,12 @@ func TestLinodeInstanceDiskDeleteTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeInstanceDiskDeleteTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"linode_id": float64(123), "disk_id": float64(10), "confirm": true})
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyDiskID: float64(10), keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -809,7 +809,7 @@ func TestLinodeInstanceDiskCloneTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeInstanceDiskCloneTool(cfg)
@@ -826,20 +826,20 @@ func TestLinodeInstanceDiskCloneTool(t *testing.T) {
 		assert.Contains(t, props, "confirm", "schema should include confirm")
 	})
 
-	t.Run("missing confirm", func(t *testing.T) {
+	t.Run(caseMissingConfirm, func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{"linode_id": float64(123), "disk_id": float64(10)})
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyDiskID: float64(10)})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "confirm=true")
+		assertErrorContains(t, result, errConfirmEqualsTrue)
 	})
 
 	t.Run("successful clone", func(t *testing.T) {
 		t.Parallel()
 
-		clonedDisk := linode.InstanceDisk{ID: 99, Label: "Ubuntu 24.04 Disk", Size: 51200, Filesystem: "ext4", Status: "ready"}
+		clonedDisk := linode.InstanceDisk{ID: 99, Label: imageUbuntu2404, Size: 51200, Filesystem: filesystemExt4, Status: statusReady}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/linode/instances/123/disks/10/clone", r.URL.Path, "request path should match")
@@ -851,12 +851,12 @@ func TestLinodeInstanceDiskCloneTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeInstanceDiskCloneTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"linode_id": float64(123), "disk_id": float64(10), "confirm": true})
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyDiskID: float64(10), keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -877,7 +877,7 @@ func TestLinodeInstanceDiskResizeTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeInstanceDiskResizeTool(cfg)
@@ -900,8 +900,8 @@ func TestLinodeInstanceDiskResizeTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing confirm", args: map[string]any{"linode_id": float64(123), "disk_id": float64(10), "size": float64(65536)}, wantContains: "confirm=true"},
-		{name: "missing size", args: map[string]any{"linode_id": float64(123), "disk_id": float64(10), "confirm": true}, wantContains: "size is required"},
+		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyDiskID: float64(10), keySize: float64(65536)}, wantContains: errConfirmEqualsTrue},
+		{name: "missing size", args: map[string]any{keyLinodeID: float64(123), keyDiskID: float64(10), keyConfirm: true}, wantContains: "size is required"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -927,13 +927,13 @@ func TestLinodeInstanceDiskResizeTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeInstanceDiskResizeTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			"linode_id": float64(123), "disk_id": float64(10), "size": float64(65536), "confirm": true,
+			keyLinodeID: float64(123), keyDiskID: float64(10), keySize: float64(65536), keyConfirm: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 
@@ -955,7 +955,7 @@ func TestLinodeInstanceIPsListTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeInstanceIPsListTool(cfg)
@@ -967,14 +967,14 @@ func TestLinodeInstanceIPsListTool(t *testing.T) {
 		require.NotNil(t, handler, "handler should not be nil")
 	})
 
-	t.Run("missing linode id", func(t *testing.T) {
+	t.Run(caseMissingLinodeID, func(t *testing.T) {
 		t.Parallel()
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "linode_id is required")
+		assertErrorContains(t, result, errLinodeIDRequired)
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -983,10 +983,10 @@ func TestLinodeInstanceIPsListTool(t *testing.T) {
 		ips := linode.InstanceIPAddresses{
 			IPv4: &linode.InstanceIPv4{
 				Public: []linode.IPAddress{
-					{Address: "203.0.113.1", Public: true, Type: "ipv4", Region: "us-east"},
+					{Address: ip203_0_113_1, Public: true, Type: keyIPv4, Region: regionUSEast},
 				},
 				Private: []linode.IPAddress{
-					{Address: "192.168.1.1", Public: false, Type: "ipv4", Region: "us-east"},
+					{Address: ip192168_1_1, Public: false, Type: keyIPv4, Region: regionUSEast},
 				},
 			},
 		}
@@ -1000,12 +1000,12 @@ func TestLinodeInstanceIPsListTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeInstanceIPsListTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"linode_id": float64(123)})
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -1014,8 +1014,8 @@ func TestLinodeInstanceIPsListTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "203.0.113.1", "response should contain public IP")
-		assert.Contains(t, textContent.Text, "192.168.1.1", "response should contain private IP")
+		assert.Contains(t, textContent.Text, ip203_0_113_1, "response should contain public IP")
+		assert.Contains(t, textContent.Text, ip192168_1_1, "response should contain private IP")
 	})
 }
 
@@ -1026,7 +1026,7 @@ func TestLinodeInstanceIPGetTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeInstanceIPGetTool(cfg)
@@ -1043,8 +1043,8 @@ func TestLinodeInstanceIPGetTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing linode id", args: map[string]any{"address": "203.0.113.1"}, wantContains: "linode_id is required"},
-		{name: "missing address", args: map[string]any{"linode_id": float64(123)}, wantContains: "address is required"},
+		{name: caseMissingLinodeID, args: map[string]any{keyAddress: ip203_0_113_1}, wantContains: errLinodeIDRequired},
+		{name: "missing address", args: map[string]any{keyLinodeID: float64(123)}, wantContains: "address is required"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1062,8 +1062,8 @@ func TestLinodeInstanceIPGetTool(t *testing.T) {
 		t.Parallel()
 
 		ipAddr := linode.IPAddress{
-			Address: "203.0.113.1", Gateway: "203.0.113.0", SubnetMask: "255.255.255.0",
-			Prefix: 24, Type: "ipv4", Public: true, Region: "us-east", LinodeID: 123,
+			Address: ip203_0_113_1, Gateway: "203.0.113.0", SubnetMask: "255.255.255.0",
+			Prefix: 24, Type: keyIPv4, Public: true, Region: regionUSEast, LinodeID: 123,
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1075,12 +1075,12 @@ func TestLinodeInstanceIPGetTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeInstanceIPGetTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"linode_id": float64(123), "address": "203.0.113.1"})
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyAddress: ip203_0_113_1})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -1089,8 +1089,8 @@ func TestLinodeInstanceIPGetTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "203.0.113.1", "response should contain IP address")
-		assert.Contains(t, textContent.Text, "us-east", "response should contain region")
+		assert.Contains(t, textContent.Text, ip203_0_113_1, "response should contain IP address")
+		assert.Contains(t, textContent.Text, regionUSEast, "response should contain region")
 	})
 }
 
@@ -1101,7 +1101,7 @@ func TestLinodeInstanceIPAllocateTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeInstanceIPAllocateTool(cfg)
@@ -1120,14 +1120,14 @@ func TestLinodeInstanceIPAllocateTool(t *testing.T) {
 		assert.Contains(t, props, "confirm", "schema should include confirm")
 	})
 
-	t.Run("missing confirm", func(t *testing.T) {
+	t.Run(caseMissingConfirm, func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{"linode_id": float64(123), "type": "ipv4", "public": true})
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyType: keyIPv4, "public": true})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "confirm=true")
+		assertErrorContains(t, result, errConfirmEqualsTrue)
 	})
 
 	t.Run("successful allocation", func(t *testing.T) {
@@ -1135,7 +1135,7 @@ func TestLinodeInstanceIPAllocateTool(t *testing.T) {
 
 		ipAddr := linode.IPAddress{
 			Address: "198.51.100.5", Gateway: "198.51.100.0", SubnetMask: "255.255.255.0",
-			Prefix: 24, Type: "ipv4", Public: true, Region: "us-east", LinodeID: 123,
+			Prefix: 24, Type: keyIPv4, Public: true, Region: regionUSEast, LinodeID: 123,
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1148,13 +1148,13 @@ func TestLinodeInstanceIPAllocateTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeInstanceIPAllocateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			"linode_id": float64(123), "type": "ipv4", "public": true, "confirm": true,
+			keyLinodeID: float64(123), keyType: keyIPv4, "public": true, keyConfirm: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 
@@ -1176,7 +1176,7 @@ func TestLinodeInstanceIPDeleteTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeInstanceIPDeleteTool(cfg)
@@ -1194,8 +1194,8 @@ func TestLinodeInstanceIPDeleteTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing confirm", args: map[string]any{"linode_id": float64(123), "address": "203.0.113.1"}, wantContains: "confirm=true"},
-		{name: "missing address", args: map[string]any{"linode_id": float64(123), "confirm": true}, wantContains: "address is required"},
+		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyAddress: ip203_0_113_1}, wantContains: errConfirmEqualsTrue},
+		{name: "missing address", args: map[string]any{keyLinodeID: float64(123), keyConfirm: true}, wantContains: "address is required"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1221,13 +1221,13 @@ func TestLinodeInstanceIPDeleteTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeInstanceIPDeleteTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			"linode_id": float64(123), "address": "203.0.113.1", "confirm": true,
+			keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyConfirm: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 
@@ -1238,7 +1238,7 @@ func TestLinodeInstanceIPDeleteTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, "removed", "response should confirm removal")
-		assert.Contains(t, textContent.Text, "203.0.113.1", "response should contain removed IP")
+		assert.Contains(t, textContent.Text, ip203_0_113_1, "response should contain removed IP")
 	})
 }
 
@@ -1249,7 +1249,7 @@ func TestLinodeInstanceCloneTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeInstanceCloneTool(cfg)
@@ -1266,20 +1266,20 @@ func TestLinodeInstanceCloneTool(t *testing.T) {
 		assert.Contains(t, props, "confirm", "schema should include confirm")
 	})
 
-	t.Run("missing confirm", func(t *testing.T) {
+	t.Run(caseMissingConfirm, func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{"linode_id": float64(123)})
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "confirm=true")
+		assertErrorContains(t, result, errConfirmEqualsTrue)
 	})
 
 	t.Run("successful clone", func(t *testing.T) {
 		t.Parallel()
 
-		instance := linode.Instance{ID: 999, Label: "my-linode-clone", Region: "us-east", Status: "provisioning"}
+		instance := linode.Instance{ID: 999, Label: "my-linode-clone", Region: regionUSEast, Status: "provisioning"}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/linode/instances/123/clone", r.URL.Path, "request path should match")
@@ -1291,13 +1291,13 @@ func TestLinodeInstanceCloneTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeInstanceCloneTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			"linode_id": float64(123), "label": "my-linode-clone", "confirm": true,
+			keyLinodeID: float64(123), keyLabel: "my-linode-clone", keyConfirm: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 
@@ -1319,7 +1319,7 @@ func TestLinodeInstanceMigrateTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeInstanceMigrateTool(cfg)
@@ -1336,14 +1336,14 @@ func TestLinodeInstanceMigrateTool(t *testing.T) {
 		assert.Contains(t, props, "confirm", "schema should include confirm")
 	})
 
-	t.Run("missing confirm", func(t *testing.T) {
+	t.Run(caseMissingConfirm, func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{"linode_id": float64(123), "region": "eu-west"})
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyRegion: regionEUWest})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "confirm=true")
+		assertErrorContains(t, result, errConfirmEqualsTrue)
 	})
 
 	t.Run("successful migration", func(t *testing.T) {
@@ -1358,13 +1358,13 @@ func TestLinodeInstanceMigrateTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeInstanceMigrateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			"linode_id": float64(123), "region": "eu-west", "confirm": true,
+			keyLinodeID: float64(123), keyRegion: regionEUWest, keyConfirm: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 
@@ -1375,7 +1375,7 @@ func TestLinodeInstanceMigrateTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, "Migration initiated", "response should confirm migration")
-		assert.Contains(t, textContent.Text, "eu-west", "response should contain target region")
+		assert.Contains(t, textContent.Text, regionEUWest, "response should contain target region")
 	})
 }
 
@@ -1385,7 +1385,7 @@ func TestLinodeInstanceRebuildTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeInstanceRebuildTool(cfg)
@@ -1409,9 +1409,9 @@ func TestLinodeInstanceRebuildTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing confirm", args: map[string]any{"linode_id": float64(123), "image": "linode/ubuntu24.04", "root_pass": "Str0ngP@ssw0rd!"}, wantContains: "confirm=true"},
-		{name: "missing image", args: map[string]any{"linode_id": float64(123), "root_pass": "Str0ngP@ssw0rd!", "confirm": true}, wantContains: "image is required"},
-		{name: "missing root pass", args: map[string]any{"linode_id": float64(123), "image": "linode/ubuntu24.04", "confirm": true}, wantContains: "root_pass is required"},
+		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyImage: imageIDUbuntu2404, keyRootPass: rootPassStrong}, wantContains: errConfirmEqualsTrue},
+		{name: "missing image", args: map[string]any{keyLinodeID: float64(123), keyRootPass: rootPassStrong, keyConfirm: true}, wantContains: "image is required"},
+		{name: "missing root pass", args: map[string]any{keyLinodeID: float64(123), keyImage: imageIDUbuntu2404, keyConfirm: true}, wantContains: "root_pass is required"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1429,7 +1429,7 @@ func TestLinodeInstanceRebuildTool(t *testing.T) {
 		t.Parallel()
 
 		instance := linode.Instance{
-			ID: 123, Label: "my-linode", Region: "us-east", Image: "linode/ubuntu24.04", Status: "rebuilding",
+			ID: 123, Label: "my-linode", Region: regionUSEast, Image: imageIDUbuntu2404, Status: "rebuilding",
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1442,13 +1442,13 @@ func TestLinodeInstanceRebuildTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeInstanceRebuildTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			"linode_id": float64(123), "image": "linode/ubuntu24.04", "root_pass": "Str0ngP@ssw0rd!", "confirm": true,
+			keyLinodeID: float64(123), keyImage: imageIDUbuntu2404, keyRootPass: rootPassStrong, keyConfirm: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 
@@ -1459,7 +1459,7 @@ func TestLinodeInstanceRebuildTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, "rebuilt", "response should confirm rebuild")
-		assert.Contains(t, textContent.Text, "linode/ubuntu24.04", "response should contain image name")
+		assert.Contains(t, textContent.Text, imageIDUbuntu2404, "response should contain image name")
 	})
 }
 
@@ -1470,7 +1470,7 @@ func TestLinodeInstanceRescueTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeInstanceRescueTool(cfg)
@@ -1487,14 +1487,14 @@ func TestLinodeInstanceRescueTool(t *testing.T) {
 		assert.Contains(t, props, "confirm", "schema should include confirm")
 	})
 
-	t.Run("missing confirm", func(t *testing.T) {
+	t.Run(caseMissingConfirm, func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{"linode_id": float64(123)})
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "confirm=true")
+		assertErrorContains(t, result, errConfirmEqualsTrue)
 	})
 
 	t.Run("successful rescue", func(t *testing.T) {
@@ -1509,12 +1509,12 @@ func TestLinodeInstanceRescueTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeInstanceRescueTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"linode_id": float64(123), "confirm": true})
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -1534,7 +1534,7 @@ func TestLinodeInstancePasswordResetTool(t *testing.T) {
 
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "test-token"}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
 	tool, handler := tools.NewLinodeInstancePasswordResetTool(cfg)
@@ -1556,8 +1556,8 @@ func TestLinodeInstancePasswordResetTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing confirm", args: map[string]any{"linode_id": float64(123), "root_pass": "NewStr0ngP@ss!"}, wantContains: "confirm=true"},
-		{name: "missing root pass", args: map[string]any{"linode_id": float64(123), "confirm": true}, wantContains: "root_pass is required"},
+		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyRootPass: "NewStr0ngP@ss!"}, wantContains: errConfirmEqualsTrue},
+		{name: "missing root pass", args: map[string]any{keyLinodeID: float64(123), keyConfirm: true}, wantContains: "root_pass is required"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1583,13 +1583,13 @@ func TestLinodeInstancePasswordResetTool(t *testing.T) {
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {Label: "Default", Linode: config.LinodeConfig{APIURL: srv.URL, Token: "test-token"}},
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
 		_, srvHandler := tools.NewLinodeInstancePasswordResetTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			"linode_id": float64(123), "root_pass": "NewStr0ngP@ss!", "confirm": true,
+			keyLinodeID: float64(123), keyRootPass: "NewStr0ngP@ss!", keyConfirm: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 

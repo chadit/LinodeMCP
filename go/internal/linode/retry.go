@@ -1617,15 +1617,20 @@ func (c *Client) ResetInstancePassword(ctx context.Context, linodeID int, rootPa
 }
 
 func (c *Client) executeWithRetry(ctx context.Context, operation string, retryFunc func() error) error {
+	if err := c.circuit.Allow(); err != nil {
+		return fmt.Errorf("%s: %w", operation, err)
+	}
+
 	var lastErr error
 
 	var attempt int
 
 	for attempt <= c.retryCfg.MaxRetries {
 		if attempt > 0 {
-			delay := c.calculateDelay(attempt)
+			delay := c.delayForAttempt(attempt, lastErr)
 			select {
 			case <-ctx.Done():
+				// Caller canceled; not an upstream-health signal.
 				return fmt.Errorf("context canceled: %w", ctx.Err())
 			case <-time.After(delay):
 			}
@@ -1633,6 +1638,8 @@ func (c *Client) executeWithRetry(ctx context.Context, operation string, retryFu
 
 		err := retryFunc()
 		if err == nil {
+			c.circuit.RecordSuccess()
+
 			return nil
 		}
 
@@ -1640,11 +1647,34 @@ func (c *Client) executeWithRetry(ctx context.Context, operation string, retryFu
 		attempt++
 
 		if !c.shouldRetry(err) {
+			// Non-retryable (e.g. auth), not the breaker's concern.
 			return err
 		}
 	}
 
+	// Retries exhausted on a retryable failure. This is exactly the signal
+	// the breaker exists to track.
+	c.circuit.RecordFailure()
+
 	return fmt.Errorf("%s: %w", operation, lastErr)
+}
+
+// delayForAttempt picks how long to wait before the next attempt. When the
+// upstream returned a Retry-After hint (typically 429), we honor that exactly
+// so we stop hammering the API. For everything else we fall back to the
+// exponential-with-jitter backoff. The hint is clamped to MaxRetryDelay so a
+// hostile or buggy server can't ask us to wait an hour.
+func (c *Client) delayForAttempt(attempt int, lastErr error) time.Duration {
+	if apiErr, ok := errors.AsType[*APIError](lastErr); ok && apiErr.RetryAfter > 0 {
+		hint := apiErr.RetryAfter
+		if hint > c.retryCfg.MaxDelay {
+			return c.retryCfg.MaxDelay
+		}
+
+		return hint
+	}
+
+	return c.calculateDelay(attempt)
 }
 
 func (c *Client) calculateDelay(attempt int) time.Duration {

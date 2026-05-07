@@ -34,9 +34,12 @@ const (
 
 // Default resilience configuration values.
 const (
-	DefaultMaxRetries     = 3
-	DefaultBaseRetryDelay = 1 * time.Second
-	DefaultMaxRetryDelay  = 30 * time.Second
+	DefaultMaxRetries              = 3
+	DefaultBaseRetryDelay          = 1 * time.Second
+	DefaultMaxRetryDelay           = 30 * time.Second
+	DefaultRateLimitPerMinute      = 700
+	DefaultCircuitBreakerThreshold = 5
+	DefaultCircuitBreakerTimeout   = 30 * time.Second
 )
 
 const (
@@ -62,11 +65,17 @@ type ServerConfig struct {
 	Port      int    `json:"port"      yaml:"port"`
 }
 
-// ResilienceConfig holds retry settings.
+// ResilienceConfig holds retry, rate limit, and circuit breaker settings.
+// RateLimitPerMinute caps outbound calls to stay under the Linode 700 req/min
+// account limit. CircuitBreaker* gate the client when an upstream goes hard
+// down so we stop hammering it.
 type ResilienceConfig struct {
-	MaxRetries     int           `json:"max_retries"      yaml:"maxRetries"`
-	BaseRetryDelay time.Duration `json:"base_retry_delay" yaml:"baseRetryDelay"`
-	MaxRetryDelay  time.Duration `json:"max_retry_delay"  yaml:"maxRetryDelay"`
+	MaxRetries              int           `json:"max_retries"               yaml:"maxRetries"`
+	BaseRetryDelay          time.Duration `json:"base_retry_delay"          yaml:"baseRetryDelay"`
+	MaxRetryDelay           time.Duration `json:"max_retry_delay"           yaml:"maxRetryDelay"`
+	RateLimitPerMinute      int           `json:"rate_limit_per_minute"     yaml:"rateLimitPerMinute"`
+	CircuitBreakerThreshold int           `json:"circuit_breaker_threshold" yaml:"circuitBreakerThreshold"`
+	CircuitBreakerTimeout   time.Duration `json:"circuit_breaker_timeout"   yaml:"circuitBreakerTimeout"`
 }
 
 // LinodeConfig holds Linode API settings for an environment.
@@ -265,6 +274,18 @@ func setResilienceDefaults(cfg *Config) {
 
 	if cfg.Resilience.MaxRetryDelay == 0 {
 		cfg.Resilience.MaxRetryDelay = DefaultMaxRetryDelay
+	}
+
+	if cfg.Resilience.RateLimitPerMinute == 0 {
+		cfg.Resilience.RateLimitPerMinute = DefaultRateLimitPerMinute
+	}
+
+	if cfg.Resilience.CircuitBreakerThreshold == 0 {
+		cfg.Resilience.CircuitBreakerThreshold = DefaultCircuitBreakerThreshold
+	}
+
+	if cfg.Resilience.CircuitBreakerTimeout == 0 {
+		cfg.Resilience.CircuitBreakerTimeout = DefaultCircuitBreakerTimeout
 	}
 }
 

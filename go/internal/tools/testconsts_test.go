@@ -1,0 +1,151 @@
+package tools_test
+
+// Shared string constants for the tools package's external test files.
+// Extracted to satisfy the goconst linter, which counts repeated literals
+// across the package. Grouped by purpose: config keys, JSON request keys,
+// response field names, fixture values, error strings, and validation case
+// names.
+const (
+	// Environment config keys and labels.
+	envKeyDefault   = "default"
+	envLabelDefault = "Default"
+	apiURLLinodeV4  = "https://api.linode.com/v4"
+	tokenTest       = "test-token"
+
+	// Common JSON request/response keys.
+	keyConfirm        = "confirm"
+	keyLabel          = "label"
+	keyRegion         = "region"
+	keyType           = "type"
+	keyName           = "name"
+	keySize           = "size"
+	keyIPv4           = "ipv4"
+	keyACL            = "acl"
+	keyAddress        = "address"
+	keyCount          = "count"
+	keyImage          = "image"
+	keyMethod         = "method"
+	keyTarget         = "target"
+	keyRootPass       = "root_pass"
+	keyRecordID       = "record_id"
+	keyK8sVersion     = "k8s_version"
+	keyVPCID          = "vpc_id"
+	keyNodeID         = "node_id"
+	keyNodePools      = "node_pools"
+	keyMaster         = "master"
+	keySoaEmail       = "soa_email"
+	keyBucketAccess   = "bucket_access"
+	keyTargetLinodeID = "target_linode_id"
+	keyIsTruncated    = "is_truncated"
+	keyNextMarker     = "next_marker"
+	keyKeyID          = "key_id"
+
+	// Tool-specific resource ID keys.
+	keyLinodeID       = "linode_id"
+	keyInstanceID     = "instance_id"
+	keyVolumeID       = "volume_id"
+	keyDomainID       = "domain_id"
+	keyDiskID         = "disk_id"
+	keyClusterID      = "cluster_id"
+	keyPoolID         = "pool_id"
+	keySubnetID       = "subnet_id"
+	keyBackupID       = "backup_id"
+	keyFirewallID     = "firewall_id"
+	keyNodeBalancerID = "nodebalancer_id"
+
+	// Pagination response keys.
+	keyData    = "data"
+	keyPage    = "page"
+	keyPages   = "pages"
+	keyResults = "results"
+
+	// Linode region IDs commonly used in fixtures.
+	regionUSEast  = "us-east"
+	regionUSEast1 = "us-east-1"
+	regionUSWest  = "us-west"
+	regionEUWest  = "eu-west"
+	countryUS     = "us"
+
+	// Linode instance type IDs commonly used in fixtures.
+	typeG6Nanode1   = "g6-nanode-1"
+	typeG6Standard1 = "g6-standard-1"
+	typeG6Standard2 = "g6-standard-2"
+
+	// Common test fixture values.
+	statusActive       = "active"
+	statusEnabled      = "enabled"
+	statusOK           = "ok"
+	statusReady        = "ready"
+	statusSuccessful   = "successful"
+	classStandard      = "standard"
+	bucketTest         = "my-bucket"
+	keyNameTest        = "my-key"
+	labelDataVol       = "data-vol"
+	labelBackupVol     = "backup-vol"
+	labelNew           = "new-label"
+	labelUpdatedSubnet = "updated-subnet"
+	labelProdVPC       = "prod-vpc"
+	labelTestVPC       = "test-vpc"
+	labelWebSubnet     = "web-subnet"
+	labelMyDisk        = "my-disk"
+	labelProdCluster   = "prod-cluster"
+	labelTestCluster   = "test-cluster"
+	domainExample      = "example.com"
+	hostWWW            = "www"
+	imageUbuntu2204    = "Ubuntu 22.04"
+	imageUbuntu2404    = "Ubuntu 24.04 Disk"
+	imageIDUbuntu2204  = "linode/ubuntu22.04"
+	imageIDUbuntu2404  = "linode/ubuntu24.04"
+	typeLinode4GB      = "Linode 4GB"
+	rootPassStrong     = "Str0ngP@ssw0rd!"
+	objectStorageKey   = "TESTKEY00000000EXAMPLE"
+	httpMethodGET      = "GET"
+	idAbc123           = "abc-123"
+	stageAlpha         = "alpha"
+	stageBeta          = "beta"
+	stageGamma         = "gamma"
+	cidrV4             = "10.0.0.0/24"
+	cidrV6             = "2001:db8::1/128"
+	ip192168_1_1       = "192.168.1.1"
+	ip192168_1_2       = "192.168.1.2"
+	ip203_0_113_1      = "203.0.113.1"
+	notANumber         = "not-a-number"
+	aclPublicRead      = "public-read"
+	objectPhotoJPG     = "photo.jpg"
+	filesystemExt4     = "ext4"
+
+	// LKE Kubernetes versions.
+	lkeVersion128 = "1.28"
+	lkeVersion129 = "1.29"
+
+	// LKE pool snapshot fixture used in multiple tests.
+	lkePoolSnapshot = `[{"type":"g6-standard-2","count":3}]`
+
+	// Snapshot literal (separate from lkePoolSnapshot).
+	wordSnapshot = "snapshot"
+
+	// Validation error message values.
+	errLabelRequired     = "label is required"
+	errRegionRequired    = "region is required"
+	errTypeRequired      = "type is required"
+	errLinodeIDRequired  = "linode_id is required"
+	errDomainIDRequired  = "domain_id is required"
+	errClusterIDRequired = "cluster_id is required"
+	errVPCIDRequired     = "vpc_id is required"
+	errSubnetIDRequired  = "subnet_id is required"
+	errACLMustBeOneOf    = "acl must be one of"
+	errInvalidACL        = "invalid ACL"
+	errConfirmEqualsTrue = "confirm=true"
+
+	// Validation case names used in table-driven test rows.
+	caseRequiresConfirm  = "requires confirm"
+	caseMissingConfirm   = "missing confirm"
+	caseMissingLabel     = "missing label"
+	caseMissingRegion    = "missing region"
+	caseMissingType      = "missing type"
+	caseMissingLinodeID  = "missing linode id"
+	caseMissingVPCID     = "missing vpc id"
+	caseMissingSubnetID  = "missing subnet id"
+	caseMissingDomainID  = "missing domain id"
+	caseMissingClusterID = "missing cluster id"
+)

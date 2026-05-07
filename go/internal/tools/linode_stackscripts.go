@@ -13,18 +13,23 @@ import (
 
 // NewLinodeStackScriptsListTool creates a tool for listing StackScripts.
 func NewLinodeStackScriptsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_stackscripts_list",
+	tool := mcp.NewTool(
+		"linode_stackscripts_list",
 		mcp.WithDescription("Lists StackScripts. By default returns your own StackScripts. Can filter by public status, ownership, or label."),
-		mcp.WithString(paramEnvironment,
+		mcp.WithString(
+			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithString("is_public",
+		mcp.WithString(
+			"is_public",
 			mcp.Description("Filter by public status (true, false)"),
 		),
-		mcp.WithString("mine",
+		mcp.WithString(
+			"mine",
 			mcp.Description("Filter by ownership - only your own StackScripts (true, false)"),
 		),
-		mcp.WithString("label_contains",
+		mcp.WithString(
+			"label_contains",
 			mcp.Description("Filter StackScripts by label containing this string (case-insensitive)"),
 		),
 	)

@@ -12,7 +12,8 @@ import (
 
 // NewLinodeImagesListTool creates a tool for listing Linode images.
 func NewLinodeImagesListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_images_list",
+	tool := mcp.NewTool(
+		"linode_images_list",
 		mcp.WithDescription("Lists all available Linode images (OS images and custom images) with optional filtering by type, public status, or deprecated status"),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithString("type", mcp.Description("Filter images by type (manual, automatic)")),
@@ -21,7 +22,8 @@ func NewLinodeImagesListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Con
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleListRequest(ctx, &request, cfg,
+		return handleListRequest(
+			ctx, &request, cfg,
 			func(ctx context.Context, client *linode.Client) ([]linode.Image, error) {
 				return client.ListImages(ctx)
 			},

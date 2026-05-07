@@ -13,7 +13,8 @@ import (
 
 // NewLinodeVPCCreateTool creates a tool for creating a new VPC.
 func NewLinodeVPCCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(cfg,
+	return newToolWithHandler(
+		cfg,
 		"linode_vpc_create",
 		"Creates a new VPC. WARNING: This creates a billable resource. "+
 			"Use linode_regions_list to find valid region values.",
@@ -89,7 +90,8 @@ func handleVPCCreateRequest(ctx context.Context, request *mcp.CallToolRequest, c
 
 // NewLinodeVPCUpdateTool creates a tool for updating an existing VPC.
 func NewLinodeVPCUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(cfg,
+	return newToolWithHandler(
+		cfg,
 		"linode_vpc_update",
 		"Updates an existing VPC's label or description.",
 		[]mcp.ToolOption{
@@ -149,7 +151,8 @@ func handleVPCUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, c
 
 // NewLinodeVPCDeleteTool creates a tool for deleting a VPC.
 func NewLinodeVPCDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(cfg,
+	return newToolWithHandler(
+		cfg,
 		"linode_vpc_delete",
 		"Deletes a VPC. WARNING: This is irreversible. All subnets within the VPC will also be deleted.",
 		[]mcp.ToolOption{
@@ -194,7 +197,8 @@ func handleVPCDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, c
 
 // NewLinodeVPCSubnetCreateTool creates a tool for creating a subnet within a VPC.
 func NewLinodeVPCSubnetCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(cfg,
+	return newToolWithHandler(
+		cfg,
 		"linode_vpc_subnet_create",
 		"Creates a new subnet within a VPC.",
 		[]mcp.ToolOption{
@@ -259,7 +263,8 @@ func handleVPCSubnetCreateRequest(ctx context.Context, request *mcp.CallToolRequ
 
 // NewLinodeVPCSubnetUpdateTool creates a tool for updating a subnet within a VPC.
 func NewLinodeVPCSubnetUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(cfg,
+	return newToolWithHandler(
+		cfg,
 		"linode_vpc_subnet_update",
 		"Updates the label of a subnet within a VPC.",
 		[]mcp.ToolOption{
@@ -323,7 +328,8 @@ func handleVPCSubnetUpdateRequest(ctx context.Context, request *mcp.CallToolRequ
 
 // NewLinodeVPCSubnetDeleteTool creates a tool for deleting a subnet from a VPC.
 func NewLinodeVPCSubnetDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(cfg,
+	return newToolWithHandler(
+		cfg,
 		"linode_vpc_subnet_delete",
 		"Deletes a subnet from a VPC. WARNING: This is irreversible.",
 		[]mcp.ToolOption{

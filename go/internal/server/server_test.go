@@ -12,6 +12,15 @@ import (
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
+const (
+	logLevelInfo    = "info"
+	envKeyDefault   = "default"
+	envLabelDefault = "Default"
+	apiURLLinodeV4  = "https://api.linode.com/v4"
+	tokenShort      = "tok"
+	serverNameTest  = "Test"
+)
+
 // End-to-end verification of server construction and initialization.
 func TestNew(t *testing.T) {
 	t.Parallel()
@@ -31,16 +40,16 @@ func TestNew(t *testing.T) {
 		cfg := &config.Config{
 			Server: config.ServerConfig{
 				Name:      "TestMCP",
-				LogLevel:  "info",
+				LogLevel:  logLevelInfo,
 				Transport: "stdio",
 				Host:      "127.0.0.1",
 				Port:      8080,
 			},
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {
-					Label: "Default",
+				envKeyDefault: {
+					Label: envLabelDefault,
 					Linode: config.LinodeConfig{
-						APIURL: "https://api.linode.com/v4",
+						APIURL: apiURLLinodeV4,
 						Token:  "test-token",
 					},
 				},
@@ -60,12 +69,12 @@ func TestNew(t *testing.T) {
 		cfg := &config.Config{
 			Server: config.ServerConfig{
 				Name:     "TestMCP",
-				LogLevel: "info",
+				LogLevel: logLevelInfo,
 			},
 			Environments: map[string]config.EnvironmentConfig{
-				"default": {
-					Label:  "Default",
-					Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "tok"},
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenShort},
 				},
 			},
 		}
@@ -83,11 +92,11 @@ func TestToolWrapperMethods(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{
-		Server: config.ServerConfig{Name: "Test", LogLevel: "info"},
+		Server: config.ServerConfig{Name: serverNameTest, LogLevel: logLevelInfo},
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {
-				Label:  "Default",
-				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "tok"},
+			envKeyDefault: {
+				Label:  envLabelDefault,
+				Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenShort},
 			},
 		},
 	}
@@ -109,11 +118,11 @@ func TestToolWrapperExecuteReturnsError(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{
-		Server: config.ServerConfig{Name: "Test", LogLevel: "info"},
+		Server: config.ServerConfig{Name: serverNameTest, LogLevel: logLevelInfo},
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {
-				Label:  "Default",
-				Linode: config.LinodeConfig{APIURL: "https://api.linode.com/v4", Token: "tok"},
+			envKeyDefault: {
+				Label:  envLabelDefault,
+				Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenShort},
 			},
 		},
 	}
@@ -136,7 +145,7 @@ func TestHelloToolHandlerDispatch(t *testing.T) {
 
 	request := mcp.CallToolRequest{}
 	request.Params.Name = "hello"
-	request.Params.Arguments = map[string]any{"name": "Test"}
+	request.Params.Arguments = map[string]any{"name": serverNameTest}
 
 	result, err := handler(t.Context(), request)
 

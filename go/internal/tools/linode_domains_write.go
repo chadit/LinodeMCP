@@ -12,26 +12,33 @@ import (
 
 // NewLinodeDomainCreateTool creates a tool for creating a domain.
 func NewLinodeDomainCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_domain_create",
+	tool := mcp.NewTool(
+		"linode_domain_create",
 		mcp.WithDescription("Creates a new DNS domain. Use type 'master' for domains you control, 'slave' for secondary DNS."),
-		mcp.WithString(paramEnvironment,
+		mcp.WithString(
+			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithString("domain",
+		mcp.WithString(
+			"domain",
 			mcp.Required(),
 			mcp.Description("The domain name (e.g., 'example.com')"),
 		),
-		mcp.WithString("type",
+		mcp.WithString(
+			"type",
 			mcp.Required(),
 			mcp.Description("Domain type: 'master' (primary) or 'slave' (secondary)"),
 		),
-		mcp.WithString("soa_email",
+		mcp.WithString(
+			"soa_email",
 			mcp.Description("Start of Authority email address (required for master domains)"),
 		),
-		mcp.WithString("description",
+		mcp.WithString(
+			"description",
 			mcp.Description("A description for the domain (optional)"),
 		),
-		mcp.WithNumber("ttl_sec",
+		mcp.WithNumber(
+			"ttl_sec",
 			mcp.Description("Default TTL in seconds for records (optional)"),
 		),
 	)
@@ -89,25 +96,32 @@ func handleLinodeDomainCreateRequest(ctx context.Context, request *mcp.CallToolR
 
 // NewLinodeDomainUpdateTool creates a tool for updating a domain.
 func NewLinodeDomainUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_domain_update",
+	tool := mcp.NewTool(
+		"linode_domain_update",
 		mcp.WithDescription("Updates an existing DNS domain. Can modify SOA email, description, TTL, and status."),
-		mcp.WithString(paramEnvironment,
+		mcp.WithString(
+			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithNumber("domain_id",
+		mcp.WithNumber(
+			"domain_id",
 			mcp.Required(),
 			mcp.Description("The ID of the domain to update"),
 		),
-		mcp.WithString("soa_email",
+		mcp.WithString(
+			"soa_email",
 			mcp.Description("New SOA email address (optional)"),
 		),
-		mcp.WithString("description",
+		mcp.WithString(
+			"description",
 			mcp.Description("New description (optional)"),
 		),
-		mcp.WithString("status",
+		mcp.WithString(
+			"status",
 			mcp.Description("New status: 'active', 'disabled', or 'edit_mode' (optional)"),
 		),
-		mcp.WithNumber("ttl_sec",
+		mcp.WithNumber(
+			"ttl_sec",
 			mcp.Description("New default TTL in seconds (optional)"),
 		),
 	)
@@ -160,16 +174,20 @@ func handleLinodeDomainUpdateRequest(ctx context.Context, request *mcp.CallToolR
 
 // NewLinodeDomainDeleteTool creates a tool for deleting a domain.
 func NewLinodeDomainDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_domain_delete",
+	tool := mcp.NewTool(
+		"linode_domain_delete",
 		mcp.WithDescription("Deletes a DNS domain and all its records. WARNING: This action is irreversible."),
-		mcp.WithString(paramEnvironment,
+		mcp.WithString(
+			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithNumber("domain_id",
+		mcp.WithNumber(
+			"domain_id",
 			mcp.Required(),
 			mcp.Description("The ID of the domain to delete"),
 		),
-		mcp.WithBoolean(paramConfirm,
+		mcp.WithBoolean(
+			paramConfirm,
 			mcp.Required(),
 			mcp.Description("Must be set to true to confirm deletion. This deletes all DNS records."),
 		),

@@ -80,10 +80,10 @@ func TestClientListInstancesSuccess(t *testing.T) {
 		assert.Equal(t, "/linode/instances", r.URL.Path, "request path should be /linode/instances")
 		w.Header().Set("Content-Type", "application/json")
 		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-			"data":    instances,
-			"page":    1,
-			"pages":   1,
-			"results": 2,
+			keyData:    instances,
+			keyPage:    1,
+			keyPages:   1,
+			keyResults: 2,
 		}), "encoding instances response should not fail")
 	}))
 	defer srv.Close()
@@ -178,6 +178,7 @@ func TestClientHandleResponseRateLimitWithRetryAfter(t *testing.T) {
 	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
 	assert.Equal(t, 429, apiErr.StatusCode, "status code should be 429 too many requests")
 	assert.Contains(t, apiErr.Message, "retry after", "error message should include the retry-after value")
+	assert.Equal(t, 30*time.Second, apiErr.RetryAfter, "RetryAfter field should carry the parsed hint")
 }
 
 // TestClientHandleResponseForbiddenNoBody verifies that the client returns
@@ -279,7 +280,8 @@ func TestNewClientOptionsOverrideConfig(t *testing.T) {
 		},
 	}
 
-	client := linode.NewClient(srv.URL, "token", cfg,
+	client := linode.NewClient(
+		srv.URL, "token", cfg,
 		linode.WithMaxRetries(1),
 		linode.WithJitter(false),
 	)
@@ -304,7 +306,8 @@ func TestNewClientNilConfigUsesDefaults(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := linode.NewClient(srv.URL, "token", nil,
+	client := linode.NewClient(
+		srv.URL, "token", nil,
 		linode.WithBaseDelay(1*time.Millisecond),
 		linode.WithMaxDelay(5*time.Millisecond),
 		linode.WithJitter(false),

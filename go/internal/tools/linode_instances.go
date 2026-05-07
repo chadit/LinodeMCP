@@ -19,12 +19,15 @@ const (
 
 // NewLinodeInstanceGetTool creates a tool for getting a single Linode instance by ID.
 func NewLinodeInstanceGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_instance_get",
+	tool := mcp.NewTool(
+		"linode_instance_get",
 		mcp.WithDescription("Retrieves details of a single Linode instance by its ID"),
-		mcp.WithString(paramEnvironment,
+		mcp.WithString(
+			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithString("instance_id",
+		mcp.WithString(
+			"instance_id",
 			mcp.Description("The ID of the Linode instance to retrieve (required)"),
 			mcp.Required(),
 		),
@@ -58,12 +61,15 @@ func handleLinodeInstanceGetRequest(ctx context.Context, request *mcp.CallToolRe
 
 // NewLinodeInstancesTool creates a tool for listing Linode instances.
 func NewLinodeInstancesTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_instances_list",
+	tool := mcp.NewTool(
+		"linode_instances_list",
 		mcp.WithDescription("Lists Linode instances with optional filtering by status"),
-		mcp.WithString(paramEnvironment,
+		mcp.WithString(
+			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithString("status",
+		mcp.WithString(
+			"status",
 			mcp.Description("Filter instances by status (running, stopped, etc.)"),
 		),
 	)

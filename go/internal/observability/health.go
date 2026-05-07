@@ -29,6 +29,8 @@ type HealthResponse struct {
 
 const (
 	healthCheckTimeout = 5 * time.Second
+	// healthStatusHealthy is the status value returned when all checks pass.
+	healthStatusHealthy = "healthy"
 )
 
 // initHealth sets up health check endpoints if enabled.
@@ -130,7 +132,7 @@ func (o *Observability) handleReady(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	if response.Status != "healthy" {
+	if response.Status != healthStatusHealthy {
 		w.WriteHeader(http.StatusServiceUnavailable)
 
 		return
@@ -149,13 +151,13 @@ func (o *Observability) checkAllHealth(ctx context.Context) HealthResponse {
 	defer o.healthMu.RUnlock()
 
 	response := HealthResponse{
-		Status:    "healthy",
+		Status:    healthStatusHealthy,
 		Timestamp: time.Now().UTC(),
 		Checks:    make(map[string]HealthStatus),
 	}
 
 	for name, check := range o.healthChecks {
-		status := HealthStatus{Status: "healthy"}
+		status := HealthStatus{Status: healthStatusHealthy}
 
 		if err := check(ctx); err != nil {
 			status.Status = "unhealthy"

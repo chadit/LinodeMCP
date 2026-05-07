@@ -12,7 +12,8 @@ import (
 
 // NewLinodeNodeBalancersListTool creates a tool for listing NodeBalancers.
 func NewLinodeNodeBalancersListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newListTool(cfg,
+	return newListTool(
+		cfg,
 		"linode_nodebalancers_list",
 		"Lists all NodeBalancers on your account. Can filter by region or label.",
 		func(ctx context.Context, client *linode.Client) ([]linode.NodeBalancer, error) {
@@ -30,12 +31,15 @@ func NewLinodeNodeBalancersListTool(cfg *config.Config) (mcp.Tool, func(ctx cont
 
 // NewLinodeNodeBalancerGetTool creates a tool for getting a single NodeBalancer.
 func NewLinodeNodeBalancerGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool("linode_nodebalancer_get",
+	tool := mcp.NewTool(
+		"linode_nodebalancer_get",
 		mcp.WithDescription("Gets detailed information about a specific NodeBalancer by its ID."),
-		mcp.WithString(paramEnvironment,
+		mcp.WithString(
+			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
 		),
-		mcp.WithNumber("nodebalancer_id",
+		mcp.WithNumber(
+			"nodebalancer_id",
 			mcp.Required(),
 			mcp.Description("The ID of the NodeBalancer to retrieve"),
 		),

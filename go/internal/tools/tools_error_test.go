@@ -67,7 +67,7 @@ func TestToolHandlersAPIErrorResponses(t *testing.T) {
 				cfg := newTestConfig(srv.URL)
 				_, handler := tools.NewLinodeInstanceGetTool(cfg)
 
-				req := createRequestWithArgs(t, map[string]any{"instance_id": "123"})
+				req := createRequestWithArgs(t, map[string]any{keyInstanceID: "123"})
 				result, err := handler(t.Context(), req)
 
 				require.NoError(t, err, "tool errors are returned as error results, not Go errors")
@@ -92,12 +92,12 @@ func TestToolHandlersAPIErrorResponses(t *testing.T) {
 				_, handler := tools.NewLinodeInstanceCreateTool(cfg)
 
 				req := createRequestWithArgs(t, map[string]any{
-					"confirm":   true,
-					"region":    "us-east",
-					"type":      "g6-nanode-1",
-					"image":     "linode/ubuntu22.04",
-					"label":     "test",
-					"root_pass": "Str0ngP@ssw0rd!",
+					keyConfirm:  true,
+					keyRegion:   regionUSEast,
+					keyType:     typeG6Nanode1,
+					keyImage:    imageIDUbuntu2204,
+					keyLabel:    "test",
+					keyRootPass: rootPassStrong,
 				})
 				result, err := handler(t.Context(), req)
 
@@ -122,7 +122,7 @@ func TestToolHandlersAPIErrorResponses(t *testing.T) {
 				cfg := newTestConfig(srv.URL)
 				_, handler := tools.NewLinodeDomainRecordsListTool(cfg)
 
-				req := createRequestWithArgs(t, map[string]any{"domain_id": "123"})
+				req := createRequestWithArgs(t, map[string]any{keyDomainID: "123"})
 				result, err := handler(t.Context(), req)
 
 				require.NoError(t, err, "tool errors are returned as error results, not Go errors")
@@ -176,9 +176,9 @@ func newErrorServer(t *testing.T, statusCode int, errorMessage string) *httptest
 func newTestConfig(apiURL string) *config.Config {
 	return &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
-			"default": {
-				Label:  "Default",
-				Linode: config.LinodeConfig{APIURL: apiURL, Token: "test-token"},
+			envKeyDefault: {
+				Label:  envLabelDefault,
+				Linode: config.LinodeConfig{APIURL: apiURL, Token: tokenTest},
 			},
 		},
 	}

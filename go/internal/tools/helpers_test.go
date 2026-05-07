@@ -76,14 +76,14 @@ func TestRequireConfirm(t *testing.T) {
 	}{
 		{
 			name:    "true boolean",
-			args:    map[string]any{"confirm": true},
+			args:    map[string]any{keyConfirm: true},
 			wantNil: true,
 		},
 		{
 			name:      "false boolean",
-			args:      map[string]any{"confirm": false},
+			args:      map[string]any{keyConfirm: false},
 			wantNil:   false,
-			checkBody: "confirm=true",
+			checkBody: errConfirmEqualsTrue,
 		},
 		{
 			name:    "missing confirm key",
@@ -92,17 +92,17 @@ func TestRequireConfirm(t *testing.T) {
 		},
 		{
 			name:    "string true coerced via ParseBool",
-			args:    map[string]any{"confirm": "true"},
+			args:    map[string]any{keyConfirm: "true"},
 			wantNil: true,
 		},
 		{
 			name:    "integer one coerced via GetBool",
-			args:    map[string]any{"confirm": 1},
+			args:    map[string]any{keyConfirm: 1},
 			wantNil: true,
 		},
 		{
 			name:    "string yes not recognized by GetBool",
-			args:    map[string]any{"confirm": "yes"},
+			args:    map[string]any{keyConfirm: "yes"},
 			wantNil: false,
 		},
 	}
@@ -153,27 +153,27 @@ func TestFilterByField(t *testing.T) {
 		{
 			name: "exact match",
 			items: []testItem{
-				{Name: "alpha", Status: "active"},
-				{Name: "beta", Status: "inactive"},
-				{Name: "gamma", Status: "active"},
+				{Name: stageAlpha, Status: statusActive},
+				{Name: stageBeta, Status: "inactive"},
+				{Name: stageGamma, Status: statusActive},
 			},
-			filter:    "active",
+			filter:    statusActive,
 			wantLen:   2,
-			wantNames: []string{"alpha", "gamma"},
+			wantNames: []string{stageAlpha, stageGamma},
 		},
 		{
 			name: "case insensitive",
 			items: []testItem{
-				{Name: "alpha", Status: "Active"},
-				{Name: "beta", Status: "ACTIVE"},
+				{Name: stageAlpha, Status: "Active"},
+				{Name: stageBeta, Status: "ACTIVE"},
 			},
-			filter:  "active",
+			filter:  statusActive,
 			wantLen: 2,
 		},
 		{
 			name: "no match",
 			items: []testItem{
-				{Name: "alpha", Status: "active"},
+				{Name: stageAlpha, Status: statusActive},
 			},
 			filter:  "deleted",
 			wantLen: 0,
@@ -181,7 +181,7 @@ func TestFilterByField(t *testing.T) {
 		{
 			name: "empty filter value",
 			items: []testItem{
-				{Name: "alpha", Status: "active"},
+				{Name: stageAlpha, Status: statusActive},
 			},
 			filter:  "",
 			wantLen: 0,
@@ -189,7 +189,7 @@ func TestFilterByField(t *testing.T) {
 		{
 			name:    "empty slice",
 			items:   nil,
-			filter:  "active",
+			filter:  statusActive,
 			wantLen: 0,
 		},
 	}
@@ -245,17 +245,17 @@ func TestFilterByContains(t *testing.T) {
 		{
 			name: "no match",
 			items: []testItem{
-				{Name: "alpha"},
-				{Name: "beta"},
+				{Name: stageAlpha},
+				{Name: stageBeta},
 			},
-			substr:  "gamma",
+			substr:  stageGamma,
 			wantLen: 0,
 		},
 		{
 			name: "empty substring matches all",
 			items: []testItem{
-				{Name: "alpha"},
-				{Name: "beta"},
+				{Name: stageAlpha},
+				{Name: stageBeta},
 			},
 			substr:  "",
 			wantLen: 2,
@@ -290,11 +290,11 @@ func TestFormatListResponse(t *testing.T) {
 		{
 			name: "with items",
 			items: []testItem{
-				{Name: "alpha", Status: "active"},
-				{Name: "beta", Status: "inactive"},
+				{Name: stageAlpha, Status: statusActive},
+				{Name: stageBeta, Status: "inactive"},
 			},
 			filters:        nil,
-			wantContains:   []string{`"count": 2`, "alpha", "beta"},
+			wantContains:   []string{`"count": 2`, stageAlpha, stageBeta},
 			wantNotContain: []string{"filter"},
 		},
 		{
@@ -306,7 +306,7 @@ func TestFormatListResponse(t *testing.T) {
 		{
 			name: "with filters",
 			items: []testItem{
-				{Name: "alpha", Status: "active"},
+				{Name: stageAlpha, Status: statusActive},
 			},
 			filters:      []string{"status=active", "region=us-east"},
 			wantContains: []string{"status=active", "region=us-east"},
@@ -314,7 +314,7 @@ func TestFormatListResponse(t *testing.T) {
 		{
 			name: "no filters",
 			items: []testItem{
-				{Name: "alpha"},
+				{Name: stageAlpha},
 			},
 			filters:        nil,
 			wantNotContain: []string{"filter"},

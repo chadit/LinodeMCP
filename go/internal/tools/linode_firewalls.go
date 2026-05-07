@@ -11,7 +11,8 @@ import (
 
 // NewLinodeFirewallsListTool creates a tool for listing firewalls.
 func NewLinodeFirewallsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newListTool(cfg,
+	return newListTool(
+		cfg,
 		"linode_firewalls_list",
 		"Lists all Cloud Firewalls on your account. Can filter by status or label.",
 		func(ctx context.Context, client *linode.Client) ([]linode.Firewall, error) {

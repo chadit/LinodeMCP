@@ -11,6 +11,8 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 )
 
+const envLabelProduction = "Production"
+
 func validYAMLConfig() string {
 	return `
 server:
@@ -198,18 +200,18 @@ func TestSelectEnvironment(t *testing.T) {
 			name: "exact match",
 			cfg: &config.Config{
 				Environments: map[string]config.EnvironmentConfig{
-					"prod":    {Label: "Production"},
+					"prod":    {Label: envLabelProduction},
 					"staging": {Label: "Staging"},
 				},
 			},
 			input:     "prod",
-			wantLabel: "Production",
+			wantLabel: envLabelProduction,
 		},
 		{
 			name: "case insensitive",
 			cfg: &config.Config{
 				Environments: map[string]config.EnvironmentConfig{
-					"Production": {Label: "Prod"},
+					envLabelProduction: {Label: "Prod"},
 				},
 			},
 			input:     "production",

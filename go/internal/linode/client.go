@@ -36,12 +36,14 @@ const (
 // Option configures a Client.
 type Option func(*retryConfig)
 
-// Client is the Linode API client with built-in retry logic.
+// Client is the Linode API client with built-in retry logic and a circuit
+// breaker that trips after sustained upstream failure.
 type Client struct {
 	httpClient *http.Client
 	baseURL    string
 	token      string
 	retryCfg   retryConfig
+	circuit    *CircuitBreaker
 }
 
 // WithMaxRetries sets the maximum number of retry attempts.
@@ -75,6 +77,11 @@ func WithJitter(enabled bool) Option {
 func NewClient(apiURL, token string, cfg *config.Config, opts ...Option) *Client {
 	retryCfg := defaultRetryConfig()
 
+	var (
+		cbThreshold int
+		cbTimeout   time.Duration
+	)
+
 	if cfg != nil {
 		if cfg.Resilience.MaxRetries > 0 {
 			retryCfg.MaxRetries = cfg.Resilience.MaxRetries
@@ -87,6 +94,9 @@ func NewClient(apiURL, token string, cfg *config.Config, opts ...Option) *Client
 		if cfg.Resilience.MaxRetryDelay > 0 {
 			retryCfg.MaxDelay = cfg.Resilience.MaxRetryDelay
 		}
+
+		cbThreshold = cfg.Resilience.CircuitBreakerThreshold
+		cbTimeout = cfg.Resilience.CircuitBreakerTimeout
 	}
 
 	for _, opt := range opts {
@@ -105,6 +115,7 @@ func NewClient(apiURL, token string, cfg *config.Config, opts ...Option) *Client
 		baseURL:  apiURL,
 		token:    token,
 		retryCfg: retryCfg,
+		circuit:  NewCircuitBreaker(cbThreshold, cbTimeout),
 	}
 }
 
@@ -174,10 +185,15 @@ func (*Client) handleErrorResponse(statusCode int, body []byte, resp *http.Respo
 	}
 
 	if err := json.Unmarshal(body, &apiError); err == nil && len(apiError.Errors) > 0 {
+		// Both code paths (structured and switch-case) need to carry the
+		// Retry-After hint for the retry loop to honor it. Without this
+		// branch a 429 with a populated errors[] body would lose the hint
+		// and fall back to exponential backoff.
 		return &APIError{
 			StatusCode: statusCode,
 			Message:    apiError.Errors[0].Reason,
 			Field:      apiError.Errors[0].Field,
+			RetryAfter: parseRetryAfter(resp),
 		}
 	}
 
@@ -188,11 +204,13 @@ func (*Client) handleErrorResponse(statusCode int, body []byte, resp *http.Respo
 		return &APIError{StatusCode: statusCode, Message: "access forbidden, your token may lack permissions"}
 	case httpTooManyReqs:
 		message := "rate limit exceeded, try again later"
-		if retryAfter := parseRetryAfter(resp); retryAfter > 0 {
+		retryAfter := parseRetryAfter(resp)
+
+		if retryAfter > 0 {
 			message = fmt.Sprintf("rate limit exceeded, retry after %v", retryAfter)
 		}
 
-		return &APIError{StatusCode: statusCode, Message: message}
+		return &APIError{StatusCode: statusCode, Message: message, RetryAfter: retryAfter}
 	case httpServerError:
 		return &APIError{StatusCode: statusCode, Message: "internal server error, try again later"}
 	default:

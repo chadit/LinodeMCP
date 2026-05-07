@@ -29,6 +29,6 @@ RUN groupadd -r linodemcp && \
 USER linodemcp
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD ["linodemcp", "--help"] || exit 1
+    CMD ["linodemcp", "--help"]
 
 ENTRYPOINT ["linodemcp"]
