@@ -13,6 +13,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/observability"
 	"github.com/chadit/LinodeMCP/internal/server"
+	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
 const (
@@ -25,12 +26,17 @@ func main() {
 }
 
 func run() int {
-	cfg, err := config.Load(config.GetConfigPath())
+	configPath := config.GetConfigPath()
+
+	watcher, err := config.NewWatcher(configPath, config.DefaultWatchInterval)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load configuration: %v\n", err)
 
 		return 1
 	}
+	defer watcher.Close()
+
+	cfg := watcher.Get()
 
 	obs, err := observability.New(&cfg.Observability)
 	if err != nil {
@@ -60,6 +66,22 @@ func run() int {
 		cancel()
 	}()
 
+	// Bridge the watcher to tool handlers. Subsequent tool calls read the
+	// latest cfg through this hook so reloaded resilience and environment
+	// settings take effect without restart.
+	tools.SetLiveConfigSource(watcher.Get)
+	defer tools.SetLiveConfigSource(nil)
+
+	// Drain reload errors in the background. Advisory; failed reloads keep
+	// the previous Config in place.
+	go func() {
+		for reloadErr := range watcher.Errors() {
+			log.Warn("config reload failed", "error", reloadErr)
+		}
+	}()
+
+	watcher.Start(ctx)
+
 	srv, err := server.New(cfg)
 	if err != nil {
 		log.Error("failed to create server", "error", err)
@@ -75,6 +97,12 @@ func run() int {
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer shutdownCancel()
+
+	// Drain in-flight tool handlers before tearing down observability so
+	// active write operations get a chance to log their final state.
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Error("server shutdown drain error", "error", err)
+	}
 
 	if err := obs.Shutdown(shutdownCtx); err != nil {
 		log.Error("observability shutdown error", "error", err)

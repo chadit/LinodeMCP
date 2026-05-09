@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+import asyncio
+from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -22,10 +23,71 @@ async def test_server_construction_stores_config(sample_config: Config) -> None:
     assert srv.mcp is not None
 
 
+async def test_shutdown_returns_immediately_with_no_inflight(
+    sample_config: Config,
+) -> None:
+    """shutdown() with empty inflight should return True quickly."""
+    srv = Server(sample_config)
+    # Generous timeout: must not block when nothing is inflight.
+    assert await srv.shutdown(timeout=1.0) is True
+
+
+async def test_shutdown_drains_inflight_dispatch(sample_config: Config) -> None:
+    """shutdown() blocks until an in-flight dispatch completes."""
+    srv = Server(sample_config)
+
+    # Patch handle_hello to await an event we control. While it waits,
+    # shutdown() must not return; once we set the event, the dispatch
+    # finishes and shutdown should resolve True.
+    release = asyncio.Event()
+
+    async def slow_hello(_arguments: dict[str, Any]) -> list[Any]:
+        await release.wait()
+        return []
+
+    with patch("linodemcp.server.handle_hello", side_effect=slow_hello):
+        dispatch_task = asyncio.create_task(srv.dispatch("hello", {"name": "x"}))
+        # Yield so the dispatch starts and increments the inflight counter.
+        await asyncio.sleep(0)
+
+        shutdown_task = asyncio.create_task(srv.shutdown(timeout=5.0))
+        # Yield to let shutdown register its waiter; it should be parked.
+        await asyncio.sleep(0)
+        assert not shutdown_task.done(), (
+            "shutdown must block while dispatch is in flight"
+        )
+
+        release.set()
+        await dispatch_task
+        assert await shutdown_task is True
+
+
+async def test_shutdown_times_out_on_stuck_dispatch(sample_config: Config) -> None:
+    """shutdown() returns False when the deadline elapses before drain."""
+    srv = Server(sample_config)
+
+    never_release = asyncio.Event()
+
+    async def stuck_hello(_arguments: dict[str, Any]) -> list[Any]:
+        await never_release.wait()
+        return []
+
+    with patch("linodemcp.server.handle_hello", side_effect=stuck_hello):
+        dispatch_task = asyncio.create_task(srv.dispatch("hello", {"name": "x"}))
+        await asyncio.sleep(0)
+
+        # Tight deadline: drain cannot complete because dispatch is stuck.
+        assert await srv.shutdown(timeout=0.05) is False
+
+        # Cleanup: release the stuck dispatch so the test exits cleanly.
+        never_release.set()
+        await dispatch_task
+
+
 async def test_server_none_config_raises() -> None:
     """Passing None as config raises ValueError."""
     with pytest.raises(ValueError, match="config cannot be None"):
-        Server(None)  # type: ignore[arg-type]
+        Server(cast("Config", None))
 
 
 async def test_hello_handler_returns_greeting() -> None:

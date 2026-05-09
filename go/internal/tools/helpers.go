@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync/atomic"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -19,6 +20,40 @@ const (
 	paramConfirm         = "confirm"
 )
 
+// liveConfigSource is the optional hot-reload provider. When set (by
+// main.go via SetLiveConfigSource), prepareClient reads through it on each
+// request so reloaded resilience/environment values take effect for new
+// API calls. When unset, prepareClient falls back to the cfg captured at
+// tool-registration time. Stored as an atomic pointer to a function so
+// reads are lock-free and the global mutation is bounded to one place.
+//
+//nolint:gochecknoglobals // process-wide hot-reload bridge; touching every factory signature would be a 123-file refactor.
+var liveConfigSource atomic.Pointer[func() *config.Config]
+
+// SetLiveConfigSource registers a function that returns the latest Config.
+// Pass nil to unregister. Safe for concurrent calls.
+func SetLiveConfigSource(getCfg func() *config.Config) {
+	if getCfg == nil {
+		liveConfigSource.Store(nil)
+
+		return
+	}
+
+	liveConfigSource.Store(&getCfg)
+}
+
+// resolveConfig returns the live config when a source is registered, else
+// the snapshot the caller captured at registration time.
+func resolveConfig(snapshot *config.Config) *config.Config {
+	if fn := liveConfigSource.Load(); fn != nil && *fn != nil {
+		if live := (*fn)(); live != nil {
+			return live
+		}
+	}
+
+	return snapshot
+}
+
 // MarshalToolResponse serializes v as indented JSON and wraps it in an MCP text result.
 func MarshalToolResponse(v any) (*mcp.CallToolResult, error) {
 	data, err := json.MarshalIndent(v, "", "  ")
@@ -30,7 +65,11 @@ func MarshalToolResponse(v any) (*mcp.CallToolResult, error) {
 }
 
 // prepareClient extracts the environment parameter, validates the config, and returns a ready-to-use API client.
+// When a live config source is registered (see SetLiveConfigSource), the
+// latest values flow through here so reloaded resilience and environment
+// settings take effect on the very next tool call.
 func prepareClient(request *mcp.CallToolRequest, cfg *config.Config) (*linode.Client, error) {
+	cfg = resolveConfig(cfg)
 	environment := request.GetString(paramEnvironment, "")
 
 	selectedEnv, err := selectEnvironment(cfg, environment)
@@ -42,7 +81,7 @@ func prepareClient(request *mcp.CallToolRequest, cfg *config.Config) (*linode.Cl
 		return nil, err
 	}
 
-	return linode.NewClient(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token, nil), nil
+	return linode.NewClient(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token, cfg), nil
 }
 
 // RequireConfirm checks the confirm parameter and returns an error result if not set.

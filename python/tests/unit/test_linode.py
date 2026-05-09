@@ -1,5 +1,6 @@
 """Unit tests for Linode client."""
 
+import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -13,6 +14,7 @@ from linodemcp.linode import (
     Client,
     NetworkError,
     Profile,
+    RateLimiter,
     RetryableClient,
     RetryConfig,
     is_retryable,
@@ -1508,5 +1510,199 @@ class TestRetryableClientCircuitBreaker:
 
             # Breaker should still be closed.
             assert mock_req.call_count == 5
+
+        await client.close()
+
+
+class TestRateLimiter:
+    """Tests for the asyncio token-bucket rate limiter.
+
+    These cover the contract: capacity equals the per-minute rate, refill is
+    rate/60 tokens per second, wait blocks until a token is available, and a
+    non-positive rate disables the limiter entirely.
+    """
+
+    async def test_disabled_when_rate_zero(self) -> None:
+        """A non-positive rate yields a no-op limiter."""
+        limiter = RateLimiter(0)
+        # 100 calls in tight succession must not block or raise.
+        for _ in range(100):
+            await limiter.wait()
+
+    async def test_allows_burst_up_to_capacity(self) -> None:
+        """A fresh bucket should grant `capacity` tokens before blocking."""
+        burst = 60
+        limiter = RateLimiter(burst)
+        for _ in range(burst):
+            await limiter.wait()
+
+    async def test_blocks_beyond_burst(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Once drained, the limiter waits for the next refill cycle."""
+        clock = [0.0]
+        sleeps: list[float] = []
+
+        async def fake_sleep(delay: float) -> None:
+            sleeps.append(delay)
+            clock[0] += delay
+
+        monkeypatch.setattr("linodemcp.linode.time.monotonic", lambda: clock[0])
+        monkeypatch.setattr("linodemcp.linode.asyncio.sleep", fake_sleep)
+
+        # 60/min => 1 token/sec refill, 60 capacity. Burn the burst, then
+        # the next wait should park for ~1s of synthetic time.
+        limiter = RateLimiter(60)
+        for _ in range(60):
+            await limiter.wait()
+
+        await limiter.wait()
+        assert sleeps, "limiter should have called asyncio.sleep at least once"
+        assert pytest.approx(sum(sleeps), rel=0.1) == 1.0
+
+    async def test_refill_caps_at_capacity(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Long idle periods do not let the bucket overflow past capacity."""
+        clock = [0.0]
+        monkeypatch.setattr("linodemcp.linode.time.monotonic", lambda: clock[0])
+
+        limiter = RateLimiter(60)
+
+        # Idle 5 minutes; refill should still cap at 60, not 60*5.
+        clock[0] = 300.0
+
+        for _ in range(60):
+            await limiter.wait()
+
+        # 61st call must require a refill: trying to wait would block in
+        # real code. Confirm by checking _tokens dropped to a sub-1 value.
+        assert limiter._tokens < 1.0
+
+    async def test_cancellation_propagates(self) -> None:
+        """A canceled wait raises CancelledError instead of swallowing it."""
+        limiter = RateLimiter(1)
+        await limiter.wait()  # drain the single token
+
+        async def waiter() -> None:
+            await limiter.wait()
+
+        task = asyncio.create_task(waiter())
+        # Yield once so the task starts its asyncio.sleep.
+        await asyncio.sleep(0)
+        task.cancel()
+
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+
+class TestClientConnectionPool:
+    """Tests for httpx.Limits configuration on the underlying Client."""
+
+    async def test_default_pool_limits(self) -> None:
+        """Default Client construction uses the documented pool defaults."""
+        client = Client("https://api.linode.com/v4", "test-token")
+        try:
+            assert client.limits.max_connections == 10
+            assert client.limits.max_keepalive_connections == 10
+            assert client.limits.keepalive_expiry == 30.0
+        finally:
+            await client.close()
+
+    async def test_custom_pool_limits(self) -> None:
+        """Pool kwargs flow into the retained httpx.Limits object."""
+        client = Client(
+            "https://api.linode.com/v4",
+            "test-token",
+            max_connections=50,
+            max_keepalive_connections=25,
+            keepalive_expiry=60.0,
+        )
+        try:
+            assert client.limits.max_connections == 50
+            assert client.limits.max_keepalive_connections == 25
+            assert client.limits.keepalive_expiry == 60.0
+        finally:
+            await client.close()
+
+    async def test_retryable_client_threads_pool_config(self) -> None:
+        """RetryableClient passes pool fields from RetryConfig to Client."""
+        cfg = RetryConfig(
+            pool_max_connections=42,
+            pool_max_keepalive_connections=21,
+            pool_keepalive_expiry=15.0,
+        )
+        client = RetryableClient("https://api.linode.com/v4", "test-token", cfg)
+        try:
+            assert client.client.limits.max_connections == 42
+            assert client.client.limits.max_keepalive_connections == 21
+            assert client.client.limits.keepalive_expiry == 15.0
+        finally:
+            await client.close()
+
+
+class TestRetryableClientRateLimiter:
+    """Tests for the limiter's integration with RetryableClient."""
+
+    async def test_limiter_gates_upstream_calls(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Drained bucket blocks the next upstream call until refill.
+
+        Patches asyncio.sleep so the synthetic delay records without burning
+        real time. The check that matters is upstream call count between the
+        first and second invocations.
+        """
+        clock = [0.0]
+        sleeps: list[float] = []
+
+        async def fake_sleep(delay: float) -> None:
+            sleeps.append(delay)
+            clock[0] += delay
+
+        monkeypatch.setattr("linodemcp.linode.time.monotonic", lambda: clock[0])
+        monkeypatch.setattr("linodemcp.linode.asyncio.sleep", fake_sleep)
+
+        client = RetryableClient(
+            "https://api.linode.com/v4",
+            "test-token",
+            RetryConfig(
+                max_retries=0,
+                base_delay=0.001,
+                max_delay=0.001,
+                circuit_breaker_threshold=0,
+                rate_limit_per_minute=60,
+            ),
+        )
+
+        ok_response = MagicMock()
+        ok_response.status_code = 200
+        ok_response.json.return_value = {
+            "username": "u",
+            "email": "e@example.com",
+            "uid": 1,
+            "timezone": "UTC",
+            "email_notifications": False,
+            "ip_whitelist_enabled": False,
+            "lish_auth_method": "password_keys",
+            "two_factor_auth": False,
+            "restricted": False,
+        }
+        ok_response.headers = {}
+
+        with patch.object(
+            client.client.client, "request", new_callable=AsyncMock
+        ) as mock_req:
+            mock_req.return_value = ok_response
+
+            # Burn the 60-token burst.
+            for _ in range(60):
+                await client.get_profile()
+
+            assert mock_req.call_count == 60
+            sleeps.clear()  # ignore any sleeps during burst
+
+            # 61st call must wait for the limiter (~1s synthetic).
+            await client.get_profile()
+            assert mock_req.call_count == 61
+            assert sleeps, "limiter must have parked the 61st call on sleep"
 
         await client.close()

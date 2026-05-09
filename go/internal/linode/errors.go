@@ -13,6 +13,11 @@ import (
 // from "we tried and the upstream failed".
 var ErrCircuitOpen = errors.New("circuit breaker open")
 
+// ErrRateLimitWaitCanceled is returned when a caller's context is canceled
+// while a goroutine is blocked waiting for a token. The breaker shouldn't
+// count this; it's a caller-side decision, not an upstream-health signal.
+var ErrRateLimitWaitCanceled = errors.New("rate limit wait canceled")
+
 // APIError represents an error returned by the Linode API.
 // RetryAfter carries the server's Retry-After hint when present so the retry
 // loop can honor it instead of computing its own backoff.

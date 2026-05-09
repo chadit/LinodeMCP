@@ -72,7 +72,7 @@ class TracingConfig:
 
 @dataclass
 class ResilienceConfig:
-    """Retry, rate limit, and circuit breaker settings."""
+    """Retry, rate limit, circuit breaker, and HTTP pool settings."""
 
     rate_limit_per_minute: int = 700
     circuit_breaker_threshold: int = 5
@@ -80,6 +80,9 @@ class ResilienceConfig:
     max_retries: int = 3
     base_retry_delay: int = 1
     max_retry_delay: int = 30
+    pool_max_connections: int = 10
+    pool_max_keepalive_connections: int = 10
+    pool_keepalive_expiry: float = 30.0
 
 
 @dataclass
@@ -300,6 +303,9 @@ def _apply_defaults(data: dict[str, Any]) -> None:
     data["resilience"].setdefault("maxRetries", 3)
     data["resilience"].setdefault("baseRetryDelay", 1)
     data["resilience"].setdefault("maxRetryDelay", 30)
+    data["resilience"].setdefault("poolMaxConnections", 10)
+    data["resilience"].setdefault("poolMaxKeepaliveConnections", 10)
+    data["resilience"].setdefault("poolKeepaliveExpiry", 30.0)
 
 
 def _apply_environment_overrides(data: dict[str, Any]) -> None:
@@ -401,17 +407,19 @@ def _data_to_config(data: dict[str, Any]) -> Config:
         ),
     )
 
+    resilience_data = data.get("resilience", {})
     resilience = ResilienceConfig(
-        rate_limit_per_minute=data.get("resilience", {}).get("rateLimitPerMinute", 700),
-        circuit_breaker_threshold=data.get("resilience", {}).get(
-            "circuitBreakerThreshold", 5
+        rate_limit_per_minute=resilience_data.get("rateLimitPerMinute", 700),
+        circuit_breaker_threshold=resilience_data.get("circuitBreakerThreshold", 5),
+        circuit_breaker_timeout=resilience_data.get("circuitBreakerTimeout", 30),
+        max_retries=resilience_data.get("maxRetries", 3),
+        base_retry_delay=resilience_data.get("baseRetryDelay", 1),
+        max_retry_delay=resilience_data.get("maxRetryDelay", 30),
+        pool_max_connections=resilience_data.get("poolMaxConnections", 10),
+        pool_max_keepalive_connections=resilience_data.get(
+            "poolMaxKeepaliveConnections", 10
         ),
-        circuit_breaker_timeout=data.get("resilience", {}).get(
-            "circuitBreakerTimeout", 30
-        ),
-        max_retries=data.get("resilience", {}).get("maxRetries", 3),
-        base_retry_delay=data.get("resilience", {}).get("baseRetryDelay", 1),
-        max_retry_delay=data.get("resilience", {}).get("maxRetryDelay", 30),
+        pool_keepalive_expiry=float(resilience_data.get("poolKeepaliveExpiry", 30.0)),
     )
 
     environments: dict[str, EnvironmentConfig] = {}

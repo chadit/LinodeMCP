@@ -36,14 +36,16 @@ const (
 // Option configures a Client.
 type Option func(*retryConfig)
 
-// Client is the Linode API client with built-in retry logic and a circuit
-// breaker that trips after sustained upstream failure.
+// Client is the Linode API client with built-in retry logic, a token-bucket
+// rate limiter, and a circuit breaker that trips after sustained upstream
+// failure.
 type Client struct {
 	httpClient *http.Client
 	baseURL    string
 	token      string
 	retryCfg   retryConfig
 	circuit    *CircuitBreaker
+	limiter    *RateLimiter
 }
 
 // WithMaxRetries sets the maximum number of retry attempts.
@@ -80,6 +82,7 @@ func NewClient(apiURL, token string, cfg *config.Config, opts ...Option) *Client
 	var (
 		cbThreshold int
 		cbTimeout   time.Duration
+		rateLimit   int
 	)
 
 	if cfg != nil {
@@ -97,6 +100,7 @@ func NewClient(apiURL, token string, cfg *config.Config, opts ...Option) *Client
 
 		cbThreshold = cfg.Resilience.CircuitBreakerThreshold
 		cbTimeout = cfg.Resilience.CircuitBreakerTimeout
+		rateLimit = cfg.Resilience.RateLimitPerMinute
 	}
 
 	for _, opt := range opts {
@@ -116,12 +120,20 @@ func NewClient(apiURL, token string, cfg *config.Config, opts ...Option) *Client
 		token:    token,
 		retryCfg: retryCfg,
 		circuit:  NewCircuitBreaker(cbThreshold, cbTimeout),
+		limiter:  NewRateLimiter(rateLimit),
 	}
 }
 
 // makeRequest builds and executes an authenticated HTTP request against the Linode API.
 // A non-nil payload is marshaled as JSON; nil sends no body.
+//
+// Each invocation is gated by the per-client rate limiter so the bucket is
+// drained per network attempt (initial + retries), not per logical operation.
 func (c *Client) makeRequest(ctx context.Context, method, endpoint string, payload any) (*http.Response, error) {
+	if err := c.limiter.Wait(ctx); err != nil {
+		return nil, err
+	}
+
 	var body io.Reader
 
 	if payload != nil {

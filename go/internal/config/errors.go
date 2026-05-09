@@ -15,4 +15,5 @@ var (
 	ErrEmptyLogLevel        = errors.New("log level cannot be empty")
 	ErrMissingAPIURL        = errors.New("api URL is required when token is provided")
 	ErrMissingToken         = errors.New("token is required when API URL is provided")
+	ErrWatcherStopped       = errors.New("config watcher stopped")
 )

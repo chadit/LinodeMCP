@@ -8,12 +8,42 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
 type testItem struct {
 	Name   string
 	Status string
+}
+
+// TestSetLiveConfigSourceLifecycle exercises the process-wide hook used by
+// main.go to bridge the config Watcher to tool handlers. Cannot observe
+// resolveConfig from outside the package (cairnlint forbids export_test.go),
+// but the hook's observable contract is "stored callbacks can be set and
+// cleared without panic", which this test pins.
+//
+//nolint:paralleltest // SetLiveConfigSource manipulates a process-wide hook.
+func TestSetLiveConfigSourceLifecycle(t *testing.T) {
+	defer tools.SetLiveConfigSource(nil)
+
+	snapshot := &config.Config{Server: config.ServerConfig{Name: "snap"}}
+
+	// Set, clear, set with a different function, clear again. Each step
+	// must not panic. The store is a sync/atomic.Pointer; correctness of
+	// load/store under concurrent access is stdlib's contract.
+	require.NotPanics(t, func() {
+		tools.SetLiveConfigSource(func() *config.Config { return snapshot })
+	})
+	require.NotPanics(t, func() {
+		tools.SetLiveConfigSource(nil)
+	})
+	require.NotPanics(t, func() {
+		tools.SetLiveConfigSource(func() *config.Config { return nil })
+	})
+	require.NotPanics(t, func() {
+		tools.SetLiveConfigSource(nil)
+	})
 }
 
 // Ensures all tool response serialization paths work correctly.

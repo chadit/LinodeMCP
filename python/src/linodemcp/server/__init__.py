@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -99,7 +100,55 @@ class Server:
 
         self.config = config
         self.mcp = MCPServer(config.server.name)
+        self._inflight = 0
+        # Set initially because count is 0; cleared when count becomes
+        # non-zero, set again when it returns to 0. shutdown() awaits this.
+        self._idle = asyncio.Event()
+        self._idle.set()
         self._register_tools()
+
+    async def dispatch(self, name: str, arguments: dict[str, Any]) -> list[Any]:
+        """Invoke a registered tool handler with in-flight tracking.
+
+        Wraps the handler call so shutdown() can drain active requests
+        before the process exits. Public so tests can drive the dispatch
+        path without going through the stdio MCP transport.
+        """
+        self._inflight += 1
+        self._idle.clear()
+        try:
+            return await self._dispatch_inner(name, arguments)
+        finally:
+            self._inflight -= 1
+            if self._inflight == 0:
+                self._idle.set()
+
+    async def shutdown(self, timeout: float = 10.0) -> bool:
+        """Wait for in-flight tool handlers to complete.
+
+        Returns True if drain finished cleanly, False on timeout. Callers
+        decide what to do with a timeout (log, force-cutoff, etc.).
+        """
+        if self._inflight == 0:
+            return True
+        try:
+            await asyncio.wait_for(self._idle.wait(), timeout=timeout)
+        except TimeoutError:
+            return False
+        return True
+
+    async def _dispatch_inner(self, name: str, arguments: dict[str, Any]) -> list[Any]:
+        """Resolve a tool name to its handler and await the result."""
+        match name:
+            case "hello":
+                return await handle_hello(arguments)
+            case "version":
+                return await handle_version(arguments)
+            case _ if name in self._config_handlers:
+                return await self._config_handlers[name](arguments, self.config)
+            case _:
+                msg = f"Unknown tool: {name}"
+                raise ValueError(msg)
 
     def _register_tools(self) -> None:
         """Register all MCP tools using auto-discovery."""
@@ -112,21 +161,13 @@ class Server:
 
         _list_tools_method()(_list_tools)
 
-        # Build handler map for config-requiring tools
-        config_handlers = {entry.name: entry.handle_fn for entry in _TOOL_REGISTRY}
+        self._config_handlers: dict[str, Callable[..., Awaitable[list[Any]]]] = {
+            entry.name: entry.handle_fn for entry in _TOOL_REGISTRY
+        }
 
         async def _call_tool(name: str, arguments: dict[str, Any]) -> list[Any]:
-            """Handle tool calls."""
-            match name:
-                case "hello":
-                    return await handle_hello(arguments)
-                case "version":
-                    return await handle_version(arguments)
-                case _ if name in config_handlers:
-                    return await config_handlers[name](arguments, self.config)
-                case _:
-                    msg = f"Unknown tool: {name}"
-                    raise ValueError(msg)
+            """Dispatch via the tracked path so Shutdown can drain it."""
+            return await self.dispatch(name, arguments)
 
         cast("CallToolDecorator", self.mcp.call_tool())(_call_tool)
 

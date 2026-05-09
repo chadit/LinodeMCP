@@ -213,6 +213,7 @@ __all__ = [
     "Price",
     "Profile",
     "Promo",
+    "RateLimiter",
     "Region",
     "Resolver",
     "RetryConfig",
@@ -868,12 +869,28 @@ class VPCIP:
 class Client:
     """Linode API client."""
 
-    def __init__(self, api_url: str, token: str) -> None:
+    def __init__(
+        self,
+        api_url: str,
+        token: str,
+        *,
+        max_connections: int = 10,
+        max_keepalive_connections: int = 10,
+        keepalive_expiry: float = 30.0,
+    ) -> None:
         self.base_url = api_url
         self.token = token
+        # Retain the Limits object so observability and tests can read back
+        # what was actually configured. httpx.AsyncClient consumes Limits
+        # internally and does not expose it.
+        self.limits = httpx.Limits(
+            max_connections=max_connections,
+            max_keepalive_connections=max_keepalive_connections,
+            keepalive_expiry=keepalive_expiry,
+        )
         self.client = httpx.AsyncClient(
             timeout=30.0,
-            limits=httpx.Limits(max_keepalive_connections=10, max_connections=10),
+            limits=self.limits,
         )
 
     async def close(self) -> None:
@@ -3371,6 +3388,61 @@ class RetryConfig:
     jitter_enabled: bool = True
     circuit_breaker_threshold: int = 5
     circuit_breaker_timeout: float = 30.0
+    rate_limit_per_minute: int = 700
+    pool_max_connections: int = 10
+    pool_max_keepalive_connections: int = 10
+    pool_keepalive_expiry: float = 30.0
+
+
+_SECONDS_PER_MINUTE = 60.0
+
+
+class RateLimiter:
+    """Asyncio token-bucket rate limiter.
+
+    Capacity equals the per-minute budget so a fully-replenished bucket
+    permits one minute's worth of burst, then settles to the steady refill
+    rate. A non-positive rate disables the limiter (wait is a no-op).
+    """
+
+    def __init__(self, per_minute: int) -> None:
+        self._enabled = per_minute > 0
+        if not self._enabled:
+            return
+        self._capacity = float(per_minute)
+        self._refill_rate = self._capacity / _SECONDS_PER_MINUTE
+        self._tokens = self._capacity
+        self._last_refill = time.monotonic()
+        self._lock = asyncio.Lock()
+
+    async def wait(self) -> None:
+        """Block until one token is available; cancellation propagates.
+
+        Each call consumes exactly one token. Disabled limiters return
+        immediately so callers don't need a special case.
+        """
+        if not self._enabled:
+            return
+        while True:
+            async with self._lock:
+                self._refill()
+                if self._tokens >= 1:
+                    self._tokens -= 1
+                    return
+                needed = 1 - self._tokens
+                wait_time = needed / self._refill_rate
+            # Sleep outside the lock so other coroutines can refill checks
+            # while this one is parked.
+            await asyncio.sleep(wait_time)
+
+    def _refill(self) -> None:
+        now = time.monotonic()
+        elapsed = now - self._last_refill
+        if elapsed > 0:
+            self._tokens = min(
+                self._capacity, self._tokens + elapsed * self._refill_rate
+            )
+            self._last_refill = now
 
 
 class _CircuitState(enum.Enum):
@@ -3451,13 +3523,20 @@ class RetryableClient:
     def __init__(
         self, api_url: str, token: str, retry_config: RetryConfig | None = None
     ) -> None:
-        self.client = Client(api_url, token)
         self.retry_config = retry_config or RetryConfig()
+        self.client = Client(
+            api_url,
+            token,
+            max_connections=self.retry_config.pool_max_connections,
+            max_keepalive_connections=self.retry_config.pool_max_keepalive_connections,
+            keepalive_expiry=self.retry_config.pool_keepalive_expiry,
+        )
         self._request_semaphore = asyncio.Semaphore(10)
         self._circuit = CircuitBreaker(
             self.retry_config.circuit_breaker_threshold,
             self.retry_config.circuit_breaker_timeout,
         )
+        self._limiter = RateLimiter(self.retry_config.rate_limit_per_minute)
 
     async def close(self) -> None:
         """Close the HTTP client."""
@@ -4668,6 +4747,11 @@ class RetryableClient:
                 if attempt > 0:
                     delay = self._calculate_delay(attempt)
                     await asyncio.sleep(delay)
+
+                # Gate the network attempt on the per-client rate limiter so
+                # the bucket drains per network call (initial + retries), not
+                # per logical operation.
+                await self._limiter.wait()
 
                 try:
                     result = await func(*args)

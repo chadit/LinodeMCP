@@ -44,6 +44,53 @@ def _truncate_string(value: str, limit: int) -> str:
     return value
 
 
+# Module-level live config source for hot-reload. main.py sets this to
+# `watcher.get` so each tool call resolves through the latest reloaded
+# Config rather than the snapshot captured at startup. None disables the
+# bridge (default: callers receive their snapshot unchanged).
+_live_config_source: Callable[[], Config] | None = None
+
+
+def set_live_config_source(getter: Callable[[], Config] | None) -> None:
+    """Register the function that returns the latest Config.
+
+    Pass None to unregister. Called once by main.py at startup.
+    """
+    global _live_config_source  # noqa: PLW0603 - process-wide hot-reload bridge
+    _live_config_source = getter
+
+
+def _resolve_config(snapshot: Config) -> Config:
+    """Return the live config when a source is registered, else snapshot."""
+    if _live_config_source is not None:
+        live = _live_config_source()
+        if live is not None:
+            return live
+    return snapshot
+
+
+def _retry_config_from(cfg: Config) -> RetryConfig:
+    """Build a RetryConfig from the loaded resilience settings.
+
+    Threads rate-limit, circuit-breaker, retry, and HTTP pool tuning through
+    to the client so operator-set values take effect instead of dataclass
+    defaults. Reads through `_resolve_config` so a registered live source
+    (set by main.py from the ConfigWatcher) wins over the snapshot.
+    """
+    res = _resolve_config(cfg).resilience
+    return RetryConfig(
+        max_retries=res.max_retries,
+        base_delay=float(res.base_retry_delay),
+        max_delay=float(res.max_retry_delay),
+        circuit_breaker_threshold=res.circuit_breaker_threshold,
+        circuit_breaker_timeout=float(res.circuit_breaker_timeout),
+        rate_limit_per_minute=res.rate_limit_per_minute,
+        pool_max_connections=res.pool_max_connections,
+        pool_max_keepalive_connections=res.pool_max_keepalive_connections,
+        pool_keepalive_expiry=res.pool_keepalive_expiry,
+    )
+
+
 def _select_environment(cfg: Config, environment: str) -> EnvironmentConfig:
     """Select an environment from configuration."""
     if environment:
@@ -76,7 +123,7 @@ async def execute_tool(
         async with RetryableClient(
             selected_env.linode.api_url,
             selected_env.linode.token,
-            RetryConfig(),
+            _retry_config_from(cfg),
         ) as client:
             response = await callback(client)
             return [TextContent(type="text", text=json.dumps(response, indent=2))]
@@ -103,7 +150,7 @@ async def execute_tool_list(
         async with RetryableClient(
             selected_env.linode.api_url,
             selected_env.linode.token,
-            RetryConfig(),
+            _retry_config_from(cfg),
         ) as client:
             response = await callback(client)
             return [TextContent(type="text", text=json.dumps(response, indent=2))]

@@ -3,8 +3,10 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"sync"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -15,11 +17,15 @@ import (
 	"github.com/chadit/LinodeMCP/pkg/contracts"
 )
 
+// toolHandler is the callback signature mcp-go invokes for each tool call.
+type toolHandler = func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error)
+
 // Server represents a LinodeMCP server.
 type Server struct {
-	config *config.Config
-	mcp    *server.MCPServer
-	tools  []contracts.Tool
+	config   *config.Config
+	mcp      *server.MCPServer
+	tools    []contracts.Tool
+	inflight sync.WaitGroup
 }
 
 // New creates a new LinodeMCP server.
@@ -67,6 +73,33 @@ func (s *Server) Tools() []contracts.Tool {
 	return s.tools
 }
 
+// HandleMessage dispatches a JSON-RPC message into the underlying mcp-go
+// server. Exposes the in-process transport for tests and embedders that
+// don't go through stdio. Tool handlers invoked via this path are still
+// tracked in the inflight WaitGroup, so Shutdown drains them correctly.
+func (s *Server) HandleMessage(ctx context.Context, message json.RawMessage) mcp.JSONRPCMessage {
+	return s.mcp.HandleMessage(ctx, message)
+}
+
+// Shutdown blocks until all in-flight tool handlers complete or ctx is
+// canceled. Returns ctx.Err() on timeout so callers can distinguish a clean
+// drain from a forced cutoff.
+func (s *Server) Shutdown(ctx context.Context) error {
+	done := make(chan struct{})
+
+	go func() {
+		s.inflight.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("shutdown drain timed out: %w", ctx.Err())
+	}
+}
+
 // Start starts the LinodeMCP server using stdio transport.
 func (s *Server) Start(ctx context.Context) error {
 	log.Printf("Starting LinodeMCP server with %d tools", len(s.tools))
@@ -97,10 +130,26 @@ func (s *Server) Start(ctx context.Context) error {
 
 type toolFactory func(*config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error))
 
+// addTool registers a tool with mcp-go and the local list, wrapping the
+// handler so each in-flight invocation is tracked in s.inflight. Shutdown
+// uses that WaitGroup to drain handlers before returning. Takes the tool by
+// pointer to satisfy gocritic's hugeParam check; mcp.AddTool needs a value
+// so we deref at the call boundary.
+func (s *Server) addTool(tool *mcp.Tool, handler toolHandler) {
+	wrapped := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		s.inflight.Add(1)
+		defer s.inflight.Done()
+
+		return handler(ctx, req)
+	}
+
+	s.mcp.AddTool(*tool, wrapped)
+	s.tools = append(s.tools, &toolWrapper{tool: *tool})
+}
+
 func (s *Server) registerToolFromFactory(factory toolFactory) {
 	tool, handler := factory(s.config)
-	s.mcp.AddTool(tool, handler)
-	s.tools = append(s.tools, &toolWrapper{tool: tool})
+	s.addTool(&tool, handler)
 }
 
 func (s *Server) registerTools() {
@@ -117,12 +166,10 @@ func (s *Server) registerTools() {
 
 func (s *Server) registerCoreTools() {
 	helloTool, helloHandler := tools.NewHelloTool()
-	s.mcp.AddTool(helloTool, helloHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: helloTool})
+	s.addTool(&helloTool, helloHandler)
 
 	versionTool, versionHandler := tools.NewVersionTool()
-	s.mcp.AddTool(versionTool, versionHandler)
-	s.tools = append(s.tools, &toolWrapper{tool: versionTool})
+	s.addTool(&versionTool, versionHandler)
 
 	for _, factory := range []toolFactory{
 		tools.NewLinodeProfileTool,
