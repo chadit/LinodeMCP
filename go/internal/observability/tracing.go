@@ -32,7 +32,8 @@ func (o *Observability) initTracing(cfg config.TracingConfig) error {
 	ctx, cancel := context.WithTimeout(context.Background(), tracingInitTimeout)
 	defer cancel()
 
-	res, err := resource.New(ctx,
+	res, err := resource.New(
+		ctx,
 		resource.WithAttributes(
 			semconv.ServiceName("linodemcp"),
 			semconv.ServiceVersion(getVersion()),
@@ -58,7 +59,8 @@ func (o *Observability) initTracing(cfg config.TracingConfig) error {
 	o.traceProvider = sdktrace.NewTracerProvider(
 		sdktrace.WithResource(res),
 		sdktrace.WithSampler(sampler),
-		sdktrace.WithBatcher(exporter,
+		sdktrace.WithBatcher(
+			exporter,
 			sdktrace.WithBatchTimeout(tracingBatchTimeout),
 			sdktrace.WithMaxExportBatchSize(tracingMaxExportBatchSize),
 		),

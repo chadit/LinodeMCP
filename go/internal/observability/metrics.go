@@ -57,7 +57,8 @@ func (o *Observability) initMetrics(cfg *config.MetricsConfig) error {
 	ctx, cancel := context.WithTimeout(context.Background(), metricsInitTimeout)
 	defer cancel()
 
-	res, err := resource.New(ctx,
+	res, err := resource.New(
+		ctx,
 		resource.WithAttributes(
 			semconv.ServiceName("linodemcp"),
 			semconv.ServiceVersion(getVersion()),
@@ -246,7 +247,8 @@ func (o *Observability) RecordRequest(ctx context.Context, tool, method, status 
 		return
 	}
 
-	o.requestsTotal.Add(ctx, 1,
+	o.requestsTotal.Add(
+		ctx, 1,
 		metric.WithAttributes(
 			attribute.String("tool", tool),
 			attribute.String("method", method),
@@ -255,7 +257,8 @@ func (o *Observability) RecordRequest(ctx context.Context, tool, method, status 
 	)
 
 	if duration > 0 {
-		o.requestDuration.Record(ctx, duration,
+		o.requestDuration.Record(
+			ctx, duration,
 			metric.WithAttributes(
 				attribute.String("tool", tool),
 				attribute.String("method", method),
@@ -270,7 +273,8 @@ func (o *Observability) RecordError(ctx context.Context, tool, errorType string)
 		return
 	}
 
-	o.errorsTotal.Add(ctx, 1,
+	o.errorsTotal.Add(
+		ctx, 1,
 		metric.WithAttributes(
 			attribute.String("tool", tool),
 			attribute.String("error_type", errorType),
@@ -284,7 +288,8 @@ func (o *Observability) RecordAPIRequest(ctx context.Context, endpoint, method s
 		return
 	}
 
-	o.apiRequests.Add(ctx, 1,
+	o.apiRequests.Add(
+		ctx, 1,
 		metric.WithAttributes(
 			attribute.String("endpoint", endpoint),
 			attribute.String("method", method),
@@ -293,7 +298,8 @@ func (o *Observability) RecordAPIRequest(ctx context.Context, endpoint, method s
 	)
 
 	if duration > 0 {
-		o.apiRequestDur.Record(ctx, duration,
+		o.apiRequestDur.Record(
+			ctx, duration,
 			metric.WithAttributes(
 				attribute.String("endpoint", endpoint),
 				attribute.String("method", method),

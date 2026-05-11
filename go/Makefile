@@ -1,4 +1,4 @@
-.PHONY: help build build-prod run test test-race test-all clean lint fmt install-tools coverage tidy gopls-check check _ensure-hooks update-hooks
+.PHONY: help build build-prod run test test-race test-all clean lint lint-fast fmt fmt-check install-tools coverage tidy gopls-check check _ensure-hooks update-hooks
 
 # Auto-install pre-commit hooks if not already set up
 _ensure-hooks:
@@ -79,10 +79,26 @@ lint: _ensure-hooks
 		exit 1; \
 	fi
 
+## lint-fast: Run golangci-lint only (CI fast-lane, skips gosec/cairnlint)
+lint-fast: _ensure-hooks
+	@echo "Running golangci-lint..."
+	@golangci-lint run --allow-parallel-runners --max-issues-per-linter=0 --max-same-issues=0 ./...
+
 ## fmt: Format with goimports and gofumpt
 fmt: _ensure-hooks
 	@goimports -w .
 	@gofumpt -w .
+
+## fmt-check: Verify code is formatted (CI gate, no writes)
+fmt-check:
+	@unformatted=$$(gofumpt -l . 2>/dev/null); \
+	if [ -n "$$unformatted" ]; then \
+		echo "[error] gofumpt would reformat:"; echo "$$unformatted"; exit 1; \
+	fi
+	@unimports=$$(goimports -l . 2>/dev/null); \
+	if [ -n "$$unimports" ]; then \
+		echo "[error] goimports would rewrite:"; echo "$$unimports"; exit 1; \
+	fi
 
 ## gopls-check: Run gopls diagnostics
 gopls-check: _ensure-hooks

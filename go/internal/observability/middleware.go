@@ -11,7 +11,8 @@ import (
 
 // ToolExecution wraps tool execution with tracing and metric recording.
 func (o *Observability) ToolExecution(ctx context.Context, toolName string, executeFn func(ctx context.Context) error) error {
-	ctx, span := o.tracer.Start(ctx, "mcp.tool.execute",
+	ctx, span := o.tracer.Start(
+		ctx, "mcp.tool.execute",
 		trace.WithAttributes(ToolAttr(toolName)),
 		trace.WithSpanKind(trace.SpanKindServer),
 	)
@@ -38,7 +39,8 @@ func (o *Observability) ToolExecution(ctx context.Context, toolName string, exec
 
 // APICall wraps a Linode API call with tracing and metric recording.
 func (o *Observability) APICall(ctx context.Context, endpoint, method string, apiFn func(ctx context.Context) error) error {
-	ctx, span := o.tracer.Start(ctx, "linode.api.call",
+	ctx, span := o.tracer.Start(
+		ctx, "linode.api.call",
 		trace.WithAttributes(
 			LinodeEndpointAttr(endpoint),
 			LinodeMethodAttr(method),
