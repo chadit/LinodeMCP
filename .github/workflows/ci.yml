@@ -171,7 +171,30 @@ jobs:
           set -euo pipefail
           go install github.com/securego/gosec/v2/cmd/gosec@latest
           go install github.com/chadit/cairnlint@latest
-          go install github.com/betterleaks/betterleaks@latest
+
+      # betterleaks ships a `replace` directive in its go.mod (forks
+      # wasilibs/go-re2 for a smaller WASM blob), which makes
+      # `go install pkg@latest` refuse the build. Fetch the release
+      # binary instead. We pass --regex-engine=stdlib at run time, so
+      # the WASM engine the replace optimizes is never loaded; see
+      # https://github.com/betterleaks/betterleaks/issues/74.
+      - name: Install betterleaks (latest release binary)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=$(gh release view --repo betterleaks/betterleaks --json tagName -q .tagName)
+          version="${tag#v}"
+          asset="betterleaks_${version}_linux_x64.tar.gz"
+          tmpdir=$(mktemp -d)
+          gh release download "$tag" \
+            --repo betterleaks/betterleaks \
+            --pattern "$asset" \
+            --dir "$tmpdir"
+          tar -xzf "$tmpdir/$asset" -C "$tmpdir" betterleaks
+          sudo install -m 0755 "$tmpdir/betterleaks" /usr/local/bin/betterleaks
+          rm -rf "$tmpdir"
+          betterleaks version
 
       - name: gosec
         working-directory: go
@@ -182,7 +205,7 @@ jobs:
         run: cairnlint ./...
 
       - name: betterleaks
-        run: betterleaks dir .
+        run: betterleaks dir . --regex-engine=stdlib
 
       - name: trivy fs scan
         uses: aquasecurity/trivy-action@master
