@@ -17,17 +17,29 @@
   // Re-run `go mod tidy` after every dependency bump so go.sum stays in sync.
   postUpdateOptions: ["gomodTidy"],
 
+  // Refresh lockfiles weekly so transitive deps (especially uv.lock entries
+  // whose parent's range already permits the fix) pick up patches without
+  // waiting on a direct-dep bump. Sharing the schedule with the cron above
+  // lets the package rules below bundle lockfile-only changes into the same
+  // group PR as their manager's regular updates.
+  lockFileMaintenance: {
+    enabled: true,
+    schedule: ["before 6am on monday"],
+  },
+
   packageRules: [
     {
-      // Bundle Go module non-major updates into one weekly PR to cut noise.
+      // Bundle Go module non-major updates and lockfile refreshes into one
+      // weekly PR per group to cut noise.
       matchManagers: ["gomod"],
-      matchUpdateTypes: ["minor", "patch", "digest"],
+      matchUpdateTypes: ["minor", "patch", "digest", "lockFileMaintenance"],
       groupName: "go modules (non-major)",
     },
     {
-      // Bundle Python (pyproject.toml) non-major updates into one weekly PR.
+      // Bundle Python (pyproject.toml) non-major updates and uv.lock
+      // refreshes into one weekly PR.
       matchManagers: ["pep621"],
-      matchUpdateTypes: ["minor", "patch", "digest"],
+      matchUpdateTypes: ["minor", "patch", "digest", "lockFileMaintenance"],
       groupName: "python deps (non-major)",
     },
     {
