@@ -164,13 +164,9 @@ jobs:
           cache: true
           cache-dependency-path: go/go.sum
 
-      # Scanners track latest so each rebuild picks up fresh CVE/secret
-      # detection rules without a manual version bump.
-      - name: Install Go security tools (latest)
-        run: |
-          set -euo pipefail
-          go install github.com/securego/gosec/v2/cmd/gosec@latest
-          go install github.com/chadit/cairnlint@latest
+      # gosec and cairnlint are invoked via `go run @latest` directly
+      # in their run steps below. No separate install step needed; the
+      # module cache picks up after the first invocation.
 
       # betterleaks ships a `replace` directive in its go.mod (forks
       # wasilibs/go-re2 for a smaller WASM blob), which makes
@@ -198,11 +194,11 @@ jobs:
 
       - name: gosec
         working-directory: go
-        run: gosec -quiet ./...
+        run: go run github.com/securego/gosec/v2/cmd/gosec@latest -quiet ./...
 
       - name: cairnlint
         working-directory: go
-        run: cairnlint ./...
+        run: go run github.com/chadit/cairnlint@latest ./...
 
       - name: betterleaks
         run: betterleaks dir . --regex-engine=stdlib

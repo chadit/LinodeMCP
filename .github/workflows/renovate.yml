@@ -37,6 +37,7 @@ concurrency:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   renovate:
@@ -62,7 +63,12 @@ jobs:
       - uses: actions/checkout@v4
         if: steps.secrets.outputs.skip != 'true'
 
-      - uses: renovatebot/github-action@v40
+      # renovatebot/github-action does not publish moving major-version
+      # tags. Use a concrete release; Renovate's github-actions manager
+      # will auto-bump this on its scheduled run. See action README:
+      # "We recommend you pin the version of Renovate to a full version
+      # or a full checksum."
+      - uses: renovatebot/github-action@v46.1.14
         if: steps.secrets.outputs.skip != 'true'
         with:
           configurationFile: renovate.json5
@@ -71,3 +77,42 @@ jobs:
           LOG_LEVEL: ${{ inputs.logLevel || 'info' }}
           RENOVATE_DRY_RUN: ${{ inputs.dryRun == 'disabled' && 'null' || inputs.dryRun }}
           RENOVATE_REPOSITORIES: ${{ github.repository }}
+
+      # If the run above fails we want it to be loud, not silent for weeks.
+      # Open a tracking issue on first failure; comment on it for repeat
+      # failures so we don't spam the issue list.
+      - name: Open issue on failure
+        if: failure() && steps.secrets.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          label="renovate-failure"
+          gh label create "$label" \
+            --color B60205 \
+            --description "Renovate workflow failed; needs attention" \
+            >/dev/null 2>&1 || true
+          existing=$(gh issue list \
+            --label "$label" \
+            --state open \
+            --json number \
+            -q '.[0].number' || true)
+          if [[ -n "$existing" ]]; then
+            gh issue comment "$existing" --body "Another failed run: ${RUN_URL}"
+          else
+            body_file=$(mktemp)
+            {
+              echo "The scheduled Renovate run failed. Latest run: ${RUN_URL}"
+              echo
+              echo "This issue is auto-opened by the workflow so a broken"
+              echo "Renovate doesn't go unnoticed. Close once the underlying"
+              echo "problem is fixed; the next failure will reopen tracking."
+            } > "$body_file"
+            gh issue create \
+              --title "Renovate workflow is failing" \
+              --label "$label" \
+              --body-file "$body_file"
+            rm -f "$body_file"
+          fi
