@@ -11,7 +11,7 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, TypeVar
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import httpx
 
@@ -1380,6 +1380,51 @@ class Client:
         except httpx.HTTPError as e:
             logger.exception("HTTP error deleting SSH key: %s", e)
             raise NetworkError("DeleteSSHKey", e) from e
+
+    async def create_monitor_service_token(
+        self, service_type: str, entity_ids: list[int]
+    ) -> dict[str, Any]:
+        """Create a Linode Metrics token scoped to a service type and entities."""
+        if not service_type:
+            msg = "service_type is required"
+            raise ValueError(msg)
+        if not entity_ids:
+            msg = "entity_ids must be a non-empty list"
+            raise ValueError(msg)
+
+        # URL-encode the path segment so unexpected characters can't escape it.
+        encoded = quote(service_type, safe="")
+        endpoint = f"/monitor/services/{encoded}/token"
+        logger.info(
+            "Creating monitor service token",
+            extra={"service_type": service_type, "entity_count": len(entity_ids)},
+        )
+
+        try:
+            body = {"entity_ids": entity_ids}
+            response = await self.make_request("POST", endpoint, body)
+            data: dict[str, Any] = response.json()
+            # Log success without the secret token value.
+            logger.info(
+                "Monitor service token created",
+                extra={
+                    "service_type": service_type,
+                    "expiry": data.get("expiry"),
+                },
+            )
+            return data
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout creating monitor token: %s", e)
+            raise NetworkError("CreateMonitorServiceToken", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout creating monitor token: %s", e)
+            raise NetworkError("CreateMonitorServiceToken", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error creating monitor token")
+            raise NetworkError("CreateMonitorServiceToken", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error creating monitor token: %s", e)
+            raise NetworkError("CreateMonitorServiceToken", e) from e
 
     async def boot_instance(
         self, instance_id: int, config_id: int | None = None
@@ -3857,6 +3902,15 @@ class RetryableClient:
     async def delete_ssh_key(self, ssh_key_id: int) -> None:
         """Delete SSH key with retry."""
         await self._execute_with_retry(self.client.delete_ssh_key, ssh_key_id)
+
+    async def create_monitor_service_token(
+        self, service_type: str, entity_ids: list[int]
+    ) -> dict[str, Any]:
+        """Create a monitor service token with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.create_monitor_service_token, service_type, entity_ids
+        )
+        return result
 
     async def boot_instance(
         self, instance_id: int, config_id: int | None = None

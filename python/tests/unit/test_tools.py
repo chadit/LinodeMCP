@@ -60,6 +60,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_delete_tool,
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
+    create_linode_monitor_service_token_create_tool,
     create_linode_vpc_create_tool,
     create_linode_vpc_delete_tool,
     create_linode_vpc_get_tool,
@@ -140,6 +141,7 @@ from linodemcp.tools import (
     handle_linode_lke_types_list,
     handle_linode_lke_version_get,
     handle_linode_lke_versions_list,
+    handle_linode_monitor_service_token_create,
     handle_linode_nodebalancer_create,
     handle_linode_nodebalancer_delete,
     handle_linode_nodebalancer_get,
@@ -6444,6 +6446,107 @@ async def test_handle_linode_instance_migrate_error(
     mock_linode_client.migrate_instance.side_effect = Exception("API error")
     result = await handle_linode_instance_migrate(
         {"instance_id": 123, "confirm": True}, sample_config
+    )
+    assert len(result) == 1
+    assert "Failed to" in result[0].text
+    assert "API error" in result[0].text
+
+
+def test_create_linode_monitor_service_token_create_tool() -> None:
+    """Tool definition advertises required service_type and entity_ids."""
+    tool = create_linode_monitor_service_token_create_tool()
+    assert tool.name == "linode_monitor_service_token_create"
+    schema = tool.inputSchema
+    required = schema["required"]
+    assert "service_type" in required
+    assert "entity_ids" in required
+    props = schema["properties"]
+    assert props["entity_ids"]["type"] == "array"
+    assert props["entity_ids"]["items"]["type"] == "integer"
+    assert props["entity_ids"]["minItems"] == 1
+
+
+async def test_handle_linode_monitor_service_token_create(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """Handler returns the token and expiry from a successful client call."""
+    mock_linode_client.create_monitor_service_token.return_value = {
+        "token": "jwt.payload.signature",
+        "expiry": "2026-06-01T00:00:00Z",
+    }
+    result = await handle_linode_monitor_service_token_create(
+        {"service_type": "dbaas", "entity_ids": [1, 2, 3]},
+        sample_config,
+    )
+    assert len(result) == 1
+    text = result[0].text
+    assert "jwt.payload.signature" in text
+    assert "2026-06-01T00:00:00Z" in text
+    assert "dbaas" in text
+    mock_linode_client.create_monitor_service_token.assert_awaited_once_with(
+        "dbaas", [1, 2, 3]
+    )
+
+
+async def test_handle_linode_monitor_service_token_create_missing_service_type(
+    sample_config: Config,
+) -> None:
+    """Missing or empty service_type returns a validation error."""
+    result = await handle_linode_monitor_service_token_create(
+        {"entity_ids": [1]}, sample_config
+    )
+    assert len(result) == 1
+    assert "service_type" in result[0].text
+    assert "Error" in result[0].text
+
+
+async def test_handle_linode_monitor_service_token_create_missing_entity_ids(
+    sample_config: Config,
+) -> None:
+    """Missing entity_ids returns a validation error."""
+    result = await handle_linode_monitor_service_token_create(
+        {"service_type": "dbaas"}, sample_config
+    )
+    assert len(result) == 1
+    assert "entity_ids" in result[0].text
+    assert "Error" in result[0].text
+
+
+async def test_handle_linode_monitor_service_token_create_empty_entity_ids(
+    sample_config: Config,
+) -> None:
+    """Empty entity_ids list returns a validation error."""
+    result = await handle_linode_monitor_service_token_create(
+        {"service_type": "dbaas", "entity_ids": []}, sample_config
+    )
+    assert len(result) == 1
+    assert "entity_ids" in result[0].text
+    assert "Error" in result[0].text
+
+
+async def test_handle_linode_monitor_service_token_create_non_int_entity_ids(
+    sample_config: Config,
+) -> None:
+    """Non-integer entity_ids (including bool) are rejected."""
+    result = await handle_linode_monitor_service_token_create(
+        {"service_type": "dbaas", "entity_ids": ["abc"]}, sample_config
+    )
+    assert len(result) == 1
+    assert "entity_ids" in result[0].text
+    # bool is a subclass of int; reject it explicitly.
+    result_bool = await handle_linode_monitor_service_token_create(
+        {"service_type": "dbaas", "entity_ids": [True]}, sample_config
+    )
+    assert "entity_ids" in result_bool[0].text
+
+
+async def test_handle_linode_monitor_service_token_create_error(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """API errors surface as a 'Failed to' message in the response text."""
+    mock_linode_client.create_monitor_service_token.side_effect = Exception("API error")
+    result = await handle_linode_monitor_service_token_create(
+        {"service_type": "dbaas", "entity_ids": [1]}, sample_config
     )
     assert len(result) == 1
     assert "Failed to" in result[0].text

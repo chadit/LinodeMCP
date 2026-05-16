@@ -184,6 +184,10 @@ from linodemcp.tools.linode_lke_write import (
     handle_linode_lke_pool_update,
     handle_linode_lke_service_token_delete,
 )
+from linodemcp.tools.linode_monitor_write import (
+    create_linode_monitor_service_token_create_tool,
+    handle_linode_monitor_service_token_create,
+)
 from linodemcp.tools.linode_nodebalancers import (
     create_linode_nodebalancer_get_tool,
     create_linode_nodebalancers_list_tool,
@@ -399,6 +403,7 @@ __all__ = [
     "create_linode_lke_types_list_tool",
     "create_linode_lke_version_get_tool",
     "create_linode_lke_versions_list_tool",
+    "create_linode_monitor_service_token_create_tool",
     "create_linode_nodebalancer_create_tool",
     "create_linode_nodebalancer_delete_tool",
     "create_linode_nodebalancer_get_tool",
@@ -525,6 +530,7 @@ __all__ = [
     "handle_linode_lke_types_list",
     "handle_linode_lke_version_get",
     "handle_linode_lke_versions_list",
+    "handle_linode_monitor_service_token_create",
     "handle_linode_nodebalancer_create",
     "handle_linode_nodebalancer_delete",
     "handle_linode_nodebalancer_get",
