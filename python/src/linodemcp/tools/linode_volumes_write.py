@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
-from linodemcp.tools.helpers import _error_response, execute_tool
+from linodemcp.tools.helpers import error_response, execute_tool
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -71,7 +71,7 @@ async def handle_linode_volume_create(
 
     label = arguments.get("label", "")
     if not label:
-        return _error_response("label is required")
+        return error_response("label is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         volume = await client.create_volume(
@@ -142,9 +142,9 @@ async def handle_linode_volume_attach(
     linode_id = arguments.get("linode_id", 0)
 
     if not volume_id:
-        return _error_response("volume_id is required")
+        return error_response("volume_id is required")
     if not linode_id:
-        return _error_response("linode_id is required")
+        return error_response("linode_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         volume = await client.attach_volume(
@@ -199,7 +199,7 @@ async def handle_linode_volume_detach(
     volume_id = arguments.get("volume_id", 0)
 
     if not volume_id:
-        return _error_response("volume_id is required")
+        return error_response("volume_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.detach_volume(int(volume_id))
@@ -265,9 +265,9 @@ async def handle_linode_volume_resize(
         ]
 
     if not volume_id:
-        return _error_response("volume_id is required")
+        return error_response("volume_id is required")
     if not size:
-        return _error_response("size is required")
+        return error_response("size is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         volume = await client.resize_volume(int(volume_id), int(size))
@@ -330,7 +330,7 @@ async def handle_linode_volume_delete(
         ]
 
     if not volume_id:
-        return _error_response("volume_id is required")
+        return error_response("volume_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_volume(int(volume_id))

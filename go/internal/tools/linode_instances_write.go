@@ -184,7 +184,7 @@ func handleLinodeInstanceShutdownRequest(ctx context.Context, request *mcp.CallT
 func NewLinodeInstanceCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_instance_create",
-		mcp.WithDescription("Creates a new Linode instance. WARNING: Billing starts immediately upon creation. Use linode_regions_list and linode_types_list to find valid region and type values."),
+		mcp.WithDescription("Creates a new Linode instance under the current Linode Interfaces generation. WARNING: Billing starts immediately upon creation. Requires firewall_id (get one from linode_firewalls_list or create with linode_firewall_create). Note: VPC attachment via the current interface model is not yet supported by this tool; use linode_vpc_* tools after create."),
 		mcp.WithString(
 			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
@@ -211,13 +211,22 @@ func NewLinodeInstanceCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context
 			"root_pass",
 			mcp.Description("The root password for the instance. Required if image is provided."),
 		),
+		mcp.WithNumber(
+			"firewall_id",
+			mcp.Required(),
+			mcp.Description("Cloud Firewall ID to attach to the public interface. Required under the current Linode Interfaces generation."),
+		),
+		mcp.WithBoolean(
+			"route_ipv4",
+			mcp.Description("Whether the public interface owns the IPv4 default route (optional, default: true)"),
+		),
+		mcp.WithBoolean(
+			"route_ipv6",
+			mcp.Description("Whether the public interface owns the IPv6 default route (optional, default: true)"),
+		),
 		mcp.WithBoolean(
 			"backups_enabled",
 			mcp.Description("Enable backups for this instance (optional, default: false)"),
-		),
-		mcp.WithBoolean(
-			"private_ip",
-			mcp.Description("Add a private IP address to this instance (optional, default: false)"),
 		),
 		mcp.WithBoolean(
 			paramConfirm,
@@ -233,6 +242,8 @@ func NewLinodeInstanceCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context
 	return tool, handler
 }
 
+const errFirewallIDRequired = "firewall_id is required for instance creation. Get a firewall ID from linode_firewalls_list, or create one with linode_firewall_create."
+
 func handleLinodeInstanceCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	region := request.GetString("region", "")
 	instanceType := request.GetString("type", "")
@@ -240,7 +251,9 @@ func handleLinodeInstanceCreateRequest(ctx context.Context, request *mcp.CallToo
 	image := request.GetString("image", "")
 	rootPass := request.GetString("root_pass", "")
 	backupsEnabled := request.GetBool("backups_enabled", false)
-	privateIP := request.GetBool("private_ip", false)
+	firewallID := request.GetInt("firewall_id", 0)
+	routeIPv4 := request.GetBool("route_ipv4", true)
+	routeIPv6 := request.GetBool("route_ipv6", true)
 
 	if result := RequireConfirm(request, "This operation creates a billable resource. Set confirm=true to proceed."); result != nil {
 		return result, nil
@@ -254,6 +267,10 @@ func handleLinodeInstanceCreateRequest(ctx context.Context, request *mcp.CallToo
 		return mcp.NewToolResultError("type is required"), nil
 	}
 
+	if firewallID <= 0 {
+		return mcp.NewToolResultError(errFirewallIDRequired), nil
+	}
+
 	if err := validateRootPassword(rootPass); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -264,13 +281,20 @@ func handleLinodeInstanceCreateRequest(ctx context.Context, request *mcp.CallToo
 	}
 
 	req := linode.CreateInstanceRequest{
-		Region:         region,
-		Type:           instanceType,
-		Label:          label,
-		Image:          image,
-		RootPass:       rootPass,
-		BackupsEnabled: backupsEnabled,
-		PrivateIP:      privateIP,
+		Region:              region,
+		Type:                instanceType,
+		Label:               label,
+		Image:               image,
+		RootPass:            rootPass,
+		BackupsEnabled:      backupsEnabled,
+		InterfaceGeneration: linode.CurrentInterfaceGeneration,
+		Interfaces: []linode.InstanceInterface{
+			{
+				Public:       &linode.InterfacePublicConfig{},
+				DefaultRoute: buildDefaultRoute(routeIPv4, routeIPv6),
+				FirewallID:   &firewallID,
+			},
+		},
 	}
 
 	instance, err := client.CreateInstance(ctx, &req)
@@ -287,6 +311,18 @@ func handleLinodeInstanceCreateRequest(ctx context.Context, request *mcp.CallToo
 	}
 
 	return MarshalToolResponse(response)
+}
+
+// buildDefaultRoute returns a default-route struct only when at least one
+// family is selected. When neither is true, returns nil so the field is omitted
+// from the wire entirely rather than sent as an empty object. When only one is
+// true, the other key is omitted by the omitempty tag on the bool field.
+func buildDefaultRoute(ipv4, ipv6 bool) *linode.InterfaceDefaultRoute {
+	if !ipv4 && !ipv6 {
+		return nil
+	}
+
+	return &linode.InterfaceDefaultRoute{IPv4: ipv4, IPv6: ipv6}
 }
 
 // NewLinodeInstanceDeleteTool creates a tool for deleting a Linode instance.

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
-from linodemcp.tools.helpers import _error_response, execute_tool
+from linodemcp.tools.helpers import error_response, execute_tool
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -71,11 +71,11 @@ async def handle_linode_lke_cluster_get(
     """Handle linode_lke_cluster_get tool request."""
     cluster_id_str = arguments.get("cluster_id", "")
     if not cluster_id_str:
-        return _error_response("cluster_id is required")
+        return error_response("cluster_id is required")
     try:
         cluster_id = int(cluster_id_str)
     except ValueError:
-        return _error_response("cluster_id must be a valid integer")
+        return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.get_lke_cluster(cluster_id)
@@ -105,11 +105,11 @@ async def handle_linode_lke_pools_list(
     """Handle linode_lke_pools_list tool request."""
     cluster_id_str = arguments.get("cluster_id", "")
     if not cluster_id_str:
-        return _error_response("cluster_id is required")
+        return error_response("cluster_id is required")
     try:
         cluster_id = int(cluster_id_str)
     except ValueError:
-        return _error_response("cluster_id must be a valid integer")
+        return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         pools = await client.list_lke_node_pools(cluster_id)
@@ -145,17 +145,17 @@ async def handle_linode_lke_pool_get(
     cluster_id_str = arguments.get("cluster_id", "")
     pool_id_str = arguments.get("pool_id", "")
     if not cluster_id_str:
-        return _error_response("cluster_id is required")
+        return error_response("cluster_id is required")
     if not pool_id_str:
-        return _error_response("pool_id is required")
+        return error_response("pool_id is required")
     try:
         cluster_id = int(cluster_id_str)
     except ValueError:
-        return _error_response("cluster_id must be a valid integer")
+        return error_response("cluster_id must be a valid integer")
     try:
         pool_id = int(pool_id_str)
     except ValueError:
-        return _error_response("pool_id must be a valid integer")
+        return error_response("pool_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.get_lke_node_pool(cluster_id, pool_id)
@@ -190,13 +190,13 @@ async def handle_linode_lke_node_get(
     cluster_id_str = arguments.get("cluster_id", "")
     node_id = arguments.get("node_id", "")
     if not cluster_id_str:
-        return _error_response("cluster_id is required")
+        return error_response("cluster_id is required")
     if not node_id:
-        return _error_response("node_id is required")
+        return error_response("node_id is required")
     try:
         cluster_id = int(cluster_id_str)
     except ValueError:
-        return _error_response("cluster_id must be a valid integer")
+        return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.get_lke_node(cluster_id, str(node_id))
@@ -226,11 +226,11 @@ async def handle_linode_lke_kubeconfig_get(
     """Handle linode_lke_kubeconfig_get tool request."""
     cluster_id_str = arguments.get("cluster_id", "")
     if not cluster_id_str:
-        return _error_response("cluster_id is required")
+        return error_response("cluster_id is required")
     try:
         cluster_id = int(cluster_id_str)
     except ValueError:
-        return _error_response("cluster_id must be a valid integer")
+        return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.get_lke_kubeconfig(cluster_id)
@@ -260,11 +260,11 @@ async def handle_linode_lke_dashboard_get(
     """Handle linode_lke_dashboard_get tool request."""
     cluster_id_str = arguments.get("cluster_id", "")
     if not cluster_id_str:
-        return _error_response("cluster_id is required")
+        return error_response("cluster_id is required")
     try:
         cluster_id = int(cluster_id_str)
     except ValueError:
-        return _error_response("cluster_id must be a valid integer")
+        return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.get_lke_dashboard(cluster_id)
@@ -294,11 +294,11 @@ async def handle_linode_lke_api_endpoints_list(
     """Handle linode_lke_api_endpoints_list tool request."""
     cluster_id_str = arguments.get("cluster_id", "")
     if not cluster_id_str:
-        return _error_response("cluster_id is required")
+        return error_response("cluster_id is required")
     try:
         cluster_id = int(cluster_id_str)
     except ValueError:
-        return _error_response("cluster_id must be a valid integer")
+        return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         endpoints = await client.list_lke_api_endpoints(cluster_id)
@@ -329,11 +329,11 @@ async def handle_linode_lke_acl_get(
     """Handle linode_lke_acl_get tool request."""
     cluster_id_str = arguments.get("cluster_id", "")
     if not cluster_id_str:
-        return _error_response("cluster_id is required")
+        return error_response("cluster_id is required")
     try:
         cluster_id = int(cluster_id_str)
     except ValueError:
-        return _error_response("cluster_id must be a valid integer")
+        return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.get_lke_control_plane_acl(cluster_id)
@@ -392,7 +392,7 @@ async def handle_linode_lke_version_get(
     """Handle linode_lke_version_get tool request."""
     version_id = arguments.get("version_id", "")
     if not version_id:
-        return _error_response("version_id is required")
+        return error_response("version_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.get_lke_version(str(version_id))

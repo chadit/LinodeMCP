@@ -67,7 +67,7 @@ class TracingConfig:
     endpoint: str = "localhost:4317"
     sample_rate: float = 1.0
     insecure: bool = True
-    headers: dict[str, str] = field(default_factory=dict)
+    headers: dict[str, str] = field(default_factory=dict[str, str])
 
 
 @dataclass

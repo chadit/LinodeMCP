@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
-from linodemcp.tools.helpers import _error_response, execute_tool
+from linodemcp.tools.helpers import error_response, execute_tool
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -76,11 +76,11 @@ async def handle_linode_vpc_get(
     """Handle linode_vpc_get tool request."""
     vpc_id_str = arguments.get("vpc_id", "")
     if not vpc_id_str:
-        return _error_response("vpc_id is required")
+        return error_response("vpc_id is required")
     try:
         vpc_id = int(vpc_id_str)
     except ValueError:
-        return _error_response("vpc_id must be a valid integer")
+        return error_response("vpc_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.get_vpc(vpc_id)
@@ -136,11 +136,11 @@ async def handle_linode_vpc_ip_list(
     """Handle linode_vpc_ip_list tool request."""
     vpc_id_str = arguments.get("vpc_id", "")
     if not vpc_id_str:
-        return _error_response("vpc_id is required")
+        return error_response("vpc_id is required")
     try:
         vpc_id = int(vpc_id_str)
     except ValueError:
-        return _error_response("vpc_id must be a valid integer")
+        return error_response("vpc_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         ips = await client.list_vpc_ip(vpc_id)
@@ -171,11 +171,11 @@ async def handle_linode_vpc_subnets_list(
     """Handle linode_vpc_subnets_list tool request."""
     vpc_id_str = arguments.get("vpc_id", "")
     if not vpc_id_str:
-        return _error_response("vpc_id is required")
+        return error_response("vpc_id is required")
     try:
         vpc_id = int(vpc_id_str)
     except ValueError:
-        return _error_response("vpc_id must be a valid integer")
+        return error_response("vpc_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         subnets = await client.list_vpc_subnets(vpc_id)
@@ -211,19 +211,19 @@ def _parse_vpc_subnet_ids(
     """
     vpc_id_str = arguments.get("vpc_id", "")
     if not vpc_id_str:
-        return _error_response("vpc_id is required")
+        return error_response("vpc_id is required")
     try:
         vpc_id = int(vpc_id_str)
     except ValueError:
-        return _error_response("vpc_id must be a valid integer")
+        return error_response("vpc_id must be a valid integer")
 
     subnet_id_str = arguments.get("subnet_id", "")
     if not subnet_id_str:
-        return _error_response("subnet_id is required")
+        return error_response("subnet_id is required")
     try:
         subnet_id = int(subnet_id_str)
     except ValueError:
-        return _error_response("subnet_id must be a valid integer")
+        return error_response("subnet_id must be a valid integer")
 
     return (vpc_id, subnet_id)
 

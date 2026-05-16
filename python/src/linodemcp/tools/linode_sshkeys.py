@@ -59,7 +59,7 @@ async def handle_linode_sshkeys_list(
             {
                 "id": k.id,
                 "label": k.label,
-                "ssh_key": _truncate_string(k.ssh_key, SSH_KEY_TRUNCATE_LIMIT),
+                "ssh_key": truncate_string(k.ssh_key, SSH_KEY_TRUNCATE_LIMIT),
                 "created": k.created,
             }
             for k in keys
@@ -78,7 +78,7 @@ async def handle_linode_sshkeys_list(
     return await execute_tool(cfg, arguments, "retrieve SSH keys", _call)
 
 
-def _truncate_string(value: str, limit: int) -> str:
+def truncate_string(value: str, limit: int) -> str:
     """Truncate a string with ellipsis if it exceeds the limit."""
     if len(value) > limit:
         return value[:limit] + "..."

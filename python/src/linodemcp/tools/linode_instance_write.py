@@ -164,8 +164,12 @@ def create_linode_instance_create_tool() -> Tool:
     return Tool(
         name="linode_instance_create",
         description=(
-            "Creates a new Linode instance. WARNING: Billing starts immediately. "
-            "Use linode_regions_list and linode_types_list to find valid values."
+            "Creates a new Linode instance under the current Linode Interfaces "
+            "generation. WARNING: Billing starts immediately. Requires "
+            "firewall_id (get one from linode_firewalls_list or create with "
+            "linode_firewall_create). Note: VPC attachment via the current "
+            "interface model is not yet supported by this tool; use "
+            "linode_vpc_* tools after create."
         ),
         inputSchema={
             "type": "object",
@@ -211,9 +215,26 @@ def create_linode_instance_create_tool() -> Tool:
                     "type": "boolean",
                     "description": "Enable backups (default: false)",
                 },
-                "private_ip": {
+                "firewall_id": {
+                    "type": "integer",
+                    "description": (
+                        "Cloud Firewall ID to attach to the public interface. "
+                        "Required under the current Linode Interfaces generation."
+                    ),
+                },
+                "route_ipv4": {
                     "type": "boolean",
-                    "description": "Add private IP (default: false)",
+                    "description": (
+                        "Whether the public interface owns the IPv4 default "
+                        "route (optional, default: true)"
+                    ),
+                },
+                "route_ipv6": {
+                    "type": "boolean",
+                    "description": (
+                        "Whether the public interface owns the IPv6 default "
+                        "route (optional, default: true)"
+                    ),
                 },
                 "confirm": {
                     "type": "boolean",
@@ -222,7 +243,7 @@ def create_linode_instance_create_tool() -> Tool:
                     ),
                 },
             },
-            "required": ["region", "type", "confirm"],
+            "required": ["region", "type", "firewall_id", "confirm"],
         },
     )
 
@@ -243,23 +264,31 @@ async def handle_linode_instance_create(
 
     region = arguments.get("region", "")
     instance_type = arguments.get("type", "")
+    firewall_id = arguments.get("firewall_id", 0)
 
     if not region:
         return _error_response("region is required")
     if not instance_type:
         return _error_response("type is required")
+    if not firewall_id or firewall_id <= 0:
+        return _error_response(
+            "firewall_id is required for instance creation. Get a firewall ID "
+            "from linode_firewalls_list, or create one with linode_firewall_create."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         instance = await client.create_instance(
             region=region,
             instance_type=instance_type,
+            firewall_id=firewall_id,
             image=arguments.get("image"),
             label=arguments.get("label"),
             root_pass=arguments.get("root_pass"),
             authorized_keys=arguments.get("authorized_keys"),
             booted=arguments.get("booted", True),
             backups_enabled=arguments.get("backups_enabled", False),
-            private_ip=arguments.get("private_ip", False),
+            route_ipv4=arguments.get("route_ipv4", True),
+            route_ipv6=arguments.get("route_ipv6", True),
         )
         return {
             "message": (

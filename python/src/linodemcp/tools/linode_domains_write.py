@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
-from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, _error_response, execute_tool
+from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -51,7 +51,7 @@ async def handle_linode_domain_create(
     domain_name = arguments.get("domain", "")
 
     if not domain_name:
-        return _error_response("domain is required")
+        return error_response("domain is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         domain = await client.create_domain(
@@ -114,7 +114,7 @@ async def handle_linode_domain_update(
     domain_id = arguments.get("domain_id", 0)
 
     if not domain_id:
-        return _error_response("domain_id is required")
+        return error_response("domain_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         domain = await client.update_domain(
@@ -178,7 +178,7 @@ async def handle_linode_domain_delete(
         ]
 
     if not domain_id:
-        return _error_response("domain_id is required")
+        return error_response("domain_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_domain(int(domain_id))

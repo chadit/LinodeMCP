@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
-from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, _error_response, execute_tool
+from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -57,7 +57,7 @@ async def handle_linode_domain_records_list(
     name_contains = arguments.get("name_contains", "")
 
     if not domain_id:
-        return _error_response("domain_id is required")
+        return error_response("domain_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         records = await client.list_domain_records(int(domain_id))
@@ -158,9 +158,9 @@ async def handle_linode_domain_record_create(
     record_type = arguments.get("type", "")
 
     if not domain_id:
-        return _error_response("domain_id is required")
+        return error_response("domain_id is required")
     if not record_type:
-        return _error_response("type is required")
+        return error_response("type is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         record = await client.create_domain_record(
@@ -245,9 +245,9 @@ async def handle_linode_domain_record_update(
     record_id = arguments.get("record_id", 0)
 
     if not domain_id:
-        return _error_response("domain_id is required")
+        return error_response("domain_id is required")
     if not record_id:
-        return _error_response("record_id is required")
+        return error_response("record_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         record = await client.update_domain_record(
@@ -305,9 +305,9 @@ async def handle_linode_domain_record_delete(
     record_id = arguments.get("record_id", 0)
 
     if not domain_id:
-        return _error_response("domain_id is required")
+        return error_response("domain_id is required")
     if not record_id:
-        return _error_response("record_id is required")
+        return error_response("record_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_domain_record(int(domain_id), int(record_id))

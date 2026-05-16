@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
-from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, _error_response, execute_tool
+from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -54,7 +54,7 @@ async def handle_linode_firewall_create(
     outbound_policy = arguments.get("outbound_policy", "ACCEPT")
 
     if not label:
-        return _error_response("label is required")
+        return error_response("label is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         firewall = await client.create_firewall(
@@ -119,7 +119,7 @@ async def handle_linode_firewall_update(
     firewall_id = arguments.get("firewall_id", 0)
 
     if not firewall_id:
-        return _error_response("firewall_id is required")
+        return error_response("firewall_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         firewall = await client.update_firewall(
@@ -184,7 +184,7 @@ async def handle_linode_firewall_delete(
         ]
 
     if not firewall_id:
-        return _error_response("firewall_id is required")
+        return error_response("firewall_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_firewall(int(firewall_id))

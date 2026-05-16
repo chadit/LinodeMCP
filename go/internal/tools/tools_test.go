@@ -152,7 +152,7 @@ func TestLinodeInstancesListTool(t *testing.T) {
 		t.Parallel()
 
 		instances := []linode.Instance{
-			{ID: 1, Label: "web-1", Status: "running"},
+			{ID: 1, Label: "web-1", Status: statusRunning},
 			{ID: 2, Label: "db-1", Status: "stopped"},
 		}
 
@@ -328,7 +328,7 @@ func TestLinodeInstanceGetTool(t *testing.T) {
 		instance := linode.Instance{
 			ID:     123,
 			Label:  "test-instance",
-			Status: "running",
+			Status: statusRunning,
 			Region: regionUSEast,
 		}
 
@@ -359,7 +359,7 @@ func TestLinodeInstanceGetTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, "test-instance", "response should contain instance label")
-		assert.Contains(t, textContent.Text, "running", "response should contain instance status")
+		assert.Contains(t, textContent.Text, statusRunning, "response should contain instance status")
 	})
 }
 

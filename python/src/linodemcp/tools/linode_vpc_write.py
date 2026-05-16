@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
-from linodemcp.tools.helpers import _error_response, execute_tool
+from linodemcp.tools.helpers import error_response, execute_tool
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -43,19 +43,19 @@ def _parse_vpc_subnet_ids(
     """
     vpc_id_str = arguments.get("vpc_id", "")
     if not vpc_id_str:
-        return _error_response("vpc_id is required")
+        return error_response("vpc_id is required")
     try:
         vpc_id = int(vpc_id_str)
     except ValueError:
-        return _error_response("vpc_id must be a valid integer")
+        return error_response("vpc_id must be a valid integer")
 
     subnet_id_str = arguments.get("subnet_id", "")
     if not subnet_id_str:
-        return _error_response("subnet_id is required")
+        return error_response("subnet_id is required")
     try:
         subnet_id = int(subnet_id_str)
     except ValueError:
-        return _error_response("subnet_id must be a valid integer")
+        return error_response("subnet_id must be a valid integer")
 
     return (vpc_id, subnet_id)
 
@@ -102,14 +102,14 @@ async def handle_linode_vpc_create(
     """Handle linode_vpc_create tool request."""
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return _error_response("Set confirm=true to proceed.")
+        return error_response("Set confirm=true to proceed.")
 
     label = arguments.get("label", "")
     region = arguments.get("region", "")
     if not label:
-        return _error_response("label is required")
+        return error_response("label is required")
     if not region:
-        return _error_response("region is required")
+        return error_response("region is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.create_vpc(
@@ -153,15 +153,15 @@ async def handle_linode_vpc_update(
     """Handle linode_vpc_update tool request."""
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return _error_response("Set confirm=true to proceed.")
+        return error_response("Set confirm=true to proceed.")
 
     vpc_id_str = arguments.get("vpc_id", "")
     if not vpc_id_str:
-        return _error_response("vpc_id is required")
+        return error_response("vpc_id is required")
     try:
         vpc_id = int(vpc_id_str)
     except ValueError:
-        return _error_response("vpc_id must be a valid integer")
+        return error_response("vpc_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.update_vpc(
@@ -201,15 +201,15 @@ async def handle_linode_vpc_delete(
     """Handle linode_vpc_delete tool request."""
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return _error_response("This is destructive. Set confirm=true to proceed.")
+        return error_response("This is destructive. Set confirm=true to proceed.")
 
     vpc_id_str = arguments.get("vpc_id", "")
     if not vpc_id_str:
-        return _error_response("vpc_id is required")
+        return error_response("vpc_id is required")
     try:
         vpc_id = int(vpc_id_str)
     except ValueError:
-        return _error_response("vpc_id must be a valid integer")
+        return error_response("vpc_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_vpc(vpc_id)
@@ -262,22 +262,22 @@ async def handle_linode_vpc_subnet_create(
     """Handle linode_vpc_subnet_create tool request."""
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return _error_response("Set confirm=true to proceed.")
+        return error_response("Set confirm=true to proceed.")
 
     vpc_id_str = arguments.get("vpc_id", "")
     if not vpc_id_str:
-        return _error_response("vpc_id is required")
+        return error_response("vpc_id is required")
     try:
         vpc_id = int(vpc_id_str)
     except ValueError:
-        return _error_response("vpc_id must be a valid integer")
+        return error_response("vpc_id must be a valid integer")
 
     label = arguments.get("label", "")
     ipv4 = arguments.get("ipv4", "")
     if not label:
-        return _error_response("label is required")
+        return error_response("label is required")
     if not ipv4:
-        return _error_response("ipv4 is required")
+        return error_response("ipv4 is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.create_vpc_subnet(
@@ -322,7 +322,7 @@ async def handle_linode_vpc_subnet_update(
     """Handle linode_vpc_subnet_update tool request."""
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return _error_response("Set confirm=true to proceed.")
+        return error_response("Set confirm=true to proceed.")
 
     ids = _parse_vpc_subnet_ids(arguments)
     if isinstance(ids, list):
@@ -331,7 +331,7 @@ async def handle_linode_vpc_subnet_update(
 
     label = arguments.get("label", "")
     if not label:
-        return _error_response("label is required")
+        return error_response("label is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.update_vpc_subnet(
@@ -376,7 +376,7 @@ async def handle_linode_vpc_subnet_delete(
     """Handle linode_vpc_subnet_delete tool request."""
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return _error_response("This is destructive. Set confirm=true to proceed.")
+        return error_response("This is destructive. Set confirm=true to proceed.")
 
     ids = _parse_vpc_subnet_ids(arguments)
     if isinstance(ids, list):

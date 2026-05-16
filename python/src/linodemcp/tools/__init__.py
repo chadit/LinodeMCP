@@ -327,8 +327,6 @@ __all__ = [
     "ENV_PARAM_SCHEMA",
     "SSH_KEY_TRUNCATE_LIMIT",
     "RetryableClient",
-    "_error_response",
-    "_truncate_string",
     "create_hello_tool",
     "create_linode_account_tool",
     "create_linode_domain_create_tool",
@@ -455,6 +453,7 @@ __all__ = [
     "create_linode_vpc_update_tool",
     "create_linode_vpcs_list_tool",
     "create_version_tool",
+    "error_response",
     "execute_tool",
     "handle_hello",
     "handle_linode_account",
@@ -582,6 +581,7 @@ __all__ = [
     "handle_linode_vpc_update",
     "handle_linode_vpcs_list",
     "handle_version",
+    "truncate_string",
 ]
 
 # Re-export shared utilities
@@ -590,7 +590,7 @@ from linodemcp.tools.helpers import (
     DESCRIPTION_TRUNCATE_LIMIT,
     ENV_PARAM_SCHEMA,
     SSH_KEY_TRUNCATE_LIMIT,
-    _error_response,
-    _truncate_string,
+    error_response,
     execute_tool,
+    truncate_string,
 )

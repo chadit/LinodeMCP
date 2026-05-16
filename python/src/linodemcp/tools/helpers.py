@@ -37,7 +37,7 @@ ENV_PARAM_SCHEMA = {
 }
 
 
-def _truncate_string(value: str, limit: int) -> str:
+def truncate_string(value: str, limit: int) -> str:
     """Truncate a string with ellipsis if it exceeds the limit."""
     if len(value) > limit:
         return value[:limit] + "..."
@@ -63,9 +63,7 @@ def set_live_config_source(getter: Callable[[], Config] | None) -> None:
 def _resolve_config(snapshot: Config) -> Config:
     """Return the live config when a source is registered, else snapshot."""
     if _live_config_source is not None:
-        live = _live_config_source()
-        if live is not None:
-            return live
+        return _live_config_source()
     return snapshot
 
 
@@ -163,6 +161,6 @@ async def execute_tool_list(
         return [TextContent(type="text", text=f"Failed to {error_action}: {e}")]
 
 
-def _error_response(message: str) -> list[TextContent]:
+def error_response(message: str) -> list[TextContent]:
     """Return a single-element TextContent error list."""
     return [TextContent(type="text", text=f"Error: {message}")]

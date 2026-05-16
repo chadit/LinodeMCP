@@ -92,12 +92,13 @@ func TestToolHandlersAPIErrorResponses(t *testing.T) {
 				_, handler := tools.NewLinodeInstanceCreateTool(cfg)
 
 				req := createRequestWithArgs(t, map[string]any{
-					keyConfirm:  true,
-					keyRegion:   regionUSEast,
-					keyType:     typeG6Nanode1,
-					keyImage:    imageIDUbuntu2204,
-					keyLabel:    "test",
-					keyRootPass: rootPassStrong,
+					keyConfirm:    true,
+					keyRegion:     regionUSEast,
+					keyType:       typeG6Nanode1,
+					keyImage:      imageIDUbuntu2204,
+					keyLabel:      "test",
+					keyRootPass:   rootPassStrong,
+					keyFirewallID: 12345,
 				})
 				result, err := handler(t.Context(), req)
 

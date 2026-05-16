@@ -1,24 +1,101 @@
 package linode
 
+// CurrentInterfaceGeneration is the Linode Interfaces generation this codebase
+// targets. The Linode API rejects POST /linode/instances payloads whose
+// interface_generation does not match the account's enabled generation, so this
+// constant is the single source of truth for the wire value.
+const CurrentInterfaceGeneration = "linode"
+
 // Instance represents a Linode instance.
 type Instance struct {
-	ID              int      `json:"id"`
-	Label           string   `json:"label"`
-	Status          string   `json:"status"`
-	Type            string   `json:"type"`
-	Region          string   `json:"region"`
-	Image           string   `json:"image"`
-	IPv4            []string `json:"ipv4"`
-	IPv6            string   `json:"ipv6"`
-	Hypervisor      string   `json:"hypervisor"`
-	Specs           Specs    `json:"specs"`
-	Alerts          Alerts   `json:"alerts"`
-	Backups         Backups  `json:"backups"`
-	Created         string   `json:"created"`
-	Updated         string   `json:"updated"`
-	Group           string   `json:"group"`
-	Tags            []string `json:"tags"`
-	WatchdogEnabled bool     `json:"watchdog_enabled"`
+	ID                  int                 `json:"id"`
+	Label               string              `json:"label"`
+	Status              string              `json:"status"`
+	Type                string              `json:"type"`
+	Region              string              `json:"region"`
+	Image               string              `json:"image"`
+	IPv4                []string            `json:"ipv4"`
+	IPv6                string              `json:"ipv6"`
+	Hypervisor          string              `json:"hypervisor"`
+	Specs               Specs               `json:"specs"`
+	Alerts              Alerts              `json:"alerts"`
+	Backups             Backups             `json:"backups"`
+	Created             string              `json:"created"`
+	Updated             string              `json:"updated"`
+	Group               string              `json:"group"`
+	Tags                []string            `json:"tags"`
+	WatchdogEnabled     bool                `json:"watchdog_enabled"`
+	InterfaceGeneration string              `json:"interface_generation,omitempty"`
+	Interfaces          []InstanceInterface `json:"interfaces,omitempty"`
+}
+
+// InstanceInterface represents a network interface on a Linode instance under
+// the current Interfaces generation. Exactly one of Public, VPC, or VLAN is set
+// per interface.
+type InstanceInterface struct {
+	ID           int                    `json:"id,omitempty"`
+	Public       *InterfacePublicConfig `json:"public,omitempty"`
+	VPC          *InterfaceVPCConfig    `json:"vpc,omitempty"`
+	VLAN         *InterfaceVLANConfig   `json:"vlan,omitempty"`
+	DefaultRoute *InterfaceDefaultRoute `json:"default_route,omitempty"`
+	FirewallID   *int                   `json:"firewall_id,omitempty"`
+	MACAddress   string                 `json:"mac_address,omitempty"`
+}
+
+// InterfacePublicConfig holds public-interface configuration. Sub-fields are
+// derived from BIMHelperScripts reference; live-response field discovery is
+// deferred per the linode-interfaces-fix spec.
+type InterfacePublicConfig struct {
+	IPv4 *InterfacePublicIPv4 `json:"ipv4,omitempty"`
+	IPv6 *InterfacePublicIPv6 `json:"ipv6,omitempty"`
+}
+
+// InterfacePublicIPv4 is the public IPv4 sub-config. Field set is conservative
+// pending live-response capture.
+type InterfacePublicIPv4 struct {
+	Addresses []InterfaceIPv4Address `json:"addresses,omitempty"`
+}
+
+// InterfacePublicIPv6 is the public IPv6 sub-config. Field set is conservative
+// pending live-response capture.
+type InterfacePublicIPv6 struct {
+	Ranges []InterfaceIPv6Range `json:"ranges,omitempty"`
+}
+
+// InterfaceIPv4Address represents a single IPv4 address on an interface.
+type InterfaceIPv4Address struct {
+	Address string `json:"address"`
+	Primary bool   `json:"primary,omitempty"`
+}
+
+// InterfaceIPv6Range represents an IPv6 range on an interface.
+type InterfaceIPv6Range struct {
+	Range string `json:"range"`
+}
+
+// InterfaceVPCConfig holds VPC-attached-interface configuration.
+type InterfaceVPCConfig struct {
+	SubnetID int               `json:"subnet_id"`
+	IPv4     *InterfaceVPCIPv4 `json:"ipv4,omitempty"`
+}
+
+// InterfaceVPCIPv4 is the VPC IPv4 sub-config.
+type InterfaceVPCIPv4 struct {
+	Addresses []InterfaceIPv4Address `json:"addresses,omitempty"`
+}
+
+// InterfaceVLANConfig holds VLAN-attached-interface configuration.
+type InterfaceVLANConfig struct {
+	Label       string `json:"vlan_label"`
+	IPAMAddress string `json:"ipam_address,omitempty"`
+}
+
+// InterfaceDefaultRoute controls whether the interface owns the default route
+// for each address family. A field is sent only when true; false values are
+// omitted from the wire so the API treats them as unset.
+type InterfaceDefaultRoute struct {
+	IPv4 bool `json:"ipv4,omitempty"`
+	IPv6 bool `json:"ipv6,omitempty"`
 }
 
 // Specs represents instance hardware specifications.
@@ -162,22 +239,26 @@ type UDF struct {
 	ManyOf  string `json:"manyof"`
 }
 
-// CreateInstanceRequest represents the request body for creating a Linode instance.
+// CreateInstanceRequest represents the request body for creating a Linode
+// instance under the current Linode Interfaces generation. InterfaceGeneration
+// and Interfaces are required on the wire; the Linode API rejects with
+// "must have at least 1 interface defined to boot" when Interfaces is empty.
 type CreateInstanceRequest struct {
-	Region          string   `json:"region"`
-	Type            string   `json:"type"`
-	Label           string   `json:"label,omitempty"`
-	Image           string   `json:"image,omitempty"`
-	RootPass        string   `json:"root_pass,omitempty"`
-	AuthorizedKeys  []string `json:"authorized_keys,omitempty"`
-	AuthorizedUsers []string `json:"authorized_users,omitempty"`
-	StackScriptID   *int     `json:"stackscript_id,omitempty"`
-	StackScriptData any      `json:"stackscript_data,omitempty"`
-	BackupsEnabled  bool     `json:"backups_enabled,omitempty"`
-	SwapSize        *int     `json:"swap_size,omitempty"`
-	PrivateIP       bool     `json:"private_ip,omitempty"`
-	Tags            []string `json:"tags,omitempty"`
-	Booted          *bool    `json:"booted,omitempty"`
+	Region              string              `json:"region"`
+	Type                string              `json:"type"`
+	Label               string              `json:"label,omitempty"`
+	Image               string              `json:"image,omitempty"`
+	RootPass            string              `json:"root_pass,omitempty"`
+	AuthorizedKeys      []string            `json:"authorized_keys,omitempty"`
+	AuthorizedUsers     []string            `json:"authorized_users,omitempty"`
+	StackScriptID       *int                `json:"stackscript_id,omitempty"`
+	StackScriptData     any                 `json:"stackscript_data,omitempty"`
+	BackupsEnabled      bool                `json:"backups_enabled,omitempty"`
+	SwapSize            *int                `json:"swap_size,omitempty"`
+	Tags                []string            `json:"tags,omitempty"`
+	Booted              *bool               `json:"booted,omitempty"`
+	InterfaceGeneration string              `json:"interface_generation"`
+	Interfaces          []InstanceInterface `json:"interfaces"`
 }
 
 // ResizeInstanceRequest represents the request body for resizing a Linode instance.

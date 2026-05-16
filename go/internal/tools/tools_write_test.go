@@ -331,7 +331,9 @@ func TestLinodeInstanceShutdownTool(t *testing.T) {
 	})
 }
 
-// End-to-end verification of the instance creation workflow.
+// End-to-end verification of the instance creation workflow under the current
+// Linode Interfaces generation. The wire shape matches BIMHelperScripts
+// linode_add_network at api-common.sh:378 exactly.
 func TestLinodeInstanceCreateTool(t *testing.T) {
 	t.Parallel()
 
@@ -352,7 +354,17 @@ func TestLinodeInstanceCreateTool(t *testing.T) {
 		assert.Contains(t, props, "type", "schema should include type property")
 		assert.Contains(t, props, "label", "schema should include label property")
 		assert.Contains(t, props, "image", "schema should include image property")
+		assert.Contains(t, props, keyFirewallID, "schema should include firewall_id property under current Interfaces generation")
+		assert.Contains(t, props, "route_ipv4", "schema should include route_ipv4 property")
+		assert.Contains(t, props, "route_ipv6", "schema should include route_ipv6 property")
 		assert.Contains(t, props, "confirm", "schema should include confirm property")
+
+		// private_ip is replaced by interface-level VPC routing in the current
+		// API and must not be a tool parameter.
+		assert.NotContains(t, props, "private_ip", "schema must not include legacy private_ip property")
+
+		// firewall_id is a hard requirement of the current API.
+		assert.Contains(t, tool.InputSchema.Required, keyFirewallID, "firewall_id must be marked required")
 	})
 
 	validationTests := []struct {
@@ -362,18 +374,23 @@ func TestLinodeInstanceCreateTool(t *testing.T) {
 	}{
 		{
 			name:         caseRequiresConfirm,
-			args:         map[string]any{keyRegion: regionUSEast, keyType: typeG6Nanode1},
+			args:         map[string]any{keyRegion: regionUSEast, keyType: typeG6Nanode1, keyFirewallID: 12345},
 			wantContains: errConfirmEqualsTrue,
 		},
 		{
 			name:         caseMissingRegion,
-			args:         map[string]any{keyType: typeG6Nanode1, keyConfirm: true},
+			args:         map[string]any{keyType: typeG6Nanode1, keyFirewallID: 12345, keyConfirm: true},
 			wantContains: errRegionRequired,
 		},
 		{
 			name:         caseMissingType,
-			args:         map[string]any{keyRegion: regionUSEast, keyConfirm: true},
+			args:         map[string]any{keyRegion: regionUSEast, keyFirewallID: 12345, keyConfirm: true},
 			wantContains: errTypeRequired,
+		},
+		{
+			name:         caseMissingFirewallID,
+			args:         map[string]any{keyRegion: regionUSEast, keyType: typeG6Nanode1, keyConfirm: true},
+			wantContains: errFirewallIDRequired,
 		},
 	}
 	for _, tt := range validationTests {
@@ -388,21 +405,17 @@ func TestLinodeInstanceCreateTool(t *testing.T) {
 		})
 	}
 
-	t.Run("successful creation", func(t *testing.T) {
+	t.Run("body shape matches BIMHelperScripts reference", func(t *testing.T) {
 		t.Parallel()
 
-		instance := linode.Instance{
-			ID:     456,
-			Label:  "web-server",
-			Region: regionUSEast,
-			Status: "provisioning",
-		}
+		var capturedBody map[string]any
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/linode/instances", r.URL.Path, "request path should match instance endpoint")
 			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&capturedBody), "request body should be valid JSON")
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(instance), "encoding response should succeed")
+			assert.NoError(t, json.NewEncoder(w).Encode(linode.Instance{ID: 456, Label: "web-server", Region: regionUSEast, Status: "provisioning"}))
 		}))
 		defer srv.Close()
 
@@ -412,10 +425,11 @@ func TestLinodeInstanceCreateTool(t *testing.T) {
 		_, successHandler := tools.NewLinodeInstanceCreateTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			keyRegion:  regionUSEast,
-			keyType:    typeG6Nanode1,
-			keyLabel:   "web-server",
-			keyConfirm: true,
+			keyRegion:     regionUSEast,
+			keyType:       typeG6Nanode1,
+			keyLabel:      "web-server",
+			keyFirewallID: 12345,
+			keyConfirm:    true,
 		})
 		result, err := successHandler(t.Context(), req)
 
@@ -423,11 +437,137 @@ func TestLinodeInstanceCreateTool(t *testing.T) {
 		require.NotNil(t, result, "handler should return a result")
 		assert.False(t, result.IsError, "result should not be an error")
 
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent type")
+		// Top-level wire fields per linode_add_network at api-common.sh:378.
+		assert.Equal(t, "linode", capturedBody["interface_generation"], "interface_generation must be 'linode'")
+
+		interfaces, interfacesOK := capturedBody["interfaces"].([]any)
+		require.True(t, interfacesOK, "interfaces must be present as an array")
+		require.Len(t, interfaces, 1, "exactly one interface must be sent")
+
+		iface, ifaceOK := interfaces[0].(map[string]any)
+		require.True(t, ifaceOK, "interface element must be an object")
+
+		// public: {} is sent so the API uses defaults; no nested fields under it.
+		pub, pubOK := iface["public"].(map[string]any)
+		require.True(t, pubOK, "public must be an object")
+		assert.Empty(t, pub, "public must be an empty object so the API assigns defaults")
+
+		// default_route: both families default to true.
+		route, routeOK := iface["default_route"].(map[string]any)
+		require.True(t, routeOK, "default_route must be an object")
+		assert.Equal(t, true, route["ipv4"], "default_route.ipv4 should be true by default")
+		assert.Equal(t, true, route["ipv6"], "default_route.ipv6 should be true by default")
+
+		// firewall_id at interface level (not top-level).
+		assert.InEpsilon(t, float64(12345), iface["firewall_id"], 0.0001, "firewall_id must be at the interface level")
+		assert.NotContains(t, capturedBody, "firewall_id", "firewall_id must not appear at top level")
+
+		textContent, textOK := result.Content[0].(mcp.TextContent)
+		require.True(t, textOK, "content should be TextContent type")
 		assert.Contains(t, textContent.Text, "web-server", "response should contain the instance label")
 		assert.Contains(t, textContent.Text, "created successfully", "response should confirm creation")
 	})
+
+	t.Run("route flags omit ipv4 key when false", func(t *testing.T) {
+		t.Parallel()
+
+		var capturedBody map[string]any
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&capturedBody))
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(linode.Instance{ID: 789, Label: "v6-only", Region: regionUSEast}))
+		}))
+		defer srv.Close()
+
+		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, successHandler := tools.NewLinodeInstanceCreateTool(successCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyRegion:     regionUSEast,
+			keyType:       typeG6Nanode1,
+			keyFirewallID: 12345,
+			"route_ipv4":  false,
+			"route_ipv6":  true,
+			keyConfirm:    true,
+		})
+		_, err := successHandler(t.Context(), req)
+		require.NoError(t, err)
+
+		interfaces, interfacesOK := capturedBody["interfaces"].([]any)
+		require.True(t, interfacesOK)
+
+		iface, ifaceOK := interfaces[0].(map[string]any)
+		require.True(t, ifaceOK, "interface element must be an object")
+
+		route, routeOK := iface["default_route"].(map[string]any)
+		require.True(t, routeOK, "default_route must be present")
+
+		// The wire shape must omit the ipv4 key entirely when false, not send
+		// "ipv4": false. The API treats absence as "not the default route" for
+		// that family.
+		_, hasIPv4 := route["ipv4"]
+		assert.False(t, hasIPv4, "default_route.ipv4 key must be omitted when route_ipv4 is false")
+		assert.Equal(t, true, route["ipv6"], "default_route.ipv6 must be sent as true")
+	})
+}
+
+// Instance GET response parsing under the current Interfaces generation must
+// surface interface_generation and interfaces[] on the returned struct.
+func TestLinodeInstanceGetParsesInterfaces(t *testing.T) {
+	t.Parallel()
+
+	firewallID := 12345
+	respBody := linode.Instance{
+		ID:                  321,
+		Label:               "web-01",
+		Status:              statusRunning,
+		Region:              regionUSEast,
+		InterfaceGeneration: "linode",
+		Interfaces: []linode.InstanceInterface{
+			{
+				ID:           1,
+				Public:       &linode.InterfacePublicConfig{},
+				DefaultRoute: &linode.InterfaceDefaultRoute{IPv4: true, IPv6: true},
+				FirewallID:   &firewallID,
+			},
+		},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/linode/instances/321", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(respBody))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, handler := tools.NewLinodeInstanceGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{keyInstanceID: "321"})
+	result, err := handler(t.Context(), req)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.IsError)
+
+	textContent, textOK := result.Content[0].(mcp.TextContent)
+	require.True(t, textOK)
+
+	// Parse the JSON response and assert structurally so the test does not
+	// depend on the marshaler's whitespace choices. The GET handler returns
+	// the Instance unwrapped at the top level.
+	var parsed linode.Instance
+
+	require.NoError(t, json.Unmarshal([]byte(textContent.Text), &parsed), "tool result must be valid JSON")
+	assert.Equal(t, "linode", parsed.InterfaceGeneration, "interface_generation must be surfaced")
+	require.Len(t, parsed.Interfaces, 1, "interfaces array must be populated")
+	assert.Equal(t, 1, parsed.Interfaces[0].ID, "interface ID must be parsed")
+	require.NotNil(t, parsed.Interfaces[0].FirewallID, "firewall_id must be parsed")
+	assert.Equal(t, 12345, *parsed.Interfaces[0].FirewallID, "firewall_id value must match")
 }
 
 // End-to-end verification of the instance deletion workflow.

@@ -4,6 +4,7 @@ PIP := $(VENV)/bin/pip
 RUFF := $(VENV)/bin/ruff
 MYPY := $(VENV)/bin/mypy
 PYTEST := $(VENV)/bin/pytest
+PYRIGHT := pyright
 
 .PHONY: help venv install install-dev test test-cov lint format typecheck vulture deptry clean run all check _ensure-hooks update-hooks
 
@@ -44,7 +45,7 @@ install: venv
 	$(PIP) install .
 
 install-dev: venv
-	$(PIP) install -e ".[dev]"
+	$(PIP) install -e ".[dev,observability]"
 
 test: _ensure-hooks
 	$(PYTEST)
@@ -62,6 +63,13 @@ lint: _ensure-hooks
 		$(MYPY) --ignore-missing-imports src/ tests/; \
 	else \
 		echo "[warn] mypy not installed, skipping type check"; \
+	fi
+	@echo "Running pyright strict mode..."
+	@if command -v $(PYRIGHT) >/dev/null 2>&1; then \
+		cd .. && $(PYRIGHT) python/; \
+	else \
+		echo "[warn] pyright not installed, skipping strict type check"; \
+		echo "       install: npm install -g pyright"; \
 	fi
 
 format: _ensure-hooks

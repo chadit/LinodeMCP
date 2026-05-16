@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
-from linodemcp.tools.helpers import _error_response, execute_tool
+from linodemcp.tools.helpers import error_response, execute_tool
 
 if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
@@ -50,12 +50,12 @@ async def handle_linode_instance_get(
     instance_id_str = arguments.get("instance_id", "")
 
     if not instance_id_str:
-        return _error_response("instance_id is required")
+        return error_response("instance_id is required")
 
     try:
         instance_id = int(instance_id_str)
     except ValueError:
-        return _error_response("instance_id must be a valid integer")
+        return error_response("instance_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         instance = await client.get_instance(instance_id)

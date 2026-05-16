@@ -80,7 +80,7 @@ async def handle_linode_stackscripts_list(
                 "id": s.id,
                 "label": s.label,
                 "username": s.username,
-                "description": _truncate_string(
+                "description": truncate_string(
                     s.description, DESCRIPTION_TRUNCATE_LIMIT
                 ),
                 "is_public": s.is_public,
@@ -113,7 +113,7 @@ async def handle_linode_stackscripts_list(
     return await execute_tool(cfg, arguments, "retrieve StackScripts", _call)
 
 
-def _truncate_string(value: str, limit: int) -> str:
+def truncate_string(value: str, limit: int) -> str:
     """Truncate a string with ellipsis if it exceeds the limit."""
     if len(value) > limit:
         return value[:limit] + "..."

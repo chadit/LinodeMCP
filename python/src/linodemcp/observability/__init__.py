@@ -9,7 +9,7 @@ pattern; that's been removed.
 import os
 import threading
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
@@ -96,7 +96,7 @@ class Observability:
         self._shutdown_funcs.clear()
 
     @contextmanager
-    def tool_execution(self, tool_name: str) -> Iterator[Any]:
+    def tool_execution(self, tool_name: str) -> Generator[Any]:
         """Trace a tool execution. Records exceptions and sets span status."""
         with self._tracer.start_as_current_span(
             "mcp.tool.execute",
@@ -111,7 +111,7 @@ class Observability:
                 raise
 
     @contextmanager
-    def api_call(self, endpoint: str, method: str) -> Iterator[Any]:
+    def api_call(self, endpoint: str, method: str) -> Generator[Any]:
         """Trace a Linode API call."""
         with self._tracer.start_as_current_span(
             "linode.api.call",
@@ -216,7 +216,7 @@ class Observability:
         try:
 
             class HealthHandler(BaseHTTPRequestHandler):
-                def log_message(self, fmt: str, *args: Any) -> None:
+                def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 - signature must match BaseHTTPRequestHandler.log_message
                     """Suppress default request logging."""
 
                 def do_GET(self) -> None:

@@ -73,7 +73,7 @@ def _build_tool_registry() -> list[ToolEntry]:
             if fn is not None:
                 handle_fns[tool_name] = fn
 
-    entries = []
+    entries: list[ToolEntry] = []
     for tool_name in sorted(create_fns.keys()):
         create_fn = create_fns[tool_name]
         handle_fn = handle_fns.get(tool_name)

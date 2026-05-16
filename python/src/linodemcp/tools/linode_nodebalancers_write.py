@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
-from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, _error_response, execute_tool
+from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -63,7 +63,7 @@ async def handle_linode_nodebalancer_create(
 
     region = arguments.get("region", "")
     if not region:
-        return _error_response("region is required")
+        return error_response("region is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         nb = await client.create_nodebalancer(
@@ -123,7 +123,7 @@ async def handle_linode_nodebalancer_update(
     nodebalancer_id = arguments.get("nodebalancer_id", 0)
 
     if not nodebalancer_id:
-        return _error_response("nodebalancer_id is required")
+        return error_response("nodebalancer_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         nb = await client.update_nodebalancer(
@@ -186,7 +186,7 @@ async def handle_linode_nodebalancer_delete(
         ]
 
     if not nodebalancer_id:
-        return _error_response("nodebalancer_id is required")
+        return error_response("nodebalancer_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_nodebalancer(int(nodebalancer_id))

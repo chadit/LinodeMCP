@@ -115,6 +115,120 @@ async def test_get_instance(sample_instance_data: dict[str, Any]) -> None:
     await client.close()
 
 
+async def test_create_instance_sends_interfaces_body(
+    sample_instance_data: dict[str, Any],
+) -> None:
+    """The POST body for create_instance must match BIMHelperScripts
+    linode_add_network at api-common.sh:378: interface_generation = "linode"
+    plus a single-element interfaces[] with public={}, default_route, and an
+    interface-level firewall_id.
+    """
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = sample_instance_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.create_instance(
+            region="us-east",
+            instance_type="g6-nanode-1",
+            firewall_id=12345,
+        )
+
+    assert mock_request.called, "make_request should have been called"
+    _method, _path, body = mock_request.call_args.args
+    assert body["interface_generation"] == "linode"
+    assert len(body["interfaces"]) == 1
+    iface = body["interfaces"][0]
+    assert iface["public"] == {}, (
+        "public must be an empty object so the API assigns defaults"
+    )
+    assert iface["default_route"] == {"ipv4": True, "ipv6": True}
+    assert iface["firewall_id"] == 12345
+    assert "firewall_id" not in body, (
+        "firewall_id must be at the interface level, not top level"
+    )
+
+    await client.close()
+
+
+async def test_create_instance_omits_route_keys_when_false(
+    sample_instance_data: dict[str, Any],
+) -> None:
+    """When route_ipv4=False the ipv4 key must be absent from default_route,
+    not sent as False. The API treats absence as "not the default route" for
+    that family.
+    """
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = sample_instance_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.create_instance(
+            region="us-east",
+            instance_type="g6-nanode-1",
+            firewall_id=12345,
+            route_ipv4=False,
+            route_ipv6=True,
+        )
+
+    _method, _path, body = mock_request.call_args.args
+    default_route = body["interfaces"][0]["default_route"]
+    assert "ipv4" not in default_route, (
+        "default_route.ipv4 must be omitted when route_ipv4 is False"
+    )
+    assert default_route["ipv6"] is True
+
+    await client.close()
+
+
+async def test_get_instance_parses_interfaces(
+    sample_instance_data: dict[str, Any],
+) -> None:
+    """A GET /linode/instances/{id} response carrying interface_generation +
+    interfaces[] must surface those fields on the parsed Instance.
+    """
+    response_data = {
+        **sample_instance_data,
+        "interface_generation": "linode",
+        "interfaces": [
+            {
+                "id": 1,
+                "public": {},
+                "default_route": {"ipv4": True, "ipv6": True},
+                "firewall_id": 12345,
+            },
+        ],
+    }
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        instance = await client.get_instance(123456)
+
+    assert instance.interface_generation == "linode"
+    assert len(instance.interfaces) == 1
+    assert instance.interfaces[0].id == 1
+    assert instance.interfaces[0].firewall_id == 12345
+    assert instance.interfaces[0].default_route is not None
+    assert instance.interfaces[0].default_route.ipv4 is True
+    assert instance.interfaces[0].default_route.ipv6 is True
+
+    await client.close()
+
+
 async def test_api_error_401() -> None:
     """Test handling 401 authentication error."""
     client = Client("https://api.linode.com/v4", "bad-token")
@@ -1598,26 +1712,46 @@ class TestRateLimiter:
 
         await limiter.wait()
         assert sleeps, "limiter should have called asyncio.sleep at least once"
-        assert pytest.approx(sum(sleeps), rel=0.1) == 1.0
+        total: float = sum(sleeps)
+        assert 0.9 <= total <= 1.1, f"expected ~1.0s total sleep, got {total}"
 
     async def test_refill_caps_at_capacity(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Long idle periods do not let the bucket overflow past capacity."""
+        """Long idle periods do not let the bucket overflow past capacity.
+
+        Behavior under test: with a 60/min limiter idle for 5 minutes, only
+        `capacity` (60) consecutive calls must succeed without waiting. The
+        61st call must trigger an asyncio.sleep. If the bucket overflowed to
+        300 (5 minutes * 60/min), this test would fail because all 300+ calls
+        would pass without sleeping.
+        """
         clock = [0.0]
+        sleeps: list[float] = []
+
+        async def fake_sleep(delay: float) -> None:
+            sleeps.append(delay)
+            clock[0] += delay
+
         monkeypatch.setattr("linodemcp.linode.time.monotonic", lambda: clock[0])
+        monkeypatch.setattr("linodemcp.linode.asyncio.sleep", fake_sleep)
 
         limiter = RateLimiter(60)
 
-        # Idle 5 minutes; refill should still cap at 60, not 60*5.
+        # Idle 5 minutes. A naive implementation would refill to 300 tokens.
         clock[0] = 300.0
 
+        # First 60 calls should NOT trigger sleep (within capacity).
         for _ in range(60):
             await limiter.wait()
+        assert not sleeps, f"first {60} calls should not block, but sleeps={sleeps}"
 
-        # 61st call must require a refill: trying to wait would block in
-        # real code. Confirm by checking _tokens dropped to a sub-1 value.
-        assert limiter._tokens < 1.0
+        # The 61st call must require waiting for a refill, proving the
+        # bucket capped at capacity rather than overflowing.
+        await limiter.wait()
+        assert sleeps, (
+            "61st call must trigger asyncio.sleep when bucket caps at capacity"
+        )
 
     async def test_cancellation_propagates(self) -> None:
         """A canceled wait raises CancelledError instead of swallowing it."""

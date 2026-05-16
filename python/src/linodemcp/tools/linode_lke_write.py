@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
-from linodemcp.tools.helpers import _error_response, execute_tool
+from linodemcp.tools.helpers import error_response, execute_tool
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -101,13 +101,13 @@ async def handle_linode_lke_cluster_create(
     control_plane = arguments.get("control_plane")
 
     if not label:
-        return _error_response("label is required")
+        return error_response("label is required")
     if not region:
-        return _error_response("region is required")
+        return error_response("region is required")
     if not k8s_version:
-        return _error_response("k8s_version is required")
+        return error_response("k8s_version is required")
     if not node_pools:
-        return _error_response("node_pools is required")
+        return error_response("node_pools is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.create_lke_cluster(
@@ -162,15 +162,15 @@ async def handle_linode_lke_cluster_update(
     """Handle linode_lke_cluster_update tool request."""
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return _error_response("Set confirm=true to proceed.")
+        return error_response("Set confirm=true to proceed.")
 
     cluster_id_str = arguments.get("cluster_id", "")
     if not cluster_id_str:
-        return _error_response("cluster_id is required")
+        return error_response("cluster_id is required")
     try:
         cluster_id = int(cluster_id_str)
     except ValueError:
-        return _error_response("cluster_id must be a valid integer")
+        return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.update_lke_cluster(
@@ -221,11 +221,11 @@ async def handle_linode_lke_cluster_delete(
 
     cluster_id_str = arguments.get("cluster_id", "")
     if not cluster_id_str:
-        return _error_response("cluster_id is required")
+        return error_response("cluster_id is required")
     try:
         cluster_id = int(cluster_id_str)
     except ValueError:
-        return _error_response("cluster_id must be a valid integer")
+        return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_lke_cluster(cluster_id)
@@ -260,15 +260,15 @@ async def handle_linode_lke_cluster_recycle(
     """Handle linode_lke_cluster_recycle tool request."""
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return _error_response("Set confirm=true to proceed.")
+        return error_response("Set confirm=true to proceed.")
 
     cluster_id_str = arguments.get("cluster_id", "")
     if not cluster_id_str:
-        return _error_response("cluster_id is required")
+        return error_response("cluster_id is required")
     try:
         cluster_id = int(cluster_id_str)
     except ValueError:
-        return _error_response("cluster_id must be a valid integer")
+        return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.recycle_lke_cluster(cluster_id)
@@ -303,15 +303,15 @@ async def handle_linode_lke_cluster_regenerate(
     """Handle linode_lke_cluster_regenerate tool request."""
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return _error_response("Set confirm=true to proceed.")
+        return error_response("Set confirm=true to proceed.")
 
     cluster_id_str = arguments.get("cluster_id", "")
     if not cluster_id_str:
-        return _error_response("cluster_id is required")
+        return error_response("cluster_id is required")
     try:
         cluster_id = int(cluster_id_str)
     except ValueError:
-        return _error_response("cluster_id must be a valid integer")
+        return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.regenerate_lke_cluster(cluster_id)
@@ -380,19 +380,19 @@ async def handle_linode_lke_pool_create(
 
     cluster_id_str = arguments.get("cluster_id", "")
     if not cluster_id_str:
-        return _error_response("cluster_id is required")
+        return error_response("cluster_id is required")
     try:
         cluster_id = int(cluster_id_str)
     except ValueError:
-        return _error_response("cluster_id must be a valid integer")
+        return error_response("cluster_id must be a valid integer")
 
     node_type = arguments.get("type", "")
     if not node_type:
-        return _error_response("type is required")
+        return error_response("type is required")
 
     count = arguments.get("count", 0)
     if not count:
-        return _error_response("count is required and must be > 0")
+        return error_response("count is required and must be > 0")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.create_lke_node_pool(
@@ -446,22 +446,22 @@ async def handle_linode_lke_pool_update(
     """Handle linode_lke_pool_update tool request."""
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return _error_response("Set confirm=true to proceed.")
+        return error_response("Set confirm=true to proceed.")
 
     cluster_id_str = arguments.get("cluster_id", "")
     pool_id_str = arguments.get("pool_id", "")
     if not cluster_id_str:
-        return _error_response("cluster_id is required")
+        return error_response("cluster_id is required")
     if not pool_id_str:
-        return _error_response("pool_id is required")
+        return error_response("pool_id is required")
     try:
         cluster_id = int(cluster_id_str)
     except ValueError:
-        return _error_response("cluster_id must be a valid integer")
+        return error_response("cluster_id must be a valid integer")
     try:
         pool_id = int(pool_id_str)
     except ValueError:
-        return _error_response("pool_id must be a valid integer")
+        return error_response("pool_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.update_lke_node_pool(
@@ -517,17 +517,17 @@ async def handle_linode_lke_pool_delete(
     cluster_id_str = arguments.get("cluster_id", "")
     pool_id_str = arguments.get("pool_id", "")
     if not cluster_id_str:
-        return _error_response("cluster_id is required")
+        return error_response("cluster_id is required")
     if not pool_id_str:
-        return _error_response("pool_id is required")
+        return error_response("pool_id is required")
     try:
         cluster_id = int(cluster_id_str)
     except ValueError:
-        return _error_response("cluster_id must be a valid integer")
+        return error_response("cluster_id must be a valid integer")
     try:
         pool_id = int(pool_id_str)
     except ValueError:
-        return _error_response("pool_id must be a valid integer")
+        return error_response("pool_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_lke_node_pool(cluster_id, pool_id)
@@ -567,22 +567,22 @@ async def handle_linode_lke_pool_recycle(
     """Handle linode_lke_pool_recycle tool request."""
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return _error_response("Set confirm=true to proceed.")
+        return error_response("Set confirm=true to proceed.")
 
     cluster_id_str = arguments.get("cluster_id", "")
     pool_id_str = arguments.get("pool_id", "")
     if not cluster_id_str:
-        return _error_response("cluster_id is required")
+        return error_response("cluster_id is required")
     if not pool_id_str:
-        return _error_response("pool_id is required")
+        return error_response("pool_id is required")
     try:
         cluster_id = int(cluster_id_str)
     except ValueError:
-        return _error_response("cluster_id must be a valid integer")
+        return error_response("cluster_id must be a valid integer")
     try:
         pool_id = int(pool_id_str)
     except ValueError:
-        return _error_response("pool_id must be a valid integer")
+        return error_response("pool_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.recycle_lke_node_pool(cluster_id, pool_id)
@@ -637,13 +637,13 @@ async def handle_linode_lke_node_delete(
     cluster_id_str = arguments.get("cluster_id", "")
     node_id = arguments.get("node_id", "")
     if not cluster_id_str:
-        return _error_response("cluster_id is required")
+        return error_response("cluster_id is required")
     if not node_id:
-        return _error_response("node_id is required")
+        return error_response("node_id is required")
     try:
         cluster_id = int(cluster_id_str)
     except ValueError:
-        return _error_response("cluster_id must be a valid integer")
+        return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_lke_node(cluster_id, str(node_id))
@@ -683,18 +683,18 @@ async def handle_linode_lke_node_recycle(
     """Handle linode_lke_node_recycle tool request."""
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return _error_response("Set confirm=true to proceed.")
+        return error_response("Set confirm=true to proceed.")
 
     cluster_id_str = arguments.get("cluster_id", "")
     node_id = arguments.get("node_id", "")
     if not cluster_id_str:
-        return _error_response("cluster_id is required")
+        return error_response("cluster_id is required")
     if not node_id:
-        return _error_response("node_id is required")
+        return error_response("node_id is required")
     try:
         cluster_id = int(cluster_id_str)
     except ValueError:
-        return _error_response("cluster_id must be a valid integer")
+        return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.recycle_lke_node(cluster_id, str(node_id))
@@ -730,15 +730,15 @@ async def handle_linode_lke_kubeconfig_delete(
     """Handle linode_lke_kubeconfig_delete tool request."""
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return _error_response("Set confirm=true to proceed.")
+        return error_response("Set confirm=true to proceed.")
 
     cluster_id_str = arguments.get("cluster_id", "")
     if not cluster_id_str:
-        return _error_response("cluster_id is required")
+        return error_response("cluster_id is required")
     try:
         cluster_id = int(cluster_id_str)
     except ValueError:
-        return _error_response("cluster_id must be a valid integer")
+        return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_lke_kubeconfig(cluster_id)
@@ -773,15 +773,15 @@ async def handle_linode_lke_service_token_delete(
     """Handle linode_lke_service_token_delete tool request."""
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return _error_response("Set confirm=true to proceed.")
+        return error_response("Set confirm=true to proceed.")
 
     cluster_id_str = arguments.get("cluster_id", "")
     if not cluster_id_str:
-        return _error_response("cluster_id is required")
+        return error_response("cluster_id is required")
     try:
         cluster_id = int(cluster_id_str)
     except ValueError:
-        return _error_response("cluster_id must be a valid integer")
+        return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_lke_service_token(cluster_id)
@@ -823,19 +823,19 @@ async def handle_linode_lke_acl_update(
     """Handle linode_lke_acl_update tool request."""
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return _error_response("Set confirm=true to proceed.")
+        return error_response("Set confirm=true to proceed.")
 
     cluster_id_str = arguments.get("cluster_id", "")
     if not cluster_id_str:
-        return _error_response("cluster_id is required")
+        return error_response("cluster_id is required")
     try:
         cluster_id = int(cluster_id_str)
     except ValueError:
-        return _error_response("cluster_id must be a valid integer")
+        return error_response("cluster_id must be a valid integer")
 
     acl = arguments.get("acl")
     if not acl:
-        return _error_response("acl is required")
+        return error_response("acl is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.update_lke_control_plane_acl(cluster_id, acl)
@@ -880,11 +880,11 @@ async def handle_linode_lke_acl_delete(
 
     cluster_id_str = arguments.get("cluster_id", "")
     if not cluster_id_str:
-        return _error_response("cluster_id is required")
+        return error_response("cluster_id is required")
     try:
         cluster_id = int(cluster_id_str)
     except ValueError:
-        return _error_response("cluster_id must be a valid integer")
+        return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_lke_control_plane_acl(cluster_id)

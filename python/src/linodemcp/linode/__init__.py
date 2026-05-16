@@ -10,6 +10,7 @@ import threading
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from dataclasses import field as dc_field
 from typing import Any, TypeVar
 from urllib.parse import quote, urlencode
 
@@ -372,6 +373,106 @@ class Backups:
     last_successful: Backup | None = None
 
 
+# CURRENT_INTERFACE_GENERATION is the Linode Interfaces generation this codebase
+# targets. The Linode API rejects POST /linode/instances payloads whose
+# interface_generation does not match the account's enabled generation, so this
+# constant is the single source of truth for the wire value. Mirrors the Go
+# linode.CurrentInterfaceGeneration constant.
+CURRENT_INTERFACE_GENERATION = "linode"
+
+
+@dataclass
+class InterfaceIPv4Address:
+    """Single IPv4 address on an interface."""
+
+    address: str
+    primary: bool = False
+
+
+@dataclass
+class InterfaceIPv6Range:
+    """IPv6 range on an interface."""
+
+    range: str
+
+
+@dataclass
+class InterfacePublicIPv4:
+    """Public IPv4 sub-config. Field set is conservative pending live capture."""
+
+    addresses: list[InterfaceIPv4Address] = dc_field(
+        default_factory=list[InterfaceIPv4Address]
+    )
+
+
+@dataclass
+class InterfacePublicIPv6:
+    """Public IPv6 sub-config. Field set is conservative pending live capture."""
+
+    ranges: list[InterfaceIPv6Range] = dc_field(
+        default_factory=list[InterfaceIPv6Range]
+    )
+
+
+@dataclass
+class InterfacePublicConfig:
+    """Public-interface configuration."""
+
+    ipv4: InterfacePublicIPv4 | None = None
+    ipv6: InterfacePublicIPv6 | None = None
+
+
+@dataclass
+class InterfaceVPCIPv4:
+    """VPC IPv4 sub-config."""
+
+    addresses: list[InterfaceIPv4Address] = dc_field(
+        default_factory=list[InterfaceIPv4Address]
+    )
+
+
+@dataclass
+class InterfaceVPCConfig:
+    """VPC-attached-interface configuration."""
+
+    subnet_id: int
+    ipv4: InterfaceVPCIPv4 | None = None
+
+
+@dataclass
+class InterfaceVLANConfig:
+    """VLAN-attached-interface configuration."""
+
+    vlan_label: str
+    ipam_address: str = ""
+
+
+@dataclass
+class InterfaceDefaultRoute:
+    """Whether the interface owns the default route per address family. A
+    family is sent only when True; False values are omitted from the wire so
+    the API treats them as unset.
+    """
+
+    ipv4: bool = False
+    ipv6: bool = False
+
+
+@dataclass
+class InstanceInterface:
+    """Network interface on a Linode instance under the current Interfaces
+    generation. Exactly one of public, vpc, or vlan is set per interface.
+    """
+
+    id: int = 0
+    public: InterfacePublicConfig | None = None
+    vpc: InterfaceVPCConfig | None = None
+    vlan: InterfaceVLANConfig | None = None
+    default_route: InterfaceDefaultRoute | None = None
+    firewall_id: int | None = None
+    mac_address: str = ""
+
+
 @dataclass
 class Instance:
     """Linode instance."""
@@ -393,6 +494,10 @@ class Instance:
     group: str
     tags: list[str]
     watchdog_enabled: bool
+    interface_generation: str = ""
+    interfaces: list[InstanceInterface] = dc_field(
+        default_factory=list[InstanceInterface]
+    )
 
 
 @dataclass
@@ -864,6 +969,61 @@ class VPCIP:
     gateway: str | None
     prefix: int | None
     subnet_mask: str | None
+
+
+def _build_public_interface_entry(
+    firewall_id: int, route_ipv4: bool, route_ipv6: bool
+) -> dict[str, Any]:
+    """Build a single public-interface entry for the POST /linode/instances
+    payload. default_route keys are included only when True so the API does
+    not see "ipv4": false as "this interface owns the IPv4 default."
+    """
+    default_route: dict[str, bool] = {}
+    if route_ipv4:
+        default_route["ipv4"] = True
+    if route_ipv6:
+        default_route["ipv6"] = True
+
+    entry: dict[str, Any] = {
+        "public": {},
+        "firewall_id": firewall_id,
+    }
+    if default_route:
+        entry["default_route"] = default_route
+
+    return entry
+
+
+def _parse_default_route(data: dict[str, Any] | None) -> InterfaceDefaultRoute | None:
+    """Parse a default_route subobject. Missing or empty returns None so the
+    caller can leave the field unset.
+    """
+    if not data:
+        return None
+
+    return InterfaceDefaultRoute(
+        ipv4=bool(data.get("ipv4", False)),
+        ipv6=bool(data.get("ipv6", False)),
+    )
+
+
+def _parse_instance_interface(data: dict[str, Any]) -> InstanceInterface:
+    """Parse a single interface object from the API response. Only top-level
+    fields and the default_route subobject are extracted; deeper sub-config
+    parsing (public.ipv4.addresses, vpc.ipv4.addresses, etc.) is deferred to
+    the live-response capture follow-up tracked in the spec's sticky issue.
+    """
+    public: InterfacePublicConfig | None = None
+    if "public" in data and data["public"] is not None:
+        public = InterfacePublicConfig()
+
+    return InstanceInterface(
+        id=data.get("id", 0),
+        public=public,
+        default_route=_parse_default_route(data.get("default_route")),
+        firewall_id=data.get("firewall_id"),
+        mac_address=data.get("mac_address", ""),
+    )
 
 
 class Client:
@@ -1503,6 +1663,7 @@ class Client:
         self,
         region: str,
         instance_type: str,
+        firewall_id: int,
         image: str | None = None,
         label: str | None = None,
         root_pass: str | None = None,
@@ -1510,10 +1671,15 @@ class Client:
         authorized_users: list[str] | None = None,
         booted: bool = True,
         backups_enabled: bool = False,
-        private_ip: bool = False,
+        route_ipv4: bool = True,
+        route_ipv6: bool = True,
         tags: list[str] | None = None,
     ) -> Instance:
-        """Create a new Linode instance."""
+        """Create a new Linode instance under the current Linode Interfaces
+        generation. firewall_id is required: the API rejects payloads without
+        an interface-level firewall with "must have at least 1 interface
+        defined to boot".
+        """
         validate_label(label)
         validate_root_password(root_pass)
 
@@ -1528,7 +1694,10 @@ class Client:
                 "type": instance_type,
                 "booted": booted,
                 "backups_enabled": backups_enabled,
-                "private_ip": private_ip,
+                "interface_generation": CURRENT_INTERFACE_GENERATION,
+                "interfaces": [
+                    _build_public_interface_entry(firewall_id, route_ipv4, route_ipv6),
+                ],
             }
             if image:
                 body["image"] = image
@@ -3136,6 +3305,11 @@ class Client:
             last_successful=last_backup,
         )
 
+        interfaces = [
+            _parse_instance_interface(iface_data)
+            for iface_data in data.get("interfaces", [])
+        ]
+
         return Instance(
             id=data.get("id", 0),
             label=data.get("label", ""),
@@ -3154,6 +3328,8 @@ class Client:
             group=data.get("group", ""),
             tags=data.get("tags", []),
             watchdog_enabled=data.get("watchdog_enabled", False),
+            interface_generation=data.get("interface_generation", ""),
+            interfaces=interfaces,
         )
 
     def _parse_account(self, data: dict[str, Any]) -> Account:
@@ -3936,6 +4112,7 @@ class RetryableClient:
         self,
         region: str,
         instance_type: str,
+        firewall_id: int,
         image: str | None = None,
         label: str | None = None,
         root_pass: str | None = None,
@@ -3943,14 +4120,18 @@ class RetryableClient:
         authorized_users: list[str] | None = None,
         booted: bool = True,
         backups_enabled: bool = False,
-        private_ip: bool = False,
+        route_ipv4: bool = True,
+        route_ipv6: bool = True,
         tags: list[str] | None = None,
     ) -> Instance:
-        """Create instance with retry."""
+        """Create instance with retry. firewall_id is required under the
+        current Linode Interfaces generation.
+        """
         result: Instance = await self._execute_with_retry(
             self.client.create_instance,
             region,
             instance_type,
+            firewall_id,
             image,
             label,
             root_pass,
@@ -3958,7 +4139,8 @@ class RetryableClient:
             authorized_users,
             booted,
             backups_enabled,
-            private_ip,
+            route_ipv4,
+            route_ipv6,
             tags,
         )
         return result
