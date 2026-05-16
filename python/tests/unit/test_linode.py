@@ -910,6 +910,48 @@ class TestMakeRequestBody:
 
         await client.close()
 
+    async def test_create_monitor_service_token_post_shape(self) -> None:
+        """POST to monitor token endpoint URL-encodes the service_type."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "token": "jwt.payload.signature",
+            "expiry": "2026-06-01T00:00:00Z",
+        }
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = mock_response
+
+            result = await client.create_monitor_service_token(
+                "weird/type with space", [10, 20]
+            )
+
+            # Path segment is URL-encoded so "/" and " " never escape the segment.
+            url_arg = mock_req.call_args[0][1]
+            assert url_arg.endswith(
+                "/monitor/services/weird%2Ftype%20with%20space/token"
+            )
+            assert mock_req.call_args[1]["json"] == {"entity_ids": [10, 20]}
+            assert result["token"] == "jwt.payload.signature"
+            assert result["expiry"] == "2026-06-01T00:00:00Z"
+
+        await client.close()
+
+    async def test_create_monitor_service_token_rejects_empty_inputs(self) -> None:
+        """Client raises ValueError before issuing a request for empty inputs."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            with pytest.raises(ValueError, match="service_type"):
+                await client.create_monitor_service_token("", [1])
+            with pytest.raises(ValueError, match="entity_ids"):
+                await client.create_monitor_service_token("dbaas", [])
+            mock_req.assert_not_called()
+
+        await client.close()
+
     async def test_get_has_no_json_body(self) -> None:
         """GET without body should not pass json= to the underlying client."""
         client = Client("https://api.linode.com/v4", "test-token")
