@@ -213,4 +213,4 @@ async def test_ipv6_range_create_tool_is_exported_and_registered(
     assert "handle_linode_ipv6_range_create" in tools_mod.__all__
 
     srv = Server(sample_config)
-    assert "linode_ipv6_range_create" in srv._config_handlers
+    assert "linode_ipv6_range_create" in srv.registered_tool_names

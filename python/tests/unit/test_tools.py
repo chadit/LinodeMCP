@@ -4728,7 +4728,7 @@ async def test_vlan_delete_tool_definition() -> None:
     """VLAN delete tool should have correct name and required params."""
     tool = create_linode_vlan_delete_tool()
     assert tool.name == "linode_vlan_delete"
-    required = tool.inputSchema.get("required") or []
+    required: list[str] = tool.inputSchema.get("required") or []
     assert "region_id" in required
     assert "label" in required
     assert "confirm" in required

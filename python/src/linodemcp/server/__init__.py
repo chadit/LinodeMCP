@@ -107,6 +107,11 @@ class Server:
         self._idle.set()
         self._register_tools()
 
+    @property
+    def registered_tool_names(self) -> frozenset[str]:
+        """Names of tools registered with the MCP server."""
+        return frozenset(entry.name for entry in _TOOL_REGISTRY)
+
     async def dispatch(self, name: str, arguments: dict[str, Any]) -> list[Any]:
         """Invoke a registered tool handler with in-flight tracking.
 
