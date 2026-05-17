@@ -284,6 +284,83 @@ async def handle_linode_volume_resize(
     return await execute_tool(cfg, arguments, "resize volume", _call)
 
 
+def create_linode_volume_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_volume_update tool."""
+    return Tool(
+        name="linode_volume_update",
+        description="Updates a block storage volume label or tags.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "volume_id": {
+                    "type": "integer",
+                    "description": "The ID of the volume to update (required)",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "New volume label (optional)",
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Replacement tags for the volume (optional)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm update.",
+                },
+            },
+            "required": ["volume_id", "confirm"],
+        },
+    ), Capability.Unknown
+
+
+async def handle_linode_volume_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_volume_update tool request."""
+    volume_id = arguments.get("volume_id", 0)
+    confirm = arguments.get("confirm", False)
+    label = arguments.get("label")
+    tags = arguments.get("tags")
+
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text="Error: This updates a volume. Set confirm=true to proceed.",
+            )
+        ]
+
+    if not volume_id:
+        return error_response("volume_id is required")
+    if label is None and tags is None:
+        return error_response("label or tags is required")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        volume = await client.update_volume(
+            volume_id=int(volume_id),
+            label=label,
+            tags=tags,
+        )
+        return {
+            "message": f"Volume {volume_id} updated successfully",
+            "volume": {
+                "id": volume.id,
+                "label": volume.label,
+                "tags": volume.tags,
+            },
+        }
+
+    return await execute_tool(cfg, arguments, "update volume", _call)
+
+
 def create_linode_volume_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_volume_delete tool."""
     return Tool(
