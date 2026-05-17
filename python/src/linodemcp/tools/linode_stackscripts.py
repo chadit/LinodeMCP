@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DESCRIPTION_TRUNCATE_LIMIT,
+    error_response,
     execute_tool,
 )
 
@@ -112,6 +113,115 @@ async def handle_linode_stackscripts_list(
         return response
 
     return await execute_tool(cfg, arguments, "retrieve StackScripts", _call)
+
+
+def create_linode_stackscript_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_stackscript_create tool."""
+    return Tool(
+        name="linode_stackscript_create",
+        description="Creates a StackScript for deploying configured Linodes.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Display label for the StackScript (required)",
+                },
+                "images": {
+                    "type": "array",
+                    "description": (
+                        "Image IDs deployable with this StackScript (required)"
+                    ),
+                    "items": {"type": "string"},
+                },
+                "script": {
+                    "type": "string",
+                    "description": "Script executed during provisioning (required)",
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Description for the StackScript",
+                },
+                "is_public": {
+                    "type": "boolean",
+                    "description": "Whether other users can use this StackScript",
+                },
+                "rev_note": {
+                    "type": "string",
+                    "description": "Notes for this StackScript revision",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this mutating operation.",
+                },
+            },
+            "required": ["label", "images", "script", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_stackscript_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_stackscript_create tool request."""
+    if not arguments.get("confirm"):
+        return error_response(
+            "This creates a StackScript. Set confirm=true to proceed."
+        )
+
+    label = arguments.get("label", "")
+    images_arg: object = arguments.get("images", [])
+    script = arguments.get("script", "")
+
+    if not label:
+        return error_response("label is required")
+    if not isinstance(images_arg, list) or not images_arg:
+        return error_response("images must be a non-empty list")
+    image_values = cast("list[object]", images_arg)
+    images: list[str] = []
+    for image in image_values:
+        if not isinstance(image, str) or not image:
+            return error_response("images must contain non-empty strings")
+        images.append(image)
+    if not script:
+        return error_response("script is required")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        stackscript = await client.create_stackscript(
+            label=label,
+            images=images,
+            script=script,
+            description=arguments.get("description"),
+            is_public=arguments.get("is_public"),
+            rev_note=arguments.get("rev_note"),
+        )
+        return {
+            "message": (
+                f"StackScript '{stackscript.label}' "
+                f"(ID: {stackscript.id}) created successfully"
+            ),
+            "stackscript": {
+                "id": stackscript.id,
+                "label": stackscript.label,
+                "username": stackscript.username,
+                "description": truncate_string(
+                    stackscript.description, DESCRIPTION_TRUNCATE_LIMIT
+                ),
+                "images": stackscript.images,
+                "is_public": stackscript.is_public,
+                "mine": stackscript.mine,
+                "created": stackscript.created,
+                "updated": stackscript.updated,
+            },
+        }
+
+    return await execute_tool(cfg, arguments, "create StackScript", _call)
 
 
 def truncate_string(value: str, limit: int) -> str:

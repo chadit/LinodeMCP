@@ -1187,6 +1187,59 @@ async def test_list_stackscripts() -> None:
     await client.close()
 
 
+async def test_create_stackscript() -> None:
+    """Test creating a StackScript."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "id": 1,
+        "username": "testuser",
+        "user_gravatar_id": "abc123",
+        "label": "my-script",
+        "description": "Test script",
+        "images": ["linode/ubuntu22.04"],
+        "deployments_total": 0,
+        "deployments_active": 0,
+        "is_public": False,
+        "mine": True,
+        "created": "2024-01-01T00:00:00",
+        "updated": "2024-01-01T00:00:00",
+        "script": "#!/bin/bash",
+        "user_defined_fields": [],
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        stackscript = await client.create_stackscript(
+            label="my-script",
+            images=["linode/ubuntu22.04"],
+            script="#!/bin/bash",
+            description="Test script",
+            is_public=False,
+            rev_note="Initial revision",
+        )
+
+        mock_request.assert_called_once_with(
+            "POST",
+            "/linode/stackscripts",
+            {
+                "label": "my-script",
+                "images": ["linode/ubuntu22.04"],
+                "script": "#!/bin/bash",
+                "description": "Test script",
+                "is_public": False,
+                "rev_note": "Initial revision",
+            },
+        )
+        assert stackscript.id == 1
+        assert stackscript.label == "my-script"
+
+    await client.close()
+
+
 # Validation function tests
 
 
