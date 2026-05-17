@@ -54,6 +54,7 @@ FEATURE_TOOLS_LIST = (
     "linode_object_storage_type_list,linode_object_storage_keys_list,"
     "linode_object_storage_key_get,linode_object_storage_transfer,"
     "linode_object_storage_bucket_access_get,"
+    "linode_object_storage_bucket_access_allow,"
     "linode_object_storage_bucket_create,linode_object_storage_bucket_delete,"
     "linode_object_storage_bucket_access_update,"
     "linode_object_storage_key_create,linode_object_storage_key_update,"

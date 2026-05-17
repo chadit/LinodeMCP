@@ -971,6 +971,30 @@ async def test_list_firewalls() -> None:
     await client.close()
 
 
+async def test_allow_object_storage_bucket_access() -> None:
+    """Test allowing Object Storage bucket access."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_response = MagicMock()
+        mock_response.json.return_value = {}
+        mock_request.return_value = mock_response
+
+        result = await client.allow_object_storage_bucket_access(
+            "us-east-1",
+            "app-bucket",
+            acl="public-read",
+            cors_enabled=True,
+        )
+
+        assert result == {}
+        mock_request.assert_called_once_with(
+            "POST",
+            "/object-storage/buckets/us-east-1/app-bucket/access",
+            {"acl": "public-read", "cors_enabled": True},
+        )
+
+
 async def test_upload_bucket_ssl() -> None:
     """Test uploading an Object Storage bucket SSL certificate."""
     client = Client("https://api.linode.com/v4", "test-token")
