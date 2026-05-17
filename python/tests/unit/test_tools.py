@@ -57,6 +57,7 @@ from linodemcp.tools import (
     create_linode_instance_password_reset_tool,
     create_linode_instance_rebuild_tool,
     create_linode_instance_rescue_tool,
+    create_linode_instance_update_tool,
     create_linode_ipv6_range_create_tool,
     create_linode_ipv6_range_delete_tool,
     create_linode_ipv6_range_get_tool,
@@ -119,6 +120,7 @@ from linodemcp.tools import (
     handle_linode_instance_rescue,
     handle_linode_instance_resize,
     handle_linode_instance_shutdown,
+    handle_linode_instance_update,
     handle_linode_instances_list,
     handle_linode_ipv6_range_create,
     handle_linode_ipv6_range_delete,
@@ -2062,6 +2064,105 @@ async def test_handle_linode_instance_create(
 
         assert len(result) == 1
         assert "created" in result[0].text.lower()
+
+
+async def test_handle_linode_instance_update_no_confirm(sample_config: Config) -> None:
+    """Test linode_instance_update tool without confirmation."""
+    result = await handle_linode_instance_update(
+        {"instance_id": 12345, "label": "updated-instance"}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "confirm" in result[0].text.lower()
+
+
+async def test_handle_linode_instance_update_missing_field(
+    sample_config: Config,
+) -> None:
+    """Test linode_instance_update tool with no update fields."""
+    result = await handle_linode_instance_update(
+        {"instance_id": 12345, "confirm": True}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "at least one update field" in result[0].text.lower()
+
+
+def test_linode_instance_update_tool_schema() -> None:
+    """The update tool schema exposes documented editable fields."""
+    tool, capability = create_linode_instance_update_tool()
+    props: dict[str, Any] = tool.inputSchema["properties"]
+
+    assert tool.name == "linode_instance_update"
+    assert capability.name == "Write"
+    assert "instance_id" in tool.inputSchema["required"]
+    assert "confirm" in tool.inputSchema["required"]
+    for field in (
+        "label",
+        "group",
+        "tags",
+        "alerts",
+        "maintenance_policy",
+        "watchdog_enabled",
+    ):
+        assert field in props
+
+
+async def test_handle_linode_instance_update(
+    sample_config: Config, sample_instance_data: dict[str, Any]
+) -> None:
+    """Test linode_instance_update tool."""
+    mock_instance = Instance(
+        id=sample_instance_data["id"],
+        label="updated-instance",
+        status=sample_instance_data["status"],
+        type=sample_instance_data["type"],
+        region=sample_instance_data["region"],
+        image=sample_instance_data["image"],
+        ipv4=sample_instance_data["ipv4"],
+        ipv6=sample_instance_data["ipv6"],
+        hypervisor=sample_instance_data["hypervisor"],
+        specs=Specs(**sample_instance_data["specs"]),
+        alerts=Alerts(**sample_instance_data["alerts"]),
+        backups=Backups(
+            enabled=sample_instance_data["backups"]["enabled"],
+            available=sample_instance_data["backups"]["available"],
+            schedule=Schedule(**sample_instance_data["backups"]["schedule"]),
+            last_successful=None,
+        ),
+        created=sample_instance_data["created"],
+        updated=sample_instance_data["updated"],
+        group=sample_instance_data["group"],
+        tags=["updated", "prod"],
+        watchdog_enabled=False,
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_instance.return_value = mock_instance
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_instance_update(
+            {
+                "instance_id": 12345,
+                "label": "updated-instance",
+                "tags": ["updated", "prod"],
+                "watchdog_enabled": False,
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "updated" in result[0].text.lower()
+        mock_client.update_instance.assert_called_once_with(
+            12345,
+            label="updated-instance",
+            tags=["updated", "prod"],
+            watchdog_enabled=False,
+        )
 
 
 async def test_handle_linode_instance_delete_no_confirm(sample_config: Config) -> None:

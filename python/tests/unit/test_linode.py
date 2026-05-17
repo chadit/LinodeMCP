@@ -1394,6 +1394,34 @@ class TestMakeRequestBody:
 
         await client.close()
 
+    async def test_update_instance_put_shape(
+        self, sample_instance_data: dict[str, Any]
+    ) -> None:
+        """PUT to a Linode instance sends the update body to the instance path."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {**sample_instance_data, "label": "updated"}
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = mock_response
+
+            result = await client.update_instance(
+                123, label="updated", tags=["prod"], watchdog_enabled=False
+            )
+
+            assert result.label == "updated"
+            assert mock_req.call_args[0][0] == "PUT"
+            assert mock_req.call_args[0][1].endswith("/linode/instances/123")
+            assert mock_req.call_args[1]["json"] == {
+                "label": "updated",
+                "tags": ["prod"],
+                "watchdog_enabled": False,
+            }
+
+        await client.close()
+
     async def test_create_monitor_service_token_post_shape(self) -> None:
         """POST to monitor token endpoint URL-encodes the service_type."""
         client = Client("https://api.linode.com/v4", "test-token")

@@ -322,6 +322,113 @@ async def handle_linode_instance_create(
     return await execute_tool(cfg, arguments, "create instance", _call)
 
 
+def create_linode_instance_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_update tool."""
+    return Tool(
+        name="linode_instance_update",
+        description="Updates editable fields on a Linode instance.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "instance_id": {
+                    "type": "integer",
+                    "description": "The ID of the instance to update (required)",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "New Linode label (optional)",
+                },
+                "group": {
+                    "type": "string",
+                    "description": "Deprecated group label (optional)",
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Tags to assign to the Linode (optional)",
+                },
+                "alerts": {
+                    "type": "object",
+                    "description": "Alert threshold settings (optional)",
+                },
+                "maintenance_policy": {
+                    "type": "string",
+                    "description": (
+                        "Maintenance policy, such as linode/migrate (optional)"
+                    ),
+                },
+                "watchdog_enabled": {
+                    "type": "boolean",
+                    "description": (
+                        "Whether Lassie shutdown watchdog is enabled (optional)"
+                    ),
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm update.",
+                },
+            },
+            "required": ["instance_id", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_instance_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_update tool request."""
+    instance_id = arguments.get("instance_id", 0)
+    confirm = arguments.get("confirm", False)
+
+    if not confirm:
+        return _error_response("Set confirm=true to update the instance.")
+
+    if not instance_id:
+        return _error_response("instance_id is required")
+
+    update_fields = {
+        key: arguments[key]
+        for key in (
+            "label",
+            "group",
+            "tags",
+            "alerts",
+            "maintenance_policy",
+            "watchdog_enabled",
+        )
+        if key in arguments
+    }
+
+    if not update_fields:
+        return _error_response(
+            "at least one update field is required: label, group, tags, alerts, "
+            "maintenance_policy, or watchdog_enabled"
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        instance = await client.update_instance(int(instance_id), **update_fields)
+        return {
+            "message": f"Instance {instance.id} updated successfully",
+            "instance": {
+                "id": instance.id,
+                "label": instance.label,
+                "status": instance.status,
+                "type": instance.type,
+                "region": instance.region,
+                "tags": instance.tags,
+                "watchdog_enabled": instance.watchdog_enabled,
+            },
+        }
+
+    return await execute_tool(cfg, arguments, "update instance", _call)
+
+
 def create_linode_instance_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_delete tool."""
     return Tool(
