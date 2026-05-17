@@ -189,6 +189,7 @@ from linodemcp.tools import (
     handle_linode_volume_delete,
     handle_linode_volume_detach,
     handle_linode_volume_resize,
+    handle_linode_volume_update,
     handle_linode_volumes_list,
     handle_linode_vpc_create,
     handle_linode_vpc_delete,
@@ -2450,6 +2451,71 @@ async def test_handle_linode_volume_resize(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "resize" in result[0].text.lower()
+
+
+async def test_handle_linode_volume_update_no_confirm(sample_config: Config) -> None:
+    """Test linode_volume_update tool without confirmation."""
+    result = await handle_linode_volume_update(
+        {"volume_id": 12345, "label": "renamed-volume"}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "confirm" in result[0].text.lower()
+
+
+async def test_handle_linode_volume_update_requires_change(
+    sample_config: Config,
+) -> None:
+    """Test linode_volume_update requires label or tags."""
+    result = await handle_linode_volume_update(
+        {"volume_id": 12345, "confirm": True}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "label or tags" in result[0].text.lower()
+
+
+async def test_handle_linode_volume_update(sample_config: Config) -> None:
+    """Test linode_volume_update tool."""
+    mock_volume = Volume(
+        id=12345,
+        label="renamed-volume",
+        status="active",
+        size=20,
+        region="us-east",
+        linode_id=None,
+        linode_label=None,
+        filesystem_path="/dev/disk/by-id/scsi-0Linode_Volume_renamed-volume",
+        created="2024-01-15T10:00:00",
+        updated="2024-01-15T12:00:00",
+        tags=["prod"],
+        hardware_type="nvme",
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_volume.return_value = mock_volume
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_volume_update(
+            {
+                "volume_id": 12345,
+                "label": "renamed-volume",
+                "tags": ["prod"],
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+        mock_client.update_volume.assert_awaited_once_with(
+            volume_id=12345,
+            label="renamed-volume",
+            tags=["prod"],
+        )
+        assert len(result) == 1
+        assert "updated" in result[0].text.lower()
 
 
 async def test_handle_linode_volume_delete_no_confirm(sample_config: Config) -> None:

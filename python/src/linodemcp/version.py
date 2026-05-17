@@ -46,7 +46,7 @@ FEATURE_TOOLS_LIST = (
     "linode_domain_create,linode_domain_update,linode_domain_delete,"
     "linode_domain_record_create,linode_domain_record_update,"
     "linode_domain_record_delete,linode_volume_create,linode_volume_attach,"
-    "linode_volume_detach,linode_volume_resize,linode_volume_delete,"
+    "linode_volume_detach,linode_volume_resize,linode_volume_update,linode_volume_delete,"
     "linode_nodebalancer_create,linode_nodebalancer_update,"
     "linode_nodebalancer_delete,"
     "linode_object_storage_buckets_list,linode_object_storage_bucket_get,"

@@ -2280,6 +2280,45 @@ class Client:
             logger.exception("HTTP error resizing volume: %s", e)
             raise NetworkError("ResizeVolume", e) from e
 
+    async def update_volume(
+        self,
+        volume_id: int,
+        label: str | None = None,
+        tags: list[str] | None = None,
+    ) -> Volume:
+        """Update a volume."""
+        endpoint = f"/volumes/{volume_id}"
+
+        if label is not None:
+            validate_label(label)
+
+        logger.info("Updating volume", extra={"volume_id": volume_id})
+
+        try:
+            body: dict[str, Any] = {}
+            if label is not None:
+                body["label"] = label
+            if tags is not None:
+                body["tags"] = tags
+
+            response = await self.make_request("PUT", endpoint, body)
+            data = response.json()
+            result = self._parse_volume(data)
+            logger.info("Volume updated", extra={"volume_id": volume_id})
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout updating volume: %s", e)
+            raise NetworkError("UpdateVolume", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout updating volume: %s", e)
+            raise NetworkError("UpdateVolume", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error updating volume")
+            raise NetworkError("UpdateVolume", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error updating volume: %s", e)
+            raise NetworkError("UpdateVolume", e) from e
+
     async def delete_volume(self, volume_id: int) -> None:
         """Delete a volume."""
         endpoint = f"/volumes/{volume_id}"
@@ -4402,6 +4441,18 @@ class RetryableClient:
     async def delete_volume(self, volume_id: int) -> None:
         """Delete volume with retry."""
         await self._execute_with_retry(self.client.delete_volume, volume_id)
+
+    async def update_volume(
+        self,
+        volume_id: int,
+        label: str | None = None,
+        tags: list[str] | None = None,
+    ) -> Volume:
+        """Update volume with retry."""
+        result: Volume = await self._execute_with_retry(
+            self.client.update_volume, volume_id, label, tags
+        )
+        return result
 
     async def create_nodebalancer(
         self,
