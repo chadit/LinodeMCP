@@ -20,11 +20,11 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		// Core / meta
 		{Name: "hello", Capability: profiles.CapMeta},
 		{Name: "version", Capability: profiles.CapMeta},
-		{Name: "linode_profile", Capability: profiles.CapRead},
-		{Name: "linode_account", Capability: profiles.CapRead},
+		{Name: toolProfile, Capability: profiles.CapRead},
+		{Name: toolAccount, Capability: profiles.CapRead},
 
 		// Compute reads
-		{Name: "linode_instances_list", Capability: profiles.CapRead},
+		{Name: toolInstancesList, Capability: profiles.CapRead},
 		{Name: "linode_instance_get", Capability: profiles.CapRead},
 		{Name: "linode_regions_list", Capability: profiles.CapRead},
 		{Name: "linode_types_list", Capability: profiles.CapRead},
@@ -32,7 +32,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_stackscripts_list", Capability: profiles.CapRead},
 		// Compute writes / destroys
 		{Name: "linode_instance_create", Capability: profiles.CapWrite},
-		{Name: "linode_instance_delete", Capability: profiles.CapDestroy},
+		{Name: toolInstanceDelete, Capability: profiles.CapDestroy},
 		{Name: "linode_instance_boot", Capability: profiles.CapWrite},
 		{Name: "linode_instance_reboot", Capability: profiles.CapWrite},
 		{Name: "linode_instance_shutdown", Capability: profiles.CapWrite},

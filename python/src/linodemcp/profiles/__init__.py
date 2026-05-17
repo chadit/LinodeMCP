@@ -19,6 +19,7 @@ from linodemcp.profiles.loader import (
     resolve_active_profile,
 )
 from linodemcp.profiles.profile import Profile
+from linodemcp.profiles.scope import Scope, required_scopes
 
 __all__ = [
     "DEFAULT_PROFILE_NAME",
@@ -27,8 +28,10 @@ __all__ = [
     "Capability",
     "Profile",
     "ProfileError",
+    "Scope",
     "ToolDescriptor",
     "builtin_catalog_json",
     "builtin_profiles",
+    "required_scopes",
     "resolve_active_profile",
 ]
