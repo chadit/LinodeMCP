@@ -11,7 +11,7 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from dataclasses import field as dc_field
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 from urllib.parse import quote, urlencode
 
 import httpx
@@ -308,7 +308,13 @@ class RetryableError(LinodeError):
 
 @dataclass
 class Profile:
-    """Linode user profile."""
+    """Linode user profile.
+
+    ``scopes`` is populated for personal access tokens (the ``/profile``
+    response includes the space-delimited scope string). OAuth tokens
+    leave it empty; Phase 6 scope validation falls back to
+    ``/profile/grants`` for those.
+    """
 
     username: str
     email: str
@@ -317,6 +323,79 @@ class Profile:
     restricted: bool
     two_factor_auth: bool
     uid: int
+    scopes: str = ""
+
+
+@dataclass
+class Grant:
+    """Permission an OAuth token has on a single Linode resource.
+
+    The Linode API groups grants by resource category (linode, domain,
+    nodebalancer, etc); each entry names a specific resource the token
+    can touch. ``permissions`` is ``"read_only"``, ``"read_write"``, or
+    an empty string when the OAuth grant carries no permission.
+    """
+
+    id: int
+    label: str
+    permissions: str
+
+
+@dataclass
+class GlobalGrants:
+    """Account-level permission booleans for an OAuth token.
+
+    Mirrors the Linode ``/profile/grants.global`` shape. Each capability
+    is its own bool, matching the wire format so scope-comparison code
+    can read them without magic-string lookups.
+    """
+
+    account_access: str = ""
+    add_databases: bool = False
+    add_domains: bool = False
+    add_firewalls: bool = False
+    add_images: bool = False
+    add_linodes: bool = False
+    add_longview: bool = False
+    add_nodebalancers: bool = False
+    add_stackscripts: bool = False
+    add_volumes: bool = False
+    add_vpcs: bool = False
+    cancel_account: bool = False
+    child_account_access: bool = False
+    longview_subscription: bool = False
+
+
+def _empty_grant_list() -> list[Grant]:
+    """Typed factory for per-resource grant slices in Grants defaults.
+
+    Plain ``default_factory=list`` resolves to ``list[Unknown]`` under
+    pyright strict; this helper pins the element type so dataclass
+    defaults round-trip cleanly through type checking.
+    """
+    return []
+
+
+@dataclass
+class Grants:
+    """Full ``/profile/grants`` response for OAuth tokens.
+
+    PATs always return an empty Grants object; their scope information is
+    on ``Profile.scopes`` instead. Phase 6's profile loader checks both.
+    """
+
+    global_: GlobalGrants = dc_field(default_factory=GlobalGrants)
+    linode: list[Grant] = dc_field(default_factory=_empty_grant_list)
+    domain: list[Grant] = dc_field(default_factory=_empty_grant_list)
+    nodebalancer: list[Grant] = dc_field(default_factory=_empty_grant_list)
+    image: list[Grant] = dc_field(default_factory=_empty_grant_list)
+    longview: list[Grant] = dc_field(default_factory=_empty_grant_list)
+    stackscript: list[Grant] = dc_field(default_factory=_empty_grant_list)
+    volume: list[Grant] = dc_field(default_factory=_empty_grant_list)
+    database: list[Grant] = dc_field(default_factory=_empty_grant_list)
+    firewall: list[Grant] = dc_field(default_factory=_empty_grant_list)
+    vpc: list[Grant] = dc_field(default_factory=_empty_grant_list)
+    lkecluster: list[Grant] = dc_field(default_factory=_empty_grant_list)
 
 
 @dataclass
@@ -1075,6 +1154,70 @@ class Client:
             restricted=data["restricted"],
             two_factor_auth=data["two_factor_auth"],
             uid=data["uid"],
+            scopes=data.get("scopes", "") or "",
+        )
+
+    def _parse_grant(self, data: dict[str, Any]) -> Grant:
+        """Parse a single per-resource OAuth grant entry."""
+        return Grant(
+            id=int(data.get("id", 0)),
+            label=str(data.get("label", "")),
+            permissions=str(data.get("permissions", "") or ""),
+        )
+
+    def _parse_grants(self, data: dict[str, Any]) -> Grants:
+        """Parse the /profile/grants response into a structured Grants.
+
+        PATs return an empty payload here; the returned Grants has all
+        empty lists and a zero-valued GlobalGrants. The Phase 6 loader
+        checks Profile.scopes first to decide which path to use.
+        """
+        global_raw_any: Any = data.get("global")
+        global_raw: dict[str, Any] = (
+            cast("dict[str, Any]", global_raw_any)
+            if isinstance(global_raw_any, dict)
+            else {}
+        )
+        global_grants = GlobalGrants(
+            account_access=str(global_raw.get("account_access", "") or ""),
+            add_databases=bool(global_raw.get("add_databases", False)),
+            add_domains=bool(global_raw.get("add_domains", False)),
+            add_firewalls=bool(global_raw.get("add_firewalls", False)),
+            add_images=bool(global_raw.get("add_images", False)),
+            add_linodes=bool(global_raw.get("add_linodes", False)),
+            add_longview=bool(global_raw.get("add_longview", False)),
+            add_nodebalancers=bool(global_raw.get("add_nodebalancers", False)),
+            add_stackscripts=bool(global_raw.get("add_stackscripts", False)),
+            add_volumes=bool(global_raw.get("add_volumes", False)),
+            add_vpcs=bool(global_raw.get("add_vpcs", False)),
+            cancel_account=bool(global_raw.get("cancel_account", False)),
+            child_account_access=bool(global_raw.get("child_account_access", False)),
+            longview_subscription=bool(global_raw.get("longview_subscription", False)),
+        )
+
+        def _list(key: str) -> list[Grant]:
+            raw: Any = data.get(key)
+            if not isinstance(raw, list):
+                return []
+            return [
+                self._parse_grant(cast("dict[str, Any]", item))
+                for item in cast("list[object]", raw)
+                if isinstance(item, dict)
+            ]
+
+        return Grants(
+            global_=global_grants,
+            linode=_list("linode"),
+            domain=_list("domain"),
+            nodebalancer=_list("nodebalancer"),
+            image=_list("image"),
+            longview=_list("longview"),
+            stackscript=_list("stackscript"),
+            volume=_list("volume"),
+            database=_list("database"),
+            firewall=_list("firewall"),
+            vpc=_list("vpc"),
+            lkecluster=_list("lkecluster"),
         )
 
     async def get_profile(self) -> Profile:
@@ -1095,6 +1238,22 @@ class Client:
             return self._parse_profile(data)
         except httpx.HTTPError as e:
             raise NetworkError("UpdateProfile", e) from e
+
+    async def get_profile_grants(self) -> Grants:
+        """Get the /profile/grants response for OAuth scope inspection.
+
+        PATs return an empty payload (200 with zero-valued fields); the
+        Phase 6 profile loader checks ``Profile.scopes`` first and only
+        consults Grants when the scope string is empty (OAuth path).
+        """
+        try:
+            response = await self.make_request("GET", "/profile/grants")
+            data: Any = response.json()
+            if not isinstance(data, dict):
+                return Grants()
+            return self._parse_grants(cast("dict[str, Any]", data))
+        except httpx.HTTPError as e:
+            raise NetworkError("GetProfileGrants", e) from e
 
     async def list_instances(self) -> list[Instance]:
         """List Linode instances."""
@@ -4018,6 +4177,11 @@ class RetryableClient:
         result: Profile = await self._execute_with_retry(
             lambda: self.client.update_profile(**fields)
         )
+        return result
+
+    async def get_profile_grants(self) -> Grants:
+        """Get /profile/grants with retry. PATs return an empty Grants."""
+        result: Grants = await self._execute_with_retry(self.client.get_profile_grants)
         return result
 
     async def list_instances(self) -> list[Instance]:

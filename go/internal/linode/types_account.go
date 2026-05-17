@@ -1,6 +1,9 @@
 package linode
 
-// Profile represents a Linode user profile.
+// Profile represents a Linode user profile. The Scopes field is populated
+// for personal access tokens via the /profile response; OAuth tokens leave
+// it empty and Phase 6 scope validation falls back to /profile/grants for
+// those. Other callers can ignore the field.
 type Profile struct {
 	Username           string `json:"username"`
 	Email              string `json:"email"`
@@ -9,6 +12,67 @@ type Profile struct {
 	EmailNotifications bool   `json:"email_notifications"`
 	Restricted         bool   `json:"restricted"`
 	TwoFactorAuth      bool   `json:"two_factor_auth"`
+	Scopes             string `json:"scopes,omitempty"`
+}
+
+// GrantPermission is one of "read_only", "read_write", or "" (no access).
+// The Linode API uses an explicit empty string when the OAuth grant carries
+// no permission on a resource, so we keep it as a string rather than an
+// enum so unknown future values round-trip cleanly.
+type GrantPermission string
+
+// Grant represents the permission an OAuth token has on a single resource
+// instance. The Linode /profile/grants response groups grants by resource
+// category (linode, domain, nodebalancer, etc); each entry inside the
+// category names a specific resource the token has access to.
+type Grant struct {
+	ID          int             `json:"id"`
+	Label       string          `json:"label"`
+	Permissions GrantPermission `json:"permissions"`
+}
+
+// Grants represents the full /profile/grants response for OAuth tokens.
+// Global covers account-level permissions (read/write per resource type);
+// the per-resource slices enumerate the specific instances the token can
+// touch. The shape mirrors the Linode API directly so future fields are
+// additive.
+//
+// PATs always return an empty Grants object; their scope information is
+// on Profile.Scopes instead. Phase 6's profile loader checks both.
+type Grants struct {
+	Global       GlobalGrants `json:"global"`
+	Linode       []Grant      `json:"linode"`
+	Domain       []Grant      `json:"domain"`
+	NodeBalancer []Grant      `json:"nodebalancer"`
+	Image        []Grant      `json:"image"`
+	Longview     []Grant      `json:"longview"`
+	StackScript  []Grant      `json:"stackscript"`
+	Volume       []Grant      `json:"volume"`
+	Database     []Grant      `json:"database"`
+	Firewall     []Grant      `json:"firewall"`
+	VPC          []Grant      `json:"vpc"`
+	LKECluster   []Grant      `json:"lkecluster"`
+}
+
+// GlobalGrants captures the account-level permission booleans the OAuth
+// flow returns. The Linode API exposes each capability as its own bool;
+// keeping them as separate fields matches the wire format and avoids
+// magic-string lookups in scope-comparison code.
+type GlobalGrants struct {
+	AccountAccess        GrantPermission `json:"account_access"`
+	AddDatabases         bool            `json:"add_databases"`
+	AddDomains           bool            `json:"add_domains"`
+	AddFirewalls         bool            `json:"add_firewalls"`
+	AddImages            bool            `json:"add_images"`
+	AddLinodes           bool            `json:"add_linodes"`
+	AddLongview          bool            `json:"add_longview"`
+	AddNodeBalancers     bool            `json:"add_nodebalancers"`
+	AddStackScripts      bool            `json:"add_stackscripts"`
+	AddVolumes           bool            `json:"add_volumes"`
+	AddVPCs              bool            `json:"add_vpcs"`
+	CancelAccount        bool            `json:"cancel_account"`
+	ChildAccountAccess   bool            `json:"child_account_access"`
+	LongviewSubscription bool            `json:"longview_subscription"`
 }
 
 // Account represents a Linode account.

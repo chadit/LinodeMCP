@@ -50,6 +50,24 @@ func (c *Client) GetProfile(ctx context.Context) (*Profile, error) {
 	return profile, err
 }
 
+// GetProfileGrants retrieves the /profile/grants response with retry. Used
+// by Phase 6's profile loader to enumerate OAuth scopes; PATs return an
+// empty Grants struct here and the loader should inspect Profile.Scopes
+// for them instead.
+func (c *Client) GetProfileGrants(ctx context.Context) (*Grants, error) {
+	var grants *Grants
+
+	err := c.executeWithRetry(ctx, "GetProfileGrants", func() error {
+		var err error
+
+		grants, err = c.httpGetProfileGrants(ctx)
+
+		return err
+	})
+
+	return grants, err
+}
+
 // ListInstances retrieves all instances with automatic retry on transient failures.
 func (c *Client) ListInstances(ctx context.Context) ([]Instance, error) {
 	var instances []Instance

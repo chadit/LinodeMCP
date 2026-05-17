@@ -13,6 +13,8 @@ from linodemcp.linode import (
     CircuitBreaker,
     CircuitOpenError,
     Client,
+    Grant,
+    Grants,
     NetworkError,
     Profile,
     RateLimiter,
@@ -99,6 +101,147 @@ async def test_update_profile_sends_put_to_profile_route(
         {"email": "updated@example.com", "timezone": "UTC"},
     )
 
+    await client.close()
+
+
+async def test_get_profile_parses_pat_scopes(
+    sample_profile_data: dict[str, Any],
+) -> None:
+    """PAT response with scopes string must round-trip into Profile.scopes.
+
+    The Linode API returns the space-delimited scope string on /profile
+    for personal access tokens; the Phase 6 loader reads this field
+    instead of /profile/grants when it's non-empty.
+    """
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    pat_response = {**sample_profile_data, "scopes": "linodes:read_write *"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = pat_response
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        profile = await client.get_profile()
+
+    assert profile.scopes == "linodes:read_write *", (
+        "PAT scopes from /profile must populate Profile.scopes"
+    )
+    await client.close()
+
+
+async def test_get_profile_oauth_leaves_scopes_empty(
+    sample_profile_data: dict[str, Any],
+) -> None:
+    """OAuth /profile response without scopes leaves Profile.scopes empty.
+
+    The Phase 6 loader uses Profile.scopes == "" as the signal to fall
+    back to /profile/grants. Tests guarantee that signal stays accurate.
+    """
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = sample_profile_data  # no scopes key
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        profile = await client.get_profile()
+
+    assert profile.scopes == "", (
+        "OAuth /profile (no scopes field) must leave Profile.scopes empty"
+    )
+    await client.close()
+
+
+async def test_get_profile_grants_parses_oauth_response() -> None:
+    """OAuth /profile/grants populates Grants with structured per-resource lists.
+
+    Verifies the global block, per-resource lists, and the GrantPermission
+    string values all round-trip. The Phase 6 loader walks this exact
+    shape to determine what an OAuth token can do.
+    """
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    grants_payload = {
+        "global": {
+            "account_access": "read_write",
+            "add_linodes": True,
+            "add_domains": False,
+            "cancel_account": False,
+        },
+        "linode": [
+            {"id": 42, "label": "web-1", "permissions": "read_write"},
+        ],
+        "domain": [
+            {"id": 7, "label": "example.com", "permissions": "read_only"},
+        ],
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = grants_payload
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        grants = await client.get_profile_grants()
+
+        mock_request.assert_called_once_with("GET", "/profile/grants")
+
+    assert isinstance(grants, Grants)
+    assert grants.global_.account_access == "read_write"
+    assert grants.global_.add_linodes is True
+    assert grants.global_.add_domains is False
+    assert len(grants.linode) == 1
+    assert grants.linode[0] == Grant(id=42, label="web-1", permissions="read_write")
+    assert len(grants.domain) == 1
+    assert grants.domain[0].permissions == "read_only"
+    # Unprovided categories default to empty lists.
+    assert grants.nodebalancer == []
+    assert grants.image == []
+
+    await client.close()
+
+
+async def test_get_profile_grants_pat_empty_payload() -> None:
+    """PAT /profile/grants returns an empty Grants without error.
+
+    The Linode API still answers 200 for PAT tokens hitting
+    /profile/grants but returns zero-valued fields. The parser must not
+    raise; the loader uses Profile.scopes to detect the PAT path anyway.
+    """
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        grants = await client.get_profile_grants()
+
+    assert isinstance(grants, Grants)
+    assert grants.linode == []
+    assert grants.global_.account_access == ""
+    assert grants.global_.add_linodes is False
+
+    await client.close()
+
+
+async def test_get_profile_grants_propagates_http_errors() -> None:
+    """A 401 on /profile/grants surfaces as NetworkError (wrapped httpx)."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("unauthorized")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.get_profile_grants()
+
+    assert "GetProfileGrants" in str(excinfo.value)
     await client.close()
 
 

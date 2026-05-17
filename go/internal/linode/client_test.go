@@ -42,6 +42,127 @@ func TestClientGetProfileSuccess(t *testing.T) {
 	assert.Equal(t, "test@example.com", result.Email, "email should match the API response")
 }
 
+// TestClientGetProfileWithScopes verifies that a personal access token
+// response with the Scopes field populated round-trips through GetProfile.
+// Phase 6 reads Profile.Scopes for PATs; OAuth tokens leave it empty and
+// the loader uses GetProfileGrants instead.
+func TestClientGetProfileWithScopes(t *testing.T) {
+	t.Parallel()
+
+	profile := linode.Profile{
+		Username: "patuser",
+		Email:    "pat@example.com",
+		Scopes:   "linodes:read_write domains:read_only",
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(profile))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "tok", nil, linode.WithMaxRetries(0))
+	result, err := client.GetProfile(t.Context())
+
+	require.NoError(t, err)
+	assert.Equal(t, "linodes:read_write domains:read_only", result.Scopes,
+		"PAT scopes from /profile must round-trip into Profile.Scopes")
+}
+
+// TestClientGetProfileGrantsSuccess covers the OAuth path: /profile/grants
+// returns a structured Grants response listing global flags plus per-
+// resource grant slices. The Phase 6 loader walks the same shape to
+// figure out what the OAuth token is permitted to do.
+func TestClientGetProfileGrantsSuccess(t *testing.T) {
+	t.Parallel()
+
+	want := linode.Grants{
+		Global: linode.GlobalGrants{
+			AccountAccess: "read_write",
+			AddLinodes:    true,
+			AddDomains:    false,
+		},
+		Linode: []linode.Grant{
+			{ID: 42, Label: "web-1", Permissions: "read_write"},
+		},
+		Domain: []linode.Grant{
+			{ID: 7, Label: "example.com", Permissions: "read_only"},
+		},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/profile/grants", r.URL.Path,
+			"request path should be /profile/grants")
+		assert.Equal(t, "Bearer oauth-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(want))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "oauth-token", nil, linode.WithMaxRetries(0))
+	got, err := client.GetProfileGrants(t.Context())
+
+	require.NoError(t, err, "GetProfileGrants should succeed on 200 response")
+	require.NotNil(t, got)
+	assert.Equal(t, linode.GrantPermission("read_write"), got.Global.AccountAccess,
+		"global account_access must round-trip")
+	assert.True(t, got.Global.AddLinodes,
+		"global add_linodes must round-trip")
+	require.Len(t, got.Linode, 1)
+	assert.Equal(t, "web-1", got.Linode[0].Label)
+	assert.Equal(t, linode.GrantPermission("read_write"), got.Linode[0].Permissions)
+	require.Len(t, got.Domain, 1)
+	assert.Equal(t, linode.GrantPermission("read_only"), got.Domain[0].Permissions)
+}
+
+// TestClientGetProfileGrantsPATEmpty verifies that a PAT (which doesn't use
+// OAuth grants) returning an empty grants payload still parses cleanly.
+// The Linode API returns 200 with zero-valued fields for this case; the
+// Phase 6 loader detects "use PAT scopes path" by checking
+// Profile.Scopes != "" before consulting Grants.
+func TestClientGetProfileGrantsPATEmpty(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.Grants{}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "pat-token", nil, linode.WithMaxRetries(0))
+	got, err := client.GetProfileGrants(t.Context())
+
+	require.NoError(t, err, "empty grants response must parse cleanly")
+	require.NotNil(t, got)
+	assert.Empty(t, got.Linode, "no Linode grants expected on PAT path")
+	assert.Empty(t, got.Global.AccountAccess, "no global permission expected")
+}
+
+// TestClientGetProfileGrantsUnauthorized confirms 401 propagates as an
+// APIError from GetProfileGrants, matching the GetProfile contract so
+// Phase 6's loader can use the same error path for both calls.
+func TestClientGetProfileGrantsUnauthorized(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			"errors": []map[string]string{{"reason": "Invalid Token"}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "bad-token", nil, linode.WithMaxRetries(0))
+	_, err := client.GetProfileGrants(t.Context())
+
+	require.Error(t, err)
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr,
+		"GetProfileGrants must return APIError on 401")
+	assert.Equal(t, http.StatusUnauthorized, apiErr.StatusCode)
+}
+
 // TestClientGetProfileUnauthorized verifies that GetProfile returns an
 // APIError with status 401 when the API rejects the token.
 func TestClientGetProfileUnauthorized(t *testing.T) {
