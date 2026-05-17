@@ -56,6 +56,7 @@ from linodemcp.tools import (
     create_linode_instance_password_reset_tool,
     create_linode_instance_rebuild_tool,
     create_linode_instance_rescue_tool,
+    create_linode_ipv6_range_create_tool,
     create_linode_ipv6_range_delete_tool,
     create_linode_lke_cluster_create_tool,
     create_linode_lke_cluster_delete_tool,
@@ -116,6 +117,7 @@ from linodemcp.tools import (
     handle_linode_instance_resize,
     handle_linode_instance_shutdown,
     handle_linode_instances_list,
+    handle_linode_ipv6_range_create,
     handle_linode_ipv6_range_delete,
     handle_linode_lke_acl_delete,
     handle_linode_lke_acl_get,
@@ -4756,6 +4758,20 @@ async def test_vpc_delete_tool_definition() -> None:
     assert "confirm" in required
 
 
+async def test_ipv6_range_create_tool_definition() -> None:
+    """IPv6 range create tool should require prefix_length and confirm."""
+    tool = create_linode_ipv6_range_create_tool()
+    assert tool.name == "linode_ipv6_range_create"
+    required: list[str] = tool.inputSchema.get("required") or []
+    properties: dict[str, Any] = tool.inputSchema.get("properties") or {}
+    assert "prefix_length" in required
+    assert "confirm" in required
+    assert "linode_id" in properties
+    assert "route_target" in properties
+    assert "linode_id" not in required
+    assert "route_target" not in required
+
+
 async def test_ipv6_range_delete_tool_definition() -> None:
     """IPv6 range delete tool should require range and confirm."""
     tool = create_linode_ipv6_range_delete_tool()
@@ -5012,6 +5028,109 @@ async def test_vpc_delete_success(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "deleted" in result[0].text.lower()
+
+
+async def test_ipv6_range_create_validation_errors(sample_config: Config) -> None:
+    """IPv6 range create should validate confirmation and documented fields."""
+    cases: list[tuple[dict[str, Any], str]] = [
+        (
+            {"prefix_length": 64, "linode_id": 123, "confirm": False},
+            "confirm=true",
+        ),
+        ({"linode_id": 123, "confirm": True}, "prefix_length"),
+        (
+            {"prefix_length": 48, "linode_id": 123, "confirm": True},
+            "56 or 64",
+        ),
+        ({"prefix_length": 64, "confirm": True}, "linode_id or route_target"),
+        (
+            {
+                "prefix_length": 64,
+                "linode_id": 123,
+                "route_target": "2001:0db8::1",
+                "confirm": True,
+            },
+            "mutually exclusive",
+        ),
+        (
+            {"prefix_length": 64, "linode_id": "bad-id", "confirm": True},
+            "valid integer",
+        ),
+        (
+            {"prefix_length": 64, "route_target": "   ", "confirm": True},
+            "non-empty",
+        ),
+    ]
+
+    for arguments, expected_message in cases:
+        result = list(await handle_linode_ipv6_range_create(arguments, sample_config))
+
+        assert len(result) == 1
+        assert expected_message in result[0].text
+
+
+async def test_ipv6_range_create_success_with_linode_id(
+    sample_config: Config,
+) -> None:
+    """IPv6 range create should call the retryable client with linode_id."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.create_ipv6_range.return_value = {
+            "range": "2001:0db8::/64",
+            "route_target": "2001:0db8::1",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_ipv6_range_create(
+                {"prefix_length": "64", "linode_id": "123", "confirm": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "2001:0db8::/64" in result[0].text
+        mock_client.create_ipv6_range.assert_called_once_with(
+            prefix_length=64,
+            linode_id=123,
+            route_target=None,
+        )
+
+
+async def test_ipv6_range_create_success_with_route_target(
+    sample_config: Config,
+) -> None:
+    """IPv6 range create should call the retryable client with route_target."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.create_ipv6_range.return_value = {
+            "range": "2001:0db8::/56",
+            "route_target": "2001:0db8::1",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_ipv6_range_create(
+                {
+                    "prefix_length": 56,
+                    "route_target": " 2001:0db8::1 ",
+                    "confirm": True,
+                },
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "2001:0db8::/56" in result[0].text
+        mock_client.create_ipv6_range.assert_called_once_with(
+            prefix_length=56,
+            linode_id=None,
+            route_target="2001:0db8::1",
+        )
 
 
 async def test_ipv6_range_delete_confirm_required(sample_config: Config) -> None:

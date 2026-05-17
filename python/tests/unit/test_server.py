@@ -201,3 +201,16 @@ async def test_all_listed_tools_have_handlers(
         f"Tool/handler count mismatch: {len(non_utility_tools)} tools"
         f" vs {len(config_handles)} handlers"
     )
+
+
+async def test_ipv6_range_create_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """IPv6 range create tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_ipv6_range_create_tool" in tools_mod.__all__
+    assert "handle_linode_ipv6_range_create" in tools_mod.__all__
+
+    srv = Server(sample_config)
+    assert "linode_ipv6_range_create" in srv._config_handlers

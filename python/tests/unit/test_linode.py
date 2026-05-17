@@ -307,6 +307,53 @@ async def test_network_error() -> None:
     await client.close()
 
 
+async def test_create_ipv6_range_posts_linode_id_body() -> None:
+    """Creating an IPv6 range should POST the linode_id payload."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {
+        "range": "2001:0db8::/64",
+        "route_target": "2001:0db8::1",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        result = await client.create_ipv6_range(64, linode_id=123)
+
+        assert result == response.json.return_value
+        mock_request.assert_awaited_once_with(
+            "POST",
+            "/networking/ipv6/ranges",
+            {"prefix_length": 64, "linode_id": 123},
+        )
+
+    await client.close()
+
+
+async def test_create_ipv6_range_posts_route_target_body() -> None:
+    """Creating an IPv6 range should POST the route_target payload."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {
+        "range": "2001:0db8::/56",
+        "route_target": "2001:0db8::1",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        await client.create_ipv6_range(56, route_target="2001:0db8::1")
+
+        mock_request.assert_awaited_once_with(
+            "POST",
+            "/networking/ipv6/ranges",
+            {"prefix_length": 56, "route_target": "2001:0db8::1"},
+        )
+
+    await client.close()
+
+
 async def test_delete_ipv6_range_encodes_range_path() -> None:
     """Deleting an IPv6 range should encode the complete path segment."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -318,6 +365,26 @@ async def test_delete_ipv6_range_encodes_range_path() -> None:
             "DELETE",
             "/networking/ipv6/ranges/2001%3A0db8%3A%3A%2F64",
         )
+
+    await client.close()
+
+
+async def test_retryable_create_ipv6_range_delegates_to_client() -> None:
+    """Retryable client should delegate IPv6 range creation."""
+    client = RetryableClient(
+        "https://api.linode.com/v4",
+        "test-token",
+        RetryConfig(max_retries=1, base_delay=0.01),
+    )
+
+    with patch.object(
+        client.client,
+        "create_ipv6_range",
+        new_callable=AsyncMock,
+    ) as mock_create:
+        await client.create_ipv6_range(64, linode_id=123)
+
+        mock_create.assert_awaited_once_with(64, 123, None)
 
     await client.close()
 

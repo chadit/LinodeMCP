@@ -40,6 +40,29 @@ _IPV6_RANGE_PROP: dict[str, Any] = {
     ),
 }
 
+_IPV6_PREFIX_LENGTH_KEY = "prefix_length"
+_LINODE_ID_KEY = "linode_id"
+_ROUTE_TARGET_KEY = "route_target"
+_IPV6_PREFIX_LENGTH_PROP: dict[str, Any] = {
+    "type": "integer",
+    "enum": [56, 64],
+    "description": "The prefix length of the IPv6 range. Must be 56 or 64.",
+}
+_LINODE_ID_PROP: dict[str, Any] = {
+    "type": "integer",
+    "description": (
+        "The ID of the Linode to assign this range to. Required when "
+        "route_target is omitted."
+    ),
+}
+_ROUTE_TARGET_PROP: dict[str, Any] = {
+    "type": "string",
+    "description": (
+        "The IPv6 SLAAC address to assign this range to. Required when "
+        "linode_id is omitted."
+    ),
+}
+
 
 def _parse_vpc_subnet_ids(
     arguments: dict[str, Any],
@@ -66,6 +89,61 @@ def _parse_vpc_subnet_ids(
         return error_response("subnet_id must be a valid integer")
 
     return (vpc_id, subnet_id)
+
+
+def _parse_ipv6_prefix_length(arguments: dict[str, Any]) -> int | list[TextContent]:
+    """Parse and validate the IPv6 range prefix length."""
+    prefix_length_value = arguments.get(_IPV6_PREFIX_LENGTH_KEY)
+    if prefix_length_value is None:
+        return error_response("prefix_length is required")
+    try:
+        prefix_length = int(str(prefix_length_value))
+    except ValueError:
+        return error_response("prefix_length must be 56 or 64")
+    if prefix_length not in (56, 64):
+        return error_response("prefix_length must be 56 or 64")
+    return prefix_length
+
+
+def _parse_ipv6_range_target(
+    arguments: dict[str, Any],
+) -> tuple[int | None, str | None] | list[TextContent]:
+    """Parse and validate the IPv6 range assignment target."""
+    linode_id_value = arguments.get(_LINODE_ID_KEY)
+    route_target_value = arguments.get(_ROUTE_TARGET_KEY)
+    has_linode_id = linode_id_value not in (None, "")
+    has_route_target = route_target_value not in (None, "")
+
+    if not has_linode_id and not has_route_target:
+        return error_response("linode_id or route_target is required")
+    if has_linode_id and has_route_target:
+        return error_response("linode_id and route_target are mutually exclusive")
+
+    if has_linode_id:
+        try:
+            return int(str(linode_id_value)), None
+        except ValueError:
+            return error_response("linode_id must be a valid integer")
+
+    if not isinstance(route_target_value, str) or not route_target_value.strip():
+        return error_response("route_target must be a non-empty string")
+    return None, route_target_value.strip()
+
+
+def _parse_ipv6_range_create_args(
+    arguments: dict[str, Any],
+) -> tuple[int, int | None, str | None] | list[TextContent]:
+    """Parse and validate create IPv6 range arguments."""
+    prefix_length = _parse_ipv6_prefix_length(arguments)
+    if isinstance(prefix_length, list):
+        return prefix_length
+
+    target = _parse_ipv6_range_target(arguments)
+    if isinstance(target, list):
+        return target
+
+    linode_id, route_target = target
+    return prefix_length, linode_id, route_target
 
 
 def create_linode_vpc_create_tool() -> Tool:
@@ -400,6 +478,51 @@ async def handle_linode_vpc_subnet_delete(
         }
 
     return await execute_tool(cfg, arguments, "delete VPC subnet", _call)
+
+
+def create_linode_ipv6_range_create_tool() -> Tool:
+    """Create the linode_ipv6_range_create tool."""
+    return Tool(
+        name="linode_ipv6_range_create",
+        description="Creates an IPv6 range",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                _IPV6_PREFIX_LENGTH_KEY: _IPV6_PREFIX_LENGTH_PROP,
+                _LINODE_ID_KEY: _LINODE_ID_PROP,
+                _ROUTE_TARGET_KEY: _ROUTE_TARGET_PROP,
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm creation.",
+                },
+            },
+            "required": [_IPV6_PREFIX_LENGTH_KEY, "confirm"],
+        },
+    )
+
+
+async def handle_linode_ipv6_range_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_ipv6_range_create tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return error_response("Set confirm=true to proceed.")
+
+    parsed_args = _parse_ipv6_range_create_args(arguments)
+    if isinstance(parsed_args, list):
+        return parsed_args
+    prefix_length, linode_id, route_target = parsed_args
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.create_ipv6_range(
+            prefix_length=prefix_length,
+            linode_id=linode_id,
+            route_target=route_target,
+        )
+
+    return await execute_tool(cfg, arguments, "create IPv6 range", _call)
 
 
 def create_linode_ipv6_range_delete_tool() -> Tool:
