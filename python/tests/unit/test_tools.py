@@ -179,6 +179,7 @@ from linodemcp.tools import (
     handle_linode_object_storage_presigned_url,
     handle_linode_object_storage_ssl_delete,
     handle_linode_object_storage_ssl_get,
+    handle_linode_object_storage_ssl_upload,
     handle_linode_object_storage_transfer,
     handle_linode_object_storage_types_list,
     handle_linode_profile,
@@ -4075,6 +4076,78 @@ async def test_ssl_get_missing_env() -> None:
 
     assert len(result) == 1
     assert "Error" in result[0].text
+
+
+async def test_ssl_upload_confirm_required(
+    sample_config: Config,
+) -> None:
+    """SSL upload should require confirm=true."""
+    result = list(
+        await handle_linode_object_storage_ssl_upload(
+            {
+                "region": "us-east-1",
+                "label": "my-bucket",
+                "certificate": "cert",
+                "private_key": "key",
+                "confirm": False,
+            },
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_ssl_upload_success(
+    sample_config: Config,
+) -> None:
+    """SSL upload should succeed with valid input."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.upload_bucket_ssl.return_value = {"ssl": True}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_object_storage_ssl_upload(
+                {
+                    "region": "us-east-1",
+                    "label": "my-bucket",
+                    "certificate": "cert",
+                    "private_key": "key",
+                    "confirm": True,
+                },
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "SSL certificate uploaded" in result[0].text
+        mock_client.upload_bucket_ssl.assert_awaited_once_with(
+            "us-east-1", "my-bucket", "cert", "key"
+        )
+
+
+async def test_ssl_upload_missing_private_key(
+    sample_config: Config,
+) -> None:
+    """SSL upload should validate private_key."""
+    result = list(
+        await handle_linode_object_storage_ssl_upload(
+            {
+                "region": "us-east-1",
+                "label": "my-bucket",
+                "certificate": "cert",
+                "confirm": True,
+            },
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "private_key is required" in result[0].text
 
 
 async def test_ssl_delete_confirm_required(

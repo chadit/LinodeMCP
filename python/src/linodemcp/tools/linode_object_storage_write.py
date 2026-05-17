@@ -933,6 +933,103 @@ async def handle_linode_object_storage_ssl_get(
     return await execute_tool(cfg, arguments, "retrieve SSL status", _call)
 
 
+def create_linode_object_storage_ssl_upload_tool() -> tuple[Tool, Capability]:
+    """Create the linode_object_storage_ssl_upload tool."""
+    return Tool(
+        name="linode_object_storage_ssl_upload",
+        description=(
+            "Uploads an SSL/TLS certificate and private key"
+            " for an Object Storage bucket."
+            " Requires confirm=true to proceed."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "region": {
+                    "type": "string",
+                    "description": ("Region where the bucket is located"),
+                },
+                "label": {
+                    "type": "string",
+                    "description": "The bucket label (name)",
+                },
+                "certificate": {
+                    "type": "string",
+                    "description": "Base64 encoded and PEM formatted SSL certificate",
+                },
+                "private_key": {
+                    "type": "string",
+                    "description": "Private key associated with the SSL certificate",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to proceed."
+                        " This uploads SSL certificate material"
+                        " for the bucket."
+                    ),
+                },
+            },
+            "required": [
+                "region",
+                "label",
+                "certificate",
+                "private_key",
+                "confirm",
+            ],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_object_storage_ssl_upload(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_object_storage_ssl_upload tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text="This uploads SSL certificate material"
+                " for the bucket."
+                " Set confirm=true to proceed.",
+            )
+        ]
+
+    region = arguments.get("region", "")
+    label = arguments.get("label", "")
+    certificate = arguments.get("certificate", "")
+    private_key = arguments.get("private_key", "")
+
+    if not region:
+        return _error_response("region is required")
+    if not label:
+        return _error_response("label is required")
+    if not certificate:
+        return _error_response("certificate is required")
+    if not private_key:
+        return _error_response("private_key is required")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.upload_bucket_ssl(region, label, certificate, private_key)
+        return {
+            "message": (
+                f"SSL certificate uploaded for bucket '{label}' in region '{region}'"
+            ),
+            "region": region,
+            "bucket": label,
+            "ssl": result.get("ssl"),
+        }
+
+    return await execute_tool(cfg, arguments, "upload SSL certificate", _call)
+
+
 def create_linode_object_storage_ssl_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_ssl_delete tool."""
     return Tool(

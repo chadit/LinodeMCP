@@ -246,6 +246,7 @@ from linodemcp.tools.linode_object_storage_write import (
     create_linode_object_storage_presigned_url_tool,
     create_linode_object_storage_ssl_delete_tool,
     create_linode_object_storage_ssl_get_tool,
+    create_linode_object_storage_ssl_upload_tool,
     handle_linode_object_storage_bucket_access_update,
     handle_linode_object_storage_bucket_create,
     handle_linode_object_storage_bucket_delete,
@@ -257,6 +258,7 @@ from linodemcp.tools.linode_object_storage_write import (
     handle_linode_object_storage_presigned_url,
     handle_linode_object_storage_ssl_delete,
     handle_linode_object_storage_ssl_get,
+    handle_linode_object_storage_ssl_upload,
 )
 from linodemcp.tools.linode_profile import (
     create_linode_profile_tool,
@@ -453,6 +455,7 @@ __all__ = [
     "create_linode_object_storage_presigned_url_tool",
     "create_linode_object_storage_ssl_delete_tool",
     "create_linode_object_storage_ssl_get_tool",
+    "create_linode_object_storage_ssl_upload_tool",
     "create_linode_object_storage_transfer_tool",
     "create_linode_object_storage_types_list_tool",
     "create_linode_profile_tool",
@@ -591,6 +594,7 @@ __all__ = [
     "handle_linode_object_storage_presigned_url",
     "handle_linode_object_storage_ssl_delete",
     "handle_linode_object_storage_ssl_get",
+    "handle_linode_object_storage_ssl_upload",
     "handle_linode_object_storage_transfer",
     "handle_linode_object_storage_types_list",
     "handle_linode_profile",
