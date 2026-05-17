@@ -51,6 +51,7 @@ from linodemcp.tools import (
     create_linode_instance_ip_allocate_tool,
     create_linode_instance_ip_delete_tool,
     create_linode_instance_ip_get_tool,
+    create_linode_instance_ip_update_tool,
     create_linode_instance_ips_list_tool,
     create_linode_instance_migrate_tool,
     create_linode_instance_password_reset_tool,
@@ -109,6 +110,7 @@ from linodemcp.tools import (
     handle_linode_instance_ip_allocate,
     handle_linode_instance_ip_delete,
     handle_linode_instance_ip_get,
+    handle_linode_instance_ip_update,
     handle_linode_instance_ips_list,
     handle_linode_instance_migrate,
     handle_linode_instance_password_reset,
@@ -6012,6 +6014,17 @@ async def test_instance_ip_allocate_tool_def() -> None:
     assert "confirm" in required
 
 
+async def test_instance_ip_update_tool_def() -> None:
+    """IP update should require instance_id, address, rdns, confirm."""
+    tool, _ = create_linode_instance_ip_update_tool()
+    assert tool.name == "linode_instance_ip_update"
+    required: list[str] = tool.inputSchema.get("required") or []
+    assert "instance_id" in required
+    assert "address" in required
+    assert "rdns" in required
+    assert "confirm" in required
+
+
 async def test_instance_ip_delete_tool_def() -> None:
     """IP delete should require instance_id, address, confirm."""
     tool, _ = create_linode_instance_ip_delete_tool()
@@ -6073,6 +6086,42 @@ async def test_instance_ip_allocate_no_confirm(
     )
     assert len(result) == 1
     assert "confirm" in result[0].text.lower()
+
+
+async def test_instance_ip_update_no_confirm(
+    sample_config: Config,
+) -> None:
+    """IP update should require confirm=true."""
+    result = list(
+        await handle_linode_instance_ip_update(
+            {
+                "instance_id": 123,
+                "address": "192.0.2.1",
+                "rdns": "host.example.com",
+            },
+            sample_config,
+        )
+    )
+    assert len(result) == 1
+    assert "confirm" in result[0].text.lower()
+
+
+async def test_instance_ip_update_missing_rdns(
+    sample_config: Config,
+) -> None:
+    """IP update should require an rdns argument."""
+    result = list(
+        await handle_linode_instance_ip_update(
+            {
+                "instance_id": 123,
+                "address": "192.0.2.1",
+                "confirm": True,
+            },
+            sample_config,
+        )
+    )
+    assert len(result) == 1
+    assert "rdns" in result[0].text.lower()
 
 
 async def test_instance_ip_delete_no_confirm(
@@ -6775,6 +6824,61 @@ async def test_handle_linode_instance_ip_allocate_success(
     )
 
 
+async def test_handle_linode_instance_ip_update_success(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """IP update should update RDNS with confirm=true."""
+    mock_linode_client.update_instance_ip.return_value = {
+        "address": "203.0.113.1",
+        "rdns": "host.example.com",
+    }
+    result = await handle_linode_instance_ip_update(
+        {
+            "instance_id": 123,
+            "address": "203.0.113.1",
+            "rdns": "host.example.com",
+            "confirm": True,
+        },
+        sample_config,
+    )
+    assert len(result) == 1
+    data = json.loads(result[0].text)
+    assert data["address"] == "203.0.113.1"
+    assert data["rdns"] == "host.example.com"
+    mock_linode_client.update_instance_ip.assert_called_once_with(
+        123,
+        "203.0.113.1",
+        "host.example.com",
+    )
+
+
+async def test_handle_linode_instance_ip_update_null_rdns_success(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """IP update should allow null RDNS."""
+    mock_linode_client.update_instance_ip.return_value = {
+        "address": "203.0.113.1",
+        "rdns": None,
+    }
+    result = await handle_linode_instance_ip_update(
+        {
+            "instance_id": 123,
+            "address": "203.0.113.1",
+            "rdns": None,
+            "confirm": True,
+        },
+        sample_config,
+    )
+    assert len(result) == 1
+    data = json.loads(result[0].text)
+    assert data["rdns"] is None
+    mock_linode_client.update_instance_ip.assert_called_once_with(
+        123,
+        "203.0.113.1",
+        None,
+    )
+
+
 async def test_handle_linode_instance_ip_delete_success(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
@@ -6905,6 +7009,25 @@ async def test_handle_linode_instance_ip_get_error(
     mock_linode_client.get_instance_ip.side_effect = Exception("API error")
     result = await handle_linode_instance_ip_get(
         {"instance_id": 123, "address": "203.0.113.1"}, sample_config
+    )
+    assert len(result) == 1
+    assert "Failed to" in result[0].text
+    assert "API error" in result[0].text
+
+
+async def test_handle_linode_instance_ip_update_error(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """IP update should return error text when the API call fails."""
+    mock_linode_client.update_instance_ip.side_effect = Exception("API error")
+    result = await handle_linode_instance_ip_update(
+        {
+            "instance_id": 123,
+            "address": "203.0.113.1",
+            "rdns": "host.example.com",
+            "confirm": True,
+        },
+        sample_config,
     )
     assert len(result) == 1
     assert "Failed to" in result[0].text

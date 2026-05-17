@@ -173,6 +173,66 @@ async def handle_linode_instance_ip_allocate(
     return await execute_tool(cfg, arguments, "allocate instance IP", _call)
 
 
+def create_linode_instance_ip_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_instance_ip_update tool."""
+    return Tool(
+        name="linode_instance_ip_update",
+        description=("Updates reverse DNS for an IP address on a Linode instance"),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "instance_id": _INSTANCE_ID_PROP,
+                "address": {
+                    "type": "string",
+                    "description": ("The IP address to update (required)"),
+                },
+                "rdns": {
+                    "type": ["string", "null"],
+                    "description": ("The reverse DNS value to assign (required)"),
+                },
+                "confirm": _CONFIRM_PROP,
+            },
+            "required": [
+                "instance_id",
+                "address",
+                "rdns",
+                "confirm",
+            ],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_instance_ip_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_ip_update tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("Set confirm=true to proceed.")
+
+    iid = _parse_instance_id(arguments)
+    if isinstance(iid, list):
+        return iid
+
+    address = arguments.get("address", "")
+    if not address:
+        return _error_response("address is required")
+
+    if "rdns" not in arguments:
+        return _error_response("rdns is required")
+    rdns = arguments.get("rdns")
+    if rdns is not None and not isinstance(rdns, str):
+        return _error_response("rdns must be a string or null")
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        return await client.update_instance_ip(iid, address, rdns)
+
+    return await execute_tool(cfg, arguments, "update instance IP", _call)
+
+
 def create_linode_instance_ip_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_ip_delete tool."""
     return Tool(

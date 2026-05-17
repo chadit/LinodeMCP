@@ -101,6 +101,36 @@ async def test_update_profile_sends_put_to_profile_route(
     await client.close()
 
 
+async def test_update_instance_ip_sends_put_to_instance_ip_route() -> None:
+    """Updating instance IP RDNS sends PUT to the exact route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "address": "203.0.113.1",
+        "rdns": "host.example.com",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.update_instance_ip(
+            123,
+            "203.0.113.1",
+            "host.example.com",
+        )
+
+    assert result["rdns"] == "host.example.com"
+    mock_request.assert_called_once_with(
+        "PUT",
+        "/linode/instances/123/ips/203.0.113.1",
+        {"rdns": "host.example.com"},
+    )
+
+    await client.close()
+
+
 async def test_list_instances(sample_instance_data: dict[str, Any]) -> None:
     """Test listing instances."""
     client = Client("https://api.linode.com/v4", "test-token")
