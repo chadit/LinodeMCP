@@ -158,6 +158,36 @@ async def test_update_volume_sends_put_to_volume_route() -> None:
     await client.close()
 
 
+async def test_update_ssh_key_sends_put_to_profile_route() -> None:
+    """Test updating an SSH key sends PUT /profile/sshkeys/{id}."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response_data = {
+        "id": 12345,
+        "label": "renamed-key",
+        "ssh_key": "ssh-rsa AAAA_valid_public_ssh_key user@example",
+        "created": "2024-01-15T10:00:00",
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        ssh_key = await client.update_ssh_key(12345, "renamed-key")
+
+    assert ssh_key.id == 12345
+    assert ssh_key.label == "renamed-key"
+    mock_request.assert_called_once_with(
+        "PUT",
+        "/profile/sshkeys/12345",
+        {"label": "renamed-key"},
+    )
+
+    await client.close()
+
+
 async def test_create_instance_sends_interfaces_body(
     sample_instance_data: dict[str, Any],
 ) -> None:

@@ -1538,6 +1538,33 @@ class Client:
             logger.exception("HTTP error creating SSH key: %s", e)
             raise NetworkError("CreateSSHKey", e) from e
 
+    async def update_ssh_key(self, ssh_key_id: int, label: str) -> SSHKey:
+        """Update an SSH key."""
+        validate_label(label)
+        endpoint = f"/profile/sshkeys/{ssh_key_id}"
+
+        logger.info("Updating SSH key", extra={"ssh_key_id": ssh_key_id})
+
+        try:
+            body = {"label": label}
+            response = await self.make_request("PUT", endpoint, body)
+            data = response.json()
+            result = self._parse_ssh_key(data)
+            logger.info("SSH key updated", extra={"ssh_key_id": ssh_key_id})
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout updating SSH key: %s", e)
+            raise NetworkError("UpdateSSHKey", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout updating SSH key: %s", e)
+            raise NetworkError("UpdateSSHKey", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error updating SSH key")
+            raise NetworkError("UpdateSSHKey", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error updating SSH key: %s", e)
+            raise NetworkError("UpdateSSHKey", e) from e
+
     async def delete_ssh_key(self, ssh_key_id: int) -> None:
         """Delete an SSH key."""
         endpoint = f"/profile/sshkeys/{ssh_key_id}"
@@ -4180,6 +4207,13 @@ class RetryableClient:
         """Create SSH key with retry."""
         result: SSHKey = await self._execute_with_retry(
             self.client.create_ssh_key, label, ssh_key
+        )
+        return result
+
+    async def update_ssh_key(self, ssh_key_id: int, label: str) -> SSHKey:
+        """Update SSH key with retry."""
+        result: SSHKey = await self._execute_with_retry(
+            self.client.update_ssh_key, ssh_key_id, label
         )
         return result
 
