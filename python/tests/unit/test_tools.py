@@ -62,6 +62,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
+    create_linode_vlan_delete_tool,
     create_linode_vlans_list_tool,
     create_linode_vpc_create_tool,
     create_linode_vpc_delete_tool,
@@ -177,6 +178,7 @@ from linodemcp.tools import (
     handle_linode_sshkeys_list,
     handle_linode_stackscripts_list,
     handle_linode_types_list,
+    handle_linode_vlan_delete,
     handle_linode_vlans_list,
     handle_linode_volume_attach,
     handle_linode_volume_create,
@@ -4718,6 +4720,16 @@ async def test_vlans_list_tool_definition() -> None:
     assert tool.name == "linode_vlans_list"
 
 
+async def test_vlan_delete_tool_definition() -> None:
+    """VLAN delete tool should have correct name and required params."""
+    tool = create_linode_vlan_delete_tool()
+    assert tool.name == "linode_vlan_delete"
+    required = tool.inputSchema.get("required") or []
+    assert "region_id" in required
+    assert "label" in required
+    assert "confirm" in required
+
+
 async def test_vpc_get_tool_definition() -> None:
     """VPC get tool should require vpc_id."""
     tool = create_linode_vpc_get_tool()
@@ -4810,6 +4822,40 @@ async def test_vlans_list(sample_config: Config) -> None:
         assert len(result) == 1
         assert "app-vlan" in result[0].text
         mock_client.list_vlans.assert_called_once()
+
+
+async def test_vlan_delete_confirm_required(sample_config: Config) -> None:
+    """VLAN delete should require confirm=true."""
+    result = list(
+        await handle_linode_vlan_delete(
+            {"region_id": "us-east", "label": "app-vlan", "confirm": False},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_vlan_delete_success(sample_config: Config) -> None:
+    """VLAN delete should succeed with valid input."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.delete_vlan.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_vlan_delete(
+                {"region_id": "us-east", "label": "app-vlan", "confirm": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "deleted" in result[0].text.lower()
+        mock_client.delete_vlan.assert_called_once_with("us-east", "app-vlan")
 
 
 async def test_vpc_get(sample_config: Config) -> None:

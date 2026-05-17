@@ -1,4 +1,4 @@
-"""Networking READ tools for LinodeMCP."""
+"""Networking tools for LinodeMCP."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
-from linodemcp.tools.helpers import execute_tool
+from linodemcp.tools.helpers import error_response, execute_tool
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -42,3 +42,57 @@ async def handle_linode_vlans_list(
         return {"count": len(vlans), "vlans": vlans}
 
     return await execute_tool(cfg, arguments, "list VLANs", _call)
+
+
+def create_linode_vlan_delete_tool() -> Tool:
+    """Create the linode_vlan_delete tool."""
+    return Tool(
+        name="linode_vlan_delete",
+        description="Deletes a VLAN",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "region_id": {
+                    "type": "string",
+                    "description": "Region ID where the VLAN exists (required)",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "VLAN label to delete (required)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm deletion.",
+                },
+            },
+            "required": ["region_id", "label", "confirm"],
+        },
+    )
+
+
+async def handle_linode_vlan_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_vlan_delete tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return error_response("This is destructive. Set confirm=true to proceed.")
+
+    region_id = arguments.get("region_id", "")
+    label = arguments.get("label", "")
+
+    if not region_id:
+        return error_response("region_id is required")
+    if not label:
+        return error_response("label is required")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_vlan(region_id, label)
+        return {
+            "message": f"VLAN {label} in region {region_id} deleted successfully",
+            "region_id": region_id,
+            "label": label,
+        }
+
+    return await execute_tool(cfg, arguments, "delete VLAN", _call)
