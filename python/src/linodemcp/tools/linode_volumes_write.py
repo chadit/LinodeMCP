@@ -326,7 +326,7 @@ def create_linode_volume_update_tool() -> tuple[Tool, Capability]:
             },
             "required": ["volume_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_volume_update(
