@@ -189,7 +189,9 @@ from linodemcp.tools.linode_monitor_write import (
     handle_linode_monitor_service_token_create,
 )
 from linodemcp.tools.linode_networking import (
+    create_linode_vlan_delete_tool,
     create_linode_vlans_list_tool,
+    handle_linode_vlan_delete,
     handle_linode_vlans_list,
 )
 from linodemcp.tools.linode_nodebalancers import (
@@ -441,6 +443,7 @@ __all__ = [
     "create_linode_sshkeys_list_tool",
     "create_linode_stackscripts_list_tool",
     "create_linode_types_list_tool",
+    "create_linode_vlan_delete_tool",
     "create_linode_vlans_list_tool",
     "create_linode_volume_attach_tool",
     "create_linode_volume_create_tool",
@@ -571,6 +574,7 @@ __all__ = [
     "handle_linode_sshkeys_list",
     "handle_linode_stackscripts_list",
     "handle_linode_types_list",
+    "handle_linode_vlan_delete",
     "handle_linode_vlans_list",
     "handle_linode_volume_attach",
     "handle_linode_volume_create",

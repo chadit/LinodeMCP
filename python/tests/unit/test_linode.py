@@ -384,6 +384,22 @@ async def test_retryable_client_list_vlans() -> None:
     await client.close()
 
 
+async def test_retryable_client_delete_vlan() -> None:
+    """Test retryable client delegates VLAN deletion."""
+    client = RetryableClient(
+        "https://api.linode.com/v4", "test-token", RetryConfig(max_retries=3)
+    )
+
+    with patch.object(
+        client.client, "delete_vlan", new_callable=AsyncMock
+    ) as mock_delete_vlan:
+        await client.delete_vlan("us-east", "app-vlan")
+
+        mock_delete_vlan.assert_awaited_once_with("us-east", "app-vlan")
+
+    await client.close()
+
+
 async def test_retryable_client_retry_on_rate_limit(
     sample_profile_data: dict[str, Any],
 ) -> None:
@@ -682,6 +698,25 @@ async def test_list_vlans() -> None:
 
         assert vlans == mock_response.json.return_value["data"]
         mock_request.assert_awaited_once_with("GET", "/networking/vlans")
+
+    await client.close()
+
+
+async def test_delete_vlan() -> None:
+    """Test deleting a VLAN."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.delete_vlan("us-east", "app-vlan")
+
+        mock_request.assert_awaited_once_with(
+            "DELETE", "/networking/vlans/us-east/app-vlan"
+        )
 
     await client.close()
 
