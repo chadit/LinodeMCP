@@ -56,6 +56,7 @@ from linodemcp.tools import (
     create_linode_instance_password_reset_tool,
     create_linode_instance_rebuild_tool,
     create_linode_instance_rescue_tool,
+    create_linode_ipv6_range_delete_tool,
     create_linode_lke_cluster_create_tool,
     create_linode_lke_cluster_delete_tool,
     create_linode_lke_cluster_get_tool,
@@ -113,6 +114,7 @@ from linodemcp.tools import (
     handle_linode_instance_resize,
     handle_linode_instance_shutdown,
     handle_linode_instances_list,
+    handle_linode_ipv6_range_delete,
     handle_linode_lke_acl_delete,
     handle_linode_lke_acl_get,
     handle_linode_lke_acl_update,
@@ -4734,6 +4736,15 @@ async def test_vpc_delete_tool_definition() -> None:
     assert "confirm" in required
 
 
+async def test_ipv6_range_delete_tool_definition() -> None:
+    """IPv6 range delete tool should require range and confirm."""
+    tool = create_linode_ipv6_range_delete_tool()
+    assert tool.name == "linode_ipv6_range_delete"
+    required: list[str] = tool.inputSchema.get("required") or []
+    assert "range" in required
+    assert "confirm" in required
+
+
 async def test_vpc_subnet_create_tool_definition() -> None:
     """VPC subnet create tool should require vpc_id, label, ipv4, confirm."""
     tool = create_linode_vpc_subnet_create_tool()
@@ -4929,6 +4940,54 @@ async def test_vpc_delete_success(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "deleted" in result[0].text.lower()
+
+
+async def test_ipv6_range_delete_confirm_required(sample_config: Config) -> None:
+    """IPv6 range delete should require confirm=true."""
+    result = list(
+        await handle_linode_ipv6_range_delete(
+            {"range": "2001:0db8::", "confirm": False},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_ipv6_range_delete_missing_range(sample_config: Config) -> None:
+    """IPv6 range delete should fail without range."""
+    result = list(
+        await handle_linode_ipv6_range_delete(
+            {"confirm": True},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "range" in result[0].text.lower()
+
+
+async def test_ipv6_range_delete_success(sample_config: Config) -> None:
+    """IPv6 range delete should succeed with valid input."""
+    ipv6_range = "2001:0db8::"
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.delete_ipv6_range.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_ipv6_range_delete(
+                {"range": ipv6_range, "confirm": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "deleted" in result[0].text.lower()
+        mock_client.delete_ipv6_range.assert_called_once_with(ipv6_range)
 
 
 async def test_vpc_ips_list(sample_config: Config) -> None:

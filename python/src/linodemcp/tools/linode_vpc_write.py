@@ -32,6 +32,14 @@ _CONFIRM_PROP: dict[str, Any] = {
     "description": "Must be true to confirm this operation.",
 }
 
+_IPV6_RANGE_KEY = "range"
+_IPV6_RANGE_PROP: dict[str, Any] = {
+    "type": "string",
+    "description": (
+        "The IPv6 range to delete, without prefix length (for example 2001:0db8::)"
+    ),
+}
+
 
 def _parse_vpc_subnet_ids(
     arguments: dict[str, Any],
@@ -392,3 +400,48 @@ async def handle_linode_vpc_subnet_delete(
         }
 
     return await execute_tool(cfg, arguments, "delete VPC subnet", _call)
+
+
+def create_linode_ipv6_range_delete_tool() -> Tool:
+    """Create the linode_ipv6_range_delete tool."""
+    return Tool(
+        name="linode_ipv6_range_delete",
+        description="Deletes an IPv6 range",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                _IPV6_RANGE_KEY: _IPV6_RANGE_PROP,
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to confirm deletion. This is irreversible."
+                    ),
+                },
+            },
+            "required": [_IPV6_RANGE_KEY, "confirm"],
+        },
+    )
+
+
+async def handle_linode_ipv6_range_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_ipv6_range_delete tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return error_response("This is destructive. Set confirm=true to proceed.")
+
+    range_value = arguments.get(_IPV6_RANGE_KEY, "")
+    if not isinstance(range_value, str) or not range_value.strip():
+        return error_response("range is required")
+    ipv6_range = range_value.strip()
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_ipv6_range(ipv6_range)
+        return {
+            "message": f"IPv6 range {ipv6_range} deleted",
+            _IPV6_RANGE_KEY: ipv6_range,
+        }
+
+    return await execute_tool(cfg, arguments, "delete IPv6 range", _call)

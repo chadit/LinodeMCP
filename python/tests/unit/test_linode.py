@@ -307,6 +307,41 @@ async def test_network_error() -> None:
     await client.close()
 
 
+async def test_delete_ipv6_range_encodes_range_path() -> None:
+    """Deleting an IPv6 range should encode the complete path segment."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        await client.delete_ipv6_range("2001:0db8::/64")
+
+        mock_request.assert_awaited_once_with(
+            "DELETE",
+            "/networking/ipv6/ranges/2001%3A0db8%3A%3A%2F64",
+        )
+
+    await client.close()
+
+
+async def test_retryable_delete_ipv6_range_delegates_to_client() -> None:
+    """Retryable client should delegate IPv6 range deletion."""
+    client = RetryableClient(
+        "https://api.linode.com/v4",
+        "test-token",
+        RetryConfig(max_retries=1, base_delay=0.01),
+    )
+
+    with patch.object(
+        client.client,
+        "delete_ipv6_range",
+        new_callable=AsyncMock,
+    ) as mock_delete:
+        await client.delete_ipv6_range("2001:0db8::")
+
+        mock_delete.assert_awaited_once_with("2001:0db8::")
+
+    await client.close()
+
+
 async def test_retryable_client_success(sample_profile_data: dict[str, Any]) -> None:
     """Test retryable client successful request."""
     client = RetryableClient(

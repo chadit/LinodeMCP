@@ -2879,6 +2879,15 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("DeleteVPCSubnet", e) from e
 
+    async def delete_ipv6_range(self, ipv6_range: str) -> None:
+        """Delete an IPv6 range."""
+        encoded_range = quote(ipv6_range, safe="")
+        endpoint = f"/networking/ipv6/ranges/{encoded_range}"
+        try:
+            await self.make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteIPv6Range", e) from e
+
     # ── Instance Backups ──
 
     async def list_instance_backups(self, instance_id: int) -> dict[str, Any]:
@@ -4711,6 +4720,10 @@ class RetryableClient:
     async def delete_vpc_subnet(self, vpc_id: int, subnet_id: int) -> None:
         """Delete VPC subnet with retry."""
         await self._execute_with_retry(self.client.delete_vpc_subnet, vpc_id, subnet_id)
+
+    async def delete_ipv6_range(self, ipv6_range: str) -> None:
+        """Delete IPv6 range with retry."""
+        await self._execute_with_retry(self.client.delete_ipv6_range, ipv6_range)
 
     # ── Instance Backups (retry wrappers) ──
 
