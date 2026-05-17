@@ -53,10 +53,10 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_instance_ip_allocate", Capability: profiles.CapWrite},
 
 		// Block storage
-		{Name: "linode_volumes_list", Capability: profiles.CapRead},
-		{Name: "linode_volume_create", Capability: profiles.CapWrite},
-		{Name: "linode_volume_delete", Capability: profiles.CapDestroy},
-		{Name: "linode_volume_resize", Capability: profiles.CapWrite},
+		{Name: toolVolumesList, Capability: profiles.CapRead},
+		{Name: toolVolumeCreate, Capability: profiles.CapWrite},
+		{Name: toolVolumeDelete, Capability: profiles.CapDestroy},
+		{Name: toolVolumeResize, Capability: profiles.CapWrite},
 
 		// Object storage
 		{Name: "linode_object_storage_buckets_list", Capability: profiles.CapRead},
@@ -186,7 +186,7 @@ func TestComputeAdminIncludesInstanceWrites(t *testing.T) {
 
 	assert.Contains(t, allowed, "linode_instance_create", "compute-admin must include instance writes")
 	assert.Contains(t, allowed, "linode_instance_delete", "compute-admin must include instance destroys")
-	assert.Contains(t, allowed, "linode_volume_create", "compute-admin must include volume writes")
+	assert.Contains(t, allowed, toolVolumeCreate, "compute-admin must include volume writes")
 	assert.Contains(t, allowed, "linode_sshkey_create", "compute-admin must include ssh key writes")
 	assert.Contains(t, allowed, "linode_instance_backup_create", "compute-admin must include backup writes")
 }
@@ -198,7 +198,7 @@ func TestNetworkAdminExcludesComputeWrites(t *testing.T) {
 	allowed := builtins[profiles.BuiltinNetworkAdmin].AllowedTools
 
 	assert.NotContains(t, allowed, "linode_instance_create", "network-admin must not include compute writes")
-	assert.NotContains(t, allowed, "linode_volume_create", "network-admin must not include block-storage writes")
+	assert.NotContains(t, allowed, toolVolumeCreate, "network-admin must not include block-storage writes")
 	assert.Contains(t, allowed, "linode_firewall_create", "network-admin must include firewall writes")
 	assert.Contains(t, allowed, "linode_domain_create", "network-admin must include DNS writes")
 	assert.Contains(t, allowed, "linode_vpc_create", "network-admin must include VPC writes")

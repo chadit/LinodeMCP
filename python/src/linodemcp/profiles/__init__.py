@@ -9,12 +9,26 @@ from linodemcp.profiles.builtin import (
     builtin_profiles,
 )
 from linodemcp.profiles.capability import Capability
+from linodemcp.profiles.errors import (
+    ActiveProfileDisabledError,
+    ActiveProfileUnknownError,
+    ProfileError,
+)
+from linodemcp.profiles.loader import (
+    DEFAULT_PROFILE_NAME,
+    resolve_active_profile,
+)
 from linodemcp.profiles.profile import Profile
 
 __all__ = [
+    "DEFAULT_PROFILE_NAME",
+    "ActiveProfileDisabledError",
+    "ActiveProfileUnknownError",
     "Capability",
     "Profile",
+    "ProfileError",
     "ToolDescriptor",
     "builtin_catalog_json",
     "builtin_profiles",
+    "resolve_active_profile",
 ]

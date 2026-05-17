@@ -46,6 +46,24 @@ def _schema_requires(schema: dict[str, Any], name: str) -> bool:
     return name in cast("list[object]", required_value)
 
 
+def test_no_capability_unknown_in_registry() -> None:
+    """Every registered tool must carry a real ``Capability`` tag.
+
+    A tool landing in the registry with ``Capability.Unknown`` is a tagging
+    bug. Phase 1's temporary allowlist exempted this; that exemption is gone
+    now. Any new tool must declare its capability at registration time.
+    """
+    registry = get_tool_registry()
+    untagged: list[str] = [
+        entry.name for entry in registry if entry.capability == Capability.Unknown
+    ]
+
+    assert not untagged, (
+        "tools registered with Capability.Unknown (tag them with "
+        "Capability.Read/Write/Destroy/Admin/Meta): " + ", ".join(sorted(untagged))
+    )
+
+
 def test_capability_and_confirm_invariants() -> None:
     """Confirm parameter matches the tool's declared capability.
 

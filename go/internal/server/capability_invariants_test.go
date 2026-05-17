@@ -63,6 +63,34 @@ func schemaHasBooleanProp(schema map[string]any, name string) bool {
 	return isString && typeVal == "boolean"
 }
 
+// TestNoCapabilityUnknownInRegistry enforces the Phase 1+ steady-state
+// invariant: every registered tool must carry a real Capability tag. A tool
+// landing in the registry with CapUnknown is a tagging bug (developer added
+// a tool and forgot the capability, or rebased a stale branch). Phase 1's
+// temporary allowlist exempted this; that exemption is gone now and any new
+// tool must declare its capability at registration time.
+func TestNoCapabilityUnknownInRegistry(t *testing.T) {
+	t.Parallel()
+
+	srv := newCapabilityTestServer(t)
+	tools := srv.ToolInfos()
+	require.NotEmpty(t, tools, "server must register at least one tool")
+
+	var untagged []string
+
+	for _, info := range tools {
+		if info.Capability == profiles.CapUnknown {
+			untagged = append(untagged, info.Name)
+		}
+	}
+
+	assert.Empty(
+		t, untagged,
+		"tools registered with CapUnknown (tag them with profiles.CapRead/Write/Destroy/Admin/Meta): %v",
+		untagged,
+	)
+}
+
 // TestCapabilityAndConfirmInvariants enforces the relationship between a
 // tool's capability tag and its confirm parameter:
 //

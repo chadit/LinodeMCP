@@ -128,6 +128,31 @@ class EnvironmentConfig:
     linode: LinodeConfig = field(default_factory=LinodeConfig)
 
 
+@dataclass(frozen=True)
+class UserProfileConfig:
+    """User-defined profile entry loaded from config.
+
+    Tuples (not lists) keep the dataclass hashable so callers can compare or
+    cache profile entries without copy semantics tripping pyright-strict.
+    Wildcard expansion against the live tool registry happens later in the
+    profile resolver; the values stored here are the raw spec inputs.
+    """
+
+    description: str = ""
+    allowed_tools: tuple[str, ...] = ()
+    denied_tools: tuple[str, ...] = ()
+    allowed_environments: tuple[str, ...] = ()
+    required_token_scopes: tuple[str, ...] = ()
+    allow_yolo: bool = False
+
+
+@dataclass(frozen=True)
+class BuiltinOverride:
+    """Per-built-in toggle. ``disabled`` is the only knob users may flip."""
+
+    disabled: bool = False
+
+
 @dataclass
 class Config:
     """Full LinodeMCP configuration."""
@@ -137,6 +162,13 @@ class Config:
     resilience: ResilienceConfig = field(default_factory=ResilienceConfig)
     environments: dict[str, EnvironmentConfig] = field(
         default_factory=dict[str, EnvironmentConfig]
+    )
+    active_profile: str = ""
+    profiles: dict[str, UserProfileConfig] = field(
+        default_factory=dict[str, UserProfileConfig]
+    )
+    profiles_builtin_overrides: dict[str, BuiltinOverride] = field(
+        default_factory=dict[str, BuiltinOverride]
     )
 
     def select_environment(self, user_input: str) -> EnvironmentConfig:
@@ -368,6 +400,62 @@ def validate_config(cfg: Config) -> None:
                 raise ConfigInvalidError(msg)
 
 
+def _parse_string_tuple(raw: Any) -> tuple[str, ...]:
+    """Coerce a YAML/JSON list-of-strings into a tuple, dropping non-strings.
+
+    Returns an empty tuple if the input is missing, null, or not a list.
+    Non-string entries are skipped silently; the resolver later warns on
+    unmatched tool names, which catches typos better than parsing errors do.
+    """
+    if not isinstance(raw, list):
+        return ()
+    raw_list = cast("list[object]", raw)
+    return tuple(item for item in raw_list if isinstance(item, str))
+
+
+def _parse_user_profiles(raw: Any) -> dict[str, UserProfileConfig]:
+    """Convert the ``profiles:`` block into typed ``UserProfileConfig`` values."""
+    if not isinstance(raw, dict):
+        return {}
+    raw_dict = cast("dict[object, object]", raw)
+    result: dict[str, UserProfileConfig] = {}
+    for name, body in raw_dict.items():
+        if not isinstance(name, str) or not isinstance(body, dict):
+            continue
+        body_dict = cast("dict[str, Any]", body)
+        description = body_dict.get("description", "")
+        if not isinstance(description, str):
+            description = ""
+        allow_yolo = bool(body_dict.get("allow_yolo", False))
+        result[name] = UserProfileConfig(
+            description=description,
+            allowed_tools=_parse_string_tuple(body_dict.get("allowed_tools")),
+            denied_tools=_parse_string_tuple(body_dict.get("denied_tools")),
+            allowed_environments=_parse_string_tuple(
+                body_dict.get("allowed_environments")
+            ),
+            required_token_scopes=_parse_string_tuple(
+                body_dict.get("required_token_scopes")
+            ),
+            allow_yolo=allow_yolo,
+        )
+    return result
+
+
+def _parse_builtin_overrides(raw: Any) -> dict[str, BuiltinOverride]:
+    """Convert ``profiles_builtin_overrides:`` into typed override values."""
+    if not isinstance(raw, dict):
+        return {}
+    raw_dict = cast("dict[object, object]", raw)
+    result: dict[str, BuiltinOverride] = {}
+    for name, body in raw_dict.items():
+        if not isinstance(name, str) or not isinstance(body, dict):
+            continue
+        body_dict = cast("dict[str, Any]", body)
+        result[name] = BuiltinOverride(disabled=bool(body_dict.get("disabled", False)))
+    return result
+
+
 def _data_to_config(data: dict[str, Any]) -> Config:
     """Convert parsed data to Config object."""
     server = ServerConfig(
@@ -434,11 +522,19 @@ def _data_to_config(data: dict[str, Any]) -> Config:
             linode=linode_cfg,
         )
 
+    active_profile_raw = data.get("active_profile", "")
+    active_profile = active_profile_raw if isinstance(active_profile_raw, str) else ""
+
     return Config(
         server=server,
         observability=observability,
         resilience=resilience,
         environments=environments,
+        active_profile=active_profile,
+        profiles=_parse_user_profiles(data.get("profiles")),
+        profiles_builtin_overrides=_parse_builtin_overrides(
+            data.get("profiles_builtin_overrides")
+        ),
     )
 
 

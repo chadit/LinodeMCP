@@ -92,10 +92,34 @@ type EnvironmentConfig struct {
 
 // Config holds the full LinodeMCP configuration.
 type Config struct {
-	Server        ServerConfig                 `json:"server"        yaml:"server"`
-	Resilience    ResilienceConfig             `json:"resilience"    yaml:"resilience"`
-	Observability ObservabilityConfig          `json:"observability" yaml:"observability"`
-	Environments  map[string]EnvironmentConfig `json:"environments"  yaml:"environments"`
+	Server                   ServerConfig                 `json:"server"                     yaml:"server"`
+	Resilience               ResilienceConfig             `json:"resilience"                 yaml:"resilience"`
+	Observability            ObservabilityConfig          `json:"observability"              yaml:"observability"`
+	Environments             map[string]EnvironmentConfig `json:"environments"               yaml:"environments"`
+	ActiveProfile            string                       `json:"active_profile"             yaml:"active_profile"`
+	Profiles                 map[string]UserProfileConfig `json:"profiles"                   yaml:"profiles"`
+	ProfilesBuiltinOverrides map[string]BuiltinOverride   `json:"profiles_builtin_overrides" yaml:"profiles_builtin_overrides"`
+}
+
+// UserProfileConfig is the YAML/JSON shape for a single user-defined profile
+// entry under Config.Profiles. Built-in profiles live in code (see
+// internal/profiles/builtin.go) and never appear in this map. Wildcard entries
+// in AllowedTools and DeniedTools are expanded against the live tool registry
+// during profile resolution in internal/profiles.ResolveActiveProfile.
+type UserProfileConfig struct {
+	Description         string   `json:"description"           yaml:"description"`
+	AllowedTools        []string `json:"allowed_tools"         yaml:"allowed_tools"`
+	DeniedTools         []string `json:"denied_tools"          yaml:"denied_tools"`
+	AllowedEnvironments []string `json:"allowed_environments"  yaml:"allowed_environments"`
+	RequiredTokenScopes []string `json:"required_token_scopes" yaml:"required_token_scopes"`
+	AllowYolo           bool     `json:"allow_yolo"            yaml:"allow_yolo"`
+}
+
+// BuiltinOverride is the YAML/JSON shape for a per-built-in toggle under
+// Config.ProfilesBuiltinOverrides. Only the Disabled field is honored today;
+// future toggles (e.g. soft scope enforcement) would live alongside it.
+type BuiltinOverride struct {
+	Disabled bool `json:"disabled" yaml:"disabled"`
 }
 
 // ObservabilityConfig holds observability settings.
