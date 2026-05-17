@@ -67,6 +67,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
+    create_linode_stackscript_create_tool,
     create_linode_vlan_delete_tool,
     create_linode_vlans_list_tool,
     create_linode_vpc_create_tool,
@@ -189,6 +190,7 @@ from linodemcp.tools import (
     handle_linode_sshkey_delete,
     handle_linode_sshkey_update,
     handle_linode_sshkeys_list,
+    handle_linode_stackscript_create,
     handle_linode_stackscripts_list,
     handle_linode_types_list,
     handle_linode_vlan_delete,
@@ -1877,6 +1879,104 @@ async def test_handle_linode_stackscripts_list_error(sample_config: Config) -> N
 
         assert len(result) == 1
         assert "Failed" in result[0].text or "error" in result[0].text.lower()
+
+
+async def test_linode_stackscript_create_tool_schema() -> None:
+    """Test linode_stackscript_create tool schema."""
+    tool, capability = create_linode_stackscript_create_tool()
+
+    assert tool.name == "linode_stackscript_create"
+    assert capability.name == "Write"
+    assert tool.inputSchema["required"] == ["label", "images", "script", "confirm"]
+
+
+async def test_handle_linode_stackscript_create(sample_config: Config) -> None:
+    """Test linode_stackscript_create tool."""
+    mock_stackscript = StackScript(
+        id=12345,
+        username="testuser",
+        user_gravatar_id="abc123",
+        label="my-script",
+        description="Test script",
+        images=["linode/ubuntu22.04"],
+        deployments_total=0,
+        deployments_active=0,
+        is_public=False,
+        mine=True,
+        created="2024-01-15T10:00:00",
+        updated="2024-01-15T10:00:00",
+        script="#!/bin/bash",
+        user_defined_fields=[],
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_stackscript.return_value = mock_stackscript
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_stackscript_create(
+            {
+                "label": "my-script",
+                "images": ["linode/ubuntu22.04"],
+                "script": "#!/bin/bash",
+                "description": "Test script",
+                "is_public": False,
+                "rev_note": "Initial revision",
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "my-script" in result[0].text
+        assert "12345" in result[0].text
+        mock_client.create_stackscript.assert_called_once_with(
+            label="my-script",
+            images=["linode/ubuntu22.04"],
+            script="#!/bin/bash",
+            description="Test script",
+            is_public=False,
+            rev_note="Initial revision",
+        )
+
+
+async def test_handle_linode_stackscript_create_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Test linode_stackscript_create requires confirmation."""
+    result = await handle_linode_stackscript_create(
+        {
+            "label": "my-script",
+            "images": ["linode/ubuntu22.04"],
+            "script": "#!/bin/bash",
+        },
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "Error" in result[0].text
+    assert "confirm=true" in result[0].text
+
+
+async def test_handle_linode_stackscript_create_validates_required_fields(
+    sample_config: Config,
+) -> None:
+    """Test linode_stackscript_create required field validation."""
+    result = await handle_linode_stackscript_create(
+        {
+            "label": "my-script",
+            "images": [],
+            "script": "#!/bin/bash",
+            "confirm": True,
+        },
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "Error" in result[0].text
+    assert "images" in result[0].text
 
 
 # Stage 4: Write operations tests

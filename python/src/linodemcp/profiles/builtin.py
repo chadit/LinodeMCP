@@ -84,6 +84,7 @@ _TOOL_CATEGORIES: tuple[tuple[str, tuple[str, ...]], ...] = (
             "linode_types_",
             "linode_images_",
             "linode_stackscripts_",
+            "linode_stackscript_",
         ),
     ),
     ("account", ("linode_account_",)),

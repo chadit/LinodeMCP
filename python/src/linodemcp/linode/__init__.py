@@ -1276,6 +1276,35 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListStackScripts", e) from e
 
+    async def create_stackscript(
+        self,
+        label: str,
+        images: list[str],
+        script: str,
+        description: str | None = None,
+        is_public: bool | None = None,
+        rev_note: str | None = None,
+    ) -> StackScript:
+        """Create a StackScript."""
+        body: dict[str, Any] = {
+            "label": label,
+            "images": images,
+            "script": script,
+        }
+        if description is not None:
+            body["description"] = description
+        if is_public is not None:
+            body["is_public"] = is_public
+        if rev_note is not None:
+            body["rev_note"] = rev_note
+
+        try:
+            response = await self.make_request("POST", "/linode/stackscripts", body)
+            data = response.json()
+            return self._parse_stackscript(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateStackScript", e) from e
+
     # Phase 1: Object Storage read operations
 
     async def list_object_storage_buckets(self) -> list[dict[str, Any]]:
@@ -4108,6 +4137,28 @@ class RetryableClient:
         """List StackScripts with retry."""
         result: list[StackScript] = await self._execute_with_retry(
             self.client.list_stackscripts
+        )
+        return result
+
+    async def create_stackscript(
+        self,
+        label: str,
+        images: list[str],
+        script: str,
+        description: str | None = None,
+        is_public: bool | None = None,
+        rev_note: str | None = None,
+    ) -> StackScript:
+        """Create a StackScript with retry."""
+        result: StackScript = await self._execute_with_retry(
+            lambda: self.client.create_stackscript(
+                label=label,
+                images=images,
+                script=script,
+                description=description,
+                is_public=is_public,
+                rev_note=rev_note,
+            )
         )
         return result
 
