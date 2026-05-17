@@ -115,7 +115,7 @@ jobs:
         run: make build-prod
 
       - name: Upload coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: go-coverage
           path: go/coverage.out
@@ -145,7 +145,7 @@ jobs:
         run: pytest tests/
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: python-coverage
           path: python/htmlcov/

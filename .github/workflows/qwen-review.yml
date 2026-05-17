@@ -1,0 +1,77 @@
+name: Qwen Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Check required secret
+        id: secrets
+        env:
+          # GitHub masks secret values inside if-conditions, but a boolean
+          # comparison done in env (`secret != ''`) yields a plain
+          # 'true'/'false' string we can branch on without leaking anything.
+          HAS_QWEN_API_KEY: ${{ secrets.QWEN_API_KEY != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          skip=false
+          if [[ "${HAS_QWEN_API_KEY}" != "true" ]]; then
+            echo "::warning title=Qwen review skipped::QWEN_API_KEY secret is not configured. Add it under Settings -> Secrets and variables -> Actions to enable AI code review."
+            skip=true
+          fi
+          echo "skip=${skip}" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout codebase
+        if: steps.secrets.outputs.skip != 'true'
+        uses: actions/checkout@v6
+
+      - name: Execute Qwen Agent
+        if: steps.secrets.outputs.skip != 'true'
+        uses: QwenLM/qwen-code-action@main
+        with:
+          openai_api_key: ${{ secrets.QWEN_API_KEY }}
+          openai_model: 'qwen3.6-plus'
+          prompt: |
+            You are a Senior Staff Backend Engineer conducting a strict architectural and code-level review.
+
+            1. Run `gh pr diff ${{ github.event.pull_request.number }}` to fetch the changes. Pay close attention to the file paths and new line numbers.
+            2. Run `gh pr view ${{ github.event.pull_request.number }} --json title,body` for context.
+            3. Analyze the code against these specific constraints:
+
+            For Go files (.go):
+            - Flag goroutine leaks, unbuffered channels causing deadlocks, or missing context cancellations.
+            - Reject ignored errors (using `_`) unless a comment explicitly justifies it.
+            - Check for improper mutex lock scopes and potential race conditions.
+            - Ensure interfaces are defined where they are consumed, not where they are implemented.
+
+            For Python files (.py):
+            - Flag blocking I/O operations inside async contexts.
+            - Reject mutable default arguments in function definitions.
+            - Enforce type hinting for all new public function signatures.
+            - Flag silent exception swallowing.
+
+            4. Construct a formal GitHub PR Review JSON payload. Map your findings to the specific lines in the diff. ONLY comment on line numbers that are part of the additions/modifications in this PR.
+            Save it to a file named `review.json` using this exact schema:
+            {
+              "body": "Your high-level architectural summary of the changes.",
+              "event": "COMMENT",
+              "comments": [
+                {
+                  "path": "path/to/file.go",
+                  "line": 42,
+                  "body": "Specific feedback for this line."
+                }
+              ]
+            }
+
+            5. Post the review directly to the GitHub API by running:
+            `gh api -X POST repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews --input review.json`
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
