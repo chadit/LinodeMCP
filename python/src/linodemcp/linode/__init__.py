@@ -2917,6 +2917,17 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("CreateIPv6Range", e) from e
 
+    async def get_ipv6_range(self, ipv6_range: str) -> dict[str, Any]:
+        """Get an IPv6 range."""
+        encoded_range = quote(ipv6_range, safe="")
+        endpoint = f"/networking/ipv6/ranges/{encoded_range}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            range_data: dict[str, Any] = response.json()
+            return range_data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetIPv6Range", e) from e
+
     async def delete_ipv6_range(self, ipv6_range: str) -> None:
         """Delete an IPv6 range."""
         encoded_range = quote(ipv6_range, safe="")
@@ -4782,6 +4793,13 @@ class RetryableClient:
             prefix_length,
             linode_id,
             route_target,
+        )
+        return result
+
+    async def get_ipv6_range(self, ipv6_range: str) -> dict[str, Any]:
+        """Get IPv6 range with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_ipv6_range, ipv6_range
         )
         return result
 
