@@ -100,10 +100,12 @@ from linodemcp.tools.linode_instance_ips import (
     create_linode_instance_ip_allocate_tool,
     create_linode_instance_ip_delete_tool,
     create_linode_instance_ip_get_tool,
+    create_linode_instance_ip_update_tool,
     create_linode_instance_ips_list_tool,
     handle_linode_instance_ip_allocate,
     handle_linode_instance_ip_delete,
     handle_linode_instance_ip_get,
+    handle_linode_instance_ip_update,
     handle_linode_instance_ips_list,
 )
 from linodemcp.tools.linode_instance_write import (
@@ -380,6 +382,7 @@ __all__ = [
     "create_linode_instance_ip_allocate_tool",
     "create_linode_instance_ip_delete_tool",
     "create_linode_instance_ip_get_tool",
+    "create_linode_instance_ip_update_tool",
     "create_linode_instance_ips_list_tool",
     "create_linode_instance_migrate_tool",
     "create_linode_instance_password_reset_tool",
@@ -515,6 +518,7 @@ __all__ = [
     "handle_linode_instance_ip_allocate",
     "handle_linode_instance_ip_delete",
     "handle_linode_instance_ip_get",
+    "handle_linode_instance_ip_update",
     "handle_linode_instance_ips_list",
     "handle_linode_instance_migrate",
     "handle_linode_instance_password_reset",
