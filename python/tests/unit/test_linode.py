@@ -364,6 +364,26 @@ async def test_retryable_client_success(sample_profile_data: dict[str, Any]) -> 
     await client.close()
 
 
+async def test_retryable_client_list_vlans() -> None:
+    """Test retryable client delegates VLAN listing."""
+    client = RetryableClient(
+        "https://api.linode.com/v4", "test-token", RetryConfig(max_retries=3)
+    )
+    expected_vlans = [{"label": "app-vlan", "region": "us-east"}]
+
+    with patch.object(
+        client.client, "list_vlans", new_callable=AsyncMock
+    ) as mock_list_vlans:
+        mock_list_vlans.return_value = expected_vlans
+
+        vlans = await client.list_vlans()
+
+        assert vlans == expected_vlans
+        mock_list_vlans.assert_awaited_once_with()
+
+    await client.close()
+
+
 async def test_retryable_client_retry_on_rate_limit(
     sample_profile_data: dict[str, Any],
 ) -> None:
@@ -632,6 +652,36 @@ async def test_list_firewalls() -> None:
         assert len(firewalls) == 1
         assert firewalls[0].id == 1
         assert firewalls[0].label == "web-fw"
+
+    await client.close()
+
+
+async def test_list_vlans() -> None:
+    """Test listing VLANs."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": [
+            {
+                "label": "app-vlan",
+                "region": "us-east",
+                "linodes": [123],
+            }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        vlans = await client.list_vlans()
+
+        assert vlans == mock_response.json.return_value["data"]
+        mock_request.assert_awaited_once_with("GET", "/networking/vlans")
 
     await client.close()
 
