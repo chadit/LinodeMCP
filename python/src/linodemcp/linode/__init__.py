@@ -1536,6 +1536,18 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetBucketSSL", e) from e
 
+    async def upload_bucket_ssl(
+        self, region: str, label: str, certificate: str, private_key: str
+    ) -> dict[str, Any]:
+        """Upload an SSL/TLS certificate for a bucket."""
+        endpoint = f"/object-storage/buckets/{region}/{label}/ssl"
+        body = {"certificate": certificate, "private_key": private_key}
+        try:
+            response = await self.make_request("POST", endpoint, body)
+            return dict(response.json())
+        except httpx.HTTPError as e:
+            raise NetworkError("UploadBucketSSL", e) from e
+
     async def delete_bucket_ssl(self, region: str, label: str) -> None:
         """Delete the SSL/TLS certificate from a bucket."""
         endpoint = f"/object-storage/buckets/{region}/{label}/ssl"
@@ -4266,6 +4278,15 @@ class RetryableClient:
         """Get bucket SSL status with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_bucket_ssl, region, label
+        )
+        return result
+
+    async def upload_bucket_ssl(
+        self, region: str, label: str, certificate: str, private_key: str
+    ) -> dict[str, Any]:
+        """Upload bucket SSL certificate with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.upload_bucket_ssl, region, label, certificate, private_key
         )
         return result
 

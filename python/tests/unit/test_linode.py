@@ -971,6 +971,37 @@ async def test_list_firewalls() -> None:
     await client.close()
 
 
+async def test_upload_bucket_ssl() -> None:
+    """Test uploading an Object Storage bucket SSL certificate."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"ssl": True}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.upload_bucket_ssl(
+            "us-east-1",
+            "app-bucket",
+            "sample-certificate",
+            "sample-private-key",
+        )
+
+        assert result == {"ssl": True}
+        mock_request.assert_awaited_once_with(
+            "POST",
+            "/object-storage/buckets/us-east-1/app-bucket/ssl",
+            {
+                "certificate": "sample-certificate",
+                "private_key": "sample-private-key",
+            },
+        )
+
+    await client.close()
+
+
 async def test_list_vlans() -> None:
     """Test listing VLANs."""
     client = Client("https://api.linode.com/v4", "test-token")
