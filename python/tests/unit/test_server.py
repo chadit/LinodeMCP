@@ -3,17 +3,40 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from linodemcp.config import BuiltinOverride, UserProfileConfig
 from linodemcp.linode import Profile
-from linodemcp.server import Server
+from linodemcp.profiles import (
+    ActiveProfileDisabledError,
+    ActiveProfileUnknownError,
+)
+from linodemcp.server import Server, get_tool_registry
 from linodemcp.tools import handle_hello, handle_version
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
+
+
+def _full_access_config(base: Config) -> Config:
+    """Return a copy of ``base`` switched to the full-access built-in.
+
+    The Server fixtures default to no ``active_profile`` set, which means
+    the resolver picks the read-only ``default`` built-in. Tests that need
+    every registered tool (or a specific Write tool) opt into full-access
+    via this helper and the matching override.
+    """
+    return dataclasses.replace(
+        base,
+        active_profile="full-access",
+        profiles_builtin_overrides={
+            "full-access": BuiltinOverride(disabled=False),
+        },
+    )
 
 
 async def test_server_construction_stores_config(sample_config: Config) -> None:
@@ -206,11 +229,102 @@ async def test_all_listed_tools_have_handlers(
 async def test_ipv6_range_create_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
-    """IPv6 range create tool should be exported and registered."""
+    """IPv6 range create tool should be exported and registered.
+
+    Uses full-access because Phase 4 filters Write tools out of the
+    default profile; the test only cares that the registration path
+    sees the tool, not the profile filter.
+    """
     from linodemcp import tools as tools_mod
 
     assert "create_linode_ipv6_range_create_tool" in tools_mod.__all__
     assert "handle_linode_ipv6_range_create" in tools_mod.__all__
 
-    srv = Server(sample_config)
+    srv = Server(_full_access_config(sample_config))
     assert "linode_ipv6_range_create" in srv.registered_tool_names
+
+
+async def test_default_profile_filters_to_read_only(sample_config: Config) -> None:
+    """Server with no active_profile registers only Read+Meta tools.
+
+    The default built-in's allow list is strictly smaller than the full
+    registry, and it must NOT include obvious mutators like
+    ``linode_instance_create``. A Read tool (``linode_instances_list``)
+    confirms the filter is letting through the right side.
+    """
+    full_registry = get_tool_registry()
+    srv = Server(sample_config)
+
+    assert srv.active_profile.name == "default"
+    assert srv.registered_tool_names, "default profile must register some tools"
+    assert len(srv.registered_tool_names) < len(full_registry), (
+        "default profile should filter the registry, not pass it through"
+    )
+    assert "linode_instances_list" in srv.registered_tool_names
+    assert "linode_instance_create" not in srv.registered_tool_names
+    assert "hello" in srv.registered_tool_names
+
+
+async def test_full_access_profile_registers_every_tool(
+    sample_config: Config,
+) -> None:
+    """Full-access (with override enabling it) registers the entire registry."""
+    full_registry = get_tool_registry()
+    cfg = _full_access_config(sample_config)
+    srv = Server(cfg)
+
+    assert srv.active_profile.name == "full-access"
+    assert len(srv.registered_tool_names) == len(full_registry)
+    expected_names = {entry.name for entry in full_registry}
+    assert srv.registered_tool_names == expected_names
+
+
+async def test_disabled_builtin_profile_raises(sample_config: Config) -> None:
+    """Selecting a disabled built-in raises at server construction."""
+    cfg = dataclasses.replace(
+        sample_config,
+        active_profile="compute-admin",
+        profiles_builtin_overrides={
+            "compute-admin": BuiltinOverride(disabled=True),
+        },
+    )
+
+    with pytest.raises(ActiveProfileDisabledError, match="compute-admin"):
+        Server(cfg)
+
+
+async def test_unknown_active_profile_raises(sample_config: Config) -> None:
+    """A typo in active_profile raises rather than silently falling back."""
+    cfg = dataclasses.replace(sample_config, active_profile="does-not-exist")
+
+    with pytest.raises(ActiveProfileUnknownError, match="does-not-exist"):
+        Server(cfg)
+
+
+async def test_user_defined_profile_registers_listed_tools_only(
+    sample_config: Config,
+) -> None:
+    """A user-defined profile's allow list maps one-to-one to registered names.
+
+    Picks two known Read tools to keep the assertion independent of any
+    capability tag changes; the profile filter is name-based by spec.
+    """
+    cfg = dataclasses.replace(
+        sample_config,
+        active_profile="minimal",
+        profiles={
+            "minimal": UserProfileConfig(
+                description="just two read tools for the filter test",
+                allowed_tools=("linode_instances_list", "linode_account"),
+            ),
+        },
+    )
+    srv = Server(cfg)
+
+    assert srv.active_profile.name == "minimal"
+    assert srv.registered_tool_names == {
+        "linode_instances_list",
+        "linode_account",
+    }
+    # Mutators outside the allow list must not slip through.
+    assert "linode_instance_create" not in srv.registered_tool_names

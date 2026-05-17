@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/chadit/LinodeMCP/internal/config"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 	"github.com/chadit/LinodeMCP/internal/server"
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
@@ -26,6 +27,43 @@ const (
 	hostLocalhost   = "127.0.0.1"
 )
 
+// baseTestConfig returns a minimal Config sufficient to construct a Server.
+// Tests that need a specific active profile copy the value and adjust the
+// ActiveProfile and ProfilesBuiltinOverrides fields before calling
+// server.New. The shared shape keeps the call sites focused on the profile
+// behavior under test.
+func baseTestConfig() *config.Config {
+	return &config.Config{
+		Server: config.ServerConfig{
+			Name:      serverNameTest,
+			LogLevel:  logLevelInfo,
+			Transport: transportStdio,
+			Host:      hostLocalhost,
+			Port:      8080,
+		},
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {
+				Label:  envLabelDefault,
+				Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenShort},
+			},
+		},
+	}
+}
+
+// fullAccessConfig returns a config that selects the built-in full-access
+// profile and overrides its default-disabled state so server.New registers
+// every tool. Used by tests that need the full tool surface and do not care
+// about profile filtering specifically.
+func fullAccessConfig() *config.Config {
+	cfg := baseTestConfig()
+	cfg.ActiveProfile = profiles.BuiltinFullAccess
+	cfg.ProfilesBuiltinOverrides = map[string]config.BuiltinOverride{
+		profiles.BuiltinFullAccess: {Disabled: false},
+	}
+
+	return cfg
+}
+
 // End-to-end verification of server construction and initialization.
 func TestNew(t *testing.T) {
 	t.Parallel()
@@ -39,50 +77,34 @@ func TestNew(t *testing.T) {
 		assert.ErrorIs(t, err, server.ErrConfigNil, "error should be ErrConfigNil")
 	})
 
-	t.Run("valid config creates server", func(t *testing.T) {
+	t.Run("valid config creates server with full-access profile", func(t *testing.T) {
 		t.Parallel()
 
-		cfg := &config.Config{
-			Server: config.ServerConfig{
-				Name:      "TestMCP",
-				LogLevel:  logLevelInfo,
-				Transport: transportStdio,
-				Host:      hostLocalhost,
-				Port:      8080,
-			},
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {
-					Label: envLabelDefault,
-					Linode: config.LinodeConfig{
-						APIURL: apiURLLinodeV4,
-						Token:  "test-token",
-					},
-				},
-			},
+		cfg := fullAccessConfig()
+		cfg.Server.Name = "TestMCP"
+		cfg.Environments[envKeyDefault] = config.EnvironmentConfig{
+			Label:  envLabelDefault,
+			Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: "test-token"},
 		}
 
 		srv, err := server.New(cfg)
 
 		require.NoError(t, err, "New with valid config should not return an error")
 		require.NotNil(t, srv, "server should not be nil with valid config")
-		assert.Len(t, srv.Tools(), 125, "should have 125 registered tools")
+		assert.NotEmpty(t, srv.Tools(), "full-access should register every tool")
+		assert.Equal(
+			t,
+			profiles.BuiltinFullAccess,
+			srv.ActiveProfile().Name,
+			"server should expose the resolved active profile",
+		)
 	})
 
 	t.Run("tools are registered", func(t *testing.T) {
 		t.Parallel()
 
-		cfg := &config.Config{
-			Server: config.ServerConfig{
-				Name:     "TestMCP",
-				LogLevel: logLevelInfo,
-			},
-			Environments: map[string]config.EnvironmentConfig{
-				envKeyDefault: {
-					Label:  envLabelDefault,
-					Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenShort},
-				},
-			},
-		}
+		cfg := baseTestConfig()
+		cfg.Server = config.ServerConfig{Name: "TestMCP", LogLevel: logLevelInfo}
 
 		srv, err := server.New(cfg)
 		require.NoError(t, err, "New should succeed with valid config")

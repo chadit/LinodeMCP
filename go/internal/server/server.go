@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"log/slog"
 	"sync"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -21,15 +22,29 @@ import (
 // toolHandler is the callback signature mcp-go invokes for each tool call.
 type toolHandler = func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error)
 
-// Server represents a LinodeMCP server.
-type Server struct {
-	config   *config.Config
-	mcp      *server.MCPServer
-	tools    []contracts.Tool
-	inflight sync.WaitGroup
+// toolEntry is the staged shape produced by the per-category collectors before
+// profile filtering decides which tools actually reach mcp-go. Pass 1 of the
+// two-pass registration builds a flat slice of these; pass 2 calls addTool
+// only for entries whose name appears in the resolved profile's AllowedTools.
+type toolEntry struct {
+	tool       mcp.Tool
+	capability profiles.Capability
+	handler    toolHandler
 }
 
-// New creates a new LinodeMCP server.
+// Server represents a LinodeMCP server.
+type Server struct {
+	config        *config.Config
+	mcp           *server.MCPServer
+	tools         []contracts.Tool
+	activeProfile profiles.Profile
+	inflight      sync.WaitGroup
+}
+
+// New creates a new LinodeMCP server. Returns an error if config is nil or if
+// the active profile cannot be resolved (unknown profile, disabled built-in,
+// etc.). A resolution error surfaces here rather than at request time so a
+// misconfigured server fails fast instead of silently registering nothing.
 func New(cfg *config.Config) (*Server, error) {
 	if cfg == nil {
 		return nil, ErrConfigNil
@@ -47,7 +62,9 @@ func New(cfg *config.Config) (*Server, error) {
 		tools:  make([]contracts.Tool, 0),
 	}
 
-	srv.registerTools()
+	if err := srv.registerTools(); err != nil {
+		return nil, err
+	}
 
 	return srv, nil
 }
@@ -83,6 +100,12 @@ func (*toolWrapper) Execute(ctx context.Context, _ map[string]any) (*mcp.CallToo
 func (s *Server) Tools() []contracts.Tool {
 	return s.tools
 }
+
+// ActiveProfile returns the profile the server resolved at construction time.
+// Used by unit assertions today; the Phase 5 audit middleware will read it to
+// tag each tool-call event with the active profile name. The returned value
+// is a copy so callers cannot mutate the server's internal state.
+func (s *Server) ActiveProfile() profiles.Profile { return s.activeProfile }
 
 // ToolInfo describes a registered tool's capability and input schema for the
 // capability invariant tests. The public contracts.Tool deliberately stays
@@ -191,36 +214,119 @@ func (s *Server) addTool(tool *mcp.Tool, capability profiles.Capability, handler
 	s.tools = append(s.tools, &toolWrapper{tool: *tool, capability: capability})
 }
 
-func (s *Server) registerToolFromFactory(factory toolFactory) {
-	tool, capability, handler := factory(s.config)
-	s.addTool(&tool, capability, handler)
+// entryFromFactory invokes a tool factory and packages its three return
+// values into a toolEntry. Pass 1 of registerTools relies on this so each
+// per-category collector can stay free of mcp.AddTool side effects.
+func entryFromFactory(cfg *config.Config, factory toolFactory) toolEntry {
+	tool, capability, handler := factory(cfg)
+
+	return toolEntry{tool: tool, capability: capability, handler: handler}
 }
 
-func (s *Server) registerTools() {
-	s.registerCoreTools()
-	s.registerComputeTools()
-	s.registerNetworkingTools()
-	s.registerDNSTools()
-	s.registerVolumeTools()
-	s.registerObjectStorageTools()
-	s.registerLKETools()
-	s.registerVPCTools()
-	s.registerInstanceDeepTools()
+// entriesFromFactories applies entryFromFactory across a slice and returns
+// the resulting entries. Per-category collectors call this so each list of
+// factories stays a single expression.
+func entriesFromFactories(cfg *config.Config, factories []toolFactory) []toolEntry {
+	entries := make([]toolEntry, 0, len(factories))
+	for _, factory := range factories {
+		entries = append(entries, entryFromFactory(cfg, factory))
+	}
+
+	return entries
 }
 
-func (s *Server) registerCoreTools() {
-	for _, factory := range []toolFactory{
+// registerTools runs the two-pass registration that produces the active
+// tool surface. Pass 1 collects every factory's toolEntry across all
+// categories. Pass 2 resolves the active profile against the collected
+// entries and registers only the tools the profile permits.
+//
+// Returns the error from profiles.ResolveActiveProfile verbatim if the
+// configured profile is unknown or disabled. The error wraps the package's
+// sentinel via fmt.Errorf("...: %w", ...) so callers can match with
+// errors.Is.
+func (s *Server) registerTools() error {
+	entries := s.collectAllToolEntries()
+
+	registry := make([]profiles.ToolDescriptor, len(entries))
+	for i := range entries {
+		registry[i] = profiles.ToolDescriptor{
+			Name:       entries[i].tool.Name,
+			Capability: entries[i].capability,
+		}
+	}
+
+	profile, err := profiles.ResolveActiveProfile(s.config, registry)
+	if err != nil {
+		return fmt.Errorf("resolve active profile: %w", err)
+	}
+
+	s.activeProfile = profile
+
+	allowed := make(map[string]struct{}, len(profile.AllowedTools))
+	for _, name := range profile.AllowedTools {
+		allowed[name] = struct{}{}
+	}
+
+	for i := range entries {
+		entry := &entries[i]
+		if _, ok := allowed[entry.tool.Name]; !ok {
+			slog.Info(
+				"profile filtered out tool at registration",
+				"profile", profile.Name,
+				"tool", entry.tool.Name,
+				"capability", entry.capability.String(),
+			)
+
+			continue
+		}
+
+		s.addTool(&entry.tool, entry.capability, entry.handler)
+	}
+
+	return nil
+}
+
+// collectAllToolEntries returns the flat list of every tool the server
+// could register, ignoring profile filtering. Pass 1 of registerTools uses
+// this to build the descriptor list for profile resolution; pass 2 then
+// filters and calls addTool.
+func (s *Server) collectAllToolEntries() []toolEntry {
+	categoryEntries := [][]toolEntry{
+		s.coreToolEntries(),
+		s.computeToolEntries(),
+		s.networkingToolEntries(),
+		s.dnsToolEntries(),
+		s.volumeToolEntries(),
+		s.objectStorageToolEntries(),
+		s.lkeToolEntries(),
+		s.vpcToolEntries(),
+		s.instanceDeepToolEntries(),
+	}
+
+	var total int
+	for _, group := range categoryEntries {
+		total += len(group)
+	}
+
+	entries := make([]toolEntry, 0, total)
+	for _, group := range categoryEntries {
+		entries = append(entries, group...)
+	}
+
+	return entries
+}
+
+func (s *Server) coreToolEntries() []toolEntry {
+	return entriesFromFactories(s.config, []toolFactory{
 		tools.NewHelloTool,
 		tools.NewVersionTool,
 		tools.NewLinodeProfileTool,
 		tools.NewLinodeAccountTool,
-	} {
-		s.registerToolFromFactory(factory)
-	}
+	})
 }
 
-func (s *Server) registerComputeTools() {
-	for _, factory := range []toolFactory{
+func (s *Server) computeToolEntries() []toolEntry {
+	return entriesFromFactories(s.config, []toolFactory{
 		tools.NewLinodeInstancesTool,
 		tools.NewLinodeInstanceGetTool,
 		tools.NewLinodeRegionsListTool,
@@ -236,13 +342,11 @@ func (s *Server) registerComputeTools() {
 		tools.NewLinodeInstanceCreateTool,
 		tools.NewLinodeInstanceDeleteTool,
 		tools.NewLinodeInstanceResizeTool,
-	} {
-		s.registerToolFromFactory(factory)
-	}
+	})
 }
 
-func (s *Server) registerNetworkingTools() {
-	for _, factory := range []toolFactory{
+func (s *Server) networkingToolEntries() []toolEntry {
+	return entriesFromFactories(s.config, []toolFactory{
 		tools.NewLinodeFirewallsListTool,
 		tools.NewLinodeNodeBalancersListTool,
 		tools.NewLinodeNodeBalancerGetTool,
@@ -252,13 +356,11 @@ func (s *Server) registerNetworkingTools() {
 		tools.NewLinodeNodeBalancerCreateTool,
 		tools.NewLinodeNodeBalancerUpdateTool,
 		tools.NewLinodeNodeBalancerDeleteTool,
-	} {
-		s.registerToolFromFactory(factory)
-	}
+	})
 }
 
-func (s *Server) registerDNSTools() {
-	for _, factory := range []toolFactory{
+func (s *Server) dnsToolEntries() []toolEntry {
+	return entriesFromFactories(s.config, []toolFactory{
 		tools.NewLinodeDomainsListTool,
 		tools.NewLinodeDomainGetTool,
 		tools.NewLinodeDomainRecordsListTool,
@@ -268,26 +370,22 @@ func (s *Server) registerDNSTools() {
 		tools.NewLinodeDomainRecordCreateTool,
 		tools.NewLinodeDomainRecordUpdateTool,
 		tools.NewLinodeDomainRecordDeleteTool,
-	} {
-		s.registerToolFromFactory(factory)
-	}
+	})
 }
 
-func (s *Server) registerVolumeTools() {
-	for _, factory := range []toolFactory{
+func (s *Server) volumeToolEntries() []toolEntry {
+	return entriesFromFactories(s.config, []toolFactory{
 		tools.NewLinodeVolumesListTool,
 		tools.NewLinodeVolumeCreateTool,
 		tools.NewLinodeVolumeAttachTool,
 		tools.NewLinodeVolumeDetachTool,
 		tools.NewLinodeVolumeResizeTool,
 		tools.NewLinodeVolumeDeleteTool,
-	} {
-		s.registerToolFromFactory(factory)
-	}
+	})
 }
 
-func (s *Server) registerObjectStorageTools() {
-	for _, factory := range []toolFactory{
+func (s *Server) objectStorageToolEntries() []toolEntry {
+	return entriesFromFactories(s.config, []toolFactory{
 		tools.NewLinodeObjectStorageBucketsListTool,
 		tools.NewLinodeObjectStorageBucketGetTool,
 		tools.NewLinodeObjectStorageBucketContentsTool,
@@ -308,13 +406,11 @@ func (s *Server) registerObjectStorageTools() {
 		tools.NewLinodeObjectStorageObjectACLUpdateTool,
 		tools.NewLinodeObjectStorageSSLGetTool,
 		tools.NewLinodeObjectStorageSSLDeleteTool,
-	} {
-		s.registerToolFromFactory(factory)
-	}
+	})
 }
 
-func (s *Server) registerVPCTools() {
-	for _, factory := range []toolFactory{
+func (s *Server) vpcToolEntries() []toolEntry {
+	return entriesFromFactories(s.config, []toolFactory{
 		// Read tools
 		tools.NewLinodeVPCsListTool,
 		tools.NewLinodeVPCGetTool,
@@ -329,13 +425,11 @@ func (s *Server) registerVPCTools() {
 		tools.NewLinodeVPCSubnetCreateTool,
 		tools.NewLinodeVPCSubnetUpdateTool,
 		tools.NewLinodeVPCSubnetDeleteTool,
-	} {
-		s.registerToolFromFactory(factory)
-	}
+	})
 }
 
-func (s *Server) registerInstanceDeepTools() {
-	for _, factory := range []toolFactory{
+func (s *Server) instanceDeepToolEntries() []toolEntry {
+	return entriesFromFactories(s.config, []toolFactory{
 		// Backups
 		tools.NewLinodeInstanceBackupsListTool,
 		tools.NewLinodeInstanceBackupGetTool,
@@ -362,13 +456,11 @@ func (s *Server) registerInstanceDeepTools() {
 		tools.NewLinodeInstanceRebuildTool,
 		tools.NewLinodeInstanceRescueTool,
 		tools.NewLinodeInstancePasswordResetTool,
-	} {
-		s.registerToolFromFactory(factory)
-	}
+	})
 }
 
-func (s *Server) registerLKETools() {
-	for _, factory := range []toolFactory{
+func (s *Server) lkeToolEntries() []toolEntry {
+	return entriesFromFactories(s.config, []toolFactory{
 		// Read tools
 		tools.NewLinodeLKEClustersListTool,
 		tools.NewLinodeLKEClusterGetTool,
@@ -399,7 +491,5 @@ func (s *Server) registerLKETools() {
 		tools.NewLinodeLKEServiceTokenDeleteTool,
 		tools.NewLinodeLKEACLUpdateTool,
 		tools.NewLinodeLKEACLDeleteTool,
-	} {
-		s.registerToolFromFactory(factory)
-	}
+	})
 }

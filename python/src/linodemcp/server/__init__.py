@@ -13,7 +13,12 @@ from mcp.server.stdio import stdio_server
 from mcp.types import Tool
 
 import linodemcp.tools as tools_module
-from linodemcp.profiles import Capability
+from linodemcp.profiles import (
+    Capability,
+    Profile,
+    ToolDescriptor,
+    resolve_active_profile,
+)
 from linodemcp.tools import (
     handle_hello,
     handle_version,
@@ -135,12 +140,32 @@ class Server:
         # non-zero, set again when it returns to 0. shutdown() awaits this.
         self._idle = asyncio.Event()
         self._idle.set()
+
+        # Phase 4: resolve the active profile against the full registry so
+        # _register_tools can skip everything outside the allow list. The
+        # resolver raises ActiveProfileUnknownError or
+        # ActiveProfileDisabledError on a bad config; let those propagate.
+        descriptors = [
+            ToolDescriptor(name=entry.name, capability=entry.capability)
+            for entry in _TOOL_REGISTRY
+        ]
+        self._active_profile = resolve_active_profile(config, descriptors)
+        self._allowed_tool_names = frozenset(self._active_profile.allowed_tools)
         self._register_tools()
 
     @property
+    def active_profile(self) -> Profile:
+        """Resolved profile the server is running under.
+
+        Used by tests today; Phase 5 hot-reload and the future audit
+        middleware will read this too.
+        """
+        return self._active_profile
+
+    @property
     def registered_tool_names(self) -> frozenset[str]:
-        """Names of tools registered with the MCP server."""
-        return frozenset(entry.name for entry in _TOOL_REGISTRY)
+        """Names of tools the active profile allowed through registration."""
+        return self._allowed_tool_names
 
     async def dispatch(self, name: str, arguments: dict[str, Any]) -> list[Any]:
         """Invoke a registered tool handler with in-flight tracking.
@@ -173,7 +198,15 @@ class Server:
         return True
 
     async def _dispatch_inner(self, name: str, arguments: dict[str, Any]) -> list[Any]:
-        """Resolve a tool name to its handler and await the result."""
+        """Resolve a tool name to its handler and await the result.
+
+        ``hello`` and ``version`` keep their direct fast path because they
+        take no config argument; they still go through the allow list so a
+        profile that omits them cannot reach them via ``dispatch``.
+        """
+        if name not in self._allowed_tool_names:
+            msg = f"Unknown tool: {name}"
+            raise ValueError(msg)
         match name:
             case "hello":
                 return await handle_hello(arguments)
@@ -186,18 +219,36 @@ class Server:
                 raise ValueError(msg)
 
     def _register_tools(self) -> None:
-        """Register all MCP tools using auto-discovery."""
+        """Register tools that the active profile permits.
+
+        Tools outside the profile's allow list never reach mcp-py's tool
+        map, so ``tools/list`` and ``call_tool`` never see them. Skipped
+        tools log at INFO so operators can confirm the filter ran.
+        """
+        allowed_entries: list[ToolEntry] = []
+        for entry in _TOOL_REGISTRY:
+            if entry.name not in self._allowed_tool_names:
+                logger.info(
+                    "[profile=%s] filtered out tool: %s",
+                    self._active_profile.name,
+                    entry.name,
+                )
+                continue
+            allowed_entries.append(entry)
+
+        self._allowed_entries: list[ToolEntry] = allowed_entries
+
         _list_tools_method = cast(
             "Callable[[], ListToolsDecorator]", self.mcp.list_tools
         )
 
         async def _list_tools() -> list[Tool]:
-            return [entry.tool for entry in _TOOL_REGISTRY]
+            return [entry.tool for entry in allowed_entries]
 
         _list_tools_method()(_list_tools)
 
         self._config_handlers: dict[str, Callable[..., Awaitable[list[Any]]]] = {
-            entry.name: entry.handle_fn for entry in _TOOL_REGISTRY
+            entry.name: entry.handle_fn for entry in allowed_entries
         }
 
         async def _call_tool(name: str, arguments: dict[str, Any]) -> list[Any]:
@@ -208,7 +259,11 @@ class Server:
 
     async def start(self) -> None:
         """Start the MCP server using stdio transport."""
-        logger.info("Starting LinodeMCP server with %d tools", len(_TOOL_REGISTRY))
+        logger.info(
+            "Starting LinodeMCP server with %d tools (profile=%s)",
+            len(self._allowed_entries),
+            self._active_profile.name,
+        )
 
         async with stdio_server() as (read_stream, write_stream):
             await self.mcp.run(
