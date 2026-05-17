@@ -25,6 +25,10 @@ const (
 	serverNameTest  = "Test"
 	transportStdio  = "stdio"
 	hostLocalhost   = "127.0.0.1"
+
+	// profileSingleTool is the name shared by the filter and reload tests
+	// that construct a user-defined profile containing exactly one tool.
+	profileSingleTool = "single-tool"
 )
 
 // baseTestConfig returns a minimal Config sufficient to construct a Server.

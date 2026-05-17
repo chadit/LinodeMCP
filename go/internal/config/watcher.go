@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -30,6 +31,13 @@ type Watcher struct {
 	errs     chan error
 	stop     chan struct{}
 	stopped  atomic.Bool
+
+	// onChangeMu guards onChange so SetOnChange can replace the callback
+	// concurrently with checkAndReload reading it. The callback itself runs
+	// in the watcher goroutine; long-running subscribers should detach work
+	// onto their own goroutine to avoid blocking the polling loop.
+	onChangeMu sync.RWMutex
+	onChange   func(*Config)
 }
 
 // NewWatcher loads the file once and returns a Watcher seeded with that
@@ -72,6 +80,17 @@ func (w *Watcher) Get() *Config {
 	return w.current.Load()
 }
 
+// SetOnChange registers a callback fired after each successful reload.
+// The callback runs in the watcher's polling goroutine; subscribers that
+// do non-trivial work should hand off to their own goroutine. Passing nil
+// clears the callback. The initial Config seeded by NewWatcher does NOT
+// trigger the callback; only post-startup reloads do.
+func (w *Watcher) SetOnChange(fn func(*Config)) {
+	w.onChangeMu.Lock()
+	w.onChange = fn
+	w.onChangeMu.Unlock()
+}
+
 // Errors returns the channel of reload errors. Receive-only for consumers.
 // Errors are dropped if the channel is full.
 func (w *Watcher) Errors() <-chan error {
@@ -94,6 +113,15 @@ func (w *Watcher) Close() {
 	if w.stopped.CompareAndSwap(false, true) {
 		close(w.stop)
 	}
+}
+
+// loadOnChange returns the current callback under the read lock. Returns
+// nil if no callback is registered.
+func (w *Watcher) loadOnChange() func(*Config) {
+	w.onChangeMu.RLock()
+	defer w.onChangeMu.RUnlock()
+
+	return w.onChange
 }
 
 func (w *Watcher) run(ctx context.Context) {
@@ -134,6 +162,10 @@ func (w *Watcher) checkAndReload() error {
 
 	w.lastMod = mod
 	w.current.Store(cfg)
+
+	if fn := w.loadOnChange(); fn != nil {
+		fn(cfg)
+	}
 
 	return nil
 }

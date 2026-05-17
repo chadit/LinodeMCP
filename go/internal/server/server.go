@@ -39,6 +39,24 @@ type Server struct {
 	tools         []contracts.Tool
 	activeProfile profiles.Profile
 	inflight      sync.WaitGroup
+
+	// allEntries holds every tool the server could register, regardless of
+	// the active profile. Built once in New and reused by ReloadProfile so a
+	// profile change can re-add tools that were filtered out at startup
+	// without re-running the per-category collectors.
+	allEntries []toolEntry
+
+	// profileMu guards activeProfile, tools, and registered against
+	// concurrent reads from Tools/ActiveProfile/ToolInfos and writes from
+	// ReloadProfile. mcp-go's internal mutex protects its own tool map, but
+	// the Server's view of which tools are live needs its own gate.
+	profileMu sync.RWMutex
+
+	// registered tracks the tools currently live in mcp-go by name, so
+	// ReloadProfile can compute additions and removals without walking the
+	// tools slice. The map value is the index into tools for O(1) lookup
+	// when rebuilding the slice after a reload.
+	registered map[string]*toolWrapper
 }
 
 // New creates a new LinodeMCP server. Returns an error if config is nil or if
@@ -57,10 +75,13 @@ func New(cfg *config.Config) (*Server, error) {
 	)
 
 	srv := &Server{
-		config: cfg,
-		mcp:    mcpServer,
-		tools:  make([]contracts.Tool, 0),
+		config:     cfg,
+		mcp:        mcpServer,
+		tools:      make([]contracts.Tool, 0),
+		registered: make(map[string]*toolWrapper),
 	}
+
+	srv.allEntries = srv.collectAllToolEntries()
 
 	if err := srv.registerTools(); err != nil {
 		return nil, err
@@ -96,16 +117,29 @@ func (*toolWrapper) Execute(ctx context.Context, _ map[string]any) (*mcp.CallToo
 	}
 }
 
-// Tools returns the registered tool list.
+// Tools returns the registered tool list. The slice is a snapshot copy so
+// callers can iterate safely even if ReloadProfile mutates the live set
+// concurrently.
 func (s *Server) Tools() []contracts.Tool {
-	return s.tools
+	s.profileMu.RLock()
+	defer s.profileMu.RUnlock()
+
+	out := make([]contracts.Tool, len(s.tools))
+	copy(out, s.tools)
+
+	return out
 }
 
-// ActiveProfile returns the profile the server resolved at construction time.
-// Used by unit assertions today; the Phase 5 audit middleware will read it to
-// tag each tool-call event with the active profile name. The returned value
-// is a copy so callers cannot mutate the server's internal state.
-func (s *Server) ActiveProfile() profiles.Profile { return s.activeProfile }
+// ActiveProfile returns the profile the server is currently running under.
+// Reflects the most recent successful ReloadProfile if one has been called;
+// otherwise the profile resolved at construction time. Returned by value so
+// callers cannot mutate the server's internal state.
+func (s *Server) ActiveProfile() profiles.Profile {
+	s.profileMu.RLock()
+	defer s.profileMu.RUnlock()
+
+	return s.activeProfile
+}
 
 // ToolInfo describes a registered tool's capability and input schema for the
 // capability invariant tests. The public contracts.Tool deliberately stays
@@ -121,6 +155,9 @@ type ToolInfo struct {
 // tag and input schema. Test-only accessor; the audit middleware reads
 // capability via its own server-internal path.
 func (s *Server) ToolInfos() []ToolInfo {
+	s.profileMu.RLock()
+	defer s.profileMu.RUnlock()
+
 	out := make([]ToolInfo, 0, len(s.tools))
 
 	for _, t := range s.tools {
@@ -196,12 +233,106 @@ func (s *Server) Start(ctx context.Context) error {
 
 type toolFactory func(*config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error))
 
+// ReloadProfile swaps the running server to the profile resolved from cfg.
+// Tools the new profile allows that weren't previously registered are added;
+// tools the new profile excludes are removed. mcp-go fires
+// notifications/tools/list_changed on both paths so connected clients
+// refresh their tool cache.
+//
+// On error (unknown profile, disabled built-in, malformed config) the server
+// keeps its current active profile and tool set. A failed reload is a
+// no-op, not a partial update.
+//
+// Concurrency: holds s.profileMu in write mode for the duration. Reads on
+// Tools/ActiveProfile/ToolInfos block until the swap completes. In-flight
+// tool handlers that already passed the dispatch gate continue to run; the
+// reload only changes what the gate accepts on future calls.
+func (s *Server) ReloadProfile(cfg *config.Config) error {
+	if cfg == nil {
+		return ErrConfigNil
+	}
+
+	s.profileMu.Lock()
+	defer s.profileMu.Unlock()
+
+	profile, err := s.resolveProfileLocked(cfg)
+	if err != nil {
+		return err
+	}
+
+	newAllowed := make(map[string]struct{}, len(profile.AllowedTools))
+	for _, name := range profile.AllowedTools {
+		newAllowed[name] = struct{}{}
+	}
+
+	toRemove := make([]string, 0, len(s.registered))
+
+	for name := range s.registered {
+		if _, ok := newAllowed[name]; !ok {
+			toRemove = append(toRemove, name)
+		}
+	}
+
+	if len(toRemove) > 0 {
+		s.mcp.DeleteTools(toRemove...)
+
+		for _, name := range toRemove {
+			delete(s.registered, name)
+		}
+	}
+
+	var addedCount int
+
+	for i := range s.allEntries {
+		entry := &s.allEntries[i]
+
+		if _, ok := newAllowed[entry.tool.Name]; !ok {
+			continue
+		}
+
+		if _, alreadyLive := s.registered[entry.tool.Name]; alreadyLive {
+			continue
+		}
+
+		s.addTool(&entry.tool, entry.capability, entry.handler)
+
+		addedCount++
+	}
+
+	s.tools = s.tools[:0]
+
+	for i := range s.allEntries {
+		name := s.allEntries[i].tool.Name
+		if w, ok := s.registered[name]; ok {
+			s.tools = append(s.tools, w)
+		}
+	}
+
+	previous := s.activeProfile.Name
+	s.activeProfile = profile
+	s.config = cfg
+
+	slog.Info(
+		"profile reloaded",
+		"previous", previous,
+		"current", profile.Name,
+		"added", addedCount,
+		"removed", len(toRemove),
+		"live", len(s.registered),
+	)
+
+	return nil
+}
+
 // addTool registers a tool with mcp-go and the local list, wrapping the
 // handler so each in-flight invocation is tracked in s.inflight. Shutdown
 // uses that WaitGroup to drain handlers before returning. Takes the tool by
 // pointer to satisfy gocritic's hugeParam check; mcp.AddTool needs a value
 // so we deref at the call boundary. Capability is stashed on the wrapper so
 // invariant tests and the audit middleware can read it without a side table.
+//
+// Caller MUST hold s.profileMu in write mode. addTool mutates s.tools and
+// s.registered, both of which are guarded by that mutex.
 func (s *Server) addTool(tool *mcp.Tool, capability profiles.Capability, handler toolHandler) {
 	wrapped := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		s.inflight.Add(1)
@@ -211,7 +342,10 @@ func (s *Server) addTool(tool *mcp.Tool, capability profiles.Capability, handler
 	}
 
 	s.mcp.AddTool(*tool, wrapped)
-	s.tools = append(s.tools, &toolWrapper{tool: *tool, capability: capability})
+
+	wrapper := &toolWrapper{tool: *tool, capability: capability}
+	s.tools = append(s.tools, wrapper)
+	s.registered[tool.Name] = wrapper
 }
 
 // entryFromFactory invokes a tool factory and packages its three return
@@ -236,28 +370,21 @@ func entriesFromFactories(cfg *config.Config, factories []toolFactory) []toolEnt
 }
 
 // registerTools runs the two-pass registration that produces the active
-// tool surface. Pass 1 collects every factory's toolEntry across all
-// categories. Pass 2 resolves the active profile against the collected
-// entries and registers only the tools the profile permits.
+// tool surface. Pass 1 was completed by the caller (New) and stashed in
+// s.allEntries. Pass 2 resolves the active profile against those entries
+// and registers only the tools the profile permits.
 //
 // Returns the error from profiles.ResolveActiveProfile verbatim if the
 // configured profile is unknown or disabled. The error wraps the package's
 // sentinel via fmt.Errorf("...: %w", ...) so callers can match with
 // errors.Is.
 func (s *Server) registerTools() error {
-	entries := s.collectAllToolEntries()
+	s.profileMu.Lock()
+	defer s.profileMu.Unlock()
 
-	registry := make([]profiles.ToolDescriptor, len(entries))
-	for i := range entries {
-		registry[i] = profiles.ToolDescriptor{
-			Name:       entries[i].tool.Name,
-			Capability: entries[i].capability,
-		}
-	}
-
-	profile, err := profiles.ResolveActiveProfile(s.config, registry)
+	profile, err := s.resolveProfileLocked(s.config)
 	if err != nil {
-		return fmt.Errorf("resolve active profile: %w", err)
+		return err
 	}
 
 	s.activeProfile = profile
@@ -267,8 +394,8 @@ func (s *Server) registerTools() error {
 		allowed[name] = struct{}{}
 	}
 
-	for i := range entries {
-		entry := &entries[i]
+	for i := range s.allEntries {
+		entry := &s.allEntries[i]
 		if _, ok := allowed[entry.tool.Name]; !ok {
 			slog.Info(
 				"profile filtered out tool at registration",
@@ -284,6 +411,28 @@ func (s *Server) registerTools() error {
 	}
 
 	return nil
+}
+
+// resolveProfileLocked is the shared pre-flight that registerTools and
+// ReloadProfile use to validate a config against the cached registry. It
+// returns the resolved Profile or the wrapped error from
+// profiles.ResolveActiveProfile. Caller must hold s.profileMu (read or
+// write); this method does not touch mutable server state.
+func (s *Server) resolveProfileLocked(cfg *config.Config) (profiles.Profile, error) {
+	registry := make([]profiles.ToolDescriptor, len(s.allEntries))
+	for i := range s.allEntries {
+		registry[i] = profiles.ToolDescriptor{
+			Name:       s.allEntries[i].tool.Name,
+			Capability: s.allEntries[i].capability,
+		}
+	}
+
+	profile, err := profiles.ResolveActiveProfile(cfg, registry)
+	if err != nil {
+		return profiles.Profile{}, fmt.Errorf("resolve active profile: %w", err)
+	}
+
+	return profile, nil
 }
 
 // collectAllToolEntries returns the flat list of every tool the server

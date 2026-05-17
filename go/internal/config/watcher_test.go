@@ -124,6 +124,105 @@ func TestWatcherKeepsLastConfigOnBadReload(t *testing.T) {
 	assert.Equal(t, original.Server.Name, current.Server.Name, "bad reload must not blank the cached config")
 }
 
+// TestWatcherOnChangeFiresAfterReload verifies that a SetOnChange callback
+// runs after a successful reload and receives the new Config. This is the
+// hook Phase 5 uses to wire Server.ReloadProfile into the watcher.
+func TestWatcherOnChangeFiresAfterReload(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := writeConfigFile(t, dir, "config.yml", validYAMLConfig())
+
+	watcher, err := config.NewWatcher(path, pollInterval)
+	require.NoError(t, err)
+
+	defer watcher.Close()
+
+	received := make(chan *config.Config, 1)
+
+	watcher.SetOnChange(func(cfg *config.Config) {
+		select {
+		case received <- cfg:
+		default:
+		}
+	})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	watcher.Start(ctx)
+
+	updated := `
+server:
+  name: "CallbackTriggered"
+  logLevel: "info"
+environments:
+  default:
+    label: "Default"
+    linode:
+      apiUrl: "https://api.linode.com/v4"
+      token: "tok"
+`
+	require.NoError(t, os.WriteFile(path, []byte(updated), 0o600))
+	bumpMtime(t, path)
+
+	select {
+	case cfg := <-received:
+		require.NotNil(t, cfg)
+		assert.Equal(t, "CallbackTriggered", cfg.Server.Name,
+			"OnChange callback must receive the post-reload Config")
+	case <-time.After(reloadAssertWait):
+		t.Fatal("OnChange callback did not fire within the deadline")
+	}
+}
+
+// TestWatcherOnChangeNotFiredOnBadReload confirms the callback is NOT
+// invoked when a reload fails. A failed reload keeps the previous Config
+// in place and must not propagate phantom updates to subscribers.
+func TestWatcherOnChangeNotFiredOnBadReload(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := writeConfigFile(t, dir, "config.yml", validYAMLConfig())
+
+	watcher, err := config.NewWatcher(path, pollInterval)
+	require.NoError(t, err)
+
+	defer watcher.Close()
+
+	fired := make(chan *config.Config, 1)
+
+	watcher.SetOnChange(func(cfg *config.Config) {
+		select {
+		case fired <- cfg:
+		default:
+		}
+	})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	watcher.Start(ctx)
+
+	// Garbage config: parse will fail, lastMod stays put, callback must NOT fire.
+	require.NoError(t, os.WriteFile(path, []byte("not: valid: yaml: ::: "), 0o600))
+	bumpMtime(t, path)
+
+	select {
+	case <-watcher.Errors():
+		// Expected: bad reload surfaces on the errors channel.
+	case <-time.After(reloadAssertWait):
+		t.Fatal("expected reload error on errors channel")
+	}
+
+	select {
+	case got := <-fired:
+		t.Fatalf("OnChange callback fired for failed reload: %+v", got)
+	case <-time.After(2 * pollInterval):
+		// OK: callback stayed silent.
+	}
+}
+
 // TestWatcherCloseStopsPolling confirms that Close releases the polling
 // goroutine and that subsequent Close calls are safe (idempotent).
 func TestWatcherCloseStopsPolling(t *testing.T) {

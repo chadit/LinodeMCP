@@ -136,21 +136,29 @@ class Server:
         self.config = config
         self.mcp = MCPServer(config.server.name)
         self._inflight = 0
-        # Set initially because count is 0; cleared when count becomes
-        # non-zero, set again when it returns to 0. shutdown() awaits this.
         self._idle = asyncio.Event()
         self._idle.set()
+
+        # Phase 5 hot-reload uses this lock so a config-watcher firing in one
+        # task can't race a tools/list arriving from the transport task. The
+        # mutation block is small (frozenset rebuild + dict swap); contention
+        # is incidental.
+        self._reload_lock = asyncio.Lock()
 
         # Phase 4: resolve the active profile against the full registry so
         # _register_tools can skip everything outside the allow list. The
         # resolver raises ActiveProfileUnknownError or
         # ActiveProfileDisabledError on a bad config; let those propagate.
-        descriptors = [
+        self._descriptors = [
             ToolDescriptor(name=entry.name, capability=entry.capability)
             for entry in _TOOL_REGISTRY
         ]
-        self._active_profile = resolve_active_profile(config, descriptors)
+        self._active_profile = resolve_active_profile(config, self._descriptors)
         self._allowed_tool_names = frozenset(self._active_profile.allowed_tools)
+        # _allowed_entries and _config_handlers are declared+initialized
+        # inside _apply_active_profile so the type annotations live in one
+        # place. Reload reuses the same helper to swap state.
+        self._apply_active_profile(emit_filter_log=True)
         self._register_tools()
 
     @property
@@ -218,44 +226,90 @@ class Server:
                 msg = f"Unknown tool: {name}"
                 raise ValueError(msg)
 
-    def _register_tools(self) -> None:
-        """Register tools that the active profile permits.
+    def _apply_active_profile(self, *, emit_filter_log: bool) -> None:
+        """Rebuild ``_allowed_entries`` and ``_config_handlers`` from the
+        registry filtered by the current active profile.
 
-        Tools outside the profile's allow list never reach mcp-py's tool
-        map, so ``tools/list`` and ``call_tool`` never see them. Skipped
-        tools log at INFO so operators can confirm the filter ran.
+        Called once at startup (with logging) and again on each successful
+        ``reload_profile`` (without re-logging the filter rationale, which
+        would spam logs on every config edit). The two derived dicts/lists
+        feed ``_list_tools`` and ``_dispatch_inner``, both of which read
+        mutable instance state so the swap takes effect on the next request
+        without re-registering decorators.
         """
         allowed_entries: list[ToolEntry] = []
+
         for entry in _TOOL_REGISTRY:
             if entry.name not in self._allowed_tool_names:
-                logger.info(
-                    "[profile=%s] filtered out tool: %s",
-                    self._active_profile.name,
-                    entry.name,
-                )
+                if emit_filter_log:
+                    logger.info(
+                        "[profile=%s] filtered out tool: %s",
+                        self._active_profile.name,
+                        entry.name,
+                    )
                 continue
             allowed_entries.append(entry)
 
         self._allowed_entries: list[ToolEntry] = allowed_entries
+        self._config_handlers: dict[str, Callable[..., Awaitable[list[Any]]]] = {
+            entry.name: entry.handle_fn for entry in allowed_entries
+        }
 
+    def _register_tools(self) -> None:
+        """Wire the MCP server's list_tools and call_tool decorators.
+
+        Both decorated callables read mutable instance state
+        (``self._allowed_entries`` and ``self.dispatch``), so a later
+        ``reload_profile`` only needs to swap that state; the decorators
+        themselves stay registered for the lifetime of the server.
+        """
         _list_tools_method = cast(
             "Callable[[], ListToolsDecorator]", self.mcp.list_tools
         )
 
         async def _list_tools() -> list[Tool]:
-            return [entry.tool for entry in allowed_entries]
+            return [entry.tool for entry in self._allowed_entries]
 
         _list_tools_method()(_list_tools)
-
-        self._config_handlers: dict[str, Callable[..., Awaitable[list[Any]]]] = {
-            entry.name: entry.handle_fn for entry in allowed_entries
-        }
 
         async def _call_tool(name: str, arguments: dict[str, Any]) -> list[Any]:
             """Dispatch via the tracked path so Shutdown can drain it."""
             return await self.dispatch(name, arguments)
 
         cast("CallToolDecorator", self.mcp.call_tool())(_call_tool)
+
+    async def reload_profile(self, config: Config) -> None:
+        """Swap the running server to the profile resolved from ``config``.
+
+        On success, the active profile, allow list, allowed entries, and
+        dispatch handler map are all updated atomically under
+        ``_reload_lock``. The next ``tools/list`` request returns the new
+        set; subsequent ``call_tool`` invocations check the new allow list.
+
+        On error, no state is mutated. The caller sees the original
+        resolver exception (``ActiveProfileUnknownError``,
+        ``ActiveProfileDisabledError``, etc.); the running server keeps its
+        current profile.
+
+        In-flight tool handlers that already passed the dispatch gate
+        continue to run unaffected; the lock only serializes reload steps
+        and tools/list requests.
+        """
+        async with self._reload_lock:
+            new_profile = resolve_active_profile(config, self._descriptors)
+
+            previous = self._active_profile.name
+            self._active_profile = new_profile
+            self._allowed_tool_names = frozenset(new_profile.allowed_tools)
+            self.config = config
+            self._apply_active_profile(emit_filter_log=False)
+
+            logger.info(
+                "profile reloaded: previous=%s current=%s live=%d",
+                previous,
+                new_profile.name,
+                len(self._allowed_entries),
+            )
 
     async def start(self) -> None:
         """Start the MCP server using stdio transport."""

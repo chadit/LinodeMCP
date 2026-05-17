@@ -147,9 +147,9 @@ func TestNewUserDefinedProfileRegistersExactlyListedTools(t *testing.T) {
 	t.Parallel()
 
 	cfg := baseTestConfig()
-	cfg.ActiveProfile = "single-tool"
+	cfg.ActiveProfile = profileSingleTool
 	cfg.Profiles = map[string]config.UserProfileConfig{
-		"single-tool": {
+		profileSingleTool: {
 			Description:  "A profile exposing exactly one tool for testing.",
 			AllowedTools: []string{toolVolumesList},
 		},
@@ -159,7 +159,7 @@ func TestNewUserDefinedProfileRegistersExactlyListedTools(t *testing.T) {
 	require.NoError(t, err, "user-defined profile must construct cleanly")
 	require.NotNil(t, srv)
 
-	assert.Equal(t, "single-tool", srv.ActiveProfile().Name)
+	assert.Equal(t, profileSingleTool, srv.ActiveProfile().Name)
 
 	names := toolNames(srv)
 	assert.ElementsMatch(t, []string{toolVolumesList}, names,

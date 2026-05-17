@@ -341,3 +341,112 @@ async def test_instance_ip_update_tool_is_exported_and_registered(
 
     srv = Server(_full_access_config(sample_config))
     assert "linode_instance_ip_update" in srv.registered_tool_names
+
+
+# Phase 5: reload_profile tests. Each one exercises a path the hot-reload
+# code is responsible for: success (state swaps), error (state preserved),
+# and convergence (repeated reloads don't accumulate leftover tools).
+async def test_reload_profile_swaps_allowed_set(sample_config: Config) -> None:
+    """Reloading from default to full-access adds the writes; back removes."""
+    srv = Server(sample_config)
+
+    before = set(srv.registered_tool_names)
+    assert srv.active_profile.name == "default"
+    assert "linode_instance_create" not in before, "default starts without write tools"
+
+    await srv.reload_profile(_full_access_config(sample_config))
+
+    after = set(srv.registered_tool_names)
+    assert srv.active_profile.name == "full-access"
+    assert "linode_instance_create" in after, (
+        "reload to full-access must add the write tools"
+    )
+    assert "linode_instances_list" in after, "reads stay registered"
+    assert after > before, "full-access is a strict superset of default"
+
+    # Reload back to default and confirm the writes come off.
+    await srv.reload_profile(sample_config)
+    back = set(srv.registered_tool_names)
+    assert srv.active_profile.name == "default"
+    assert "linode_instance_create" not in back, (
+        "reload back to default removes write tools"
+    )
+    assert back == before, "default↔full-access round-trip must be reversible"
+
+
+async def test_reload_profile_dispatch_gate_updates(sample_config: Config) -> None:
+    """The dispatch gate honors the post-reload allow set.
+
+    A call to a tool that was permitted under the previous profile but
+    not the new one must raise ``ValueError``. The new profile's tools
+    become invocable on the same server instance.
+    """
+    srv = Server(_full_access_config(sample_config))
+
+    # full-access allows linode_instances_list AND linode_instance_create.
+    # The default profile drops linode_instance_create; after reload,
+    # dispatching it must raise.
+    await srv.reload_profile(sample_config)
+
+    with pytest.raises(ValueError, match="Unknown tool"):
+        await srv.dispatch("linode_instance_create", {})
+
+
+async def test_reload_profile_disabled_builtin_is_no_op(
+    sample_config: Config,
+) -> None:
+    """A failed reload (disabled built-in) must not mutate state."""
+    srv = Server(sample_config)
+    before_profile = srv.active_profile.name
+    before_tools = set(srv.registered_tool_names)
+
+    bad = dataclasses.replace(
+        sample_config,
+        active_profile="compute-admin",
+        profiles_builtin_overrides={
+            "compute-admin": BuiltinOverride(disabled=True),
+        },
+    )
+
+    with pytest.raises(ActiveProfileDisabledError):
+        await srv.reload_profile(bad)
+
+    assert srv.active_profile.name == before_profile
+    assert set(srv.registered_tool_names) == before_tools
+
+
+async def test_reload_profile_unknown_is_no_op(sample_config: Config) -> None:
+    """A failed reload (unknown profile name) must not mutate state."""
+    srv = Server(sample_config)
+    before_profile = srv.active_profile.name
+    before_tools = set(srv.registered_tool_names)
+
+    bad = dataclasses.replace(sample_config, active_profile="not-a-real-profile")
+
+    with pytest.raises(ActiveProfileUnknownError):
+        await srv.reload_profile(bad)
+
+    assert srv.active_profile.name == before_profile
+    assert set(srv.registered_tool_names) == before_tools
+
+
+async def test_reload_profile_repeated_cycles_converge(
+    sample_config: Config,
+) -> None:
+    """Repeated A→B→A cycles must end at the final profile with no leftover.
+
+    Guards against accumulation bugs where the swap path forgets to clear
+    state between reloads, ending in a state that's neither A nor B.
+    """
+    srv = Server(sample_config)
+    full = _full_access_config(sample_config)
+
+    for _ in range(3):
+        await srv.reload_profile(full)
+        await srv.reload_profile(sample_config)
+
+    await srv.reload_profile(full)
+
+    fresh = Server(full)
+    assert srv.active_profile.name == "full-access"
+    assert set(srv.registered_tool_names) == set(fresh.registered_tool_names)

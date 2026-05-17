@@ -6,7 +6,7 @@ import sys
 
 import structlog
 
-from linodemcp.config import ConfigError, get_config_path
+from linodemcp.config import Config, ConfigError, get_config_path
 from linodemcp.config.watcher import ConfigWatcher
 from linodemcp.observability import Observability
 from linodemcp.server import Server
@@ -32,6 +32,27 @@ structlog.configure(
 )
 
 logger = structlog.get_logger(__name__)
+
+
+def _wire_profile_hot_reload(
+    watcher: ConfigWatcher,
+    server: Server,
+    log: structlog.stdlib.BoundLogger,
+) -> None:
+    """Phase 5: wire profile reload to config-file changes.
+
+    The watcher fires on_change inside its polling task; reload_profile
+    is fast (resolver + dict swap) so awaiting it inline is fine. A
+    failed reload logs and the previous profile stays active.
+    """
+
+    async def _on_config_change(new_cfg: Config) -> None:
+        try:
+            await server.reload_profile(new_cfg)
+        except Exception as exc:
+            log.warning("profile reload failed", error=str(exc))
+
+    watcher.set_on_change(_on_config_change)
 
 
 async def async_main() -> int:
@@ -66,11 +87,12 @@ async def async_main() -> int:
     # Bridge the watcher to tool helpers so reloaded resilience and
     # environment values take effect on the next tool call.
     tool_helpers.set_live_config_source(watcher.get)
-    watcher.start()
 
     server: Server | None = None
     try:
         server = Server(cfg)
+        _wire_profile_hot_reload(watcher, server, log)
+        watcher.start()
         await server.start()
     except Exception as exc:
         log.exception("server error", error=str(exc))

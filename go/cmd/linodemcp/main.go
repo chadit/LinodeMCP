@@ -80,14 +80,25 @@ func run() int {
 		}
 	}()
 
-	watcher.Start(ctx)
-
 	srv, err := server.New(cfg)
 	if err != nil {
 		log.Error("failed to create server", "error", err)
 
 		return 1
 	}
+
+	// Phase 5: a config reload that changes active_profile or the active
+	// profile's contents must re-resolve the running tool surface. The
+	// callback runs in the watcher's polling goroutine; ReloadProfile is
+	// fast (diff + mcp-go DeleteTools/AddTool) so synchronous is fine.
+	// A failed reload is logged and the previous profile stays active.
+	watcher.SetOnChange(func(newCfg *config.Config) {
+		if reloadErr := srv.ReloadProfile(newCfg); reloadErr != nil {
+			log.Warn("profile reload failed", "error", reloadErr)
+		}
+	})
+
+	watcher.Start(ctx)
 
 	if err := srv.Start(ctx); err != nil {
 		log.Error("server error", "error", err)
