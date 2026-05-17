@@ -8,7 +8,9 @@ from linodemcp.tools.hello import (
 )
 from linodemcp.tools.linode_account import (
     create_linode_account_tool,
+    create_linode_account_update_tool,
     handle_linode_account,
+    handle_linode_account_update,
 )
 from linodemcp.tools.linode_domain_records import (
     create_linode_domain_record_create_tool,
@@ -349,6 +351,7 @@ __all__ = [
     "RetryableClient",
     "create_hello_tool",
     "create_linode_account_tool",
+    "create_linode_account_update_tool",
     "create_linode_domain_create_tool",
     "create_linode_domain_delete_tool",
     "create_linode_domain_get_tool",
@@ -486,6 +489,7 @@ __all__ = [
     "execute_tool",
     "handle_hello",
     "handle_linode_account",
+    "handle_linode_account_update",
     "handle_linode_domain_create",
     "handle_linode_domain_delete",
     "handle_linode_domain_get",

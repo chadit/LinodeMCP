@@ -86,6 +86,7 @@ _TOOL_CATEGORIES: tuple[tuple[str, tuple[str, ...]], ...] = (
             "linode_stackscripts_",
         ),
     ),
+    ("account", ("linode_account_",)),
     ("block_storage", ("linode_volume_", "linode_volumes_")),
     ("object_storage", ("linode_object_storage_",)),
     # dns lists ``linode_domain_record_`` before ``linode_domain_`` for the
@@ -270,6 +271,7 @@ _PROFILE_BLUEPRINTS: dict[str, _ProfileBlueprint] = {
         ),
         elevated_categories=frozenset(
             {
+                "account",
                 "compute",
                 "compute_deep",
                 "block_storage",
@@ -292,6 +294,7 @@ _PROFILE_BLUEPRINTS: dict[str, _ProfileBlueprint] = {
         ),
         elevated_categories=frozenset(
             {
+                "account",
                 "compute",
                 "compute_deep",
                 "block_storage",

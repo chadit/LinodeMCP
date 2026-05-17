@@ -1135,6 +1135,16 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetAccount", e) from e
 
+    async def update_account(self, **fields: Any) -> Account:
+        """Update Linode account information."""
+        body = {key: value for key, value in fields.items() if value is not None}
+        try:
+            response = await self.make_request("PUT", "/account", body)
+            data = response.json()
+            return self._parse_account(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateAccount", e) from e
+
     async def list_regions(self) -> list[Region]:
         """List Linode regions."""
         try:
@@ -3972,6 +3982,13 @@ class RetryableClient:
     async def get_account(self) -> Account:
         """Get Linode account information with retry."""
         result: Account = await self._execute_with_retry(self.client.get_account)
+        return result
+
+    async def update_account(self, **fields: Any) -> Account:
+        """Update Linode account information with retry."""
+        result: Account = await self._execute_with_retry(
+            lambda: self.client.update_account(**fields)
+        )
         return result
 
     async def list_regions(self) -> list[Region]:
