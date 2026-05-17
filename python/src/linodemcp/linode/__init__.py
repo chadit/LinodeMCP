@@ -1435,6 +1435,27 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateObjectStorageBucketAccess", e) from e
 
+    async def allow_object_storage_bucket_access(
+        self,
+        region: str,
+        label: str,
+        acl: str | None = None,
+        cors_enabled: bool | None = None,
+    ) -> dict[str, Any]:
+        """Allow access to an Object Storage bucket."""
+        endpoint = f"/object-storage/buckets/{region}/{label}/access"
+        try:
+            body: dict[str, Any] = {}
+            if acl is not None:
+                body["acl"] = acl
+            if cors_enabled is not None:
+                body["cors_enabled"] = cors_enabled
+            response = await self.make_request("POST", endpoint, body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("AllowObjectStorageBucketAccess", e) from e
+
     # Stage 5 Phase 4: Object Storage access key write operations
 
     async def create_object_storage_key(
@@ -4203,6 +4224,23 @@ class RetryableClient:
             acl,
             cors_enabled,
         )
+
+    async def allow_object_storage_bucket_access(
+        self,
+        region: str,
+        label: str,
+        acl: str | None = None,
+        cors_enabled: bool | None = None,
+    ) -> dict[str, Any]:
+        """Allow bucket access settings with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.allow_object_storage_bucket_access,
+            region,
+            label,
+            acl,
+            cors_enabled,
+        )
+        return result
 
     # Stage 5 Phase 4: Object Storage access key write operations with retry
 

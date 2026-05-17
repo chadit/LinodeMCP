@@ -235,6 +235,7 @@ from linodemcp.tools.linode_object_storage import (
     handle_linode_object_storage_types_list,
 )
 from linodemcp.tools.linode_object_storage_write import (
+    create_linode_object_storage_bucket_access_allow_tool,
     create_linode_object_storage_bucket_access_update_tool,
     create_linode_object_storage_bucket_create_tool,
     create_linode_object_storage_bucket_delete_tool,
@@ -247,6 +248,7 @@ from linodemcp.tools.linode_object_storage_write import (
     create_linode_object_storage_ssl_delete_tool,
     create_linode_object_storage_ssl_get_tool,
     create_linode_object_storage_ssl_upload_tool,
+    handle_linode_object_storage_bucket_access_allow,
     handle_linode_object_storage_bucket_access_update,
     handle_linode_object_storage_bucket_create,
     handle_linode_object_storage_bucket_delete,
@@ -437,6 +439,7 @@ __all__ = [
     "create_linode_nodebalancer_get_tool",
     "create_linode_nodebalancer_update_tool",
     "create_linode_nodebalancers_list_tool",
+    "create_linode_object_storage_bucket_access_allow_tool",
     "create_linode_object_storage_bucket_access_get_tool",
     "create_linode_object_storage_bucket_access_update_tool",
     "create_linode_object_storage_bucket_contents_tool",
@@ -576,6 +579,7 @@ __all__ = [
     "handle_linode_nodebalancer_get",
     "handle_linode_nodebalancer_update",
     "handle_linode_nodebalancers_list",
+    "handle_linode_object_storage_bucket_access_allow",
     "handle_linode_object_storage_bucket_access_get",
     "handle_linode_object_storage_bucket_access_update",
     "handle_linode_object_storage_bucket_contents",

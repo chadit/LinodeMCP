@@ -317,6 +317,100 @@ async def handle_linode_object_storage_bucket_access_update(
     return await execute_tool(cfg, arguments, "update bucket access settings", _call)
 
 
+def create_linode_object_storage_bucket_access_allow_tool() -> tuple[Tool, Capability]:
+    """Create the linode_object_storage_bucket_access_allow tool."""
+    return Tool(
+        name="linode_object_storage_bucket_access_allow",
+        description=("Allows access to an Object Storage bucket."),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "region": {
+                    "type": "string",
+                    "description": "Region of the bucket",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Label of the bucket",
+                },
+                "acl": {
+                    "type": "string",
+                    "description": (
+                        "Access control: private, public-read,"
+                        " authenticated-read, or public-read-write"
+                    ),
+                },
+                "cors_enabled": {
+                    "type": "boolean",
+                    "description": ("Whether to enable CORS on the bucket"),
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": ("Must be true to confirm access changes."),
+                },
+            },
+            "required": ["region", "label", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_object_storage_bucket_access_allow(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle bucket access allow tool request."""
+    confirm = arguments.get("confirm", False)
+
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text=(
+                    "Error: This changes bucket access controls."
+                    " Set confirm=true to proceed."
+                ),
+            )
+        ]
+
+    region = arguments.get("region", "")
+    label = arguments.get("label", "")
+    acl = arguments.get("acl")
+    cors_enabled = arguments.get("cors_enabled")
+
+    validation_err = None
+    if not region:
+        validation_err = "region is required"
+    elif not label:
+        validation_err = "label is required"
+    elif acl is not None:
+        validation_err = _validate_bucket_acl(acl)
+    if validation_err:
+        return _error_response(validation_err)
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        access = await client.allow_object_storage_bucket_access(
+            region=region,
+            label=label,
+            acl=acl,
+            cors_enabled=cors_enabled,
+        )
+        return {
+            "message": (
+                f"Access allowed for bucket '{label}' in {region} successfully"
+            ),
+            "region": region,
+            "label": label,
+            "access": access,
+        }
+
+    return await execute_tool(cfg, arguments, "allow bucket access", _call)
+
+
 # Stage 5 Phase 4: Object Storage access key write operations
 
 _MAX_KEY_LABEL_LENGTH = 50

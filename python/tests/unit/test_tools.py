@@ -161,6 +161,7 @@ from linodemcp.tools import (
     handle_linode_nodebalancer_get,
     handle_linode_nodebalancer_update,
     handle_linode_nodebalancers_list,
+    handle_linode_object_storage_bucket_access_allow,
     handle_linode_object_storage_bucket_access_get,
     handle_linode_object_storage_bucket_access_update,
     handle_linode_object_storage_bucket_contents,
@@ -3489,6 +3490,73 @@ async def test_handle_object_storage_bucket_delete_success(
 
         assert len(result) == 1
         assert "deleted successfully" in result[0].text
+
+
+async def test_handle_object_storage_bucket_access_allow_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Test bucket access allow requires confirm."""
+    result = await handle_linode_object_storage_bucket_access_allow(
+        {
+            "region": "us-east-1",
+            "label": "my-bucket",
+            "acl": "public-read",
+        },
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_handle_object_storage_bucket_access_allow_invalid_acl(
+    sample_config: Config,
+) -> None:
+    """Test bucket access allow rejects invalid ACL."""
+    result = await handle_linode_object_storage_bucket_access_allow(
+        {
+            "region": "us-east-1",
+            "label": "my-bucket",
+            "acl": "bad-acl",
+            "confirm": True,
+        },
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "acl must be one of" in result[0].text
+
+
+async def test_handle_object_storage_bucket_access_allow_success(
+    sample_config: Config,
+) -> None:
+    """Test bucket access allow success."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.allow_object_storage_bucket_access.return_value = {}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_object_storage_bucket_access_allow(
+            {
+                "region": "us-east-1",
+                "label": "my-bucket",
+                "acl": "public-read",
+                "cors_enabled": True,
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "Access allowed" in result[0].text
+        mock_client.allow_object_storage_bucket_access.assert_called_once_with(
+            region="us-east-1",
+            label="my-bucket",
+            acl="public-read",
+            cors_enabled=True,
+        )
 
 
 async def test_handle_object_storage_bucket_access_update_requires_confirm(
