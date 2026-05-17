@@ -75,6 +75,67 @@ async def handle_linode_sshkey_create(
     return await execute_tool(cfg, arguments, "create SSH key", _call)
 
 
+def create_linode_sshkey_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_sshkey_update tool."""
+    return Tool(
+        name="linode_sshkey_update",
+        description="Updates the label for an SSH key in your Linode profile.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "ssh_key_id": {
+                    "type": "integer",
+                    "description": "The ID of the SSH key to update (required)",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "The new label for the SSH key (required)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this mutating operation.",
+                },
+            },
+            "required": ["ssh_key_id", "label", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_sshkey_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_sshkey_update tool request."""
+    if not arguments.get("confirm"):
+        return error_response("This updates an SSH key. Set confirm=true to proceed.")
+
+    ssh_key_id = arguments.get("ssh_key_id", 0)
+    label = arguments.get("label", "")
+
+    if not ssh_key_id:
+        return error_response("ssh_key_id is required")
+    if not label:
+        return error_response("label is required")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        key = await client.update_ssh_key(int(ssh_key_id), label)
+        return {
+            "message": f"SSH key '{key.label}' (ID: {key.id}) updated successfully",
+            "ssh_key": {
+                "id": key.id,
+                "label": key.label,
+                "created": key.created,
+            },
+        }
+
+    return await execute_tool(cfg, arguments, "update SSH key", _call)
+
+
 def create_linode_sshkey_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_sshkey_delete tool."""
     return Tool(

@@ -179,6 +179,7 @@ from linodemcp.tools import (
     handle_linode_regions_list,
     handle_linode_sshkey_create,
     handle_linode_sshkey_delete,
+    handle_linode_sshkey_update,
     handle_linode_sshkeys_list,
     handle_linode_stackscripts_list,
     handle_linode_types_list,
@@ -1837,6 +1838,53 @@ async def test_handle_linode_sshkey_create_missing_params(
     )
     assert len(result) == 1
     assert "Error" in result[0].text
+
+
+async def test_handle_linode_sshkey_update(sample_config: Config) -> None:
+    """Test linode_sshkey_update tool."""
+    mock_key = SSHKey(
+        id=12345,
+        label="renamed-key",
+        ssh_key="ssh-rsa AAAA...",
+        created="2024-01-15T10:00:00",
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_ssh_key.return_value = mock_key
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_sshkey_update(
+            {"ssh_key_id": 12345, "label": "renamed-key", "confirm": True},
+            sample_config,
+        )
+
+        mock_client.update_ssh_key.assert_awaited_once_with(12345, "renamed-key")
+        assert len(result) == 1
+        assert "renamed-key" in result[0].text
+        assert "updated" in result[0].text.lower()
+
+
+async def test_handle_linode_sshkey_update_missing_params(
+    sample_config: Config,
+) -> None:
+    """Test linode_sshkey_update tool with missing parameters."""
+    result = await handle_linode_sshkey_update(
+        {"ssh_key_id": 12345, "confirm": True}, sample_config
+    )
+    assert len(result) == 1
+    assert "label is required" in result[0].text
+
+
+async def test_handle_linode_sshkey_update_no_confirm(sample_config: Config) -> None:
+    """Test linode_sshkey_update tool without confirmation."""
+    result = await handle_linode_sshkey_update(
+        {"ssh_key_id": 12345, "label": "renamed-key"}, sample_config
+    )
+    assert len(result) == 1
+    assert "confirm" in result[0].text.lower()
 
 
 async def test_handle_linode_sshkey_delete(sample_config: Config) -> None:
