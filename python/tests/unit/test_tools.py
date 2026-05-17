@@ -62,6 +62,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
+    create_linode_vlans_list_tool,
     create_linode_vpc_create_tool,
     create_linode_vpc_delete_tool,
     create_linode_vpc_get_tool,
@@ -176,6 +177,7 @@ from linodemcp.tools import (
     handle_linode_sshkeys_list,
     handle_linode_stackscripts_list,
     handle_linode_types_list,
+    handle_linode_vlans_list,
     handle_linode_volume_attach,
     handle_linode_volume_create,
     handle_linode_volume_delete,
@@ -4710,6 +4712,12 @@ async def test_vpcs_list_tool_definition() -> None:
     assert tool.name == "linode_vpcs_list"
 
 
+async def test_vlans_list_tool_definition() -> None:
+    """VLANs list tool should have correct name."""
+    tool = create_linode_vlans_list_tool()
+    assert tool.name == "linode_vlans_list"
+
+
 async def test_vpc_get_tool_definition() -> None:
     """VPC get tool should require vpc_id."""
     tool = create_linode_vpc_get_tool()
@@ -4784,6 +4792,24 @@ async def test_vpcs_list(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "my-vpc" in result[0].text
+
+
+async def test_vlans_list(sample_config: Config) -> None:
+    """VLANs list should return VLAN data."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.list_vlans.return_value = [
+            {"label": "app-vlan", "region": "us-east", "linodes": [123]},
+        ]
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(await handle_linode_vlans_list({}, sample_config))
+
+        assert len(result) == 1
+        assert "app-vlan" in result[0].text
+        mock_client.list_vlans.assert_called_once()
 
 
 async def test_vpc_get(sample_config: Config) -> None:
