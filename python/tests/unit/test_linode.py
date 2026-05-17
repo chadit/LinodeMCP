@@ -70,6 +70,37 @@ async def test_get_profile(sample_profile_data: dict[str, Any]) -> None:
     await client.close()
 
 
+async def test_update_profile_sends_put_to_profile_route(
+    sample_profile_data: dict[str, Any],
+) -> None:
+    """Test updating user profile sends PUT /profile."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    updated_profile = {**sample_profile_data, "email": "updated@example.com"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = updated_profile
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        profile = await client.update_profile(
+            email="updated@example.com",
+            timezone="UTC",
+            email_notifications=None,
+        )
+
+    assert isinstance(profile, Profile)
+    assert profile.email == "updated@example.com"
+    mock_request.assert_called_once_with(
+        "PUT",
+        "/profile",
+        {"email": "updated@example.com", "timezone": "UTC"},
+    )
+
+    await client.close()
+
+
 async def test_list_instances(sample_instance_data: dict[str, Any]) -> None:
     """Test listing instances."""
     client = Client("https://api.linode.com/v4", "test-token")

@@ -1065,22 +1065,36 @@ class Client:
         """Async context manager exit."""
         await self.close()
 
+    def _parse_profile(self, data: dict[str, Any]) -> Profile:
+        """Parse a Linode profile response."""
+        return Profile(
+            username=data["username"],
+            email=data["email"],
+            timezone=data["timezone"],
+            email_notifications=data["email_notifications"],
+            restricted=data["restricted"],
+            two_factor_auth=data["two_factor_auth"],
+            uid=data["uid"],
+        )
+
     async def get_profile(self) -> Profile:
         """Get Linode user profile."""
         try:
             response = await self.make_request("GET", "/profile")
             data = response.json()
-            return Profile(
-                username=data["username"],
-                email=data["email"],
-                timezone=data["timezone"],
-                email_notifications=data["email_notifications"],
-                restricted=data["restricted"],
-                two_factor_auth=data["two_factor_auth"],
-                uid=data["uid"],
-            )
+            return self._parse_profile(data)
         except httpx.HTTPError as e:
             raise NetworkError("GetProfile", e) from e
+
+    async def update_profile(self, **fields: Any) -> Profile:
+        """Update Linode user profile."""
+        body = {key: value for key, value in fields.items() if value is not None}
+        try:
+            response = await self.make_request("PUT", "/profile", body)
+            data = response.json()
+            return self._parse_profile(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateProfile", e) from e
 
     async def list_instances(self) -> list[Instance]:
         """List Linode instances."""
@@ -3898,6 +3912,13 @@ class RetryableClient:
     async def get_profile(self) -> Profile:
         """Get Linode user profile with retry."""
         result: Profile = await self._execute_with_retry(self.client.get_profile)
+        return result
+
+    async def update_profile(self, **fields: Any) -> Profile:
+        """Update Linode user profile with retry."""
+        result: Profile = await self._execute_with_retry(
+            lambda: self.client.update_profile(**fields)
+        )
         return result
 
     async def list_instances(self) -> list[Instance]:
