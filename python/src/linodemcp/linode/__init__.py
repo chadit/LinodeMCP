@@ -1115,6 +1115,17 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetInstance", e) from e
 
+    async def update_instance(self, instance_id: int, **fields: Any) -> Instance:
+        """Update a Linode instance."""
+        endpoint = f"/linode/instances/{instance_id}"
+        body = {key: value for key, value in fields.items() if value is not None}
+        try:
+            response = await self.make_request("PUT", endpoint, body)
+            data = response.json()
+            return self._parse_instance(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateInstance", e) from e
+
     async def get_account(self) -> Account:
         """Get Linode account information."""
         try:
@@ -3948,6 +3959,13 @@ class RetryableClient:
         """Get a specific Linode instance with retry."""
         result: Instance = await self._execute_with_retry(
             self.client.get_instance, instance_id
+        )
+        return result
+
+    async def update_instance(self, instance_id: int, **fields: Any) -> Instance:
+        """Update a Linode instance with retry."""
+        result: Instance = await self._execute_with_retry(
+            lambda: self.client.update_instance(instance_id, **fields)
         )
         return result
 
