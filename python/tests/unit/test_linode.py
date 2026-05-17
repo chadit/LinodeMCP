@@ -8,6 +8,7 @@ import httpx
 import pytest
 
 from linodemcp.linode import (
+    Account,
     APIError,
     CircuitBreaker,
     CircuitOpenError,
@@ -96,6 +97,54 @@ async def test_update_profile_sends_put_to_profile_route(
         "PUT",
         "/profile",
         {"email": "updated@example.com", "timezone": "UTC"},
+    )
+
+    await client.close()
+
+
+async def test_update_account_sends_put_to_account_route() -> None:
+    """Test updating account sends PUT /account."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    updated_account = {
+        "first_name": "Test",
+        "last_name": "User",
+        "email": "updated@example.com",
+        "company": "Updated Co",
+        "address_1": "123 Test St",
+        "address_2": "",
+        "city": "Test City",
+        "state": "TS",
+        "zip": "12345",
+        "country": "US",
+        "phone": "555-1234",
+        "balance": 100.50,
+        "balance_uninvoiced": 50.25,
+        "capabilities": ["Linodes", "Block Storage"],
+        "active_since": "2020-01-01T00:00:00",
+        "euuid": "abcd-1234",
+        "billing_source": "linode",
+        "active_promotions": [],
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = updated_account
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        account = await client.update_account(
+            email="updated@example.com",
+            company="Updated Co",
+            phone=None,
+        )
+
+    assert isinstance(account, Account)
+    assert account.email == "updated@example.com"
+    mock_request.assert_called_once_with(
+        "PUT",
+        "/account",
+        {"email": "updated@example.com", "company": "Updated Co"},
     )
 
     await client.close()

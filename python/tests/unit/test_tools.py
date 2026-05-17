@@ -34,6 +34,7 @@ from linodemcp.linode import (
     Volume,
 )
 from linodemcp.tools import (
+    create_linode_account_update_tool,
     create_linode_instance_backup_create_tool,
     create_linode_instance_backup_get_tool,
     create_linode_instance_backup_restore_tool,
@@ -76,6 +77,7 @@ from linodemcp.tools import (
     create_linode_vpcs_list_tool,
     handle_hello,
     handle_linode_account,
+    handle_linode_account_update,
     handle_linode_domain_create,
     handle_linode_domain_delete,
     handle_linode_domain_get,
@@ -533,6 +535,77 @@ async def test_handle_linode_account(sample_config: Config) -> None:
         assert "Test" in result[0].text
         assert "test@example.com" in result[0].text
         mock_client.get_account.assert_called_once()
+
+
+async def test_create_linode_account_update_tool() -> None:
+    """Test linode_account_update tool schema."""
+    tool, capability = create_linode_account_update_tool()
+
+    assert tool.name == "linode_account_update"
+    assert capability.name == "Write"
+    assert "email" in tool.inputSchema["properties"]
+    assert "confirm" in tool.inputSchema["required"]
+
+
+async def test_handle_linode_account_update(sample_config: Config) -> None:
+    """Test linode_account_update tool."""
+    mock_account = Account(
+        first_name="Test",
+        last_name="User",
+        email="updated@example.com",
+        company="TestCo",
+        address_1="123 Test St",
+        address_2="Suite 1",
+        city="Test City",
+        state="TS",
+        zip="12345",
+        country="US",
+        phone="555-1234",
+        balance=100.50,
+        balance_uninvoiced=50.25,
+        capabilities=["Linodes", "Block Storage"],
+        active_since="2020-01-01T00:00:00",
+        euuid="abcd-1234",
+        billing_source="linode",
+        active_promotions=[],
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_account.return_value = mock_account
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_update(
+            {"email": "updated@example.com", "confirm": True}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "updated@example.com" in result[0].text
+        mock_client.update_account.assert_called_once_with(email="updated@example.com")
+
+
+async def test_handle_linode_account_update_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Test linode_account_update requires confirmation."""
+    result = await handle_linode_account_update(
+        {"email": "updated@example.com"}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_handle_linode_account_update_requires_field(
+    sample_config: Config,
+) -> None:
+    """Test linode_account_update requires an account field."""
+    result = await handle_linode_account_update({"confirm": True}, sample_config)
+
+    assert len(result) == 1
+    assert "At least one account field" in result[0].text
 
 
 async def test_handle_linode_regions_list(sample_config: Config) -> None:
