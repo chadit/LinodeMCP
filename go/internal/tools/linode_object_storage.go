@@ -30,7 +30,7 @@ func NewLinodeObjectStorageBucketsListTool(cfg *config.Config) (mcp.Tool, profil
 		return handleObjectStorageBucketsListRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleObjectStorageBucketsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -80,7 +80,7 @@ func NewLinodeObjectStorageBucketGetTool(cfg *config.Config) (mcp.Tool, profiles
 		return handleObjectStorageBucketGetRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleObjectStorageBucketGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -149,7 +149,7 @@ func NewLinodeObjectStorageBucketContentsTool(cfg *config.Config) (mcp.Tool, pro
 		return handleObjectStorageBucketContentsRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleObjectStorageBucketContentsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -243,7 +243,7 @@ func NewLinodeObjectStorageClustersListTool(cfg *config.Config) (mcp.Tool, profi
 		return handleObjectStorageClustersListRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleObjectStorageClustersListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -283,7 +283,7 @@ func NewLinodeObjectStorageTypeListTool(cfg *config.Config) (mcp.Tool, profiles.
 		return handleObjectStorageTypeListRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleObjectStorageTypeListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -323,7 +323,7 @@ func NewLinodeObjectStorageKeysListTool(cfg *config.Config) (mcp.Tool, profiles.
 		return handleObjectStorageKeysListRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleObjectStorageKeysListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -368,7 +368,7 @@ func NewLinodeObjectStorageKeyGetTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 		return handleObjectStorageKeyGetRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleObjectStorageKeyGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -411,7 +411,7 @@ func NewLinodeObjectStorageTransferTool(cfg *config.Config) (mcp.Tool, profiles.
 		return handleObjectStorageTransferRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleObjectStorageTransferRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -453,7 +453,7 @@ func NewLinodeObjectStorageBucketAccessGetTool(cfg *config.Config) (mcp.Tool, pr
 		return handleObjectStorageBucketAccessGetRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleObjectStorageBucketAccessGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -521,7 +521,7 @@ func NewLinodeObjectStoragePresignedURLTool(cfg *config.Config) (mcp.Tool, profi
 		return handleObjectStoragePresignedURLRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleObjectStoragePresignedURLRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -600,7 +600,7 @@ func NewLinodeObjectStorageObjectACLGetTool(cfg *config.Config) (mcp.Tool, profi
 		return handleObjectStorageObjectACLGetRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleObjectStorageObjectACLGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -658,7 +658,7 @@ func NewLinodeObjectStorageSSLGetTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 		return handleObjectStorageSSLGetRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleObjectStorageSSLGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

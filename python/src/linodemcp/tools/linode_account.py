@@ -29,7 +29,7 @@ def create_linode_account_tool() -> tuple[Tool, Capability]:
                 },
             },
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_account(

@@ -35,5 +35,5 @@ func NewHelloTool(_ *config.Config) (mcp.Tool, profiles.Capability, func(ctx con
 		return mcp.NewToolResultText(message), nil
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapMeta, handler
 }

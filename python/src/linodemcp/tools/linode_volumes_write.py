@@ -53,7 +53,7 @@ def create_linode_volume_create_tool() -> tuple[Tool, Capability]:
             },
             "required": ["label", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_volume_create(
@@ -129,10 +129,14 @@ def create_linode_volume_attach_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": "Keep attached across reboots (default: false)",
                 },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this mutating operation.",
+                },
             },
-            "required": ["volume_id", "linode_id"],
+            "required": ["volume_id", "linode_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_volume_attach(
@@ -187,10 +191,14 @@ def create_linode_volume_detach_tool() -> tuple[Tool, Capability]:
                     "type": "integer",
                     "description": "The ID of the volume to detach (required)",
                 },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this mutating operation.",
+                },
             },
-            "required": ["volume_id"],
+            "required": ["volume_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_volume_detach(
@@ -246,7 +254,7 @@ def create_linode_volume_resize_tool() -> tuple[Tool, Capability]:
             },
             "required": ["volume_id", "size", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_volume_resize(
@@ -312,7 +320,7 @@ def create_linode_volume_delete_tool() -> tuple[Tool, Capability]:
             },
             "required": ["volume_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Destroy
 
 
 async def handle_linode_volume_delete(

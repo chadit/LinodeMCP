@@ -82,7 +82,7 @@ def create_linode_instance_clone_tool() -> tuple[Tool, Capability]:
             },
             "required": ["instance_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_instance_clone(
@@ -130,7 +130,7 @@ def create_linode_instance_migrate_tool() -> tuple[Tool, Capability]:
             },
             "required": ["instance_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_instance_migrate(
@@ -205,7 +205,7 @@ def create_linode_instance_rebuild_tool() -> tuple[Tool, Capability]:
                 "confirm",
             ],
         },
-    ), Capability.Unknown
+    ), Capability.Destroy
 
 
 async def handle_linode_instance_rebuild(
@@ -260,7 +260,7 @@ def create_linode_instance_rescue_tool() -> tuple[Tool, Capability]:
             },
             "required": ["instance_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_instance_rescue(
@@ -309,7 +309,7 @@ def create_linode_instance_password_reset_tool() -> tuple[Tool, Capability]:
                 "confirm",
             ],
         },
-    ), Capability.Unknown
+    ), Capability.Destroy
 
 
 async def handle_linode_instance_password_reset(

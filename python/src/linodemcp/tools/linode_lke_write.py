@@ -75,7 +75,7 @@ def create_linode_lke_cluster_create_tool() -> tuple[Tool, Capability]:
             },
             "required": ["label", "region", "k8s_version", "node_pools", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_lke_cluster_create(
@@ -154,7 +154,7 @@ def create_linode_lke_cluster_update_tool() -> tuple[Tool, Capability]:
             },
             "required": ["cluster_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_lke_cluster_update(
@@ -204,7 +204,7 @@ def create_linode_lke_cluster_delete_tool() -> tuple[Tool, Capability]:
             },
             "required": ["cluster_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Destroy
 
 
 async def handle_linode_lke_cluster_delete(
@@ -252,7 +252,7 @@ def create_linode_lke_cluster_recycle_tool() -> tuple[Tool, Capability]:
             },
             "required": ["cluster_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Destroy
 
 
 async def handle_linode_lke_cluster_recycle(
@@ -295,7 +295,7 @@ def create_linode_lke_cluster_regenerate_tool() -> tuple[Tool, Capability]:
             },
             "required": ["cluster_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Destroy
 
 
 async def handle_linode_lke_cluster_regenerate(
@@ -360,7 +360,7 @@ def create_linode_lke_pool_create_tool() -> tuple[Tool, Capability]:
             },
             "required": ["cluster_id", "type", "count", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_lke_pool_create(
@@ -438,7 +438,7 @@ def create_linode_lke_pool_update_tool() -> tuple[Tool, Capability]:
             },
             "required": ["cluster_id", "pool_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_lke_pool_update(
@@ -499,7 +499,7 @@ def create_linode_lke_pool_delete_tool() -> tuple[Tool, Capability]:
             },
             "required": ["cluster_id", "pool_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Destroy
 
 
 async def handle_linode_lke_pool_delete(
@@ -559,7 +559,7 @@ def create_linode_lke_pool_recycle_tool() -> tuple[Tool, Capability]:
             },
             "required": ["cluster_id", "pool_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Destroy
 
 
 async def handle_linode_lke_pool_recycle(
@@ -619,7 +619,7 @@ def create_linode_lke_node_delete_tool() -> tuple[Tool, Capability]:
             },
             "required": ["cluster_id", "node_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Destroy
 
 
 async def handle_linode_lke_node_delete(
@@ -675,7 +675,7 @@ def create_linode_lke_node_recycle_tool() -> tuple[Tool, Capability]:
             },
             "required": ["cluster_id", "node_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Destroy
 
 
 async def handle_linode_lke_node_recycle(
@@ -722,7 +722,7 @@ def create_linode_lke_kubeconfig_delete_tool() -> tuple[Tool, Capability]:
             },
             "required": ["cluster_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Destroy
 
 
 async def handle_linode_lke_kubeconfig_delete(
@@ -765,7 +765,7 @@ def create_linode_lke_service_token_delete_tool() -> tuple[Tool, Capability]:
             },
             "required": ["cluster_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Destroy
 
 
 async def handle_linode_lke_service_token_delete(
@@ -815,7 +815,7 @@ def create_linode_lke_acl_update_tool() -> tuple[Tool, Capability]:
             },
             "required": ["cluster_id", "acl", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_lke_acl_update(
@@ -863,7 +863,7 @@ def create_linode_lke_acl_delete_tool() -> tuple[Tool, Capability]:
             },
             "required": ["cluster_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Destroy
 
 
 async def handle_linode_lke_acl_delete(

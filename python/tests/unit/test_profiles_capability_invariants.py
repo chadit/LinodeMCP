@@ -32,11 +32,28 @@ def _schema_has_boolean_prop(schema: dict[str, Any], name: str) -> bool:
     return prop_typed.get("type") == "boolean"
 
 
+def _schema_requires(schema: dict[str, Any], name: str) -> bool:
+    """Return True iff ``name`` is declared as a boolean property AND listed
+    in ``required[]``. A mutator that lists confirm in properties but omits
+    it from required can be invoked without confirm at runtime, so the safety
+    gate is not actually enforced. This check rejects that case.
+    """
+    if not _schema_has_boolean_prop(schema, name):
+        return False
+    required_value = schema.get("required")
+    if not isinstance(required_value, list):
+        return False
+    return name in cast("list[object]", required_value)
+
+
 def test_capability_and_confirm_invariants() -> None:
     """Confirm parameter matches the tool's declared capability.
 
     - ``Read`` tools must not declare ``confirm`` (they don't mutate state).
-    - ``Write``, ``Destroy``, ``Admin`` tools must declare ``confirm``.
+    - ``Write``, ``Destroy``, ``Admin`` tools must require ``confirm``
+      (declared as a boolean property AND listed in ``required[]``). Just
+      declaring it in properties is not enough: the safety gate has to be
+      enforceable, which means the client must be required to send it.
     - ``Meta`` and ``Unknown`` are exempt (either shape is permitted).
     """
     registry = get_tool_registry()
@@ -52,13 +69,13 @@ def test_capability_and_confirm_invariants() -> None:
         entry.name
         for entry in registry
         if entry.capability in mutators
-        and not _schema_has_boolean_prop(entry.tool.inputSchema, "confirm")
+        and not _schema_requires(entry.tool.inputSchema, "confirm")
     ]
 
     assert not read_violations, "Read tools must not declare confirm: " + ", ".join(
         sorted(read_violations)
     )
     assert not mutator_violations, (
-        "Write/Destroy/Admin tools must declare confirm: "
+        "Write/Destroy/Admin tools must require confirm in required[]: "
         + ", ".join(sorted(mutator_violations))
     )

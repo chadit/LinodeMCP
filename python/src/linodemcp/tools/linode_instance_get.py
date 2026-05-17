@@ -36,7 +36,7 @@ def create_linode_instance_get_tool() -> tuple[Tool, Capability]:
             },
             "required": ["instance_id"],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_instance_get(

@@ -46,7 +46,7 @@ def create_linode_domain_records_list_tool() -> tuple[Tool, Capability]:
             },
             "required": ["domain_id"],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_domain_records_list(
@@ -145,16 +145,23 @@ def create_linode_domain_record_create_tool() -> tuple[Tool, Capability]:
                     "type": "integer",
                     "description": "TTL in seconds (optional)",
                 },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm this operation.",
+                },
             },
-            "required": ["domain_id", "type"],
+            "required": ["domain_id", "type", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_domain_record_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_domain_record_create tool request."""
+    if not arguments.get("confirm"):
+        return error_response("This creates a DNS record. Set confirm=true to proceed.")
+
     domain_id = arguments.get("domain_id", 0)
     record_type = arguments.get("type", "")
 
@@ -232,16 +239,23 @@ def create_linode_domain_record_update_tool() -> tuple[Tool, Capability]:
                     "type": "integer",
                     "description": "New TTL in seconds (optional)",
                 },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm this operation.",
+                },
             },
-            "required": ["domain_id", "record_id"],
+            "required": ["domain_id", "record_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_domain_record_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_domain_record_update tool request."""
+    if not arguments.get("confirm"):
+        return error_response("This updates a DNS record. Set confirm=true to proceed.")
+
     domain_id = arguments.get("domain_id", 0)
     record_id = arguments.get("record_id", 0)
 
@@ -292,16 +306,26 @@ def create_linode_domain_record_delete_tool() -> tuple[Tool, Capability]:
                     "type": "integer",
                     "description": "The ID of the record to delete (required)",
                 },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm this operation.",
+                },
             },
-            "required": ["domain_id", "record_id"],
+            "required": ["domain_id", "record_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Destroy
 
 
 async def handle_linode_domain_record_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_domain_record_delete tool request."""
+    if not arguments.get("confirm"):
+        return error_response(
+            "This deletes a DNS record and is irreversible. "
+            "Set confirm=true to proceed."
+        )
+
     domain_id = arguments.get("domain_id", 0)
     record_id = arguments.get("record_id", 0)
 

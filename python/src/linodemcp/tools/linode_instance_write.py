@@ -41,10 +41,14 @@ def create_linode_instance_boot_tool() -> tuple[Tool, Capability]:
                         "The ID of the config profile to boot with (optional)"
                     ),
                 },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this mutating operation.",
+                },
             },
-            "required": ["instance_id"],
+            "required": ["instance_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_instance_boot(
@@ -91,10 +95,14 @@ def create_linode_instance_reboot_tool() -> tuple[Tool, Capability]:
                         "The ID of the config profile to reboot with (optional)"
                     ),
                 },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this mutating operation.",
+                },
             },
-            "required": ["instance_id"],
+            "required": ["instance_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_instance_reboot(
@@ -135,10 +143,14 @@ def create_linode_instance_shutdown_tool() -> tuple[Tool, Capability]:
                     "type": "integer",
                     "description": "The ID of the instance to shutdown (required)",
                 },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this mutating operation.",
+                },
             },
-            "required": ["instance_id"],
+            "required": ["instance_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_instance_shutdown(
@@ -246,7 +258,7 @@ def create_linode_instance_create_tool() -> tuple[Tool, Capability]:
             },
             "required": ["region", "type", "firewall_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_instance_create(
@@ -338,7 +350,7 @@ def create_linode_instance_delete_tool() -> tuple[Tool, Capability]:
             },
             "required": ["instance_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Destroy
 
 
 async def handle_linode_instance_delete(
@@ -411,7 +423,7 @@ def create_linode_instance_resize_tool() -> tuple[Tool, Capability]:
             },
             "required": ["instance_id", "type", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_instance_resize(

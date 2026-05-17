@@ -59,7 +59,7 @@ def create_linode_instance_ips_list_tool() -> tuple[Tool, Capability]:
             },
             "required": ["instance_id"],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_instance_ips_list(
@@ -95,7 +95,7 @@ def create_linode_instance_ip_get_tool() -> tuple[Tool, Capability]:
             },
             "required": ["instance_id", "address"],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_instance_ip_get(
@@ -144,7 +144,7 @@ def create_linode_instance_ip_allocate_tool() -> tuple[Tool, Capability]:
                 "confirm",
             ],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_instance_ip_allocate(
@@ -200,7 +200,7 @@ def create_linode_instance_ip_delete_tool() -> tuple[Tool, Capability]:
                 "confirm",
             ],
         },
-    ), Capability.Unknown
+    ), Capability.Destroy
 
 
 async def handle_linode_instance_ip_delete(

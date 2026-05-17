@@ -30,7 +30,7 @@ def create_linode_vlans_list_tool() -> tuple[Tool, Capability]:
                 "environment": _ENV_PROP,
             },
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_vlans_list(
@@ -69,7 +69,7 @@ def create_linode_vlan_delete_tool() -> tuple[Tool, Capability]:
             },
             "required": ["region_id", "label", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Destroy
 
 
 async def handle_linode_vlan_delete(

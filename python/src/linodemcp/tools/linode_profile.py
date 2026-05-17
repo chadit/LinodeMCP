@@ -26,7 +26,7 @@ def create_linode_profile_tool() -> tuple[Tool, Capability]:
                 },
             },
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_profile(

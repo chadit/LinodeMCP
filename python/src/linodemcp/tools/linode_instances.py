@@ -35,7 +35,7 @@ def create_linode_instances_list_tool() -> tuple[Tool, Capability]:
                 },
             },
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_instances_list(

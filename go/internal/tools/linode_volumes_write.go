@@ -48,7 +48,7 @@ func NewLinodeVolumeCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		return handleLinodeVolumeCreateRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleLinodeVolumeCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -129,19 +129,28 @@ func NewLinodeVolumeAttachTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 			"config_id",
 			mcp.Description("The Linode config ID to attach to (optional)"),
 		),
+		mcp.WithBoolean(
+			paramConfirm,
+			mcp.Required(),
+			mcp.Description("Must be set to true to confirm attaching the volume."),
+		),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return handleLinodeVolumeAttachRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleLinodeVolumeAttachRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	volumeID := request.GetInt("volume_id", 0)
 	linodeID := request.GetInt("linode_id", 0)
 	configID := request.GetInt("config_id", 0)
+
+	if result := RequireConfirm(request, "This attaches a block storage volume to an instance. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
 
 	if volumeID == 0 {
 		return mcp.NewToolResultError("volume_id is required"), nil
@@ -196,17 +205,26 @@ func NewLinodeVolumeDetachTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 			mcp.Required(),
 			mcp.Description("The ID of the volume to detach"),
 		),
+		mcp.WithBoolean(
+			paramConfirm,
+			mcp.Required(),
+			mcp.Description("Must be set to true to confirm detaching the volume."),
+		),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return handleLinodeVolumeDetachRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleLinodeVolumeDetachRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	volumeID := request.GetInt("volume_id", 0)
+
+	if result := RequireConfirm(request, "This detaches a block storage volume from an instance. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
 
 	if volumeID == 0 {
 		return mcp.NewToolResultError("volume_id is required"), nil
@@ -262,7 +280,7 @@ func NewLinodeVolumeResizeTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		return handleLinodeVolumeResizeRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleLinodeVolumeResizeRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -327,7 +345,7 @@ func NewLinodeVolumeDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		return handleLinodeVolumeDeleteRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleLinodeVolumeDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

@@ -24,7 +24,7 @@ func NewLinodeInstanceDisksListTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 		handleInstanceDisksListRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleInstanceDisksListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -69,7 +69,7 @@ func NewLinodeInstanceDiskGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 		handleInstanceDiskGetRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleInstanceDiskGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -125,7 +125,7 @@ func NewLinodeInstanceDiskCreateTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		handleInstanceDiskCreateRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleInstanceDiskCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -217,7 +217,7 @@ func NewLinodeInstanceDiskUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		handleInstanceDiskUpdateRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleInstanceDiskUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -279,7 +279,7 @@ func NewLinodeInstanceDiskDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		handleInstanceDiskDeleteRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleInstanceDiskDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -336,7 +336,7 @@ func NewLinodeInstanceDiskCloneTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 		handleInstanceDiskCloneRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleInstanceDiskCloneRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -395,7 +395,7 @@ func NewLinodeInstanceDiskResizeTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		handleInstanceDiskResizeRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleInstanceDiskResizeRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

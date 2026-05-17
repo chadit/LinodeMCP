@@ -38,7 +38,7 @@ def create_linode_firewalls_list_tool() -> tuple[Tool, Capability]:
                 },
             },
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_firewalls_list(

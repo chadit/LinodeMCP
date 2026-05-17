@@ -35,7 +35,7 @@ def create_linode_lke_clusters_list_tool() -> tuple[Tool, Capability]:
                 "environment": _ENV_PROP,
             },
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_lke_clusters_list(
@@ -63,7 +63,7 @@ def create_linode_lke_cluster_get_tool() -> tuple[Tool, Capability]:
             },
             "required": ["cluster_id"],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_lke_cluster_get(
@@ -97,7 +97,7 @@ def create_linode_lke_pools_list_tool() -> tuple[Tool, Capability]:
             },
             "required": ["cluster_id"],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_lke_pools_list(
@@ -136,7 +136,7 @@ def create_linode_lke_pool_get_tool() -> tuple[Tool, Capability]:
             },
             "required": ["cluster_id", "pool_id"],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_lke_pool_get(
@@ -181,7 +181,7 @@ def create_linode_lke_node_get_tool() -> tuple[Tool, Capability]:
             },
             "required": ["cluster_id", "node_id"],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_lke_node_get(
@@ -218,7 +218,7 @@ def create_linode_lke_kubeconfig_get_tool() -> tuple[Tool, Capability]:
             },
             "required": ["cluster_id"],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_lke_kubeconfig_get(
@@ -252,7 +252,7 @@ def create_linode_lke_dashboard_get_tool() -> tuple[Tool, Capability]:
             },
             "required": ["cluster_id"],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_lke_dashboard_get(
@@ -286,7 +286,7 @@ def create_linode_lke_api_endpoints_list_tool() -> tuple[Tool, Capability]:
             },
             "required": ["cluster_id"],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_lke_api_endpoints_list(
@@ -321,7 +321,7 @@ def create_linode_lke_acl_get_tool() -> tuple[Tool, Capability]:
             },
             "required": ["cluster_id"],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_lke_acl_get(
@@ -353,7 +353,7 @@ def create_linode_lke_versions_list_tool() -> tuple[Tool, Capability]:
                 "environment": _ENV_PROP,
             },
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_lke_versions_list(
@@ -384,7 +384,7 @@ def create_linode_lke_version_get_tool() -> tuple[Tool, Capability]:
             },
             "required": ["version_id"],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_lke_version_get(
@@ -412,7 +412,7 @@ def create_linode_lke_types_list_tool() -> tuple[Tool, Capability]:
                 "environment": _ENV_PROP,
             },
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_lke_types_list(
@@ -438,7 +438,7 @@ def create_linode_lke_tier_versions_list_tool() -> tuple[Tool, Capability]:
                 "environment": _ENV_PROP,
             },
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_lke_tier_versions_list(

@@ -34,7 +34,7 @@ func NewLinodeVPCCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 		handleVPCCreateRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleVPCCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -110,7 +110,7 @@ func NewLinodeVPCUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 		handleVPCUpdateRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleVPCUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -169,7 +169,7 @@ func NewLinodeVPCDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 		handleVPCDeleteRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleVPCDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -221,7 +221,7 @@ func NewLinodeVPCSubnetCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 		handleVPCSubnetCreateRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleVPCSubnetCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -289,7 +289,7 @@ func NewLinodeVPCSubnetUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 		handleVPCSubnetUpdateRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleVPCSubnetUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -354,7 +354,7 @@ func NewLinodeVPCSubnetDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 		handleVPCSubnetDeleteRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleVPCSubnetDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

@@ -30,7 +30,7 @@ func NewLinodeVPCsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, f
 		"vpcs",
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 // NewLinodeVPCGetTool creates a tool for getting a single VPC by ID.
@@ -49,7 +49,7 @@ func NewLinodeVPCGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, fun
 		handleVPCGetRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleVPCGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -84,7 +84,7 @@ func NewLinodeVPCIPsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability,
 		"ips",
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 // NewLinodeVPCIPListTool creates a tool for listing IP addresses for a specific VPC.
@@ -103,7 +103,7 @@ func NewLinodeVPCIPListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 		handleVPCIPListRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleVPCIPListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -149,7 +149,7 @@ func NewLinodeVPCSubnetsListTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 		handleVPCSubnetsListRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleVPCSubnetsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -200,7 +200,7 @@ func NewLinodeVPCSubnetGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		handleVPCSubnetGetRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleVPCSubnetGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

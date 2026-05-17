@@ -39,16 +39,23 @@ def create_linode_domain_create_tool() -> tuple[Tool, Capability]:
                     "type": "string",
                     "description": "Description for the domain (optional)",
                 },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm this operation.",
+                },
             },
-            "required": ["domain"],
+            "required": ["domain", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_domain_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_domain_create tool request."""
+    if not arguments.get("confirm"):
+        return error_response("This creates a DNS domain. Set confirm=true to proceed.")
+
     domain_name = arguments.get("domain", "")
 
     if not domain_name:
@@ -102,16 +109,23 @@ def create_linode_domain_update_tool() -> tuple[Tool, Capability]:
                     "type": "string",
                     "description": "New description (optional)",
                 },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm this operation.",
+                },
             },
-            "required": ["domain_id"],
+            "required": ["domain_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_domain_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_domain_update tool request."""
+    if not arguments.get("confirm"):
+        return error_response("This updates a DNS domain. Set confirm=true to proceed.")
+
     domain_id = arguments.get("domain_id", 0)
 
     if not domain_id:
@@ -160,7 +174,7 @@ def create_linode_domain_delete_tool() -> tuple[Tool, Capability]:
             },
             "required": ["domain_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Destroy
 
 
 async def handle_linode_domain_delete(

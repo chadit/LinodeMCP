@@ -48,7 +48,7 @@ def create_linode_vpcs_list_tool() -> tuple[Tool, Capability]:
                 "environment": _ENV_PROP,
             },
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_vpcs_list(
@@ -76,7 +76,7 @@ def create_linode_vpc_get_tool() -> tuple[Tool, Capability]:
             },
             "required": ["vpc_id"],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_vpc_get(
@@ -110,7 +110,7 @@ def create_linode_ipv6_range_get_tool() -> tuple[Tool, Capability]:
             },
             "required": [_IPV6_RANGE_KEY],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_ipv6_range_get(
@@ -139,7 +139,7 @@ def create_linode_vpc_ips_list_tool() -> tuple[Tool, Capability]:
                 "environment": _ENV_PROP,
             },
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_vpc_ips_list(
@@ -167,7 +167,7 @@ def create_linode_vpc_ip_list_tool() -> tuple[Tool, Capability]:
             },
             "required": ["vpc_id"],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_vpc_ip_list(
@@ -202,7 +202,7 @@ def create_linode_vpc_subnets_list_tool() -> tuple[Tool, Capability]:
             },
             "required": ["vpc_id"],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_vpc_subnets_list(
@@ -238,7 +238,7 @@ def create_linode_vpc_subnet_get_tool() -> tuple[Tool, Capability]:
             },
             "required": ["vpc_id", "subnet_id"],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 def _parse_vpc_subnet_ids(

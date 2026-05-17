@@ -30,7 +30,7 @@ func NewLinodeTypesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 		return handleLinodeTypesListRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleLinodeTypesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

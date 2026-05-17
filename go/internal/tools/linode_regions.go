@@ -39,7 +39,7 @@ func NewLinodeRegionsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability
 		)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func filterRegionsByCapability(regions []linode.Region, capabilityFilter string) []linode.Region {

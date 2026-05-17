@@ -35,7 +35,7 @@ func NewLinodeInstanceCloneTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 		handleInstanceCloneRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleInstanceCloneRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -104,7 +104,7 @@ func NewLinodeInstanceMigrateTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 		handleInstanceMigrateRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleInstanceMigrateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -171,7 +171,7 @@ func NewLinodeInstanceRebuildTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 		handleInstanceRebuildRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleInstanceRebuildRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -258,7 +258,7 @@ func NewLinodeInstanceRescueTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 		handleInstanceRescueRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleInstanceRescueRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -318,7 +318,7 @@ func NewLinodeInstancePasswordResetTool(cfg *config.Config) (mcp.Tool, profiles.
 		handleInstancePasswordResetRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleInstancePasswordResetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

@@ -24,7 +24,7 @@ func NewLinodeInstanceBackupsListTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 		handleInstanceBackupsListRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleInstanceBackupsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -61,7 +61,7 @@ func NewLinodeInstanceBackupGetTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 		handleInstanceBackupGetRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleInstanceBackupGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -104,7 +104,7 @@ func NewLinodeInstanceBackupCreateTool(cfg *config.Config) (mcp.Tool, profiles.C
 		handleInstanceBackupCreateRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleInstanceBackupCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -160,7 +160,7 @@ func NewLinodeInstanceBackupRestoreTool(cfg *config.Config) (mcp.Tool, profiles.
 		handleInstanceBackupRestoreRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleInstanceBackupRestoreRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -235,7 +235,7 @@ func NewLinodeInstanceBackupsEnableTool(cfg *config.Config) (mcp.Tool, profiles.
 		handleInstanceBackupsEnableRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleInstanceBackupsEnableRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -284,7 +284,7 @@ func NewLinodeInstanceBackupsCancelTool(cfg *config.Config) (mcp.Tool, profiles.
 		handleInstanceBackupsCancelRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleInstanceBackupsCancelRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

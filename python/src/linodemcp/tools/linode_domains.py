@@ -37,7 +37,7 @@ def create_linode_domains_list_tool() -> tuple[Tool, Capability]:
                 },
             },
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_domains_list(
@@ -105,7 +105,7 @@ def create_linode_domain_get_tool() -> tuple[Tool, Capability]:
             },
             "required": ["domain_id"],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_domain_get(

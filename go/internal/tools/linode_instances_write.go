@@ -29,18 +29,37 @@ func NewLinodeInstanceBootTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 			"config_id",
 			mcp.Description("The ID of the configuration profile to boot with (optional)"),
 		),
+		mcp.WithBoolean(
+			paramConfirm,
+			mcp.Required(),
+			mcp.Description("Must be set to true to confirm booting the instance."),
+		),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return handleLinodeInstanceBootRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
-func handleLinodeInstanceBootRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+// handleInstancePowerAction is shared by the Boot and Reboot handlers,
+// which differ only by which client method they invoke and the verb in
+// status messages. Centralizing the flow keeps the dupl linter happy and
+// keeps the confirm/instance_id validation in one place.
+func handleInstancePowerAction(
+	ctx context.Context,
+	request *mcp.CallToolRequest,
+	cfg *config.Config,
+	verb, confirmMsg string,
+	action func(ctx context.Context, client *linode.Client, instanceID int, configID *int) error,
+) (*mcp.CallToolResult, error) {
 	instanceID := request.GetInt("instance_id", 0)
 	configID := request.GetInt("config_id", 0)
+
+	if result := RequireConfirm(request, confirmMsg); result != nil {
+		return result, nil
+	}
 
 	if instanceID == 0 {
 		return mcp.NewToolResultError("instance_id is required"), nil
@@ -56,19 +75,30 @@ func handleLinodeInstanceBootRequest(ctx context.Context, request *mcp.CallToolR
 		configIDPtr = &configID
 	}
 
-	if err := client.BootInstance(ctx, instanceID, configIDPtr); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to boot instance %d: %v", instanceID, err)), nil
+	if err := action(ctx, client, instanceID, configIDPtr); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to %s instance %d: %v", verb, instanceID, err)), nil
 	}
 
 	response := struct {
 		Message    string `json:"message"`
 		InstanceID int    `json:"instance_id"`
 	}{
-		Message:    fmt.Sprintf("Instance %d boot initiated successfully", instanceID),
+		Message:    fmt.Sprintf("Instance %d %s initiated successfully", instanceID, verb),
 		InstanceID: instanceID,
 	}
 
 	return MarshalToolResponse(response)
+}
+
+func handleLinodeInstanceBootRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	return handleInstancePowerAction(
+		ctx, request, cfg,
+		"boot",
+		"This boots a Linode instance. Set confirm=true to proceed.",
+		func(ctx context.Context, client *linode.Client, instanceID int, configID *int) error {
+			return client.BootInstance(ctx, instanceID, configID)
+		},
+	)
 }
 
 // NewLinodeInstanceRebootTool creates a tool for rebooting a Linode instance.
@@ -89,46 +119,29 @@ func NewLinodeInstanceRebootTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 			"config_id",
 			mcp.Description("The ID of the configuration profile to boot with after reboot (optional)"),
 		),
+		mcp.WithBoolean(
+			paramConfirm,
+			mcp.Required(),
+			mcp.Description("Must be set to true to confirm rebooting the instance. This causes a brief outage."),
+		),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return handleLinodeInstanceRebootRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleLinodeInstanceRebootRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	instanceID := request.GetInt("instance_id", 0)
-	configID := request.GetInt("config_id", 0)
-
-	if instanceID == 0 {
-		return mcp.NewToolResultError("instance_id is required"), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	var configIDPtr *int
-	if configID != 0 {
-		configIDPtr = &configID
-	}
-
-	if err := client.RebootInstance(ctx, instanceID, configIDPtr); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to reboot instance %d: %v", instanceID, err)), nil
-	}
-
-	response := struct {
-		Message    string `json:"message"`
-		InstanceID int    `json:"instance_id"`
-	}{
-		Message:    fmt.Sprintf("Instance %d reboot initiated successfully", instanceID),
-		InstanceID: instanceID,
-	}
-
-	return MarshalToolResponse(response)
+	return handleInstancePowerAction(
+		ctx, request, cfg,
+		"reboot",
+		"This reboots a Linode instance and causes a brief outage. Set confirm=true to proceed.",
+		func(ctx context.Context, client *linode.Client, instanceID int, configID *int) error {
+			return client.RebootInstance(ctx, instanceID, configID)
+		},
+	)
 }
 
 // NewLinodeInstanceShutdownTool creates a tool for shutting down a Linode instance.
@@ -145,17 +158,26 @@ func NewLinodeInstanceShutdownTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 			mcp.Required(),
 			mcp.Description("The ID of the Linode instance to shut down"),
 		),
+		mcp.WithBoolean(
+			paramConfirm,
+			mcp.Required(),
+			mcp.Description("Must be set to true to confirm shutting down the instance."),
+		),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return handleLinodeInstanceShutdownRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleLinodeInstanceShutdownRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	instanceID := request.GetInt("instance_id", 0)
+
+	if result := RequireConfirm(request, "This shuts down a Linode instance. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
 
 	if instanceID == 0 {
 		return mcp.NewToolResultError("instance_id is required"), nil
@@ -240,7 +262,7 @@ func NewLinodeInstanceCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 		return handleLinodeInstanceCreateRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 const errFirewallIDRequired = "firewall_id is required for instance creation. Get a firewall ID from linode_firewalls_list, or create one with linode_firewall_create."
@@ -351,7 +373,7 @@ func NewLinodeInstanceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 		return handleLinodeInstanceDeleteRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleLinodeInstanceDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -406,7 +428,7 @@ func NewLinodeInstanceResizeTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 		handleLinodeInstanceResizeRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleLinodeInstanceResizeRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

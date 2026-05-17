@@ -30,18 +30,27 @@ func NewLinodeSSHKeyCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 			mcp.Required(),
 			mcp.Description("The public SSH key in authorized_keys format (e.g., 'ssh-rsa AAAA...')"),
 		),
+		mcp.WithBoolean(
+			paramConfirm,
+			mcp.Required(),
+			mcp.Description("Must be set to true to confirm SSH key creation."),
+		),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return handleLinodeSSHKeyCreateRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleLinodeSSHKeyCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	label := request.GetString("label", "")
 	sshKey := request.GetString("ssh_key", "")
+
+	if result := RequireConfirm(request, "This adds an SSH key to your Linode profile. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
 
 	if label == "" {
 		return mcp.NewToolResultError("label is required"), nil
@@ -91,17 +100,26 @@ func NewLinodeSSHKeyDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 			mcp.Required(),
 			mcp.Description("The ID of the SSH key to delete"),
 		),
+		mcp.WithBoolean(
+			paramConfirm,
+			mcp.Required(),
+			mcp.Description("Must be set to true to confirm SSH key deletion."),
+		),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return handleLinodeSSHKeyDeleteRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleLinodeSSHKeyDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	sshKeyID := request.GetInt("sshkey_id", 0)
+
+	if result := RequireConfirm(request, "This removes an SSH key from your Linode profile. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
 
 	if sshKeyID == 0 {
 		return mcp.NewToolResultError("sshkey_id is required"), nil

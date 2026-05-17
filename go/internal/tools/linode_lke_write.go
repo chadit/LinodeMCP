@@ -84,7 +84,7 @@ func NewLinodeLKEClusterCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 		handleLKEClusterCreateRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleLKEClusterCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -181,7 +181,7 @@ func NewLinodeLKEClusterUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 		handleLKEClusterUpdateRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleLKEClusterUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -249,7 +249,7 @@ func NewLinodeLKEClusterDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 		handleLKEClusterDeleteRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleLKEClusterDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -297,7 +297,7 @@ func NewLinodeLKEClusterRecycleTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 		handleLKEClusterRecycleRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleLKEClusterRecycleRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -345,7 +345,7 @@ func NewLinodeLKEClusterRegenerateTool(cfg *config.Config) (mcp.Tool, profiles.C
 		handleLKEClusterRegenerateRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleLKEClusterRegenerateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -405,7 +405,7 @@ func NewLinodeLKEPoolCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 		handleLKEPoolCreateRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleLKEPoolCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -494,7 +494,7 @@ func NewLinodeLKEPoolUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 		handleLKEPoolUpdateRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleLKEPoolUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -570,7 +570,7 @@ func NewLinodeLKEPoolDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 		handleLKEPoolDeleteRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleLKEPoolDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -608,7 +608,7 @@ func NewLinodeLKEPoolRecycleTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 		handleLKEPoolRecycleRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleLKEPoolRecycleRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -646,7 +646,7 @@ func NewLinodeLKENodeDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 		handleLKENodeDeleteRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleLKENodeDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -684,7 +684,7 @@ func NewLinodeLKENodeRecycleTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 		handleLKENodeRecycleRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleLKENodeRecycleRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -720,7 +720,7 @@ func NewLinodeLKEKubeconfigDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 		handleLKEKubeconfigDeleteRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleLKEKubeconfigDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -768,7 +768,7 @@ func NewLinodeLKEServiceTokenDeleteTool(cfg *config.Config) (mcp.Tool, profiles.
 		handleLKEServiceTokenDeleteRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleLKEServiceTokenDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -822,7 +822,7 @@ func NewLinodeLKEACLUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		handleLKEACLUpdateRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleLKEACLUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -889,7 +889,7 @@ func NewLinodeLKEACLDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		handleLKEACLDeleteRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleLKEACLDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

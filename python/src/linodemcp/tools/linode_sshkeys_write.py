@@ -34,16 +34,25 @@ def create_linode_sshkey_create_tool() -> tuple[Tool, Capability]:
                     "type": "string",
                     "description": "The public SSH key (required)",
                 },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this mutating operation.",
+                },
             },
-            "required": ["label", "ssh_key"],
+            "required": ["label", "ssh_key", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_sshkey_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_sshkey_create tool request."""
+    if not arguments.get("confirm"):
+        return error_response(
+            "This creates an SSH key on your profile. Set confirm=true to proceed."
+        )
+
     label = arguments.get("label", "")
     ssh_key = arguments.get("ssh_key", "")
 
@@ -84,16 +93,23 @@ def create_linode_sshkey_delete_tool() -> tuple[Tool, Capability]:
                     "type": "integer",
                     "description": "The ID of the SSH key to delete (required)",
                 },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this mutating operation.",
+                },
             },
-            "required": ["ssh_key_id"],
+            "required": ["ssh_key_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Destroy
 
 
 async def handle_linode_sshkey_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_sshkey_delete tool request."""
+    if not arguments.get("confirm"):
+        return error_response("This deletes an SSH key. Set confirm=true to proceed.")
+
     ssh_key_id = arguments.get("ssh_key_id", 0)
 
     if not ssh_key_id:

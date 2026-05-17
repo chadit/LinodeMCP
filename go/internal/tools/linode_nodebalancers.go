@@ -29,7 +29,7 @@ func NewLinodeNodeBalancersListTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 		"nodebalancers",
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 // NewLinodeNodeBalancerGetTool creates a tool for getting a single NodeBalancer.
@@ -52,7 +52,7 @@ func NewLinodeNodeBalancerGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 		return handleLinodeNodeBalancerGetRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleLinodeNodeBalancerGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

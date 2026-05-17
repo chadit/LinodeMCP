@@ -81,7 +81,7 @@ def create_linode_instance_disks_list_tool() -> tuple[Tool, Capability]:
             },
             "required": ["instance_id"],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_instance_disks_list(
@@ -115,7 +115,7 @@ def create_linode_instance_disk_get_tool() -> tuple[Tool, Capability]:
             },
             "required": ["instance_id", "disk_id"],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_instance_disk_get(
@@ -174,7 +174,7 @@ def create_linode_instance_disk_create_tool() -> tuple[Tool, Capability]:
                 "confirm",
             ],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_instance_disk_create(
@@ -235,7 +235,7 @@ def create_linode_instance_disk_update_tool() -> tuple[Tool, Capability]:
                 "confirm",
             ],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_instance_disk_update(
@@ -287,7 +287,7 @@ def create_linode_instance_disk_delete_tool() -> tuple[Tool, Capability]:
                 "confirm",
             ],
         },
-    ), Capability.Unknown
+    ), Capability.Destroy
 
 
 async def handle_linode_instance_disk_delete(
@@ -335,7 +335,7 @@ def create_linode_instance_disk_clone_tool() -> tuple[Tool, Capability]:
                 "confirm",
             ],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_instance_disk_clone(
@@ -383,7 +383,7 @@ def create_linode_instance_disk_resize_tool() -> tuple[Tool, Capability]:
                 "confirm",
             ],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_instance_disk_resize(

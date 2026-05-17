@@ -44,7 +44,7 @@ def create_linode_images_list_tool() -> tuple[Tool, Capability]:
                 },
             },
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_images_list(

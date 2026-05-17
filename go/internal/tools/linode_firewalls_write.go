@@ -33,19 +33,28 @@ func NewLinodeFirewallCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 			"outbound_policy",
 			mcp.Description("Default policy for outbound traffic: 'ACCEPT' or 'DROP' (optional, default: 'ACCEPT')"),
 		),
+		mcp.WithBoolean(
+			paramConfirm,
+			mcp.Required(),
+			mcp.Description("Must be set to true to confirm firewall creation."),
+		),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return handleLinodeFirewallCreateRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleLinodeFirewallCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	label := request.GetString("label", "")
 	inboundPolicy := request.GetString("inbound_policy", "ACCEPT")
 	outboundPolicy := request.GetString("outbound_policy", "ACCEPT")
+
+	if result := RequireConfirm(request, "This creates a Cloud Firewall. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
 
 	if label == "" {
 		return mcp.NewToolResultError("label is required"), nil
@@ -100,11 +109,13 @@ func NewLinodeFirewallUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 			mcp.WithString("status", mcp.Description("New status: 'enabled' or 'disabled' (optional)")),
 			mcp.WithString("inbound_policy", mcp.Description("Default policy for inbound traffic: 'ACCEPT' or 'DROP' (optional)")),
 			mcp.WithString("outbound_policy", mcp.Description("Default policy for outbound traffic: 'ACCEPT' or 'DROP' (optional)")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be set to true to confirm firewall update.")),
 		},
 		handleLinodeFirewallUpdateRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleLinodeFirewallUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -113,6 +124,10 @@ func handleLinodeFirewallUpdateRequest(ctx context.Context, request *mcp.CallToo
 	status := request.GetString("status", "")
 	inboundPolicy := request.GetString("inbound_policy", "")
 	outboundPolicy := request.GetString("outbound_policy", "")
+
+	if result := RequireConfirm(request, "This updates a Cloud Firewall. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
 
 	if firewallID == 0 {
 		return mcp.NewToolResultError("firewall_id is required"), nil
@@ -188,7 +203,7 @@ func NewLinodeFirewallDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 		return handleLinodeFirewallDeleteRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleLinodeFirewallDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

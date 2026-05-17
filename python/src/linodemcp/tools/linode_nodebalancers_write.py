@@ -45,7 +45,7 @@ def create_linode_nodebalancer_create_tool() -> tuple[Tool, Capability]:
             },
             "required": ["region", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_nodebalancer_create(
@@ -111,10 +111,14 @@ def create_linode_nodebalancer_update_tool() -> tuple[Tool, Capability]:
                     "type": "integer",
                     "description": "New throttle limit (0-20, optional)",
                 },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this mutating operation.",
+                },
             },
-            "required": ["nodebalancer_id"],
+            "required": ["nodebalancer_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_nodebalancer_update(
@@ -168,7 +172,7 @@ def create_linode_nodebalancer_delete_tool() -> tuple[Tool, Capability]:
             },
             "required": ["nodebalancer_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Destroy
 
 
 async def handle_linode_nodebalancer_delete(

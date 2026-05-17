@@ -1818,7 +1818,8 @@ async def test_handle_linode_sshkey_create(sample_config: Config) -> None:
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_sshkey_create(
-            {"label": "my-key", "ssh_key": "ssh-rsa AAAA..."}, sample_config
+            {"label": "my-key", "ssh_key": "ssh-rsa AAAA...", "confirm": True},
+            sample_config,
         )
 
         assert len(result) == 1
@@ -1830,7 +1831,9 @@ async def test_handle_linode_sshkey_create_missing_params(
     sample_config: Config,
 ) -> None:
     """Test linode_sshkey_create tool with missing parameters."""
-    result = await handle_linode_sshkey_create({"label": "test"}, sample_config)
+    result = await handle_linode_sshkey_create(
+        {"label": "test", "confirm": True}, sample_config
+    )
     assert len(result) == 1
     assert "Error" in result[0].text
 
@@ -1844,7 +1847,9 @@ async def test_handle_linode_sshkey_delete(sample_config: Config) -> None:
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
 
-        result = await handle_linode_sshkey_delete({"ssh_key_id": 12345}, sample_config)
+        result = await handle_linode_sshkey_delete(
+            {"ssh_key_id": 12345, "confirm": True}, sample_config
+        )
 
         assert len(result) == 1
         assert "deleted" in result[0].text.lower()
@@ -1860,7 +1865,7 @@ async def test_handle_linode_instance_boot(sample_config: Config) -> None:
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_instance_boot(
-            {"instance_id": 12345}, sample_config
+            {"instance_id": 12345, "confirm": True}, sample_config
         )
 
         assert len(result) == 1
@@ -1877,7 +1882,7 @@ async def test_handle_linode_instance_reboot(sample_config: Config) -> None:
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_instance_reboot(
-            {"instance_id": 12345}, sample_config
+            {"instance_id": 12345, "confirm": True}, sample_config
         )
 
         assert len(result) == 1
@@ -1894,7 +1899,7 @@ async def test_handle_linode_instance_shutdown(sample_config: Config) -> None:
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_instance_shutdown(
-            {"instance_id": 12345}, sample_config
+            {"instance_id": 12345, "confirm": True}, sample_config
         )
 
         assert len(result) == 1
@@ -2086,7 +2091,7 @@ async def test_handle_linode_firewall_create(sample_config: Config) -> None:
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_firewall_create(
-            {"label": "my-firewall"}, sample_config
+            {"label": "my-firewall", "confirm": True}, sample_config
         )
 
         assert len(result) == 1
@@ -2118,7 +2123,8 @@ async def test_handle_linode_firewall_update(sample_config: Config) -> None:
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_firewall_update(
-            {"firewall_id": 12345, "label": "updated-firewall"}, sample_config
+            {"firewall_id": 12345, "label": "updated-firewall", "confirm": True},
+            sample_config,
         )
 
         assert len(result) == 1
@@ -2164,7 +2170,12 @@ async def test_handle_linode_domain_create(sample_config: Config) -> None:
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_domain_create(
-            {"domain": "example.com", "soa_email": "admin@example.com"}, sample_config
+            {
+                "domain": "example.com",
+                "soa_email": "admin@example.com",
+                "confirm": True,
+            },
+            sample_config,
         )
 
         assert len(result) == 1
@@ -2193,7 +2204,8 @@ async def test_handle_linode_domain_update(sample_config: Config) -> None:
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_domain_update(
-            {"domain_id": 12345, "description": "Updated"}, sample_config
+            {"domain_id": 12345, "description": "Updated", "confirm": True},
+            sample_config,
         )
 
         assert len(result) == 1
@@ -2245,6 +2257,7 @@ async def test_handle_linode_domain_record_create(sample_config: Config) -> None
                 "type": "A",
                 "name": "www",
                 "target": "192.0.2.1",
+                "confirm": True,
             },
             sample_config,
         )
@@ -2276,7 +2289,12 @@ async def test_handle_linode_domain_record_update(sample_config: Config) -> None
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_domain_record_update(
-            {"domain_id": 12345, "record_id": 12345, "target": "192.0.2.2"},
+            {
+                "domain_id": 12345,
+                "record_id": 12345,
+                "target": "192.0.2.2",
+                "confirm": True,
+            },
             sample_config,
         )
 
@@ -2294,7 +2312,7 @@ async def test_handle_linode_domain_record_delete(sample_config: Config) -> None
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_domain_record_delete(
-            {"domain_id": 12345, "record_id": 12345}, sample_config
+            {"domain_id": 12345, "record_id": 12345, "confirm": True}, sample_config
         )
 
         assert len(result) == 1
@@ -2368,7 +2386,7 @@ async def test_handle_linode_volume_attach(sample_config: Config) -> None:
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_volume_attach(
-            {"volume_id": 12345, "linode_id": 54321}, sample_config
+            {"volume_id": 12345, "linode_id": 54321, "confirm": True}, sample_config
         )
 
         assert len(result) == 1
@@ -2384,7 +2402,9 @@ async def test_handle_linode_volume_detach(sample_config: Config) -> None:
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
 
-        result = await handle_linode_volume_detach({"volume_id": 12345}, sample_config)
+        result = await handle_linode_volume_detach(
+            {"volume_id": 12345, "confirm": True}, sample_config
+        )
 
         assert len(result) == 1
         assert "detach" in result[0].text.lower()
@@ -2524,7 +2544,12 @@ async def test_handle_linode_nodebalancer_update(sample_config: Config) -> None:
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_nodebalancer_update(
-            {"nodebalancer_id": 12345, "label": "updated-nodebalancer"}, sample_config
+            {
+                "nodebalancer_id": 12345,
+                "label": "updated-nodebalancer",
+                "confirm": True,
+            },
+            sample_config,
         )
 
         assert len(result) == 1
@@ -6808,7 +6833,7 @@ async def test_handle_linode_monitor_service_token_create(
         "expiry": "2026-06-01T00:00:00Z",
     }
     result = await handle_linode_monitor_service_token_create(
-        {"service_type": "dbaas", "entity_ids": [1, 2, 3]},
+        {"service_type": "dbaas", "entity_ids": [1, 2, 3], "confirm": True},
         sample_config,
     )
     assert len(result) == 1
@@ -6826,7 +6851,7 @@ async def test_handle_linode_monitor_service_token_create_missing_service_type(
 ) -> None:
     """Missing or empty service_type returns a validation error."""
     result = await handle_linode_monitor_service_token_create(
-        {"entity_ids": [1]}, sample_config
+        {"entity_ids": [1], "confirm": True}, sample_config
     )
     assert len(result) == 1
     assert "service_type" in result[0].text
@@ -6838,7 +6863,7 @@ async def test_handle_linode_monitor_service_token_create_missing_entity_ids(
 ) -> None:
     """Missing entity_ids returns a validation error."""
     result = await handle_linode_monitor_service_token_create(
-        {"service_type": "dbaas"}, sample_config
+        {"service_type": "dbaas", "confirm": True}, sample_config
     )
     assert len(result) == 1
     assert "entity_ids" in result[0].text
@@ -6850,7 +6875,7 @@ async def test_handle_linode_monitor_service_token_create_empty_entity_ids(
 ) -> None:
     """Empty entity_ids list returns a validation error."""
     result = await handle_linode_monitor_service_token_create(
-        {"service_type": "dbaas", "entity_ids": []}, sample_config
+        {"service_type": "dbaas", "entity_ids": [], "confirm": True}, sample_config
     )
     assert len(result) == 1
     assert "entity_ids" in result[0].text
@@ -6862,13 +6887,13 @@ async def test_handle_linode_monitor_service_token_create_non_int_entity_ids(
 ) -> None:
     """Non-integer entity_ids (including bool) are rejected."""
     result = await handle_linode_monitor_service_token_create(
-        {"service_type": "dbaas", "entity_ids": ["abc"]}, sample_config
+        {"service_type": "dbaas", "entity_ids": ["abc"], "confirm": True}, sample_config
     )
     assert len(result) == 1
     assert "entity_ids" in result[0].text
     # bool is a subclass of int; reject it explicitly.
     result_bool = await handle_linode_monitor_service_token_create(
-        {"service_type": "dbaas", "entity_ids": [True]}, sample_config
+        {"service_type": "dbaas", "entity_ids": [True], "confirm": True}, sample_config
     )
     assert "entity_ids" in result_bool[0].text
 
@@ -6879,7 +6904,7 @@ async def test_handle_linode_monitor_service_token_create_error(
     """API errors surface as a 'Failed to' message in the response text."""
     mock_linode_client.create_monitor_service_token.side_effect = Exception("API error")
     result = await handle_linode_monitor_service_token_create(
-        {"service_type": "dbaas", "entity_ids": [1]}, sample_config
+        {"service_type": "dbaas", "entity_ids": [1], "confirm": True}, sample_config
     )
     assert len(result) == 1
     assert "Failed to" in result[0].text

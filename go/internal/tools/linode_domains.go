@@ -30,7 +30,7 @@ func NewLinodeDomainsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability
 		"domains",
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 // NewLinodeDomainGetTool creates a tool for getting a single domain.
@@ -53,7 +53,7 @@ func NewLinodeDomainGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 		return handleLinodeDomainGetRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleLinodeDomainGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -104,7 +104,7 @@ func NewLinodeDomainRecordsListTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 		return handleLinodeDomainRecordsListRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleLinodeDomainRecordsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

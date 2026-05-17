@@ -28,7 +28,7 @@ func NewLinodeLKEClustersListTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 		"clusters",
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 // NewLinodeLKEClusterGetTool creates a tool for getting a single LKE cluster by ID.
@@ -48,7 +48,7 @@ func NewLinodeLKEClusterGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 		return handleLKEClusterGetRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleLKEClusterGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -87,7 +87,7 @@ func NewLinodeLKEPoolsListTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		return handleLKEPoolsListRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleLKEPoolsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -139,7 +139,7 @@ func NewLinodeLKEPoolGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability,
 		return handleLKEPoolGetRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleLKEPoolGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -188,7 +188,7 @@ func NewLinodeLKENodeGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability,
 		return handleLKENodeGetRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleLKENodeGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -232,7 +232,7 @@ func NewLinodeLKEKubeconfigGetTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 		return handleLKEKubeconfigGetRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleLKEKubeconfigGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -271,7 +271,7 @@ func NewLinodeLKEDashboardGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 		return handleLKEDashboardGetRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleLKEDashboardGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -310,7 +310,7 @@ func NewLinodeLKEAPIEndpointsListTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 		return handleLKEAPIEndpointsListRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleLKEAPIEndpointsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -357,7 +357,7 @@ func NewLinodeLKEACLGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 		return handleLKEACLGetRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleLKEACLGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -392,7 +392,7 @@ func NewLinodeLKEVersionsListTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 		"versions",
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 // NewLinodeLKEVersionGetTool creates a tool for getting a specific Kubernetes version.
@@ -412,7 +412,7 @@ func NewLinodeLKEVersionGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 		return handleLKEVersionGetRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleLKEVersionGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -447,7 +447,7 @@ func NewLinodeLKETypesListTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		"types",
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 // NewLinodeLKETierVersionsListTool creates a tool for listing available LKE tier versions.
@@ -463,7 +463,7 @@ func NewLinodeLKETierVersionsListTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 		"tier_versions",
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 // parseLKEClusterID validates and converts the cluster ID string to an integer.

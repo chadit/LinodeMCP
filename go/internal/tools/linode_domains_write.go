@@ -42,13 +42,18 @@ func NewLinodeDomainCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 			"ttl_sec",
 			mcp.Description("Default TTL in seconds for records (optional)"),
 		),
+		mcp.WithBoolean(
+			paramConfirm,
+			mcp.Required(),
+			mcp.Description("Must be set to true to confirm domain creation."),
+		),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return handleLinodeDomainCreateRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleLinodeDomainCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -57,6 +62,10 @@ func handleLinodeDomainCreateRequest(ctx context.Context, request *mcp.CallToolR
 	soaEmail := request.GetString("soa_email", "")
 	description := request.GetString("description", "")
 	ttlSec := request.GetInt("ttl_sec", 0)
+
+	if result := RequireConfirm(request, "This creates a DNS domain. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
 
 	if domain == "" {
 		return mcp.NewToolResultError("domain is required"), nil
@@ -107,11 +116,13 @@ func NewLinodeDomainUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 			mcp.WithString("description", mcp.Description("New description (optional)")),
 			mcp.WithString("status", mcp.Description("New status: 'active', 'disabled', or 'edit_mode' (optional)")),
 			mcp.WithNumber("ttl_sec", mcp.Description("New default TTL in seconds (optional)")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be set to true to confirm domain update.")),
 		},
 		handleLinodeDomainUpdateRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleLinodeDomainUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -120,6 +131,10 @@ func handleLinodeDomainUpdateRequest(ctx context.Context, request *mcp.CallToolR
 	description := request.GetString("description", "")
 	status := request.GetString("status", "")
 	ttlSec := request.GetInt("ttl_sec", 0)
+
+	if result := RequireConfirm(request, "This updates a DNS domain. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
 
 	if domainID == 0 {
 		return mcp.NewToolResultError("domain_id is required"), nil
@@ -178,7 +193,7 @@ func NewLinodeDomainDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		return handleLinodeDomainDeleteRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleLinodeDomainDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

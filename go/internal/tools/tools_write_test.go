@@ -45,8 +45,8 @@ func TestLinodeSSHKeyCreateTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: caseMissingLabel, args: map[string]any{"ssh_key": validTestSSHKey}, wantContains: errLabelRequired},
-		{name: "missing ssh key", args: map[string]any{keyLabel: keyNameTest}, wantContains: "ssh_key is required"},
+		{name: caseMissingLabel, args: map[string]any{"ssh_key": validTestSSHKey, keyConfirm: true}, wantContains: errLabelRequired},
+		{name: "missing ssh key", args: map[string]any{keyLabel: keyNameTest, keyConfirm: true}, wantContains: "ssh_key is required"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -82,8 +82,9 @@ func TestLinodeSSHKeyCreateTool(t *testing.T) {
 		_, _, successHandler := tools.NewLinodeSSHKeyCreateTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			keyLabel:  keyNameTest,
-			"ssh_key": validTestSSHKey,
+			keyLabel:   keyNameTest,
+			"ssh_key":  validTestSSHKey,
+			keyConfirm: true,
 		})
 		result, err := successHandler(t.Context(), req)
 
@@ -119,7 +120,7 @@ func TestLinodeSSHKeyDeleteTool(t *testing.T) {
 
 	t.Run("missing sshkey id", func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{})
+		req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
@@ -142,7 +143,7 @@ func TestLinodeSSHKeyDeleteTool(t *testing.T) {
 		}}
 		_, _, successHandler := tools.NewLinodeSSHKeyDeleteTool(successCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"sshkey_id": float64(123)})
+		req := createRequestWithArgs(t, map[string]any{"sshkey_id": float64(123), keyConfirm: true})
 		result, err := successHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -177,7 +178,7 @@ func TestLinodeInstanceBootTool(t *testing.T) {
 
 	t.Run("missing instance id", func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{})
+		req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
@@ -201,7 +202,7 @@ func TestLinodeInstanceBootTool(t *testing.T) {
 		}}
 		_, _, successHandler := tools.NewLinodeInstanceBootTool(successCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyInstanceID: float64(123)})
+		req := createRequestWithArgs(t, map[string]any{keyInstanceID: float64(123), keyConfirm: true})
 		result, err := successHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -236,7 +237,7 @@ func TestLinodeInstanceRebootTool(t *testing.T) {
 
 	t.Run("missing instance id", func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{})
+		req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
@@ -260,7 +261,7 @@ func TestLinodeInstanceRebootTool(t *testing.T) {
 		}}
 		_, _, successHandler := tools.NewLinodeInstanceRebootTool(successCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyInstanceID: float64(123)})
+		req := createRequestWithArgs(t, map[string]any{keyInstanceID: float64(123), keyConfirm: true})
 		result, err := successHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -294,7 +295,7 @@ func TestLinodeInstanceShutdownTool(t *testing.T) {
 
 	t.Run("missing instance id", func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{})
+		req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
@@ -318,7 +319,7 @@ func TestLinodeInstanceShutdownTool(t *testing.T) {
 		}}
 		_, _, successHandler := tools.NewLinodeInstanceShutdownTool(successCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyInstanceID: float64(123)})
+		req := createRequestWithArgs(t, map[string]any{keyInstanceID: float64(123), keyConfirm: true})
 		result, err := successHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -762,7 +763,7 @@ func TestLinodeFirewallCreateTool(t *testing.T) {
 
 	t.Run(caseMissingLabel, func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{})
+		req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
@@ -795,6 +796,7 @@ func TestLinodeFirewallCreateTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{
 			keyLabel:         "web-firewall",
 			"inbound_policy": "DROP",
+			keyConfirm:       true,
 		})
 		result, err := successHandler(t.Context(), req)
 
@@ -832,7 +834,7 @@ func TestLinodeFirewallUpdateTool(t *testing.T) {
 
 	t.Run("missing firewall id", func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyLabel: labelNew})
+		req := createRequestWithArgs(t, map[string]any{keyLabel: labelNew, keyConfirm: true})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
@@ -865,6 +867,7 @@ func TestLinodeFirewallUpdateTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{
 			keyFirewallID: float64(789),
 			keyLabel:      "updated-firewall",
+			keyConfirm:    true,
 		})
 		result, err := successHandler(t.Context(), req)
 
@@ -966,8 +969,8 @@ func TestLinodeDomainCreateTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing domain", args: map[string]any{keyType: keyMaster}, wantContains: "domain is required"},
-		{name: caseMissingType, args: map[string]any{"domain": domainExample}, wantContains: errTypeRequired},
+		{name: "missing domain", args: map[string]any{keyType: keyMaster, keyConfirm: true}, wantContains: "domain is required"},
+		{name: caseMissingType, args: map[string]any{"domain": domainExample, keyConfirm: true}, wantContains: errTypeRequired},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1008,6 +1011,7 @@ func TestLinodeDomainCreateTool(t *testing.T) {
 			"domain":    domainExample,
 			keyType:     keyMaster,
 			keySoaEmail: "admin@example.com",
+			keyConfirm:  true,
 		})
 		result, err := successHandler(t.Context(), req)
 
@@ -1045,7 +1049,7 @@ func TestLinodeDomainUpdateTool(t *testing.T) {
 
 	t.Run(caseMissingDomainID, func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keySoaEmail: "new@example.com"})
+		req := createRequestWithArgs(t, map[string]any{keySoaEmail: "new@example.com", keyConfirm: true})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
@@ -1079,6 +1083,7 @@ func TestLinodeDomainUpdateTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{
 			keyDomainID: float64(111),
 			keySoaEmail: "new@example.com",
+			keyConfirm:  true,
 		})
 		result, err := successHandler(t.Context(), req)
 
@@ -1183,17 +1188,17 @@ func TestLinodeDomainRecordCreateTool(t *testing.T) {
 	}{
 		{
 			name:         caseMissingDomainID,
-			args:         map[string]any{keyType: "A", keyTarget: ip192168_1_1},
+			args:         map[string]any{keyType: "A", keyTarget: ip192168_1_1, keyConfirm: true},
 			wantContains: errDomainIDRequired,
 		},
 		{
 			name:         caseMissingType,
-			args:         map[string]any{keyDomainID: float64(111), keyTarget: ip192168_1_1},
+			args:         map[string]any{keyDomainID: float64(111), keyTarget: ip192168_1_1, keyConfirm: true},
 			wantContains: errTypeRequired,
 		},
 		{
 			name:         "missing target",
-			args:         map[string]any{keyDomainID: float64(111), keyType: "A"},
+			args:         map[string]any{keyDomainID: float64(111), keyType: "A", keyConfirm: true},
 			wantContains: "target is required",
 		},
 	}
@@ -1237,6 +1242,7 @@ func TestLinodeDomainRecordCreateTool(t *testing.T) {
 			keyType:     "A",
 			keyName:     hostWWW,
 			keyTarget:   "203.0.113.50",
+			keyConfirm:  true,
 		})
 		result, err := successHandler(t.Context(), req)
 
@@ -1278,12 +1284,12 @@ func TestLinodeDomainRecordUpdateTool(t *testing.T) {
 	}{
 		{
 			name:         caseMissingDomainID,
-			args:         map[string]any{keyRecordID: float64(222), keyTarget: ip192168_1_2},
+			args:         map[string]any{keyRecordID: float64(222), keyTarget: ip192168_1_2, keyConfirm: true},
 			wantContains: errDomainIDRequired,
 		},
 		{
 			name:         "missing record id",
-			args:         map[string]any{keyDomainID: float64(111), keyTarget: ip192168_1_2},
+			args:         map[string]any{keyDomainID: float64(111), keyTarget: ip192168_1_2, keyConfirm: true},
 			wantContains: "record_id is required",
 		},
 	}
@@ -1326,6 +1332,7 @@ func TestLinodeDomainRecordUpdateTool(t *testing.T) {
 			keyDomainID: float64(111),
 			keyRecordID: float64(222),
 			keyTarget:   ip192168_1_2,
+			keyConfirm:  true,
 		})
 		result, err := successHandler(t.Context(), req)
 
@@ -1366,12 +1373,12 @@ func TestLinodeDomainRecordDeleteTool(t *testing.T) {
 	}{
 		{
 			name:         caseMissingDomainID,
-			args:         map[string]any{keyRecordID: float64(222)},
+			args:         map[string]any{keyRecordID: float64(222), keyConfirm: true},
 			wantContains: errDomainIDRequired,
 		},
 		{
 			name:         "missing record id",
-			args:         map[string]any{keyDomainID: float64(111)},
+			args:         map[string]any{keyDomainID: float64(111), keyConfirm: true},
 			wantContains: "record_id is required",
 		},
 	}
@@ -1405,6 +1412,7 @@ func TestLinodeDomainRecordDeleteTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{
 			keyDomainID: float64(111),
 			keyRecordID: float64(222),
+			keyConfirm:  true,
 		})
 		result, err := successHandler(t.Context(), req)
 
@@ -1545,12 +1553,12 @@ func TestLinodeVolumeAttachTool(t *testing.T) {
 	}{
 		{
 			name:         "missing volume id",
-			args:         map[string]any{keyLinodeID: float64(123)},
+			args:         map[string]any{keyLinodeID: float64(123), keyConfirm: true},
 			wantContains: "volume_id is required",
 		},
 		{
 			name:         caseMissingLinodeID,
-			args:         map[string]any{keyVolumeID: float64(333)},
+			args:         map[string]any{keyVolumeID: float64(333), keyConfirm: true},
 			wantContains: errLinodeIDRequired,
 		},
 	}
@@ -1594,6 +1602,7 @@ func TestLinodeVolumeAttachTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{
 			keyVolumeID: float64(333),
 			keyLinodeID: float64(123),
+			keyConfirm:  true,
 		})
 		result, err := successHandler(t.Context(), req)
 
@@ -1628,7 +1637,7 @@ func TestLinodeVolumeDetachTool(t *testing.T) {
 
 	t.Run("missing volume id", func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{})
+		req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
@@ -1652,7 +1661,7 @@ func TestLinodeVolumeDetachTool(t *testing.T) {
 		}}
 		_, _, successHandler := tools.NewLinodeVolumeDetachTool(successCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyVolumeID: float64(333)})
+		req := createRequestWithArgs(t, map[string]any{keyVolumeID: float64(333), keyConfirm: true})
 		result, err := successHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -1937,7 +1946,7 @@ func TestLinodeNodeBalancerUpdateTool(t *testing.T) {
 
 	t.Run("missing nodebalancer id", func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyLabel: labelNew})
+		req := createRequestWithArgs(t, map[string]any{keyLabel: labelNew, keyConfirm: true})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
@@ -1970,6 +1979,7 @@ func TestLinodeNodeBalancerUpdateTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{
 			keyNodeBalancerID: float64(444),
 			keyLabel:          "updated-lb",
+			keyConfirm:        true,
 		})
 		result, err := successHandler(t.Context(), req)
 

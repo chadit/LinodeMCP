@@ -67,13 +67,18 @@ func NewLinodeDomainRecordCreateTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 			"tag",
 			mcp.Description("Tag for CAA records: 'issue', 'issuewild', or 'iodef' (optional)"),
 		),
+		mcp.WithBoolean(
+			paramConfirm,
+			mcp.Required(),
+			mcp.Description("Must be set to true to confirm DNS record creation."),
+		),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return handleLinodeDomainRecordCreateRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleLinodeDomainRecordCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -88,6 +93,10 @@ func handleLinodeDomainRecordCreateRequest(ctx context.Context, request *mcp.Cal
 	protocol := request.GetString("protocol", "")
 	ttlSec := request.GetInt("ttl_sec", 0)
 	tag := request.GetString("tag", "")
+
+	if result := RequireConfirm(request, "This creates a DNS record. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
 
 	if domainID == 0 {
 		return mcp.NewToolResultError("domain_id is required"), nil
@@ -184,13 +193,18 @@ func NewLinodeDomainRecordUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 			"ttl_sec",
 			mcp.Description("New TTL in seconds (optional)"),
 		),
+		mcp.WithBoolean(
+			paramConfirm,
+			mcp.Required(),
+			mcp.Description("Must be set to true to confirm DNS record update."),
+		),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return handleLinodeDomainRecordUpdateRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleLinodeDomainRecordUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -202,6 +216,10 @@ func handleLinodeDomainRecordUpdateRequest(ctx context.Context, request *mcp.Cal
 	weight := request.GetInt("weight", 0)
 	port := request.GetInt("port", 0)
 	ttlSec := request.GetInt("ttl_sec", 0)
+
+	if result := RequireConfirm(request, "This updates a DNS record. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
 
 	if domainID == 0 {
 		return mcp.NewToolResultError("domain_id is required"), nil
@@ -262,18 +280,27 @@ func NewLinodeDomainRecordDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 			mcp.Required(),
 			mcp.Description("The ID of the record to delete"),
 		),
+		mcp.WithBoolean(
+			paramConfirm,
+			mcp.Required(),
+			mcp.Description("Must be set to true to confirm DNS record deletion. This action is irreversible."),
+		),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return handleLinodeDomainRecordDeleteRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleLinodeDomainRecordDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	domainID := request.GetInt("domain_id", 0)
 	recordID := request.GetInt("record_id", 0)
+
+	if result := RequireConfirm(request, "This deletes a DNS record and is irreversible. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
 
 	if domainID == 0 {
 		return mcp.NewToolResultError("domain_id is required"), nil

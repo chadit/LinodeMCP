@@ -18,7 +18,7 @@ def create_version_tool() -> tuple[Tool, Capability]:
             "type": "object",
             "properties": {},
         },
-    ), Capability.Unknown
+    ), Capability.Meta
 
 
 async def handle_version(_arguments: dict[str, Any]) -> list[TextContent]:

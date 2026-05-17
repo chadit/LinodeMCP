@@ -34,7 +34,7 @@ func NewLinodeObjectStorageBucketCreateTool(cfg *config.Config) (mcp.Tool, profi
 		handleObjectStorageBucketCreateRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleObjectStorageBucketCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -122,7 +122,7 @@ func NewLinodeObjectStorageBucketDeleteTool(cfg *config.Config) (mcp.Tool, profi
 		return handleObjectStorageBucketDeleteRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleObjectStorageBucketDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -184,7 +184,7 @@ func NewLinodeObjectStorageBucketAccessUpdateTool(cfg *config.Config) (mcp.Tool,
 		handleObjectStorageBucketAccessUpdateRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleObjectStorageBucketAccessUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -272,7 +272,7 @@ func NewLinodeObjectStorageKeyCreateTool(cfg *config.Config) (mcp.Tool, profiles
 		return handleObjectStorageKeyCreateRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleObjectStorageKeyCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -362,7 +362,7 @@ func NewLinodeObjectStorageKeyUpdateTool(cfg *config.Config) (mcp.Tool, profiles
 		return handleObjectStorageKeyUpdateRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleObjectStorageKeyUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -448,7 +448,7 @@ func NewLinodeObjectStorageKeyDeleteTool(cfg *config.Config) (mcp.Tool, profiles
 		return handleObjectStorageKeyDeleteRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleObjectStorageKeyDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -523,7 +523,7 @@ func NewLinodeObjectStorageObjectACLUpdateTool(cfg *config.Config) (mcp.Tool, pr
 		return handleObjectStorageObjectACLUpdateRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleObjectStorageObjectACLUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -601,7 +601,7 @@ func NewLinodeObjectStorageSSLDeleteTool(cfg *config.Config) (mcp.Tool, profiles
 		return handleObjectStorageSSLDeleteRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleObjectStorageSSLDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

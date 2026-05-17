@@ -180,7 +180,7 @@ def create_linode_vpc_create_tool() -> tuple[Tool, Capability]:
             },
             "required": ["label", "region", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_vpc_create(
@@ -231,7 +231,7 @@ def create_linode_vpc_update_tool() -> tuple[Tool, Capability]:
             },
             "required": ["vpc_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_vpc_update(
@@ -279,7 +279,7 @@ def create_linode_vpc_delete_tool() -> tuple[Tool, Capability]:
             },
             "required": ["vpc_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Destroy
 
 
 async def handle_linode_vpc_delete(
@@ -340,7 +340,7 @@ def create_linode_vpc_subnet_create_tool() -> tuple[Tool, Capability]:
                 "confirm",
             ],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_vpc_subnet_create(
@@ -400,7 +400,7 @@ def create_linode_vpc_subnet_update_tool() -> tuple[Tool, Capability]:
                 "confirm",
             ],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_vpc_subnet_update(
@@ -454,7 +454,7 @@ def create_linode_vpc_subnet_delete_tool() -> tuple[Tool, Capability]:
                 "confirm",
             ],
         },
-    ), Capability.Unknown
+    ), Capability.Destroy
 
 
 async def handle_linode_vpc_subnet_delete(
@@ -500,7 +500,7 @@ def create_linode_ipv6_range_create_tool() -> tuple[Tool, Capability]:
             },
             "required": [_IPV6_PREFIX_LENGTH_KEY, "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_ipv6_range_create(
@@ -545,7 +545,7 @@ def create_linode_ipv6_range_delete_tool() -> tuple[Tool, Capability]:
             },
             "required": [_IPV6_RANGE_KEY, "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Destroy
 
 
 async def handle_linode_ipv6_range_delete(

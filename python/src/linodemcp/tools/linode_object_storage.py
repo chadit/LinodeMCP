@@ -30,7 +30,7 @@ def create_linode_object_storage_buckets_list_tool() -> tuple[Tool, Capability]:
                 },
             },
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_object_storage_buckets_list(
@@ -75,7 +75,7 @@ def create_linode_object_storage_bucket_get_tool() -> tuple[Tool, Capability]:
             },
             "required": ["region", "label"],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_object_storage_bucket_get(
@@ -147,7 +147,7 @@ def create_linode_object_storage_bucket_contents_tool() -> tuple[Tool, Capabilit
             },
             "required": ["region", "label"],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 def _build_bucket_params(
@@ -244,7 +244,7 @@ def create_linode_object_storage_clusters_list_tool() -> tuple[Tool, Capability]
                 },
             },
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_object_storage_clusters_list(
@@ -281,7 +281,7 @@ def create_linode_object_storage_types_list_tool() -> tuple[Tool, Capability]:
                 },
             },
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_object_storage_types_list(
@@ -318,7 +318,7 @@ def create_linode_object_storage_keys_list_tool() -> tuple[Tool, Capability]:
                 },
             },
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_object_storage_keys_list(
@@ -357,7 +357,7 @@ def create_linode_object_storage_key_get_tool() -> tuple[Tool, Capability]:
             },
             "required": ["key_id"],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_object_storage_key_get(
@@ -393,7 +393,7 @@ def create_linode_object_storage_transfer_tool() -> tuple[Tool, Capability]:
                 },
             },
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_object_storage_transfer(
@@ -438,7 +438,7 @@ def create_linode_object_storage_bucket_access_get_tool() -> tuple[Tool, Capabil
             },
             "required": ["region", "label"],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_object_storage_bucket_access_get(

@@ -38,7 +38,7 @@ func NewLinodeInstanceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability
 		return handleLinodeInstanceGetRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleLinodeInstanceGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -79,7 +79,7 @@ func NewLinodeInstancesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 		return handleLinodeInstancesRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleLinodeInstancesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

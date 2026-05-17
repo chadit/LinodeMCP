@@ -45,10 +45,14 @@ def create_linode_monitor_service_token_create_tool() -> tuple[Tool, Capability]
                         "to (required)"
                     ),
                 },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this mutating operation.",
+                },
             },
-            "required": ["service_type", "entity_ids"],
+            "required": ["service_type", "entity_ids", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 def _coerce_entity_ids(raw: object) -> list[int] | None:
@@ -75,6 +79,11 @@ async def handle_linode_monitor_service_token_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_monitor_service_token_create tool request."""
+    if not arguments.get("confirm"):
+        return error_response(
+            "This creates a Linode Metrics service token. Set confirm=true to proceed."
+        )
+
     service_type = arguments.get("service_type", "")
     if not service_type or not isinstance(service_type, str):
         return error_response("service_type is required")

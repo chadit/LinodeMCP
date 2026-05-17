@@ -36,5 +36,5 @@ func NewVersionTool(_ *config.Config) (mcp.Tool, profiles.Capability, func(ctx c
 		return mcp.NewToolResultText(string(jsonResponse)), nil
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapMeta, handler
 }

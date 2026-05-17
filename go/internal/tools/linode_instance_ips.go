@@ -24,7 +24,7 @@ func NewLinodeInstanceIPsListTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 		handleInstanceIPsListRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleInstanceIPsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -61,7 +61,7 @@ func NewLinodeInstanceIPGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 		handleInstanceIPGetRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleInstanceIPGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -107,7 +107,7 @@ func NewLinodeInstanceIPAllocateTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		handleInstanceIPAllocateRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleInstanceIPAllocateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -170,7 +170,7 @@ func NewLinodeInstanceIPDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 		handleInstanceIPDeleteRequest,
 	)
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleInstanceIPDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

@@ -30,7 +30,7 @@ func NewLinodeSSHKeysListTool(cfg *config.Config) (mcp.Tool, profiles.Capability
 		return handleLinodeSSHKeysListRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleLinodeSSHKeysListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

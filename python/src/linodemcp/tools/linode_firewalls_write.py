@@ -40,16 +40,25 @@ def create_linode_firewall_create_tool() -> tuple[Tool, Capability]:
                         "(default: 'ACCEPT')"
                     ),
                 },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm this operation.",
+                },
             },
-            "required": ["label"],
+            "required": ["label", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_firewall_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_firewall_create tool request."""
+    if not arguments.get("confirm"):
+        return error_response(
+            "This creates a Cloud Firewall. Set confirm=true to proceed."
+        )
+
     label = arguments.get("label", "")
     inbound_policy = arguments.get("inbound_policy", "ACCEPT")
     outbound_policy = arguments.get("outbound_policy", "ACCEPT")
@@ -107,10 +116,14 @@ def create_linode_firewall_update_tool() -> tuple[Tool, Capability]:
                     "type": "string",
                     "description": "New outbound policy: 'ACCEPT' or 'DROP' (optional)",
                 },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this mutating operation.",
+                },
             },
-            "required": ["firewall_id"],
+            "required": ["firewall_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Write
 
 
 async def handle_linode_firewall_update(
@@ -166,7 +179,7 @@ def create_linode_firewall_delete_tool() -> tuple[Tool, Capability]:
             },
             "required": ["firewall_id", "confirm"],
         },
-    ), Capability.Unknown
+    ), Capability.Destroy
 
 
 async def handle_linode_firewall_delete(

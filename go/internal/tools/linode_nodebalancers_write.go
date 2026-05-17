@@ -44,7 +44,7 @@ func NewLinodeNodeBalancerCreateTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		return handleLinodeNodeBalancerCreateRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 func handleLinodeNodeBalancerCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -109,13 +109,18 @@ func NewLinodeNodeBalancerUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 			"client_conn_throttle",
 			mcp.Description("New connections per second throttle limit (0-20) (optional)"),
 		),
+		mcp.WithBoolean(
+			paramConfirm,
+			mcp.Required(),
+			mcp.Description("Must be set to true to confirm NodeBalancer update."),
+		),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return handleLinodeNodeBalancerUpdateRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapWrite, handler
 }
 
 // notProvided signals that an optional numeric parameter was not included in the request.
@@ -125,6 +130,10 @@ func handleLinodeNodeBalancerUpdateRequest(ctx context.Context, request *mcp.Cal
 	nodeBalancerID := request.GetInt("nodebalancer_id", 0)
 	label := request.GetString("label", "")
 	clientConnThrottle := request.GetInt("client_conn_throttle", notProvided)
+
+	if result := RequireConfirm(request, "This updates a NodeBalancer. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
 
 	if nodeBalancerID == 0 {
 		return mcp.NewToolResultError("nodebalancer_id is required"), nil
@@ -184,7 +193,7 @@ func NewLinodeNodeBalancerDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		return handleLinodeNodeBalancerDeleteRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapDestroy, handler
 }
 
 func handleLinodeNodeBalancerDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

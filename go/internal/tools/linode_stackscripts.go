@@ -39,7 +39,7 @@ func NewLinodeStackScriptsListTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 		return handleLinodeStackScriptsListRequest(ctx, &request, cfg)
 	}
 
-	return tool, profiles.CapUnknown, handler
+	return tool, profiles.CapRead, handler
 }
 
 func handleLinodeStackScriptsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

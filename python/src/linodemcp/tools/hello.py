@@ -21,7 +21,7 @@ def create_hello_tool() -> tuple[Tool, Capability]:
                 },
             },
         },
-    ), Capability.Unknown
+    ), Capability.Meta
 
 
 async def handle_hello(arguments: dict[str, Any]) -> list[TextContent]:

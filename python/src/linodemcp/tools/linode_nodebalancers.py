@@ -36,7 +36,7 @@ def create_linode_nodebalancers_list_tool() -> tuple[Tool, Capability]:
                 },
             },
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_nodebalancers_list(
@@ -108,7 +108,7 @@ def create_linode_nodebalancer_get_tool() -> tuple[Tool, Capability]:
             },
             "required": ["nodebalancer_id"],
         },
-    ), Capability.Unknown
+    ), Capability.Read
 
 
 async def handle_linode_nodebalancer_get(
