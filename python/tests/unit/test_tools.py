@@ -58,6 +58,7 @@ from linodemcp.tools import (
     create_linode_instance_rescue_tool,
     create_linode_ipv6_range_create_tool,
     create_linode_ipv6_range_delete_tool,
+    create_linode_ipv6_range_get_tool,
     create_linode_lke_cluster_create_tool,
     create_linode_lke_cluster_delete_tool,
     create_linode_lke_cluster_get_tool,
@@ -119,6 +120,7 @@ from linodemcp.tools import (
     handle_linode_instances_list,
     handle_linode_ipv6_range_create,
     handle_linode_ipv6_range_delete,
+    handle_linode_ipv6_range_get,
     handle_linode_lke_acl_delete,
     handle_linode_lke_acl_get,
     handle_linode_lke_acl_update,
@@ -4772,6 +4774,17 @@ async def test_ipv6_range_create_tool_definition() -> None:
     assert "route_target" not in required
 
 
+async def test_ipv6_range_get_tool_definition() -> None:
+    """IPv6 range get tool should require range without confirm."""
+    tool = create_linode_ipv6_range_get_tool()
+    assert tool.name == "linode_ipv6_range_get"
+    required: list[str] = tool.inputSchema.get("required") or []
+    properties: dict[str, Any] = tool.inputSchema.get("properties") or {}
+    assert "range" in required
+    assert "confirm" not in required
+    assert "confirm" not in properties
+
+
 async def test_ipv6_range_delete_tool_definition() -> None:
     """IPv6 range delete tool should require range and confirm."""
     tool = create_linode_ipv6_range_delete_tool()
@@ -4900,6 +4913,40 @@ async def test_vpc_get_missing_id(sample_config: Config) -> None:
 
     assert len(result) == 1
     assert "vpc_id" in result[0].text.lower()
+
+
+async def test_ipv6_range_get_missing_range(sample_config: Config) -> None:
+    """IPv6 range get should fail without range."""
+    result = list(await handle_linode_ipv6_range_get({}, sample_config))
+
+    assert len(result) == 1
+    assert "range" in result[0].text.lower()
+
+
+async def test_ipv6_range_get_success(sample_config: Config) -> None:
+    """IPv6 range get should return IPv6 range data."""
+    ipv6_range = "2001:0db8::"
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_ipv6_range.return_value = {
+            "range": ipv6_range,
+            "region": "us-east",
+            "prefix": 64,
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_ipv6_range_get(
+                {"range": ipv6_range},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert ipv6_range in result[0].text
+        mock_client.get_ipv6_range.assert_called_once_with(ipv6_range)
 
 
 async def test_vpc_create_confirm_required(sample_config: Config) -> None:

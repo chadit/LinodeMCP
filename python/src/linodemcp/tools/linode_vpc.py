@@ -27,6 +27,14 @@ _SUBNET_ID_PROP: dict[str, Any] = {
     "description": "The ID of the subnet (required)",
 }
 
+_IPV6_RANGE_KEY = "range"
+_IPV6_RANGE_PROP: dict[str, Any] = {
+    "type": "string",
+    "description": (
+        "The IPv6 range to access, without prefix length (for example 2001:0db8::)"
+    ),
+}
+
 
 def create_linode_vpcs_list_tool() -> Tool:
     """Create the linode_vpcs_list tool."""
@@ -86,6 +94,37 @@ async def handle_linode_vpc_get(
         return await client.get_vpc(vpc_id)
 
     return await execute_tool(cfg, arguments, "get VPC", _call)
+
+
+def create_linode_ipv6_range_get_tool() -> Tool:
+    """Create the linode_ipv6_range_get tool."""
+    return Tool(
+        name="linode_ipv6_range_get",
+        description="Gets details of an IPv6 range",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                _IPV6_RANGE_KEY: _IPV6_RANGE_PROP,
+            },
+            "required": [_IPV6_RANGE_KEY],
+        },
+    )
+
+
+async def handle_linode_ipv6_range_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_ipv6_range_get tool request."""
+    range_value = arguments.get(_IPV6_RANGE_KEY, "")
+    if not isinstance(range_value, str) or not range_value.strip():
+        return error_response("range is required")
+    ipv6_range = range_value.strip()
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_ipv6_range(ipv6_range)
+
+    return await execute_tool(cfg, arguments, "get IPv6 range", _call)
 
 
 def create_linode_vpc_ips_list_tool() -> Tool:
