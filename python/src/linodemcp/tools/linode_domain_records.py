@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
 
 if TYPE_CHECKING:
@@ -11,7 +12,7 @@ if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 
-def create_linode_domain_records_list_tool() -> Tool:
+def create_linode_domain_records_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_domain_records_list tool."""
     return Tool(
         name="linode_domain_records_list",
@@ -45,7 +46,7 @@ def create_linode_domain_records_list_tool() -> Tool:
             },
             "required": ["domain_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_domain_records_list(
@@ -99,7 +100,7 @@ async def handle_linode_domain_records_list(
     return await execute_tool(cfg, arguments, "retrieve domain records", _call)
 
 
-def create_linode_domain_record_create_tool() -> Tool:
+def create_linode_domain_record_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_domain_record_create tool."""
     return Tool(
         name="linode_domain_record_create",
@@ -147,7 +148,7 @@ def create_linode_domain_record_create_tool() -> Tool:
             },
             "required": ["domain_id", "type"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_domain_record_create(
@@ -190,7 +191,7 @@ async def handle_linode_domain_record_create(
     return await execute_tool(cfg, arguments, "create DNS record", _call)
 
 
-def create_linode_domain_record_update_tool() -> Tool:
+def create_linode_domain_record_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_domain_record_update tool."""
     return Tool(
         name="linode_domain_record_update",
@@ -234,7 +235,7 @@ def create_linode_domain_record_update_tool() -> Tool:
             },
             "required": ["domain_id", "record_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_domain_record_update(
@@ -274,7 +275,7 @@ async def handle_linode_domain_record_update(
     return await execute_tool(cfg, arguments, "update DNS record", _call)
 
 
-def create_linode_domain_record_delete_tool() -> Tool:
+def create_linode_domain_record_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_domain_record_delete tool."""
     return Tool(
         name="linode_domain_record_delete",
@@ -294,7 +295,7 @@ def create_linode_domain_record_delete_tool() -> Tool:
             },
             "required": ["domain_id", "record_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_domain_record_delete(

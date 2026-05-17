@@ -5,10 +5,11 @@ from typing import Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.profiles import Capability
 from linodemcp.version import get_version_info
 
 
-def create_version_tool() -> Tool:
+def create_version_tool() -> tuple[Tool, Capability]:
     """Create the version tool."""
     return Tool(
         name="version",
@@ -17,7 +18,7 @@ def create_version_tool() -> Tool:
             "type": "object",
             "properties": {},
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_version(_arguments: dict[str, Any]) -> list[TextContent]:

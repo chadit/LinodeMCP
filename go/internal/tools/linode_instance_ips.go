@@ -8,11 +8,12 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
 // NewLinodeInstanceIPsListTool creates a tool for listing all IP addresses for a Linode instance.
-func NewLinodeInstanceIPsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeInstanceIPsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_ips_list",
 		"Lists all IP addresses (IPv4 and IPv6) for a Linode instance",
@@ -22,6 +23,8 @@ func NewLinodeInstanceIPsListTool(cfg *config.Config) (mcp.Tool, func(ctx contex
 		},
 		handleInstanceIPsListRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleInstanceIPsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -44,8 +47,8 @@ func handleInstanceIPsListRequest(ctx context.Context, request *mcp.CallToolRequ
 }
 
 // NewLinodeInstanceIPGetTool creates a tool for retrieving a specific IP address for a Linode instance.
-func NewLinodeInstanceIPGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeInstanceIPGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_ip_get",
 		"Retrieves details of a specific IP address for a Linode instance",
@@ -57,6 +60,8 @@ func NewLinodeInstanceIPGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.
 		},
 		handleInstanceIPGetRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleInstanceIPGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -84,8 +89,8 @@ func handleInstanceIPGetRequest(ctx context.Context, request *mcp.CallToolReques
 }
 
 // NewLinodeInstanceIPAllocateTool creates a tool for allocating a new IP address for a Linode instance.
-func NewLinodeInstanceIPAllocateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeInstanceIPAllocateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_ip_allocate",
 		"Allocates a new IP address for a Linode instance. WARNING: Additional IPs may incur charges.",
@@ -101,6 +106,8 @@ func NewLinodeInstanceIPAllocateTool(cfg *config.Config) (mcp.Tool, func(ctx con
 		},
 		handleInstanceIPAllocateRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleInstanceIPAllocateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -147,8 +154,8 @@ func handleInstanceIPAllocateRequest(ctx context.Context, request *mcp.CallToolR
 }
 
 // NewLinodeInstanceIPDeleteTool creates a tool for removing an IP address from a Linode instance.
-func NewLinodeInstanceIPDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeInstanceIPDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_ip_delete",
 		"Removes an IP address from a Linode instance. WARNING: This permanently removes the IP and is irreversible.",
@@ -162,6 +169,8 @@ func NewLinodeInstanceIPDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx conte
 		},
 		handleInstanceIPDeleteRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleInstanceIPDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

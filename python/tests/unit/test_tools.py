@@ -1933,7 +1933,7 @@ def test_linode_instance_create_tool_schema() -> None:
     """
     from linodemcp.tools import create_linode_instance_create_tool
 
-    tool = create_linode_instance_create_tool()
+    tool, _ = create_linode_instance_create_tool()
     props: dict[str, Any] = tool.inputSchema["properties"]
     required: list[str] = tool.inputSchema["required"]
 
@@ -3830,20 +3830,20 @@ async def test_ssl_delete_missing_env() -> None:
 
 async def test_lke_clusters_list_tool_definition() -> None:
     """LKE clusters list tool should have correct name."""
-    tool = create_linode_lke_clusters_list_tool()
+    tool, _ = create_linode_lke_clusters_list_tool()
     assert tool.name == "linode_lke_clusters_list"
 
 
 async def test_lke_cluster_get_tool_definition() -> None:
     """LKE cluster get tool should require cluster_id."""
-    tool = create_linode_lke_cluster_get_tool()
+    tool, _ = create_linode_lke_cluster_get_tool()
     assert tool.name == "linode_lke_cluster_get"
     assert "cluster_id" in (tool.inputSchema.get("required") or [])
 
 
 async def test_lke_cluster_create_tool_definition() -> None:
     """LKE cluster create tool should require label, region, k8s_version."""
-    tool = create_linode_lke_cluster_create_tool()
+    tool, _ = create_linode_lke_cluster_create_tool()
     assert tool.name == "linode_lke_cluster_create"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "label" in required
@@ -3853,7 +3853,7 @@ async def test_lke_cluster_create_tool_definition() -> None:
 
 async def test_lke_cluster_delete_tool_definition() -> None:
     """LKE cluster delete tool should require cluster_id and confirm."""
-    tool = create_linode_lke_cluster_delete_tool()
+    tool, _ = create_linode_lke_cluster_delete_tool()
     assert tool.name == "linode_lke_cluster_delete"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "cluster_id" in required
@@ -4714,19 +4714,19 @@ async def test_lke_tier_versions_list(sample_config: Config) -> None:
 
 async def test_vpcs_list_tool_definition() -> None:
     """VPCs list tool should have correct name."""
-    tool = create_linode_vpcs_list_tool()
+    tool, _ = create_linode_vpcs_list_tool()
     assert tool.name == "linode_vpcs_list"
 
 
 async def test_vlans_list_tool_definition() -> None:
     """VLANs list tool should have correct name."""
-    tool = create_linode_vlans_list_tool()
+    tool, _ = create_linode_vlans_list_tool()
     assert tool.name == "linode_vlans_list"
 
 
 async def test_vlan_delete_tool_definition() -> None:
     """VLAN delete tool should have correct name and required params."""
-    tool = create_linode_vlan_delete_tool()
+    tool, _ = create_linode_vlan_delete_tool()
     assert tool.name == "linode_vlan_delete"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "region_id" in required
@@ -4736,14 +4736,14 @@ async def test_vlan_delete_tool_definition() -> None:
 
 async def test_vpc_get_tool_definition() -> None:
     """VPC get tool should require vpc_id."""
-    tool = create_linode_vpc_get_tool()
+    tool, _ = create_linode_vpc_get_tool()
     assert tool.name == "linode_vpc_get"
     assert "vpc_id" in (tool.inputSchema.get("required") or [])
 
 
 async def test_vpc_create_tool_definition() -> None:
     """VPC create tool should require label, region, confirm."""
-    tool = create_linode_vpc_create_tool()
+    tool, _ = create_linode_vpc_create_tool()
     assert tool.name == "linode_vpc_create"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "label" in required
@@ -4753,7 +4753,7 @@ async def test_vpc_create_tool_definition() -> None:
 
 async def test_vpc_delete_tool_definition() -> None:
     """VPC delete tool should require vpc_id and confirm."""
-    tool = create_linode_vpc_delete_tool()
+    tool, _ = create_linode_vpc_delete_tool()
     assert tool.name == "linode_vpc_delete"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "vpc_id" in required
@@ -4762,7 +4762,7 @@ async def test_vpc_delete_tool_definition() -> None:
 
 async def test_ipv6_range_create_tool_definition() -> None:
     """IPv6 range create tool should require prefix_length and confirm."""
-    tool = create_linode_ipv6_range_create_tool()
+    tool, _ = create_linode_ipv6_range_create_tool()
     assert tool.name == "linode_ipv6_range_create"
     required: list[str] = tool.inputSchema.get("required") or []
     properties: dict[str, Any] = tool.inputSchema.get("properties") or {}
@@ -4776,7 +4776,7 @@ async def test_ipv6_range_create_tool_definition() -> None:
 
 async def test_ipv6_range_get_tool_definition() -> None:
     """IPv6 range get tool should require range without confirm."""
-    tool = create_linode_ipv6_range_get_tool()
+    tool, _ = create_linode_ipv6_range_get_tool()
     assert tool.name == "linode_ipv6_range_get"
     required: list[str] = tool.inputSchema.get("required") or []
     properties: dict[str, Any] = tool.inputSchema.get("properties") or {}
@@ -4787,7 +4787,7 @@ async def test_ipv6_range_get_tool_definition() -> None:
 
 async def test_ipv6_range_delete_tool_definition() -> None:
     """IPv6 range delete tool should require range and confirm."""
-    tool = create_linode_ipv6_range_delete_tool()
+    tool, _ = create_linode_ipv6_range_delete_tool()
     assert tool.name == "linode_ipv6_range_delete"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "range" in required
@@ -4796,7 +4796,7 @@ async def test_ipv6_range_delete_tool_definition() -> None:
 
 async def test_vpc_subnet_create_tool_definition() -> None:
     """VPC subnet create tool should require vpc_id, label, ipv4, confirm."""
-    tool = create_linode_vpc_subnet_create_tool()
+    tool, _ = create_linode_vpc_subnet_create_tool()
     assert tool.name == "linode_vpc_subnet_create"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "vpc_id" in required
@@ -4807,7 +4807,7 @@ async def test_vpc_subnet_create_tool_definition() -> None:
 
 async def test_vpc_subnet_delete_tool_definition() -> None:
     """VPC subnet delete tool should require vpc_id, subnet_id, confirm."""
-    tool = create_linode_vpc_subnet_delete_tool()
+    tool, _ = create_linode_vpc_subnet_delete_tool()
     assert tool.name == "linode_vpc_subnet_delete"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "vpc_id" in required
@@ -5480,14 +5480,14 @@ async def test_vpc_subnet_delete_success(sample_config: Config) -> None:
 
 async def test_instance_backups_list_tool_definition() -> None:
     """Backups list tool should require instance_id."""
-    tool = create_linode_instance_backups_list_tool()
+    tool, _ = create_linode_instance_backups_list_tool()
     assert tool.name == "linode_instance_backups_list"
     assert "instance_id" in (tool.inputSchema.get("required") or [])
 
 
 async def test_instance_backup_get_tool_definition() -> None:
     """Backup get tool should require instance_id and backup_id."""
-    tool = create_linode_instance_backup_get_tool()
+    tool, _ = create_linode_instance_backup_get_tool()
     assert tool.name == "linode_instance_backup_get"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "instance_id" in required
@@ -5496,7 +5496,7 @@ async def test_instance_backup_get_tool_definition() -> None:
 
 async def test_instance_backup_create_tool_def() -> None:
     """Backup create tool should require instance_id and confirm."""
-    tool = create_linode_instance_backup_create_tool()
+    tool, _ = create_linode_instance_backup_create_tool()
     assert tool.name == "linode_instance_backup_create"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "instance_id" in required
@@ -5505,7 +5505,7 @@ async def test_instance_backup_create_tool_def() -> None:
 
 async def test_instance_backup_restore_tool_def() -> None:
     """Backup restore should require instance_id, backup_id, linode_id, confirm."""
-    tool = create_linode_instance_backup_restore_tool()
+    tool, _ = create_linode_instance_backup_restore_tool()
     assert tool.name == "linode_instance_backup_restore"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "instance_id" in required
@@ -5516,7 +5516,7 @@ async def test_instance_backup_restore_tool_def() -> None:
 
 async def test_instance_backups_enable_tool_def() -> None:
     """Backups enable tool should require instance_id and confirm."""
-    tool = create_linode_instance_backups_enable_tool()
+    tool, _ = create_linode_instance_backups_enable_tool()
     assert tool.name == "linode_instance_backups_enable"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "instance_id" in required
@@ -5525,7 +5525,7 @@ async def test_instance_backups_enable_tool_def() -> None:
 
 async def test_instance_backups_cancel_tool_def() -> None:
     """Backups cancel tool should require instance_id and confirm."""
-    tool = create_linode_instance_backups_cancel_tool()
+    tool, _ = create_linode_instance_backups_cancel_tool()
     assert tool.name == "linode_instance_backups_cancel"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "instance_id" in required
@@ -5666,14 +5666,14 @@ async def test_instance_backup_get_missing_ids(
 
 async def test_instance_disks_list_tool_def() -> None:
     """Disks list tool should require instance_id."""
-    tool = create_linode_instance_disks_list_tool()
+    tool, _ = create_linode_instance_disks_list_tool()
     assert tool.name == "linode_instance_disks_list"
     assert "instance_id" in (tool.inputSchema.get("required") or [])
 
 
 async def test_instance_disk_get_tool_def() -> None:
     """Disk get tool should require instance_id and disk_id."""
-    tool = create_linode_instance_disk_get_tool()
+    tool, _ = create_linode_instance_disk_get_tool()
     assert tool.name == "linode_instance_disk_get"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "instance_id" in required
@@ -5682,7 +5682,7 @@ async def test_instance_disk_get_tool_def() -> None:
 
 async def test_instance_disk_create_tool_def() -> None:
     """Disk create should require instance_id, label, size, confirm."""
-    tool = create_linode_instance_disk_create_tool()
+    tool, _ = create_linode_instance_disk_create_tool()
     assert tool.name == "linode_instance_disk_create"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "instance_id" in required
@@ -5693,7 +5693,7 @@ async def test_instance_disk_create_tool_def() -> None:
 
 async def test_instance_disk_update_tool_def() -> None:
     """Disk update should require instance_id, disk_id, confirm."""
-    tool = create_linode_instance_disk_update_tool()
+    tool, _ = create_linode_instance_disk_update_tool()
     assert tool.name == "linode_instance_disk_update"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "instance_id" in required
@@ -5703,7 +5703,7 @@ async def test_instance_disk_update_tool_def() -> None:
 
 async def test_instance_disk_delete_tool_def() -> None:
     """Disk delete should require instance_id, disk_id, confirm."""
-    tool = create_linode_instance_disk_delete_tool()
+    tool, _ = create_linode_instance_disk_delete_tool()
     assert tool.name == "linode_instance_disk_delete"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "instance_id" in required
@@ -5713,7 +5713,7 @@ async def test_instance_disk_delete_tool_def() -> None:
 
 async def test_instance_disk_clone_tool_def() -> None:
     """Disk clone should require instance_id, disk_id, confirm."""
-    tool = create_linode_instance_disk_clone_tool()
+    tool, _ = create_linode_instance_disk_clone_tool()
     assert tool.name == "linode_instance_disk_clone"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "instance_id" in required
@@ -5723,7 +5723,7 @@ async def test_instance_disk_clone_tool_def() -> None:
 
 async def test_instance_disk_resize_tool_def() -> None:
     """Disk resize should require instance_id, disk_id, size, confirm."""
-    tool = create_linode_instance_disk_resize_tool()
+    tool, _ = create_linode_instance_disk_resize_tool()
     assert tool.name == "linode_instance_disk_resize"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "instance_id" in required
@@ -5849,14 +5849,14 @@ async def test_instance_disk_resize_no_confirm(
 
 async def test_instance_ips_list_tool_def() -> None:
     """IPs list tool should require instance_id."""
-    tool = create_linode_instance_ips_list_tool()
+    tool, _ = create_linode_instance_ips_list_tool()
     assert tool.name == "linode_instance_ips_list"
     assert "instance_id" in (tool.inputSchema.get("required") or [])
 
 
 async def test_instance_ip_get_tool_def() -> None:
     """IP get tool should require instance_id and address."""
-    tool = create_linode_instance_ip_get_tool()
+    tool, _ = create_linode_instance_ip_get_tool()
     assert tool.name == "linode_instance_ip_get"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "instance_id" in required
@@ -5865,7 +5865,7 @@ async def test_instance_ip_get_tool_def() -> None:
 
 async def test_instance_ip_allocate_tool_def() -> None:
     """IP allocate should require instance_id, type, confirm."""
-    tool = create_linode_instance_ip_allocate_tool()
+    tool, _ = create_linode_instance_ip_allocate_tool()
     assert tool.name == "linode_instance_ip_allocate"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "instance_id" in required
@@ -5875,7 +5875,7 @@ async def test_instance_ip_allocate_tool_def() -> None:
 
 async def test_instance_ip_delete_tool_def() -> None:
     """IP delete should require instance_id, address, confirm."""
-    tool = create_linode_instance_ip_delete_tool()
+    tool, _ = create_linode_instance_ip_delete_tool()
     assert tool.name == "linode_instance_ip_delete"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "instance_id" in required
@@ -5958,7 +5958,7 @@ async def test_instance_ip_delete_no_confirm(
 
 async def test_instance_clone_tool_def() -> None:
     """Clone tool should require instance_id and confirm."""
-    tool = create_linode_instance_clone_tool()
+    tool, _ = create_linode_instance_clone_tool()
     assert tool.name == "linode_instance_clone"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "instance_id" in required
@@ -5967,7 +5967,7 @@ async def test_instance_clone_tool_def() -> None:
 
 async def test_instance_migrate_tool_def() -> None:
     """Migrate tool should require instance_id and confirm."""
-    tool = create_linode_instance_migrate_tool()
+    tool, _ = create_linode_instance_migrate_tool()
     assert tool.name == "linode_instance_migrate"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "instance_id" in required
@@ -5976,7 +5976,7 @@ async def test_instance_migrate_tool_def() -> None:
 
 async def test_instance_rebuild_tool_def() -> None:
     """Rebuild should require instance_id, image, root_pass, confirm."""
-    tool = create_linode_instance_rebuild_tool()
+    tool, _ = create_linode_instance_rebuild_tool()
     assert tool.name == "linode_instance_rebuild"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "instance_id" in required
@@ -5987,7 +5987,7 @@ async def test_instance_rebuild_tool_def() -> None:
 
 async def test_instance_rescue_tool_def() -> None:
     """Rescue tool should require instance_id and confirm."""
-    tool = create_linode_instance_rescue_tool()
+    tool, _ = create_linode_instance_rescue_tool()
     assert tool.name == "linode_instance_rescue"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "instance_id" in required
@@ -5996,7 +5996,7 @@ async def test_instance_rescue_tool_def() -> None:
 
 async def test_instance_password_reset_tool_def() -> None:
     """Password reset should require instance_id, root_pass, confirm."""
-    tool = create_linode_instance_password_reset_tool()
+    tool, _ = create_linode_instance_password_reset_tool()
     assert tool.name == "linode_instance_password_reset"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "instance_id" in required
@@ -6787,7 +6787,7 @@ async def test_handle_linode_instance_migrate_error(
 
 def test_create_linode_monitor_service_token_create_tool() -> None:
     """Tool definition advertises required service_type and entity_ids."""
-    tool = create_linode_monitor_service_token_create_tool()
+    tool, _ = create_linode_monitor_service_token_create_tool()
     assert tool.name == "linode_monitor_service_token_create"
     schema = tool.inputSchema
     required = schema["required"]

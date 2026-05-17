@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import error_response, execute_tool
 
 if TYPE_CHECKING:
@@ -11,7 +12,7 @@ if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 
-def create_linode_sshkey_create_tool() -> Tool:
+def create_linode_sshkey_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_sshkey_create tool."""
     return Tool(
         name="linode_sshkey_create",
@@ -36,7 +37,7 @@ def create_linode_sshkey_create_tool() -> Tool:
             },
             "required": ["label", "ssh_key"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_sshkey_create(
@@ -65,7 +66,7 @@ async def handle_linode_sshkey_create(
     return await execute_tool(cfg, arguments, "create SSH key", _call)
 
 
-def create_linode_sshkey_delete_tool() -> Tool:
+def create_linode_sshkey_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_sshkey_delete tool."""
     return Tool(
         name="linode_sshkey_delete",
@@ -86,7 +87,7 @@ def create_linode_sshkey_delete_tool() -> Tool:
             },
             "required": ["ssh_key_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_sshkey_delete(

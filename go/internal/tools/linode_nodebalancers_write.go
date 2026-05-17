@@ -8,10 +8,11 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
 // NewLinodeNodeBalancerCreateTool creates a tool for creating a NodeBalancer.
-func NewLinodeNodeBalancerCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeNodeBalancerCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_nodebalancer_create",
 		mcp.WithDescription("Creates a new NodeBalancer (load balancer). WARNING: Billing starts immediately. Use linode_regions_list to find valid regions."),
@@ -43,7 +44,7 @@ func NewLinodeNodeBalancerCreateTool(cfg *config.Config) (mcp.Tool, func(ctx con
 		return handleLinodeNodeBalancerCreateRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLinodeNodeBalancerCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -87,7 +88,7 @@ func handleLinodeNodeBalancerCreateRequest(ctx context.Context, request *mcp.Cal
 }
 
 // NewLinodeNodeBalancerUpdateTool creates a tool for updating a NodeBalancer.
-func NewLinodeNodeBalancerUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeNodeBalancerUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_nodebalancer_update",
 		mcp.WithDescription("Updates an existing NodeBalancer. Can modify label and connection throttle."),
@@ -114,7 +115,7 @@ func NewLinodeNodeBalancerUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx con
 		return handleLinodeNodeBalancerUpdateRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 // notProvided signals that an optional numeric parameter was not included in the request.
@@ -159,7 +160,7 @@ func handleLinodeNodeBalancerUpdateRequest(ctx context.Context, request *mcp.Cal
 }
 
 // NewLinodeNodeBalancerDeleteTool creates a tool for deleting a NodeBalancer.
-func NewLinodeNodeBalancerDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeNodeBalancerDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_nodebalancer_delete",
 		mcp.WithDescription("Deletes a NodeBalancer. WARNING: This will remove the load balancer and all its configurations."),
@@ -183,7 +184,7 @@ func NewLinodeNodeBalancerDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx con
 		return handleLinodeNodeBalancerDeleteRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLinodeNodeBalancerDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

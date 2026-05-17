@@ -6,10 +6,11 @@ from mcp.types import TextContent, Tool
 
 from linodemcp.config import Config
 from linodemcp.linode import RetryableClient
+from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import execute_tool
 
 
-def create_linode_profile_tool() -> Tool:
+def create_linode_profile_tool() -> tuple[Tool, Capability]:
     """Create the linode_profile tool."""
     return Tool(
         name="linode_profile",
@@ -25,7 +26,7 @@ def create_linode_profile_tool() -> Tool:
                 },
             },
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_profile(

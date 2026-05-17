@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
 
 if TYPE_CHECKING:
@@ -11,7 +12,7 @@ if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 
-def create_linode_firewall_create_tool() -> Tool:
+def create_linode_firewall_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_firewall_create tool."""
     return Tool(
         name="linode_firewall_create",
@@ -42,7 +43,7 @@ def create_linode_firewall_create_tool() -> Tool:
             },
             "required": ["label"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_firewall_create(
@@ -77,7 +78,7 @@ async def handle_linode_firewall_create(
     return await execute_tool(cfg, arguments, "create firewall", _call)
 
 
-def create_linode_firewall_update_tool() -> Tool:
+def create_linode_firewall_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_firewall_update tool."""
     return Tool(
         name="linode_firewall_update",
@@ -109,7 +110,7 @@ def create_linode_firewall_update_tool() -> Tool:
             },
             "required": ["firewall_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_firewall_update(
@@ -142,7 +143,7 @@ async def handle_linode_firewall_update(
     return await execute_tool(cfg, arguments, "update firewall", _call)
 
 
-def create_linode_firewall_delete_tool() -> Tool:
+def create_linode_firewall_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_firewall_delete tool."""
     return Tool(
         name="linode_firewall_delete",
@@ -165,7 +166,7 @@ def create_linode_firewall_delete_tool() -> Tool:
             },
             "required": ["firewall_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_firewall_delete(

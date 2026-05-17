@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import error_response, execute_tool
 
 if TYPE_CHECKING:
@@ -11,7 +12,7 @@ if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 
-def create_linode_monitor_service_token_create_tool() -> Tool:
+def create_linode_monitor_service_token_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_monitor_service_token_create tool."""
     return Tool(
         name="linode_monitor_service_token_create",
@@ -47,7 +48,7 @@ def create_linode_monitor_service_token_create_tool() -> Tool:
             },
             "required": ["service_type", "entity_ids"],
         },
-    )
+    ), Capability.Unknown
 
 
 def _coerce_entity_ids(raw: object) -> list[int] | None:

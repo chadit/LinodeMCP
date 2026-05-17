@@ -13,6 +13,7 @@ from mcp.server.stdio import stdio_server
 from mcp.types import Tool
 
 import linodemcp.tools as tools_module
+from linodemcp.profiles import Capability
 from linodemcp.tools import (
     handle_hello,
     handle_version,
@@ -21,7 +22,7 @@ from linodemcp.tools import (
 if TYPE_CHECKING:
     from linodemcp.config import Config
 
-__all__ = ["Server"]
+__all__ = ["Server", "ToolEntry", "get_tool_registry"]
 
 logger = logging.getLogger(__name__)
 
@@ -37,26 +38,38 @@ CallToolDecorator = Callable[
     Callable[..., Awaitable[list[Any]]],
 ]
 
+# Each tool factory now returns (Tool, Capability). We invoke every factory
+# once at module import time and store the resolved Tool plus its capability,
+# matching the Go side's "factory called once at registration" semantics.
+ToolFactory = Callable[[], tuple[Tool, Capability]]
+
 
 @dataclass(frozen=True)
 class ToolEntry:
-    """A registered tool with its create and handle functions."""
+    """A registered tool's name, MCP definition, capability tag, and handler.
+
+    The ``tool`` field holds the already-materialized ``Tool`` instance;
+    factories are not re-invoked per request. The ``capability`` field is
+    ``Capability.Unknown`` for any tool still on the Phase 1 untagged
+    allowlist; category PRs replace those with real capabilities.
+    """
 
     name: str
-    create_fn: Callable[[], Tool]
+    tool: Tool
+    capability: Capability
     handle_fn: Callable[..., Awaitable[list[Any]]]
 
 
 def _build_tool_registry() -> list[ToolEntry]:
-    """Discover all tools from the linodemcp.tools module.
+    """Discover and instantiate every registered tool at import time.
 
-    Scans ``linodemcp.tools.__all__`` for names matching
-    ``create_*_tool`` / ``handle_*`` patterns, pairing them by
-    stripping the prefix/suffix to derive the tool name.
+    Scans ``linodemcp.tools.__all__`` for ``create_*_tool`` / ``handle_*``
+    pairs, invokes each factory once to materialize the ``(Tool, Capability)``
+    tuple, and stores it alongside the matching handler.
     """
     all_names = getattr(tools_module, "__all__", [])
 
-    create_fns: dict[str, Callable[[], Tool]] = {}
+    create_fns: dict[str, ToolFactory] = {}
     handle_fns: dict[str, Callable[..., Awaitable[list[Any]]]] = {}
 
     for name in all_names:
@@ -65,7 +78,7 @@ def _build_tool_registry() -> list[ToolEntry]:
             tool_name = name[len("create_") : -len("_tool")]
             fn = getattr(tools_module, name, None)
             if fn is not None:
-                create_fns[tool_name] = fn
+                create_fns[tool_name] = cast("ToolFactory", fn)
         elif name.startswith("handle_"):
             # handle_linode_instances_list -> linode_instances_list
             tool_name = name[len("handle_") :]
@@ -80,14 +93,31 @@ def _build_tool_registry() -> list[ToolEntry]:
         if handle_fn is None:
             logger.warning("No handler found for tool: %s", tool_name)
             continue
+        tool, capability = create_fn()
         entries.append(
-            ToolEntry(name=tool_name, create_fn=create_fn, handle_fn=handle_fn)
+            ToolEntry(
+                name=tool_name,
+                tool=tool,
+                capability=capability,
+                handle_fn=handle_fn,
+            )
         )
 
     return entries
 
 
 _TOOL_REGISTRY = _build_tool_registry()
+
+
+def get_tool_registry() -> list[ToolEntry]:
+    """Return the eagerly-built registry for tests and introspection.
+
+    Each ``ToolEntry`` carries the materialized ``Tool``, its
+    ``Capability`` tag, and the request handler. Callers must not mutate
+    the returned list; treat it as a snapshot of the registry built once
+    at module import.
+    """
+    return _TOOL_REGISTRY
 
 
 class Server:
@@ -162,7 +192,7 @@ class Server:
         )
 
         async def _list_tools() -> list[Tool]:
-            return [entry.create_fn() for entry in _TOOL_REGISTRY]
+            return [entry.tool for entry in _TOOL_REGISTRY]
 
         _list_tools_method()(_list_tools)
 

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import execute_tool
 
 if TYPE_CHECKING:
@@ -45,7 +46,7 @@ def _validate_bucket_acl(acl: str) -> str | None:
     return None
 
 
-def create_linode_object_storage_bucket_create_tool() -> Tool:
+def create_linode_object_storage_bucket_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_bucket_create tool."""
     return Tool(
         name="linode_object_storage_bucket_create",
@@ -92,7 +93,7 @@ def create_linode_object_storage_bucket_create_tool() -> Tool:
             },
             "required": ["label", "region", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_object_storage_bucket_create(
@@ -144,7 +145,7 @@ async def handle_linode_object_storage_bucket_create(
     return await execute_tool(cfg, arguments, "create bucket", _call)
 
 
-def create_linode_object_storage_bucket_delete_tool() -> Tool:
+def create_linode_object_storage_bucket_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_bucket_delete tool."""
     return Tool(
         name="linode_object_storage_bucket_delete",
@@ -179,7 +180,7 @@ def create_linode_object_storage_bucket_delete_tool() -> Tool:
             },
             "required": ["region", "label", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_object_storage_bucket_delete(
@@ -219,7 +220,7 @@ async def handle_linode_object_storage_bucket_delete(
     return await execute_tool(cfg, arguments, "delete bucket", _call)
 
 
-def create_linode_object_storage_bucket_access_update_tool() -> Tool:
+def create_linode_object_storage_bucket_access_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_bucket_access_update tool."""
     return Tool(
         name="linode_object_storage_bucket_access_update",
@@ -260,7 +261,7 @@ def create_linode_object_storage_bucket_access_update_tool() -> Tool:
             },
             "required": ["region", "label", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_object_storage_bucket_access_update(
@@ -349,7 +350,7 @@ def _validate_bucket_access_entries(
     return None
 
 
-def create_linode_object_storage_key_create_tool() -> Tool:
+def create_linode_object_storage_key_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_key_create tool."""
     return Tool(
         name="linode_object_storage_key_create",
@@ -390,10 +391,10 @@ def create_linode_object_storage_key_create_tool() -> Tool:
             },
             "required": ["label", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
-def create_linode_object_storage_key_update_tool() -> Tool:
+def create_linode_object_storage_key_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_key_update tool."""
     return Tool(
         name="linode_object_storage_key_update",
@@ -433,10 +434,10 @@ def create_linode_object_storage_key_update_tool() -> Tool:
             },
             "required": ["key_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
-def create_linode_object_storage_key_delete_tool() -> Tool:
+def create_linode_object_storage_key_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_key_delete tool."""
     return Tool(
         name="linode_object_storage_key_delete",
@@ -464,7 +465,7 @@ def create_linode_object_storage_key_delete_tool() -> Tool:
             },
             "required": ["key_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_object_storage_key_create(
@@ -644,7 +645,7 @@ def _validate_expires_in(expires_in: int) -> str | None:
     return None
 
 
-def create_linode_object_storage_presigned_url_tool() -> Tool:
+def create_linode_object_storage_presigned_url_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_presigned_url tool."""
     return Tool(
         name="linode_object_storage_presigned_url",
@@ -689,7 +690,7 @@ def create_linode_object_storage_presigned_url_tool() -> Tool:
             },
             "required": ["region", "label", "name", "method"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_object_storage_presigned_url(
@@ -728,7 +729,7 @@ async def handle_linode_object_storage_presigned_url(
     return await execute_tool(cfg, arguments, "generate presigned URL", _call)
 
 
-def create_linode_object_storage_object_acl_get_tool() -> Tool:
+def create_linode_object_storage_object_acl_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_object_acl_get tool."""
     return Tool(
         name="linode_object_storage_object_acl_get",
@@ -760,7 +761,7 @@ def create_linode_object_storage_object_acl_get_tool() -> Tool:
             },
             "required": ["region", "label", "name"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_object_storage_object_acl_get(
@@ -784,7 +785,7 @@ async def handle_linode_object_storage_object_acl_get(
     return await execute_tool(cfg, arguments, "retrieve object ACL", _call)
 
 
-def create_linode_object_storage_object_acl_update_tool() -> Tool:
+def create_linode_object_storage_object_acl_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_object_acl_update tool."""
     return Tool(
         name="linode_object_storage_object_acl_update",
@@ -839,7 +840,7 @@ def create_linode_object_storage_object_acl_update_tool() -> Tool:
                 "confirm",
             ],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_object_storage_object_acl_update(
@@ -883,7 +884,7 @@ async def handle_linode_object_storage_object_acl_update(
     return await execute_tool(cfg, arguments, "update object ACL", _call)
 
 
-def create_linode_object_storage_ssl_get_tool() -> Tool:
+def create_linode_object_storage_ssl_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_ssl_get tool."""
     return Tool(
         name="linode_object_storage_ssl_get",
@@ -911,7 +912,7 @@ def create_linode_object_storage_ssl_get_tool() -> Tool:
             },
             "required": ["region", "label"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_object_storage_ssl_get(
@@ -932,7 +933,7 @@ async def handle_linode_object_storage_ssl_get(
     return await execute_tool(cfg, arguments, "retrieve SSL status", _call)
 
 
-def create_linode_object_storage_ssl_delete_tool() -> Tool:
+def create_linode_object_storage_ssl_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_ssl_delete tool."""
     return Tool(
         name="linode_object_storage_ssl_delete",
@@ -969,7 +970,7 @@ def create_linode_object_storage_ssl_delete_tool() -> Tool:
             },
             "required": ["region", "label", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_object_storage_ssl_delete(

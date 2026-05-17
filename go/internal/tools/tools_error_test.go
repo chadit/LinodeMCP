@@ -41,7 +41,7 @@ func TestToolHandlersAPIErrorResponses(t *testing.T) {
 				defer srv.Close()
 
 				cfg := newTestConfig(srv.URL)
-				_, handler := tools.NewLinodeInstancesTool(cfg)
+				_, _, handler := tools.NewLinodeInstancesTool(cfg)
 
 				req := createRequestWithArgs(t, map[string]any{})
 				result, err := handler(t.Context(), req)
@@ -65,7 +65,7 @@ func TestToolHandlersAPIErrorResponses(t *testing.T) {
 				defer srv.Close()
 
 				cfg := newTestConfig(srv.URL)
-				_, handler := tools.NewLinodeInstanceGetTool(cfg)
+				_, _, handler := tools.NewLinodeInstanceGetTool(cfg)
 
 				req := createRequestWithArgs(t, map[string]any{keyInstanceID: "123"})
 				result, err := handler(t.Context(), req)
@@ -89,7 +89,7 @@ func TestToolHandlersAPIErrorResponses(t *testing.T) {
 				defer srv.Close()
 
 				cfg := newTestConfig(srv.URL)
-				_, handler := tools.NewLinodeInstanceCreateTool(cfg)
+				_, _, handler := tools.NewLinodeInstanceCreateTool(cfg)
 
 				req := createRequestWithArgs(t, map[string]any{
 					keyConfirm:    true,
@@ -121,7 +121,7 @@ func TestToolHandlersAPIErrorResponses(t *testing.T) {
 				defer srv.Close()
 
 				cfg := newTestConfig(srv.URL)
-				_, handler := tools.NewLinodeDomainRecordsListTool(cfg)
+				_, _, handler := tools.NewLinodeDomainRecordsListTool(cfg)
 
 				req := createRequestWithArgs(t, map[string]any{keyDomainID: "123"})
 				result, err := handler(t.Context(), req)
@@ -149,7 +149,7 @@ func TestToolHandlersMalformedJSONErrorResponse(t *testing.T) {
 	defer srv.Close()
 
 	cfg := newTestConfig(srv.URL)
-	_, handler := tools.NewLinodeInstancesTool(cfg)
+	_, _, handler := tools.NewLinodeInstancesTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 	result, err := handler(t.Context(), req)

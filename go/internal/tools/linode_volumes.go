@@ -7,11 +7,12 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
 // NewLinodeVolumesListTool creates a tool for listing Linode block storage volumes.
-func NewLinodeVolumesListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newListTool(
+func NewLinodeVolumesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newListTool(
 		cfg,
 		"linode_volumes_list",
 		"Lists all block storage volumes for the authenticated user with optional filtering by region or label",
@@ -26,4 +27,6 @@ func NewLinodeVolumesListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Co
 		},
 		"volumes",
 	)
+
+	return tool, profiles.CapUnknown, handler
 }

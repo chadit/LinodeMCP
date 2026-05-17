@@ -10,11 +10,12 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
 // NewLinodeObjectStorageBucketCreateTool creates a tool for creating an Object Storage bucket.
-func NewLinodeObjectStorageBucketCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeObjectStorageBucketCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_object_storage_bucket_create",
 		"Creates a new Object Storage bucket. WARNING: Billing starts immediately. Use linode_object_storage_clusters_list to find valid regions.",
@@ -32,6 +33,8 @@ func NewLinodeObjectStorageBucketCreateTool(cfg *config.Config) (mcp.Tool, func(
 		},
 		handleObjectStorageBucketCreateRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleObjectStorageBucketCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -90,7 +93,7 @@ func handleObjectStorageBucketCreateRequest(ctx context.Context, request *mcp.Ca
 }
 
 // NewLinodeObjectStorageBucketDeleteTool creates a tool for deleting an Object Storage bucket.
-func NewLinodeObjectStorageBucketDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeObjectStorageBucketDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_object_storage_bucket_delete",
 		mcp.WithDescription("Deletes an Object Storage bucket. WARNING: This is irreversible. All objects must be removed first."),
@@ -119,7 +122,7 @@ func NewLinodeObjectStorageBucketDeleteTool(cfg *config.Config) (mcp.Tool, func(
 		return handleObjectStorageBucketDeleteRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleObjectStorageBucketDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -161,8 +164,8 @@ func handleObjectStorageBucketDeleteRequest(ctx context.Context, request *mcp.Ca
 }
 
 // NewLinodeObjectStorageBucketAccessUpdateTool creates a tool for updating bucket access controls.
-func NewLinodeObjectStorageBucketAccessUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeObjectStorageBucketAccessUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_object_storage_bucket_access_update",
 		"Updates access control settings for an Object Storage bucket. Changes ACL and/or CORS configuration.",
@@ -180,6 +183,8 @@ func NewLinodeObjectStorageBucketAccessUpdateTool(cfg *config.Config) (mcp.Tool,
 		},
 		handleObjectStorageBucketAccessUpdateRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleObjectStorageBucketAccessUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -239,7 +244,7 @@ func handleObjectStorageBucketAccessUpdateRequest(ctx context.Context, request *
 }
 
 // NewLinodeObjectStorageKeyCreateTool creates a tool for creating an Object Storage access key.
-func NewLinodeObjectStorageKeyCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeObjectStorageKeyCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_object_storage_key_create",
 		mcp.WithDescription("Creates a new Object Storage access key. WARNING: The secret_key is only shown ONCE in the response and cannot be retrieved later."),
@@ -267,7 +272,7 @@ func NewLinodeObjectStorageKeyCreateTool(cfg *config.Config) (mcp.Tool, func(ctx
 		return handleObjectStorageKeyCreateRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleObjectStorageKeyCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -325,7 +330,7 @@ func handleObjectStorageKeyCreateRequest(ctx context.Context, request *mcp.CallT
 }
 
 // NewLinodeObjectStorageKeyUpdateTool creates a tool for updating an Object Storage access key.
-func NewLinodeObjectStorageKeyUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeObjectStorageKeyUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_object_storage_key_update",
 		mcp.WithDescription("Updates an Object Storage access key's label or bucket permissions."),
@@ -357,7 +362,7 @@ func NewLinodeObjectStorageKeyUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx
 		return handleObjectStorageKeyUpdateRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleObjectStorageKeyUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -419,7 +424,7 @@ func handleObjectStorageKeyUpdateRequest(ctx context.Context, request *mcp.CallT
 }
 
 // NewLinodeObjectStorageKeyDeleteTool creates a tool for revoking an Object Storage access key.
-func NewLinodeObjectStorageKeyDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeObjectStorageKeyDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_object_storage_key_delete",
 		mcp.WithDescription("Revokes an Object Storage access key permanently."),
@@ -443,7 +448,7 @@ func NewLinodeObjectStorageKeyDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx
 		return handleObjectStorageKeyDeleteRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleObjectStorageKeyDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -478,7 +483,7 @@ func handleObjectStorageKeyDeleteRequest(ctx context.Context, request *mcp.CallT
 }
 
 // NewLinodeObjectStorageObjectACLUpdateTool creates a tool for updating an object's ACL.
-func NewLinodeObjectStorageObjectACLUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeObjectStorageObjectACLUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_object_storage_object_acl_update",
 		mcp.WithDescription("Updates the Access Control List (ACL) for a specific object in an Object Storage bucket. "+
@@ -518,7 +523,7 @@ func NewLinodeObjectStorageObjectACLUpdateTool(cfg *config.Config) (mcp.Tool, fu
 		return handleObjectStorageObjectACLUpdateRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleObjectStorageObjectACLUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -566,7 +571,7 @@ func handleObjectStorageObjectACLUpdateRequest(ctx context.Context, request *mcp
 }
 
 // NewLinodeObjectStorageSSLDeleteTool creates a tool for deleting a bucket's SSL certificate.
-func NewLinodeObjectStorageSSLDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeObjectStorageSSLDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_object_storage_ssl_delete",
 		mcp.WithDescription("Deletes the SSL/TLS certificate from an Object Storage bucket. "+
@@ -596,7 +601,7 @@ func NewLinodeObjectStorageSSLDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx
 		return handleObjectStorageSSLDeleteRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleObjectStorageSSLDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

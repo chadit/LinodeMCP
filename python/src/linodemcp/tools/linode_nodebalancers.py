@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
 
 if TYPE_CHECKING:
@@ -11,7 +12,7 @@ if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 
-def create_linode_nodebalancers_list_tool() -> Tool:
+def create_linode_nodebalancers_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_nodebalancers_list tool."""
     return Tool(
         name="linode_nodebalancers_list",
@@ -35,7 +36,7 @@ def create_linode_nodebalancers_list_tool() -> Tool:
                 },
             },
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_nodebalancers_list(
@@ -89,7 +90,7 @@ async def handle_linode_nodebalancers_list(
     return await execute_tool(cfg, arguments, "retrieve NodeBalancers", _call)
 
 
-def create_linode_nodebalancer_get_tool() -> Tool:
+def create_linode_nodebalancer_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_nodebalancer_get tool."""
     return Tool(
         name="linode_nodebalancer_get",
@@ -107,7 +108,7 @@ def create_linode_nodebalancer_get_tool() -> Tool:
             },
             "required": ["nodebalancer_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_nodebalancer_get(

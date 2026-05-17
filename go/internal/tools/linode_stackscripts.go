@@ -9,10 +9,11 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
 // NewLinodeStackScriptsListTool creates a tool for listing StackScripts.
-func NewLinodeStackScriptsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeStackScriptsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_stackscripts_list",
 		mcp.WithDescription("Lists StackScripts. By default returns your own StackScripts. Can filter by public status, ownership, or label."),
@@ -38,7 +39,7 @@ func NewLinodeStackScriptsListTool(cfg *config.Config) (mcp.Tool, func(ctx conte
 		return handleLinodeStackScriptsListRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLinodeStackScriptsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

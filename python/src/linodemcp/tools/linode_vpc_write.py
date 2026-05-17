@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import error_response, execute_tool
 
 if TYPE_CHECKING:
@@ -146,7 +147,7 @@ def _parse_ipv6_range_create_args(
     return prefix_length, linode_id, route_target
 
 
-def create_linode_vpc_create_tool() -> Tool:
+def create_linode_vpc_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_vpc_create tool."""
     return Tool(
         name="linode_vpc_create",
@@ -179,7 +180,7 @@ def create_linode_vpc_create_tool() -> Tool:
             },
             "required": ["label", "region", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_vpc_create(
@@ -208,7 +209,7 @@ async def handle_linode_vpc_create(
     return await execute_tool(cfg, arguments, "create VPC", _call)
 
 
-def create_linode_vpc_update_tool() -> Tool:
+def create_linode_vpc_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_vpc_update tool."""
     return Tool(
         name="linode_vpc_update",
@@ -230,7 +231,7 @@ def create_linode_vpc_update_tool() -> Tool:
             },
             "required": ["vpc_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_vpc_update(
@@ -259,7 +260,7 @@ async def handle_linode_vpc_update(
     return await execute_tool(cfg, arguments, "update VPC", _call)
 
 
-def create_linode_vpc_delete_tool() -> Tool:
+def create_linode_vpc_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_vpc_delete tool."""
     return Tool(
         name="linode_vpc_delete",
@@ -278,7 +279,7 @@ def create_linode_vpc_delete_tool() -> Tool:
             },
             "required": ["vpc_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_vpc_delete(
@@ -307,7 +308,7 @@ async def handle_linode_vpc_delete(
     return await execute_tool(cfg, arguments, "delete VPC", _call)
 
 
-def create_linode_vpc_subnet_create_tool() -> Tool:
+def create_linode_vpc_subnet_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_vpc_subnet_create tool."""
     return Tool(
         name="linode_vpc_subnet_create",
@@ -339,7 +340,7 @@ def create_linode_vpc_subnet_create_tool() -> Tool:
                 "confirm",
             ],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_vpc_subnet_create(
@@ -375,7 +376,7 @@ async def handle_linode_vpc_subnet_create(
     return await execute_tool(cfg, arguments, "create VPC subnet", _call)
 
 
-def create_linode_vpc_subnet_update_tool() -> Tool:
+def create_linode_vpc_subnet_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_vpc_subnet_update tool."""
     return Tool(
         name="linode_vpc_subnet_update",
@@ -399,7 +400,7 @@ def create_linode_vpc_subnet_update_tool() -> Tool:
                 "confirm",
             ],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_vpc_subnet_update(
@@ -429,7 +430,7 @@ async def handle_linode_vpc_subnet_update(
     return await execute_tool(cfg, arguments, "update VPC subnet", _call)
 
 
-def create_linode_vpc_subnet_delete_tool() -> Tool:
+def create_linode_vpc_subnet_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_vpc_subnet_delete tool."""
     return Tool(
         name="linode_vpc_subnet_delete",
@@ -453,7 +454,7 @@ def create_linode_vpc_subnet_delete_tool() -> Tool:
                 "confirm",
             ],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_vpc_subnet_delete(
@@ -480,7 +481,7 @@ async def handle_linode_vpc_subnet_delete(
     return await execute_tool(cfg, arguments, "delete VPC subnet", _call)
 
 
-def create_linode_ipv6_range_create_tool() -> Tool:
+def create_linode_ipv6_range_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_ipv6_range_create tool."""
     return Tool(
         name="linode_ipv6_range_create",
@@ -499,7 +500,7 @@ def create_linode_ipv6_range_create_tool() -> Tool:
             },
             "required": [_IPV6_PREFIX_LENGTH_KEY, "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_ipv6_range_create(
@@ -525,7 +526,7 @@ async def handle_linode_ipv6_range_create(
     return await execute_tool(cfg, arguments, "create IPv6 range", _call)
 
 
-def create_linode_ipv6_range_delete_tool() -> Tool:
+def create_linode_ipv6_range_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_ipv6_range_delete tool."""
     return Tool(
         name="linode_ipv6_range_delete",
@@ -544,7 +545,7 @@ def create_linode_ipv6_range_delete_tool() -> Tool:
             },
             "required": [_IPV6_RANGE_KEY, "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_ipv6_range_delete(

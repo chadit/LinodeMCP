@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
 
 if TYPE_CHECKING:
@@ -11,7 +12,7 @@ if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 
-def create_linode_domain_create_tool() -> Tool:
+def create_linode_domain_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_domain_create tool."""
     return Tool(
         name="linode_domain_create",
@@ -41,7 +42,7 @@ def create_linode_domain_create_tool() -> Tool:
             },
             "required": ["domain"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_domain_create(
@@ -76,7 +77,7 @@ async def handle_linode_domain_create(
     return await execute_tool(cfg, arguments, "create domain", _call)
 
 
-def create_linode_domain_update_tool() -> Tool:
+def create_linode_domain_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_domain_update tool."""
     return Tool(
         name="linode_domain_update",
@@ -104,7 +105,7 @@ def create_linode_domain_update_tool() -> Tool:
             },
             "required": ["domain_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_domain_update(
@@ -137,7 +138,7 @@ async def handle_linode_domain_update(
     return await execute_tool(cfg, arguments, "update domain", _call)
 
 
-def create_linode_domain_delete_tool() -> Tool:
+def create_linode_domain_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_domain_delete tool."""
     return Tool(
         name="linode_domain_delete",
@@ -159,7 +160,7 @@ def create_linode_domain_delete_tool() -> Tool:
             },
             "required": ["domain_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_domain_delete(

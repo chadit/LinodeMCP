@@ -22,6 +22,8 @@ const (
 	apiURLLinodeV4  = "https://api.linode.com/v4"
 	tokenShort      = "tok"
 	serverNameTest  = "Test"
+	transportStdio  = "stdio"
+	hostLocalhost   = "127.0.0.1"
 )
 
 // End-to-end verification of server construction and initialization.
@@ -44,8 +46,8 @@ func TestNew(t *testing.T) {
 			Server: config.ServerConfig{
 				Name:      "TestMCP",
 				LogLevel:  logLevelInfo,
-				Transport: "stdio",
-				Host:      "127.0.0.1",
+				Transport: transportStdio,
+				Host:      hostLocalhost,
 				Port:      8080,
 			},
 			Environments: map[string]config.EnvironmentConfig{
@@ -244,8 +246,8 @@ func newTestServer(t *testing.T) *server.Server {
 		Server: config.ServerConfig{
 			Name:      serverNameTest,
 			LogLevel:  logLevelInfo,
-			Transport: "stdio",
-			Host:      "127.0.0.1",
+			Transport: transportStdio,
+			Host:      hostLocalhost,
 			Port:      8080,
 		},
 		Environments: map[string]config.EnvironmentConfig{
@@ -267,7 +269,7 @@ func newTestServer(t *testing.T) *server.Server {
 func TestHelloToolHandlerDispatch(t *testing.T) {
 	t.Parallel()
 
-	_, handler := tools.NewHelloTool()
+	_, _, handler := tools.NewHelloTool(nil)
 
 	request := mcp.CallToolRequest{}
 	request.Params.Name = "hello"

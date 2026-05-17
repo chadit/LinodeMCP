@@ -9,6 +9,7 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
 // boolTrue and boolFalse are used for boolean string comparison in filter functions.
@@ -18,7 +19,7 @@ const (
 )
 
 // NewLinodeInstanceGetTool creates a tool for getting a single Linode instance by ID.
-func NewLinodeInstanceGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeInstanceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_instance_get",
 		mcp.WithDescription("Retrieves details of a single Linode instance by its ID"),
@@ -37,7 +38,7 @@ func NewLinodeInstanceGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Co
 		return handleLinodeInstanceGetRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLinodeInstanceGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -60,7 +61,7 @@ func handleLinodeInstanceGetRequest(ctx context.Context, request *mcp.CallToolRe
 }
 
 // NewLinodeInstancesTool creates a tool for listing Linode instances.
-func NewLinodeInstancesTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeInstancesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_instances_list",
 		mcp.WithDescription("Lists Linode instances with optional filtering by status"),
@@ -78,7 +79,7 @@ func NewLinodeInstancesTool(cfg *config.Config) (mcp.Tool, func(ctx context.Cont
 		return handleLinodeInstancesRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLinodeInstancesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

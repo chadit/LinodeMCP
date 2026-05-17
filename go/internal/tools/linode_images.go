@@ -8,10 +8,11 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
 // NewLinodeImagesListTool creates a tool for listing Linode images.
-func NewLinodeImagesListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeImagesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_images_list",
 		mcp.WithDescription("Lists all available Linode images (OS images and custom images) with optional filtering by type, public status, or deprecated status"),
@@ -40,7 +41,7 @@ func NewLinodeImagesListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Con
 		)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func filterImagesByPublic(images []linode.Image, isPublicFilter string) []linode.Image {

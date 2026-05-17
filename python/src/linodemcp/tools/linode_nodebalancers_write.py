@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
 
 if TYPE_CHECKING:
@@ -11,7 +12,7 @@ if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 
-def create_linode_nodebalancer_create_tool() -> Tool:
+def create_linode_nodebalancer_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_nodebalancer_create tool."""
     return Tool(
         name="linode_nodebalancer_create",
@@ -44,7 +45,7 @@ def create_linode_nodebalancer_create_tool() -> Tool:
             },
             "required": ["region", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_nodebalancer_create(
@@ -89,7 +90,7 @@ async def handle_linode_nodebalancer_create(
     return await execute_tool(cfg, arguments, "create NodeBalancer", _call)
 
 
-def create_linode_nodebalancer_update_tool() -> Tool:
+def create_linode_nodebalancer_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_nodebalancer_update tool."""
     return Tool(
         name="linode_nodebalancer_update",
@@ -113,7 +114,7 @@ def create_linode_nodebalancer_update_tool() -> Tool:
             },
             "required": ["nodebalancer_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_nodebalancer_update(
@@ -144,7 +145,7 @@ async def handle_linode_nodebalancer_update(
     return await execute_tool(cfg, arguments, "update NodeBalancer", _call)
 
 
-def create_linode_nodebalancer_delete_tool() -> Tool:
+def create_linode_nodebalancer_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_nodebalancer_delete tool."""
     return Tool(
         name="linode_nodebalancer_delete",
@@ -167,7 +168,7 @@ def create_linode_nodebalancer_delete_tool() -> Tool:
             },
             "required": ["nodebalancer_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_nodebalancer_delete(

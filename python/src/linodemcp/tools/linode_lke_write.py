@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import error_response, execute_tool
 
 if TYPE_CHECKING:
@@ -28,7 +29,7 @@ _CONFIRM_PROP: dict[str, Any] = {
 }
 
 
-def create_linode_lke_cluster_create_tool() -> Tool:
+def create_linode_lke_cluster_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_cluster_create tool."""
     return Tool(
         name="linode_lke_cluster_create",
@@ -74,7 +75,7 @@ def create_linode_lke_cluster_create_tool() -> Tool:
             },
             "required": ["label", "region", "k8s_version", "node_pools", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_cluster_create(
@@ -122,7 +123,7 @@ async def handle_linode_lke_cluster_create(
     return await execute_tool(cfg, arguments, "create LKE cluster", _call)
 
 
-def create_linode_lke_cluster_update_tool() -> Tool:
+def create_linode_lke_cluster_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_cluster_update tool."""
     return Tool(
         name="linode_lke_cluster_update",
@@ -153,7 +154,7 @@ def create_linode_lke_cluster_update_tool() -> Tool:
             },
             "required": ["cluster_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_cluster_update(
@@ -184,7 +185,7 @@ async def handle_linode_lke_cluster_update(
     return await execute_tool(cfg, arguments, "update LKE cluster", _call)
 
 
-def create_linode_lke_cluster_delete_tool() -> Tool:
+def create_linode_lke_cluster_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_cluster_delete tool."""
     return Tool(
         name="linode_lke_cluster_delete",
@@ -203,7 +204,7 @@ def create_linode_lke_cluster_delete_tool() -> Tool:
             },
             "required": ["cluster_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_cluster_delete(
@@ -237,7 +238,7 @@ async def handle_linode_lke_cluster_delete(
     return await execute_tool(cfg, arguments, "delete LKE cluster", _call)
 
 
-def create_linode_lke_cluster_recycle_tool() -> Tool:
+def create_linode_lke_cluster_recycle_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_cluster_recycle tool."""
     return Tool(
         name="linode_lke_cluster_recycle",
@@ -251,7 +252,7 @@ def create_linode_lke_cluster_recycle_tool() -> Tool:
             },
             "required": ["cluster_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_cluster_recycle(
@@ -280,7 +281,7 @@ async def handle_linode_lke_cluster_recycle(
     return await execute_tool(cfg, arguments, "recycle LKE cluster", _call)
 
 
-def create_linode_lke_cluster_regenerate_tool() -> Tool:
+def create_linode_lke_cluster_regenerate_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_cluster_regenerate tool."""
     return Tool(
         name="linode_lke_cluster_regenerate",
@@ -294,7 +295,7 @@ def create_linode_lke_cluster_regenerate_tool() -> Tool:
             },
             "required": ["cluster_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_cluster_regenerate(
@@ -323,7 +324,7 @@ async def handle_linode_lke_cluster_regenerate(
     return await execute_tool(cfg, arguments, "regenerate LKE cluster", _call)
 
 
-def create_linode_lke_pool_create_tool() -> Tool:
+def create_linode_lke_pool_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_pool_create tool."""
     return Tool(
         name="linode_lke_pool_create",
@@ -359,7 +360,7 @@ def create_linode_lke_pool_create_tool() -> Tool:
             },
             "required": ["cluster_id", "type", "count", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_pool_create(
@@ -406,7 +407,7 @@ async def handle_linode_lke_pool_create(
     return await execute_tool(cfg, arguments, "create LKE node pool", _call)
 
 
-def create_linode_lke_pool_update_tool() -> Tool:
+def create_linode_lke_pool_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_pool_update tool."""
     return Tool(
         name="linode_lke_pool_update",
@@ -437,7 +438,7 @@ def create_linode_lke_pool_update_tool() -> Tool:
             },
             "required": ["cluster_id", "pool_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_pool_update(
@@ -475,7 +476,7 @@ async def handle_linode_lke_pool_update(
     return await execute_tool(cfg, arguments, "update LKE node pool", _call)
 
 
-def create_linode_lke_pool_delete_tool() -> Tool:
+def create_linode_lke_pool_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_pool_delete tool."""
     return Tool(
         name="linode_lke_pool_delete",
@@ -498,7 +499,7 @@ def create_linode_lke_pool_delete_tool() -> Tool:
             },
             "required": ["cluster_id", "pool_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_pool_delete(
@@ -540,7 +541,7 @@ async def handle_linode_lke_pool_delete(
     return await execute_tool(cfg, arguments, "delete LKE node pool", _call)
 
 
-def create_linode_lke_pool_recycle_tool() -> Tool:
+def create_linode_lke_pool_recycle_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_pool_recycle tool."""
     return Tool(
         name="linode_lke_pool_recycle",
@@ -558,7 +559,7 @@ def create_linode_lke_pool_recycle_tool() -> Tool:
             },
             "required": ["cluster_id", "pool_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_pool_recycle(
@@ -595,7 +596,7 @@ async def handle_linode_lke_pool_recycle(
     return await execute_tool(cfg, arguments, "recycle LKE node pool", _call)
 
 
-def create_linode_lke_node_delete_tool() -> Tool:
+def create_linode_lke_node_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_node_delete tool."""
     return Tool(
         name="linode_lke_node_delete",
@@ -618,7 +619,7 @@ def create_linode_lke_node_delete_tool() -> Tool:
             },
             "required": ["cluster_id", "node_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_node_delete(
@@ -656,7 +657,7 @@ async def handle_linode_lke_node_delete(
     return await execute_tool(cfg, arguments, "delete LKE node", _call)
 
 
-def create_linode_lke_node_recycle_tool() -> Tool:
+def create_linode_lke_node_recycle_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_node_recycle tool."""
     return Tool(
         name="linode_lke_node_recycle",
@@ -674,7 +675,7 @@ def create_linode_lke_node_recycle_tool() -> Tool:
             },
             "required": ["cluster_id", "node_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_node_recycle(
@@ -707,7 +708,7 @@ async def handle_linode_lke_node_recycle(
     return await execute_tool(cfg, arguments, "recycle LKE node", _call)
 
 
-def create_linode_lke_kubeconfig_delete_tool() -> Tool:
+def create_linode_lke_kubeconfig_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_kubeconfig_delete tool."""
     return Tool(
         name="linode_lke_kubeconfig_delete",
@@ -721,7 +722,7 @@ def create_linode_lke_kubeconfig_delete_tool() -> Tool:
             },
             "required": ["cluster_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_kubeconfig_delete(
@@ -750,7 +751,7 @@ async def handle_linode_lke_kubeconfig_delete(
     return await execute_tool(cfg, arguments, "delete LKE kubeconfig", _call)
 
 
-def create_linode_lke_service_token_delete_tool() -> Tool:
+def create_linode_lke_service_token_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_service_token_delete tool."""
     return Tool(
         name="linode_lke_service_token_delete",
@@ -764,7 +765,7 @@ def create_linode_lke_service_token_delete_tool() -> Tool:
             },
             "required": ["cluster_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_service_token_delete(
@@ -793,7 +794,7 @@ async def handle_linode_lke_service_token_delete(
     return await execute_tool(cfg, arguments, "delete LKE service token", _call)
 
 
-def create_linode_lke_acl_update_tool() -> Tool:
+def create_linode_lke_acl_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_acl_update tool."""
     return Tool(
         name="linode_lke_acl_update",
@@ -814,7 +815,7 @@ def create_linode_lke_acl_update_tool() -> Tool:
             },
             "required": ["cluster_id", "acl", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_acl_update(
@@ -843,7 +844,7 @@ async def handle_linode_lke_acl_update(
     return await execute_tool(cfg, arguments, "update LKE control plane ACL", _call)
 
 
-def create_linode_lke_acl_delete_tool() -> Tool:
+def create_linode_lke_acl_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_acl_delete tool."""
     return Tool(
         name="linode_lke_acl_delete",
@@ -862,7 +863,7 @@ def create_linode_lke_acl_delete_tool() -> Tool:
             },
             "required": ["cluster_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_acl_delete(

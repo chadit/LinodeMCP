@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import execute_tool
 
 if TYPE_CHECKING:
@@ -67,7 +68,7 @@ def _parse_instance_and_disk_ids(
     return iid, disk_id
 
 
-def create_linode_instance_disks_list_tool() -> Tool:
+def create_linode_instance_disks_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_disks_list tool."""
     return Tool(
         name="linode_instance_disks_list",
@@ -80,7 +81,7 @@ def create_linode_instance_disks_list_tool() -> Tool:
             },
             "required": ["instance_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_disks_list(
@@ -100,7 +101,7 @@ async def handle_linode_instance_disks_list(
     return await execute_tool(cfg, arguments, "list instance disks", _call)
 
 
-def create_linode_instance_disk_get_tool() -> Tool:
+def create_linode_instance_disk_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_disk_get tool."""
     return Tool(
         name="linode_instance_disk_get",
@@ -114,7 +115,7 @@ def create_linode_instance_disk_get_tool() -> Tool:
             },
             "required": ["instance_id", "disk_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_disk_get(
@@ -134,7 +135,7 @@ async def handle_linode_instance_disk_get(
     return await execute_tool(cfg, arguments, "get instance disk", _call)
 
 
-def create_linode_instance_disk_create_tool() -> Tool:
+def create_linode_instance_disk_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_disk_create tool."""
     return Tool(
         name="linode_instance_disk_create",
@@ -173,7 +174,7 @@ def create_linode_instance_disk_create_tool() -> Tool:
                 "confirm",
             ],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_disk_create(
@@ -211,7 +212,7 @@ async def handle_linode_instance_disk_create(
     return await execute_tool(cfg, arguments, "create instance disk", _call)
 
 
-def create_linode_instance_disk_update_tool() -> Tool:
+def create_linode_instance_disk_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_disk_update tool."""
     return Tool(
         name="linode_instance_disk_update",
@@ -234,7 +235,7 @@ def create_linode_instance_disk_update_tool() -> Tool:
                 "confirm",
             ],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_disk_update(
@@ -262,7 +263,7 @@ async def handle_linode_instance_disk_update(
     return await execute_tool(cfg, arguments, "update instance disk", _call)
 
 
-def create_linode_instance_disk_delete_tool() -> Tool:
+def create_linode_instance_disk_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_disk_delete tool."""
     return Tool(
         name="linode_instance_disk_delete",
@@ -286,7 +287,7 @@ def create_linode_instance_disk_delete_tool() -> Tool:
                 "confirm",
             ],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_disk_delete(
@@ -315,7 +316,7 @@ async def handle_linode_instance_disk_delete(
     return await execute_tool(cfg, arguments, "delete instance disk", _call)
 
 
-def create_linode_instance_disk_clone_tool() -> Tool:
+def create_linode_instance_disk_clone_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_disk_clone tool."""
     return Tool(
         name="linode_instance_disk_clone",
@@ -334,7 +335,7 @@ def create_linode_instance_disk_clone_tool() -> Tool:
                 "confirm",
             ],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_disk_clone(
@@ -358,7 +359,7 @@ async def handle_linode_instance_disk_clone(
     return await execute_tool(cfg, arguments, "clone instance disk", _call)
 
 
-def create_linode_instance_disk_resize_tool() -> Tool:
+def create_linode_instance_disk_resize_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_disk_resize tool."""
     return Tool(
         name="linode_instance_disk_resize",
@@ -382,7 +383,7 @@ def create_linode_instance_disk_resize_tool() -> Tool:
                 "confirm",
             ],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_disk_resize(

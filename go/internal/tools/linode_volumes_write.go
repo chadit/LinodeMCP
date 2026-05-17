@@ -8,10 +8,11 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
 // NewLinodeVolumeCreateTool creates a tool for creating a volume.
-func NewLinodeVolumeCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeVolumeCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_volume_create",
 		mcp.WithDescription("Creates a new block storage volume. WARNING: Billing starts immediately. Use linode_regions_list to find valid regions."),
@@ -47,7 +48,7 @@ func NewLinodeVolumeCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 		return handleLinodeVolumeCreateRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLinodeVolumeCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -106,7 +107,7 @@ func handleLinodeVolumeCreateRequest(ctx context.Context, request *mcp.CallToolR
 }
 
 // NewLinodeVolumeAttachTool creates a tool for attaching a volume to a Linode.
-func NewLinodeVolumeAttachTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeVolumeAttachTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_volume_attach",
 		mcp.WithDescription("Attaches a block storage volume to a Linode instance. The volume and instance must be in the same region."),
@@ -134,7 +135,7 @@ func NewLinodeVolumeAttachTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 		return handleLinodeVolumeAttachRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLinodeVolumeAttachRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -182,7 +183,7 @@ func handleLinodeVolumeAttachRequest(ctx context.Context, request *mcp.CallToolR
 }
 
 // NewLinodeVolumeDetachTool creates a tool for detaching a volume from a Linode.
-func NewLinodeVolumeDetachTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeVolumeDetachTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_volume_detach",
 		mcp.WithDescription("Detaches a block storage volume from a Linode instance. The volume data is preserved."),
@@ -201,7 +202,7 @@ func NewLinodeVolumeDetachTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 		return handleLinodeVolumeDetachRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLinodeVolumeDetachRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -232,7 +233,7 @@ func handleLinodeVolumeDetachRequest(ctx context.Context, request *mcp.CallToolR
 }
 
 // NewLinodeVolumeResizeTool creates a tool for resizing a volume.
-func NewLinodeVolumeResizeTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeVolumeResizeTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_volume_resize",
 		mcp.WithDescription("Resizes a block storage volume. WARNING: Volumes can only be resized UP. This operation may incur additional billing."),
@@ -261,7 +262,7 @@ func NewLinodeVolumeResizeTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 		return handleLinodeVolumeResizeRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLinodeVolumeResizeRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -302,7 +303,7 @@ func handleLinodeVolumeResizeRequest(ctx context.Context, request *mcp.CallToolR
 }
 
 // NewLinodeVolumeDeleteTool creates a tool for deleting a volume.
-func NewLinodeVolumeDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeVolumeDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_volume_delete",
 		mcp.WithDescription("Deletes a block storage volume. WARNING: This action is irreversible and all data will be permanently lost. The volume must be detached first."),
@@ -326,7 +327,7 @@ func NewLinodeVolumeDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 		return handleLinodeVolumeDeleteRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLinodeVolumeDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

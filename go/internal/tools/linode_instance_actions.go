@@ -9,11 +9,12 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
 // NewLinodeInstanceCloneTool creates a tool for cloning a Linode instance.
-func NewLinodeInstanceCloneTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeInstanceCloneTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_clone",
 		"Clones a Linode instance. WARNING: This creates a billable resource.",
@@ -33,6 +34,8 @@ func NewLinodeInstanceCloneTool(cfg *config.Config) (mcp.Tool, func(ctx context.
 		},
 		handleInstanceCloneRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleInstanceCloneRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -85,8 +88,8 @@ func handleInstanceCloneRequest(ctx context.Context, request *mcp.CallToolReques
 }
 
 // NewLinodeInstanceMigrateTool creates a tool for migrating a Linode instance to a new region.
-func NewLinodeInstanceMigrateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeInstanceMigrateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_migrate",
 		"Migrates a Linode instance to a new region. If no region is specified, Linode picks the destination.",
@@ -100,6 +103,8 @@ func NewLinodeInstanceMigrateTool(cfg *config.Config) (mcp.Tool, func(ctx contex
 		},
 		handleInstanceMigrateRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleInstanceMigrateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -142,8 +147,8 @@ func handleInstanceMigrateRequest(ctx context.Context, request *mcp.CallToolRequ
 }
 
 // NewLinodeInstanceRebuildTool creates a tool for rebuilding a Linode instance with a new image.
-func NewLinodeInstanceRebuildTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeInstanceRebuildTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_rebuild",
 		"Rebuilds a Linode instance with a new image. WARNING: This destroys all existing data on the instance.",
@@ -165,6 +170,8 @@ func NewLinodeInstanceRebuildTool(cfg *config.Config) (mcp.Tool, func(ctx contex
 		},
 		handleInstanceRebuildRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleInstanceRebuildRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -234,8 +241,8 @@ func handleInstanceRebuildRequest(ctx context.Context, request *mcp.CallToolRequ
 }
 
 // NewLinodeInstanceRescueTool creates a tool for booting a Linode instance into rescue mode.
-func NewLinodeInstanceRescueTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeInstanceRescueTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_rescue",
 		"Boots a Linode instance into rescue mode for recovery operations.",
@@ -250,6 +257,8 @@ func NewLinodeInstanceRescueTool(cfg *config.Config) (mcp.Tool, func(ctx context
 		},
 		handleInstanceRescueRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleInstanceRescueRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -293,8 +302,8 @@ func handleInstanceRescueRequest(ctx context.Context, request *mcp.CallToolReque
 }
 
 // NewLinodeInstancePasswordResetTool creates a tool for resetting the root password on a Linode instance.
-func NewLinodeInstancePasswordResetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeInstancePasswordResetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_password_reset",
 		"Resets the root password on a Linode instance. The instance must be powered off.",
@@ -308,6 +317,8 @@ func NewLinodeInstancePasswordResetTool(cfg *config.Config) (mcp.Tool, func(ctx 
 		},
 		handleInstancePasswordResetRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleInstancePasswordResetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

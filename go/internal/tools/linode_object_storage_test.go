@@ -25,7 +25,7 @@ func TestLinodeObjectStorageBucketsListTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeObjectStorageBucketsListTool(cfg)
+	tool, _, handler := tools.NewLinodeObjectStorageBucketsListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -60,7 +60,7 @@ func TestLinodeObjectStorageBucketsListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeObjectStorageBucketsListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeObjectStorageBucketsListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := srvHandler(t.Context(), req)
@@ -82,7 +82,7 @@ func TestLinodeObjectStorageBucketsListTool(t *testing.T) {
 		emptyCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{},
 		}
-		_, emptyHandler := tools.NewLinodeObjectStorageBucketsListTool(emptyCfg)
+		_, _, emptyHandler := tools.NewLinodeObjectStorageBucketsListTool(emptyCfg)
 
 		req := createRequestWithArgs(t, map[string]any{"environment": "nonexistent"})
 		result, err := emptyHandler(t.Context(), req)
@@ -102,7 +102,7 @@ func TestLinodeObjectStorageBucketGetTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeObjectStorageBucketGetTool(cfg)
+	tool, _, handler := tools.NewLinodeObjectStorageBucketGetTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -135,7 +135,7 @@ func TestLinodeObjectStorageBucketGetTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeObjectStorageBucketGetTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeObjectStorageBucketGetTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest})
 		result, err := srvHandler(t.Context(), req)
@@ -185,7 +185,7 @@ func TestLinodeObjectStorageBucketContentsTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeObjectStorageBucketContentsTool(cfg)
+	tool, _, handler := tools.NewLinodeObjectStorageBucketContentsTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -219,7 +219,7 @@ func TestLinodeObjectStorageBucketContentsTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeObjectStorageBucketContentsTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeObjectStorageBucketContentsTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest})
 		result, err := srvHandler(t.Context(), req)
@@ -258,7 +258,7 @@ func TestLinodeObjectStorageBucketContentsTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeObjectStorageBucketContentsTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeObjectStorageBucketContentsTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyRegion: regionUSEast1,
@@ -299,7 +299,7 @@ func TestLinodeObjectStorageBucketContentsTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeObjectStorageBucketContentsTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeObjectStorageBucketContentsTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest})
 		result, err := srvHandler(t.Context(), req)
@@ -331,7 +331,7 @@ func TestLinodeObjectStorageClustersListTool(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, handler := tools.NewLinodeObjectStorageClustersListTool(cfg)
+	tool, _, handler := tools.NewLinodeObjectStorageClustersListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -366,7 +366,7 @@ func TestLinodeObjectStorageClustersListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeObjectStorageClustersListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeObjectStorageClustersListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := srvHandler(t.Context(), req)
@@ -388,7 +388,7 @@ func TestLinodeObjectStorageTypeListTool(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, handler := tools.NewLinodeObjectStorageTypeListTool(cfg)
+	tool, _, handler := tools.NewLinodeObjectStorageTypeListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -422,7 +422,7 @@ func TestLinodeObjectStorageTypeListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeObjectStorageTypeListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeObjectStorageTypeListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := srvHandler(t.Context(), req)
@@ -445,7 +445,7 @@ func TestLinodeObjectStorageTypeListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: "", Token: ""}},
 			},
 		}
-		_, incompleteHandler := tools.NewLinodeObjectStorageTypeListTool(incompleteCfg)
+		_, _, incompleteHandler := tools.NewLinodeObjectStorageTypeListTool(incompleteCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := incompleteHandler(t.Context(), req)
@@ -461,7 +461,7 @@ func TestLinodeObjectStorageKeysListTool(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, handler := tools.NewLinodeObjectStorageKeysListTool(cfg)
+	tool, _, handler := tools.NewLinodeObjectStorageKeysListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -500,7 +500,7 @@ func TestLinodeObjectStorageKeysListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeObjectStorageKeysListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeObjectStorageKeysListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := srvHandler(t.Context(), req)
@@ -523,7 +523,7 @@ func TestLinodeObjectStorageKeysListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: "", Token: ""}},
 			},
 		}
-		_, incompleteHandler := tools.NewLinodeObjectStorageKeysListTool(incompleteCfg)
+		_, _, incompleteHandler := tools.NewLinodeObjectStorageKeysListTool(incompleteCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := incompleteHandler(t.Context(), req)
@@ -543,7 +543,7 @@ func TestLinodeObjectStorageKeyGetTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeObjectStorageKeyGetTool(cfg)
+	tool, _, handler := tools.NewLinodeObjectStorageKeyGetTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -578,7 +578,7 @@ func TestLinodeObjectStorageKeyGetTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeObjectStorageKeyGetTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeObjectStorageKeyGetTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyKeyID: "42"})
 		result, err := srvHandler(t.Context(), req)
@@ -625,7 +625,7 @@ func TestLinodeObjectStorageTransferTool(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, handler := tools.NewLinodeObjectStorageTransferTool(cfg)
+	tool, _, handler := tools.NewLinodeObjectStorageTransferTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -652,7 +652,7 @@ func TestLinodeObjectStorageTransferTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeObjectStorageTransferTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeObjectStorageTransferTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := srvHandler(t.Context(), req)
@@ -674,7 +674,7 @@ func TestLinodeObjectStorageTransferTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: "", Token: ""}},
 			},
 		}
-		_, incompleteHandler := tools.NewLinodeObjectStorageTransferTool(incompleteCfg)
+		_, _, incompleteHandler := tools.NewLinodeObjectStorageTransferTool(incompleteCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := incompleteHandler(t.Context(), req)
@@ -694,7 +694,7 @@ func TestLinodeObjectStorageBucketAccessGetTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeObjectStorageBucketAccessGetTool(cfg)
+	tool, _, handler := tools.NewLinodeObjectStorageBucketAccessGetTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -724,7 +724,7 @@ func TestLinodeObjectStorageBucketAccessGetTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeObjectStorageBucketAccessGetTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeObjectStorageBucketAccessGetTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest})
 		result, err := srvHandler(t.Context(), req)
@@ -770,7 +770,7 @@ func TestLinodeObjectStorageBucketAccessGetTool(t *testing.T) {
 		emptyCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{},
 		}
-		_, emptyHandler := tools.NewLinodeObjectStorageBucketAccessGetTool(emptyCfg)
+		_, _, emptyHandler := tools.NewLinodeObjectStorageBucketAccessGetTool(emptyCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest})
 		result, err := emptyHandler(t.Context(), req)
@@ -790,7 +790,7 @@ func TestLinodeObjectStorageBucketCreateTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeObjectStorageBucketCreateTool(cfg)
+	tool, _, handler := tools.NewLinodeObjectStorageBucketCreateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -895,7 +895,7 @@ func TestLinodeObjectStorageBucketCreateTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeObjectStorageBucketCreateTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeObjectStorageBucketCreateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyLabel:   bucketTest,
@@ -925,7 +925,7 @@ func TestLinodeObjectStorageBucketDeleteTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeObjectStorageBucketDeleteTool(cfg)
+	tool, _, handler := tools.NewLinodeObjectStorageBucketDeleteTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -996,7 +996,7 @@ func TestLinodeObjectStorageBucketDeleteTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeObjectStorageBucketDeleteTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeObjectStorageBucketDeleteTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyRegion:  regionUSEast1,
@@ -1024,7 +1024,7 @@ func TestLinodeObjectStorageBucketAccessUpdateTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeObjectStorageBucketAccessUpdateTool(cfg)
+	tool, _, handler := tools.NewLinodeObjectStorageBucketAccessUpdateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1091,7 +1091,7 @@ func TestLinodeObjectStorageBucketAccessUpdateTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeObjectStorageBucketAccessUpdateTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeObjectStorageBucketAccessUpdateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyRegion:  regionUSEast1,
@@ -1116,7 +1116,7 @@ func TestLinodeObjectStorageBucketAccessUpdateTool(t *testing.T) {
 		emptyCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{},
 		}
-		_, emptyHandler := tools.NewLinodeObjectStorageBucketAccessUpdateTool(emptyCfg)
+		_, _, emptyHandler := tools.NewLinodeObjectStorageBucketAccessUpdateTool(emptyCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyRegion:  regionUSEast1,
@@ -1141,7 +1141,7 @@ func TestLinodeObjectStorageKeyCreateTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeObjectStorageKeyCreateTool(cfg)
+	tool, _, handler := tools.NewLinodeObjectStorageKeyCreateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1243,7 +1243,7 @@ func TestLinodeObjectStorageKeyCreateTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeObjectStorageKeyCreateTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeObjectStorageKeyCreateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyLabel:        keyNameTest,
@@ -1271,7 +1271,7 @@ func TestLinodeObjectStorageKeyCreateTool(t *testing.T) {
 		emptyCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{},
 		}
-		_, emptyHandler := tools.NewLinodeObjectStorageKeyCreateTool(emptyCfg)
+		_, _, emptyHandler := tools.NewLinodeObjectStorageKeyCreateTool(emptyCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyLabel:   keyNameTest,
@@ -1294,7 +1294,7 @@ func TestLinodeObjectStorageKeyUpdateTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeObjectStorageKeyUpdateTool(cfg)
+	tool, _, handler := tools.NewLinodeObjectStorageKeyUpdateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1362,7 +1362,7 @@ func TestLinodeObjectStorageKeyUpdateTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeObjectStorageKeyUpdateTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeObjectStorageKeyUpdateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyKeyID:   float64(42),
@@ -1390,7 +1390,7 @@ func TestLinodeObjectStorageKeyDeleteTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeObjectStorageKeyDeleteTool(cfg)
+	tool, _, handler := tools.NewLinodeObjectStorageKeyDeleteTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1454,7 +1454,7 @@ func TestLinodeObjectStorageKeyDeleteTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeObjectStorageKeyDeleteTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeObjectStorageKeyDeleteTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyKeyID:   float64(42),
@@ -1477,7 +1477,7 @@ func TestLinodeObjectStorageKeyDeleteTool(t *testing.T) {
 		emptyCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{},
 		}
-		_, emptyHandler := tools.NewLinodeObjectStorageKeyDeleteTool(emptyCfg)
+		_, _, emptyHandler := tools.NewLinodeObjectStorageKeyDeleteTool(emptyCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyKeyID:   float64(42),
@@ -1500,7 +1500,7 @@ func TestLinodeObjectStoragePresignedURLTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeObjectStoragePresignedURLTool(cfg)
+	tool, _, handler := tools.NewLinodeObjectStoragePresignedURLTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1598,7 +1598,7 @@ func TestLinodeObjectStoragePresignedURLTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeObjectStoragePresignedURLTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeObjectStoragePresignedURLTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyRegion: regionUSEast1,
@@ -1623,7 +1623,7 @@ func TestLinodeObjectStoragePresignedURLTool(t *testing.T) {
 		emptyCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{},
 		}
-		_, emptyHandler := tools.NewLinodeObjectStoragePresignedURLTool(emptyCfg)
+		_, _, emptyHandler := tools.NewLinodeObjectStoragePresignedURLTool(emptyCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyRegion: regionUSEast1,
@@ -1648,7 +1648,7 @@ func TestLinodeObjectStorageObjectACLGetTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeObjectStorageObjectACLGetTool(cfg)
+	tool, _, handler := tools.NewLinodeObjectStorageObjectACLGetTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1702,7 +1702,7 @@ func TestLinodeObjectStorageObjectACLGetTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeObjectStorageObjectACLGetTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeObjectStorageObjectACLGetTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyRegion: regionUSEast1,
@@ -1730,7 +1730,7 @@ func TestLinodeObjectStorageObjectACLUpdateTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeObjectStorageObjectACLUpdateTool(cfg)
+	tool, _, handler := tools.NewLinodeObjectStorageObjectACLUpdateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1782,7 +1782,7 @@ func TestLinodeObjectStorageObjectACLUpdateTool(t *testing.T) {
 					testCfg = &config.Config{}
 				}
 
-				_, testHandler := tools.NewLinodeObjectStorageObjectACLUpdateTool(testCfg)
+				_, _, testHandler := tools.NewLinodeObjectStorageObjectACLUpdateTool(testCfg)
 
 				req := createRequestWithArgs(t, testCase.args)
 				result, err := testHandler(t.Context(), req)
@@ -1819,7 +1819,7 @@ func TestLinodeObjectStorageObjectACLUpdateTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeObjectStorageObjectACLUpdateTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeObjectStorageObjectACLUpdateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyRegion:  regionUSEast1,
@@ -1845,7 +1845,7 @@ func TestLinodeObjectStorageSSLGetTool(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, handler := tools.NewLinodeObjectStorageSSLGetTool(cfg)
+	tool, _, handler := tools.NewLinodeObjectStorageSSLGetTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1879,7 +1879,7 @@ func TestLinodeObjectStorageSSLGetTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeObjectStorageSSLGetTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeObjectStorageSSLGetTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyRegion: regionUSEast1,
@@ -1902,7 +1902,7 @@ func TestLinodeObjectStorageSSLGetTool(t *testing.T) {
 		emptyCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{},
 		}
-		_, emptyHandler := tools.NewLinodeObjectStorageSSLGetTool(emptyCfg)
+		_, _, emptyHandler := tools.NewLinodeObjectStorageSSLGetTool(emptyCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyRegion: regionUSEast1,
@@ -1921,7 +1921,7 @@ func TestLinodeObjectStorageSSLDeleteTool(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, handler := tools.NewLinodeObjectStorageSSLDeleteTool(cfg)
+	tool, _, handler := tools.NewLinodeObjectStorageSSLDeleteTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1970,7 +1970,7 @@ func TestLinodeObjectStorageSSLDeleteTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeObjectStorageSSLDeleteTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeObjectStorageSSLDeleteTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyRegion:  regionUSEast1,
@@ -1994,7 +1994,7 @@ func TestLinodeObjectStorageSSLDeleteTool(t *testing.T) {
 		emptyCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{},
 		}
-		_, emptyHandler := tools.NewLinodeObjectStorageSSLDeleteTool(emptyCfg)
+		_, _, emptyHandler := tools.NewLinodeObjectStorageSSLDeleteTool(emptyCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyRegion:  regionUSEast1,

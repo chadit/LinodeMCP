@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import error_response, execute_tool
 
 if TYPE_CHECKING:
@@ -11,7 +12,7 @@ if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 
-def create_linode_volume_create_tool() -> Tool:
+def create_linode_volume_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_volume_create tool."""
     return Tool(
         name="linode_volume_create",
@@ -52,7 +53,7 @@ def create_linode_volume_create_tool() -> Tool:
             },
             "required": ["label", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_volume_create(
@@ -98,7 +99,7 @@ async def handle_linode_volume_create(
     return await execute_tool(cfg, arguments, "create volume", _call)
 
 
-def create_linode_volume_attach_tool() -> Tool:
+def create_linode_volume_attach_tool() -> tuple[Tool, Capability]:
     """Create the linode_volume_attach tool."""
     return Tool(
         name="linode_volume_attach",
@@ -131,7 +132,7 @@ def create_linode_volume_attach_tool() -> Tool:
             },
             "required": ["volume_id", "linode_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_volume_attach(
@@ -168,7 +169,7 @@ async def handle_linode_volume_attach(
     return await execute_tool(cfg, arguments, "attach volume", _call)
 
 
-def create_linode_volume_detach_tool() -> Tool:
+def create_linode_volume_detach_tool() -> tuple[Tool, Capability]:
     """Create the linode_volume_detach tool."""
     return Tool(
         name="linode_volume_detach",
@@ -189,7 +190,7 @@ def create_linode_volume_detach_tool() -> Tool:
             },
             "required": ["volume_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_volume_detach(
@@ -211,7 +212,7 @@ async def handle_linode_volume_detach(
     return await execute_tool(cfg, arguments, "detach volume", _call)
 
 
-def create_linode_volume_resize_tool() -> Tool:
+def create_linode_volume_resize_tool() -> tuple[Tool, Capability]:
     """Create the linode_volume_resize tool."""
     return Tool(
         name="linode_volume_resize",
@@ -245,7 +246,7 @@ def create_linode_volume_resize_tool() -> Tool:
             },
             "required": ["volume_id", "size", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_volume_resize(
@@ -283,7 +284,7 @@ async def handle_linode_volume_resize(
     return await execute_tool(cfg, arguments, "resize volume", _call)
 
 
-def create_linode_volume_delete_tool() -> Tool:
+def create_linode_volume_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_volume_delete tool."""
     return Tool(
         name="linode_volume_delete",
@@ -311,7 +312,7 @@ def create_linode_volume_delete_tool() -> Tool:
             },
             "required": ["volume_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_volume_delete(

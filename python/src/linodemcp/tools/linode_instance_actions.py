@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import execute_tool
 
 if TYPE_CHECKING:
@@ -45,7 +46,7 @@ def _parse_instance_id(
         return _error_response("instance_id must be a valid integer")
 
 
-def create_linode_instance_clone_tool() -> Tool:
+def create_linode_instance_clone_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_clone tool."""
     return Tool(
         name="linode_instance_clone",
@@ -81,7 +82,7 @@ def create_linode_instance_clone_tool() -> Tool:
             },
             "required": ["instance_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_clone(
@@ -111,7 +112,7 @@ async def handle_linode_instance_clone(
     return await execute_tool(cfg, arguments, "clone instance", _call)
 
 
-def create_linode_instance_migrate_tool() -> Tool:
+def create_linode_instance_migrate_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_migrate tool."""
     return Tool(
         name="linode_instance_migrate",
@@ -129,7 +130,7 @@ def create_linode_instance_migrate_tool() -> Tool:
             },
             "required": ["instance_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_migrate(
@@ -156,7 +157,7 @@ async def handle_linode_instance_migrate(
     return await execute_tool(cfg, arguments, "migrate instance", _call)
 
 
-def create_linode_instance_rebuild_tool() -> Tool:
+def create_linode_instance_rebuild_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_rebuild tool."""
     return Tool(
         name="linode_instance_rebuild",
@@ -204,7 +205,7 @@ def create_linode_instance_rebuild_tool() -> Tool:
                 "confirm",
             ],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_rebuild(
@@ -241,7 +242,7 @@ async def handle_linode_instance_rebuild(
     return await execute_tool(cfg, arguments, "rebuild instance", _call)
 
 
-def create_linode_instance_rescue_tool() -> Tool:
+def create_linode_instance_rescue_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_rescue tool."""
     return Tool(
         name="linode_instance_rescue",
@@ -259,7 +260,7 @@ def create_linode_instance_rescue_tool() -> Tool:
             },
             "required": ["instance_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_rescue(
@@ -286,7 +287,7 @@ async def handle_linode_instance_rescue(
     return await execute_tool(cfg, arguments, "rescue instance", _call)
 
 
-def create_linode_instance_password_reset_tool() -> Tool:
+def create_linode_instance_password_reset_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_password_reset tool."""
     return Tool(
         name="linode_instance_password_reset",
@@ -308,7 +309,7 @@ def create_linode_instance_password_reset_tool() -> Tool:
                 "confirm",
             ],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_password_reset(

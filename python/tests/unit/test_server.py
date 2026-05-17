@@ -162,7 +162,7 @@ async def test_all_listed_tools_have_handlers(
         if name.startswith("create_") and name.endswith("_tool")
     ]
 
-    tool_names = [fn().name for fn in create_funcs]
+    tool_names = [fn()[0].name for fn in create_funcs]
 
     # No duplicate tool names
     seen: set[str] = set()

@@ -20,7 +20,7 @@ func TestLinodeLKEClustersListTool(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, handler := tools.NewLinodeLKEClustersListTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEClustersListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -54,7 +54,7 @@ func TestLinodeLKEClustersListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKEClustersListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEClustersListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := srvHandler(t.Context(), req)
@@ -94,7 +94,7 @@ func TestLinodeLKEClustersListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKEClustersListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEClustersListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyLabel: "prod"})
 		result, err := srvHandler(t.Context(), req)
@@ -120,7 +120,7 @@ func TestLinodeLKEClusterGetTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeLKEClusterGetTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEClusterGetTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -168,7 +168,7 @@ func TestLinodeLKEClusterGetTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKEClusterGetTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEClusterGetTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
 		result, err := srvHandler(t.Context(), req)
@@ -194,7 +194,7 @@ func TestLinodeLKEPoolsListTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeLKEPoolsListTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEPoolsListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -235,7 +235,7 @@ func TestLinodeLKEPoolsListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKEPoolsListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEPoolsListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
 		result, err := srvHandler(t.Context(), req)
@@ -262,7 +262,7 @@ func TestLinodeLKEPoolGetTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeLKEPoolGetTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEPoolGetTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -308,7 +308,7 @@ func TestLinodeLKEPoolGetTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKEPoolGetTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEPoolGetTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123", keyPoolID: "10"})
 		result, err := srvHandler(t.Context(), req)
@@ -333,7 +333,7 @@ func TestLinodeLKENodeGetTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeLKENodeGetTool(cfg)
+	tool, _, handler := tools.NewLinodeLKENodeGetTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -379,7 +379,7 @@ func TestLinodeLKENodeGetTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKENodeGetTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKENodeGetTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123", keyNodeID: idAbc123})
 		result, err := srvHandler(t.Context(), req)
@@ -405,7 +405,7 @@ func TestLinodeLKEKubeconfigGetTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeLKEKubeconfigGetTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEKubeconfigGetTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -443,7 +443,7 @@ func TestLinodeLKEKubeconfigGetTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKEKubeconfigGetTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEKubeconfigGetTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
 		result, err := srvHandler(t.Context(), req)
@@ -464,7 +464,7 @@ func TestLinodeLKEDashboardGetTool(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, handler := tools.NewLinodeLKEDashboardGetTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEDashboardGetTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -490,7 +490,7 @@ func TestLinodeLKEDashboardGetTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKEDashboardGetTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEDashboardGetTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
 		result, err := srvHandler(t.Context(), req)
@@ -511,7 +511,7 @@ func TestLinodeLKEAPIEndpointsListTool(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, handler := tools.NewLinodeLKEAPIEndpointsListTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEAPIEndpointsListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -541,7 +541,7 @@ func TestLinodeLKEAPIEndpointsListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKEAPIEndpointsListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEAPIEndpointsListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
 		result, err := srvHandler(t.Context(), req)
@@ -562,7 +562,7 @@ func TestLinodeLKEACLGetTool(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, handler := tools.NewLinodeLKEACLGetTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEACLGetTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -594,7 +594,7 @@ func TestLinodeLKEACLGetTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKEACLGetTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEACLGetTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
 		result, err := srvHandler(t.Context(), req)
@@ -616,7 +616,7 @@ func TestLinodeLKEVersionsListTool(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, handler := tools.NewLinodeLKEVersionsListTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEVersionsListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -644,7 +644,7 @@ func TestLinodeLKEVersionsListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKEVersionsListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEVersionsListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := srvHandler(t.Context(), req)
@@ -670,7 +670,7 @@ func TestLinodeLKEVersionGetTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeLKEVersionGetTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEVersionGetTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -706,7 +706,7 @@ func TestLinodeLKEVersionGetTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKEVersionGetTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEVersionGetTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{"version": lkeVersion129})
 		result, err := srvHandler(t.Context(), req)
@@ -727,7 +727,7 @@ func TestLinodeLKETypesListTool(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, handler := tools.NewLinodeLKETypesListTool(cfg)
+	tool, _, handler := tools.NewLinodeLKETypesListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -760,7 +760,7 @@ func TestLinodeLKETypesListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKETypesListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKETypesListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := srvHandler(t.Context(), req)
@@ -781,7 +781,7 @@ func TestLinodeLKETierVersionsListTool(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, handler := tools.NewLinodeLKETierVersionsListTool(cfg)
+	tool, _, handler := tools.NewLinodeLKETierVersionsListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -812,7 +812,7 @@ func TestLinodeLKETierVersionsListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKETierVersionsListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKETierVersionsListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := srvHandler(t.Context(), req)
@@ -837,7 +837,7 @@ func TestLinodeLKEClusterCreateTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeLKEClusterCreateTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEClusterCreateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -912,7 +912,7 @@ func TestLinodeLKEClusterCreateTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKEClusterCreateTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEClusterCreateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyLabel: labelTestCluster, keyRegion: regionUSEast, keyK8sVersion: lkeVersion129,
@@ -941,7 +941,7 @@ func TestLinodeLKEClusterUpdateTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeLKEClusterUpdateTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEClusterUpdateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -995,7 +995,7 @@ func TestLinodeLKEClusterUpdateTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKEClusterUpdateTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEClusterUpdateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyLabel: "updated-cluster", keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
@@ -1020,7 +1020,7 @@ func TestLinodeLKEClusterDeleteTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeLKEClusterDeleteTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEClusterDeleteTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1065,7 +1065,7 @@ func TestLinodeLKEClusterDeleteTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKEClusterDeleteTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEClusterDeleteTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
@@ -1090,7 +1090,7 @@ func TestLinodeLKEClusterRecycleTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeLKEClusterRecycleTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEClusterRecycleTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1125,7 +1125,7 @@ func TestLinodeLKEClusterRecycleTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKEClusterRecycleTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEClusterRecycleTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
@@ -1150,7 +1150,7 @@ func TestLinodeLKEClusterRegenerateTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeLKEClusterRegenerateTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEClusterRegenerateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1185,7 +1185,7 @@ func TestLinodeLKEClusterRegenerateTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKEClusterRegenerateTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEClusterRegenerateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
@@ -1209,7 +1209,7 @@ func TestLinodeLKEPoolCreateTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeLKEPoolCreateTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEPoolCreateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1263,7 +1263,7 @@ func TestLinodeLKEPoolCreateTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKEPoolCreateTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEPoolCreateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyClusterID: float64(123), keyType: typeG6Standard2, keyCount: float64(3), keyConfirm: true,
@@ -1290,7 +1290,7 @@ func TestLinodeLKEPoolUpdateTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeLKEPoolUpdateTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEPoolUpdateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1327,7 +1327,7 @@ func TestLinodeLKEPoolUpdateTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKEPoolUpdateTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEPoolUpdateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyClusterID: float64(123), keyPoolID: float64(10), keyCount: float64(5), keyConfirm: true,
@@ -1354,7 +1354,7 @@ func TestLinodeLKEPoolDeleteTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeLKEPoolDeleteTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEPoolDeleteTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1388,7 +1388,7 @@ func TestLinodeLKEPoolDeleteTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKEPoolDeleteTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEPoolDeleteTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyPoolID: float64(10), keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
@@ -1413,7 +1413,7 @@ func TestLinodeLKEPoolRecycleTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeLKEPoolRecycleTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEPoolRecycleTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1448,7 +1448,7 @@ func TestLinodeLKEPoolRecycleTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKEPoolRecycleTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEPoolRecycleTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyPoolID: float64(10), keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
@@ -1473,7 +1473,7 @@ func TestLinodeLKENodeDeleteTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeLKENodeDeleteTool(cfg)
+	tool, _, handler := tools.NewLinodeLKENodeDeleteTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1517,7 +1517,7 @@ func TestLinodeLKENodeDeleteTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKENodeDeleteTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKENodeDeleteTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyNodeID: idAbc123, keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
@@ -1543,7 +1543,7 @@ func TestLinodeLKENodeRecycleTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeLKENodeRecycleTool(cfg)
+	tool, _, handler := tools.NewLinodeLKENodeRecycleTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1578,7 +1578,7 @@ func TestLinodeLKENodeRecycleTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKENodeRecycleTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKENodeRecycleTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyNodeID: idAbc123, keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
@@ -1603,7 +1603,7 @@ func TestLinodeLKEKubeconfigDeleteTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeLKEKubeconfigDeleteTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEKubeconfigDeleteTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1637,7 +1637,7 @@ func TestLinodeLKEKubeconfigDeleteTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKEKubeconfigDeleteTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEKubeconfigDeleteTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
@@ -1662,7 +1662,7 @@ func TestLinodeLKEServiceTokenDeleteTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeLKEServiceTokenDeleteTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEServiceTokenDeleteTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1696,7 +1696,7 @@ func TestLinodeLKEServiceTokenDeleteTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKEServiceTokenDeleteTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEServiceTokenDeleteTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
@@ -1721,7 +1721,7 @@ func TestLinodeLKEACLUpdateTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeLKEACLUpdateTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEACLUpdateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1771,7 +1771,7 @@ func TestLinodeLKEACLUpdateTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKEACLUpdateTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEACLUpdateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyClusterID: float64(123), statusEnabled: true,
@@ -1799,7 +1799,7 @@ func TestLinodeLKEACLDeleteTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeLKEACLDeleteTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEACLDeleteTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1833,7 +1833,7 @@ func TestLinodeLKEACLDeleteTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeLKEACLDeleteTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEACLDeleteTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)

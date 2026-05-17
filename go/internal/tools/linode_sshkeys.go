@@ -8,10 +8,11 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
 // NewLinodeSSHKeysListTool creates a tool for listing SSH keys.
-func NewLinodeSSHKeysListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeSSHKeysListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_sshkeys_list",
 		mcp.WithDescription("Lists all SSH keys associated with your Linode profile. Can filter by label."),
@@ -29,7 +30,7 @@ func NewLinodeSSHKeysListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Co
 		return handleLinodeSSHKeysListRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLinodeSSHKeysListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

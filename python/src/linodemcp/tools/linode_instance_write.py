@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import execute_tool
 
 if TYPE_CHECKING:
@@ -16,7 +17,7 @@ def _error_response(message: str) -> list[TextContent]:
     return [TextContent(type="text", text=f"Error: {message}")]
 
 
-def create_linode_instance_boot_tool() -> Tool:
+def create_linode_instance_boot_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_boot tool."""
     return Tool(
         name="linode_instance_boot",
@@ -43,7 +44,7 @@ def create_linode_instance_boot_tool() -> Tool:
             },
             "required": ["instance_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_boot(
@@ -66,7 +67,7 @@ async def handle_linode_instance_boot(
     return await execute_tool(cfg, arguments, "boot instance", _call)
 
 
-def create_linode_instance_reboot_tool() -> Tool:
+def create_linode_instance_reboot_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_reboot tool."""
     return Tool(
         name="linode_instance_reboot",
@@ -93,7 +94,7 @@ def create_linode_instance_reboot_tool() -> Tool:
             },
             "required": ["instance_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_reboot(
@@ -116,7 +117,7 @@ async def handle_linode_instance_reboot(
     return await execute_tool(cfg, arguments, "reboot instance", _call)
 
 
-def create_linode_instance_shutdown_tool() -> Tool:
+def create_linode_instance_shutdown_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_shutdown tool."""
     return Tool(
         name="linode_instance_shutdown",
@@ -137,7 +138,7 @@ def create_linode_instance_shutdown_tool() -> Tool:
             },
             "required": ["instance_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_shutdown(
@@ -159,7 +160,7 @@ async def handle_linode_instance_shutdown(
     return await execute_tool(cfg, arguments, "shutdown instance", _call)
 
 
-def create_linode_instance_create_tool() -> Tool:
+def create_linode_instance_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_create tool."""
     return Tool(
         name="linode_instance_create",
@@ -245,7 +246,7 @@ def create_linode_instance_create_tool() -> Tool:
             },
             "required": ["region", "type", "firewall_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_create(
@@ -309,7 +310,7 @@ async def handle_linode_instance_create(
     return await execute_tool(cfg, arguments, "create instance", _call)
 
 
-def create_linode_instance_delete_tool() -> Tool:
+def create_linode_instance_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_delete tool."""
     return Tool(
         name="linode_instance_delete",
@@ -337,7 +338,7 @@ def create_linode_instance_delete_tool() -> Tool:
             },
             "required": ["instance_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_delete(
@@ -368,7 +369,7 @@ async def handle_linode_instance_delete(
     return await execute_tool(cfg, arguments, "delete instance", _call)
 
 
-def create_linode_instance_resize_tool() -> Tool:
+def create_linode_instance_resize_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_resize tool."""
     return Tool(
         name="linode_instance_resize",
@@ -410,7 +411,7 @@ def create_linode_instance_resize_tool() -> Tool:
             },
             "required": ["instance_id", "type", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_resize(

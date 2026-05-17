@@ -8,11 +8,12 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
 // NewLinodeInstanceDisksListTool creates a tool for listing all disks on a Linode instance.
-func NewLinodeInstanceDisksListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeInstanceDisksListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_disks_list",
 		"Lists all disks attached to a Linode instance.",
@@ -22,6 +23,8 @@ func NewLinodeInstanceDisksListTool(cfg *config.Config) (mcp.Tool, func(ctx cont
 		},
 		handleInstanceDisksListRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleInstanceDisksListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -52,8 +55,8 @@ func handleInstanceDisksListRequest(ctx context.Context, request *mcp.CallToolRe
 }
 
 // NewLinodeInstanceDiskGetTool creates a tool for retrieving a specific disk on a Linode instance.
-func NewLinodeInstanceDiskGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeInstanceDiskGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_disk_get",
 		"Retrieves details of a specific disk on a Linode instance.",
@@ -65,6 +68,8 @@ func NewLinodeInstanceDiskGetTool(cfg *config.Config) (mcp.Tool, func(ctx contex
 		},
 		handleInstanceDiskGetRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleInstanceDiskGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -92,8 +97,8 @@ func handleInstanceDiskGetRequest(ctx context.Context, request *mcp.CallToolRequ
 }
 
 // NewLinodeInstanceDiskCreateTool creates a tool for adding a new disk to a Linode instance.
-func NewLinodeInstanceDiskCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeInstanceDiskCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_disk_create",
 		"Creates a new disk on a Linode instance. WARNING: This modifies the instance's storage allocation.",
@@ -119,6 +124,8 @@ func NewLinodeInstanceDiskCreateTool(cfg *config.Config) (mcp.Tool, func(ctx con
 		},
 		handleInstanceDiskCreateRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleInstanceDiskCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -192,8 +199,8 @@ func handleInstanceDiskCreateRequest(ctx context.Context, request *mcp.CallToolR
 }
 
 // NewLinodeInstanceDiskUpdateTool creates a tool for updating a disk's label on a Linode instance.
-func NewLinodeInstanceDiskUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeInstanceDiskUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_disk_update",
 		"Updates the label of a disk on a Linode instance.",
@@ -209,6 +216,8 @@ func NewLinodeInstanceDiskUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx con
 		},
 		handleInstanceDiskUpdateRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleInstanceDiskUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -254,8 +263,8 @@ func handleInstanceDiskUpdateRequest(ctx context.Context, request *mcp.CallToolR
 }
 
 // NewLinodeInstanceDiskDeleteTool creates a tool for deleting a disk from a Linode instance.
-func NewLinodeInstanceDiskDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeInstanceDiskDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_disk_delete",
 		"Deletes a disk from a Linode instance. WARNING: This is irreversible and all data on the disk will be lost.",
@@ -269,6 +278,8 @@ func NewLinodeInstanceDiskDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx con
 		},
 		handleInstanceDiskDeleteRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleInstanceDiskDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -309,8 +320,8 @@ func handleInstanceDiskDeleteRequest(ctx context.Context, request *mcp.CallToolR
 }
 
 // NewLinodeInstanceDiskCloneTool creates a tool for cloning a disk on a Linode instance.
-func NewLinodeInstanceDiskCloneTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeInstanceDiskCloneTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_disk_clone",
 		"Clones a disk on a Linode instance. The instance must have enough unallocated storage for the clone.",
@@ -324,6 +335,8 @@ func NewLinodeInstanceDiskCloneTool(cfg *config.Config) (mcp.Tool, func(ctx cont
 		},
 		handleInstanceDiskCloneRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleInstanceDiskCloneRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -363,8 +376,8 @@ func handleInstanceDiskCloneRequest(ctx context.Context, request *mcp.CallToolRe
 }
 
 // NewLinodeInstanceDiskResizeTool creates a tool for resizing a disk on a Linode instance.
-func NewLinodeInstanceDiskResizeTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeInstanceDiskResizeTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_disk_resize",
 		"Resizes a disk on a Linode instance. The instance must be powered off to resize. "+
@@ -381,6 +394,8 @@ func NewLinodeInstanceDiskResizeTool(cfg *config.Config) (mcp.Tool, func(ctx con
 		},
 		handleInstanceDiskResizeRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleInstanceDiskResizeRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

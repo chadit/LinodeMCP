@@ -10,6 +10,7 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
 // handleLKESubResourceAction handles confirmed actions on LKE sub-resources
@@ -56,8 +57,8 @@ func handleLKESubResourceAction[ID int | string](
 }
 
 // NewLinodeLKEClusterCreateTool creates a tool for creating a new LKE cluster.
-func NewLinodeLKEClusterCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeLKEClusterCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_cluster_create",
 		"Creates a new LKE Kubernetes cluster. WARNING: This creates billable resources. "+
@@ -82,6 +83,8 @@ func NewLinodeLKEClusterCreateTool(cfg *config.Config) (mcp.Tool, func(ctx conte
 		},
 		handleLKEClusterCreateRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLKEClusterCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -156,8 +159,8 @@ func handleLKEClusterCreateRequest(ctx context.Context, request *mcp.CallToolReq
 }
 
 // NewLinodeLKEClusterUpdateTool creates a tool for updating an LKE cluster.
-func NewLinodeLKEClusterUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeLKEClusterUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_cluster_update",
 		"Updates an existing LKE cluster's label, Kubernetes version, tags, or high availability setting.",
@@ -177,6 +180,8 @@ func NewLinodeLKEClusterUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx conte
 		},
 		handleLKEClusterUpdateRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLKEClusterUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -230,8 +235,8 @@ func handleLKEClusterUpdateRequest(ctx context.Context, request *mcp.CallToolReq
 }
 
 // NewLinodeLKEClusterDeleteTool creates a tool for deleting an LKE cluster.
-func NewLinodeLKEClusterDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeLKEClusterDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_cluster_delete",
 		"Deletes an LKE cluster. WARNING: This is irreversible. All node pools, nodes, and associated resources will be deleted.",
@@ -243,6 +248,8 @@ func NewLinodeLKEClusterDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx conte
 		},
 		handleLKEClusterDeleteRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLKEClusterDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -276,8 +283,8 @@ func handleLKEClusterDeleteRequest(ctx context.Context, request *mcp.CallToolReq
 }
 
 // NewLinodeLKEClusterRecycleTool creates a tool for recycling all nodes in an LKE cluster.
-func NewLinodeLKEClusterRecycleTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeLKEClusterRecycleTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_cluster_recycle",
 		"Recycles all nodes in an LKE cluster. WARNING: This causes temporary disruption as all nodes are replaced.",
@@ -289,6 +296,8 @@ func NewLinodeLKEClusterRecycleTool(cfg *config.Config) (mcp.Tool, func(ctx cont
 		},
 		handleLKEClusterRecycleRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLKEClusterRecycleRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -322,8 +331,8 @@ func handleLKEClusterRecycleRequest(ctx context.Context, request *mcp.CallToolRe
 }
 
 // NewLinodeLKEClusterRegenerateTool creates a tool for regenerating an LKE cluster's service token.
-func NewLinodeLKEClusterRegenerateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeLKEClusterRegenerateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_cluster_regenerate",
 		"Regenerates the service token for an LKE cluster. Existing tokens will stop working.",
@@ -335,6 +344,8 @@ func NewLinodeLKEClusterRegenerateTool(cfg *config.Config) (mcp.Tool, func(ctx c
 		},
 		handleLKEClusterRegenerateRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLKEClusterRegenerateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -368,8 +379,8 @@ func handleLKEClusterRegenerateRequest(ctx context.Context, request *mcp.CallToo
 }
 
 // NewLinodeLKEPoolCreateTool creates a tool for adding a node pool to an LKE cluster.
-func NewLinodeLKEPoolCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeLKEPoolCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_pool_create",
 		"Creates a new node pool in an LKE cluster. WARNING: This creates billable compute resources.",
@@ -393,6 +404,8 @@ func NewLinodeLKEPoolCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.
 		},
 		handleLKEPoolCreateRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLKEPoolCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -455,8 +468,8 @@ func handleLKEPoolCreateRequest(ctx context.Context, request *mcp.CallToolReques
 }
 
 // NewLinodeLKEPoolUpdateTool creates a tool for updating an LKE node pool.
-func NewLinodeLKEPoolUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeLKEPoolUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_pool_update",
 		"Updates a node pool in an LKE cluster. Can change node count, autoscaler settings, or tags.",
@@ -480,6 +493,8 @@ func NewLinodeLKEPoolUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.
 		},
 		handleLKEPoolUpdateRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLKEPoolUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -539,8 +554,8 @@ func handleLKEPoolUpdateRequest(ctx context.Context, request *mcp.CallToolReques
 }
 
 // NewLinodeLKEPoolDeleteTool creates a tool for deleting a node pool from an LKE cluster.
-func NewLinodeLKEPoolDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeLKEPoolDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_pool_delete",
 		"Deletes a node pool from an LKE cluster. All nodes in the pool will be removed.",
@@ -554,6 +569,8 @@ func NewLinodeLKEPoolDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.
 		},
 		handleLKEPoolDeleteRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLKEPoolDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -575,8 +592,8 @@ func handleLKEPoolDeleteRequest(ctx context.Context, request *mcp.CallToolReques
 }
 
 // NewLinodeLKEPoolRecycleTool creates a tool for recycling all nodes in an LKE node pool.
-func NewLinodeLKEPoolRecycleTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeLKEPoolRecycleTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_pool_recycle",
 		"Recycles all nodes in a specific LKE node pool. Nodes will be replaced with new ones.",
@@ -590,6 +607,8 @@ func NewLinodeLKEPoolRecycleTool(cfg *config.Config) (mcp.Tool, func(ctx context
 		},
 		handleLKEPoolRecycleRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLKEPoolRecycleRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -611,8 +630,8 @@ func handleLKEPoolRecycleRequest(ctx context.Context, request *mcp.CallToolReque
 }
 
 // NewLinodeLKENodeDeleteTool creates a tool for deleting a specific node from an LKE cluster.
-func NewLinodeLKENodeDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeLKENodeDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_node_delete",
 		"Deletes a specific node from an LKE cluster. The node will be removed and may be replaced depending on pool settings.",
@@ -626,6 +645,8 @@ func NewLinodeLKENodeDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.
 		},
 		handleLKENodeDeleteRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLKENodeDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -647,8 +668,8 @@ func handleLKENodeDeleteRequest(ctx context.Context, request *mcp.CallToolReques
 }
 
 // NewLinodeLKENodeRecycleTool creates a tool for recycling a specific node in an LKE cluster.
-func NewLinodeLKENodeRecycleTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeLKENodeRecycleTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_node_recycle",
 		"Recycles a specific node in an LKE cluster. The node will be drained and replaced with a new one.",
@@ -662,6 +683,8 @@ func NewLinodeLKENodeRecycleTool(cfg *config.Config) (mcp.Tool, func(ctx context
 		},
 		handleLKENodeRecycleRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLKENodeRecycleRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -683,8 +706,8 @@ func handleLKENodeRecycleRequest(ctx context.Context, request *mcp.CallToolReque
 }
 
 // NewLinodeLKEKubeconfigDeleteTool creates a tool for deleting and regenerating an LKE cluster's kubeconfig.
-func NewLinodeLKEKubeconfigDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeLKEKubeconfigDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_kubeconfig_delete",
 		"Deletes and regenerates the kubeconfig for an LKE cluster. Existing kubeconfig files will stop working.",
@@ -696,6 +719,8 @@ func NewLinodeLKEKubeconfigDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx co
 		},
 		handleLKEKubeconfigDeleteRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLKEKubeconfigDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -729,8 +754,8 @@ func handleLKEKubeconfigDeleteRequest(ctx context.Context, request *mcp.CallTool
 }
 
 // NewLinodeLKEServiceTokenDeleteTool creates a tool for deleting and regenerating an LKE cluster's service token.
-func NewLinodeLKEServiceTokenDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeLKEServiceTokenDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_service_token_delete",
 		"Deletes and regenerates the service token for an LKE cluster. Existing tokens will stop working.",
@@ -742,6 +767,8 @@ func NewLinodeLKEServiceTokenDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx 
 		},
 		handleLKEServiceTokenDeleteRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLKEServiceTokenDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -775,8 +802,8 @@ func handleLKEServiceTokenDeleteRequest(ctx context.Context, request *mcp.CallTo
 }
 
 // NewLinodeLKEACLUpdateTool creates a tool for updating the control plane ACL of an LKE cluster.
-func NewLinodeLKEACLUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeLKEACLUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_acl_update",
 		"Updates the control plane ACL for an LKE cluster. Controls which IP addresses can access the cluster's API server.",
@@ -794,6 +821,8 @@ func NewLinodeLKEACLUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 		},
 		handleLKEACLUpdateRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLKEACLUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -846,8 +875,8 @@ func handleLKEACLUpdateRequest(ctx context.Context, request *mcp.CallToolRequest
 }
 
 // NewLinodeLKEACLDeleteTool creates a tool for deleting the control plane ACL of an LKE cluster.
-func NewLinodeLKEACLDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeLKEACLDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_acl_delete",
 		"Deletes the control plane ACL for an LKE cluster. This removes all IP restrictions from the API server.",
@@ -859,6 +888,8 @@ func NewLinodeLKEACLDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 		},
 		handleLKEACLDeleteRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLKEACLDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

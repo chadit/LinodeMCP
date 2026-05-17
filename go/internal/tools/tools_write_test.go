@@ -26,7 +26,7 @@ func TestLinodeSSHKeyCreateTool(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, handler := tools.NewLinodeSSHKeyCreateTool(cfg)
+	tool, _, handler := tools.NewLinodeSSHKeyCreateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -79,7 +79,7 @@ func TestLinodeSSHKeyCreateTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeSSHKeyCreateTool(successCfg)
+		_, _, successHandler := tools.NewLinodeSSHKeyCreateTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyLabel:  keyNameTest,
@@ -105,7 +105,7 @@ func TestLinodeSSHKeyDeleteTool(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, handler := tools.NewLinodeSSHKeyDeleteTool(cfg)
+	tool, _, handler := tools.NewLinodeSSHKeyDeleteTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -140,7 +140,7 @@ func TestLinodeSSHKeyDeleteTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeSSHKeyDeleteTool(successCfg)
+		_, _, successHandler := tools.NewLinodeSSHKeyDeleteTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{"sshkey_id": float64(123)})
 		result, err := successHandler(t.Context(), req)
@@ -162,7 +162,7 @@ func TestLinodeInstanceBootTool(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, handler := tools.NewLinodeInstanceBootTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceBootTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -199,7 +199,7 @@ func TestLinodeInstanceBootTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeInstanceBootTool(successCfg)
+		_, _, successHandler := tools.NewLinodeInstanceBootTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyInstanceID: float64(123)})
 		result, err := successHandler(t.Context(), req)
@@ -221,7 +221,7 @@ func TestLinodeInstanceRebootTool(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, handler := tools.NewLinodeInstanceRebootTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceRebootTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -258,7 +258,7 @@ func TestLinodeInstanceRebootTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeInstanceRebootTool(successCfg)
+		_, _, successHandler := tools.NewLinodeInstanceRebootTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyInstanceID: float64(123)})
 		result, err := successHandler(t.Context(), req)
@@ -280,7 +280,7 @@ func TestLinodeInstanceShutdownTool(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, handler := tools.NewLinodeInstanceShutdownTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceShutdownTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -316,7 +316,7 @@ func TestLinodeInstanceShutdownTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeInstanceShutdownTool(successCfg)
+		_, _, successHandler := tools.NewLinodeInstanceShutdownTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyInstanceID: float64(123)})
 		result, err := successHandler(t.Context(), req)
@@ -340,7 +340,7 @@ func TestLinodeInstanceCreateTool(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, handler := tools.NewLinodeInstanceCreateTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceCreateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -422,7 +422,7 @@ func TestLinodeInstanceCreateTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeInstanceCreateTool(successCfg)
+		_, _, successHandler := tools.NewLinodeInstanceCreateTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyRegion:     regionUSEast,
@@ -483,7 +483,7 @@ func TestLinodeInstanceCreateTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeInstanceCreateTool(successCfg)
+		_, _, successHandler := tools.NewLinodeInstanceCreateTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyRegion:     regionUSEast,
@@ -546,7 +546,7 @@ func TestLinodeInstanceGetParsesInterfaces(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, handler := tools.NewLinodeInstanceGetTool(cfg)
+	_, _, handler := tools.NewLinodeInstanceGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyInstanceID: "321"})
 	result, err := handler(t.Context(), req)
@@ -577,7 +577,7 @@ func TestLinodeInstanceDeleteTool(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, handler := tools.NewLinodeInstanceDeleteTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceDeleteTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -632,7 +632,7 @@ func TestLinodeInstanceDeleteTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeInstanceDeleteTool(successCfg)
+		_, _, successHandler := tools.NewLinodeInstanceDeleteTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyInstanceID: float64(123),
@@ -657,7 +657,7 @@ func TestLinodeInstanceResizeTool(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, handler := tools.NewLinodeInstanceResizeTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceResizeTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -719,7 +719,7 @@ func TestLinodeInstanceResizeTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeInstanceResizeTool(successCfg)
+		_, _, successHandler := tools.NewLinodeInstanceResizeTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyInstanceID: float64(123),
@@ -746,7 +746,7 @@ func TestLinodeFirewallCreateTool(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, handler := tools.NewLinodeFirewallCreateTool(cfg)
+	tool, _, handler := tools.NewLinodeFirewallCreateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -790,7 +790,7 @@ func TestLinodeFirewallCreateTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeFirewallCreateTool(successCfg)
+		_, _, successHandler := tools.NewLinodeFirewallCreateTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyLabel:         "web-firewall",
@@ -816,7 +816,7 @@ func TestLinodeFirewallUpdateTool(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, handler := tools.NewLinodeFirewallUpdateTool(cfg)
+	tool, _, handler := tools.NewLinodeFirewallUpdateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -860,7 +860,7 @@ func TestLinodeFirewallUpdateTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeFirewallUpdateTool(successCfg)
+		_, _, successHandler := tools.NewLinodeFirewallUpdateTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyFirewallID: float64(789),
@@ -885,7 +885,7 @@ func TestLinodeFirewallDeleteTool(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, handler := tools.NewLinodeFirewallDeleteTool(cfg)
+	tool, _, handler := tools.NewLinodeFirewallDeleteTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -922,7 +922,7 @@ func TestLinodeFirewallDeleteTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeFirewallDeleteTool(successCfg)
+		_, _, successHandler := tools.NewLinodeFirewallDeleteTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyFirewallID: float64(789),
@@ -947,7 +947,7 @@ func TestLinodeDomainCreateTool(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, handler := tools.NewLinodeDomainCreateTool(cfg)
+	tool, _, handler := tools.NewLinodeDomainCreateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1002,7 +1002,7 @@ func TestLinodeDomainCreateTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeDomainCreateTool(successCfg)
+		_, _, successHandler := tools.NewLinodeDomainCreateTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			"domain":    domainExample,
@@ -1029,7 +1029,7 @@ func TestLinodeDomainUpdateTool(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, handler := tools.NewLinodeDomainUpdateTool(cfg)
+	tool, _, handler := tools.NewLinodeDomainUpdateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1074,7 +1074,7 @@ func TestLinodeDomainUpdateTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeDomainUpdateTool(successCfg)
+		_, _, successHandler := tools.NewLinodeDomainUpdateTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyDomainID: float64(111),
@@ -1099,7 +1099,7 @@ func TestLinodeDomainDeleteTool(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, handler := tools.NewLinodeDomainDeleteTool(cfg)
+	tool, _, handler := tools.NewLinodeDomainDeleteTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1136,7 +1136,7 @@ func TestLinodeDomainDeleteTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeDomainDeleteTool(successCfg)
+		_, _, successHandler := tools.NewLinodeDomainDeleteTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyDomainID: float64(111),
@@ -1161,7 +1161,7 @@ func TestLinodeDomainRecordCreateTool(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, handler := tools.NewLinodeDomainRecordCreateTool(cfg)
+	tool, _, handler := tools.NewLinodeDomainRecordCreateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1230,7 +1230,7 @@ func TestLinodeDomainRecordCreateTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeDomainRecordCreateTool(successCfg)
+		_, _, successHandler := tools.NewLinodeDomainRecordCreateTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyDomainID: float64(111),
@@ -1257,7 +1257,7 @@ func TestLinodeDomainRecordUpdateTool(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, handler := tools.NewLinodeDomainRecordUpdateTool(cfg)
+	tool, _, handler := tools.NewLinodeDomainRecordUpdateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1320,7 +1320,7 @@ func TestLinodeDomainRecordUpdateTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeDomainRecordUpdateTool(successCfg)
+		_, _, successHandler := tools.NewLinodeDomainRecordUpdateTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyDomainID: float64(111),
@@ -1346,7 +1346,7 @@ func TestLinodeDomainRecordDeleteTool(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, handler := tools.NewLinodeDomainRecordDeleteTool(cfg)
+	tool, _, handler := tools.NewLinodeDomainRecordDeleteTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1400,7 +1400,7 @@ func TestLinodeDomainRecordDeleteTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeDomainRecordDeleteTool(successCfg)
+		_, _, successHandler := tools.NewLinodeDomainRecordDeleteTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyDomainID: float64(111),
@@ -1425,7 +1425,7 @@ func TestLinodeVolumeCreateTool(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, handler := tools.NewLinodeVolumeCreateTool(cfg)
+	tool, _, handler := tools.NewLinodeVolumeCreateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1496,7 +1496,7 @@ func TestLinodeVolumeCreateTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeVolumeCreateTool(successCfg)
+		_, _, successHandler := tools.NewLinodeVolumeCreateTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyLabel:   labelDataVol,
@@ -1524,7 +1524,7 @@ func TestLinodeVolumeAttachTool(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, handler := tools.NewLinodeVolumeAttachTool(cfg)
+	tool, _, handler := tools.NewLinodeVolumeAttachTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1589,7 +1589,7 @@ func TestLinodeVolumeAttachTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeVolumeAttachTool(successCfg)
+		_, _, successHandler := tools.NewLinodeVolumeAttachTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyVolumeID: float64(333),
@@ -1614,7 +1614,7 @@ func TestLinodeVolumeDetachTool(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, handler := tools.NewLinodeVolumeDetachTool(cfg)
+	tool, _, handler := tools.NewLinodeVolumeDetachTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1650,7 +1650,7 @@ func TestLinodeVolumeDetachTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeVolumeDetachTool(successCfg)
+		_, _, successHandler := tools.NewLinodeVolumeDetachTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyVolumeID: float64(333)})
 		result, err := successHandler(t.Context(), req)
@@ -1672,7 +1672,7 @@ func TestLinodeVolumeResizeTool(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, handler := tools.NewLinodeVolumeResizeTool(cfg)
+	tool, _, handler := tools.NewLinodeVolumeResizeTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1743,7 +1743,7 @@ func TestLinodeVolumeResizeTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeVolumeResizeTool(successCfg)
+		_, _, successHandler := tools.NewLinodeVolumeResizeTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyVolumeID: float64(333),
@@ -1769,7 +1769,7 @@ func TestLinodeVolumeDeleteTool(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, handler := tools.NewLinodeVolumeDeleteTool(cfg)
+	tool, _, handler := tools.NewLinodeVolumeDeleteTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1806,7 +1806,7 @@ func TestLinodeVolumeDeleteTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeVolumeDeleteTool(successCfg)
+		_, _, successHandler := tools.NewLinodeVolumeDeleteTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyVolumeID: float64(333),
@@ -1831,7 +1831,7 @@ func TestLinodeNodeBalancerCreateTool(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, handler := tools.NewLinodeNodeBalancerCreateTool(cfg)
+	tool, _, handler := tools.NewLinodeNodeBalancerCreateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1894,7 +1894,7 @@ func TestLinodeNodeBalancerCreateTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeNodeBalancerCreateTool(successCfg)
+		_, _, successHandler := tools.NewLinodeNodeBalancerCreateTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyRegion:  regionUSEast,
@@ -1921,7 +1921,7 @@ func TestLinodeNodeBalancerUpdateTool(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, handler := tools.NewLinodeNodeBalancerUpdateTool(cfg)
+	tool, _, handler := tools.NewLinodeNodeBalancerUpdateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1965,7 +1965,7 @@ func TestLinodeNodeBalancerUpdateTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeNodeBalancerUpdateTool(successCfg)
+		_, _, successHandler := tools.NewLinodeNodeBalancerUpdateTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyNodeBalancerID: float64(444),
@@ -1990,7 +1990,7 @@ func TestLinodeNodeBalancerDeleteTool(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, handler := tools.NewLinodeNodeBalancerDeleteTool(cfg)
+	tool, _, handler := tools.NewLinodeNodeBalancerDeleteTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -2027,7 +2027,7 @@ func TestLinodeNodeBalancerDeleteTool(t *testing.T) {
 		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, successHandler := tools.NewLinodeNodeBalancerDeleteTool(successCfg)
+		_, _, successHandler := tools.NewLinodeNodeBalancerDeleteTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyNodeBalancerID: float64(444),

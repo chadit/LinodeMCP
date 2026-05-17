@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import error_response, execute_tool
 
 if TYPE_CHECKING:
@@ -18,7 +19,7 @@ _ENV_PROP: dict[str, Any] = {
 }
 
 
-def create_linode_vlans_list_tool() -> Tool:
+def create_linode_vlans_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_vlans_list tool."""
     return Tool(
         name="linode_vlans_list",
@@ -29,7 +30,7 @@ def create_linode_vlans_list_tool() -> Tool:
                 "environment": _ENV_PROP,
             },
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_vlans_list(
@@ -44,7 +45,7 @@ async def handle_linode_vlans_list(
     return await execute_tool(cfg, arguments, "list VLANs", _call)
 
 
-def create_linode_vlan_delete_tool() -> Tool:
+def create_linode_vlan_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_vlan_delete tool."""
     return Tool(
         name="linode_vlan_delete",
@@ -68,7 +69,7 @@ def create_linode_vlan_delete_tool() -> Tool:
             },
             "required": ["region_id", "label", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_vlan_delete(

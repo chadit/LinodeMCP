@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import execute_tool
 
 if TYPE_CHECKING:
@@ -67,7 +68,7 @@ def _parse_instance_and_backup_ids(
     return iid, backup_id
 
 
-def create_linode_instance_backups_list_tool() -> Tool:
+def create_linode_instance_backups_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_backups_list tool."""
     return Tool(
         name="linode_instance_backups_list",
@@ -80,7 +81,7 @@ def create_linode_instance_backups_list_tool() -> Tool:
             },
             "required": ["instance_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_backups_list(
@@ -99,7 +100,7 @@ async def handle_linode_instance_backups_list(
     return await execute_tool(cfg, arguments, "list instance backups", _call)
 
 
-def create_linode_instance_backup_get_tool() -> Tool:
+def create_linode_instance_backup_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_backup_get tool."""
     return Tool(
         name="linode_instance_backup_get",
@@ -113,7 +114,7 @@ def create_linode_instance_backup_get_tool() -> Tool:
             },
             "required": ["instance_id", "backup_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_backup_get(
@@ -133,7 +134,7 @@ async def handle_linode_instance_backup_get(
     return await execute_tool(cfg, arguments, "get instance backup", _call)
 
 
-def create_linode_instance_backup_create_tool() -> Tool:
+def create_linode_instance_backup_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_backup_create tool."""
     return Tool(
         name="linode_instance_backup_create",
@@ -151,7 +152,7 @@ def create_linode_instance_backup_create_tool() -> Tool:
             },
             "required": ["instance_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_backup_create(
@@ -174,7 +175,7 @@ async def handle_linode_instance_backup_create(
     return await execute_tool(cfg, arguments, "create instance backup", _call)
 
 
-def create_linode_instance_backup_restore_tool() -> Tool:
+def create_linode_instance_backup_restore_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_backup_restore tool."""
     return Tool(
         name="linode_instance_backup_restore",
@@ -202,7 +203,7 @@ def create_linode_instance_backup_restore_tool() -> Tool:
                 "confirm",
             ],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_backup_restore(
@@ -241,7 +242,7 @@ async def handle_linode_instance_backup_restore(
     return await execute_tool(cfg, arguments, "restore instance backup", _call)
 
 
-def create_linode_instance_backups_enable_tool() -> Tool:
+def create_linode_instance_backups_enable_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_backups_enable tool."""
     return Tool(
         name="linode_instance_backups_enable",
@@ -255,7 +256,7 @@ def create_linode_instance_backups_enable_tool() -> Tool:
             },
             "required": ["instance_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_backups_enable(
@@ -282,7 +283,7 @@ async def handle_linode_instance_backups_enable(
     return await execute_tool(cfg, arguments, "enable instance backups", _call)
 
 
-def create_linode_instance_backups_cancel_tool() -> Tool:
+def create_linode_instance_backups_cancel_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_backups_cancel tool."""
     return Tool(
         name="linode_instance_backups_cancel",
@@ -304,7 +305,7 @@ def create_linode_instance_backups_cancel_tool() -> Tool:
             },
             "required": ["instance_id", "confirm"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_backups_cancel(

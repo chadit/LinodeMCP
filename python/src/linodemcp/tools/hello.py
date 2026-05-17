@@ -4,8 +4,10 @@ from typing import Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.profiles import Capability
 
-def create_hello_tool() -> Tool:
+
+def create_hello_tool() -> tuple[Tool, Capability]:
     """Create the hello tool."""
     return Tool(
         name="hello",
@@ -19,7 +21,7 @@ def create_hello_tool() -> Tool:
                 },
             },
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_hello(arguments: dict[str, Any]) -> list[TextContent]:

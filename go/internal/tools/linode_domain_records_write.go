@@ -8,10 +8,11 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
 // NewLinodeDomainRecordCreateTool creates a tool for creating a domain record.
-func NewLinodeDomainRecordCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeDomainRecordCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_domain_record_create",
 		mcp.WithDescription("Creates a new DNS record within a domain. Supports A, AAAA, NS, MX, CNAME, TXT, SRV, CAA, and PTR record types."),
@@ -72,7 +73,7 @@ func NewLinodeDomainRecordCreateTool(cfg *config.Config) (mcp.Tool, func(ctx con
 		return handleLinodeDomainRecordCreateRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLinodeDomainRecordCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -141,7 +142,7 @@ func handleLinodeDomainRecordCreateRequest(ctx context.Context, request *mcp.Cal
 }
 
 // NewLinodeDomainRecordUpdateTool creates a tool for updating a domain record.
-func NewLinodeDomainRecordUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeDomainRecordUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_domain_record_update",
 		mcp.WithDescription("Updates an existing DNS record. Note: Record type cannot be changed."),
@@ -189,7 +190,7 @@ func NewLinodeDomainRecordUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx con
 		return handleLinodeDomainRecordUpdateRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLinodeDomainRecordUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -243,7 +244,7 @@ func handleLinodeDomainRecordUpdateRequest(ctx context.Context, request *mcp.Cal
 }
 
 // NewLinodeDomainRecordDeleteTool creates a tool for deleting a domain record.
-func NewLinodeDomainRecordDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeDomainRecordDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_domain_record_delete",
 		mcp.WithDescription("Deletes a DNS record from a domain."),
@@ -267,7 +268,7 @@ func NewLinodeDomainRecordDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx con
 		return handleLinodeDomainRecordDeleteRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLinodeDomainRecordDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

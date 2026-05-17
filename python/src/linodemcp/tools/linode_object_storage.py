@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import execute_tool
 
 if TYPE_CHECKING:
@@ -13,7 +14,7 @@ if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 
-def create_linode_object_storage_buckets_list_tool() -> Tool:
+def create_linode_object_storage_buckets_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_buckets_list tool."""
     return Tool(
         name="linode_object_storage_buckets_list",
@@ -29,7 +30,7 @@ def create_linode_object_storage_buckets_list_tool() -> Tool:
                 },
             },
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_object_storage_buckets_list(
@@ -47,7 +48,7 @@ async def handle_linode_object_storage_buckets_list(
     return await execute_tool(cfg, arguments, "retrieve Object Storage buckets", _call)
 
 
-def create_linode_object_storage_bucket_get_tool() -> Tool:
+def create_linode_object_storage_bucket_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_bucket_get tool."""
     return Tool(
         name="linode_object_storage_bucket_get",
@@ -74,7 +75,7 @@ def create_linode_object_storage_bucket_get_tool() -> Tool:
             },
             "required": ["region", "label"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_object_storage_bucket_get(
@@ -95,7 +96,7 @@ async def handle_linode_object_storage_bucket_get(
     return await execute_tool(cfg, arguments, "retrieve Object Storage bucket", _call)
 
 
-def create_linode_object_storage_bucket_contents_tool() -> Tool:
+def create_linode_object_storage_bucket_contents_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_bucket_contents tool."""
     return Tool(
         name="linode_object_storage_bucket_contents",
@@ -146,7 +147,7 @@ def create_linode_object_storage_bucket_contents_tool() -> Tool:
             },
             "required": ["region", "label"],
         },
-    )
+    ), Capability.Unknown
 
 
 def _build_bucket_params(
@@ -224,7 +225,7 @@ async def handle_linode_object_storage_bucket_contents(
     )
 
 
-def create_linode_object_storage_clusters_list_tool() -> Tool:
+def create_linode_object_storage_clusters_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_clusters_list tool."""
     return Tool(
         name="linode_object_storage_clusters_list",
@@ -243,7 +244,7 @@ def create_linode_object_storage_clusters_list_tool() -> Tool:
                 },
             },
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_object_storage_clusters_list(
@@ -261,7 +262,7 @@ async def handle_linode_object_storage_clusters_list(
     return await execute_tool(cfg, arguments, "retrieve Object Storage clusters", _call)
 
 
-def create_linode_object_storage_types_list_tool() -> Tool:
+def create_linode_object_storage_types_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_types_list tool."""
     return Tool(
         name="linode_object_storage_types_list",
@@ -280,7 +281,7 @@ def create_linode_object_storage_types_list_tool() -> Tool:
                 },
             },
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_object_storage_types_list(
@@ -301,7 +302,7 @@ async def handle_linode_object_storage_types_list(
 # Phase 2: Read-Only Access Key & Transfer Tools
 
 
-def create_linode_object_storage_keys_list_tool() -> Tool:
+def create_linode_object_storage_keys_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_keys_list tool."""
     return Tool(
         name="linode_object_storage_keys_list",
@@ -317,7 +318,7 @@ def create_linode_object_storage_keys_list_tool() -> Tool:
                 },
             },
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_object_storage_keys_list(
@@ -335,7 +336,7 @@ async def handle_linode_object_storage_keys_list(
     return await execute_tool(cfg, arguments, "retrieve Object Storage keys", _call)
 
 
-def create_linode_object_storage_key_get_tool() -> Tool:
+def create_linode_object_storage_key_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_key_get tool."""
     return Tool(
         name="linode_object_storage_key_get",
@@ -356,7 +357,7 @@ def create_linode_object_storage_key_get_tool() -> Tool:
             },
             "required": ["key_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_object_storage_key_get(
@@ -374,7 +375,7 @@ async def handle_linode_object_storage_key_get(
     return await execute_tool(cfg, arguments, "retrieve Object Storage key", _call)
 
 
-def create_linode_object_storage_transfer_tool() -> Tool:
+def create_linode_object_storage_transfer_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_transfer tool."""
     return Tool(
         name="linode_object_storage_transfer",
@@ -392,7 +393,7 @@ def create_linode_object_storage_transfer_tool() -> Tool:
                 },
             },
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_object_storage_transfer(
@@ -408,7 +409,7 @@ async def handle_linode_object_storage_transfer(
     )
 
 
-def create_linode_object_storage_bucket_access_get_tool() -> Tool:
+def create_linode_object_storage_bucket_access_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_bucket_access_get tool."""
     return Tool(
         name="linode_object_storage_bucket_access_get",
@@ -437,7 +438,7 @@ def create_linode_object_storage_bucket_access_get_tool() -> Tool:
             },
             "required": ["region", "label"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_object_storage_bucket_access_get(

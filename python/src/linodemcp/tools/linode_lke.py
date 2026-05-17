@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import error_response, execute_tool
 
 if TYPE_CHECKING:
@@ -23,7 +24,7 @@ _CLUSTER_ID_PROP: dict[str, Any] = {
 }
 
 
-def create_linode_lke_clusters_list_tool() -> Tool:
+def create_linode_lke_clusters_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_clusters_list tool."""
     return Tool(
         name="linode_lke_clusters_list",
@@ -34,7 +35,7 @@ def create_linode_lke_clusters_list_tool() -> Tool:
                 "environment": _ENV_PROP,
             },
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_clusters_list(
@@ -49,7 +50,7 @@ async def handle_linode_lke_clusters_list(
     return await execute_tool(cfg, arguments, "list LKE clusters", _call)
 
 
-def create_linode_lke_cluster_get_tool() -> Tool:
+def create_linode_lke_cluster_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_cluster_get tool."""
     return Tool(
         name="linode_lke_cluster_get",
@@ -62,7 +63,7 @@ def create_linode_lke_cluster_get_tool() -> Tool:
             },
             "required": ["cluster_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_cluster_get(
@@ -83,7 +84,7 @@ async def handle_linode_lke_cluster_get(
     return await execute_tool(cfg, arguments, "get LKE cluster", _call)
 
 
-def create_linode_lke_pools_list_tool() -> Tool:
+def create_linode_lke_pools_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_pools_list tool."""
     return Tool(
         name="linode_lke_pools_list",
@@ -96,7 +97,7 @@ def create_linode_lke_pools_list_tool() -> Tool:
             },
             "required": ["cluster_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_pools_list(
@@ -118,7 +119,7 @@ async def handle_linode_lke_pools_list(
     return await execute_tool(cfg, arguments, "list LKE node pools", _call)
 
 
-def create_linode_lke_pool_get_tool() -> Tool:
+def create_linode_lke_pool_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_pool_get tool."""
     return Tool(
         name="linode_lke_pool_get",
@@ -135,7 +136,7 @@ def create_linode_lke_pool_get_tool() -> Tool:
             },
             "required": ["cluster_id", "pool_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_pool_get(
@@ -163,7 +164,7 @@ async def handle_linode_lke_pool_get(
     return await execute_tool(cfg, arguments, "get LKE node pool", _call)
 
 
-def create_linode_lke_node_get_tool() -> Tool:
+def create_linode_lke_node_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_node_get tool."""
     return Tool(
         name="linode_lke_node_get",
@@ -180,7 +181,7 @@ def create_linode_lke_node_get_tool() -> Tool:
             },
             "required": ["cluster_id", "node_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_node_get(
@@ -204,7 +205,7 @@ async def handle_linode_lke_node_get(
     return await execute_tool(cfg, arguments, "get LKE node", _call)
 
 
-def create_linode_lke_kubeconfig_get_tool() -> Tool:
+def create_linode_lke_kubeconfig_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_kubeconfig_get tool."""
     return Tool(
         name="linode_lke_kubeconfig_get",
@@ -217,7 +218,7 @@ def create_linode_lke_kubeconfig_get_tool() -> Tool:
             },
             "required": ["cluster_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_kubeconfig_get(
@@ -238,7 +239,7 @@ async def handle_linode_lke_kubeconfig_get(
     return await execute_tool(cfg, arguments, "get LKE kubeconfig", _call)
 
 
-def create_linode_lke_dashboard_get_tool() -> Tool:
+def create_linode_lke_dashboard_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_dashboard_get tool."""
     return Tool(
         name="linode_lke_dashboard_get",
@@ -251,7 +252,7 @@ def create_linode_lke_dashboard_get_tool() -> Tool:
             },
             "required": ["cluster_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_dashboard_get(
@@ -272,7 +273,7 @@ async def handle_linode_lke_dashboard_get(
     return await execute_tool(cfg, arguments, "get LKE dashboard", _call)
 
 
-def create_linode_lke_api_endpoints_list_tool() -> Tool:
+def create_linode_lke_api_endpoints_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_api_endpoints_list tool."""
     return Tool(
         name="linode_lke_api_endpoints_list",
@@ -285,7 +286,7 @@ def create_linode_lke_api_endpoints_list_tool() -> Tool:
             },
             "required": ["cluster_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_api_endpoints_list(
@@ -307,7 +308,7 @@ async def handle_linode_lke_api_endpoints_list(
     return await execute_tool(cfg, arguments, "list LKE API endpoints", _call)
 
 
-def create_linode_lke_acl_get_tool() -> Tool:
+def create_linode_lke_acl_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_acl_get tool."""
     return Tool(
         name="linode_lke_acl_get",
@@ -320,7 +321,7 @@ def create_linode_lke_acl_get_tool() -> Tool:
             },
             "required": ["cluster_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_acl_get(
@@ -341,7 +342,7 @@ async def handle_linode_lke_acl_get(
     return await execute_tool(cfg, arguments, "get LKE control plane ACL", _call)
 
 
-def create_linode_lke_versions_list_tool() -> Tool:
+def create_linode_lke_versions_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_versions_list tool."""
     return Tool(
         name="linode_lke_versions_list",
@@ -352,7 +353,7 @@ def create_linode_lke_versions_list_tool() -> Tool:
                 "environment": _ENV_PROP,
             },
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_versions_list(
@@ -367,7 +368,7 @@ async def handle_linode_lke_versions_list(
     return await execute_tool(cfg, arguments, "list LKE versions", _call)
 
 
-def create_linode_lke_version_get_tool() -> Tool:
+def create_linode_lke_version_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_version_get tool."""
     return Tool(
         name="linode_lke_version_get",
@@ -383,7 +384,7 @@ def create_linode_lke_version_get_tool() -> Tool:
             },
             "required": ["version_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_version_get(
@@ -400,7 +401,7 @@ async def handle_linode_lke_version_get(
     return await execute_tool(cfg, arguments, "get LKE version", _call)
 
 
-def create_linode_lke_types_list_tool() -> Tool:
+def create_linode_lke_types_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_types_list tool."""
     return Tool(
         name="linode_lke_types_list",
@@ -411,7 +412,7 @@ def create_linode_lke_types_list_tool() -> Tool:
                 "environment": _ENV_PROP,
             },
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_types_list(
@@ -426,7 +427,7 @@ async def handle_linode_lke_types_list(
     return await execute_tool(cfg, arguments, "list LKE types", _call)
 
 
-def create_linode_lke_tier_versions_list_tool() -> Tool:
+def create_linode_lke_tier_versions_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_tier_versions_list tool."""
     return Tool(
         name="linode_lke_tier_versions_list",
@@ -437,7 +438,7 @@ def create_linode_lke_tier_versions_list_tool() -> Tool:
                 "environment": _ENV_PROP,
             },
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_lke_tier_versions_list(

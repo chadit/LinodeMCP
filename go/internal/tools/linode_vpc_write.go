@@ -9,11 +9,12 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
 // NewLinodeVPCCreateTool creates a tool for creating a new VPC.
-func NewLinodeVPCCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeVPCCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_vpc_create",
 		"Creates a new VPC. WARNING: This creates a billable resource. "+
@@ -32,6 +33,8 @@ func NewLinodeVPCCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Cont
 		},
 		handleVPCCreateRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleVPCCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -89,8 +92,8 @@ func handleVPCCreateRequest(ctx context.Context, request *mcp.CallToolRequest, c
 }
 
 // NewLinodeVPCUpdateTool creates a tool for updating an existing VPC.
-func NewLinodeVPCUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeVPCUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_vpc_update",
 		"Updates an existing VPC's label or description.",
@@ -106,6 +109,8 @@ func NewLinodeVPCUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Cont
 		},
 		handleVPCUpdateRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleVPCUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -150,8 +155,8 @@ func handleVPCUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, c
 }
 
 // NewLinodeVPCDeleteTool creates a tool for deleting a VPC.
-func NewLinodeVPCDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeVPCDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_vpc_delete",
 		"Deletes a VPC. WARNING: This is irreversible. All subnets within the VPC will also be deleted.",
@@ -163,6 +168,8 @@ func NewLinodeVPCDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Cont
 		},
 		handleVPCDeleteRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleVPCDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -196,8 +203,8 @@ func handleVPCDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, c
 }
 
 // NewLinodeVPCSubnetCreateTool creates a tool for creating a subnet within a VPC.
-func NewLinodeVPCSubnetCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeVPCSubnetCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_vpc_subnet_create",
 		"Creates a new subnet within a VPC.",
@@ -213,6 +220,8 @@ func NewLinodeVPCSubnetCreateTool(cfg *config.Config) (mcp.Tool, func(ctx contex
 		},
 		handleVPCSubnetCreateRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleVPCSubnetCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -262,8 +271,8 @@ func handleVPCSubnetCreateRequest(ctx context.Context, request *mcp.CallToolRequ
 }
 
 // NewLinodeVPCSubnetUpdateTool creates a tool for updating a subnet within a VPC.
-func NewLinodeVPCSubnetUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeVPCSubnetUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_vpc_subnet_update",
 		"Updates the label of a subnet within a VPC.",
@@ -279,6 +288,8 @@ func NewLinodeVPCSubnetUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx contex
 		},
 		handleVPCSubnetUpdateRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleVPCSubnetUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -327,8 +338,8 @@ func handleVPCSubnetUpdateRequest(ctx context.Context, request *mcp.CallToolRequ
 }
 
 // NewLinodeVPCSubnetDeleteTool creates a tool for deleting a subnet from a VPC.
-func NewLinodeVPCSubnetDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeVPCSubnetDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_vpc_subnet_delete",
 		"Deletes a subnet from a VPC. WARNING: This is irreversible.",
@@ -342,6 +353,8 @@ func NewLinodeVPCSubnetDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx contex
 		},
 		handleVPCSubnetDeleteRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleVPCSubnetDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

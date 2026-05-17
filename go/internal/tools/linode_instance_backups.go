@@ -8,11 +8,12 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
 // NewLinodeInstanceBackupsListTool creates a tool for listing all backups for a Linode instance.
-func NewLinodeInstanceBackupsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeInstanceBackupsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_backups_list",
 		"Lists all backups for a Linode instance, including automatic backups and manual snapshots.",
@@ -22,6 +23,8 @@ func NewLinodeInstanceBackupsListTool(cfg *config.Config) (mcp.Tool, func(ctx co
 		},
 		handleInstanceBackupsListRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleInstanceBackupsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -44,8 +47,8 @@ func handleInstanceBackupsListRequest(ctx context.Context, request *mcp.CallTool
 }
 
 // NewLinodeInstanceBackupGetTool creates a tool for retrieving a specific backup for a Linode instance.
-func NewLinodeInstanceBackupGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeInstanceBackupGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_backup_get",
 		"Retrieves details of a specific backup for a Linode instance.",
@@ -57,6 +60,8 @@ func NewLinodeInstanceBackupGetTool(cfg *config.Config) (mcp.Tool, func(ctx cont
 		},
 		handleInstanceBackupGetRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleInstanceBackupGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -84,8 +89,8 @@ func handleInstanceBackupGetRequest(ctx context.Context, request *mcp.CallToolRe
 }
 
 // NewLinodeInstanceBackupCreateTool creates a tool for taking a manual snapshot of a Linode instance.
-func NewLinodeInstanceBackupCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeInstanceBackupCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_backup_create",
 		"Creates a manual snapshot of a Linode instance. "+
@@ -98,6 +103,8 @@ func NewLinodeInstanceBackupCreateTool(cfg *config.Config) (mcp.Tool, func(ctx c
 		},
 		handleInstanceBackupCreateRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleInstanceBackupCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -132,8 +139,8 @@ func handleInstanceBackupCreateRequest(ctx context.Context, request *mcp.CallToo
 }
 
 // NewLinodeInstanceBackupRestoreTool creates a tool for restoring a backup to a Linode instance.
-func NewLinodeInstanceBackupRestoreTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeInstanceBackupRestoreTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_backup_restore",
 		"Restores a backup to a Linode instance. "+
@@ -152,6 +159,8 @@ func NewLinodeInstanceBackupRestoreTool(cfg *config.Config) (mcp.Tool, func(ctx 
 		},
 		handleInstanceBackupRestoreRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleInstanceBackupRestoreRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -211,8 +220,8 @@ func handleInstanceBackupRestoreRequest(ctx context.Context, request *mcp.CallTo
 }
 
 // NewLinodeInstanceBackupsEnableTool creates a tool for enabling the backup service on a Linode instance.
-func NewLinodeInstanceBackupsEnableTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeInstanceBackupsEnableTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_backups_enable",
 		"Enables the backup service for a Linode instance. "+
@@ -225,6 +234,8 @@ func NewLinodeInstanceBackupsEnableTool(cfg *config.Config) (mcp.Tool, func(ctx 
 		},
 		handleInstanceBackupsEnableRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleInstanceBackupsEnableRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -258,8 +269,8 @@ func handleInstanceBackupsEnableRequest(ctx context.Context, request *mcp.CallTo
 }
 
 // NewLinodeInstanceBackupsCancelTool creates a tool for canceling the backup service on a Linode instance.
-func NewLinodeInstanceBackupsCancelTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeInstanceBackupsCancelTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_backups_cancel",
 		"Cancels the backup service for a Linode instance. "+
@@ -272,6 +283,8 @@ func NewLinodeInstanceBackupsCancelTool(cfg *config.Config) (mcp.Tool, func(ctx 
 		},
 		handleInstanceBackupsCancelRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleInstanceBackupsCancelRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, execute_tool
 
 if TYPE_CHECKING:
@@ -11,7 +12,7 @@ if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 
-def create_linode_firewalls_list_tool() -> Tool:
+def create_linode_firewalls_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_firewalls_list tool."""
     return Tool(
         name="linode_firewalls_list",
@@ -37,7 +38,7 @@ def create_linode_firewalls_list_tool() -> Tool:
                 },
             },
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_firewalls_list(

@@ -6,13 +6,14 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import error_response, execute_tool
 
 if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 
-def create_linode_instance_get_tool() -> Tool:
+def create_linode_instance_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_get tool."""
     return Tool(
         name="linode_instance_get",
@@ -35,7 +36,7 @@ def create_linode_instance_get_tool() -> Tool:
             },
             "required": ["instance_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_get(

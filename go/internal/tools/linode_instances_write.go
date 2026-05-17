@@ -8,10 +8,11 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
 // NewLinodeInstanceBootTool creates a tool for booting a Linode instance.
-func NewLinodeInstanceBootTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeInstanceBootTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_instance_boot",
 		mcp.WithDescription("Boots a Linode instance that is currently offline. If the instance is already running, this has no effect."),
@@ -34,7 +35,7 @@ func NewLinodeInstanceBootTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 		return handleLinodeInstanceBootRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLinodeInstanceBootRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -71,7 +72,7 @@ func handleLinodeInstanceBootRequest(ctx context.Context, request *mcp.CallToolR
 }
 
 // NewLinodeInstanceRebootTool creates a tool for rebooting a Linode instance.
-func NewLinodeInstanceRebootTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeInstanceRebootTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_instance_reboot",
 		mcp.WithDescription("Reboots a running Linode instance. This is equivalent to pressing the reset button on a physical computer."),
@@ -94,7 +95,7 @@ func NewLinodeInstanceRebootTool(cfg *config.Config) (mcp.Tool, func(ctx context
 		return handleLinodeInstanceRebootRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLinodeInstanceRebootRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -131,7 +132,7 @@ func handleLinodeInstanceRebootRequest(ctx context.Context, request *mcp.CallToo
 }
 
 // NewLinodeInstanceShutdownTool creates a tool for shutting down a Linode instance.
-func NewLinodeInstanceShutdownTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeInstanceShutdownTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_instance_shutdown",
 		mcp.WithDescription("Gracefully shuts down a running Linode instance. The instance will attempt to shut down cleanly."),
@@ -150,7 +151,7 @@ func NewLinodeInstanceShutdownTool(cfg *config.Config) (mcp.Tool, func(ctx conte
 		return handleLinodeInstanceShutdownRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLinodeInstanceShutdownRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -181,7 +182,7 @@ func handleLinodeInstanceShutdownRequest(ctx context.Context, request *mcp.CallT
 }
 
 // NewLinodeInstanceCreateTool creates a tool for creating a new Linode instance.
-func NewLinodeInstanceCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeInstanceCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_instance_create",
 		mcp.WithDescription("Creates a new Linode instance under the current Linode Interfaces generation. WARNING: Billing starts immediately upon creation. Requires firewall_id (get one from linode_firewalls_list or create with linode_firewall_create). Note: VPC attachment via the current interface model is not yet supported by this tool; use linode_vpc_* tools after create."),
@@ -239,7 +240,7 @@ func NewLinodeInstanceCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context
 		return handleLinodeInstanceCreateRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 const errFirewallIDRequired = "firewall_id is required for instance creation. Get a firewall ID from linode_firewalls_list, or create one with linode_firewall_create."
@@ -326,7 +327,7 @@ func buildDefaultRoute(ipv4, ipv6 bool) *linode.InterfaceDefaultRoute {
 }
 
 // NewLinodeInstanceDeleteTool creates a tool for deleting a Linode instance.
-func NewLinodeInstanceDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeInstanceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_instance_delete",
 		mcp.WithDescription("Deletes a Linode instance. WARNING: This action is irreversible and all data will be permanently lost."),
@@ -350,7 +351,7 @@ func NewLinodeInstanceDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context
 		return handleLinodeInstanceDeleteRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLinodeInstanceDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -385,8 +386,8 @@ func handleLinodeInstanceDeleteRequest(ctx context.Context, request *mcp.CallToo
 }
 
 // NewLinodeInstanceResizeTool creates a tool for resizing a Linode instance.
-func NewLinodeInstanceResizeTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newToolWithHandler(
+func NewLinodeInstanceResizeTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_resize",
 		"Resizes a Linode instance to a new plan. WARNING: This causes downtime during the migration process and may affect billing.",
@@ -404,6 +405,8 @@ func NewLinodeInstanceResizeTool(cfg *config.Config) (mcp.Tool, func(ctx context
 		},
 		handleLinodeInstanceResizeRequest,
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLinodeInstanceResizeRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

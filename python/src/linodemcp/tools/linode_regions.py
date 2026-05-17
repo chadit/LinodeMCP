@@ -6,13 +6,14 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import execute_tool
 
 if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 
-def create_linode_regions_list_tool() -> Tool:
+def create_linode_regions_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_regions_list tool."""
     return Tool(
         name="linode_regions_list",
@@ -42,7 +43,7 @@ def create_linode_regions_list_tool() -> Tool:
                 },
             },
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_regions_list(

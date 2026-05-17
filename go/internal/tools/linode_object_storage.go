@@ -10,12 +10,13 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
 const defaultPresignedExpiry = 3600
 
 // NewLinodeObjectStorageBucketsListTool creates a tool for listing Object Storage buckets.
-func NewLinodeObjectStorageBucketsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeObjectStorageBucketsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_object_storage_buckets_list",
 		mcp.WithDescription("Lists all Object Storage buckets across all regions for the authenticated user"),
@@ -29,7 +30,7 @@ func NewLinodeObjectStorageBucketsListTool(cfg *config.Config) (mcp.Tool, func(c
 		return handleObjectStorageBucketsListRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleObjectStorageBucketsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -55,7 +56,7 @@ func handleObjectStorageBucketsListRequest(ctx context.Context, request *mcp.Cal
 }
 
 // NewLinodeObjectStorageBucketGetTool creates a tool for getting a specific bucket.
-func NewLinodeObjectStorageBucketGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeObjectStorageBucketGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_object_storage_bucket_get",
 		mcp.WithDescription("Gets details about a specific Object Storage bucket by region and label"),
@@ -79,7 +80,7 @@ func NewLinodeObjectStorageBucketGetTool(cfg *config.Config) (mcp.Tool, func(ctx
 		return handleObjectStorageBucketGetRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleObjectStorageBucketGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -108,7 +109,7 @@ func handleObjectStorageBucketGetRequest(ctx context.Context, request *mcp.CallT
 }
 
 // NewLinodeObjectStorageBucketContentsTool creates a tool for listing objects in a bucket.
-func NewLinodeObjectStorageBucketContentsTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeObjectStorageBucketContentsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_object_storage_bucket_contents",
 		mcp.WithDescription("Lists objects in an Object Storage bucket with optional prefix/delimiter filtering and pagination"),
@@ -148,7 +149,7 @@ func NewLinodeObjectStorageBucketContentsTool(cfg *config.Config) (mcp.Tool, fun
 		return handleObjectStorageBucketContentsRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleObjectStorageBucketContentsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -228,7 +229,7 @@ func formatBucketContentsResponse(objects []linode.ObjectStorageObject, isTrunca
 }
 
 // NewLinodeObjectStorageClustersListTool creates a tool for listing Object Storage clusters.
-func NewLinodeObjectStorageClustersListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeObjectStorageClustersListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_object_storage_clusters_list",
 		mcp.WithDescription("Lists available Object Storage clusters/regions where buckets can be created"),
@@ -242,7 +243,7 @@ func NewLinodeObjectStorageClustersListTool(cfg *config.Config) (mcp.Tool, func(
 		return handleObjectStorageClustersListRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleObjectStorageClustersListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -268,7 +269,7 @@ func handleObjectStorageClustersListRequest(ctx context.Context, request *mcp.Ca
 }
 
 // NewLinodeObjectStorageTypeListTool creates a tool for listing Object Storage types and pricing.
-func NewLinodeObjectStorageTypeListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeObjectStorageTypeListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_object_storage_type_list",
 		mcp.WithDescription("Lists Object Storage types and pricing information"),
@@ -282,7 +283,7 @@ func NewLinodeObjectStorageTypeListTool(cfg *config.Config) (mcp.Tool, func(ctx 
 		return handleObjectStorageTypeListRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleObjectStorageTypeListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -308,7 +309,7 @@ func handleObjectStorageTypeListRequest(ctx context.Context, request *mcp.CallTo
 }
 
 // NewLinodeObjectStorageKeysListTool creates a tool for listing Object Storage access keys.
-func NewLinodeObjectStorageKeysListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeObjectStorageKeysListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_object_storage_keys_list",
 		mcp.WithDescription("Lists all Object Storage access keys for the authenticated user"),
@@ -322,7 +323,7 @@ func NewLinodeObjectStorageKeysListTool(cfg *config.Config) (mcp.Tool, func(ctx 
 		return handleObjectStorageKeysListRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleObjectStorageKeysListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -348,7 +349,7 @@ func handleObjectStorageKeysListRequest(ctx context.Context, request *mcp.CallTo
 }
 
 // NewLinodeObjectStorageKeyGetTool creates a tool for getting a specific access key.
-func NewLinodeObjectStorageKeyGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeObjectStorageKeyGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_object_storage_key_get",
 		mcp.WithDescription("Gets details about a specific Object Storage access key by ID"),
@@ -367,7 +368,7 @@ func NewLinodeObjectStorageKeyGetTool(cfg *config.Config) (mcp.Tool, func(ctx co
 		return handleObjectStorageKeyGetRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleObjectStorageKeyGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -396,7 +397,7 @@ func handleObjectStorageKeyGetRequest(ctx context.Context, request *mcp.CallTool
 }
 
 // NewLinodeObjectStorageTransferTool creates a tool for getting Object Storage transfer usage.
-func NewLinodeObjectStorageTransferTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeObjectStorageTransferTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_object_storage_transfer",
 		mcp.WithDescription("Gets Object Storage outbound data transfer usage for the current month"),
@@ -410,7 +411,7 @@ func NewLinodeObjectStorageTransferTool(cfg *config.Config) (mcp.Tool, func(ctx 
 		return handleObjectStorageTransferRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleObjectStorageTransferRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -428,7 +429,7 @@ func handleObjectStorageTransferRequest(ctx context.Context, request *mcp.CallTo
 }
 
 // NewLinodeObjectStorageBucketAccessGetTool creates a tool for getting bucket ACL/CORS settings.
-func NewLinodeObjectStorageBucketAccessGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeObjectStorageBucketAccessGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_object_storage_bucket_access_get",
 		mcp.WithDescription("Gets the ACL and CORS settings for a specific Object Storage bucket"),
@@ -452,7 +453,7 @@ func NewLinodeObjectStorageBucketAccessGetTool(cfg *config.Config) (mcp.Tool, fu
 		return handleObjectStorageBucketAccessGetRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleObjectStorageBucketAccessGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -481,7 +482,7 @@ func handleObjectStorageBucketAccessGetRequest(ctx context.Context, request *mcp
 }
 
 // NewLinodeObjectStoragePresignedURLTool creates a tool for generating presigned URLs for objects.
-func NewLinodeObjectStoragePresignedURLTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeObjectStoragePresignedURLTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_object_storage_presigned_url",
 		mcp.WithDescription("Generates a presigned URL for accessing an object in Object Storage. "+
@@ -520,7 +521,7 @@ func NewLinodeObjectStoragePresignedURLTool(cfg *config.Config) (mcp.Tool, func(
 		return handleObjectStoragePresignedURLRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleObjectStoragePresignedURLRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -570,7 +571,7 @@ func handleObjectStoragePresignedURLRequest(ctx context.Context, request *mcp.Ca
 }
 
 // NewLinodeObjectStorageObjectACLGetTool creates a tool for getting an object's ACL.
-func NewLinodeObjectStorageObjectACLGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeObjectStorageObjectACLGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_object_storage_object_acl_get",
 		mcp.WithDescription("Gets the Access Control List (ACL) for a specific object in an Object Storage bucket"),
@@ -599,7 +600,7 @@ func NewLinodeObjectStorageObjectACLGetTool(cfg *config.Config) (mcp.Tool, func(
 		return handleObjectStorageObjectACLGetRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleObjectStorageObjectACLGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -633,7 +634,7 @@ func handleObjectStorageObjectACLGetRequest(ctx context.Context, request *mcp.Ca
 }
 
 // NewLinodeObjectStorageSSLGetTool creates a tool for checking a bucket's SSL certificate status.
-func NewLinodeObjectStorageSSLGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeObjectStorageSSLGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_object_storage_ssl_get",
 		mcp.WithDescription("Checks whether an Object Storage bucket has an SSL/TLS certificate installed"),
@@ -657,7 +658,7 @@ func NewLinodeObjectStorageSSLGetTool(cfg *config.Config) (mcp.Tool, func(ctx co
 		return handleObjectStorageSSLGetRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleObjectStorageSSLGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

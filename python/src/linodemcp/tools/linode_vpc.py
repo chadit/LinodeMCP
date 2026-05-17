@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import error_response, execute_tool
 
 if TYPE_CHECKING:
@@ -36,7 +37,7 @@ _IPV6_RANGE_PROP: dict[str, Any] = {
 }
 
 
-def create_linode_vpcs_list_tool() -> Tool:
+def create_linode_vpcs_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_vpcs_list tool."""
     return Tool(
         name="linode_vpcs_list",
@@ -47,7 +48,7 @@ def create_linode_vpcs_list_tool() -> Tool:
                 "environment": _ENV_PROP,
             },
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_vpcs_list(
@@ -62,7 +63,7 @@ async def handle_linode_vpcs_list(
     return await execute_tool(cfg, arguments, "list VPCs", _call)
 
 
-def create_linode_vpc_get_tool() -> Tool:
+def create_linode_vpc_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_vpc_get tool."""
     return Tool(
         name="linode_vpc_get",
@@ -75,7 +76,7 @@ def create_linode_vpc_get_tool() -> Tool:
             },
             "required": ["vpc_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_vpc_get(
@@ -96,7 +97,7 @@ async def handle_linode_vpc_get(
     return await execute_tool(cfg, arguments, "get VPC", _call)
 
 
-def create_linode_ipv6_range_get_tool() -> Tool:
+def create_linode_ipv6_range_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_ipv6_range_get tool."""
     return Tool(
         name="linode_ipv6_range_get",
@@ -109,7 +110,7 @@ def create_linode_ipv6_range_get_tool() -> Tool:
             },
             "required": [_IPV6_RANGE_KEY],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_ipv6_range_get(
@@ -127,7 +128,7 @@ async def handle_linode_ipv6_range_get(
     return await execute_tool(cfg, arguments, "get IPv6 range", _call)
 
 
-def create_linode_vpc_ips_list_tool() -> Tool:
+def create_linode_vpc_ips_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_vpc_ips_list tool."""
     return Tool(
         name="linode_vpc_ips_list",
@@ -138,7 +139,7 @@ def create_linode_vpc_ips_list_tool() -> Tool:
                 "environment": _ENV_PROP,
             },
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_vpc_ips_list(
@@ -153,7 +154,7 @@ async def handle_linode_vpc_ips_list(
     return await execute_tool(cfg, arguments, "list VPC IPs", _call)
 
 
-def create_linode_vpc_ip_list_tool() -> Tool:
+def create_linode_vpc_ip_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_vpc_ip_list tool."""
     return Tool(
         name="linode_vpc_ip_list",
@@ -166,7 +167,7 @@ def create_linode_vpc_ip_list_tool() -> Tool:
             },
             "required": ["vpc_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_vpc_ip_list(
@@ -188,7 +189,7 @@ async def handle_linode_vpc_ip_list(
     return await execute_tool(cfg, arguments, "list VPC IPs", _call)
 
 
-def create_linode_vpc_subnets_list_tool() -> Tool:
+def create_linode_vpc_subnets_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_vpc_subnets_list tool."""
     return Tool(
         name="linode_vpc_subnets_list",
@@ -201,7 +202,7 @@ def create_linode_vpc_subnets_list_tool() -> Tool:
             },
             "required": ["vpc_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_vpc_subnets_list(
@@ -223,7 +224,7 @@ async def handle_linode_vpc_subnets_list(
     return await execute_tool(cfg, arguments, "list VPC subnets", _call)
 
 
-def create_linode_vpc_subnet_get_tool() -> Tool:
+def create_linode_vpc_subnet_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_vpc_subnet_get tool."""
     return Tool(
         name="linode_vpc_subnet_get",
@@ -237,7 +238,7 @@ def create_linode_vpc_subnet_get_tool() -> Tool:
             },
             "required": ["vpc_id", "subnet_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 def _parse_vpc_subnet_ids(

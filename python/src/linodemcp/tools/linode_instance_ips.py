@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import execute_tool
 
 if TYPE_CHECKING:
@@ -45,7 +46,7 @@ def _parse_instance_id(
         return _error_response("instance_id must be a valid integer")
 
 
-def create_linode_instance_ips_list_tool() -> Tool:
+def create_linode_instance_ips_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_ips_list tool."""
     return Tool(
         name="linode_instance_ips_list",
@@ -58,7 +59,7 @@ def create_linode_instance_ips_list_tool() -> Tool:
             },
             "required": ["instance_id"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_ips_list(
@@ -77,7 +78,7 @@ async def handle_linode_instance_ips_list(
     return await execute_tool(cfg, arguments, "list instance IPs", _call)
 
 
-def create_linode_instance_ip_get_tool() -> Tool:
+def create_linode_instance_ip_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_ip_get tool."""
     return Tool(
         name="linode_instance_ip_get",
@@ -94,7 +95,7 @@ def create_linode_instance_ip_get_tool() -> Tool:
             },
             "required": ["instance_id", "address"],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_ip_get(
@@ -117,7 +118,7 @@ async def handle_linode_instance_ip_get(
     return await execute_tool(cfg, arguments, "get instance IP", _call)
 
 
-def create_linode_instance_ip_allocate_tool() -> Tool:
+def create_linode_instance_ip_allocate_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_ip_allocate tool."""
     return Tool(
         name="linode_instance_ip_allocate",
@@ -143,7 +144,7 @@ def create_linode_instance_ip_allocate_tool() -> Tool:
                 "confirm",
             ],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_ip_allocate(
@@ -172,7 +173,7 @@ async def handle_linode_instance_ip_allocate(
     return await execute_tool(cfg, arguments, "allocate instance IP", _call)
 
 
-def create_linode_instance_ip_delete_tool() -> Tool:
+def create_linode_instance_ip_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_ip_delete tool."""
     return Tool(
         name="linode_instance_ip_delete",
@@ -199,7 +200,7 @@ def create_linode_instance_ip_delete_tool() -> Tool:
                 "confirm",
             ],
         },
-    )
+    ), Capability.Unknown
 
 
 async def handle_linode_instance_ip_delete(

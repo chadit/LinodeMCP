@@ -8,10 +8,11 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
 // NewLinodeRegionsListTool creates a tool for listing Linode regions.
-func NewLinodeRegionsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeRegionsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_regions_list",
 		mcp.WithDescription("Lists all available Linode regions (datacenters) with optional filtering by country or capabilities"),
@@ -38,7 +39,7 @@ func NewLinodeRegionsListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Co
 		)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func filterRegionsByCapability(regions []linode.Region, capabilityFilter string) []linode.Region {

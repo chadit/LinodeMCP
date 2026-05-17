@@ -25,7 +25,7 @@ func TestLinodeInstanceBackupsListTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeInstanceBackupsListTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceBackupsListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -68,7 +68,7 @@ func TestLinodeInstanceBackupsListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeInstanceBackupsListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeInstanceBackupsListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyLinodeID: "123"})
 		result, err := srvHandler(t.Context(), req)
@@ -94,7 +94,7 @@ func TestLinodeInstanceBackupGetTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeInstanceBackupGetTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceBackupGetTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -140,7 +140,7 @@ func TestLinodeInstanceBackupGetTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeInstanceBackupGetTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeInstanceBackupGetTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyLinodeID: "123", keyBackupID: "100"})
 		result, err := srvHandler(t.Context(), req)
@@ -165,7 +165,7 @@ func TestLinodeInstanceBackupCreateTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeInstanceBackupCreateTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceBackupCreateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -217,7 +217,7 @@ func TestLinodeInstanceBackupCreateTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeInstanceBackupCreateTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeInstanceBackupCreateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyLinodeID: "123", keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
@@ -242,7 +242,7 @@ func TestLinodeInstanceBackupRestoreTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeInstanceBackupRestoreTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceBackupRestoreTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -294,7 +294,7 @@ func TestLinodeInstanceBackupRestoreTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeInstanceBackupRestoreTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeInstanceBackupRestoreTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyLinodeID: "123", keyBackupID: "100", keyTargetLinodeID: float64(456), keyConfirm: true,
@@ -321,7 +321,7 @@ func TestLinodeInstanceBackupsEnableTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeInstanceBackupsEnableTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceBackupsEnableTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -366,7 +366,7 @@ func TestLinodeInstanceBackupsEnableTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeInstanceBackupsEnableTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeInstanceBackupsEnableTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyLinodeID: "123", keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
@@ -391,7 +391,7 @@ func TestLinodeInstanceBackupsCancelTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeInstanceBackupsCancelTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceBackupsCancelTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -436,7 +436,7 @@ func TestLinodeInstanceBackupsCancelTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeInstanceBackupsCancelTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeInstanceBackupsCancelTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyLinodeID: "123", keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
@@ -461,7 +461,7 @@ func TestLinodeInstanceDisksListTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeInstanceDisksListTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceDisksListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -502,7 +502,7 @@ func TestLinodeInstanceDisksListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeInstanceDisksListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeInstanceDisksListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)})
 		result, err := srvHandler(t.Context(), req)
@@ -528,7 +528,7 @@ func TestLinodeInstanceDiskGetTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeInstanceDiskGetTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceDiskGetTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -574,7 +574,7 @@ func TestLinodeInstanceDiskGetTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeInstanceDiskGetTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeInstanceDiskGetTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyDiskID: float64(10)})
 		result, err := srvHandler(t.Context(), req)
@@ -599,7 +599,7 @@ func TestLinodeInstanceDiskCreateTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeInstanceDiskCreateTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceDiskCreateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -654,7 +654,7 @@ func TestLinodeInstanceDiskCreateTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeInstanceDiskCreateTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeInstanceDiskCreateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyLinodeID: float64(123), keyLabel: labelMyDisk, keySize: float64(1024), keyConfirm: true,
@@ -682,7 +682,7 @@ func TestLinodeInstanceDiskUpdateTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeInstanceDiskUpdateTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceDiskUpdateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -725,7 +725,7 @@ func TestLinodeInstanceDiskUpdateTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeInstanceDiskUpdateTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeInstanceDiskUpdateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyLinodeID: float64(123), keyDiskID: float64(10), keyLabel: "renamed-disk", keyConfirm: true,
@@ -752,7 +752,7 @@ func TestLinodeInstanceDiskDeleteTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeInstanceDiskDeleteTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceDiskDeleteTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -787,7 +787,7 @@ func TestLinodeInstanceDiskDeleteTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeInstanceDiskDeleteTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeInstanceDiskDeleteTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyDiskID: float64(10), keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
@@ -812,7 +812,7 @@ func TestLinodeInstanceDiskCloneTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeInstanceDiskCloneTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceDiskCloneTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -854,7 +854,7 @@ func TestLinodeInstanceDiskCloneTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeInstanceDiskCloneTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeInstanceDiskCloneTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyDiskID: float64(10), keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
@@ -880,7 +880,7 @@ func TestLinodeInstanceDiskResizeTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeInstanceDiskResizeTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceDiskResizeTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -930,7 +930,7 @@ func TestLinodeInstanceDiskResizeTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeInstanceDiskResizeTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeInstanceDiskResizeTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyLinodeID: float64(123), keyDiskID: float64(10), keySize: float64(65536), keyConfirm: true,
@@ -958,7 +958,7 @@ func TestLinodeInstanceIPsListTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeInstanceIPsListTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceIPsListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1003,7 +1003,7 @@ func TestLinodeInstanceIPsListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeInstanceIPsListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeInstanceIPsListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)})
 		result, err := srvHandler(t.Context(), req)
@@ -1029,7 +1029,7 @@ func TestLinodeInstanceIPGetTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeInstanceIPGetTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceIPGetTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1078,7 +1078,7 @@ func TestLinodeInstanceIPGetTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeInstanceIPGetTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeInstanceIPGetTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyAddress: ip203_0_113_1})
 		result, err := srvHandler(t.Context(), req)
@@ -1104,7 +1104,7 @@ func TestLinodeInstanceIPAllocateTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeInstanceIPAllocateTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceIPAllocateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1151,7 +1151,7 @@ func TestLinodeInstanceIPAllocateTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeInstanceIPAllocateTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeInstanceIPAllocateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyLinodeID: float64(123), keyType: keyIPv4, "public": true, keyConfirm: true,
@@ -1179,7 +1179,7 @@ func TestLinodeInstanceIPDeleteTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeInstanceIPDeleteTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceIPDeleteTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1224,7 +1224,7 @@ func TestLinodeInstanceIPDeleteTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeInstanceIPDeleteTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeInstanceIPDeleteTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyConfirm: true,
@@ -1252,7 +1252,7 @@ func TestLinodeInstanceCloneTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeInstanceCloneTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceCloneTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1294,7 +1294,7 @@ func TestLinodeInstanceCloneTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeInstanceCloneTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeInstanceCloneTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyLinodeID: float64(123), keyLabel: "my-linode-clone", keyConfirm: true,
@@ -1322,7 +1322,7 @@ func TestLinodeInstanceMigrateTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeInstanceMigrateTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceMigrateTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1361,7 +1361,7 @@ func TestLinodeInstanceMigrateTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeInstanceMigrateTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeInstanceMigrateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyLinodeID: float64(123), keyRegion: regionEUWest, keyConfirm: true,
@@ -1388,7 +1388,7 @@ func TestLinodeInstanceRebuildTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeInstanceRebuildTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceRebuildTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1445,7 +1445,7 @@ func TestLinodeInstanceRebuildTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeInstanceRebuildTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeInstanceRebuildTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyLinodeID: float64(123), keyImage: imageIDUbuntu2404, keyRootPass: rootPassStrong, keyConfirm: true,
@@ -1473,7 +1473,7 @@ func TestLinodeInstanceRescueTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeInstanceRescueTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceRescueTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1512,7 +1512,7 @@ func TestLinodeInstanceRescueTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeInstanceRescueTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeInstanceRescueTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyConfirm: true})
 		result, err := srvHandler(t.Context(), req)
@@ -1537,7 +1537,7 @@ func TestLinodeInstancePasswordResetTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, handler := tools.NewLinodeInstancePasswordResetTool(cfg)
+	tool, _, handler := tools.NewLinodeInstancePasswordResetTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1586,7 +1586,7 @@ func TestLinodeInstancePasswordResetTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, srvHandler := tools.NewLinodeInstancePasswordResetTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeInstancePasswordResetTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyLinodeID: float64(123), keyRootPass: "NewStr0ngP@ss!", keyConfirm: true,

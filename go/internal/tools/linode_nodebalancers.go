@@ -8,11 +8,12 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
 // NewLinodeNodeBalancersListTool creates a tool for listing NodeBalancers.
-func NewLinodeNodeBalancersListTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newListTool(
+func NewLinodeNodeBalancersListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newListTool(
 		cfg,
 		"linode_nodebalancers_list",
 		"Lists all NodeBalancers on your account. Can filter by region or label.",
@@ -27,10 +28,12 @@ func NewLinodeNodeBalancersListTool(cfg *config.Config) (mcp.Tool, func(ctx cont
 		},
 		"nodebalancers",
 	)
+
+	return tool, profiles.CapUnknown, handler
 }
 
 // NewLinodeNodeBalancerGetTool creates a tool for getting a single NodeBalancer.
-func NewLinodeNodeBalancerGetTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeNodeBalancerGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_nodebalancer_get",
 		mcp.WithDescription("Gets detailed information about a specific NodeBalancer by its ID."),
@@ -49,7 +52,7 @@ func NewLinodeNodeBalancerGetTool(cfg *config.Config) (mcp.Tool, func(ctx contex
 		return handleLinodeNodeBalancerGetRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLinodeNodeBalancerGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

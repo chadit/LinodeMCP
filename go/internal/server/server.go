@@ -13,6 +13,7 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/appinfo"
 	"github.com/chadit/LinodeMCP/internal/config"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 	"github.com/chadit/LinodeMCP/internal/tools"
 	"github.com/chadit/LinodeMCP/pkg/contracts"
 )
@@ -52,12 +53,22 @@ func New(cfg *config.Config) (*Server, error) {
 }
 
 type toolWrapper struct {
-	tool mcp.Tool
+	tool       mcp.Tool
+	capability profiles.Capability
 }
 
 func (tw *toolWrapper) Name() string        { return tw.tool.Name }
 func (tw *toolWrapper) Description() string { return tw.tool.Description }
 func (tw *toolWrapper) InputSchema() any    { return tw.tool.InputSchema }
+
+// Capability returns the tool's capability tag. Server-internal accessor used
+// by the invariant tests and (in later phases) the audit middleware. The
+// public pkg/contracts/Tool interface deliberately does not expose this.
+func (tw *toolWrapper) Capability() profiles.Capability { return tw.capability }
+
+// RawTool returns the underlying mcp.Tool so the invariant tests can inspect
+// the input schema. Server-internal accessor.
+func (tw *toolWrapper) RawTool() mcp.Tool { return tw.tool }
 
 func (*toolWrapper) Execute(ctx context.Context, _ map[string]any) (*mcp.CallToolResult, error) {
 	select {
@@ -71,6 +82,38 @@ func (*toolWrapper) Execute(ctx context.Context, _ map[string]any) (*mcp.CallToo
 // Tools returns the registered tool list.
 func (s *Server) Tools() []contracts.Tool {
 	return s.tools
+}
+
+// ToolInfo describes a registered tool's capability and input schema for the
+// capability invariant tests. The public contracts.Tool deliberately stays
+// minimal; this accessor lives on Server so tests in package server_test can
+// inspect the capability tag without widening the public contract.
+type ToolInfo struct {
+	Name        string
+	Capability  profiles.Capability
+	InputSchema mcp.ToolInputSchema
+}
+
+// ToolInfos returns one entry per registered tool, exposing the capability
+// tag and input schema. Test-only accessor; the audit middleware reads
+// capability via its own server-internal path.
+func (s *Server) ToolInfos() []ToolInfo {
+	out := make([]ToolInfo, 0, len(s.tools))
+
+	for _, t := range s.tools {
+		wrapper, ok := t.(*toolWrapper)
+		if !ok {
+			continue
+		}
+
+		out = append(out, ToolInfo{
+			Name:        wrapper.tool.Name,
+			Capability:  wrapper.capability,
+			InputSchema: wrapper.tool.InputSchema,
+		})
+	}
+
+	return out
 }
 
 // HandleMessage dispatches a JSON-RPC message into the underlying mcp-go
@@ -128,14 +171,15 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 }
 
-type toolFactory func(*config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error))
+type toolFactory func(*config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error))
 
 // addTool registers a tool with mcp-go and the local list, wrapping the
 // handler so each in-flight invocation is tracked in s.inflight. Shutdown
 // uses that WaitGroup to drain handlers before returning. Takes the tool by
 // pointer to satisfy gocritic's hugeParam check; mcp.AddTool needs a value
-// so we deref at the call boundary.
-func (s *Server) addTool(tool *mcp.Tool, handler toolHandler) {
+// so we deref at the call boundary. Capability is stashed on the wrapper so
+// invariant tests and the audit middleware can read it without a side table.
+func (s *Server) addTool(tool *mcp.Tool, capability profiles.Capability, handler toolHandler) {
 	wrapped := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		s.inflight.Add(1)
 		defer s.inflight.Done()
@@ -144,12 +188,12 @@ func (s *Server) addTool(tool *mcp.Tool, handler toolHandler) {
 	}
 
 	s.mcp.AddTool(*tool, wrapped)
-	s.tools = append(s.tools, &toolWrapper{tool: *tool})
+	s.tools = append(s.tools, &toolWrapper{tool: *tool, capability: capability})
 }
 
 func (s *Server) registerToolFromFactory(factory toolFactory) {
-	tool, handler := factory(s.config)
-	s.addTool(&tool, handler)
+	tool, capability, handler := factory(s.config)
+	s.addTool(&tool, capability, handler)
 }
 
 func (s *Server) registerTools() {
@@ -165,13 +209,9 @@ func (s *Server) registerTools() {
 }
 
 func (s *Server) registerCoreTools() {
-	helloTool, helloHandler := tools.NewHelloTool()
-	s.addTool(&helloTool, helloHandler)
-
-	versionTool, versionHandler := tools.NewVersionTool()
-	s.addTool(&versionTool, versionHandler)
-
 	for _, factory := range []toolFactory{
+		tools.NewHelloTool,
+		tools.NewVersionTool,
 		tools.NewLinodeProfileTool,
 		tools.NewLinodeAccountTool,
 	} {

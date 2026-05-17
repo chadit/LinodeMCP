@@ -8,10 +8,11 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
 // NewLinodeDomainCreateTool creates a tool for creating a domain.
-func NewLinodeDomainCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeDomainCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_domain_create",
 		mcp.WithDescription("Creates a new DNS domain. Use type 'master' for domains you control, 'slave' for secondary DNS."),
@@ -47,7 +48,7 @@ func NewLinodeDomainCreateTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 		return handleLinodeDomainCreateRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLinodeDomainCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -95,42 +96,22 @@ func handleLinodeDomainCreateRequest(ctx context.Context, request *mcp.CallToolR
 }
 
 // NewLinodeDomainUpdateTool creates a tool for updating a domain.
-func NewLinodeDomainUpdateTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+func NewLinodeDomainUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
 		"linode_domain_update",
-		mcp.WithDescription("Updates an existing DNS domain. Can modify SOA email, description, TTL, and status."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithNumber(
-			"domain_id",
-			mcp.Required(),
-			mcp.Description("The ID of the domain to update"),
-		),
-		mcp.WithString(
-			"soa_email",
-			mcp.Description("New SOA email address (optional)"),
-		),
-		mcp.WithString(
-			"description",
-			mcp.Description("New description (optional)"),
-		),
-		mcp.WithString(
-			"status",
-			mcp.Description("New status: 'active', 'disabled', or 'edit_mode' (optional)"),
-		),
-		mcp.WithNumber(
-			"ttl_sec",
-			mcp.Description("New default TTL in seconds (optional)"),
-		),
+		"Updates an existing DNS domain. Can modify SOA email, description, TTL, and status.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("domain_id", mcp.Required(), mcp.Description("The ID of the domain to update")),
+			mcp.WithString("soa_email", mcp.Description("New SOA email address (optional)")),
+			mcp.WithString("description", mcp.Description("New description (optional)")),
+			mcp.WithString("status", mcp.Description("New status: 'active', 'disabled', or 'edit_mode' (optional)")),
+			mcp.WithNumber("ttl_sec", mcp.Description("New default TTL in seconds (optional)")),
+		},
+		handleLinodeDomainUpdateRequest,
 	)
 
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeDomainUpdateRequest(ctx, &request, cfg)
-	}
-
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLinodeDomainUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -173,7 +154,7 @@ func handleLinodeDomainUpdateRequest(ctx context.Context, request *mcp.CallToolR
 }
 
 // NewLinodeDomainDeleteTool creates a tool for deleting a domain.
-func NewLinodeDomainDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+func NewLinodeDomainDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_domain_delete",
 		mcp.WithDescription("Deletes a DNS domain and all its records. WARNING: This action is irreversible."),
@@ -197,7 +178,7 @@ func NewLinodeDomainDeleteTool(cfg *config.Config) (mcp.Tool, func(ctx context.C
 		return handleLinodeDomainDeleteRequest(ctx, &request, cfg)
 	}
 
-	return tool, handler
+	return tool, profiles.CapUnknown, handler
 }
 
 func handleLinodeDomainDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
