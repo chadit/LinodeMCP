@@ -2897,6 +2897,26 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("DeleteVPCSubnet", e) from e
 
+    async def create_ipv6_range(
+        self,
+        prefix_length: int,
+        linode_id: int | None = None,
+        route_target: str | None = None,
+    ) -> dict[str, Any]:
+        """Create an IPv6 range."""
+        try:
+            body: dict[str, Any] = {"prefix_length": prefix_length}
+            if linode_id is not None:
+                body["linode_id"] = linode_id
+            if route_target is not None:
+                body["route_target"] = route_target
+
+            response = await self.make_request("POST", "/networking/ipv6/ranges", body)
+            ipv6_range: dict[str, Any] = response.json()
+            return ipv6_range
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateIPv6Range", e) from e
+
     async def delete_ipv6_range(self, ipv6_range: str) -> None:
         """Delete an IPv6 range."""
         encoded_range = quote(ipv6_range, safe="")
@@ -4749,6 +4769,21 @@ class RetryableClient:
     async def delete_vpc_subnet(self, vpc_id: int, subnet_id: int) -> None:
         """Delete VPC subnet with retry."""
         await self._execute_with_retry(self.client.delete_vpc_subnet, vpc_id, subnet_id)
+
+    async def create_ipv6_range(
+        self,
+        prefix_length: int,
+        linode_id: int | None = None,
+        route_target: str | None = None,
+    ) -> dict[str, Any]:
+        """Create IPv6 range with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.create_ipv6_range,
+            prefix_length,
+            linode_id,
+            route_target,
+        )
+        return result
 
     async def delete_ipv6_range(self, ipv6_range: str) -> None:
         """Delete IPv6 range with retry."""
