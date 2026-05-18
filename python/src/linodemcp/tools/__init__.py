@@ -295,7 +295,9 @@ from linodemcp.tools.linode_types import (
     handle_linode_types_list,
 )
 from linodemcp.tools.linode_volumes import (
+    create_linode_volume_get_tool,
     create_linode_volumes_list_tool,
+    handle_linode_volume_get,
     handle_linode_volumes_list,
 )
 from linodemcp.tools.linode_volumes_write import (
@@ -481,6 +483,7 @@ __all__ = [
     "create_linode_volume_create_tool",
     "create_linode_volume_delete_tool",
     "create_linode_volume_detach_tool",
+    "create_linode_volume_get_tool",
     "create_linode_volume_resize_tool",
     "create_linode_volume_update_tool",
     "create_linode_volumes_list_tool",
@@ -623,6 +626,7 @@ __all__ = [
     "handle_linode_volume_create",
     "handle_linode_volume_delete",
     "handle_linode_volume_detach",
+    "handle_linode_volume_get",
     "handle_linode_volume_resize",
     "handle_linode_volume_update",
     "handle_linode_volumes_list",

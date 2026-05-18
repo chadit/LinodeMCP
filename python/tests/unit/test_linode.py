@@ -368,6 +368,41 @@ async def test_get_instance(sample_instance_data: dict[str, Any]) -> None:
     await client.close()
 
 
+async def test_get_volume_sends_get_to_volume_route() -> None:
+    """Test getting a volume sends GET /volumes/{id}."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response_data = {
+        "id": 12345,
+        "label": "data-volume",
+        "status": "active",
+        "size": 20,
+        "region": "us-east",
+        "linode_id": None,
+        "linode_label": None,
+        "filesystem_path": "/dev/disk/by-id/scsi-0Linode_Volume_data-volume",
+        "created": "2024-01-15T10:00:00",
+        "updated": "2024-01-15T12:00:00",
+        "tags": ["prod"],
+        "hardware_type": "nvme",
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        volume = await client.get_volume(12345)
+
+    assert volume.id == 12345
+    assert volume.label == "data-volume"
+    assert volume.tags == ["prod"]
+    mock_request.assert_called_once_with("GET", "/volumes/12345")
+
+    await client.close()
+
+
 async def test_update_volume_sends_put_to_volume_route() -> None:
     """Test updating a volume sends PUT /volumes/{id}."""
     client = Client("https://api.linode.com/v4", "test-token")

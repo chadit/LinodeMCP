@@ -1331,6 +1331,15 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListVolumes", e) from e
 
+    async def get_volume(self, volume_id: int) -> Volume:
+        """Get a Linode block storage volume."""
+        try:
+            response = await self.make_request("GET", f"/volumes/{volume_id}")
+            data = response.json()
+            return self._parse_volume(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("GetVolume", e) from e
+
     async def list_images(self) -> list[Image]:
         """List Linode images."""
         try:
@@ -4258,6 +4267,13 @@ class RetryableClient:
     async def list_volumes(self) -> list[Volume]:
         """List Linode volumes with retry."""
         result: list[Volume] = await self._execute_with_retry(self.client.list_volumes)
+        return result
+
+    async def get_volume(self, volume_id: int) -> Volume:
+        """Get volume with retry."""
+        result: Volume = await self._execute_with_retry(
+            self.client.get_volume, volume_id
+        )
         return result
 
     async def list_images(self) -> list[Image]:
