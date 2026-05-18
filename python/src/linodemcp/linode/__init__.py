@@ -1587,6 +1587,16 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("CreateSupportTicketReply", e) from e
 
+    async def close_support_ticket(self, ticket_id: int) -> dict[str, Any]:
+        """Close a support ticket."""
+        endpoint = f"/support/tickets/{ticket_id}/close"
+        try:
+            response = await self.make_request("POST", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("CloseSupportTicket", e) from e
+
     async def list_nodebalancers(self) -> list[NodeBalancer]:
         """List NodeBalancers."""
         try:
@@ -4608,6 +4618,13 @@ class RetryableClient:
         """Create a support ticket reply with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.create_support_ticket_reply, ticket_id, description
+        )
+        return result
+
+    async def close_support_ticket(self, ticket_id: int) -> dict[str, Any]:
+        """Close a support ticket with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.close_support_ticket, ticket_id
         )
         return result
 

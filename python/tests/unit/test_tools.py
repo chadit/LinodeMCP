@@ -35,6 +35,7 @@ from linodemcp.linode import (
 )
 from linodemcp.profiles import Capability
 from linodemcp.tools import (
+    create_linode_account_support_ticket_close_tool,
     create_linode_account_support_ticket_replies_list_tool,
     create_linode_account_support_ticket_reply_create_tool,
     create_linode_account_tag_create_tool,
@@ -87,6 +88,7 @@ from linodemcp.tools import (
     create_linode_vpcs_list_tool,
     handle_hello,
     handle_linode_account,
+    handle_linode_account_support_ticket_close,
     handle_linode_account_support_ticket_replies_list,
     handle_linode_account_support_ticket_reply_create,
     handle_linode_account_tag_create,
@@ -1034,6 +1036,102 @@ async def test_handle_linode_account_support_ticket_replies_list_reports_client_
     assert len(result) == 1
     assert "Failed to list Linode support ticket replies" in result[0].text
     assert "boom" in result[0].text
+
+
+async def test_create_linode_account_support_ticket_close_tool() -> None:
+    """Test support ticket close tool schema."""
+    tool, capability = create_linode_account_support_ticket_close_tool()
+
+    assert tool.name == "linode_account_support_ticket_close"
+    assert capability is Capability.Write
+    assert tool.inputSchema["required"] == ["ticket_id", "confirm"]
+
+
+async def test_handle_linode_account_support_ticket_close_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Support ticket close requires confirmation."""
+    result = await handle_linode_account_support_ticket_close(
+        {"ticket_id": 123}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_handle_linode_account_support_ticket_close_validates_ticket_id(
+    sample_config: Config,
+) -> None:
+    """Support ticket close validates ticket_id."""
+    result = await handle_linode_account_support_ticket_close(
+        {"confirm": True, "ticket_id": 0},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "ticket_id" in result[0].text
+
+
+async def test_handle_linode_account_support_ticket_close(
+    sample_config: Config,
+) -> None:
+    """Test support ticket close handler."""
+    response_data: dict[str, Any] = {"id": 123, "status": "closed"}
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.close_support_ticket.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_support_ticket_close(
+            {"confirm": True, "ticket_id": 123},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert json.loads(result[0].text) == {
+            "message": "Support ticket closed successfully",
+            "ticket": response_data,
+        }
+        mock_client.close_support_ticket.assert_awaited_once_with(123)
+
+
+async def test_handle_linode_account_support_ticket_close_reports_client_errors(
+    sample_config: Config,
+) -> None:
+    """Support ticket close reports client errors."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.close_support_ticket.side_effect = RuntimeError("boom")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_support_ticket_close(
+            {"confirm": True, "ticket_id": 123},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "Failed to close Linode support ticket" in result[0].text
+        assert "boom" in result[0].text
+
+
+async def test_account_support_ticket_close_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Support ticket close tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+    from linodemcp.server import get_tool_registry
+
+    assert "create_linode_account_support_ticket_close_tool" in tools_mod.__all__
+    assert "handle_linode_account_support_ticket_close" in tools_mod.__all__
+
+    registry = {entry.name: entry for entry in get_tool_registry()}
+    assert (
+        registry["linode_account_support_ticket_close"].capability is Capability.Write
+    )
 
 
 async def test_create_linode_account_support_ticket_reply_create_tool() -> None:

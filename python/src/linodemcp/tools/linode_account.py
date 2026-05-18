@@ -423,6 +423,53 @@ async def handle_linode_account_support_ticket_replies_list(
     )
 
 
+def create_linode_account_support_ticket_close_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_support_ticket_close tool."""
+    return Tool(
+        name="linode_account_support_ticket_close",
+        description="Closes a Linode support ticket.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "ticket_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Support ticket ID to close",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this mutating operation.",
+                },
+            },
+            "required": ["ticket_id", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_account_support_ticket_close(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_support_ticket_close tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This closes a support ticket. Set confirm=true to proceed."
+        )
+
+    ticket_id = arguments.get("ticket_id")
+    if not isinstance(ticket_id, int) or isinstance(ticket_id, bool) or ticket_id < 1:
+        return error_response("ticket_id must be a positive integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        closed_ticket = await client.close_support_ticket(ticket_id)
+        return {
+            "message": "Support ticket closed successfully",
+            "ticket": closed_ticket,
+        }
+
+    return await execute_tool(cfg, arguments, "close Linode support ticket", _call)
+
+
 def create_linode_account_support_ticket_reply_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_support_ticket_reply_create tool."""
     return Tool(

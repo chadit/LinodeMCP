@@ -661,6 +661,54 @@ async def test_retryable_create_support_ticket_reply_delegates_to_client() -> No
     await retryable.close()
 
 
+async def test_close_support_ticket_sends_post_to_ticket_close_route() -> None:
+    """Test support ticket close sends documented POST route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response_data: dict[str, Any] = {"id": 123, "status": "closed"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.close_support_ticket(123)
+
+    assert result == response_data
+    mock_request.assert_called_once_with("POST", "/support/tickets/123/close")
+    await client.close()
+
+
+async def test_close_support_ticket_wraps_http_errors() -> None:
+    """Test support ticket close wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.close_support_ticket(123)
+
+    assert "CloseSupportTicket" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_close_support_ticket_delegates_to_client() -> None:
+    """Test RetryableClient delegates support ticket close."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "close_support_ticket", new_callable=AsyncMock
+    ) as mock_close:
+        mock_close.return_value = {"id": 123, "status": "closed"}
+        result = await retryable.close_support_ticket(123)
+
+    assert result == {"id": 123, "status": "closed"}
+    mock_close.assert_awaited_once_with(123)
+    await retryable.close()
+
+
 async def test_delete_tag_sends_delete_to_tag_route() -> None:
     """Test deleting a tag sends DELETE /tags/{tagLabel}."""
     client = Client("https://api.linode.com/v4", "test-token")
