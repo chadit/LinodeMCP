@@ -290,9 +290,11 @@ from linodemcp.tools.linode_object_storage_write import (
 )
 from linodemcp.tools.linode_profile import (
     create_linode_profile_token_revoke_tool,
+    create_linode_profile_token_update_tool,
     create_linode_profile_tool,
     handle_linode_profile,
     handle_linode_profile_token_revoke,
+    handle_linode_profile_token_update,
 )
 from linodemcp.tools.linode_regions import (
     create_linode_regions_availability_get_tool,
@@ -519,6 +521,7 @@ __all__ = [
     "create_linode_object_storage_transfer_tool",
     "create_linode_object_storage_types_list_tool",
     "create_linode_profile_token_revoke_tool",
+    "create_linode_profile_token_update_tool",
     "create_linode_profile_tool",
     "create_linode_regions_availability_get_tool",
     "create_linode_regions_availability_list_tool",
@@ -682,6 +685,7 @@ __all__ = [
     "handle_linode_object_storage_types_list",
     "handle_linode_profile",
     "handle_linode_profile_token_revoke",
+    "handle_linode_profile_token_update",
     "handle_linode_regions_availability_get",
     "handle_linode_regions_availability_list",
     "handle_linode_regions_get",

@@ -2165,6 +2165,31 @@ class Client:
             logger.exception("HTTP error revoking profile token: %s", e)
             raise NetworkError("DeleteProfileToken", e) from e
 
+    async def update_profile_token(self, token_id: int, label: str) -> dict[str, Any]:
+        """Update a personal access token."""
+        encoded_token_id = quote(str(token_id), safe="")
+        endpoint = f"/profile/tokens/{encoded_token_id}"
+        body = {"label": label}
+        logger.info("Updating profile token", extra={"token_id": token_id})
+
+        try:
+            response = await self.make_request("PUT", endpoint, body)
+            result: dict[str, Any] = response.json()
+            logger.info("Profile token updated", extra={"token_id": token_id})
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout updating profile token: %s", e)
+            raise NetworkError("UpdateProfileToken", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout updating profile token: %s", e)
+            raise NetworkError("UpdateProfileToken", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error updating profile token")
+            raise NetworkError("UpdateProfileToken", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error updating profile token: %s", e)
+            raise NetworkError("UpdateProfileToken", e) from e
+
     async def create_monitor_service_token(
         self, service_type: str, entity_ids: list[int]
     ) -> dict[str, Any]:
@@ -5128,6 +5153,13 @@ class RetryableClient:
     async def delete_profile_token(self, token_id: int) -> None:
         """Revoke a profile token with retry."""
         await self._execute_with_retry(self.client.delete_profile_token, token_id)
+
+    async def update_profile_token(self, token_id: int, label: str) -> dict[str, Any]:
+        """Update a profile token with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.update_profile_token, token_id, label
+        )
+        return result
 
     async def create_monitor_service_token(
         self, service_type: str, entity_ids: list[int]
