@@ -463,3 +463,12 @@ async def test_reload_profile_repeated_cycles_converge(
     fresh = Server(full)
     assert srv.active_profile.name == "full-access"
     assert set(srv.registered_tool_names) == set(fresh.registered_tool_names)
+
+
+def test_linode_image_create_registered() -> None:
+    """Image create tool should be registered from tools exports."""
+    from linodemcp.server import get_tool_registry
+
+    entries = {entry.name: entry for entry in get_tool_registry()}
+    assert "linode_image_create" in entries
+    assert entries["linode_image_create"].capability.name == "Write"

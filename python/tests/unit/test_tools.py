@@ -35,6 +35,7 @@ from linodemcp.linode import (
 )
 from linodemcp.tools import (
     create_linode_account_update_tool,
+    create_linode_image_create_tool,
     create_linode_instance_backup_create_tool,
     create_linode_instance_backup_get_tool,
     create_linode_instance_backup_restore_tool,
@@ -92,6 +93,7 @@ from linodemcp.tools import (
     handle_linode_firewall_delete,
     handle_linode_firewall_update,
     handle_linode_firewalls_list,
+    handle_linode_image_create,
     handle_linode_images_list,
     handle_linode_instance_backup_create,
     handle_linode_instance_backup_get,
@@ -888,6 +890,85 @@ async def test_handle_linode_volumes_list_filter_region(sample_config: Config) -
         assert "data-vol" in result[0].text
         assert "backup-vol" not in result[0].text
         assert '"count": 1' in result[0].text
+
+
+async def test_create_linode_image_create_tool_def() -> None:
+    """Image create tool should require disk_id and confirm."""
+    tool, capability = create_linode_image_create_tool()
+    assert tool.name == "linode_image_create"
+    assert capability.name == "Write"
+    assert tool.inputSchema["required"] == ["disk_id", "confirm"]
+
+
+async def test_handle_linode_image_create_success(sample_config: Config) -> None:
+    """Test linode_image_create tool."""
+    mock_image = Image(
+        id="private/12345",
+        label="app-image",
+        description="Application image",
+        type="manual",
+        is_public=False,
+        deprecated=False,
+        size=2048,
+        vendor="",
+        status="creating",
+        created="2024-01-01T00:00:00",
+        created_by="testuser",
+        expiry=None,
+        eol=None,
+        capabilities=["cloud-init"],
+        tags=["prod"],
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_image.return_value = mock_image
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_image_create(
+            {
+                "disk_id": 123,
+                "label": "app-image",
+                "description": "Application image",
+                "cloud_init": True,
+                "tags": ["prod"],
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "private/12345" in result[0].text
+        mock_client.create_image.assert_awaited_once_with(
+            disk_id=123,
+            label="app-image",
+            description="Application image",
+            cloud_init=True,
+            tags=["prod"],
+        )
+
+
+async def test_handle_linode_image_create_confirm_required(
+    sample_config: Config,
+) -> None:
+    """Image create should require confirm=true."""
+    result = await handle_linode_image_create({"disk_id": 123}, sample_config)
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_handle_linode_image_create_invalid_tags(sample_config: Config) -> None:
+    """Image create should validate tags."""
+    result = await handle_linode_image_create(
+        {"disk_id": 123, "tags": ["prod", ""], "confirm": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "tags" in result[0].text
 
 
 async def test_handle_linode_images_list(sample_config: Config) -> None:
