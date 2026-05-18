@@ -3665,3 +3665,27 @@ class TestRetryableClientRateLimiter:
             assert sleeps, "limiter must have parked the 61st call on sleep"
 
         await client.close()
+
+
+async def test_delete_profile_token_sends_delete_to_profile_token_route() -> None:
+    """Profile token revoke sends DELETE /profile/tokens/{tokenId}."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        await client.delete_profile_token(12345)
+
+    mock_request.assert_called_once_with("DELETE", "/profile/tokens/12345")
+    await client.close()
+
+
+async def test_delete_profile_token_encodes_path_parameter() -> None:
+    """Profile token path segment is URL-encoded at the client boundary."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        await client.delete_profile_token("12/../34?x=1")  # type: ignore[arg-type]
+
+    mock_request.assert_called_once_with(
+        "DELETE", "/profile/tokens/12%2F..%2F34%3Fx%3D1"
+    )
+    await client.close()

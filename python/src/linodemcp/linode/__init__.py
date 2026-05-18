@@ -2143,6 +2143,28 @@ class Client:
             logger.exception("HTTP error deleting SSH key: %s", e)
             raise NetworkError("DeleteSSHKey", e) from e
 
+    async def delete_profile_token(self, token_id: int) -> None:
+        """Revoke a personal access token."""
+        encoded_token_id = quote(str(token_id), safe="")
+        endpoint = f"/profile/tokens/{encoded_token_id}"
+        logger.info("Revoking profile token", extra={"token_id": token_id})
+
+        try:
+            await self.make_request("DELETE", endpoint)
+            logger.info("Profile token revoked", extra={"token_id": token_id})
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout revoking profile token: %s", e)
+            raise NetworkError("DeleteProfileToken", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout revoking profile token: %s", e)
+            raise NetworkError("DeleteProfileToken", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error revoking profile token")
+            raise NetworkError("DeleteProfileToken", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error revoking profile token: %s", e)
+            raise NetworkError("DeleteProfileToken", e) from e
+
     async def create_monitor_service_token(
         self, service_type: str, entity_ids: list[int]
     ) -> dict[str, Any]:
@@ -5102,6 +5124,10 @@ class RetryableClient:
     async def delete_ssh_key(self, ssh_key_id: int) -> None:
         """Delete SSH key with retry."""
         await self._execute_with_retry(self.client.delete_ssh_key, ssh_key_id)
+
+    async def delete_profile_token(self, token_id: int) -> None:
+        """Revoke a profile token with retry."""
+        await self._execute_with_retry(self.client.delete_profile_token, token_id)
 
     async def create_monitor_service_token(
         self, service_type: str, entity_ids: list[int]
