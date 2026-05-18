@@ -368,6 +368,40 @@ async def handle_linode_account_tag_delete(
     return await execute_tool(cfg, arguments, "delete Linode tag", _call)
 
 
+def create_linode_account_support_ticket_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_support_ticket_get tool."""
+    return Tool(
+        name="linode_account_support_ticket_get",
+        description="Gets a Linode support ticket by ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "ticket_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Support ticket ID to retrieve",
+                },
+            },
+            "required": ["ticket_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_account_support_ticket_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_support_ticket_get tool request."""
+    ticket_id = arguments.get("ticket_id")
+    if not isinstance(ticket_id, int) or isinstance(ticket_id, bool) or ticket_id < 1:
+        return error_response("ticket_id must be a positive integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_support_ticket(ticket_id)
+
+    return await execute_tool(cfg, arguments, "get Linode support ticket", _call)
+
+
 def create_linode_account_support_ticket_replies_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_support_ticket_replies_list tool."""
     return Tool(

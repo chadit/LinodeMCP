@@ -8,6 +8,7 @@ from linodemcp.tools.hello import (
 )
 from linodemcp.tools.linode_account import (
     create_linode_account_support_ticket_close_tool,
+    create_linode_account_support_ticket_get_tool,
     create_linode_account_support_ticket_replies_list_tool,
     create_linode_account_support_ticket_reply_create_tool,
     create_linode_account_tag_create_tool,
@@ -18,6 +19,7 @@ from linodemcp.tools.linode_account import (
     create_linode_account_update_tool,
     handle_linode_account,
     handle_linode_account_support_ticket_close,
+    handle_linode_account_support_ticket_get,
     handle_linode_account_support_ticket_replies_list,
     handle_linode_account_support_ticket_reply_create,
     handle_linode_account_tag_create,
@@ -385,6 +387,7 @@ __all__ = [
     "RetryableClient",
     "create_hello_tool",
     "create_linode_account_support_ticket_close_tool",
+    "create_linode_account_support_ticket_get_tool",
     "create_linode_account_support_ticket_replies_list_tool",
     "create_linode_account_support_ticket_reply_create_tool",
     "create_linode_account_tag_create_tool",
@@ -541,6 +544,7 @@ __all__ = [
     "handle_hello",
     "handle_linode_account",
     "handle_linode_account_support_ticket_close",
+    "handle_linode_account_support_ticket_get",
     "handle_linode_account_support_ticket_replies_list",
     "handle_linode_account_support_ticket_reply_create",
     "handle_linode_account_tag_create",

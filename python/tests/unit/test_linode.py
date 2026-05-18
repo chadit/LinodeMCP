@@ -553,6 +553,54 @@ async def test_retryable_create_tag_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_get_support_ticket_sends_get_to_ticket_route() -> None:
+    """Test support ticket retrieval sends documented GET route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response_data: dict[str, Any] = {"id": 123, "summary": "Need help"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.get_support_ticket(123)
+
+    assert result == response_data
+    mock_request.assert_called_once_with("GET", "/support/tickets/123")
+    await client.close()
+
+
+async def test_get_support_ticket_wraps_http_errors() -> None:
+    """Test support ticket retrieval wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.get_support_ticket(123)
+
+    assert "GetSupportTicket" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_get_support_ticket_delegates_to_client() -> None:
+    """Test RetryableClient delegates support ticket retrieval."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "get_support_ticket", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = {"id": 123}
+        result = await retryable.get_support_ticket(123)
+
+    assert result == {"id": 123}
+    mock_get.assert_awaited_once_with(123)
+    await retryable.close()
+
+
 async def test_list_support_ticket_replies_sends_get_to_ticket_replies_route() -> None:
     """Test support ticket reply listing sends documented GET query."""
     client = Client("https://api.linode.com/v4", "test-token")
