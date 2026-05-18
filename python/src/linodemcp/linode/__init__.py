@@ -1386,6 +1386,15 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListSSHKeys", e) from e
 
+    async def get_ssh_key(self, ssh_key_id: int) -> SSHKey:
+        """Get a specific SSH key."""
+        try:
+            response = await self.make_request("GET", f"/profile/sshkeys/{ssh_key_id}")
+            data = response.json()
+            return self._parse_ssh_key(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("GetSSHKey", e) from e
+
     async def list_domains(self) -> list[Domain]:
         """List domains."""
         try:
@@ -4306,6 +4315,13 @@ class RetryableClient:
     async def list_ssh_keys(self) -> list[SSHKey]:
         """List SSH keys with retry."""
         result: list[SSHKey] = await self._execute_with_retry(self.client.list_ssh_keys)
+        return result
+
+    async def get_ssh_key(self, ssh_key_id: int) -> SSHKey:
+        """Get a specific SSH key with retry."""
+        result: SSHKey = await self._execute_with_retry(
+            self.client.get_ssh_key, ssh_key_id
+        )
         return result
 
     async def list_domains(self) -> list[Domain]:

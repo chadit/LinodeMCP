@@ -122,6 +122,7 @@ def test_instance_subtools_route_to_linodes(tool_name: str) -> None:
     ("tool_name", "capability", "expected"),
     [
         ("linode_sshkeys_list", Capability.Read, Scope.AccountReadOnly),
+        ("linode_sshkey_get", Capability.Read, Scope.AccountReadOnly),
         ("linode_sshkey_create", Capability.Write, Scope.AccountReadWrite),
         (
             "linode_monitor_service_token_create",

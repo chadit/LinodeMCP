@@ -1037,6 +1037,31 @@ async def test_list_ssh_keys() -> None:
     await client.close()
 
 
+async def test_get_ssh_key_sends_get_to_profile_route() -> None:
+    """Test getting an SSH key sends GET /profile/sshkeys/{id}."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "id": 12345,
+        "label": "work-key",
+        "ssh_key": "ssh-rsa AAAA...",
+        "created": "2024-01-01T00:00:00",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        key = await client.get_ssh_key(12345)
+
+        assert key.id == 12345
+        assert key.label == "work-key"
+        mock_request.assert_awaited_once_with("GET", "/profile/sshkeys/12345")
+
+    await client.close()
+
+
 async def test_list_domains() -> None:
     """Test listing domains."""
     client = Client("https://api.linode.com/v4", "test-token")

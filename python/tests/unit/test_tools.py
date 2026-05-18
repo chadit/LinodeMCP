@@ -190,6 +190,7 @@ from linodemcp.tools import (
     handle_linode_regions_list,
     handle_linode_sshkey_create,
     handle_linode_sshkey_delete,
+    handle_linode_sshkey_get,
     handle_linode_sshkey_update,
     handle_linode_sshkeys_list,
     handle_linode_stackscript_create,
@@ -1353,6 +1354,38 @@ async def test_handle_linode_sshkeys_list(sample_config: Config) -> None:
         assert "work-laptop" in result[0].text
         assert "home-desktop" in result[0].text
         mock_client.list_ssh_keys.assert_called_once()
+
+
+async def test_handle_linode_sshkey_get(sample_config: Config) -> None:
+    """Test linode_sshkey_get tool."""
+    mock_key = SSHKey(
+        id=12345,
+        label="work-laptop",
+        ssh_key="ssh-rsa AAAA... user@work",
+        created="2024-01-01T00:00:00",
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_ssh_key.return_value = mock_key
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_sshkey_get({"ssh_key_id": 12345}, sample_config)
+
+        assert len(result) == 1
+        assert "work-laptop" in result[0].text
+        assert "12345" in result[0].text
+        mock_client.get_ssh_key.assert_called_once_with(12345)
+
+
+async def test_handle_linode_sshkey_get_requires_id(sample_config: Config) -> None:
+    """Test linode_sshkey_get requires ssh_key_id."""
+    result = await handle_linode_sshkey_get({}, sample_config)
+
+    assert len(result) == 1
+    assert "ssh_key_id is required" in result[0].text
 
 
 async def test_handle_linode_sshkeys_list_filter_label(sample_config: Config) -> None:
