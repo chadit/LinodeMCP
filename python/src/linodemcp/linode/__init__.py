@@ -2143,6 +2143,30 @@ class Client:
             logger.exception("HTTP error deleting SSH key: %s", e)
             raise NetworkError("DeleteSSHKey", e) from e
 
+    async def get_profile_token(self, token_id: int) -> dict[str, Any]:
+        """Get a personal access token."""
+        encoded_token_id = quote(str(token_id), safe="")
+        endpoint = f"/profile/tokens/{encoded_token_id}"
+        logger.info("Getting profile token", extra={"token_id": token_id})
+
+        try:
+            response = await self.make_request("GET", endpoint)
+            result: dict[str, Any] = response.json()
+            logger.info("Profile token retrieved", extra={"token_id": token_id})
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout getting profile token: %s", e)
+            raise NetworkError("GetProfileToken", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout getting profile token: %s", e)
+            raise NetworkError("GetProfileToken", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error getting profile token")
+            raise NetworkError("GetProfileToken", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error getting profile token: %s", e)
+            raise NetworkError("GetProfileToken", e) from e
+
     async def delete_profile_token(self, token_id: int) -> None:
         """Revoke a personal access token."""
         encoded_token_id = quote(str(token_id), safe="")
@@ -5149,6 +5173,13 @@ class RetryableClient:
     async def delete_ssh_key(self, ssh_key_id: int) -> None:
         """Delete SSH key with retry."""
         await self._execute_with_retry(self.client.delete_ssh_key, ssh_key_id)
+
+    async def get_profile_token(self, token_id: int) -> dict[str, Any]:
+        """Get a profile token with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_profile_token, token_id
+        )
+        return result
 
     async def delete_profile_token(self, token_id: int) -> None:
         """Revoke a profile token with retry."""

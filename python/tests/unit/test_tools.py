@@ -80,6 +80,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
+    create_linode_profile_token_get_tool,
     create_linode_profile_token_revoke_tool,
     create_linode_profile_token_update_tool,
     create_linode_regions_availability_get_tool,
@@ -216,6 +217,7 @@ from linodemcp.tools import (
     handle_linode_object_storage_transfer,
     handle_linode_object_storage_types_list,
     handle_linode_profile,
+    handle_linode_profile_token_get,
     handle_linode_profile_token_revoke,
     handle_linode_profile_token_update,
     handle_linode_regions_availability_get,
@@ -9169,6 +9171,107 @@ async def test_handle_linode_monitor_service_token_create_error(
     result = await handle_linode_monitor_service_token_create(
         {"service_type": "dbaas", "entity_ids": [1], "confirm": True}, sample_config
     )
+    assert len(result) == 1
+    assert "Failed to" in result[0].text
+    assert "API error" in result[0].text
+
+
+def test_create_linode_profile_token_get_tool() -> None:
+    """Profile token get tool exposes token_id."""
+    tool, capability = create_linode_profile_token_get_tool()
+
+    assert tool.name == "linode_profile_token_get"
+    assert capability is Capability.Read
+    assert tool.inputSchema["required"] == ["token_id"]
+    assert tool.inputSchema["properties"]["token_id"]["minimum"] == 1
+
+
+async def test_handle_linode_profile_token_get_requires_token_id(
+    sample_config: Config,
+) -> None:
+    """Profile token get validates token_id before calling the client."""
+    for token_id in (
+        None,
+        True,
+        False,
+        0,
+        -1,
+        "123",
+        "12/../34?x=1",
+        "..",
+        "/",
+        "?",
+    ):
+        result = await handle_linode_profile_token_get(
+            {"token_id": token_id}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "token_id" in result[0].text
+
+
+async def test_handle_linode_profile_token_get_success(
+    sample_config: Config,
+) -> None:
+    """Profile token get calls the retryable client and returns token details."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.get_profile_token.return_value = {
+            "id": 12345,
+            "label": "api-token",
+        }
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_token_get(
+            {"token_id": 12345}, sample_config
+        )
+
+    assert json.loads(result[0].text) == {"id": 12345, "label": "api-token"}
+    mock_client.get_profile_token.assert_awaited_once_with(12345)
+
+
+async def test_handle_linode_profile_token_get_redacts_secret_fields(
+    sample_config: Config,
+) -> None:
+    """Profile token get does not expose secret token material."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.get_profile_token.return_value = {
+            "id": 12345,
+            "label": "api-token",
+            "token": "secret-token",
+            "access_token": "secret-access-token",
+            "secret": "secret-value",
+        }
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_token_get(
+            {"token_id": 12345}, sample_config
+        )
+
+    assert json.loads(result[0].text) == {"id": 12345, "label": "api-token"}
+    mock_client.get_profile_token.assert_awaited_once_with(12345)
+
+
+async def test_handle_linode_profile_token_get_error(
+    sample_config: Config,
+) -> None:
+    """Profile token get surfaces client errors."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.get_profile_token.side_effect = Exception("API error")
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_token_get(
+            {"token_id": 12345}, sample_config
+        )
+
     assert len(result) == 1
     assert "Failed to" in result[0].text
     assert "API error" in result[0].text

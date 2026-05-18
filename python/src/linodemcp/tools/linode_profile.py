@@ -10,6 +10,16 @@ from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
 
 PROFILE_TOKEN_LABEL_MAX_LENGTH = 100
+PROFILE_TOKEN_SECRET_FIELDS = frozenset({"token", "access_token", "secret"})
+
+
+def _redact_profile_token(token: dict[str, Any]) -> dict[str, Any]:
+    """Drop secret token fields from profile token tool output."""
+    return {
+        key: value
+        for key, value in token.items()
+        if key.lower() not in PROFILE_TOKEN_SECRET_FIELDS
+    }
 
 
 def create_linode_profile_tool() -> tuple[Tool, Capability]:
@@ -54,6 +64,41 @@ async def handle_linode_profile(
         }
 
     return await execute_tool(cfg, arguments, "retrieve Linode profile", _call)
+
+
+def create_linode_profile_token_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_token_get tool."""
+    return Tool(
+        name="linode_profile_token_get",
+        description="Retrieves a Linode personal access token by token ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "token_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "ID of the personal access token to retrieve",
+                },
+            },
+            "required": ["token_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_profile_token_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_profile_token_get tool request."""
+    token_id = arguments.get("token_id")
+    if isinstance(token_id, bool) or not isinstance(token_id, int) or token_id < 1:
+        return error_response("token_id must be a positive integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        token = await client.get_profile_token(token_id)
+        return _redact_profile_token(token)
+
+    return await execute_tool(cfg, arguments, "retrieve Linode profile token", _call)
 
 
 def create_linode_profile_token_update_tool() -> tuple[Tool, Capability]:

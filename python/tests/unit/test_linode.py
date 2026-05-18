@@ -3667,6 +3667,48 @@ class TestRetryableClientRateLimiter:
         await client.close()
 
 
+async def test_get_profile_token_sends_get_to_profile_token_route() -> None:
+    """Profile token get sends GET /profile/tokens/{tokenId}."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {"id": 12345, "label": "api-token"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        result = await client.get_profile_token(12345)
+
+    assert result == {"id": 12345, "label": "api-token"}
+    mock_request.assert_called_once_with("GET", "/profile/tokens/12345")
+    await client.close()
+
+
+async def test_get_profile_token_encodes_path_parameter() -> None:
+    """Profile token get path segment is URL-encoded at the client boundary."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {"id": 12345, "label": "api-token"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        await client.get_profile_token("12/../34?x=1")  # type: ignore[arg-type]
+
+    mock_request.assert_called_once_with("GET", "/profile/tokens/12%2F..%2F34%3Fx%3D1")
+    await client.close()
+
+
+async def test_get_profile_token_wraps_http_errors() -> None:
+    """Profile token get maps HTTP errors to GetProfileToken."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ReadTimeout("timeout")
+        with pytest.raises(NetworkError) as exc_info:
+            await client.get_profile_token(12345)
+
+    assert exc_info.value.operation == "GetProfileToken"
+    await client.close()
+
+
 async def test_update_profile_token_sends_put_to_profile_token_route() -> None:
     """Profile token update sends PUT /profile/tokens/{tokenId}."""
     client = Client("https://api.linode.com/v4", "test-token")
