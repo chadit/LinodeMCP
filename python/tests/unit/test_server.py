@@ -851,3 +851,17 @@ async def test_linode_regions_availability_get_tool_is_exported_and_registered(
 
     srv = Server(sample_config)
     assert "linode_regions_availability_get" in srv.registered_tool_names
+
+
+async def test_profile_token_revoke_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Profile token revoke tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_profile_token_revoke_tool" in tools_mod.__all__
+    assert "handle_linode_profile_token_revoke" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert srv.active_profile.name == "full-access"
+    assert "linode_profile_token_revoke" in srv.registered_tool_names
