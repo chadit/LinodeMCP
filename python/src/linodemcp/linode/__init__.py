@@ -1481,6 +1481,15 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("DeleteVLAN", e) from e
 
+    async def delete_tag(self, tag_label: str) -> None:
+        """Delete a tag."""
+        encoded_label = quote(tag_label, safe="")
+        endpoint = f"/tags/{encoded_label}"
+        try:
+            await self.make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteTag", e) from e
+
     async def list_nodebalancers(self) -> list[NodeBalancer]:
         """List NodeBalancers."""
         try:
@@ -4440,6 +4449,10 @@ class RetryableClient:
     async def delete_vlan(self, region_id: str, label: str) -> None:
         """Delete VLAN with retry."""
         await self._execute_with_retry(self.client.delete_vlan, region_id, label)
+
+    async def delete_tag(self, tag_label: str) -> None:
+        """Delete tag with retry."""
+        await self._execute_with_retry(self.client.delete_tag, tag_label)
 
     async def list_nodebalancers(self) -> list[NodeBalancer]:
         """List NodeBalancers with retry."""
