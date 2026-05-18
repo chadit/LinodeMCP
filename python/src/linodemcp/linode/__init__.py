@@ -2539,6 +2539,35 @@ class Client:
             logger.exception("HTTP error creating volume: %s", e)
             raise NetworkError("CreateVolume", e) from e
 
+    async def clone_volume(self, volume_id: int, label: str) -> Volume:
+        """Clone a volume."""
+        endpoint = f"/volumes/{volume_id}/clone"
+        validate_label(label)
+
+        logger.info("Cloning volume", extra={"volume_id": volume_id, "label": label})
+
+        try:
+            response = await self.make_request("POST", endpoint, {"label": label})
+            data = response.json()
+            result = self._parse_volume(data)
+            logger.info(
+                "Volume cloned",
+                extra={"source_volume_id": volume_id, "cloned_volume_id": result.id},
+            )
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout cloning volume: %s", e)
+            raise NetworkError("CloneVolume", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout cloning volume: %s", e)
+            raise NetworkError("CloneVolume", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error cloning volume")
+            raise NetworkError("CloneVolume", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error cloning volume: %s", e)
+            raise NetworkError("CloneVolume", e) from e
+
     async def attach_volume(
         self,
         volume_id: int,
@@ -4899,6 +4928,13 @@ class RetryableClient:
         """Create volume with retry."""
         result: Volume = await self._execute_with_retry(
             self.client.create_volume, label, region, linode_id, size, tags
+        )
+        return result
+
+    async def clone_volume(self, volume_id: int, label: str) -> Volume:
+        """Clone volume with retry."""
+        result: Volume = await self._execute_with_retry(
+            self.client.clone_volume, volume_id, label
         )
         return result
 

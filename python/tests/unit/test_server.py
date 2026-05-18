@@ -278,6 +278,19 @@ async def test_volume_get_tool_is_exported_and_registered(
     assert "linode_volume_get" in srv.registered_tool_names
 
 
+async def test_volume_clone_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Volume clone tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_volume_clone_tool" in tools_mod.__all__
+    assert "handle_linode_volume_clone" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_volume_clone" in srv.registered_tool_names
+
+
 async def test_ipv6_range_create_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

@@ -203,6 +203,7 @@ from linodemcp.tools import (
     handle_linode_vlan_delete,
     handle_linode_vlans_list,
     handle_linode_volume_attach,
+    handle_linode_volume_clone,
     handle_linode_volume_create,
     handle_linode_volume_delete,
     handle_linode_volume_detach,
@@ -2938,6 +2939,66 @@ async def test_handle_linode_volume_create(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "my-volume" in result[0].text
+
+
+async def test_handle_linode_volume_clone_no_confirm(sample_config: Config) -> None:
+    """Test linode_volume_clone tool without confirmation."""
+    result = await handle_linode_volume_clone(
+        {"volume_id": 12345, "label": "my-volume-clone"}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "confirm" in result[0].text.lower()
+
+
+async def test_handle_linode_volume_clone_requires_label(
+    sample_config: Config,
+) -> None:
+    """Test linode_volume_clone validates label."""
+    result = await handle_linode_volume_clone(
+        {"volume_id": 12345, "confirm": True}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "label is required" in result[0].text
+
+
+async def test_handle_linode_volume_clone(sample_config: Config) -> None:
+    """Test linode_volume_clone tool."""
+    mock_volume = Volume(
+        id=23456,
+        label="my-volume-clone",
+        status="creating",
+        size=20,
+        region="us-east",
+        linode_id=None,
+        linode_label=None,
+        filesystem_path="/dev/disk/by-id/scsi-0Linode_Volume_my-volume-clone",
+        created="2024-01-15T10:00:00",
+        updated="2024-01-15T10:00:00",
+        tags=[],
+        hardware_type="nvme",
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.clone_volume.return_value = mock_volume
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_volume_clone(
+            {
+                "volume_id": 12345,
+                "label": "my-volume-clone",
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+        mock_client.clone_volume.assert_awaited_once_with(12345, "my-volume-clone")
+        assert len(result) == 1
+        assert "my-volume-clone" in result[0].text
 
 
 async def test_handle_linode_volume_attach(sample_config: Config) -> None:

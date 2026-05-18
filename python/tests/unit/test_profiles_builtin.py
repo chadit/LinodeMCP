@@ -50,6 +50,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_instance_ip_allocate", Capability.Write),
         # Block storage.
         ToolDescriptor("linode_volumes_list", Capability.Read),
+        ToolDescriptor("linode_volume_clone", Capability.Write),
         ToolDescriptor("linode_volume_create", Capability.Write),
         ToolDescriptor("linode_volume_delete", Capability.Destroy),
         # Object storage.
@@ -171,6 +172,7 @@ def test_compute_admin_includes_instance_writes() -> None:
     assert "linode_instance_delete" in compute_admin_tools
     # Block storage and SSH keys are in compute-admin's elevated categories
     # per spec.
+    assert "linode_volume_clone" in compute_admin_tools
     assert "linode_volume_create" in compute_admin_tools
     assert "linode_sshkey_create" in compute_admin_tools
 
@@ -182,6 +184,7 @@ def test_network_admin_excludes_compute_writes() -> None:
 
     network_admin_tools = set(profiles["network-admin"].allowed_tools)
     assert "linode_instance_create" not in network_admin_tools
+    assert "linode_volume_clone" not in network_admin_tools
     assert "linode_volume_create" not in network_admin_tools
     # But network mutators are present.
     assert "linode_firewall_create" in network_admin_tools
@@ -210,6 +213,7 @@ def test_storage_admin_includes_backups_but_not_other_compute() -> None:
 
     storage_tools = set(profiles["storage-admin"].allowed_tools)
     assert "linode_instance_backup_create" in storage_tools
+    assert "linode_volume_clone" in storage_tools
     assert "linode_volume_create" in storage_tools
     assert "linode_object_storage_bucket_create" in storage_tools
     # No general compute write access.
