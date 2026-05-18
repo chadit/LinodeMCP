@@ -1,6 +1,6 @@
 """Linode account tool - authenticated user account information."""
 
-from typing import Any
+from typing import Any, cast
 
 from mcp.types import TextContent, Tool
 
@@ -199,6 +199,92 @@ async def handle_linode_account_tag_objects_list(
         )
 
     return await execute_tool(cfg, arguments, "list tagged objects", _call)
+
+
+def create_linode_account_tag_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_tag_create tool."""
+    return Tool(
+        name="linode_account_tag_create",
+        description="Creates a Linode account tag and optionally assigns resources.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "label": {"type": "string", "description": "Tag label to create"},
+                "domains": {
+                    "type": "array",
+                    "items": {"type": "integer", "minimum": 1},
+                    "description": "Domain IDs to assign to the tag",
+                },
+                "linodes": {
+                    "type": "array",
+                    "items": {"type": "integer", "minimum": 1},
+                    "description": "Linode IDs to assign to the tag",
+                },
+                "nodebalancers": {
+                    "type": "array",
+                    "items": {"type": "integer", "minimum": 1},
+                    "description": "NodeBalancer IDs to assign to the tag",
+                },
+                "volumes": {
+                    "type": "array",
+                    "items": {"type": "integer", "minimum": 1},
+                    "description": "Volume IDs to assign to the tag",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this mutating operation.",
+                },
+            },
+            "required": ["label", "confirm"],
+        },
+    ), Capability.Write
+
+
+def _optional_int_list_argument(
+    arguments: dict[str, Any], name: str
+) -> list[int] | None:
+    value = arguments.get(name)
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise TypeError(f"{name} must be a list of integers")
+    values: list[int] = []
+    for item in cast("list[object]", value):
+        if not isinstance(item, int) or isinstance(item, bool):
+            raise TypeError(f"{name} must be a list of integers")
+        if item < 1:
+            raise ValueError(f"{name} must contain positive integers")
+        values.append(item)
+    if not values:
+        return None
+    return values
+
+
+async def handle_linode_account_tag_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_tag_create tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response("This creates a tag. Set confirm=true to proceed.")
+
+    label = arguments.get("label")
+    if not isinstance(label, str) or not label.strip():
+        return error_response("label is required")
+
+    try:
+        resource_ids = {
+            name: _optional_int_list_argument(arguments, name)
+            for name in ("domains", "linodes", "nodebalancers", "volumes")
+        }
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        tag = await client.create_tag(label.strip(), **resource_ids)
+        return {"message": f"Tag '{label.strip()}' created successfully", "tag": tag}
+
+    return await execute_tool(cfg, arguments, "create Linode tag", _call)
 
 
 def create_linode_account_tag_delete_tool() -> tuple[Tool, Capability]:

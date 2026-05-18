@@ -430,6 +430,76 @@ async def test_retryable_list_tagged_objects_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_create_tag_sends_post_to_tags_route() -> None:
+    """Test creating a tag sends POST /tags with documented body fields."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response_data: dict[str, Any] = {"label": "production"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.create_tag(
+            "production",
+            domains=[1],
+            linodes=[2],
+            nodebalancers=[3],
+            volumes=[4],
+        )
+
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "POST",
+        "/tags",
+        {
+            "label": "production",
+            "domains": [1],
+            "linodes": [2],
+            "nodebalancers": [3],
+            "volumes": [4],
+        },
+    )
+    await client.close()
+
+
+async def test_create_tag_wraps_http_errors() -> None:
+    """Test creating a tag wraps HTTP errors with operation context."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.create_tag("production")
+
+    assert "CreateTag" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_create_tag_delegates_to_client() -> None:
+    """Test RetryableClient delegates tag creation to Client.create_tag."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "create_tag", new_callable=AsyncMock
+    ) as mock_create:
+        mock_create.return_value = {"label": "production"}
+        result = await retryable.create_tag("production", linodes=[123])
+
+    assert result == {"label": "production"}
+    mock_create.assert_awaited_once_with(
+        "production",
+        domains=None,
+        linodes=[123],
+        nodebalancers=None,
+        volumes=None,
+    )
+    await retryable.close()
+
+
 async def test_delete_tag_sends_delete_to_tag_route() -> None:
     """Test deleting a tag sends DELETE /tags/{tagLabel}."""
     client = Client("https://api.linode.com/v4", "test-token")

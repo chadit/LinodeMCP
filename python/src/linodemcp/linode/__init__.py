@@ -1501,6 +1501,31 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListTaggedObjects", e) from e
 
+    async def create_tag(
+        self,
+        label: str,
+        domains: list[int] | None = None,
+        linodes: list[int] | None = None,
+        nodebalancers: list[int] | None = None,
+        volumes: list[int] | None = None,
+    ) -> dict[str, Any]:
+        """Create a tag and optionally assign supported resources."""
+        body: dict[str, Any] = {"label": label}
+        if domains is not None:
+            body["domains"] = domains
+        if linodes is not None:
+            body["linodes"] = linodes
+        if nodebalancers is not None:
+            body["nodebalancers"] = nodebalancers
+        if volumes is not None:
+            body["volumes"] = volumes
+        try:
+            response = await self.make_request("POST", "/tags", body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateTag", e) from e
+
     async def delete_tag(self, tag_label: str) -> None:
         """Delete a tag."""
         encoded_label = quote(tag_label, safe="")
@@ -4477,6 +4502,26 @@ class RetryableClient:
         result: dict[str, Any] = await self._execute_with_retry(
             lambda: self.client.list_tagged_objects(
                 tag_label, page=page, page_size=page_size
+            )
+        )
+        return result
+
+    async def create_tag(
+        self,
+        label: str,
+        domains: list[int] | None = None,
+        linodes: list[int] | None = None,
+        nodebalancers: list[int] | None = None,
+        volumes: list[int] | None = None,
+    ) -> dict[str, Any]:
+        """Create tag with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.create_tag(
+                label,
+                domains=domains,
+                linodes=linodes,
+                nodebalancers=nodebalancers,
+                volumes=volumes,
             )
         )
         return result
