@@ -19,8 +19,11 @@ from linodemcp.cli.profile import (
     print_profile_detail,
     resolve_active_name,
     run_profile_command,
+    run_profile_disable,
+    run_profile_enable,
     run_profile_list,
     run_profile_show,
+    run_profile_use,
 )
 
 __all__ = [
@@ -29,6 +32,9 @@ __all__ = [
     "print_profile_detail",
     "resolve_active_name",
     "run_profile_command",
+    "run_profile_disable",
+    "run_profile_enable",
     "run_profile_list",
     "run_profile_show",
+    "run_profile_use",
 ]

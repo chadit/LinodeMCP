@@ -39,10 +39,15 @@ const (
 const profileUsage = `Usage: linodemcp profile <subcommand> [args]
 
 Read-only:
-  list           List all built-in and user-defined profiles.
-  show <name>    Show details for a single profile.
+  list             List all built-in and user-defined profiles.
+  show <name>      Show details for a single profile.
 
-Mutators (Phase 7b/7c): use, clone, delete, enable, disable.`
+Mutators (atomic config write, comments and ordering not preserved):
+  use <name>       Switch the active profile.
+  enable <name>    Clear the disabled flag on a built-in profile.
+  disable <name>   Set the disabled flag on a built-in profile.
+
+Phase 7c will add: clone <src> <dst>, delete <name>.`
 
 // RunProfileCommand dispatches `linodemcp profile <subcommand> ...` and
 // returns the exit code. Unknown subcommand or empty args print usage to
@@ -60,6 +65,12 @@ func RunProfileCommand(args []string, stdout, stderr io.Writer) int {
 		return RunProfileList(args[1:], stdout, stderr)
 	case "show":
 		return RunProfileShow(args[1:], stdout, stderr)
+	case "use":
+		return RunProfileUse(args[1:], "", stdout, stderr)
+	case "enable":
+		return RunProfileEnable(args[1:], "", stdout, stderr)
+	case "disable":
+		return RunProfileDisable(args[1:], "", stdout, stderr)
 	default:
 		writef(stderr, "unknown profile subcommand: %s\n\n%s\n", args[0], profileUsage)
 
@@ -209,6 +220,177 @@ func loadConfigOrError(stderr io.Writer) (*config.Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// RunProfileUse switches the active profile. The named profile must
+// exist (built-in or user-defined); unknown names exit 1 without
+// writing. On success the rewrite is atomic: a malformed write never
+// replaces the existing file.
+//
+// configPath identifies the config file to load and rewrite; passing
+// an empty string falls back to “config.GetConfigPath()“ so the
+// production dispatcher (cmd/linodemcp) doesn't have to repeat the
+// lookup. Tests pass a tempdir-rooted path.
+//
+// Comments and key ordering in the source YAML/JSON are NOT preserved;
+// this trade-off is documented in the usage block above.
+func RunProfileUse(args []string, configPath string, stdout, stderr io.Writer) int {
+	if len(args) != 1 {
+		writeln(stderr, "Usage: linodemcp profile use <name>")
+
+		return ExitUsageError
+	}
+
+	name := args[0]
+	path := resolveConfigPath(configPath)
+
+	cfg, err := loadConfigFromPath(path, stderr)
+	if err != nil {
+		return 1
+	}
+
+	if _, ok := AllProfiles(cfg)[name]; !ok {
+		writef(stderr, "profile %q not found.\n", name)
+
+		return 1
+	}
+
+	cfg.ActiveProfile = name
+
+	return writeAndReport(path, cfg, stdout, stderr, "active profile switched to "+name)
+}
+
+// RunProfileEnable clears the disabled flag on a built-in profile via
+// the ProfilesBuiltinOverrides map. Only built-ins are subject to this
+// override (user-defined profiles cannot be disabled today). See
+// RunProfileUse for the configPath parameter semantics.
+func RunProfileEnable(args []string, configPath string, stdout, stderr io.Writer) int {
+	return runProfileToggle(args, configPath, stdout, stderr, false, "enabled")
+}
+
+// RunProfileDisable sets the disabled flag on a built-in profile via
+// the same override map RunProfileEnable clears. Disabling the active
+// profile is rejected so the server cannot get stuck.
+func RunProfileDisable(args []string, configPath string, stdout, stderr io.Writer) int {
+	return runProfileToggle(args, configPath, stdout, stderr, true, "disabled")
+}
+
+// runProfileToggle is the shared body for enable/disable. disabled
+// selects the target value; verb is the past-tense word used in the
+// success message ("enabled"/"disabled").
+func runProfileToggle(
+	args []string,
+	configPath string,
+	stdout, stderr io.Writer,
+	disabled bool,
+	verb string,
+) int {
+	if len(args) != 1 {
+		writef(stderr, "Usage: linodemcp profile %s <name>\n", verb)
+
+		return ExitUsageError
+	}
+
+	name := args[0]
+	path := resolveConfigPath(configPath)
+
+	cfg, err := loadConfigFromPath(path, stderr)
+	if err != nil {
+		return 1
+	}
+
+	if !isBuiltinName(name) {
+		writef(
+			stderr,
+			"profile %q is not a built-in; enable/disable only applies to built-in profiles.\n",
+			name,
+		)
+
+		return 1
+	}
+
+	if disabled && ResolveActiveName(cfg) == name {
+		writef(
+			stderr,
+			"profile %q is the active profile; switch first via `profile use <other>` before disabling.\n",
+			name,
+		)
+
+		return 1
+	}
+
+	if cfg.ProfilesBuiltinOverrides == nil {
+		cfg.ProfilesBuiltinOverrides = map[string]config.BuiltinOverride{}
+	}
+
+	cfg.ProfilesBuiltinOverrides[name] = config.BuiltinOverride{Disabled: disabled}
+
+	return writeAndReport(path, cfg, stdout, stderr, "profile "+name+" "+verb)
+}
+
+// resolveConfigPath returns the explicit configPath when non-empty,
+// otherwise falls back to “config.GetConfigPath()“. The fallback
+// branch covers the production runtime; the explicit-path branch
+// supports tempdir-rooted config files in unit tests.
+func resolveConfigPath(configPath string) string {
+	if configPath != "" {
+		return configPath
+	}
+
+	return config.GetConfigPath()
+}
+
+// loadConfigFromPath reads the config from path, mirroring the error-
+// reporting shape of the original loadConfigOrError but without
+// reaching for “GetConfigPath“ itself.
+func loadConfigFromPath(path string, stderr io.Writer) (*config.Config, error) {
+	cfg, err := config.Load(path)
+	if err != nil {
+		writef(stderr, "load config from %s: %v\n", path, err)
+
+		return nil, fmt.Errorf("load config: %w", err)
+	}
+
+	return cfg, nil
+}
+
+// writeAndReport calls config.WriteAtomic and prints either the
+// success message or the failure. Exists so the three mutator
+// subcommands share the same I/O footprint.
+func writeAndReport(
+	path string,
+	cfg *config.Config,
+	stdout, stderr io.Writer,
+	success string,
+) int {
+	if err := config.WriteAtomic(path, cfg); err != nil {
+		writef(stderr, "write config to %s: %v\n", path, err)
+
+		return 1
+	}
+
+	writef(stdout, "%s\n", success)
+
+	return 0
+}
+
+// isBuiltinName reports whether name matches any of the eight
+// built-in profile names. Used by enable/disable to refuse to operate
+// on user-defined profiles where the override map has no effect.
+func isBuiltinName(name string) bool {
+	switch name {
+	case profiles.BuiltinDefault,
+		profiles.BuiltinReadonlyFull,
+		profiles.BuiltinComputeAdmin,
+		profiles.BuiltinNetworkAdmin,
+		profiles.BuiltinKubernetesAdmin,
+		profiles.BuiltinStorageAdmin,
+		profiles.BuiltinFullAccess,
+		profiles.BuiltinEmergency:
+		return true
+	default:
+		return false
+	}
 }
 
 // AllProfiles returns every profile the user could activate, keyed by

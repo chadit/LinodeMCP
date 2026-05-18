@@ -16,4 +16,9 @@ var (
 	ErrMissingAPIURL        = errors.New("api URL is required when token is provided")
 	ErrMissingToken         = errors.New("token is required when API URL is provided")
 	ErrWatcherStopped       = errors.New("config watcher stopped")
+	// ErrNilConfig is returned by WriteAtomic when the caller passes
+	// nil instead of a Config pointer. Callers can match with
+	// errors.Is to distinguish the programmer-error path from on-disk
+	// I/O failures.
+	ErrNilConfig = errors.New("config: cannot write nil config")
 )

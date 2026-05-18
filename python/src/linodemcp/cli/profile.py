@@ -8,9 +8,15 @@ build catalog, print. No watcher, no linode client. Tests live in
 from __future__ import annotations
 
 import dataclasses
-from typing import TextIO
+from typing import TYPE_CHECKING, TextIO
 
-from linodemcp.config import Config, get_config_path, load_from_file
+from linodemcp.config import (
+    BuiltinOverride,
+    Config,
+    get_config_path,
+    load_from_file,
+    write_atomic,
+)
 from linodemcp.profiles import (
     DEFAULT_PROFILE_NAME,
     Profile,
@@ -18,6 +24,23 @@ from linodemcp.profiles import (
     builtin_profiles,
 )
 from linodemcp.server import get_tool_registry
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
+_BUILTIN_PROFILE_NAMES: frozenset[str] = frozenset(
+    {
+        "default",
+        "readonly-full",
+        "compute-admin",
+        "network-admin",
+        "kubernetes-admin",
+        "storage-admin",
+        "full-access",
+        "emergency",
+    }
+)
 
 # EXIT_USAGE_ERROR is the conventional code for argument-shape problems
 # (matches sysexits' EX_USAGE). Re-exported so main can use the same
@@ -35,10 +58,15 @@ PROFILE_USAGE = """\
 Usage: linodemcp profile <subcommand> [args]
 
 Read-only:
-  list           List all built-in and user-defined profiles.
-  show <name>    Show details for a single profile.
+  list             List all built-in and user-defined profiles.
+  show <name>      Show details for a single profile.
 
-Mutators (Phase 7b/7c): use, clone, delete, enable, disable.\
+Mutators (atomic config write, comments and ordering not preserved):
+  use <name>       Switch the active profile.
+  enable <name>    Clear the disabled flag on a built-in profile.
+  disable <name>   Set the disabled flag on a built-in profile.
+
+Phase 7c will add: clone <src> <dst>, delete <name>.\
 """
 
 
@@ -55,12 +83,162 @@ def run_profile_command(args: list[str], stdout: TextIO, stderr: TextIO) -> int:
 
     sub = args[0]
     rest = args[1:]
-    if sub == "list":
-        return run_profile_list(rest, stdout, stderr)
-    if sub == "show":
-        return run_profile_show(rest, stdout, stderr)
+
+    read_only_handlers: dict[str, Callable[[list[str], TextIO, TextIO], int]] = {
+        "list": run_profile_list,
+        "show": run_profile_show,
+    }
+    if sub in read_only_handlers:
+        return read_only_handlers[sub](rest, stdout, stderr)
+
+    mutator_handlers: dict[
+        str, Callable[[list[str], Path | None, TextIO, TextIO], int]
+    ] = {
+        "use": run_profile_use,
+        "enable": run_profile_enable,
+        "disable": run_profile_disable,
+    }
+    if sub in mutator_handlers:
+        return mutator_handlers[sub](rest, None, stdout, stderr)
+
     print(f"unknown profile subcommand: {sub}\n\n{PROFILE_USAGE}", file=stderr)
     return EXIT_USAGE_ERROR
+
+
+def run_profile_use(
+    args: list[str],
+    config_path: Path | None,
+    stdout: TextIO,
+    stderr: TextIO,
+) -> int:
+    """Switch the active profile after validating the target exists.
+
+    ``config_path`` is the file to load and rewrite; ``None`` falls
+    back to ``get_config_path()``. Unknown profile names exit 1 without
+    writing; on success the rewrite is atomic.
+    """
+    if len(args) != 1:
+        print("Usage: linodemcp profile use <name>", file=stderr)
+        return EXIT_USAGE_ERROR
+
+    name = args[0]
+    path = config_path if config_path is not None else get_config_path()
+
+    cfg = _load_config_from_path(path, stderr)
+    if cfg is None:
+        return 1
+
+    if name not in all_profiles(cfg):
+        print(f'profile "{name}" not found.', file=stderr)
+        return 1
+
+    cfg.active_profile = name
+    return _write_and_report(
+        path, cfg, stdout, stderr, f"active profile switched to {name}"
+    )
+
+
+def run_profile_enable(
+    args: list[str],
+    config_path: Path | None,
+    stdout: TextIO,
+    stderr: TextIO,
+) -> int:
+    """Clear the disabled flag on a built-in profile via overrides.
+
+    Only built-ins are subject to the override map; calling enable on
+    a user-defined profile exits 1 since the override would silently
+    do nothing.
+    """
+    return _run_profile_toggle(
+        args, config_path, stdout, stderr, disabled=False, verb="enabled"
+    )
+
+
+def run_profile_disable(
+    args: list[str],
+    config_path: Path | None,
+    stdout: TextIO,
+    stderr: TextIO,
+) -> int:
+    """Set the disabled flag on a built-in profile.
+
+    Refuses to disable the currently-active profile so the server
+    cannot get stuck unable to start.
+    """
+    return _run_profile_toggle(
+        args, config_path, stdout, stderr, disabled=True, verb="disabled"
+    )
+
+
+def _run_profile_toggle(
+    args: list[str],
+    config_path: Path | None,
+    stdout: TextIO,
+    stderr: TextIO,
+    *,
+    disabled: bool,
+    verb: str,
+) -> int:
+    """Shared body for enable/disable."""
+    if len(args) != 1:
+        print(f"Usage: linodemcp profile {verb} <name>", file=stderr)
+        return EXIT_USAGE_ERROR
+
+    name = args[0]
+    path = config_path if config_path is not None else get_config_path()
+
+    cfg = _load_config_from_path(path, stderr)
+    if cfg is None:
+        return 1
+
+    if name not in _BUILTIN_PROFILE_NAMES:
+        print(
+            f'profile "{name}" is not a built-in; enable/disable only applies '
+            "to built-in profiles.",
+            file=stderr,
+        )
+        return 1
+
+    if disabled and resolve_active_name(cfg) == name:
+        print(
+            f'profile "{name}" is the active profile; switch first via '
+            "`profile use <other>` before disabling.",
+            file=stderr,
+        )
+        return 1
+
+    overrides = dict(cfg.profiles_builtin_overrides or {})
+    overrides[name] = BuiltinOverride(disabled=disabled)
+    cfg.profiles_builtin_overrides = overrides
+
+    return _write_and_report(path, cfg, stdout, stderr, f"profile {name} {verb}")
+
+
+def _load_config_from_path(path: Path, stderr: TextIO) -> Config | None:
+    """Load the config from path with friendly stderr on failure."""
+    try:
+        return load_from_file(path)
+    except Exception as exc:
+        print(f"load config from {path}: {exc}", file=stderr)
+        return None
+
+
+def _write_and_report(
+    path: Path,
+    cfg: Config,
+    stdout: TextIO,
+    stderr: TextIO,
+    success: str,
+) -> int:
+    """Write the config atomically and print success or the error."""
+    try:
+        write_atomic(path, cfg)
+    except Exception as exc:
+        print(f"write config to {path}: {exc}", file=stderr)
+        return 1
+    print(success, file=stdout)
+    return 0
 
 
 def run_profile_list(args: list[str], stdout: TextIO, stderr: TextIO) -> int:

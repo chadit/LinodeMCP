@@ -11,7 +11,14 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 )
 
-const envLabelProduction = "Production"
+// Shared test constants. Pulled out so goconst stops flagging the
+// same string recurring in config_test.go and write_test.go.
+const (
+	envLabelProduction = "Production"
+	envKeyDefault      = "default"
+	envLabelDefault    = "Default"
+	apiURLLinodeV4     = "https://api.linode.com/v4"
+)
 
 func validYAMLConfig() string {
 	return `
@@ -221,8 +228,8 @@ func TestSelectEnvironment(t *testing.T) {
 			name: "falls back to default",
 			cfg: &config.Config{
 				Environments: map[string]config.EnvironmentConfig{
-					"default": {Label: "Default Env"},
-					"other":   {Label: "Other"},
+					envKeyDefault: {Label: "Default Env"},
+					"other":       {Label: "Other"},
 				},
 			},
 			input:     "nonexistent",
@@ -232,7 +239,7 @@ func TestSelectEnvironment(t *testing.T) {
 			name: "empty input",
 			cfg: &config.Config{
 				Environments: map[string]config.EnvironmentConfig{
-					"default": {Label: "Default"},
+					envKeyDefault: {Label: envLabelDefault},
 				},
 			},
 			input:   "",

@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
@@ -569,6 +570,138 @@ def load_from_file(path: Path) -> Config:
 def load() -> Config:
     """Load configuration from default location."""
     return load_from_file(get_config_path())
+
+
+def _config_to_data(cfg: Config) -> dict[str, Any]:
+    """Convert a Config back into the parsed-dict shape ``_data_to_config``
+    consumes. The keys match the on-disk schema (camelCase for server
+    fields, snake_case for the profile maps) so the round-trip is
+    byte-for-byte symmetric with ``load_from_file``.
+    """
+    environments: dict[str, Any] = {}
+    for name, env in cfg.environments.items():
+        environments[name] = {
+            "label": env.label,
+            "linode": {
+                "apiUrl": env.linode.api_url,
+                "token": env.linode.token,
+            },
+        }
+
+    profiles: dict[str, Any] = {}
+    for name, prof in (cfg.profiles or {}).items():
+        profiles[name] = {
+            "description": prof.description,
+            "allowed_tools": list(prof.allowed_tools),
+            "denied_tools": list(prof.denied_tools),
+            "allowed_environments": list(prof.allowed_environments),
+            "required_token_scopes": list(prof.required_token_scopes),
+            "allow_yolo": prof.allow_yolo,
+        }
+
+    overrides: dict[str, Any] = {}
+    for name, override in (cfg.profiles_builtin_overrides or {}).items():
+        overrides[name] = {"disabled": override.disabled}
+
+    return {
+        "server": {
+            "name": cfg.server.name,
+            "logLevel": cfg.server.log_level,
+            "transport": cfg.server.transport,
+            "host": cfg.server.host,
+            "port": cfg.server.port,
+        },
+        "observability": {
+            "tracing": {
+                "enabled": cfg.observability.tracing.enabled,
+                "endpoint": cfg.observability.tracing.endpoint,
+                "sampleRate": cfg.observability.tracing.sample_rate,
+            },
+            "metrics": {
+                "enabled": cfg.observability.metrics.enabled,
+                "runtime": cfg.observability.metrics.runtime,
+                "host": cfg.observability.metrics.host,
+                "prometheusPort": cfg.observability.metrics.prometheus_port,
+                "prometheusPath": cfg.observability.metrics.prometheus_path,
+            },
+            "logging": {
+                "format": cfg.observability.logging.format,
+                "level": cfg.observability.logging.level,
+            },
+            "health": {
+                "enabled": cfg.observability.health.enabled,
+                "port": cfg.observability.health.port,
+                "path": cfg.observability.health.path,
+            },
+        },
+        "resilience": {
+            "rateLimitPerMinute": cfg.resilience.rate_limit_per_minute,
+            "circuitBreakerThreshold": cfg.resilience.circuit_breaker_threshold,
+            "circuitBreakerTimeout": cfg.resilience.circuit_breaker_timeout,
+            "maxRetries": cfg.resilience.max_retries,
+            "baseRetryDelay": cfg.resilience.base_retry_delay,
+            "maxRetryDelay": cfg.resilience.max_retry_delay,
+        },
+        "environments": environments,
+        "active_profile": cfg.active_profile,
+        "profiles": profiles,
+        "profiles_builtin_overrides": overrides,
+    }
+
+
+def write_atomic(path: Path, cfg: Config) -> None:
+    """Rewrite ``path`` with ``cfg`` using a temp-file-and-rename pattern.
+
+    Format is detected from the path's suffix: ``.json`` produces JSON,
+    anything else writes YAML. The fresh data is validated by round-
+    tripping through ``_data_to_config`` and ``validate_config`` before
+    the rename so a malformed write never replaces a good config.
+
+    Comments and key ordering in the original file are NOT preserved
+    (PyYAML, like Go's yaml.v3 in non-Node mode, drops them). This
+    trade-off is documented in the CLI usage block.
+    """
+    data = _config_to_data(cfg)
+    _apply_defaults(data)
+
+    candidate = _data_to_config(data)
+    validate_config(candidate)
+
+    suffix = path.suffix.lower()
+    if suffix == ".json":
+        serialized = json.dumps(data, indent=2) + "\n"
+    else:
+        serialized = yaml.safe_dump(data, sort_keys=False)
+
+    parent = path.parent
+    parent.mkdir(parents=True, exist_ok=True)
+
+    # Preserve existing mode bits when possible; new files default to 0600.
+    mode = 0o600
+    if path.exists():
+        mode = path.stat().st_mode & 0o777
+
+    # NamedTemporaryFile with delete=False so we can rename it. Same
+    # directory as the target so the rename is atomic on POSIX.
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=parent,
+        prefix=f".{path.name}.tmp.",
+        delete=False,
+    ) as tmp:
+        tmp.write(serialized)
+        tmp.flush()
+        os.fsync(tmp.fileno())
+        tmp_path = Path(tmp.name)
+
+    try:
+        tmp_path.chmod(mode)
+        tmp_path.replace(path)
+    except OSError:
+        if tmp_path.exists():
+            tmp_path.unlink()
+        raise
 
 
 def exists() -> bool:
