@@ -6,4 +6,5 @@ import "errors"
 var (
 	ErrConfigNil             = errors.New("config cannot be nil")
 	ErrExecuteNotImplemented = errors.New("execute method not implemented for wrapper")
+	errServerShuttingDown    = errors.New("server is shutting down")
 )
