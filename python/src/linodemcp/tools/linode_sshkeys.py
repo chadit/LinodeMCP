@@ -15,6 +15,53 @@ if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 
+def create_linode_sshkey_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_sshkey_get tool."""
+    return Tool(
+        name="linode_sshkey_get",
+        description="Gets one SSH key associated with your Linode profile.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "ssh_key_id": {
+                    "type": "integer",
+                    "description": "The ID of the SSH key to retrieve (required)",
+                },
+            },
+            "required": ["ssh_key_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_sshkey_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_sshkey_get tool request."""
+    ssh_key_id = arguments.get("ssh_key_id", 0)
+
+    if not ssh_key_id:
+        return [TextContent(type="text", text="Error: ssh_key_id is required")]
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        key = await client.get_ssh_key(int(ssh_key_id))
+        return {
+            "ssh_key": {
+                "id": key.id,
+                "label": key.label,
+                "ssh_key": truncate_string(key.ssh_key, SSH_KEY_TRUNCATE_LIMIT),
+                "created": key.created,
+            },
+        }
+
+    return await execute_tool(cfg, arguments, "retrieve SSH key", _call)
+
+
 def create_linode_sshkeys_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_sshkeys_list tool."""
     return Tool(

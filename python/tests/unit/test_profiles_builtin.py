@@ -75,6 +75,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_vpc_subnet_create", Capability.Write),
         # Security (SSH keys).
         ToolDescriptor("linode_sshkeys_list", Capability.Read),
+        ToolDescriptor("linode_sshkey_get", Capability.Read),
         ToolDescriptor("linode_sshkey_create", Capability.Write),
         # Monitor (no built-in elevates it currently except full-access).
         ToolDescriptor("linode_monitor_service_token_create", Capability.Write),
