@@ -1335,6 +1335,15 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetRegionAvailability", e) from e
 
+    async def list_regions_availability(self) -> list[dict[str, Any]]:
+        """List compute instance availability across regions."""
+        try:
+            response = await self.make_request("GET", "/regions/availability")
+            data: list[dict[str, Any]] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListRegionsAvailability", e) from e
+
     async def list_types(self) -> list[InstanceType]:
         """List Linode instance types."""
         try:
@@ -4554,6 +4563,13 @@ class RetryableClient:
         """Get compute instance availability for a region with retry."""
         result: list[dict[str, Any]] = await self._execute_with_retry(
             self.client.get_region_availability, region_id
+        )
+        return result
+
+    async def list_regions_availability(self) -> list[dict[str, Any]]:
+        """List compute instance availability across regions with retry."""
+        result: list[dict[str, Any]] = await self._execute_with_retry(
+            self.client.list_regions_availability
         )
         return result
 

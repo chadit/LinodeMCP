@@ -158,6 +158,40 @@ async def handle_linode_regions_get(
     return await execute_tool(cfg, arguments, f"retrieve region {region_id}", _call)
 
 
+def create_linode_regions_availability_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_regions_availability_list tool."""
+    return Tool(
+        name="linode_regions_availability_list",
+        description="Lists compute instance type availability across Linode regions",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+            },
+        },
+    ), Capability.Read
+
+
+async def handle_linode_regions_availability_list(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_regions_availability_list tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        availability = await client.list_regions_availability()
+        return {
+            "count": len(availability),
+            "availability": availability,
+        }
+
+    return await execute_tool(cfg, arguments, "retrieve regions availability", _call)
+
+
 def create_linode_regions_availability_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_regions_availability_get tool."""
     return Tool(
