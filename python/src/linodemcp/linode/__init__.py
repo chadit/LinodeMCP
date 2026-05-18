@@ -1605,6 +1605,25 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("CreateSupportTicket", e) from e
 
+    async def list_support_tickets(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List support tickets."""
+        endpoint = "/support/tickets"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListSupportTickets", e) from e
+
     async def get_support_ticket(self, ticket_id: int) -> dict[str, Any]:
         """Get a support ticket."""
         endpoint = f"/support/tickets/{ticket_id}"
@@ -4709,6 +4728,15 @@ class RetryableClient:
         """Get a support ticket with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_support_ticket, ticket_id
+        )
+        return result
+
+    async def list_support_tickets(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List support tickets with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_support_tickets(page=page, page_size=page_size)
         )
         return result
 

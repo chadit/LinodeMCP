@@ -636,6 +636,62 @@ async def test_retryable_create_support_ticket_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_list_support_tickets_sends_get_to_tickets_route() -> None:
+    """Test support ticket listing sends documented GET query."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response_data: dict[str, Any] = {
+        "data": [{"id": 789, "summary": "Need help"}],
+        "page": 2,
+        "pages": 3,
+        "results": 51,
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.list_support_tickets(page=2, page_size=25)
+
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "GET",
+        "/support/tickets?page=2&page_size=25",
+    )
+    await client.close()
+
+
+async def test_list_support_tickets_wraps_http_errors() -> None:
+    """Test support ticket listing wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.list_support_tickets()
+
+    assert "ListSupportTickets" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_list_support_tickets_delegates_to_client() -> None:
+    """Test RetryableClient delegates support ticket listing."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "list_support_tickets", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = {"data": [{"id": 789}]}
+        result = await retryable.list_support_tickets(page=2, page_size=25)
+
+    assert result == {"data": [{"id": 789}]}
+    mock_list.assert_awaited_once_with(page=2, page_size=25)
+    await retryable.close()
+
+
 async def test_get_support_ticket_sends_get_to_ticket_route() -> None:
     """Test support ticket retrieval sends documented GET route."""
     client = Client("https://api.linode.com/v4", "test-token")
