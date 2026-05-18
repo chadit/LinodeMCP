@@ -1554,6 +1554,57 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("DeleteTag", e) from e
 
+    async def create_support_ticket(
+        self,
+        summary: str,
+        description: str,
+        *,
+        bucket: str | None = None,
+        database_id: int | None = None,
+        domain_id: int | None = None,
+        firewall_id: int | None = None,
+        linode_id: int | None = None,
+        lkecluster_id: int | None = None,
+        longviewclient_id: int | None = None,
+        managed_issue: bool | None = None,
+        nodebalancer_id: int | None = None,
+        region: str | None = None,
+        severity: int | None = None,
+        vlan: str | None = None,
+        volume_id: int | None = None,
+        vpc_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Create a support ticket."""
+        body: dict[str, Any] = {
+            "summary": summary,
+            "description": description,
+        }
+        optional_fields: dict[str, Any] = {
+            "bucket": bucket,
+            "database_id": database_id,
+            "domain_id": domain_id,
+            "firewall_id": firewall_id,
+            "linode_id": linode_id,
+            "lkecluster_id": lkecluster_id,
+            "longviewclient_id": longviewclient_id,
+            "managed_issue": managed_issue,
+            "nodebalancer_id": nodebalancer_id,
+            "region": region,
+            "severity": severity,
+            "vlan": vlan,
+            "volume_id": volume_id,
+            "vpc_id": vpc_id,
+        }
+        body.update(
+            {key: value for key, value in optional_fields.items() if value is not None}
+        )
+        try:
+            response = await self.make_request("POST", "/support/tickets", body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateSupportTicket", e) from e
+
     async def get_support_ticket(self, ticket_id: int) -> dict[str, Any]:
         """Get a support ticket."""
         endpoint = f"/support/tickets/{ticket_id}"
@@ -4610,6 +4661,49 @@ class RetryableClient:
     async def delete_tag(self, tag_label: str) -> None:
         """Delete tag with retry."""
         await self._execute_with_retry(self.client.delete_tag, tag_label)
+
+    async def create_support_ticket(
+        self,
+        summary: str,
+        description: str,
+        *,
+        bucket: str | None = None,
+        database_id: int | None = None,
+        domain_id: int | None = None,
+        firewall_id: int | None = None,
+        linode_id: int | None = None,
+        lkecluster_id: int | None = None,
+        longviewclient_id: int | None = None,
+        managed_issue: bool | None = None,
+        nodebalancer_id: int | None = None,
+        region: str | None = None,
+        severity: int | None = None,
+        vlan: str | None = None,
+        volume_id: int | None = None,
+        vpc_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Create a support ticket with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.create_support_ticket(
+                summary,
+                description,
+                bucket=bucket,
+                database_id=database_id,
+                domain_id=domain_id,
+                firewall_id=firewall_id,
+                linode_id=linode_id,
+                lkecluster_id=lkecluster_id,
+                longviewclient_id=longviewclient_id,
+                managed_issue=managed_issue,
+                nodebalancer_id=nodebalancer_id,
+                region=region,
+                severity=severity,
+                vlan=vlan,
+                volume_id=volume_id,
+                vpc_id=vpc_id,
+            )
+        )
+        return result
 
     async def get_support_ticket(self, ticket_id: int) -> dict[str, Any]:
         """Get a support ticket with retry."""

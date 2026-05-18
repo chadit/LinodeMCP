@@ -349,6 +349,49 @@ async def test_account_tag_delete_tool_is_exported_and_registered(
     assert "linode_account_tag_delete" in srv.registered_tool_names
 
 
+async def test_account_support_ticket_create_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Support ticket create tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_support_ticket_create_tool" in tools_mod.__all__
+    assert "handle_linode_account_support_ticket_create" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_account_support_ticket_create" in srv.registered_tool_names
+
+
+async def test_account_support_ticket_create_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Support ticket create is callable through server dispatch."""
+    response_data = {"id": 789, "summary": "Need help"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_support_ticket.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_support_ticket_create",
+            {
+                "confirm": True,
+                "summary": "Need help",
+                "description": "Details",
+            },
+        )
+
+    assert json.loads(result[0].text) == {
+        "message": "Support ticket opened successfully",
+        "ticket": response_data,
+    }
+    mock_client.create_support_ticket.assert_awaited_once()
+
+
 async def test_account_support_ticket_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
