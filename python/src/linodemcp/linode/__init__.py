@@ -1481,6 +1481,26 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("DeleteVLAN", e) from e
 
+    async def list_tagged_objects(
+        self, tag_label: str, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List objects assigned to a tag."""
+        encoded_label = quote(tag_label, safe="")
+        endpoint = f"/tags/{encoded_label}"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListTaggedObjects", e) from e
+
     async def delete_tag(self, tag_label: str) -> None:
         """Delete a tag."""
         encoded_label = quote(tag_label, safe="")
@@ -4449,6 +4469,17 @@ class RetryableClient:
     async def delete_vlan(self, region_id: str, label: str) -> None:
         """Delete VLAN with retry."""
         await self._execute_with_retry(self.client.delete_vlan, region_id, label)
+
+    async def list_tagged_objects(
+        self, tag_label: str, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List objects assigned to a tag with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_tagged_objects(
+                tag_label, page=page, page_size=page_size
+            )
+        )
+        return result
 
     async def delete_tag(self, tag_label: str) -> None:
         """Delete tag with retry."""
