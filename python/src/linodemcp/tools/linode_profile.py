@@ -66,6 +66,83 @@ async def handle_linode_profile(
     return await execute_tool(cfg, arguments, "retrieve Linode profile", _call)
 
 
+def create_linode_profile_token_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_token_create tool."""
+    return Tool(
+        name="linode_profile_token_create",
+        description="Creates a Linode personal access token.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "expiry": {
+                    "type": ["string", "null"],
+                    "description": (
+                        "Expiration timestamp for the token. Omit to keep valid "
+                        "until manually revoked."
+                    ),
+                },
+                "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": PROFILE_TOKEN_LABEL_MAX_LENGTH,
+                    "description": "Display label for the personal access token",
+                },
+                "scopes": {
+                    "type": "string",
+                    "description": "Space-separated access scopes for the token",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this token creation.",
+                },
+            },
+            "required": ["confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_profile_token_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_profile_token_create tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This creates a profile token. Set confirm=true to proceed."
+        )
+
+    label = arguments.get("label")
+    if label is not None:
+        if not isinstance(label, str) or not label.strip():
+            return error_response("label must be a non-empty string")
+        if len(label) > PROFILE_TOKEN_LABEL_MAX_LENGTH:
+            return error_response("label must be 100 characters or fewer")
+
+    scopes = arguments.get("scopes")
+    if scopes is not None and (not isinstance(scopes, str) or not scopes.strip()):
+        return error_response("scopes must be a non-empty string")
+
+    expiry = arguments.get("expiry")
+    if expiry is not None and not isinstance(expiry, str):
+        return error_response("expiry must be a string or null")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        token = await client.create_profile_token(
+            expiry=expiry,
+            label=label.strip() if isinstance(label, str) else None,
+            scopes=scopes.strip() if isinstance(scopes, str) else None,
+        )
+        return {
+            "warning": (
+                "IMPORTANT: The token below is shown ONLY ONCE. "
+                "Save it now - it cannot be retrieved later."
+            ),
+            "token": token,
+        }
+
+    return await execute_tool(cfg, arguments, "create Linode profile token", _call)
+
+
 def create_linode_profile_token_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_profile_token_get tool."""
     return Tool(
