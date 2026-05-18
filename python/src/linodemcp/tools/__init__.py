@@ -294,8 +294,10 @@ from linodemcp.tools.linode_profile import (
 )
 from linodemcp.tools.linode_regions import (
     create_linode_regions_availability_get_tool,
+    create_linode_regions_get_tool,
     create_linode_regions_list_tool,
     handle_linode_regions_availability_get,
+    handle_linode_regions_get,
     handle_linode_regions_list,
 )
 from linodemcp.tools.linode_sshkeys import (
@@ -514,6 +516,7 @@ __all__ = [
     "create_linode_object_storage_types_list_tool",
     "create_linode_profile_tool",
     "create_linode_regions_availability_get_tool",
+    "create_linode_regions_get_tool",
     "create_linode_regions_list_tool",
     "create_linode_sshkey_create_tool",
     "create_linode_sshkey_delete_tool",
@@ -673,6 +676,7 @@ __all__ = [
     "handle_linode_object_storage_types_list",
     "handle_linode_profile",
     "handle_linode_regions_availability_get",
+    "handle_linode_regions_get",
     "handle_linode_regions_list",
     "handle_linode_sshkey_create",
     "handle_linode_sshkey_delete",

@@ -104,6 +104,60 @@ async def handle_linode_regions_list(
     return await execute_tool(cfg, arguments, "retrieve Linode regions", _call)
 
 
+def create_linode_regions_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_regions_get tool."""
+    return Tool(
+        name="linode_regions_get",
+        description="Gets details for a specific Linode region",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "region_id": {
+                    "type": "string",
+                    "description": "Region ID to retrieve (for example, 'us-east')",
+                },
+            },
+            "required": ["region_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_regions_get(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_regions_get tool request."""
+    region_id = str(arguments.get("region_id", "")).strip()
+    if not region_id:
+        return error_response("region_id is required")
+    if not _is_region_id(region_id):
+        return error_response(
+            "region_id must contain only letters, numbers, and hyphens"
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        region = await client.get_region(region_id)
+        return {
+            "id": region.id,
+            "label": region.label,
+            "country": region.country,
+            "capabilities": region.capabilities,
+            "status": region.status,
+            "resolvers": {
+                "ipv4": region.resolvers.ipv4,
+                "ipv6": region.resolvers.ipv6,
+            },
+            "site_type": region.site_type,
+        }
+
+    return await execute_tool(cfg, arguments, f"retrieve region {region_id}", _call)
+
+
 def create_linode_regions_availability_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_regions_availability_get tool."""
     return Tool(
