@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, execute_tool
+from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -39,6 +39,51 @@ def create_linode_firewalls_list_tool() -> tuple[Tool, Capability]:
             },
         },
     ), Capability.Read
+
+
+def create_linode_firewall_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_firewall_get tool."""
+    return Tool(
+        name="linode_firewall_get",
+        description="Gets a Cloud Firewall by ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "firewall_id": {
+                    "type": "integer",
+                    "description": "The ID of the firewall to retrieve (required)",
+                },
+            },
+            "required": ["firewall_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_firewall_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_firewall_get tool request."""
+    firewall_id = arguments.get("firewall_id", 0)
+    if not firewall_id:
+        return error_response("firewall_id is required")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        firewall = await client.get_firewall(int(firewall_id))
+        return {
+            "firewall": {
+                "id": firewall.id,
+                "label": firewall.label,
+                "status": firewall.status,
+                "rules_inbound_count": len(firewall.rules.inbound),
+                "rules_outbound_count": len(firewall.rules.outbound),
+                "created": firewall.created,
+                "updated": firewall.updated,
+                "tags": firewall.tags,
+            }
+        }
+
+    return await execute_tool(cfg, arguments, "retrieve firewall", _call)
 
 
 async def handle_linode_firewalls_list(
