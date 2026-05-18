@@ -23,6 +23,10 @@ const (
 )
 
 func main() {
+	if len(os.Args) >= 2 && os.Args[1] == "profile" {
+		os.Exit(runProfileCommand(os.Args[2:]))
+	}
+
 	exitCode := run()
 	os.Exit(exitCode)
 }

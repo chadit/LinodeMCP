@@ -6,6 +6,7 @@ import sys
 
 import structlog
 
+from linodemcp.cli import run_profile_command
 from linodemcp.config import Config, ConfigError, get_config_path
 from linodemcp.config.watcher import ConfigWatcher
 from linodemcp.observability import Observability
@@ -16,6 +17,11 @@ from linodemcp.profiles import (
 from linodemcp.server import Server
 from linodemcp.tools import helpers as tool_helpers
 from linodemcp.version import get_version_info
+
+# Number of positional arguments required before sys.argv[1] is safe to
+# index. Extracted so the magic-number check passes and the guard is
+# self-documenting in main().
+_MIN_ARGV_FOR_SUBCOMMAND = 2
 
 # Bootstrap logger for startup. The Observability constructor reconfigures
 # structlog once it knows the configured level/format, so this is just for
@@ -215,7 +221,17 @@ async def async_main() -> int:
 
 
 def main() -> None:
-    """Main entry point."""
+    """Main entry point.
+
+    Bare invocation (``linodemcp``) starts the MCP server via stdio.
+    Phase 7a profile subcommand: ``linodemcp profile list|show ...``
+    dispatches to the CLI helpers and exits without touching the
+    server runtime. Subcommand mode is synchronous and never calls
+    ``asyncio.run`` so simple operations don't pay the event-loop tax.
+    """
+    if len(sys.argv) >= _MIN_ARGV_FOR_SUBCOMMAND and sys.argv[1] == "profile":
+        sys.exit(run_profile_command(sys.argv[2:], sys.stdout, sys.stderr))
+
     try:
         exit_code = asyncio.run(async_main())
         sys.exit(exit_code)

@@ -82,7 +82,7 @@ func New(cfg *config.Config) (*Server, error) {
 		registered: make(map[string]*toolWrapper),
 	}
 
-	srv.allEntries = srv.collectAllToolEntries()
+	srv.allEntries = collectAllToolEntries(cfg)
 
 	if err := srv.registerTools(); err != nil {
 		return nil, err
@@ -490,21 +490,43 @@ func (s *Server) resolveProfileLocked(cfg *config.Config) (profiles.Profile, err
 	return profile, nil
 }
 
+// ToolDescriptors returns the flat list of (name, capability) pairs for
+// every tool the package can register against the given config. Lets
+// the CLI subcommands (profile list/show) enumerate the catalog without
+// instantiating a full Server (which would require a valid active
+// profile and would start up internal state). Pure: no goroutines, no
+// I/O, no global side effects.
+func ToolDescriptors(cfg *config.Config) []profiles.ToolDescriptor {
+	entries := collectAllToolEntries(cfg)
+	out := make([]profiles.ToolDescriptor, len(entries))
+
+	for i := range entries {
+		out[i] = profiles.ToolDescriptor{
+			Name:       entries[i].tool.Name,
+			Capability: entries[i].capability,
+		}
+	}
+
+	return out
+}
+
 // collectAllToolEntries returns the flat list of every tool the server
-// could register, ignoring profile filtering. Pass 1 of registerTools uses
-// this to build the descriptor list for profile resolution; pass 2 then
-// filters and calls addTool.
-func (s *Server) collectAllToolEntries() []toolEntry {
+// could register, ignoring profile filtering. Used by Server.registerTools
+// for the descriptor list it passes to profile resolution, and by the
+// package-level ToolDescriptors helper for CLI enumeration. Takes the
+// config directly so callers that haven't built a Server can still get
+// the catalog.
+func collectAllToolEntries(cfg *config.Config) []toolEntry {
 	categoryEntries := [][]toolEntry{
-		s.coreToolEntries(),
-		s.computeToolEntries(),
-		s.networkingToolEntries(),
-		s.dnsToolEntries(),
-		s.volumeToolEntries(),
-		s.objectStorageToolEntries(),
-		s.lkeToolEntries(),
-		s.vpcToolEntries(),
-		s.instanceDeepToolEntries(),
+		coreToolEntries(cfg),
+		computeToolEntries(cfg),
+		networkingToolEntries(cfg),
+		dnsToolEntries(cfg),
+		volumeToolEntries(cfg),
+		objectStorageToolEntries(cfg),
+		lkeToolEntries(cfg),
+		vpcToolEntries(cfg),
+		instanceDeepToolEntries(cfg),
 	}
 
 	var total int
@@ -520,8 +542,8 @@ func (s *Server) collectAllToolEntries() []toolEntry {
 	return entries
 }
 
-func (s *Server) coreToolEntries() []toolEntry {
-	return entriesFromFactories(s.config, []toolFactory{
+func coreToolEntries(cfg *config.Config) []toolEntry {
+	return entriesFromFactories(cfg, []toolFactory{
 		tools.NewHelloTool,
 		tools.NewVersionTool,
 		tools.NewLinodeProfileTool,
@@ -529,8 +551,8 @@ func (s *Server) coreToolEntries() []toolEntry {
 	})
 }
 
-func (s *Server) computeToolEntries() []toolEntry {
-	return entriesFromFactories(s.config, []toolFactory{
+func computeToolEntries(cfg *config.Config) []toolEntry {
+	return entriesFromFactories(cfg, []toolFactory{
 		tools.NewLinodeInstancesTool,
 		tools.NewLinodeInstanceGetTool,
 		tools.NewLinodeRegionsListTool,
@@ -549,8 +571,8 @@ func (s *Server) computeToolEntries() []toolEntry {
 	})
 }
 
-func (s *Server) networkingToolEntries() []toolEntry {
-	return entriesFromFactories(s.config, []toolFactory{
+func networkingToolEntries(cfg *config.Config) []toolEntry {
+	return entriesFromFactories(cfg, []toolFactory{
 		tools.NewLinodeFirewallsListTool,
 		tools.NewLinodeNodeBalancersListTool,
 		tools.NewLinodeNodeBalancerGetTool,
@@ -563,8 +585,8 @@ func (s *Server) networkingToolEntries() []toolEntry {
 	})
 }
 
-func (s *Server) dnsToolEntries() []toolEntry {
-	return entriesFromFactories(s.config, []toolFactory{
+func dnsToolEntries(cfg *config.Config) []toolEntry {
+	return entriesFromFactories(cfg, []toolFactory{
 		tools.NewLinodeDomainsListTool,
 		tools.NewLinodeDomainGetTool,
 		tools.NewLinodeDomainRecordsListTool,
@@ -577,8 +599,8 @@ func (s *Server) dnsToolEntries() []toolEntry {
 	})
 }
 
-func (s *Server) volumeToolEntries() []toolEntry {
-	return entriesFromFactories(s.config, []toolFactory{
+func volumeToolEntries(cfg *config.Config) []toolEntry {
+	return entriesFromFactories(cfg, []toolFactory{
 		tools.NewLinodeVolumesListTool,
 		tools.NewLinodeVolumeCreateTool,
 		tools.NewLinodeVolumeAttachTool,
@@ -588,8 +610,8 @@ func (s *Server) volumeToolEntries() []toolEntry {
 	})
 }
 
-func (s *Server) objectStorageToolEntries() []toolEntry {
-	return entriesFromFactories(s.config, []toolFactory{
+func objectStorageToolEntries(cfg *config.Config) []toolEntry {
+	return entriesFromFactories(cfg, []toolFactory{
 		tools.NewLinodeObjectStorageBucketsListTool,
 		tools.NewLinodeObjectStorageBucketGetTool,
 		tools.NewLinodeObjectStorageBucketContentsTool,
@@ -613,8 +635,8 @@ func (s *Server) objectStorageToolEntries() []toolEntry {
 	})
 }
 
-func (s *Server) vpcToolEntries() []toolEntry {
-	return entriesFromFactories(s.config, []toolFactory{
+func vpcToolEntries(cfg *config.Config) []toolEntry {
+	return entriesFromFactories(cfg, []toolFactory{
 		// Read tools
 		tools.NewLinodeVPCsListTool,
 		tools.NewLinodeVPCGetTool,
@@ -632,8 +654,8 @@ func (s *Server) vpcToolEntries() []toolEntry {
 	})
 }
 
-func (s *Server) instanceDeepToolEntries() []toolEntry {
-	return entriesFromFactories(s.config, []toolFactory{
+func instanceDeepToolEntries(cfg *config.Config) []toolEntry {
+	return entriesFromFactories(cfg, []toolFactory{
 		// Backups
 		tools.NewLinodeInstanceBackupsListTool,
 		tools.NewLinodeInstanceBackupGetTool,
@@ -663,8 +685,8 @@ func (s *Server) instanceDeepToolEntries() []toolEntry {
 	})
 }
 
-func (s *Server) lkeToolEntries() []toolEntry {
-	return entriesFromFactories(s.config, []toolFactory{
+func lkeToolEntries(cfg *config.Config) []toolEntry {
+	return entriesFromFactories(cfg, []toolFactory{
 		// Read tools
 		tools.NewLinodeLKEClustersListTool,
 		tools.NewLinodeLKEClusterGetTool,
