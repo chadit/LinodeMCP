@@ -21,8 +21,31 @@ from linodemcp.profiles.scopecheck import (
 
 if TYPE_CHECKING:
     from linodemcp.linode import Grants, Profile
+    from linodemcp.profiles.profile import Profile as ProfileModel
     from linodemcp.profiles.scope import Scope
     from linodemcp.profiles.scopecheck import ScopeComparison
+
+
+def profile_is_elevated(profile: ProfileModel) -> bool:
+    """Return True if the profile carries any write/destroy capability.
+
+    Judged by the presence of a ``:read_write`` suffix in any required
+    token scope. The missing-token policy uses this to decide whether
+    to fail load (elevated) or warn-and-continue (read-only).
+
+    Profiles with no required scopes (e.g. a freshly-loaded user
+    profile with no allowed tools) are NOT elevated by this rule; spec
+    behavior is that such profiles can start without a token.
+    """
+    return any(scope.endswith(":read_write") for scope in profile.required_token_scopes)
+
+
+class TokenNotConfiguredError(Exception):
+    """Raised from ``Server.validate_scopes`` when the active environment
+    has no Linode token set. The caller (main) decides what to do:
+    read-only profiles warn and continue, elevated profiles fail to
+    start.
+    """
 
 
 class TokenKind(IntEnum):

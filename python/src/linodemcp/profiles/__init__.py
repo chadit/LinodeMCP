@@ -32,6 +32,8 @@ from linodemcp.profiles.validator import (
     ScopeValidationResult,
     TokenInspector,
     TokenKind,
+    TokenNotConfiguredError,
+    profile_is_elevated,
     validate_scopes,
 )
 
@@ -49,12 +51,14 @@ __all__ = [
     "ScopeValidationResult",
     "TokenInspector",
     "TokenKind",
+    "TokenNotConfiguredError",
     "ToolDescriptor",
     "builtin_catalog_json",
     "builtin_profiles",
     "compare_scopes",
     "flatten_grants",
     "parse_pat_scopes",
+    "profile_is_elevated",
     "required_scopes",
     "resolve_active_profile",
     "validate_scopes",

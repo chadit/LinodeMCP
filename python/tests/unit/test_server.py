@@ -524,3 +524,51 @@ def test_linode_image_create_registered() -> None:
     entries = {entry.name: entry for entry in get_tool_registry()}
     assert "linode_image_create" in entries
     assert entries["linode_image_create"].capability.name == "Write"
+
+
+async def test_validate_scopes_no_token_raises_sentinel(
+    sample_config: Config,
+) -> None:
+    """Phase 6.4c: empty token surfaces as TokenNotConfiguredError.
+
+    The validator never makes an API call when the token is absent.
+    main.py uses this signal to decide policy by profile elevation.
+    """
+    from linodemcp.config import EnvironmentConfig, LinodeConfig
+    from linodemcp.profiles import TokenNotConfiguredError
+
+    cfg = dataclasses.replace(
+        sample_config,
+        environments={
+            "default": EnvironmentConfig(
+                label="Default",
+                linode=LinodeConfig(api_url="https://example.invalid", token=""),
+            ),
+        },
+    )
+    srv = Server(cfg)
+
+    with pytest.raises(TokenNotConfiguredError):
+        await srv.validate_scopes()
+
+
+async def test_profile_is_elevated_reflects_required_scopes(
+    sample_config: Config,
+) -> None:
+    """Phase 6.4c policy helper: ``:read_write`` scopes mark elevation.
+
+    Default profile carries only :read_only scopes and must not be
+    elevated; full-access carries write scopes and must be. main.py
+    uses this to decide whether missing-token is fail vs warn.
+    """
+    from linodemcp.profiles import profile_is_elevated
+
+    default_srv = Server(sample_config)
+    assert not profile_is_elevated(default_srv.active_profile), (
+        "default profile is read-only and must not be classified elevated"
+    )
+
+    full_srv = Server(_full_access_config(sample_config))
+    assert profile_is_elevated(full_srv.active_profile), (
+        "full-access carries :read_write scopes and must be classified elevated"
+    )

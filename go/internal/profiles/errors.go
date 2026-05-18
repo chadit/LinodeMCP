@@ -20,4 +20,9 @@ var (
 	// ErrGrantsFetchFailed wraps any error returned by GetProfileGrants
 	// on the OAuth code path. Same use as ErrProfileFetchFailed.
 	ErrGrantsFetchFailed = errors.New("fetch /profile/grants failed")
+	// ErrTokenNotConfigured is returned from Server.ValidateScopes when
+	// the active environment has no Linode token set. The caller
+	// (typically main) decides what to do: read-only profiles warn and
+	// continue, elevated profiles fail to start.
+	ErrTokenNotConfigured = errors.New("active environment has no Linode token configured")
 )

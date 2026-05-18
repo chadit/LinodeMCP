@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -12,6 +13,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/appinfo"
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/observability"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 	"github.com/chadit/LinodeMCP/internal/server"
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
@@ -23,6 +25,98 @@ const (
 func main() {
 	exitCode := run()
 	os.Exit(exitCode)
+}
+
+// runScopeValidation enforces the Phase 6.4 token-scope policy at
+// startup. Returns 0 to continue startup, non-zero to abort.
+//
+// Policy:
+//   - Missing required scopes: always fail (the AI would hit auth
+//     errors mid-call; better to fail at load).
+//   - Excess scopes: warn (least-privilege signal) but continue.
+//   - API failure or no-token configured: fail for elevated profiles
+//     (any tool needs write access), warn for read-only profiles
+//     (tool discovery works without credentials).
+func runScopeValidation(
+	ctx context.Context,
+	srv *server.Server,
+	active *profiles.Profile,
+	log interface {
+		Info(msg string, args ...any)
+		Warn(msg string, args ...any)
+		Error(msg string, args ...any)
+	},
+) int {
+	result, err := srv.ValidateScopes(ctx)
+	if err != nil {
+		elevated := profiles.ProfileIsElevated(active)
+
+		switch {
+		case errors.Is(err, profiles.ErrTokenNotConfigured):
+			if elevated {
+				log.Error(
+					"profile requires a Linode token; configure environments.<env>.linode.token",
+					"profile", active.Name,
+				)
+
+				return 1
+			}
+
+			log.Warn(
+				"no Linode token configured; read-only profile starts but API calls will fail",
+				"profile", active.Name,
+			)
+
+			return 0
+		default:
+			if elevated {
+				log.Error(
+					"token-scope validation failed; profile requires write access so refusing to start",
+					"profile", active.Name,
+					"error", err,
+				)
+
+				return 1
+			}
+
+			log.Warn(
+				"token-scope validation failed; read-only profile continues without verified token",
+				"profile", active.Name,
+				"error", err,
+			)
+
+			return 0
+		}
+	}
+
+	if result.Comparison.HasMissing() {
+		log.Error(
+			"active token is missing scopes the profile requires; refusing to start",
+			"profile", active.Name,
+			"token_kind", result.Kind.String(),
+			"missing", result.Comparison.Missing,
+		)
+
+		return 1
+	}
+
+	if result.Comparison.HasExcess() {
+		log.Warn(
+			"active token carries more scopes than the profile requires (least-privilege violated)",
+			"profile", active.Name,
+			"token_kind", result.Kind.String(),
+			"excess", result.Comparison.Excess,
+		)
+	}
+
+	log.Info(
+		"token-scope validation passed",
+		"profile", active.Name,
+		"token_kind", result.Kind.String(),
+		"username", result.Profile.Username,
+	)
+
+	return 0
 }
 
 func run() int {
@@ -97,6 +191,15 @@ func run() int {
 			log.Warn("profile reload failed", "error", reloadErr)
 		}
 	})
+
+	// Phase 6.4c: validate the active token's scopes against the active
+	// profile's required scopes. Missing scopes always fail load; an
+	// API failure or missing token fails for elevated profiles and
+	// warns-and-continues for read-only ones. Excess scopes warn only.
+	active := srv.ActiveProfile()
+	if exitCode := runScopeValidation(ctx, srv, &active, log); exitCode != 0 {
+		return exitCode
+	}
 
 	watcher.Start(ctx)
 

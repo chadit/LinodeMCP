@@ -14,6 +14,7 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/appinfo"
 	"github.com/chadit/LinodeMCP/internal/config"
+	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
 	"github.com/chadit/LinodeMCP/internal/tools"
 	"github.com/chadit/LinodeMCP/pkg/contracts"
@@ -139,6 +140,60 @@ func (s *Server) ActiveProfile() profiles.Profile {
 	defer s.profileMu.RUnlock()
 
 	return s.activeProfile
+}
+
+// ValidateScopes runs Phase 6.4 token-scope validation against the
+// active profile. It builds a Linode client from the default
+// environment in the current config and delegates to
+// profiles.ValidateScopes for PAT-vs-OAuth dispatch.
+//
+// Returns profiles.ErrTokenNotConfigured (no API call made) when the
+// active environment has no token set; the caller decides whether to
+// fail load (elevated profile) or warn-and-continue (read-only) per
+// the missing-token policy. Other errors come from the underlying
+// /profile and /profile/grants calls, wrapped in
+// ErrProfileFetchFailed / ErrGrantsFetchFailed.
+//
+// On success, the returned ScopeValidationResult carries the actual
+// scope set, the diff against the profile's required scopes, and the
+// token kind for audit logging.
+func (s *Server) ValidateScopes(ctx context.Context) (*profiles.ScopeValidationResult, error) {
+	s.profileMu.RLock()
+	cfg := s.config
+	required := append([]profiles.Scope(nil), parseRequiredScopes(s.activeProfile.RequiredTokenScopes)...)
+	s.profileMu.RUnlock()
+
+	env, err := cfg.SelectEnvironment("default")
+	if err != nil {
+		return nil, fmt.Errorf("select default environment for scope validation: %w", err)
+	}
+
+	if env.Linode.Token == "" {
+		return nil, profiles.ErrTokenNotConfigured
+	}
+
+	client := linode.NewClient(env.Linode.APIURL, env.Linode.Token, cfg)
+
+	result, err := profiles.ValidateScopes(ctx, client, required)
+	if err != nil {
+		return nil, fmt.Errorf("validate scopes: %w", err)
+	}
+
+	return result, nil
+}
+
+// parseRequiredScopes converts the profile's stored []string scope
+// values into the typed Scope slice ValidateScopes expects. Stored as
+// strings so user-defined profiles can declare custom scopes the
+// catalog doesn't yet name; the cast back to Scope is a string alias
+// so no data is lost.
+func parseRequiredScopes(stored []string) []profiles.Scope {
+	out := make([]profiles.Scope, len(stored))
+	for i, s := range stored {
+		out[i] = profiles.Scope(s)
+	}
+
+	return out
 }
 
 // ToolInfo describes a registered tool's capability and input schema for the

@@ -3,9 +3,33 @@ package profiles
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
+
+// ProfileIsElevated reports whether a profile carries any write/destroy
+// capability, judged by the presence of a “:read_write“ scope in
+// RequiredTokenScopes. The missing-token policy uses this to decide
+// whether to fail load (elevated) or warn-and-continue (read-only).
+//
+// Profiles with no required scopes (e.g. a freshly-loaded user-defined
+// profile with no allowed tools) are NOT elevated by this rule. Spec
+// behavior: such profiles can start without a token. Takes profile by
+// pointer to avoid the 112-byte struct copy gocritic flags on hugeParam.
+func ProfileIsElevated(profile *Profile) bool {
+	if profile == nil {
+		return false
+	}
+
+	for _, scope := range profile.RequiredTokenScopes {
+		if strings.HasSuffix(scope, ":read_write") {
+			return true
+		}
+	}
+
+	return false
+}
 
 // TokenKind identifies whether the active token is a personal access
 // token (scopes embedded in /profile) or an OAuth token (grants on

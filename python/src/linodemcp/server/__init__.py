@@ -13,11 +13,16 @@ from mcp.server.stdio import stdio_server
 from mcp.types import Tool
 
 import linodemcp.tools as tools_module
+from linodemcp.linode import RetryableClient
 from linodemcp.profiles import (
     Capability,
     Profile,
+    Scope,
+    ScopeValidationResult,
+    TokenNotConfiguredError,
     ToolDescriptor,
     resolve_active_profile,
+    validate_scopes,
 )
 from linodemcp.tools import (
     handle_hello,
@@ -190,6 +195,39 @@ class Server:
             self._inflight -= 1
             if self._inflight == 0:
                 self._idle.set()
+
+    async def validate_scopes(self) -> ScopeValidationResult:
+        """Phase 6.4c: validate the active token's scopes.
+
+        Builds a Linode client from the default environment in the
+        current config and delegates to ``profiles.validate_scopes``
+        for the PAT-vs-OAuth dispatch.
+
+        Raises ``TokenNotConfiguredError`` (no API call made) when the
+        active environment has no token set; the caller (main) decides
+        whether to fail load (elevated profile) or warn-and-continue
+        (read-only) per the missing-token policy.
+
+        Other exceptions (``ProfileFetchError`` / ``GrantsFetchError``)
+        come from the underlying API calls.
+        """
+        cfg = self.config
+        env = cfg.environments.get("default")
+        if env is None:
+            msg = "default environment is required for scope validation"
+            raise TokenNotConfiguredError(msg)
+        if not env.linode.token:
+            raise TokenNotConfiguredError(
+                "active environment has no Linode token configured"
+            )
+
+        required = [Scope(s) for s in self._active_profile.required_token_scopes]
+
+        client = RetryableClient(env.linode.api_url, env.linode.token)
+        try:
+            return await validate_scopes(client, required)
+        finally:
+            await client.close()
 
     async def shutdown(self, timeout: float = 10.0) -> bool:
         """Wait for in-flight tool handlers to complete.
