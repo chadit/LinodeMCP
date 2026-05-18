@@ -3667,6 +3667,52 @@ class TestRetryableClientRateLimiter:
         await client.close()
 
 
+async def test_update_profile_token_sends_put_to_profile_token_route() -> None:
+    """Profile token update sends PUT /profile/tokens/{tokenId}."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {"id": 12345, "label": "new-label"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        result = await client.update_profile_token(12345, label="new-label")
+
+    assert result == {"id": 12345, "label": "new-label"}
+    mock_request.assert_called_once_with(
+        "PUT", "/profile/tokens/12345", {"label": "new-label"}
+    )
+    await client.close()
+
+
+async def test_update_profile_token_encodes_path_parameter() -> None:
+    """Profile token update path segment is URL-encoded at the client boundary."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {"id": 12345, "label": "new-label"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        await client.update_profile_token("12/../34?x=1", label="new-label")  # type: ignore[arg-type]
+
+    mock_request.assert_called_once_with(
+        "PUT", "/profile/tokens/12%2F..%2F34%3Fx%3D1", {"label": "new-label"}
+    )
+    await client.close()
+
+
+async def test_update_profile_token_wraps_http_errors() -> None:
+    """Profile token update maps HTTP errors to UpdateProfileToken."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ReadTimeout("timeout")
+        with pytest.raises(NetworkError) as exc_info:
+            await client.update_profile_token(12345, label="new-label")
+
+    assert exc_info.value.operation == "UpdateProfileToken"
+    await client.close()
+
+
 async def test_delete_profile_token_sends_delete_to_profile_token_route() -> None:
     """Profile token revoke sends DELETE /profile/tokens/{tokenId}."""
     client = Client("https://api.linode.com/v4", "test-token")
