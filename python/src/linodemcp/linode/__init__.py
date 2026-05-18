@@ -11,6 +11,7 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from dataclasses import field as dc_field
+from datetime import datetime
 from typing import Any, TypeVar, cast
 from urllib.parse import quote, urlencode
 
@@ -44,6 +45,7 @@ MAX_DNS_NAME_LENGTH = 253
 MIN_VOLUME_SIZE_GB = 10
 MAX_VOLUME_SIZE_GB = 10240
 MAX_LABEL_LENGTH = 64
+MAX_PROFILE_TOKEN_LABEL_LENGTH = 100
 MIN_DISK_SIZE_MB = 1
 MAX_DISK_SIZE_MB = 524288
 
@@ -161,6 +163,39 @@ def validate_label(label: str | None) -> None:
         if not (char.isalnum() or char in "_-."):
             msg = f"label contains invalid character '{char}'"
             raise ValueError(msg)
+
+
+def build_profile_token_create_body(
+    expiry: str | None = None,
+    label: str | None = None,
+    scopes: str | None = None,
+) -> dict[str, Any]:
+    """Validate profile token create fields and build the request body."""
+    body: dict[str, Any] = {}
+    if expiry is not None:
+        if not expiry.strip():
+            msg = "expiry must be a non-empty ISO 8601 timestamp or null"
+            raise ValueError(msg)
+        try:
+            datetime.fromisoformat(expiry)
+        except ValueError as exc:
+            msg = "expiry must be a valid ISO 8601 timestamp"
+            raise ValueError(msg) from exc
+        body["expiry"] = expiry
+    if label is not None:
+        if not label.strip():
+            msg = "label must be a non-empty string"
+            raise ValueError(msg)
+        if len(label) > MAX_PROFILE_TOKEN_LABEL_LENGTH:
+            msg = "label must be 100 characters or fewer"
+            raise ValueError(msg)
+        body["label"] = label
+    if scopes is not None:
+        if not scopes.strip():
+            msg = "scopes must be a non-empty string"
+            raise ValueError(msg)
+        body["scopes"] = scopes
+    return body
 
 
 # HTTP status code constants
@@ -2142,6 +2177,37 @@ class Client:
         except httpx.HTTPError as e:
             logger.exception("HTTP error deleting SSH key: %s", e)
             raise NetworkError("DeleteSSHKey", e) from e
+
+    async def create_profile_token(
+        self,
+        expiry: str | None = None,
+        label: str | None = None,
+        scopes: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a personal access token."""
+        body = build_profile_token_create_body(
+            expiry=expiry, label=label, scopes=scopes
+        )
+
+        logger.info("Creating profile token")
+
+        try:
+            response = await self.make_request("POST", "/profile/tokens", body)
+            result: dict[str, Any] = response.json()
+            logger.info("Profile token created", extra={"token_id": result.get("id")})
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout creating profile token: %s", e)
+            raise NetworkError("CreateProfileToken", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout creating profile token: %s", e)
+            raise NetworkError("CreateProfileToken", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error creating profile token")
+            raise NetworkError("CreateProfileToken", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error creating profile token: %s", e)
+            raise NetworkError("CreateProfileToken", e) from e
 
     async def get_profile_token(self, token_id: int) -> dict[str, Any]:
         """Get a personal access token."""
@@ -5173,6 +5239,23 @@ class RetryableClient:
     async def delete_ssh_key(self, ssh_key_id: int) -> None:
         """Delete SSH key with retry."""
         await self._execute_with_retry(self.client.delete_ssh_key, ssh_key_id)
+
+    async def create_profile_token(
+        self,
+        *,
+        expiry: str | None = None,
+        label: str | None = None,
+        scopes: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a profile token with retry."""
+
+        async def _create_profile_token() -> dict[str, Any]:
+            return await self.client.create_profile_token(
+                expiry=expiry, label=label, scopes=scopes
+            )
+
+        result: dict[str, Any] = await self._execute_with_retry(_create_profile_token)
+        return result
 
     async def get_profile_token(self, token_id: int) -> dict[str, Any]:
         """Get a profile token with retry."""

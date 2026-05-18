@@ -3667,6 +3667,118 @@ class TestRetryableClientRateLimiter:
         await client.close()
 
 
+async def test_create_profile_token_sends_post_to_profile_tokens_route() -> None:
+    """Profile token create sends POST /profile/tokens with documented body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {
+        "id": 12345,
+        "label": "api-token",
+        "scopes": "linodes:read_only",
+        "expiry": "2026-01-01T00:00:00",
+        "token": "abcdefghijklmnop",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        result = await client.create_profile_token(
+            expiry="2026-01-01T00:00:00",
+            label="api-token",
+            scopes="linodes:read_only",
+        )
+
+    assert result == {
+        "id": 12345,
+        "label": "api-token",
+        "scopes": "linodes:read_only",
+        "expiry": "2026-01-01T00:00:00",
+        "token": "abcdefghijklmnop",
+    }
+    mock_request.assert_called_once_with(
+        "POST",
+        "/profile/tokens",
+        {
+            "expiry": "2026-01-01T00:00:00",
+            "label": "api-token",
+            "scopes": "linodes:read_only",
+        },
+    )
+    await client.close()
+
+
+async def test_create_profile_token_omits_unspecified_body_fields() -> None:
+    """Profile token create omits unset optional body fields."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {"id": 12345, "label": "api-token"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        await client.create_profile_token(label="api-token")
+
+    mock_request.assert_called_once_with(
+        "POST", "/profile/tokens", {"label": "api-token"}
+    )
+    await client.close()
+
+
+async def test_create_profile_token_validates_inputs_before_request() -> None:
+    """Profile token create validates documented body fields before POST."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        invalid_calls = (
+            {"label": ""},
+            {"label": "   "},
+            {"label": "x" * 101},
+            {"scopes": ""},
+            {"expiry": "not-a-date"},
+            {"expiry": ""},
+        )
+        for kwargs in invalid_calls:
+            with pytest.raises(ValueError, match="must be"):
+                await client.create_profile_token(**kwargs)
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_retryable_create_profile_token_preserves_optional_arguments() -> None:
+    """Retryable profile token create forwards documented body fields."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        client.client, "create_profile_token", new_callable=AsyncMock
+    ) as mock_create:
+        mock_create.return_value = {"id": 12345, "label": "api-token"}
+        result = await client.create_profile_token(
+            expiry="2026-01-01T00:00:00",
+            label="api-token",
+            scopes="linodes:read_only",
+        )
+
+    assert result == {"id": 12345, "label": "api-token"}
+    mock_create.assert_awaited_once_with(
+        expiry="2026-01-01T00:00:00",
+        label="api-token",
+        scopes="linodes:read_only",
+    )
+    await client.close()
+
+
+async def test_create_profile_token_wraps_http_errors() -> None:
+    """Profile token create maps HTTP errors to CreateProfileToken."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ReadTimeout("timeout")
+        with pytest.raises(NetworkError) as exc_info:
+            await client.create_profile_token(label="api-token")
+
+    assert exc_info.value.operation == "CreateProfileToken"
+    await client.close()
+
+
 async def test_get_profile_token_sends_get_to_profile_token_route() -> None:
     """Profile token get sends GET /profile/tokens/{tokenId}."""
     client = Client("https://api.linode.com/v4", "test-token")
