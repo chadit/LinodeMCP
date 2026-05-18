@@ -248,6 +248,40 @@ func selectAllowed(catalog []ToolDescriptor, elevated map[string]struct{}) []str
 	return allowed
 }
 
+// computeRequiredScopes returns the deduplicated union of RequiredScopes
+// over allowedTools, looked up against the catalog for capability. Output
+// is sorted ascending so cross-language parity tests stay stable. Tools
+// the catalog doesn't know about contribute nothing (matches the
+// best-effort fallback in RequiredScopes itself).
+func computeRequiredScopes(catalog []ToolDescriptor, allowedTools []string) []string {
+	capByName := make(map[string]Capability, len(catalog))
+	for _, d := range catalog {
+		capByName[d.Name] = d.Capability
+	}
+
+	seen := make(map[string]struct{}, len(allowedTools))
+
+	for _, name := range allowedTools {
+		capability, ok := capByName[name]
+		if !ok {
+			continue
+		}
+
+		for _, scope := range RequiredScopes(name, capability) {
+			seen[string(scope)] = struct{}{}
+		}
+	}
+
+	out := make([]string, 0, len(seen))
+	for s := range seen {
+		out = append(out, s)
+	}
+
+	sort.Strings(out)
+
+	return out
+}
+
 // BuiltinProfiles returns the catalog of built-in profiles, resolved against
 // the supplied tool descriptors. The function is pure: repeated calls with
 // the same catalog return equal output. The caller owns the catalog slice
@@ -262,7 +296,6 @@ func BuiltinProfiles(catalog []ToolDescriptor) map[string]Profile {
 			Name:                BuiltinDefault,
 			Description:         "Safe read-only default profile. Cannot execute writes, destroys, or admin operations.",
 			AllowedEnvironments: []string{},
-			RequiredTokenScopes: []string{"*:read_only"},
 			AllowYolo:           false,
 			Disabled:            false,
 		},
@@ -270,7 +303,6 @@ func BuiltinProfiles(catalog []ToolDescriptor) map[string]Profile {
 			Name:                BuiltinReadonlyFull,
 			Description:         "Explicit read-only profile spanning every category.",
 			AllowedEnvironments: []string{},
-			RequiredTokenScopes: []string{"*:read_only"},
 			AllowYolo:           false,
 			Disabled:            false,
 		},
@@ -278,55 +310,34 @@ func BuiltinProfiles(catalog []ToolDescriptor) map[string]Profile {
 			Name:                BuiltinComputeAdmin,
 			Description:         "Read everywhere plus write/destroy on compute, block storage, and SSH keys.",
 			AllowedEnvironments: []string{},
-			RequiredTokenScopes: []string{
-				"linodes:read_write",
-				"volumes:read_write",
-				"ssh_keys:read_write",
-			},
-			AllowYolo: false,
-			Disabled:  false,
+			AllowYolo:           false,
+			Disabled:            false,
 		},
 		BuiltinNetworkAdmin: {
 			Name:                BuiltinNetworkAdmin,
 			Description:         "Read everywhere plus write/destroy on networking, DNS, and VPCs.",
 			AllowedEnvironments: []string{},
-			RequiredTokenScopes: []string{
-				"firewalls:read_write",
-				"nodebalancers:read_write",
-				"domains:read_write",
-				"vpcs:read_write",
-			},
-			AllowYolo: false,
-			Disabled:  false,
+			AllowYolo:           false,
+			Disabled:            false,
 		},
 		BuiltinKubernetesAdmin: {
 			Name:                BuiltinKubernetesAdmin,
 			Description:         "Read everywhere plus write/destroy on LKE, compute, and VPCs.",
 			AllowedEnvironments: []string{},
-			RequiredTokenScopes: []string{
-				"lke:read_write",
-				"linodes:read_write",
-				"vpcs:read_write",
-			},
-			AllowYolo: false,
-			Disabled:  false,
+			AllowYolo:           false,
+			Disabled:            false,
 		},
 		BuiltinStorageAdmin: {
 			Name:                BuiltinStorageAdmin,
 			Description:         "Read everywhere plus write/destroy on object storage, block storage, and backups.",
 			AllowedEnvironments: []string{},
-			RequiredTokenScopes: []string{
-				"volumes:read_write",
-				"object_storage:read_write",
-			},
-			AllowYolo: false,
-			Disabled:  false,
+			AllowYolo:           false,
+			Disabled:            false,
 		},
 		BuiltinFullAccess: {
 			Name:                BuiltinFullAccess,
 			Description:         "Read, write, and destroy across every category. Disabled by default.",
 			AllowedEnvironments: []string{},
-			RequiredTokenScopes: []string{"*:read_write"},
 			AllowYolo:           false,
 			Disabled:            true,
 		},
@@ -334,14 +345,21 @@ func BuiltinProfiles(catalog []ToolDescriptor) map[string]Profile {
 			Name:                BuiltinEmergency,
 			Description:         "Break-glass profile: full access plus yolo execution. Disabled by default.",
 			AllowedEnvironments: []string{},
-			RequiredTokenScopes: []string{"*:read_write"},
 			AllowYolo:           true,
 			Disabled:            true,
 		},
 	}
 
+	// Phase 6.3: RequiredTokenScopes is derived from the resolved tool
+	// list rather than hardcoded. Each profile's scope union comes from
+	// RequiredScopes(toolName, capability) over its AllowedTools, so a
+	// new tool added to a category automatically extends the scope
+	// requirement. The previous hardcoded values had Linode-name typos
+	// (firewalls plural, ssh_keys, vpcs plural); deriving them fixes
+	// the drift in one place.
 	for name, p := range profiles {
 		p.AllowedTools = selectAllowed(catalog, elevatedCategories(name))
+		p.RequiredTokenScopes = computeRequiredScopes(catalog, p.AllowedTools)
 		profiles[name] = p
 	}
 

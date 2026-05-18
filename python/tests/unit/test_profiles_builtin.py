@@ -13,9 +13,11 @@ import json
 from linodemcp.profiles import (
     Capability,
     Profile,
+    Scope,
     ToolDescriptor,
     builtin_catalog_json,
     builtin_profiles,
+    required_scopes,
 )
 
 
@@ -237,6 +239,85 @@ def test_allowed_tools_are_sorted_for_determinism() -> None:
     for name, profile in profiles.items():
         tools = list(profile.allowed_tools)
         assert tools == sorted(tools), f"{name} allowed_tools not sorted"
+
+
+def test_required_token_scopes_derived_from_tools() -> None:
+    """Phase 6.3 contract: each profile's required_token_scopes equals
+    the deduplicated, sorted union of required_scopes() over its
+    allowed_tools.
+
+    Pins the derivation against drift between the scope catalog and the
+    blueprint, and catches anyone trying to restore hardcoded scope
+    tuples by mistake.
+    """
+    catalog = _synthetic_catalog()
+    built = builtin_profiles(catalog)
+    cap_by_name = {d.name: d.capability for d in catalog}
+
+    for name, prof in built.items():
+        expected: set[str] = set()
+        for tool_name in prof.allowed_tools:
+            capability = cap_by_name.get(tool_name)
+            if capability is None:
+                continue
+            for scope in required_scopes(tool_name, capability):
+                expected.add(scope.value)
+        assert set(prof.required_token_scopes) == expected, (
+            f"profile {name} scope union mismatch: "
+            f"got {prof.required_token_scopes}, expected {sorted(expected)}"
+        )
+        assert list(prof.required_token_scopes) == sorted(prof.required_token_scopes), (
+            f"profile {name} required_token_scopes must be sorted "
+            "ascending for cross-language parity"
+        )
+
+
+def test_read_only_profiles_have_no_write_scopes() -> None:
+    """Default and readonly-full carry only :read_only scopes.
+
+    A regression that lets a write tool slip into a read-only built-in
+    would surface here as a :read_write scope appearing on the profile.
+    """
+    catalog = _synthetic_catalog()
+    built = builtin_profiles(catalog)
+
+    for name in ("default", "readonly-full"):
+        for scope in built[name].required_token_scopes:
+            assert ":read_write" not in scope, (
+                f"profile {name} is read-only but lists write scope {scope!r}"
+            )
+
+
+def test_full_access_scopes_match_expected_categories() -> None:
+    """Full-access aggregates every write scope the catalog can produce.
+
+    The synthetic catalog includes write tools for compute, volumes,
+    domains, firewall, nodebalancers, LKE, object storage, and VPC.
+    StackScripts is intentionally absent (only a list-read tool exists
+    in the fixture), so stackscripts:read_write should NOT appear.
+    Images:read_only is pulled in by instance_create's cross-category
+    extras table.
+    """
+    built = builtin_profiles(_synthetic_catalog())
+    full = built["full-access"].required_token_scopes
+
+    want_present = {
+        Scope.LinodesReadWrite.value,
+        Scope.VolumesReadWrite.value,
+        Scope.DomainsReadWrite.value,
+        Scope.FirewallReadWrite.value,
+        Scope.NodeBalancersReadWrite.value,
+        Scope.LKEReadWrite.value,
+        Scope.ObjectStorageReadWrite.value,
+        Scope.VPCReadWrite.value,
+        Scope.ImagesReadOnly.value,
+    }
+    for scope in want_present:
+        assert scope in full, f"full-access should include {scope}"
+
+    assert Scope.StackScriptsReadWrite.value not in full, (
+        "fixture has no stackscripts write tool; scope should not be in the derived set"
+    )
 
 
 def test_json_roundtrip() -> None:

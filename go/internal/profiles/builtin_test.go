@@ -220,6 +220,139 @@ func TestCapAdminExcludedFromEveryBuiltin(t *testing.T) {
 	}
 }
 
+// TestRequiredTokenScopesDerivedFromTools is the Phase 6.3 contract:
+// each built-in profile's RequiredTokenScopes must equal the
+// deduplicated, sorted union of RequiredScopes() over its AllowedTools.
+// This pins the derivation against drift between the scope catalog and
+// the built-in blueprint and catches regressions where someone restores
+// hardcoded scope lists by mistake.
+func TestRequiredTokenScopesDerivedFromTools(t *testing.T) {
+	t.Parallel()
+
+	catalog := syntheticCatalog()
+	built := profiles.BuiltinProfiles(catalog)
+
+	capByName := make(map[string]profiles.Capability, len(catalog))
+	for _, d := range catalog {
+		capByName[d.Name] = d.Capability
+	}
+
+	for name, prof := range built {
+		expected := make(map[string]struct{}, len(prof.AllowedTools))
+
+		for _, toolName := range prof.AllowedTools {
+			capability, ok := capByName[toolName]
+			if !ok {
+				continue
+			}
+
+			for _, scope := range profiles.RequiredScopes(toolName, capability) {
+				expected[string(scope)] = struct{}{}
+			}
+		}
+
+		assert.Lenf(
+			t,
+			prof.RequiredTokenScopes,
+			len(expected),
+			"profile %s should have %d unique scopes, got %d",
+			name, len(expected), len(prof.RequiredTokenScopes),
+		)
+
+		for _, scope := range prof.RequiredTokenScopes {
+			_, found := expected[scope]
+			assert.Truef(
+				t, found,
+				"profile %s has scope %q that no allowed tool requires",
+				name, scope,
+			)
+		}
+	}
+}
+
+// TestRequiredTokenScopesReadOnlyProfilesHaveNoWriteScopes verifies that
+// read-only built-ins (default, readonly-full) carry only :read_only
+// scopes. A regression that accidentally lets a write tool slip into a
+// read-only profile would surface here as a :read_write scope showing up.
+func TestRequiredTokenScopesReadOnlyProfilesHaveNoWriteScopes(t *testing.T) {
+	t.Parallel()
+
+	catalog := syntheticCatalog()
+	built := profiles.BuiltinProfiles(catalog)
+
+	for _, name := range []string{
+		profiles.BuiltinDefault,
+		profiles.BuiltinReadonlyFull,
+	} {
+		prof, ok := built[name]
+		require.Truef(t, ok, "built-in %s must exist", name)
+
+		for _, scope := range prof.RequiredTokenScopes {
+			assert.NotContainsf(
+				t, scope, ":read_write",
+				"profile %s is read-only but lists a write scope %q",
+				name, scope,
+			)
+		}
+	}
+}
+
+// TestRequiredTokenScopesFullAccessIncludesLinodesWrite verifies that a
+// full-access profile aggregates write scopes from every category. Pins
+// the Phase 6.3 derivation against silent drops by checking a few
+// known-required scopes are present.
+func TestRequiredTokenScopesFullAccessIncludesLinodesWrite(t *testing.T) {
+	t.Parallel()
+
+	catalog := syntheticCatalog()
+	built := profiles.BuiltinProfiles(catalog)
+
+	full, ok := built[profiles.BuiltinFullAccess]
+	require.True(t, ok)
+
+	// Each entry below is a scope the synthetic catalog must produce for
+	// full-access. stackscripts:read_write is intentionally absent: the
+	// fixture has only a stackscripts list (read) tool, so no
+	// stackscripts write scope can be derived. images:read_only is
+	// present because instance_create pulls it in via the cross-category
+	// extras table.
+	want := []string{
+		string(profiles.ScopeLinodesReadWrite),
+		string(profiles.ScopeVolumesReadWrite),
+		string(profiles.ScopeDomainsReadWrite),
+		string(profiles.ScopeFirewallReadWrite),
+		string(profiles.ScopeNodeBalancersReadWrite),
+		string(profiles.ScopeLKEReadWrite),
+		string(profiles.ScopeObjectStorageReadWrite),
+		string(profiles.ScopeVPCReadWrite),
+		string(profiles.ScopeImagesReadOnly),
+	}
+
+	for _, scope := range want {
+		assert.Containsf(
+			t, full.RequiredTokenScopes, scope,
+			"full-access profile should include %s in its required scopes", scope,
+		)
+	}
+}
+
+// TestRequiredTokenScopesSorted locks in the sort order so cross-language
+// parity comparison via BuiltinCatalogJSON stays stable.
+func TestRequiredTokenScopesSorted(t *testing.T) {
+	t.Parallel()
+
+	built := profiles.BuiltinProfiles(syntheticCatalog())
+
+	for name, prof := range built {
+		assert.Truef(
+			t,
+			slices.IsSorted(prof.RequiredTokenScopes),
+			"profile %s must have RequiredTokenScopes sorted ascending for parity",
+			name,
+		)
+	}
+}
+
 func TestJSONRoundtrip(t *testing.T) {
 	t.Parallel()
 

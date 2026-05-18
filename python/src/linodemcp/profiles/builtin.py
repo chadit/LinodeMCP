@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 
 from linodemcp.profiles.capability import Capability
 from linodemcp.profiles.profile import Profile
+from linodemcp.profiles.scope import required_scopes
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -315,6 +316,30 @@ _PROFILE_BLUEPRINTS: dict[str, _ProfileBlueprint] = {
 }
 
 
+def _compute_required_scopes(
+    catalog: Sequence[ToolDescriptor], allowed_tools: tuple[str, ...]
+) -> tuple[str, ...]:
+    """Return the deduplicated, sorted union of required_scopes over the
+    profile's allowed tools.
+
+    Phase 6.3 derives required_token_scopes from the resolved tool list
+    instead of hardcoding it on the blueprint. The previous static
+    values had Linode-name drift (firewalls plural, ssh_keys, vpcs
+    plural); deriving them fixes the spelling in one place. Tools the
+    catalog doesn't know about contribute nothing, matching the
+    best-effort fallback in required_scopes itself.
+    """
+    cap_by_name = {d.name: d.capability for d in catalog}
+    seen: set[str] = set()
+    for tool_name in allowed_tools:
+        capability = cap_by_name.get(tool_name)
+        if capability is None:
+            continue
+        for scope in required_scopes(tool_name, capability):
+            seen.add(scope.value)
+    return tuple(sorted(seen))
+
+
 def builtin_profiles(catalog: Sequence[ToolDescriptor]) -> dict[str, Profile]:
     """Build the eight built-in profiles against a tool catalog.
 
@@ -323,20 +348,19 @@ def builtin_profiles(catalog: Sequence[ToolDescriptor]) -> dict[str, Profile]:
     insertion order matches ``_PROFILE_BLUEPRINTS``, which is the order
     used by the parity test for deterministic JSON output.
     """
-    return {
-        name: Profile(
+    profiles: dict[str, Profile] = {}
+    for name, blueprint in _PROFILE_BLUEPRINTS.items():
+        allowed = _resolve_allowed_tools(catalog, blueprint.elevated_categories)
+        profiles[name] = Profile(
             name=name,
             description=blueprint.description,
-            allowed_tools=_resolve_allowed_tools(
-                catalog, blueprint.elevated_categories
-            ),
+            allowed_tools=allowed,
             allowed_environments=(),
-            required_token_scopes=blueprint.required_token_scopes,
+            required_token_scopes=_compute_required_scopes(catalog, allowed),
             allow_yolo=blueprint.allow_yolo,
             disabled=blueprint.disabled,
         )
-        for name, blueprint in _PROFILE_BLUEPRINTS.items()
-    }
+    return profiles
 
 
 def builtin_catalog_json(catalog: Sequence[ToolDescriptor]) -> str:
