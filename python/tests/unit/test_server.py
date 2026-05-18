@@ -386,6 +386,45 @@ async def test_account_support_ticket_replies_list_dispatches_from_registry(
     )
 
 
+async def test_account_support_ticket_close_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Support ticket close tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_support_ticket_close_tool" in tools_mod.__all__
+    assert "handle_linode_account_support_ticket_close" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_account_support_ticket_close" in srv.registered_tool_names
+
+
+async def test_account_support_ticket_close_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Support ticket close is callable through server dispatch."""
+    response_data = {"id": 123, "status": "closed"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.close_support_ticket.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_support_ticket_close",
+            {"ticket_id": 123, "confirm": True},
+        )
+
+    assert json.loads(result[0].text) == {
+        "message": "Support ticket closed successfully",
+        "ticket": response_data,
+    }
+    mock_client.close_support_ticket.assert_awaited_once_with(123)
+
+
 async def test_account_support_ticket_reply_create_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
