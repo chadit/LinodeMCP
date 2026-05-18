@@ -35,6 +35,7 @@ from linodemcp.linode import (
 )
 from linodemcp.profiles import Capability
 from linodemcp.tools import (
+    create_linode_account_tag_create_tool,
     create_linode_account_tag_delete_tool,
     create_linode_account_tag_objects_list_tool,
     create_linode_account_update_tool,
@@ -83,6 +84,7 @@ from linodemcp.tools import (
     create_linode_vpcs_list_tool,
     handle_hello,
     handle_linode_account,
+    handle_linode_account_tag_create,
     handle_linode_account_tag_delete,
     handle_linode_account_tag_objects_list,
     handle_linode_account_update,
@@ -700,6 +702,195 @@ async def test_handle_linode_account_tag_objects_list(sample_config: Config) -> 
         mock_client.list_tagged_objects.assert_awaited_once_with(
             "production", page=2, page_size=25
         )
+
+
+async def test_create_linode_account_tag_create_tool() -> None:
+    """Test linode_account_tag_create tool schema."""
+    tool, capability = create_linode_account_tag_create_tool()
+
+    assert tool.name == "linode_account_tag_create"
+    assert capability is Capability.Write
+    assert "label" in tool.inputSchema["required"]
+    assert "confirm" in tool.inputSchema["required"]
+    assert "linodes" not in tool.inputSchema["required"]
+
+
+async def test_handle_linode_account_tag_create_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Tag creation requires confirmation."""
+    result = await handle_linode_account_tag_create(
+        {"label": "production", "linodes": [123]}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_handle_linode_account_tag_create_rejects_non_boolean_confirm(
+    sample_config: Config,
+) -> None:
+    """Tag creation requires confirm to be true boolean."""
+    result = await handle_linode_account_tag_create(
+        {"confirm": "yes", "label": "production"}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_handle_linode_account_tag_create_requires_label(
+    sample_config: Config,
+) -> None:
+    """Tag creation requires a non-empty label."""
+    result = await handle_linode_account_tag_create(
+        {"confirm": True, "linodes": [123]}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "label" in result[0].text
+
+
+async def test_handle_linode_account_tag_create_rejects_blank_label(
+    sample_config: Config,
+) -> None:
+    """Tag creation rejects a blank label."""
+    result = await handle_linode_account_tag_create(
+        {"confirm": True, "label": "   ", "linodes": [123]}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "label" in result[0].text
+
+
+async def test_handle_linode_account_tag_create_rejects_invalid_resource_ids(
+    sample_config: Config,
+) -> None:
+    """Tag creation validates resource ID lists."""
+    result = await handle_linode_account_tag_create(
+        {"confirm": True, "label": "production", "linodes": [123, "bad"]}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "linodes" in result[0].text
+
+
+async def test_handle_linode_account_tag_create_rejects_non_positive_resource_ids(
+    sample_config: Config,
+) -> None:
+    """Tag creation rejects non-positive resource IDs."""
+    result = await handle_linode_account_tag_create(
+        {"confirm": True, "label": "production", "linodes": [0]}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "positive integers" in result[0].text
+
+
+async def test_handle_linode_account_tag_create_rejects_boolean_resource_ids(
+    sample_config: Config,
+) -> None:
+    """Tag creation rejects boolean resource IDs."""
+    result = await handle_linode_account_tag_create(
+        {"confirm": True, "label": "production", "volumes": [True]}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "volumes" in result[0].text
+
+
+async def test_handle_linode_account_tag_create(sample_config: Config) -> None:
+    """Test linode_account_tag_create tool."""
+    response_data: dict[str, Any] = {"label": "production"}
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_tag.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_tag_create(
+            {
+                "confirm": True,
+                "label": "production",
+                "domains": [1],
+                "linodes": [2],
+                "nodebalancers": [3],
+                "volumes": [4],
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert json.loads(result[0].text) == {
+            "message": "Tag 'production' created successfully",
+            "tag": response_data,
+        }
+        mock_client.create_tag.assert_awaited_once_with(
+            "production",
+            domains=[1],
+            linodes=[2],
+            nodebalancers=[3],
+            volumes=[4],
+        )
+
+
+async def test_handle_linode_account_tag_create_omits_empty_resource_lists(
+    sample_config: Config,
+) -> None:
+    """Tag creation omits empty resource lists."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_tag.return_value = {"label": "production"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        await handle_linode_account_tag_create(
+            {"confirm": True, "label": "production", "linodes": []}, sample_config
+        )
+
+        mock_client.create_tag.assert_awaited_once_with(
+            "production",
+            domains=None,
+            linodes=None,
+            nodebalancers=None,
+            volumes=None,
+        )
+
+
+async def test_handle_linode_account_tag_create_reports_client_errors(
+    sample_config: Config,
+) -> None:
+    """Tag creation reports client errors."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_tag.side_effect = RuntimeError("boom")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_tag_create(
+            {"confirm": True, "label": "production"}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "Failed to create Linode tag" in result[0].text
+
+
+async def test_account_tag_create_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Account tag create tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_tag_create_tool" in tools_mod.__all__
+    assert "handle_linode_account_tag_create" in tools_mod.__all__
+
+    from linodemcp.server import get_tool_registry
+
+    registry = {entry.name: entry for entry in get_tool_registry()}
+    assert registry["linode_account_tag_create"].capability is Capability.Write
 
 
 async def test_create_linode_account_tag_delete_tool() -> None:
