@@ -1,1 +1,21 @@
-{"$schema":"https://docs.renovatebot.com/renovate-schema.json","extends":["config:recommended","helpers:pinGitHubActionDigests"],"schedule":["before 6am on monday"],"timezone":"UTC","labels":["dependencies"],"rebaseWhen":"conflicted","prConcurrentLimit":5,"postUpdateOptions":["gomodTidy"],"lockFileMaintenance":{"enabled":true,"schedule":["before 6am on monday"]},"packageRules":[{"matchManagers":["gomod"],"matchUpdateTypes":["minor","patch","digest","lockFileMaintenance"],"groupName":"go modules (non-major)"},{"matchManagers":["pep621"],"matchUpdateTypes":["minor","patch","digest","lockFileMaintenance"],"groupName":"python deps (non-major)"},{"matchManagers":["github-actions"],"matchUpdateTypes":["minor","patch","digest"],"groupName":"github actions (non-major)"},{"matchManagers":["pre-commit"],"matchUpdateTypes":["minor","patch","digest"],"groupName":"pre-commit hooks (non-major)"}],"customManagers":[{"customType":"regex","fileMatch":["(^|/)go\\.mod$"],"matchStrings":["(?m)^go (?<currentValue>\\d+\\.\\d+(?:\\.\\d+)?)$"],"datasourceTemplate":"golang-version","depNameTemplate":"go-toolchain","versioningTemplate":"go","extractVersionTemplate":"^(?<version>\\d+\\.\\d+)"},{"customType":"regex","fileMatch":["(^|/)pyproject\\.toml$"],"matchStrings":["requires-python\\s*=\\s*\"\\s*>=\\s*(?<currentValue>\\d+\\.\\d+(?:\\.\\d+)?)\\s*\""],"datasourceTemplate":"python-version","depNameTemplate":"python","versioningTemplate":"python","extractVersionTemplate":"^(?<version>\\d+\\.\\d+)"}]}
+{"$schema":"https://docs.renovatebot.com/renovate-schema.json","extends":["config:recommended","helpers:pinGitHubActionDigests"],"schedule":["before 6am on monday"],"timezone":"UTC","labels":["dependencies"],"rebaseWhen":"conflicted","prConcurrentLimit":5,"postUpdateOptions":["gomodTidy"],"lockFileMaintenance":{"enabled":true,"schedule":["before 6am on monday"]},"packageRules":[{"matchManagers":["gomod"],"matchUpdateTypes":["minor","patch","digest","lockFileMaintenance"],"groupName":"go modules (non-major)"},{"matchManagers":["pep621"],"matchUpdateTypes":["minor","patch","digest","lockFileMaintenance"],"groupName":"python deps (non-major)"},{"matchManagers":["github-actions"],"matchUpdateTypes":["minor","patch","digest"],"groupName":"github actions (non-major)"},{"matchManagers":["pre-commit"],"matchUpdateTypes":["minor","patch","digest"],"groupName":"pre-commit hooks (non-major)"}],"customManagers":[{
+      "customType":"regex",
+      "managerFilePatterns": [
+        "/(^|/)go\\.mod$/"
+      ],
+      "matchStrings":["(?m)^go (?<currentValue>\\d+\\.\\d+(?:\\.\\d+)?)$"],
+      "datasourceTemplate":"golang-version",
+      "depNameTemplate":"go-toolchain",
+      "versioningTemplate":"go",
+      "extractVersionTemplate":"^(?<version>\\d+\\.\\d+)"
+    },{
+      "customType":"regex",
+      "managerFilePatterns": [
+        "/(^|/)pyproject\\.toml$/"
+      ],
+      "matchStrings":["requires-python\\s*=\\s*\"\\s*>=\\s*(?<currentValue>\\d+\\.\\d+(?:\\.\\d+)?)\\s*\""],
+      "datasourceTemplate":"python-version",
+      "depNameTemplate":"python",
+      "versioningTemplate":"python",
+      "extractVersionTemplate":"^(?<version>\\d+\\.\\d+)"
+    }]}
