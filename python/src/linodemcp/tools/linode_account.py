@@ -368,6 +368,126 @@ async def handle_linode_account_tag_delete(
     return await execute_tool(cfg, arguments, "delete Linode tag", _call)
 
 
+def create_linode_account_support_ticket_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_support_ticket_create tool."""
+    return Tool(
+        name="linode_account_support_ticket_create",
+        description="Opens a Linode support ticket.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "summary": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "description": "Support ticket summary or title",
+                },
+                "description": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 65000,
+                    "description": "Full details of the issue or question",
+                },
+                "bucket": {
+                    "type": "string",
+                    "description": "Object Storage bucket name",
+                },
+                "database_id": {"type": "integer", "minimum": 1},
+                "domain_id": {"type": "integer", "minimum": 1},
+                "firewall_id": {"type": "integer", "minimum": 1},
+                "linode_id": {"type": "integer", "minimum": 1},
+                "lkecluster_id": {"type": "integer", "minimum": 1},
+                "longviewclient_id": {"type": "integer", "minimum": 1},
+                "managed_issue": {"type": "boolean"},
+                "nodebalancer_id": {"type": "integer", "minimum": 1},
+                "region": {"type": "string", "description": "Region ID"},
+                "severity": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3,
+                    "description": "Ticket severity: 1 major, 2 moderate, 3 low",
+                },
+                "vlan": {"type": "string", "description": "VLAN label"},
+                "volume_id": {"type": "integer", "minimum": 1},
+                "vpc_id": {"type": "integer", "minimum": 1},
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this mutating operation.",
+                },
+            },
+            "required": ["summary", "description", "confirm"],
+        },
+    ), Capability.Write
+
+
+def _required_string_argument(arguments: dict[str, Any], name: str) -> str:
+    value = arguments.get(name)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{name} is required")
+    return value.strip()
+
+
+def _optional_string_argument(arguments: dict[str, Any], name: str) -> str | None:
+    value = arguments.get(name)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{name} must be a non-empty string")
+    return value.strip()
+
+
+def _optional_bool_argument(arguments: dict[str, Any], name: str) -> bool | None:
+    value = arguments.get(name)
+    if value is None:
+        return None
+    if not isinstance(value, bool):
+        raise TypeError(f"{name} must be a boolean")
+    return value
+
+
+async def handle_linode_account_support_ticket_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_support_ticket_create tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This opens a support ticket. Set confirm=true to proceed."
+        )
+
+    try:
+        summary = _required_string_argument(arguments, "summary")
+        description = _required_string_argument(arguments, "description")
+        ticket_fields: dict[str, Any] = {
+            "bucket": _optional_string_argument(arguments, "bucket"),
+            "database_id": _optional_int_argument(arguments, "database_id", 1),
+            "domain_id": _optional_int_argument(arguments, "domain_id", 1),
+            "firewall_id": _optional_int_argument(arguments, "firewall_id", 1),
+            "linode_id": _optional_int_argument(arguments, "linode_id", 1),
+            "lkecluster_id": _optional_int_argument(arguments, "lkecluster_id", 1),
+            "longviewclient_id": _optional_int_argument(
+                arguments, "longviewclient_id", 1
+            ),
+            "managed_issue": _optional_bool_argument(arguments, "managed_issue"),
+            "nodebalancer_id": _optional_int_argument(arguments, "nodebalancer_id", 1),
+            "region": _optional_string_argument(arguments, "region"),
+            "severity": _optional_int_argument(arguments, "severity", 1, 3),
+            "vlan": _optional_string_argument(arguments, "vlan"),
+            "volume_id": _optional_int_argument(arguments, "volume_id", 1),
+            "vpc_id": _optional_int_argument(arguments, "vpc_id", 1),
+        }
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        ticket = await client.create_support_ticket(
+            summary, description, **ticket_fields
+        )
+        return {"message": "Support ticket opened successfully", "ticket": ticket}
+
+    return await execute_tool(cfg, arguments, "open Linode support ticket", _call)
+
+
 def create_linode_account_support_ticket_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_support_ticket_get tool."""
     return Tool(
