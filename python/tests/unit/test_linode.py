@@ -368,6 +368,41 @@ async def test_get_instance(sample_instance_data: dict[str, Any]) -> None:
     await client.close()
 
 
+async def test_list_volume_types_sends_get_to_volume_types_route() -> None:
+    """Test listing volume types sends GET /volumes/types."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response_data = {
+        "data": [
+            {
+                "id": "volume",
+                "label": "Storage Volume",
+                "price": {"hourly": 0.0015, "monthly": 0.10},
+                "region_prices": [
+                    {"id": "us-iad", "hourly": 0.00018, "monthly": 0.12},
+                ],
+                "transfer": 0,
+            },
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        volume_types = await client.list_volume_types()
+
+    assert volume_types == response_data["data"]
+    mock_request.assert_called_once_with("GET", "/volumes/types")
+
+    await client.close()
+
+
 async def test_get_volume_sends_get_to_volume_route() -> None:
     """Test getting a volume sends GET /volumes/{id}."""
     client = Client("https://api.linode.com/v4", "test-token")
