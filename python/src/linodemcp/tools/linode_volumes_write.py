@@ -99,6 +99,83 @@ async def handle_linode_volume_create(
     return await execute_tool(cfg, arguments, "create volume", _call)
 
 
+def create_linode_volume_clone_tool() -> tuple[Tool, Capability]:
+    """Create the linode_volume_clone tool."""
+    return Tool(
+        name="linode_volume_clone",
+        description=(
+            "Clones a block storage volume. WARNING: The cloned volume is a "
+            "new billable resource."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "volume_id": {
+                    "type": "integer",
+                    "description": "The ID of the volume to clone (required)",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Label for the cloned volume (required)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to confirm cloning. This incurs billing."
+                    ),
+                },
+            },
+            "required": ["volume_id", "label", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_volume_clone(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_volume_clone tool request."""
+    volume_id = arguments.get("volume_id", 0)
+    label = arguments.get("label", "")
+    confirm = arguments.get("confirm", False)
+
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text="Error: This creates a billable resource. Set confirm=true.",
+            )
+        ]
+    if not volume_id:
+        return error_response("volume_id is required")
+    if not label:
+        return error_response("label is required")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        volume = await client.clone_volume(int(volume_id), label)
+        return {
+            "message": (
+                f"Volume {volume_id} cloned successfully as "
+                f"'{volume.label}' (ID: {volume.id})"
+            ),
+            "volume": {
+                "id": volume.id,
+                "label": volume.label,
+                "size": volume.size,
+                "region": volume.region,
+                "status": volume.status,
+                "filesystem_path": volume.filesystem_path,
+            },
+        }
+
+    return await execute_tool(cfg, arguments, "clone volume", _call)
+
+
 def create_linode_volume_attach_tool() -> tuple[Tool, Capability]:
     """Create the linode_volume_attach tool."""
     return Tool(

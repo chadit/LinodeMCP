@@ -46,6 +46,7 @@ def _synthetic_registry() -> list[ToolDescriptor]:
         # to match against.
         ToolDescriptor("linode_volumes_list", Capability.Read),
         ToolDescriptor("linode_volume_get", Capability.Read),
+        ToolDescriptor("linode_volume_clone", Capability.Write),
         ToolDescriptor("linode_volume_create", Capability.Write),
         ToolDescriptor("linode_volume_update", Capability.Write),
         ToolDescriptor("linode_volume_delete", Capability.Destroy),
@@ -152,6 +153,7 @@ def test_wildcard_expansion_resolves_every_matching_tool() -> None:
 
     assert set(profile.allowed_tools) == {
         "linode_volume_get",
+        "linode_volume_clone",
         "linode_volume_create",
         "linode_volume_update",
         "linode_volume_delete",

@@ -403,6 +403,43 @@ async def test_get_volume_sends_get_to_volume_route() -> None:
     await client.close()
 
 
+async def test_clone_volume_sends_post_to_volume_clone_route() -> None:
+    """Test cloning a volume sends POST /volumes/{id}/clone."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "id": 23456,
+        "label": "my-volume-clone",
+        "status": "creating",
+        "size": 20,
+        "region": "us-east",
+        "linode_id": None,
+        "linode_label": None,
+        "filesystem_path": "/dev/disk/by-id/scsi-0Linode_Volume_my-volume-clone",
+        "created": "2024-01-15T10:00:00",
+        "updated": "2024-01-15T10:00:00",
+        "tags": [],
+        "hardware_type": "nvme",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        volume = await client.clone_volume(12345, "my-volume-clone")
+
+    assert volume.id == 23456
+    assert volume.label == "my-volume-clone"
+    mock_request.assert_called_once_with(
+        "POST",
+        "/volumes/12345/clone",
+        {"label": "my-volume-clone"},
+    )
+
+    await client.close()
+
+
 async def test_update_volume_sends_put_to_volume_route() -> None:
     """Test updating a volume sends PUT /volumes/{id}."""
     client = Client("https://api.linode.com/v4", "test-token")
