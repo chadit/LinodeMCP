@@ -35,6 +35,7 @@ from linodemcp.linode import (
 )
 from linodemcp.profiles import Capability
 from linodemcp.tools import (
+    create_linode_account_tag_delete_tool,
     create_linode_account_update_tool,
     create_linode_firewall_get_tool,
     create_linode_image_create_tool,
@@ -81,6 +82,7 @@ from linodemcp.tools import (
     create_linode_vpcs_list_tool,
     handle_hello,
     handle_linode_account,
+    handle_linode_account_tag_delete,
     handle_linode_account_update,
     handle_linode_domain_create,
     handle_linode_domain_delete,
@@ -620,6 +622,68 @@ async def test_handle_linode_account_update_requires_field(
 
     assert len(result) == 1
     assert "At least one account field" in result[0].text
+
+
+async def test_create_linode_account_tag_delete_tool() -> None:
+    """Test linode_account_tag_delete tool schema."""
+    tool, capability = create_linode_account_tag_delete_tool()
+
+    assert tool.name == "linode_account_tag_delete"
+    assert capability is Capability.Destroy
+    assert "tag_label" in tool.inputSchema["required"]
+    assert "confirm" in tool.inputSchema["required"]
+
+
+async def test_handle_linode_account_tag_delete_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Tag delete requires confirmation."""
+    result = await handle_linode_account_tag_delete(
+        {"tag_label": "obsolete"}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_handle_linode_account_tag_delete_requires_label(
+    sample_config: Config,
+) -> None:
+    """Tag delete requires a non-empty tag label."""
+    result = await handle_linode_account_tag_delete({"confirm": True}, sample_config)
+
+    assert len(result) == 1
+    assert "tag_label" in result[0].text
+
+
+async def test_handle_linode_account_tag_delete_rejects_blank_label(
+    sample_config: Config,
+) -> None:
+    """Tag delete rejects a blank tag label."""
+    result = await handle_linode_account_tag_delete(
+        {"tag_label": "   ", "confirm": True}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "tag_label" in result[0].text
+
+
+async def test_handle_linode_account_tag_delete(sample_config: Config) -> None:
+    """Test linode_account_tag_delete tool."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_tag.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_tag_delete(
+            {"tag_label": "obsolete", "confirm": True}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "deleted successfully" in result[0].text
+        mock_client.delete_tag.assert_awaited_once_with("obsolete")
 
 
 async def test_handle_linode_regions_list(sample_config: Config) -> None:

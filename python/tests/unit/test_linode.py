@@ -368,6 +368,55 @@ async def test_get_instance(sample_instance_data: dict[str, Any]) -> None:
     await client.close()
 
 
+async def test_delete_tag_sends_delete_to_tag_route() -> None:
+    """Test deleting a tag sends DELETE /tags/{tagLabel}."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        await client.delete_tag("obsolete")
+
+    mock_request.assert_called_once_with("DELETE", "/tags/obsolete")
+    await client.close()
+
+
+async def test_delete_tag_encodes_label_path_segment() -> None:
+    """Test deleting a tag URL-encodes tagLabel as one path segment."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        await client.delete_tag("team/blue tag")
+
+    mock_request.assert_called_once_with("DELETE", "/tags/team%2Fblue%20tag")
+    await client.close()
+
+
+async def test_delete_tag_wraps_http_errors() -> None:
+    """Test deleting a tag wraps HTTP errors with operation context."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.delete_tag("obsolete")
+
+    assert "DeleteTag" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_delete_tag_delegates_to_client() -> None:
+    """Test RetryableClient delegates tag delete to Client.delete_tag."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "delete_tag", new_callable=AsyncMock
+    ) as mock_delete:
+        await retryable.delete_tag("obsolete")
+
+    mock_delete.assert_awaited_once_with("obsolete")
+    await retryable.close()
+
+
 async def test_list_volume_types_sends_get_to_volume_types_route() -> None:
     """Test listing volume types sends GET /volumes/types."""
     client = Client("https://api.linode.com/v4", "test-token")

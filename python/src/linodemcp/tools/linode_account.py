@@ -132,3 +132,43 @@ async def handle_linode_account_update(
         }
 
     return await execute_tool(cfg, arguments, "update Linode account", _call)
+
+
+def create_linode_account_tag_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_tag_delete tool."""
+    return Tool(
+        name="linode_account_tag_delete",
+        description="Deletes a Linode account tag by label.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "tag_label": {
+                    "type": "string",
+                    "description": "Label of the tag to delete",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this destructive operation.",
+                },
+            },
+            "required": ["tag_label", "confirm"],
+        },
+    ), Capability.Destroy
+
+
+async def handle_linode_account_tag_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_tag_delete tool request."""
+    tag_label = arguments.get("tag_label")
+    if not isinstance(tag_label, str) or not tag_label.strip():
+        return error_response("tag_label is required")
+    if not arguments.get("confirm"):
+        return error_response("This deletes a tag. Set confirm=true to proceed.")
+
+    async def _call(client: RetryableClient) -> dict[str, str]:
+        await client.delete_tag(tag_label)
+        return {"message": f"Tag '{tag_label}' deleted successfully"}
+
+    return await execute_tool(cfg, arguments, "delete Linode tag", _call)
