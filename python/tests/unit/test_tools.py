@@ -38,6 +38,7 @@ from linodemcp.tools import (
     create_linode_account_tag_create_tool,
     create_linode_account_tag_delete_tool,
     create_linode_account_tag_objects_list_tool,
+    create_linode_account_tags_list_tool,
     create_linode_account_update_tool,
     create_linode_firewall_get_tool,
     create_linode_image_create_tool,
@@ -87,6 +88,7 @@ from linodemcp.tools import (
     handle_linode_account_tag_create,
     handle_linode_account_tag_delete,
     handle_linode_account_tag_objects_list,
+    handle_linode_account_tags_list,
     handle_linode_account_update,
     handle_linode_domain_create,
     handle_linode_domain_delete,
@@ -626,6 +628,50 @@ async def test_handle_linode_account_update_requires_field(
 
     assert len(result) == 1
     assert "At least one account field" in result[0].text
+
+
+async def test_create_linode_account_tags_list_tool() -> None:
+    """Test linode_account_tags_list tool schema."""
+    tool, capability = create_linode_account_tags_list_tool()
+
+    assert tool.name == "linode_account_tags_list"
+    assert capability is Capability.Read
+    assert "page" not in tool.inputSchema.get("required", [])
+    assert "page_size" not in tool.inputSchema.get("required", [])
+
+
+async def test_handle_linode_account_tags_list_rejects_invalid_page(
+    sample_config: Config,
+) -> None:
+    """Account tag listing validates page."""
+    result = await handle_linode_account_tags_list({"page": 0}, sample_config)
+
+    assert len(result) == 1
+    assert "page" in result[0].text
+
+
+async def test_handle_linode_account_tags_list(sample_config: Config) -> None:
+    """Test linode_account_tags_list tool."""
+    response_data: dict[str, Any] = {
+        "data": [{"label": "production"}, {"label": "web"}],
+        "page": 2,
+        "pages": 3,
+        "results": 51,
+    }
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_tags.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_tags_list(
+            {"page": 2, "page_size": 25}, sample_config
+        )
+
+        assert len(result) == 1
+        assert json.loads(result[0].text) == response_data
+        mock_client.list_tags.assert_awaited_once_with(page=2, page_size=25)
 
 
 async def test_create_linode_account_tag_objects_list_tool() -> None:

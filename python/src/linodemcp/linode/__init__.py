@@ -1481,6 +1481,25 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("DeleteVLAN", e) from e
 
+    async def list_tags(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List account tags."""
+        endpoint = "/tags"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListTags", e) from e
+
     async def list_tagged_objects(
         self, tag_label: str, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -4494,6 +4513,15 @@ class RetryableClient:
     async def delete_vlan(self, region_id: str, label: str) -> None:
         """Delete VLAN with retry."""
         await self._execute_with_retry(self.client.delete_vlan, region_id, label)
+
+    async def list_tags(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List account tags with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_tags(page=page, page_size=page_size)
+        )
+        return result
 
     async def list_tagged_objects(
         self, tag_label: str, page: int | None = None, page_size: int | None = None

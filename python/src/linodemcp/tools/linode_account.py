@@ -149,6 +149,47 @@ def _optional_int_argument(
     return value
 
 
+def create_linode_account_tags_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_tags_list tool."""
+    return Tool(
+        name="linode_account_tags_list",
+        description="Lists tags on the Linode account.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
+            },
+        },
+    ), Capability.Read
+
+
+async def handle_linode_account_tags_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_tags_list tool request."""
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.list_tags(page=page, page_size=page_size)
+
+    return await execute_tool(cfg, arguments, "list Linode account tags", _call)
+
+
 def create_linode_account_tag_objects_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_tag_objects_list tool."""
     return Tool(
