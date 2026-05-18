@@ -1554,6 +1554,16 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("DeleteTag", e) from e
 
+    async def get_support_ticket(self, ticket_id: int) -> dict[str, Any]:
+        """Get a support ticket."""
+        endpoint = f"/support/tickets/{ticket_id}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetSupportTicket", e) from e
+
     async def list_support_ticket_replies(
         self, ticket_id: int, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -4600,6 +4610,13 @@ class RetryableClient:
     async def delete_tag(self, tag_label: str) -> None:
         """Delete tag with retry."""
         await self._execute_with_retry(self.client.delete_tag, tag_label)
+
+    async def get_support_ticket(self, ticket_id: int) -> dict[str, Any]:
+        """Get a support ticket with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_support_ticket, ticket_id
+        )
+        return result
 
     async def list_support_ticket_replies(
         self, ticket_id: int, page: int | None = None, page_size: int | None = None
