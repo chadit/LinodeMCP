@@ -6,7 +6,7 @@ MYPY := $(VENV)/bin/mypy
 PYTEST := $(VENV)/bin/pytest
 PYRIGHT := pyright
 
-.PHONY: help venv install install-dev test test-cov lint format typecheck vulture deptry clean run all check _ensure-hooks update-hooks
+.PHONY: help venv install install-dev build test test-cov lint format typecheck vulture deptry clean run all check _ensure-hooks update-hooks
 
 # Auto-install pre-commit hooks if not already set up
 _ensure-hooks:
@@ -25,6 +25,7 @@ help: _ensure-hooks
 	@echo "  venv         - Create virtual environment"
 	@echo "  install      - Install package"
 	@echo "  install-dev  - Install package with dev dependencies"
+	@echo "  build        - Build wheel and sdist into bin/"
 	@echo "  test         - Run tests"
 	@echo "  test-cov     - Run tests with coverage report"
 	@echo "  lint         - Run ruff linter"
@@ -46,6 +47,12 @@ install: venv
 
 install-dev: venv
 	$(PIP) install -e ".[dev,observability]"
+
+build: venv
+	@echo "Building linodemcp wheel + sdist into bin/..."
+	@$(PIP) install --quiet --upgrade build
+	@rm -rf bin/
+	@$(PYTHON) -m build --outdir bin/
 
 test: _ensure-hooks
 	$(PYTEST)
@@ -85,6 +92,7 @@ deptry: _ensure-hooks
 	deptry src/linodemcp
 
 clean:
+	rm -rf bin/
 	rm -rf build/
 	rm -rf dist/
 	rm -rf *.egg-info

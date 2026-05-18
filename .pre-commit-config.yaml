@@ -95,3 +95,14 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-push]
+
+      # Build gate before push. Ensures both Go and Python artifacts build
+      # cleanly from the root Makefile. Requires:
+      #   pre-commit install --hook-type pre-push
+      - id: make-build
+        name: make build (root, all languages)
+        entry: make build
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

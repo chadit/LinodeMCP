@@ -1,8 +1,8 @@
-.PHONY: help check lint clean \
+.PHONY: help build check lint clean \
 	docker-build-go docker-build-python docker-build-all \
 	docker-run-go docker-run-python docker-clean \
 	go-build go-test go-lint go-fmt go-clean go-run go-check \
-	python-build python-test python-lint python-fmt python-clean python-run python-check \
+	python-build python-install-dev python-test python-lint python-fmt python-clean python-run python-check \
 	betterleaks trivy
 
 CONTAINER_ENGINE ?= docker
@@ -16,6 +16,9 @@ help:
 	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/^## //' | awk -F': ' '{printf "  make %-22s %s\n", $$1, $$2}'
 
 # --- Top-level targets ---
+
+## build: Build all language binaries (Go + Python) into each language's bin/
+build: go-build python-build
 
 ## check: Run all linters and tests (go-check + python-check)
 check: go-check python-check
@@ -76,8 +79,12 @@ go-check:
 
 # --- Python pass-through targets ---
 
-## python-build: Install Python dev deps
+## python-build: Build Python wheel + sdist into python/bin/
 python-build:
+	$(MAKE) -C python build
+
+## python-install-dev: Install Python package with dev dependencies (editable)
+python-install-dev:
 	$(MAKE) -C python install-dev
 
 ## python-test: Run Python tests

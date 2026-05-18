@@ -22,7 +22,7 @@ update-hooks:
 ## build: Build development binary
 build: _ensure-hooks
 	@echo "Building linodemcp..."
-	@go build -o bin/linodemcp cmd/linodemcp/main.go
+	@go build -o bin/linodemcp ./cmd/linodemcp
 
 APPINFO_PKG := github.com/chadit/LinodeMCP/internal/appinfo
 LDFLAGS := -s -w -buildid= \
@@ -36,7 +36,7 @@ build-prod: _ensure-hooks
 		-trimpath \
 		-buildmode=pie \
 		-tags=netgo,osusergo \
-		-o bin/linodemcp cmd/linodemcp/main.go
+		-o bin/linodemcp ./cmd/linodemcp
 
 ## run: Build and run
 run: build
