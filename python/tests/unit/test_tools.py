@@ -40,6 +40,7 @@ from linodemcp.tools import (
     create_linode_account_support_ticket_get_tool,
     create_linode_account_support_ticket_replies_list_tool,
     create_linode_account_support_ticket_reply_create_tool,
+    create_linode_account_support_tickets_list_tool,
     create_linode_account_tag_create_tool,
     create_linode_account_tag_delete_tool,
     create_linode_account_tag_objects_list_tool,
@@ -95,6 +96,7 @@ from linodemcp.tools import (
     handle_linode_account_support_ticket_get,
     handle_linode_account_support_ticket_replies_list,
     handle_linode_account_support_ticket_reply_create,
+    handle_linode_account_support_tickets_list,
     handle_linode_account_tag_create,
     handle_linode_account_tag_delete,
     handle_linode_account_tag_objects_list,
@@ -1134,6 +1136,73 @@ async def test_create_linode_account_support_ticket_get_tool() -> None:
     assert tool.name == "linode_account_support_ticket_get"
     assert capability is Capability.Read
     assert "ticket_id" in tool.inputSchema["required"]
+
+
+async def test_create_linode_account_support_tickets_list_tool() -> None:
+    """Test linode_account_support_tickets_list tool schema."""
+    tool, capability = create_linode_account_support_tickets_list_tool()
+
+    assert tool.name == "linode_account_support_tickets_list"
+    assert capability is Capability.Read
+    assert "required" not in tool.inputSchema
+    assert "page" in tool.inputSchema["properties"]
+    assert "page_size" in tool.inputSchema["properties"]
+
+
+async def test_handle_linode_account_support_tickets_list_rejects_page_size(
+    sample_config: Config,
+) -> None:
+    """Support ticket listing validates page_size."""
+    result = await handle_linode_account_support_tickets_list(
+        {"page_size": 10}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "page_size" in result[0].text
+
+
+async def test_handle_linode_account_support_tickets_list(
+    sample_config: Config,
+) -> None:
+    """Test linode_account_support_tickets_list tool."""
+    response_data: dict[str, Any] = {
+        "data": [{"id": 789, "summary": "Need help"}],
+        "page": 2,
+        "pages": 3,
+        "results": 51,
+    }
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_support_tickets.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_support_tickets_list(
+            {"page": 2, "page_size": 25}, sample_config
+        )
+
+        assert len(result) == 1
+        assert json.loads(result[0].text) == response_data
+        mock_client.list_support_tickets.assert_awaited_once_with(page=2, page_size=25)
+
+
+async def test_handle_linode_account_support_tickets_list_reports_client_errors(
+    sample_config: Config,
+) -> None:
+    """Test support tickets list handler reports client errors."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_support_tickets.side_effect = RuntimeError("boom")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_support_tickets_list({}, sample_config)
+
+    assert len(result) == 1
+    assert "Failed to list Linode support tickets" in result[0].text
+    assert "boom" in result[0].text
 
 
 async def test_handle_linode_account_support_ticket_get_requires_ticket_id(
