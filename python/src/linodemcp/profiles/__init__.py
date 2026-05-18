@@ -26,16 +26,29 @@ from linodemcp.profiles.scopecheck import (
     flatten_grants,
     parse_pat_scopes,
 )
+from linodemcp.profiles.validator import (
+    GrantsFetchError,
+    ProfileFetchError,
+    ScopeValidationResult,
+    TokenInspector,
+    TokenKind,
+    validate_scopes,
+)
 
 __all__ = [
     "DEFAULT_PROFILE_NAME",
     "ActiveProfileDisabledError",
     "ActiveProfileUnknownError",
     "Capability",
+    "GrantsFetchError",
     "Profile",
     "ProfileError",
+    "ProfileFetchError",
     "Scope",
     "ScopeComparison",
+    "ScopeValidationResult",
+    "TokenInspector",
+    "TokenKind",
     "ToolDescriptor",
     "builtin_catalog_json",
     "builtin_profiles",
@@ -44,4 +57,5 @@ __all__ = [
     "parse_pat_scopes",
     "required_scopes",
     "resolve_active_profile",
+    "validate_scopes",
 ]

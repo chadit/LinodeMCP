@@ -12,4 +12,12 @@ var (
 	// Config.ProfilesBuiltinOverrides. User-defined profiles cannot be
 	// disabled today, so this only triggers for built-ins.
 	ErrActiveProfileDisabled = errors.New("active profile is disabled")
+	// ErrProfileFetchFailed wraps any error returned by GetProfile during
+	// Phase 6.4 scope validation. Callers can match with errors.Is to
+	// distinguish "couldn't reach Linode" from a scope mismatch (which
+	// is reported via the ScopeComparison instead of an error return).
+	ErrProfileFetchFailed = errors.New("fetch /profile failed")
+	// ErrGrantsFetchFailed wraps any error returned by GetProfileGrants
+	// on the OAuth code path. Same use as ErrProfileFetchFailed.
+	ErrGrantsFetchFailed = errors.New("fetch /profile/grants failed")
 )
