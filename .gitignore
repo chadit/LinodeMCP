@@ -48,3 +48,9 @@ coverage.xml
 # repo ships its own CI workflows. Re-include them here.
 !/.github/
 !/.github/**
+
+# Override: the global ~/.gitignore excludes **/docs/ broadly, but this
+# repo ships host integration examples and profile docs under docs/.
+# Re-include them here.
+!/docs/
+!/docs/**
