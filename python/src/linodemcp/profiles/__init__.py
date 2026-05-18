@@ -20,6 +20,12 @@ from linodemcp.profiles.loader import (
 )
 from linodemcp.profiles.profile import Profile
 from linodemcp.profiles.scope import Scope, required_scopes
+from linodemcp.profiles.scopecheck import (
+    ScopeComparison,
+    compare_scopes,
+    flatten_grants,
+    parse_pat_scopes,
+)
 
 __all__ = [
     "DEFAULT_PROFILE_NAME",
@@ -29,9 +35,13 @@ __all__ = [
     "Profile",
     "ProfileError",
     "Scope",
+    "ScopeComparison",
     "ToolDescriptor",
     "builtin_catalog_json",
     "builtin_profiles",
+    "compare_scopes",
+    "flatten_grants",
+    "parse_pat_scopes",
     "required_scopes",
     "resolve_active_profile",
 ]
