@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import json
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import AsyncMock, patch
 
@@ -346,6 +347,43 @@ async def test_account_tag_delete_tool_is_exported_and_registered(
 
     srv = Server(_full_access_config(sample_config))
     assert "linode_account_tag_delete" in srv.registered_tool_names
+
+
+async def test_account_support_ticket_replies_list_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Support ticket replies list tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_support_ticket_replies_list_tool" in tools_mod.__all__
+    assert "handle_linode_account_support_ticket_replies_list" in tools_mod.__all__
+
+    srv = Server(sample_config)
+    assert "linode_account_support_ticket_replies_list" in srv.registered_tool_names
+
+
+async def test_account_support_ticket_replies_list_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Support ticket replies list is callable through server dispatch."""
+    response_data = {"data": [{"id": 456}], "page": 1, "pages": 1, "results": 1}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_support_ticket_replies.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_account_support_ticket_replies_list", {"ticket_id": 123}
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.list_support_ticket_replies.assert_awaited_once_with(
+        123, page=None, page_size=None
+    )
 
 
 async def test_account_support_ticket_reply_create_tool_is_exported_and_registered(

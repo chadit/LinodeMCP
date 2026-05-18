@@ -368,6 +368,61 @@ async def handle_linode_account_tag_delete(
     return await execute_tool(cfg, arguments, "delete Linode tag", _call)
 
 
+def create_linode_account_support_ticket_replies_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_support_ticket_replies_list tool."""
+    return Tool(
+        name="linode_account_support_ticket_replies_list",
+        description="Lists replies on a Linode support ticket.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "ticket_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Support ticket ID whose replies to list",
+                },
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
+            },
+            "required": ["ticket_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_account_support_ticket_replies_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_support_ticket_replies_list tool request."""
+    ticket_id = arguments.get("ticket_id")
+    if not isinstance(ticket_id, int) or isinstance(ticket_id, bool) or ticket_id < 1:
+        return error_response("ticket_id must be a positive integer")
+
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.list_support_ticket_replies(
+            ticket_id, page=page, page_size=page_size
+        )
+
+    return await execute_tool(
+        cfg, arguments, "list Linode support ticket replies", _call
+    )
+
+
 def create_linode_account_support_ticket_reply_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_support_ticket_reply_create tool."""
     return Tool(

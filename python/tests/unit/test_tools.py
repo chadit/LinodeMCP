@@ -35,6 +35,7 @@ from linodemcp.linode import (
 )
 from linodemcp.profiles import Capability
 from linodemcp.tools import (
+    create_linode_account_support_ticket_replies_list_tool,
     create_linode_account_support_ticket_reply_create_tool,
     create_linode_account_tag_create_tool,
     create_linode_account_tag_delete_tool,
@@ -86,6 +87,7 @@ from linodemcp.tools import (
     create_linode_vpcs_list_tool,
     handle_hello,
     handle_linode_account,
+    handle_linode_account_support_ticket_replies_list,
     handle_linode_account_support_ticket_reply_create,
     handle_linode_account_tag_create,
     handle_linode_account_tag_delete,
@@ -939,6 +941,99 @@ async def test_account_tag_create_tool_is_exported_and_registered(
 
     registry = {entry.name: entry for entry in get_tool_registry()}
     assert registry["linode_account_tag_create"].capability is Capability.Write
+
+
+async def test_create_linode_account_support_ticket_replies_list_tool() -> None:
+    """Test linode_account_support_ticket_replies_list tool schema."""
+    tool, capability = create_linode_account_support_ticket_replies_list_tool()
+
+    assert tool.name == "linode_account_support_ticket_replies_list"
+    assert capability is Capability.Read
+    assert "ticket_id" in tool.inputSchema["required"]
+    assert "page" not in tool.inputSchema["required"]
+    assert "page_size" not in tool.inputSchema["required"]
+
+
+async def test_handle_linode_account_support_ticket_replies_list_requires_ticket_id(
+    sample_config: Config,
+) -> None:
+    """Support ticket reply listing requires a positive ticket_id."""
+    result = await handle_linode_account_support_ticket_replies_list({}, sample_config)
+
+    assert len(result) == 1
+    assert "ticket_id" in result[0].text
+
+
+async def test_handle_linode_account_support_ticket_replies_list_rejects_bad_id(
+    sample_config: Config,
+) -> None:
+    """Support ticket reply listing rejects invalid ticket IDs."""
+    result = await handle_linode_account_support_ticket_replies_list(
+        {"ticket_id": 0}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "ticket_id" in result[0].text
+
+
+async def test_handle_linode_account_support_ticket_replies_list_rejects_page_size(
+    sample_config: Config,
+) -> None:
+    """Support ticket reply listing validates page_size."""
+    result = await handle_linode_account_support_ticket_replies_list(
+        {"ticket_id": 123, "page_size": 10}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "page_size" in result[0].text
+
+
+async def test_handle_linode_account_support_ticket_replies_list(
+    sample_config: Config,
+) -> None:
+    """Test linode_account_support_ticket_replies_list tool."""
+    response_data: dict[str, Any] = {
+        "data": [{"id": 456, "description": "Thanks"}],
+        "page": 2,
+        "pages": 3,
+        "results": 51,
+    }
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_support_ticket_replies.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_support_ticket_replies_list(
+            {"ticket_id": 123, "page": 2, "page_size": 25}, sample_config
+        )
+
+        assert len(result) == 1
+        assert json.loads(result[0].text) == response_data
+        mock_client.list_support_ticket_replies.assert_awaited_once_with(
+            123, page=2, page_size=25
+        )
+
+
+async def test_handle_linode_account_support_ticket_replies_list_reports_client_errors(
+    sample_config: Config,
+) -> None:
+    """Test support ticket replies list handler reports client errors."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_support_ticket_replies.side_effect = RuntimeError("boom")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_support_ticket_replies_list(
+            {"ticket_id": 123}, sample_config
+        )
+
+    assert len(result) == 1
+    assert "Failed to list Linode support ticket replies" in result[0].text
+    assert "boom" in result[0].text
 
 
 async def test_create_linode_account_support_ticket_reply_create_tool() -> None:
