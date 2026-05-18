@@ -740,6 +740,38 @@ async def test_retryable_create_ipv6_range_delegates_to_client() -> None:
     await client.close()
 
 
+async def test_retryable_create_image_delegates_to_client() -> None:
+    """Retryable client should delegate image creation."""
+    client = RetryableClient(
+        "https://api.linode.com/v4",
+        "test-token",
+        RetryConfig(max_retries=1, base_delay=0.01),
+    )
+
+    with patch.object(
+        client.client,
+        "create_image",
+        new_callable=AsyncMock,
+    ) as mock_create:
+        await client.create_image(
+            123,
+            label="app-image",
+            description="Application image",
+            cloud_init=True,
+            tags=["prod"],
+        )
+
+        mock_create.assert_awaited_once_with(
+            disk_id=123,
+            label="app-image",
+            description="Application image",
+            cloud_init=True,
+            tags=["prod"],
+        )
+
+    await client.close()
+
+
 async def test_retryable_get_ipv6_range_delegates_to_client() -> None:
     """Retryable client should delegate IPv6 range retrieval."""
     client = RetryableClient(
@@ -1379,6 +1411,60 @@ async def test_create_stackscript() -> None:
         )
         assert stackscript.id == 1
         assert stackscript.label == "my-script"
+
+    await client.close()
+
+
+async def test_create_image_sends_post_to_images_route() -> None:
+    """Test creating an image sends POST /images."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "id": "private/12345",
+        "label": "app-image",
+        "description": "Application image",
+        "type": "manual",
+        "is_public": False,
+        "deprecated": False,
+        "size": 2048,
+        "vendor": "",
+        "status": "creating",
+        "created": "2024-01-01T00:00:00",
+        "created_by": "testuser",
+        "updated": "2024-01-01T00:00:00",
+        "expiry": None,
+        "eol": None,
+        "capabilities": ["cloud-init"],
+        "regions": [],
+        "tags": ["prod"],
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        image = await client.create_image(
+            disk_id=123,
+            label="app-image",
+            description="Application image",
+            cloud_init=True,
+            tags=["prod"],
+        )
+
+        mock_request.assert_called_once_with(
+            "POST",
+            "/images",
+            {
+                "disk_id": 123,
+                "label": "app-image",
+                "description": "Application image",
+                "cloud_init": True,
+                "tags": ["prod"],
+            },
+        )
+        assert image.id == "private/12345"
+        assert image.label == "app-image"
 
     await client.close()
 

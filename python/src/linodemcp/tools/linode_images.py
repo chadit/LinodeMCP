@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import execute_tool
+from linodemcp.tools.helpers import error_response, execute_tool
 
 if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
@@ -45,6 +45,99 @@ def create_linode_images_list_tool() -> tuple[Tool, Capability]:
             },
         },
     ), Capability.Read
+
+
+def create_linode_image_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_create tool."""
+    return Tool(
+        name="linode_image_create",
+        description="Creates a private image from a Linode disk.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "disk_id": {
+                    "type": "integer",
+                    "description": "ID of the Linode disk to image (required)",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Short title for the image",
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Detailed description for the image",
+                },
+                "cloud_init": {
+                    "type": "boolean",
+                    "description": "Whether the image supports cloud-init",
+                },
+                "tags": {
+                    "type": "array",
+                    "description": "Tags to apply to the image",
+                    "items": {"type": "string"},
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this mutating operation.",
+                },
+            },
+            "required": ["disk_id", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_image_create(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_image_create tool request."""
+    if not arguments.get("confirm"):
+        return error_response("This creates an image. Set confirm=true to proceed.")
+
+    disk_id = arguments.get("disk_id")
+    if not isinstance(disk_id, int) or isinstance(disk_id, bool) or disk_id <= 0:
+        return error_response("disk_id must be a positive integer")
+
+    tags_arg = arguments.get("tags")
+    tags: list[str] | None = None
+    if tags_arg is not None:
+        if not isinstance(tags_arg, list):
+            return error_response("tags must be a list of strings")
+        tag_values = cast("list[object]", tags_arg)
+        tags = []
+        for tag in tag_values:
+            if not isinstance(tag, str) or not tag:
+                return error_response("tags must contain non-empty strings")
+            tags.append(tag)
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        image = await client.create_image(
+            disk_id=disk_id,
+            label=arguments.get("label"),
+            description=arguments.get("description"),
+            cloud_init=arguments.get("cloud_init"),
+            tags=tags,
+        )
+        return {
+            "message": f"Image '{image.label}' ({image.id}) created successfully",
+            "image": {
+                "id": image.id,
+                "label": image.label,
+                "description": image.description,
+                "type": image.type,
+                "status": image.status,
+                "size": image.size,
+                "is_public": image.is_public,
+                "created": image.created,
+            },
+        }
+
+    return await execute_tool(cfg, arguments, "create Linode image", _call)
 
 
 async def handle_linode_images_list(

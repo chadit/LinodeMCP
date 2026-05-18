@@ -1340,6 +1340,32 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListImages", e) from e
 
+    async def create_image(
+        self,
+        disk_id: int,
+        label: str | None = None,
+        description: str | None = None,
+        cloud_init: bool | None = None,
+        tags: list[str] | None = None,
+    ) -> Image:
+        """Create a private image from a Linode disk."""
+        body: dict[str, Any] = {"disk_id": disk_id}
+        if label is not None:
+            body["label"] = label
+        if description is not None:
+            body["description"] = description
+        if cloud_init is not None:
+            body["cloud_init"] = cloud_init
+        if tags is not None:
+            body["tags"] = tags
+
+        try:
+            response = await self.make_request("POST", "/images", body)
+            data = response.json()
+            return self._parse_image(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateImage", e) from e
+
     # Stage 3: Extended read operations
 
     async def list_ssh_keys(self) -> list[SSHKey]:
@@ -4237,6 +4263,26 @@ class RetryableClient:
     async def list_images(self) -> list[Image]:
         """List Linode images with retry."""
         result: list[Image] = await self._execute_with_retry(self.client.list_images)
+        return result
+
+    async def create_image(
+        self,
+        disk_id: int,
+        label: str | None = None,
+        description: str | None = None,
+        cloud_init: bool | None = None,
+        tags: list[str] | None = None,
+    ) -> Image:
+        """Create a private image from a Linode disk with retry."""
+        result: Image = await self._execute_with_retry(
+            lambda: self.client.create_image(
+                disk_id=disk_id,
+                label=label,
+                description=description,
+                cloud_init=cloud_init,
+                tags=tags,
+            )
+        )
         return result
 
     # Stage 3: Extended read operations
