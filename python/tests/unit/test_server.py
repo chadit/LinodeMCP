@@ -812,3 +812,16 @@ async def test_profile_is_elevated_reflects_required_scopes(
     assert profile_is_elevated(full_srv.active_profile), (
         "full-access carries :read_write scopes and must be classified elevated"
     )
+
+
+async def test_linode_regions_availability_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Region availability tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_regions_availability_get_tool" in tools_mod.__all__
+    assert "handle_linode_regions_availability_get" in tools_mod.__all__
+
+    srv = Server(sample_config)
+    assert "linode_regions_availability_get" in srv.registered_tool_names
