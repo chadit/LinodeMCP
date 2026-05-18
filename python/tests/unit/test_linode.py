@@ -1166,6 +1166,38 @@ async def test_list_domain_records() -> None:
     await client.close()
 
 
+async def test_get_domain_record() -> None:
+    """Test getting a domain record."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "id": 1,
+        "type": "A",
+        "name": "www",
+        "target": "192.0.2.1",
+        "priority": 0,
+        "weight": 0,
+        "port": 0,
+        "ttl_sec": 300,
+        "created": "2024-01-01T00:00:00",
+        "updated": "2024-01-15T12:00:00",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        record = await client.get_domain_record(1, 2)
+
+        assert record.id == 1
+        assert record.type == "A"
+        assert record.name == "www"
+        mock_request.assert_awaited_once_with("GET", "/domains/1/records/2")
+
+    await client.close()
+
+
 async def test_list_firewalls() -> None:
     """Test listing firewalls."""
     client = Client("https://api.linode.com/v4", "test-token")

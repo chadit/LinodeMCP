@@ -1424,6 +1424,16 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListDomainRecords", e) from e
 
+    async def get_domain_record(self, domain_id: int, record_id: int) -> DomainRecord:
+        """Get a specific domain record."""
+        endpoint = f"/domains/{domain_id}/records/{record_id}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data = response.json()
+            return self._parse_domain_record(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("GetDomainRecord", e) from e
+
     async def list_firewalls(self) -> list[Firewall]:
         """List firewalls."""
         try:
@@ -4350,6 +4360,13 @@ class RetryableClient:
         """List domain records with retry."""
         result: list[DomainRecord] = await self._execute_with_retry(
             self.client.list_domain_records, domain_id
+        )
+        return result
+
+    async def get_domain_record(self, domain_id: int, record_id: int) -> DomainRecord:
+        """Get a specific domain record with retry."""
+        result: DomainRecord = await self._execute_with_retry(
+            self.client.get_domain_record, domain_id, record_id
         )
         return result
 
