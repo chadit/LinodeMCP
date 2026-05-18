@@ -1313,6 +1313,17 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListRegions", e) from e
 
+    async def get_region(self, region_id: str) -> Region:
+        """Get a Linode region."""
+        encoded_region_id = quote(region_id, safe="")
+        endpoint = f"/regions/{encoded_region_id}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data = response.json()
+            return self._parse_region(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("GetRegion", e) from e
+
     async def get_region_availability(self, region_id: str) -> list[dict[str, Any]]:
         """Get compute instance availability for a region."""
         encoded_region_id = quote(region_id, safe="")
@@ -4530,6 +4541,13 @@ class RetryableClient:
     async def list_regions(self) -> list[Region]:
         """List Linode regions with retry."""
         result: list[Region] = await self._execute_with_retry(self.client.list_regions)
+        return result
+
+    async def get_region(self, region_id: str) -> Region:
+        """Get a Linode region with retry."""
+        result: Region = await self._execute_with_retry(
+            self.client.get_region, region_id
+        )
         return result
 
     async def get_region_availability(self, region_id: str) -> list[dict[str, Any]]:

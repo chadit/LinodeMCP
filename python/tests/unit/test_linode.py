@@ -18,6 +18,8 @@ from linodemcp.linode import (
     NetworkError,
     Profile,
     RateLimiter,
+    Region,
+    Resolver,
     RetryableClient,
     RetryConfig,
     is_retryable,
@@ -1298,6 +1300,98 @@ async def test_api_error_500() -> None:
 
         assert exc_info.value.status_code == 500
         assert exc_info.value.is_server_error()
+
+    await client.close()
+
+
+async def test_get_region_sends_exact_route() -> None:
+    """Getting a region sends GET /regions/{regionId}."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data = {
+        "id": "us-east",
+        "label": "Newark, NJ",
+        "country": "us",
+        "capabilities": ["Linodes", "Block Storage"],
+        "status": "ok",
+        "resolvers": {"ipv4": "192.0.2.1", "ipv6": "2001:db8::1"},
+        "site_type": "core",
+    }
+    response = MagicMock()
+    response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        result = await client.get_region("us-east")
+
+    assert result.id == "us-east"
+    assert result.label == "Newark, NJ"
+    assert result.resolvers.ipv4 == "192.0.2.1"
+    mock_request.assert_called_once_with("GET", "/regions/us-east")
+
+    await client.close()
+
+
+async def test_get_region_url_encodes_region_id() -> None:
+    """Region get escapes path separators before sending request."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {
+        "id": "us/east?x=1",
+        "label": "Encoded",
+        "country": "us",
+        "capabilities": [],
+        "status": "ok",
+        "resolvers": {},
+        "site_type": "core",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        result = await client.get_region("us/east?x=1")
+
+    assert result.id == "us/east?x=1"
+    mock_request.assert_called_once_with("GET", "/regions/us%2Feast%3Fx%3D1")
+
+    await client.close()
+
+
+async def test_get_region_wraps_http_error() -> None:
+    """Region get wraps client HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.get_region("us-east")
+
+    assert "GetRegion" in str(exc_info.value)
+
+    await client.close()
+
+
+async def test_retryable_get_region_delegates() -> None:
+    """Retryable client delegates region get to the base client."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+    region = Region(
+        id="us-east",
+        label="Newark, NJ",
+        country="us",
+        capabilities=["Linodes"],
+        status="ok",
+        resolvers=Resolver(ipv4="192.0.2.1", ipv6="2001:db8::1"),
+        site_type="core",
+    )
+
+    with patch.object(client.client, "get_region", new_callable=AsyncMock) as mock_get:
+        mock_get.return_value = region
+
+        result = await client.get_region("us-east")
+
+    assert result is region
+    mock_get.assert_awaited_once_with("us-east")
 
     await client.close()
 
