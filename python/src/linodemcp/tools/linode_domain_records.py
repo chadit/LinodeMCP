@@ -49,6 +49,58 @@ def create_linode_domain_records_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def create_linode_domain_record_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_domain_record_get tool."""
+    return Tool(
+        name="linode_domain_record_get",
+        description="Gets a specific DNS record for a domain.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "domain_id": {
+                    "type": "integer",
+                    "description": "The ID of the domain (required)",
+                },
+                "record_id": {
+                    "type": "integer",
+                    "description": "The ID of the record to retrieve (required)",
+                },
+            },
+            "required": ["domain_id", "record_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_domain_record_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_domain_record_get tool request."""
+    domain_id = arguments.get("domain_id", 0)
+    record_id = arguments.get("record_id", 0)
+
+    if not domain_id:
+        return error_response("domain_id is required")
+    if not record_id:
+        return error_response("record_id is required")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        record = await client.get_domain_record(int(domain_id), int(record_id))
+        return {
+            "domain_id": domain_id,
+            "record": {
+                "id": record.id,
+                "type": record.type,
+                "name": record.name,
+                "target": record.target,
+                "priority": record.priority,
+                "ttl_sec": record.ttl_sec,
+            },
+        }
+
+    return await execute_tool(cfg, arguments, "retrieve domain record", _call)
+
+
 async def handle_linode_domain_records_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:

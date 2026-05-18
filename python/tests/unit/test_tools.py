@@ -87,6 +87,7 @@ from linodemcp.tools import (
     handle_linode_domain_get,
     handle_linode_domain_record_create,
     handle_linode_domain_record_delete,
+    handle_linode_domain_record_get,
     handle_linode_domain_record_update,
     handle_linode_domain_records_list,
     handle_linode_domain_update,
@@ -1591,6 +1592,48 @@ async def test_handle_linode_domain_records_list(sample_config: Config) -> None:
         assert "192.0.2.1" in result[0].text
         assert "mail.example.com" in result[0].text
         mock_client.list_domain_records.assert_called_once_with(1)
+
+
+async def test_handle_linode_domain_record_get(sample_config: Config) -> None:
+    """Test linode_domain_record_get tool."""
+    mock_record = DomainRecord(
+        id=2,
+        type="A",
+        name="www",
+        target="192.0.2.1",
+        priority=0,
+        weight=0,
+        port=0,
+        ttl_sec=300,
+        created="2024-01-01T00:00:00",
+        updated="2024-01-15T12:00:00",
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_domain_record.return_value = mock_record
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_domain_record_get(
+            {"domain_id": 1, "record_id": 2}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "192.0.2.1" in result[0].text
+        assert "www" in result[0].text
+        mock_client.get_domain_record.assert_called_once_with(1, 2)
+
+
+async def test_handle_linode_domain_record_get_missing_id(
+    sample_config: Config,
+) -> None:
+    """Test linode_domain_record_get tool with missing record_id."""
+    result = await handle_linode_domain_record_get({"domain_id": 1}, sample_config)
+
+    assert len(result) == 1
+    assert "record_id is required" in result[0].text
 
 
 async def test_handle_linode_domain_records_list_filter_type(
