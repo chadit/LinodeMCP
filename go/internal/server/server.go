@@ -39,7 +39,13 @@ type Server struct {
 	mcp           *server.MCPServer
 	tools         []contracts.Tool
 	activeProfile profiles.Profile
-	inflight      sync.WaitGroup
+
+	// shutdownMu serializes positive inflight.Add calls with Shutdown's
+	// inflight.Wait call. sync.WaitGroup requires Add to happen before Wait
+	// when the counter is zero, so tool dispatch must pass this gate first.
+	shutdownMu   sync.Mutex
+	shuttingDown bool
+	inflight     sync.WaitGroup
 
 	// allEntries holds every tool the server could register, regardless of
 	// the active profile. Built once in New and reused by ReloadProfile so a
@@ -243,6 +249,10 @@ func (s *Server) HandleMessage(ctx context.Context, message json.RawMessage) mcp
 // canceled. Returns ctx.Err() on timeout so callers can distinguish a clean
 // drain from a forced cutoff.
 func (s *Server) Shutdown(ctx context.Context) error {
+	s.shutdownMu.Lock()
+	s.shuttingDown = true
+	s.shutdownMu.Unlock()
+
 	done := make(chan struct{})
 
 	go func() {
@@ -390,7 +400,16 @@ func (s *Server) ReloadProfile(cfg *config.Config) error {
 // s.registered, both of which are guarded by that mutex.
 func (s *Server) addTool(tool *mcp.Tool, capability profiles.Capability, handler toolHandler) {
 	wrapped := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		s.shutdownMu.Lock()
+		if s.shuttingDown {
+			s.shutdownMu.Unlock()
+
+			return nil, errServerShuttingDown
+		}
+
 		s.inflight.Add(1)
+		s.shutdownMu.Unlock()
+
 		defer s.inflight.Done()
 
 		return handler(ctx, req)

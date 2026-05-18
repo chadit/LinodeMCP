@@ -2,6 +2,8 @@ package server_test
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
@@ -29,6 +31,13 @@ const (
 	// profileSingleTool is the name shared by the filter and reload tests
 	// that construct a user-defined profile containing exactly one tool.
 	profileSingleTool = "single-tool"
+
+	linodeAccountCallMessage = `{
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "tools/call",
+		"params": {"name": "linode_account", "arguments": {}}
+	}`
 )
 
 // baseTestConfig returns a minimal Config sufficient to construct a Server.
@@ -180,92 +189,99 @@ func TestShutdownReturnsImmediatelyWithNoInflight(t *testing.T) {
 	require.NoError(t, srv.Shutdown(ctx), "Shutdown should return nil with no in-flight handlers")
 }
 
-// TestShutdownDrainsInflightHandlers dispatches a slow tool call through
-// HandleMessage in a goroutine, then asserts Shutdown blocks until that
-// call completes. The trigger channel synchronizes the test so the assertion
-// fires after Shutdown is observably blocked.
+// TestShutdownDrainsInflightHandlers dispatches a blocking tool call through
+// HandleMessage, then asserts Shutdown waits until that call finishes.
 func TestShutdownDrainsInflightHandlers(t *testing.T) {
 	t.Parallel()
 
-	srv := newTestServer(t)
+	handlerEntered := make(chan struct{})
+	releaseHandler := make(chan struct{})
 
-	// Stand up a goroutine that fires the slow hello tool. The hello tool
-	// handler returns immediately, but mcp-go dispatches it through the
-	// wrapped handler which Add(1)s before Done()ing. To make the inflight
-	// state observable, we instead use a sync.WaitGroup to ensure the
-	// handler goroutine has actually invoked HandleMessage.
-	dispatchStarted := make(chan struct{})
+	apiServer := newBlockingAccountServer(t, handlerEntered, releaseHandler)
+	defer apiServer.Close()
 
-	var inflightCalls sync.WaitGroup
+	srv := newTestServerWithAPIURL(t, apiServer.URL)
 
-	inflightCalls.Go(func() {
-		close(dispatchStarted)
+	dispatchCtx, cancelDispatch := context.WithCancel(t.Context())
+	defer cancelDispatch()
 
-		// Use the hello tool: simple, doesn't need network.
-		msg := []byte(`{
-			"jsonrpc": "2.0",
-			"id": 1,
-			"method": "tools/call",
-			"params": {"name": "hello", "arguments": {"name": "drain"}}
-		}`)
-		_ = srv.HandleMessage(t.Context(), msg)
-	})
+	dispatchDone := make(chan struct{})
 
-	<-dispatchStarted
+	go func() {
+		defer close(dispatchDone)
 
-	// Shutdown with a generous timeout: the hello call is fast, drain
-	// should complete cleanly. If the wrap is broken (handler not tracked),
-	// Shutdown still returns nil but the goroutine may finish after, which
-	// would be an undetected leak. Asserting both Shutdown success AND the
-	// dispatch goroutine completion catches the leak case.
+		_ = srv.HandleMessage(dispatchCtx, []byte(linodeAccountCallMessage))
+	}()
+
+	waitForHandlerEntry(t, handlerEntered)
+
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
-	require.NoError(t, srv.Shutdown(ctx), "Shutdown should drain the in-flight call")
-
-	// Dispatch goroutine should have finished by now (drain waited for it).
-	finished := make(chan struct{})
+	shutdownDone := make(chan error, 1)
 
 	go func() {
-		inflightCalls.Wait()
-		close(finished)
+		shutdownDone <- srv.Shutdown(ctx)
 	}()
 
 	select {
-	case <-finished:
-	case <-time.After(time.Second):
-		t.Fatal("dispatch goroutine still running after Shutdown returned")
+	case err := <-shutdownDone:
+		t.Fatalf("Shutdown returned before the handler finished: %v", err)
+	case <-time.After(50 * time.Millisecond):
 	}
+
+	close(releaseHandler)
+
+	require.NoError(t, <-shutdownDone, "Shutdown should drain the in-flight call")
+	waitForDispatchDone(t, dispatchDone)
 }
 
-// TestShutdownTimesOutOnStuckHandler dispatches a tool call that never
-// returns (simulated by leaking an inflight count via a long-running call),
-// then asserts Shutdown returns the ctx error when the deadline elapses
-// before drain completes.
-//
-// Implemented by holding the dispatch goroutine open via a channel the
-// handler closure waits on. Cannot use a stock tool because none of them
-// block; this exercises the timeout path through the public surface only.
+// TestShutdownTimesOutOnStuckHandler dispatches a tool call that stays inside
+// the HTTP handler, then asserts Shutdown returns the ctx error when the
+// deadline elapses before drain completes.
 func TestShutdownTimesOutOnStuckHandler(t *testing.T) {
 	t.Parallel()
 
-	srv := newTestServer(t)
+	handlerEntered := make(chan struct{})
+	releaseHandler := make(chan struct{})
 
-	// Start a "stuck" dispatch by invoking a real tool with a context that
-	// won't complete: a context.Background() in a goroutine that we never
-	// signal. The hello tool finishes quickly though, so it doesn't actually
-	// stick. This test exercises the timeout path when no handler is stuck;
-	// it confirms Shutdown returns nil quickly. The "stuck" path requires
-	// register-time handler injection which isn't part of the public API,
-	// so this test stops at verifying the no-stuck happy path under a
-	// short deadline.
-	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	apiServer := newBlockingAccountServer(t, handlerEntered, releaseHandler)
+	defer apiServer.Close()
+
+	srv := newTestServerWithAPIURL(t, apiServer.URL)
+
+	dispatchCtx, cancelDispatch := context.WithCancel(t.Context())
+	defer cancelDispatch()
+
+	dispatchDone := make(chan struct{})
+
+	go func() {
+		defer close(dispatchDone)
+
+		_ = srv.HandleMessage(dispatchCtx, []byte(linodeAccountCallMessage))
+	}()
+
+	waitForHandlerEntry(t, handlerEntered)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
 	defer cancel()
 
-	require.NoError(t, srv.Shutdown(ctx), "Shutdown with no stuck handlers should return nil within deadline")
+	err := srv.Shutdown(ctx)
+
+	close(releaseHandler)
+
+	require.Error(t, err, "Shutdown should return an error when the drain times out")
+	require.ErrorIs(t, err, context.DeadlineExceeded, "Shutdown should wrap the context error")
+	waitForDispatchDone(t, dispatchDone)
 }
 
 func newTestServer(t *testing.T) *server.Server {
+	t.Helper()
+
+	return newTestServerWithAPIURL(t, apiURLLinodeV4)
+}
+
+func newTestServerWithAPIURL(t *testing.T, apiURL string) *server.Server {
 	t.Helper()
 
 	cfg := &config.Config{
@@ -279,7 +295,7 @@ func newTestServer(t *testing.T) *server.Server {
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {
 				Label:  envLabelDefault,
-				Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenShort},
+				Linode: config.LinodeConfig{APIURL: apiURL, Token: tokenShort},
 			},
 		},
 	}
@@ -288,6 +304,53 @@ func newTestServer(t *testing.T) *server.Server {
 	require.NoError(t, err, "test server construction should succeed")
 
 	return srv
+}
+
+func newBlockingAccountServer(t *testing.T, handlerEntered chan<- struct{}, releaseHandler <-chan struct{}) *httptest.Server {
+	t.Helper()
+
+	var signalOnce sync.Once
+
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/account" {
+			http.NotFound(w, r)
+
+			return
+		}
+
+		signalOnce.Do(func() {
+			close(handlerEntered)
+		})
+
+		select {
+		case <-releaseHandler:
+		case <-r.Context().Done():
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{}`))
+	}))
+}
+
+func waitForHandlerEntry(t *testing.T, handlerEntered <-chan struct{}) {
+	t.Helper()
+
+	select {
+	case <-handlerEntered:
+	case <-time.After(time.Second):
+		t.Fatal("blocking account handler didn't start")
+	}
+}
+
+func waitForDispatchDone(t *testing.T, dispatchDone <-chan struct{}) {
+	t.Helper()
+
+	select {
+	case <-dispatchDone:
+	case <-time.After(time.Second):
+		t.Fatal("dispatch goroutine still running after Shutdown returned")
+	}
 }
 
 // TestHelloToolHandlerDispatch verifies that the hello tool handler can be
