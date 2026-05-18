@@ -28,6 +28,7 @@ from linodemcp.tools import (
     handle_hello,
     handle_version,
 )
+from linodemcp.tools.linode_profile_builder import set_tool_catalog_provider
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -158,6 +159,12 @@ class Server:
             ToolDescriptor(name=entry.name, capability=entry.capability)
             for entry in _TOOL_REGISTRY
         ]
+        # Phase 8.2: wire the builder catalog bridge before profile
+        # resolution so handlers fired during startup (none today, but
+        # cheap insurance) see the live catalog. The descriptor list is
+        # immutable after construction; the closure captures the same
+        # list every handler call reads.
+        set_tool_catalog_provider(lambda: self._descriptors)
         self._active_profile = resolve_active_profile(config, self._descriptors)
         self._allowed_tool_names = frozenset(self._active_profile.allowed_tools)
         # _allowed_entries and _config_handlers are declared+initialized

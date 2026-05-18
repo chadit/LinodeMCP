@@ -127,6 +127,38 @@ _CORE_TOOL_NAMES: frozenset[str] = frozenset(
 )
 
 
+def categories(tool_name: str) -> list[str]:
+    """Return every category a tool name belongs to.
+
+    Mirrors the Go ``profiles.Categories`` shape so the Phase 8.2
+    builder tool ``linode_profile_list_tools`` can return the same
+    field structure across languages. ``_TOOL_CATEGORIES`` is walked
+    in declaration order and every category whose prefix list matches
+    contributes one entry to the result. A tool can land in multiple
+    categories (rare but legitimate, e.g. if future prefixes overlap
+    intentionally). An empty list signals "no known category"; the
+    caller decides how to render that.
+
+    Core tools (hello, version, linode_profile, linode_account) live
+    in their own bucket and bypass the prefix walk.
+    """
+    if tool_name in _CORE_TOOL_NAMES:
+        return ["core"]
+
+    result: list[str] = []
+    for category, prefixes in _TOOL_CATEGORIES:
+        if category == "core":
+            # Core membership is name-exact (handled above), not prefix.
+            continue
+
+        for prefix in prefixes:
+            if tool_name.startswith(prefix):
+                result.append(category)
+                break
+
+    return result
+
+
 def _categorize(tool_name: str) -> str | None:
     """Return the category a tool name belongs to, or ``None`` if unknown.
 

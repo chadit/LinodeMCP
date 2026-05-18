@@ -35,7 +35,7 @@ const (
 	allEnvironments = "*"
 )
 
-// categorize returns the list of category names a tool belongs to based on
+// Categories returns the list of category names a tool belongs to based on
 // its name. Categorization is prefix-based per the cross-language spec.
 //
 // A tool may belong to multiple categories (e.g. linode_instance_boot is in
@@ -43,7 +43,11 @@ const (
 // compute_actions, and compute_deep into a single "compute" bucket; we keep
 // them split because some profiles (storage-admin, kubernetes-admin) lift
 // only the deep slice and not the full compute surface.
-func categorize(toolName string) []string {
+//
+// Returns an empty slice for tools whose name matches no known prefix.
+// Phase 8.2 builder tools surface this list via linode_profile_list_tools
+// so the model can filter the catalog by category.
+func Categories(toolName string) []string {
 	cats := make([]string, 0, 2)
 
 	// Core: a small explicit list of meta/account names.
@@ -166,7 +170,7 @@ func isComputeAction(toolName string) bool {
 }
 
 // hasAnyPrefix reports whether toolName starts with any of the given
-// prefixes. Helper to keep categorize readable.
+// prefixes. Helper to keep Categories readable.
 func hasAnyPrefix(toolName string, prefixes ...string) bool {
 	for _, p := range prefixes {
 		if strings.HasPrefix(toolName, p) {
@@ -240,7 +244,7 @@ func selectAllowed(catalog []ToolDescriptor, elevated map[string]struct{}) []str
 		case CapRead, CapMeta:
 			allowed = append(allowed, descriptor.Name)
 		case CapWrite, CapDestroy:
-			if isElevated(categorize(descriptor.Name), elevated) {
+			if isElevated(Categories(descriptor.Name), elevated) {
 				allowed = append(allowed, descriptor.Name)
 			}
 		case CapAdmin, CapUnknown:

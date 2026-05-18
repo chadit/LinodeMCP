@@ -89,12 +89,33 @@ func New(cfg *config.Config) (*Server, error) {
 	}
 
 	srv.allEntries = collectAllToolEntries(cfg)
+	srv.allEntries = append(srv.allEntries, builderToolEntries(srv)...)
 
 	if err := srv.registerTools(); err != nil {
 		return nil, err
 	}
 
 	return srv, nil
+}
+
+// builderToolEntries assembles the Phase 8 profile-builder tool
+// entries. Built outside collectAllToolEntries because the builder
+// handlers need a closure over the server itself (Server.ToolCatalog,
+// future draft registry access). The CapMeta tag means the active
+// profile filter always passes them through.
+//
+// Calling Server.ToolCatalog from a builder handler returns the
+// catalog as it stands at call time, including the builder tools
+// themselves. That self-inclusion is deliberate: a user composing a
+// new profile may want to know which builder tools they're inheriting.
+func builderToolEntries(srv *Server) []toolEntry {
+	listTool, listCap, listHandler := tools.NewLinodeProfileListToolsTool(srv.ToolCatalog)
+	catTool, catCap, catHandler := tools.NewLinodeProfileListCategoriesTool(srv.ToolCatalog)
+
+	return []toolEntry{
+		{tool: listTool, capability: listCap, handler: listHandler},
+		{tool: catTool, capability: catCap, handler: catHandler},
+	}
 }
 
 type toolWrapper struct {
@@ -146,6 +167,31 @@ func (s *Server) ActiveProfile() profiles.Profile {
 	defer s.profileMu.RUnlock()
 
 	return s.activeProfile
+}
+
+// ToolCatalog returns the full set of tools the server could register,
+// regardless of the active profile's filter. The Phase 8 builder tools
+// read this to surface the registerable surface to the model; profile
+// filtering controls which subset reaches handlers, but the catalog is
+// always the full menu so the user can build a new profile against
+// anything available.
+//
+// Returns a snapshot copy so callers can iterate without holding the
+// server lock. Order matches the construction order in
+// collectAllToolEntries (category-by-category, factory-by-factory).
+func (s *Server) ToolCatalog() []profiles.ToolDescriptor {
+	s.profileMu.RLock()
+	defer s.profileMu.RUnlock()
+
+	out := make([]profiles.ToolDescriptor, len(s.allEntries))
+	for i := range s.allEntries {
+		out[i] = profiles.ToolDescriptor{
+			Name:       s.allEntries[i].tool.Name,
+			Capability: s.allEntries[i].capability,
+		}
+	}
+
+	return out
 }
 
 // ValidateScopes runs Phase 6.4 token-scope validation against the

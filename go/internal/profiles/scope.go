@@ -99,7 +99,7 @@ const (
 
 // RequiredScopes returns the Linode scope(s) a tool needs the active
 // token to carry. The mapping is name-prefix based, mirroring how
-// categorize() in builtin.go assigns tools to profile categories. The
+// Categories() in builtin.go assigns tools to profile categories. The
 // capability tells whether the tool reads or writes, which decides
 // between :read_only and :read_write.
 //
