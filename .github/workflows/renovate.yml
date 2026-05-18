@@ -60,7 +60,7 @@ jobs:
           fi
           echo "skip=${skip}" >> "${GITHUB_OUTPUT}"
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         if: steps.secrets.outputs.skip != 'true'
 
       # renovatebot/github-action does not publish moving major-version
@@ -68,7 +68,7 @@ jobs:
       # will auto-bump this on its scheduled run. See action README:
       # "We recommend you pin the version of Renovate to a full version
       # or a full checksum."
-      - uses: renovatebot/github-action@v46.1.14
+      - uses: renovatebot/github-action@693b9ef15eec82123529a37c782242f091365961 # v46.1.14
         if: steps.secrets.outputs.skip != 'true'
         with:
           configurationFile: renovate.json5
