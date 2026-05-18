@@ -81,6 +81,7 @@ from linodemcp.tools import (
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
     create_linode_regions_availability_get_tool,
+    create_linode_regions_availability_list_tool,
     create_linode_regions_get_tool,
     create_linode_stackscript_create_tool,
     create_linode_vlan_delete_tool,
@@ -214,6 +215,7 @@ from linodemcp.tools import (
     handle_linode_object_storage_types_list,
     handle_linode_profile,
     handle_linode_regions_availability_get,
+    handle_linode_regions_availability_list,
     handle_linode_regions_get,
     handle_linode_regions_list,
     handle_linode_sshkey_create,
@@ -1753,6 +1755,55 @@ async def test_handle_linode_regions_get_error(sample_config: Config) -> None:
         result = await handle_linode_regions_get(
             {"region_id": "us-east"}, sample_config
         )
+
+        assert len(result) == 1
+        assert "Failed" in result[0].text or "error" in result[0].text.lower()
+
+
+async def test_create_linode_regions_availability_list_tool() -> None:
+    """Regions availability list tool is read-only and has no route inputs."""
+    tool, capability = create_linode_regions_availability_list_tool()
+
+    assert tool.name == "linode_regions_availability_list"
+    assert capability is Capability.Read
+    assert "required" not in tool.inputSchema
+
+
+async def test_handle_linode_regions_availability_list(sample_config: Config) -> None:
+    """Test linode_regions_availability_list tool."""
+    availability = [
+        {"available": True, "plan": "g6-standard-1", "region": "us-east"},
+        {"available": False, "plan": "g6-standard-2", "region": "us-west"},
+    ]
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_regions_availability.return_value = availability
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_regions_availability_list({}, sample_config)
+
+        assert len(result) == 1
+        data = json.loads(result[0].text)
+        assert data["count"] == 2
+        assert data["availability"] == availability
+        mock_client.list_regions_availability.assert_awaited_once_with()
+
+
+async def test_handle_linode_regions_availability_list_error(
+    sample_config: Config,
+) -> None:
+    """Test linode_regions_availability_list error handling."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_regions_availability.side_effect = Exception("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_regions_availability_list({}, sample_config)
 
         assert len(result) == 1
         assert "Failed" in result[0].text or "error" in result[0].text.lower()

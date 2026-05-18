@@ -40,6 +40,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_instance_create", Capability.Write),
         ToolDescriptor("linode_instance_delete", Capability.Destroy),
         ToolDescriptor("linode_regions_list", Capability.Read),
+        ToolDescriptor("linode_regions_availability_list", Capability.Read),
         ToolDescriptor("linode_regions_availability_get", Capability.Read),
         ToolDescriptor("linode_types_list", Capability.Read),
         ToolDescriptor("linode_images_list", Capability.Read),

@@ -1468,6 +1468,63 @@ async def test_retryable_get_region_availability_delegates() -> None:
     await client.close()
 
 
+async def test_list_regions_availability_sends_exact_route() -> None:
+    """Listing regions availability sends GET /regions/availability."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = [
+        {"available": True, "plan": "g6-standard-1", "region": "us-east"},
+        {"available": False, "plan": "g6-standard-2", "region": "us-west"},
+    ]
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        result = await client.list_regions_availability()
+
+    assert result == [
+        {"available": True, "plan": "g6-standard-1", "region": "us-east"},
+        {"available": False, "plan": "g6-standard-2", "region": "us-west"},
+    ]
+    mock_request.assert_called_once_with("GET", "/regions/availability")
+
+    await client.close()
+
+
+async def test_list_regions_availability_wraps_http_error() -> None:
+    """Regions availability wraps client HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.list_regions_availability()
+
+    assert "ListRegionsAvailability" in str(exc_info.value)
+
+    await client.close()
+
+
+async def test_retryable_list_regions_availability_delegates() -> None:
+    """Retryable client delegates regions availability to the base client."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        client.client, "list_regions_availability", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = [
+            {"available": True, "plan": "g6-standard-1", "region": "us-east"}
+        ]
+
+        result = await client.list_regions_availability()
+
+    assert result == [{"available": True, "plan": "g6-standard-1", "region": "us-east"}]
+    mock_list.assert_awaited_once_with()
+
+    await client.close()
+
+
 async def test_network_error() -> None:
     """Test network error handling."""
     client = Client("https://api.linode.com/v4", "test-token")
