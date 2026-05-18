@@ -201,6 +201,7 @@ from linodemcp.tools import (
     handle_linode_volume_create,
     handle_linode_volume_delete,
     handle_linode_volume_detach,
+    handle_linode_volume_get,
     handle_linode_volume_resize,
     handle_linode_volume_update,
     handle_linode_volumes_list,
@@ -794,6 +795,48 @@ async def test_handle_linode_types_list_filter_class(sample_config: Config) -> N
         assert "g6-standard-2" in result[0].text
         assert "g6-nanode-1" not in result[0].text
         assert '"count": 1' in result[0].text
+
+
+async def test_handle_linode_volume_get(sample_config: Config) -> None:
+    """Test linode_volume_get tool."""
+    mock_volume = Volume(
+        id=12345,
+        label="data-vol",
+        status="active",
+        size=100,
+        region="us-east",
+        linode_id=123,
+        linode_label="test-instance",
+        filesystem_path="/dev/disk/by-id/scsi-0Linode_Volume_data-vol",
+        tags=["production"],
+        created="2024-01-01T00:00:00",
+        updated="2024-01-02T00:00:00",
+        hardware_type="nvme",
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_volume.return_value = mock_volume
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_volume_get({"volume_id": 12345}, sample_config)
+
+        assert len(result) == 1
+        assert "data-vol" in result[0].text
+        assert '"id": 12345' in result[0].text
+        mock_client.get_volume.assert_called_once_with(12345)
+
+
+async def test_handle_linode_volume_get_requires_volume_id(
+    sample_config: Config,
+) -> None:
+    """Test linode_volume_get validates volume_id."""
+    result = await handle_linode_volume_get({}, sample_config)
+
+    assert len(result) == 1
+    assert "volume_id is required" in result[0].text
 
 
 async def test_handle_linode_volumes_list(sample_config: Config) -> None:

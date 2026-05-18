@@ -35,7 +35,7 @@ class VersionInfo:
 FEATURE_TOOLS_LIST = (
     "hello,version,linode_profile,linode_account,linode_account_update,"
     "linode_instances_list,linode_instance_get,linode_regions_list,"
-    "linode_types_list,linode_volumes_list,linode_image_create,linode_images_list,"
+    "linode_types_list,linode_volumes_list,linode_volume_get,linode_image_create,linode_images_list,"
     "linode_sshkeys_list,linode_domains_list,linode_domain_get,"
     "linode_domain_records_list,linode_firewalls_list,"
     "linode_nodebalancers_list,linode_nodebalancer_get,"
