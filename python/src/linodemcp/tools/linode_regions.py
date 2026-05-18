@@ -7,10 +7,15 @@ from typing import TYPE_CHECKING, Any
 from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import execute_tool
+from linodemcp.tools.helpers import error_response, execute_tool
 
 if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
+
+
+def _is_region_id(value: str) -> bool:
+    """Return True when value looks like a Linode region ID slug."""
+    return bool(value) and all(c.isalnum() or c == "-" for c in value)
 
 
 def create_linode_regions_list_tool() -> tuple[Tool, Capability]:
@@ -97,3 +102,54 @@ async def handle_linode_regions_list(
         return response
 
     return await execute_tool(cfg, arguments, "retrieve Linode regions", _call)
+
+
+def create_linode_regions_availability_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_regions_availability_get tool."""
+    return Tool(
+        name="linode_regions_availability_get",
+        description=(
+            "Gets compute instance type availability for a specific Linode region"
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "region_id": {
+                    "type": "string",
+                    "description": "Region ID to check (for example, 'us-east')",
+                },
+            },
+            "required": ["region_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_regions_availability_get(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_regions_availability_get tool request."""
+    region_id = str(arguments.get("region_id", "")).strip()
+    if not region_id:
+        return error_response("region_id is required")
+    if not _is_region_id(region_id):
+        return error_response(
+            "region_id must contain only letters, numbers, and hyphens"
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        availability = await client.get_region_availability(region_id)
+        return {
+            "region_id": region_id,
+            "count": len(availability),
+            "availability": availability,
+        }
+
+    return await execute_tool(
+        cfg, arguments, f"retrieve availability for region {region_id}", _call
+    )

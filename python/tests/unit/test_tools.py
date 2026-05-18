@@ -80,6 +80,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
+    create_linode_regions_availability_get_tool,
     create_linode_stackscript_create_tool,
     create_linode_vlan_delete_tool,
     create_linode_vlans_list_tool,
@@ -211,6 +212,7 @@ from linodemcp.tools import (
     handle_linode_object_storage_transfer,
     handle_linode_object_storage_types_list,
     handle_linode_profile,
+    handle_linode_regions_availability_get,
     handle_linode_regions_list,
     handle_linode_sshkey_create,
     handle_linode_sshkey_delete,
@@ -1657,6 +1659,83 @@ async def test_handle_linode_account_tag_delete(sample_config: Config) -> None:
         assert len(result) == 1
         assert "deleted successfully" in result[0].text
         mock_client.delete_tag.assert_awaited_once_with("obsolete")
+
+
+async def test_create_linode_regions_availability_get_tool() -> None:
+    """Region availability tool is read-only and requires region_id."""
+    tool, capability = create_linode_regions_availability_get_tool()
+
+    assert tool.name == "linode_regions_availability_get"
+    assert capability is Capability.Read
+    assert tool.inputSchema["required"] == ["region_id"]
+
+
+async def test_handle_linode_regions_availability_get(sample_config: Config) -> None:
+    """Test linode_regions_availability_get tool."""
+    availability = [
+        {"available": True, "plan": "g6-standard-1", "region": "us-east"},
+        {"available": False, "plan": "g6-standard-2", "region": "us-east"},
+    ]
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_region_availability.return_value = availability
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_regions_availability_get(
+            {"region_id": "us-east"}, sample_config
+        )
+
+        assert len(result) == 1
+        data = json.loads(result[0].text)
+        assert data["region_id"] == "us-east"
+        assert data["count"] == 2
+        assert data["availability"] == availability
+        mock_client.get_region_availability.assert_awaited_once_with("us-east")
+
+
+async def test_handle_linode_regions_availability_get_rejects_malformed_region_id(
+    sample_config: Config,
+) -> None:
+    """Region availability rejects separators in region_id."""
+    for region_id in ("us/east", "us-east?x=1", "../us-east"):
+        result = await handle_linode_regions_availability_get(
+            {"region_id": region_id}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "letters, numbers, and hyphens" in result[0].text
+
+
+async def test_handle_linode_regions_availability_get_requires_region_id(
+    sample_config: Config,
+) -> None:
+    """Region availability requires region_id."""
+    result = await handle_linode_regions_availability_get({}, sample_config)
+
+    assert len(result) == 1
+    assert "region_id is required" in result[0].text
+
+
+async def test_handle_linode_regions_availability_get_error(
+    sample_config: Config,
+) -> None:
+    """Test linode_regions_availability_get error handling."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_region_availability.side_effect = Exception("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_regions_availability_get(
+            {"region_id": "us-east"}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "Failed" in result[0].text or "error" in result[0].text.lower()
 
 
 async def test_handle_linode_regions_list(sample_config: Config) -> None:
