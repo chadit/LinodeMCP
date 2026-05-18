@@ -1554,6 +1554,20 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("DeleteTag", e) from e
 
+    async def create_support_ticket_reply(
+        self, ticket_id: int, description: str
+    ) -> dict[str, Any]:
+        """Create a reply for a support ticket."""
+        endpoint = f"/support/tickets/{ticket_id}/replies"
+        try:
+            response = await self.make_request(
+                "POST", endpoint, {"description": description}
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateSupportTicketReply", e) from e
+
     async def list_nodebalancers(self) -> list[NodeBalancer]:
         """List NodeBalancers."""
         try:
@@ -4557,6 +4571,15 @@ class RetryableClient:
     async def delete_tag(self, tag_label: str) -> None:
         """Delete tag with retry."""
         await self._execute_with_retry(self.client.delete_tag, tag_label)
+
+    async def create_support_ticket_reply(
+        self, ticket_id: int, description: str
+    ) -> dict[str, Any]:
+        """Create a support ticket reply with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.create_support_ticket_reply, ticket_id, description
+        )
+        return result
 
     async def list_nodebalancers(self) -> list[NodeBalancer]:
         """List NodeBalancers with retry."""

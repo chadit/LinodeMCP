@@ -553,6 +553,58 @@ async def test_retryable_create_tag_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_create_support_ticket_reply_sends_post_to_ticket_replies_route() -> None:
+    """Test support ticket reply creation sends documented POST body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response_data: dict[str, Any] = {"id": 456, "description": "Thanks"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.create_support_ticket_reply(123, "Thanks")
+
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "POST",
+        "/support/tickets/123/replies",
+        {"description": "Thanks"},
+    )
+    await client.close()
+
+
+async def test_create_support_ticket_reply_wraps_http_errors() -> None:
+    """Test support ticket reply creation wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.create_support_ticket_reply(123, "Thanks")
+
+    assert "CreateSupportTicketReply" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_create_support_ticket_reply_delegates_to_client() -> None:
+    """Test RetryableClient delegates support ticket reply creation."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "create_support_ticket_reply", new_callable=AsyncMock
+    ) as mock_create:
+        mock_create.return_value = {"id": 456}
+        result = await retryable.create_support_ticket_reply(123, "Thanks")
+
+    assert result == {"id": 456}
+    mock_create.assert_awaited_once_with(123, "Thanks")
+    await retryable.close()
+
+
 async def test_delete_tag_sends_delete_to_tag_route() -> None:
     """Test deleting a tag sends DELETE /tags/{tagLabel}."""
     client = Client("https://api.linode.com/v4", "test-token")
