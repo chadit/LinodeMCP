@@ -35,6 +35,7 @@ from linodemcp.linode import (
 )
 from linodemcp.profiles import Capability
 from linodemcp.tools import (
+    create_linode_account_support_ticket_reply_create_tool,
     create_linode_account_tag_create_tool,
     create_linode_account_tag_delete_tool,
     create_linode_account_tag_objects_list_tool,
@@ -85,6 +86,7 @@ from linodemcp.tools import (
     create_linode_vpcs_list_tool,
     handle_hello,
     handle_linode_account,
+    handle_linode_account_support_ticket_reply_create,
     handle_linode_account_tag_create,
     handle_linode_account_tag_delete,
     handle_linode_account_tag_objects_list,
@@ -937,6 +939,119 @@ async def test_account_tag_create_tool_is_exported_and_registered(
 
     registry = {entry.name: entry for entry in get_tool_registry()}
     assert registry["linode_account_tag_create"].capability is Capability.Write
+
+
+async def test_create_linode_account_support_ticket_reply_create_tool() -> None:
+    """Test support ticket reply create tool schema."""
+    tool, capability = create_linode_account_support_ticket_reply_create_tool()
+
+    assert tool.name == "linode_account_support_ticket_reply_create"
+    assert capability is Capability.Write
+    assert tool.inputSchema["required"] == [
+        "ticket_id",
+        "description",
+        "confirm",
+    ]
+
+
+async def test_handle_linode_account_support_ticket_reply_create_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Support ticket reply creation requires confirmation."""
+    result = await handle_linode_account_support_ticket_reply_create(
+        {"ticket_id": 123, "description": "Thanks"}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_handle_linode_account_support_ticket_reply_create_validates_ticket_id(
+    sample_config: Config,
+) -> None:
+    """Support ticket reply creation validates ticket_id."""
+    result = await handle_linode_account_support_ticket_reply_create(
+        {"confirm": True, "ticket_id": 0, "description": "Thanks"},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "ticket_id" in result[0].text
+
+
+async def test_handle_linode_account_support_ticket_reply_create_requires_description(
+    sample_config: Config,
+) -> None:
+    """Support ticket reply creation requires a non-empty description."""
+    result = await handle_linode_account_support_ticket_reply_create(
+        {"confirm": True, "ticket_id": 123, "description": "   "},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "description" in result[0].text
+
+
+async def test_handle_linode_account_support_ticket_reply_create(
+    sample_config: Config,
+) -> None:
+    """Test support ticket reply create handler."""
+    response_data: dict[str, Any] = {"id": 456, "description": "Thanks"}
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_support_ticket_reply.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_support_ticket_reply_create(
+            {"confirm": True, "ticket_id": 123, "description": " Thanks "},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert json.loads(result[0].text) == {
+            "message": "Support ticket reply created successfully",
+            "reply": response_data,
+        }
+        mock_client.create_support_ticket_reply.assert_awaited_once_with(123, "Thanks")
+
+
+async def test_handle_linode_account_support_ticket_reply_create_reports_client_errors(
+    sample_config: Config,
+) -> None:
+    """Support ticket reply creation reports client errors."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_support_ticket_reply.side_effect = RuntimeError("boom")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_support_ticket_reply_create(
+            {"confirm": True, "ticket_id": 123, "description": "Thanks"},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "Failed to create Linode support ticket reply" in result[0].text
+
+
+async def test_account_support_ticket_reply_create_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Support ticket reply create tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+    from linodemcp.server import get_tool_registry
+
+    assert "create_linode_account_support_ticket_reply_create_tool" in tools_mod.__all__
+    assert "handle_linode_account_support_ticket_reply_create" in tools_mod.__all__
+
+    registry = {entry.name: entry for entry in get_tool_registry()}
+    assert (
+        registry["linode_account_support_ticket_reply_create"].capability
+        is Capability.Write
+    )
 
 
 async def test_create_linode_account_tag_delete_tool() -> None:
