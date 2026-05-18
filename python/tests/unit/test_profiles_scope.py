@@ -32,6 +32,7 @@ def test_meta_returns_empty() -> None:
         ("linode_volume_clone", Capability.Write, [Scope.VolumesReadWrite]),
         ("linode_volume_create", Capability.Write, [Scope.VolumesReadWrite]),
         ("linode_volumes_list", Capability.Read, [Scope.VolumesReadOnly]),
+        ("linode_volume_types_list", Capability.Read, [Scope.VolumesReadOnly]),
         ("linode_domain_delete", Capability.Destroy, [Scope.DomainsReadWrite]),
         ("linode_lke_cluster_regenerate", Capability.Write, [Scope.LKEReadWrite]),
         (

@@ -50,6 +50,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_instance_ip_allocate", Capability.Write),
         # Block storage.
         ToolDescriptor("linode_volumes_list", Capability.Read),
+        ToolDescriptor("linode_volume_types_list", Capability.Read),
         ToolDescriptor("linode_volume_clone", Capability.Write),
         ToolDescriptor("linode_volume_create", Capability.Write),
         ToolDescriptor("linode_volume_delete", Capability.Destroy),

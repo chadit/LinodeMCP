@@ -209,6 +209,7 @@ from linodemcp.tools import (
     handle_linode_volume_detach,
     handle_linode_volume_get,
     handle_linode_volume_resize,
+    handle_linode_volume_types_list,
     handle_linode_volume_update,
     handle_linode_volumes_list,
     handle_linode_vpc_create,
@@ -843,6 +844,35 @@ async def test_handle_linode_volume_get_requires_volume_id(
 
     assert len(result) == 1
     assert "volume_id is required" in result[0].text
+
+
+async def test_handle_linode_volume_types_list(sample_config: Config) -> None:
+    """Test linode_volume_types_list tool."""
+    volume_types = [
+        {
+            "id": "volume",
+            "label": "Storage Volume",
+            "price": {"hourly": 0.0015, "monthly": 0.10},
+            "region_prices": [
+                {"id": "us-iad", "hourly": 0.00018, "monthly": 0.12},
+            ],
+            "transfer": 0,
+        }
+    ]
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_volume_types.return_value = volume_types
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_volume_types_list({}, sample_config)
+
+        assert len(result) == 1
+        assert "Storage Volume" in result[0].text
+        assert '"count": 1' in result[0].text
+        mock_client.list_volume_types.assert_called_once()
 
 
 async def test_handle_linode_volumes_list(sample_config: Config) -> None:

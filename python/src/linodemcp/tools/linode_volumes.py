@@ -101,6 +101,37 @@ def create_linode_volumes_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def create_linode_volume_types_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_volume_types_list tool."""
+    return Tool(
+        name="linode_volume_types_list",
+        description="Lists available block storage volume types and prices.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+            },
+        },
+    ), Capability.Read
+
+
+async def handle_linode_volume_types_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_volume_types_list tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        volume_types = await client.list_volume_types()
+        return {"count": len(volume_types), "volume_types": volume_types}
+
+    return await execute_tool(cfg, arguments, "list Linode volume types", _call)
+
+
 async def handle_linode_volumes_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
