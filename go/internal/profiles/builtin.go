@@ -73,14 +73,19 @@ func categorize(toolName string) []string {
 	// compute: broad compute surface (instances, regions, types, images,
 	// stackscripts). Sub-resources under linode_instance_ that already
 	// matched compute_deep are still in compute too; profile rules use
-	// the union of categories, so duplication is harmless.
+	// the union of categories, so duplication is harmless. Both singular
+	// and plural prefixes are listed so write tools that use the singular
+	// (e.g. linode_image_create, linode_stackscript_create) get routed
+	// alongside their list/get counterparts.
 	if hasAnyPrefix(
 		toolName,
 		"linode_instance_",
 		"linode_instances_",
 		"linode_regions_",
 		"linode_types_",
+		"linode_image_",
 		"linode_images_",
+		"linode_stackscript_",
 		"linode_stackscripts_",
 	) {
 		cats = append(cats, "compute")
