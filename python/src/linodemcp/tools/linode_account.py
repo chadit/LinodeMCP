@@ -134,6 +134,73 @@ async def handle_linode_account_update(
     return await execute_tool(cfg, arguments, "update Linode account", _call)
 
 
+def _optional_int_argument(
+    arguments: dict[str, Any], name: str, minimum: int, maximum: int | None = None
+) -> int | None:
+    value = arguments.get(name)
+    if value is None:
+        return None
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise TypeError(f"{name} must be an integer")
+    if value < minimum:
+        raise ValueError(f"{name} must be at least {minimum}")
+    if maximum is not None and value > maximum:
+        raise ValueError(f"{name} must be at most {maximum}")
+    return value
+
+
+def create_linode_account_tag_objects_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_tag_objects_list tool."""
+    return Tool(
+        name="linode_account_tag_objects_list",
+        description="Lists objects assigned to a Linode account tag.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "tag_label": {
+                    "type": "string",
+                    "description": "Label of the tag to inspect",
+                },
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
+            },
+            "required": ["tag_label"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_account_tag_objects_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_tag_objects_list tool request."""
+    tag_label = arguments.get("tag_label")
+    if not isinstance(tag_label, str) or not tag_label.strip():
+        return error_response("tag_label is required")
+
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.list_tagged_objects(
+            tag_label, page=page, page_size=page_size
+        )
+
+    return await execute_tool(cfg, arguments, "list tagged objects", _call)
+
+
 def create_linode_account_tag_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_tag_delete tool."""
     return Tool(

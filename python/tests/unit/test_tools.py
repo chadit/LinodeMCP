@@ -36,6 +36,7 @@ from linodemcp.linode import (
 from linodemcp.profiles import Capability
 from linodemcp.tools import (
     create_linode_account_tag_delete_tool,
+    create_linode_account_tag_objects_list_tool,
     create_linode_account_update_tool,
     create_linode_firewall_get_tool,
     create_linode_image_create_tool,
@@ -83,6 +84,7 @@ from linodemcp.tools import (
     handle_hello,
     handle_linode_account,
     handle_linode_account_tag_delete,
+    handle_linode_account_tag_objects_list,
     handle_linode_account_update,
     handle_linode_domain_create,
     handle_linode_domain_delete,
@@ -622,6 +624,82 @@ async def test_handle_linode_account_update_requires_field(
 
     assert len(result) == 1
     assert "At least one account field" in result[0].text
+
+
+async def test_create_linode_account_tag_objects_list_tool() -> None:
+    """Test linode_account_tag_objects_list tool schema."""
+    tool, capability = create_linode_account_tag_objects_list_tool()
+
+    assert tool.name == "linode_account_tag_objects_list"
+    assert capability is Capability.Read
+    assert "tag_label" in tool.inputSchema["required"]
+    assert "page" not in tool.inputSchema["required"]
+
+
+async def test_handle_linode_account_tag_objects_list_requires_label(
+    sample_config: Config,
+) -> None:
+    """Tagged object listing requires a non-empty tag label."""
+    result = await handle_linode_account_tag_objects_list({}, sample_config)
+
+    assert len(result) == 1
+    assert "tag_label" in result[0].text
+
+
+async def test_handle_linode_account_tag_objects_list_rejects_invalid_page(
+    sample_config: Config,
+) -> None:
+    """Tagged object listing validates page."""
+    result = await handle_linode_account_tag_objects_list(
+        {"tag_label": "production", "page": 0}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "page" in result[0].text
+
+
+async def test_handle_linode_account_tag_objects_list_rejects_invalid_page_size(
+    sample_config: Config,
+) -> None:
+    """Tagged object listing validates page_size."""
+    result = await handle_linode_account_tag_objects_list(
+        {"tag_label": "production", "page_size": 10}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "page_size" in result[0].text
+
+
+async def test_handle_linode_account_tag_objects_list(sample_config: Config) -> None:
+    """Test linode_account_tag_objects_list tool."""
+    response_data: dict[str, Any] = {
+        "data": [
+            {
+                "type": "linode",
+                "data": {"id": 123, "label": "web-1"},
+            }
+        ],
+        "page": 2,
+        "pages": 3,
+        "results": 51,
+    }
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_tagged_objects.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_tag_objects_list(
+            {"tag_label": "production", "page": 2, "page_size": 25},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert json.loads(result[0].text) == response_data
+        mock_client.list_tagged_objects.assert_awaited_once_with(
+            "production", page=2, page_size=25
+        )
 
 
 async def test_create_linode_account_tag_delete_tool() -> None:

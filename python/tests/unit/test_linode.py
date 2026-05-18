@@ -368,6 +368,68 @@ async def test_get_instance(sample_instance_data: dict[str, Any]) -> None:
     await client.close()
 
 
+async def test_list_tagged_objects_sends_get_to_tag_route() -> None:
+    """Test listing tagged objects sends GET /tags/{tagLabel}."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response_data: dict[str, Any] = {
+        "data": [
+            {
+                "type": "linode",
+                "data": {"id": 123, "label": "web-1"},
+            }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.list_tagged_objects("team/blue tag", page=2, page_size=25)
+
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "GET", "/tags/team%2Fblue%20tag?page=2&page_size=25"
+    )
+    await client.close()
+
+
+async def test_list_tagged_objects_wraps_http_errors() -> None:
+    """Test listing tagged objects wraps HTTP errors with operation context."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.list_tagged_objects("production")
+
+    assert "ListTaggedObjects" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_list_tagged_objects_delegates_to_client() -> None:
+    """Test RetryableClient delegates tagged object listing to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "list_tagged_objects", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = {"data": [], "page": 1, "pages": 1, "results": 0}
+        result = await retryable.list_tagged_objects(
+            "production", page=1, page_size=100
+        )
+
+    assert result["data"] == []
+    mock_list.assert_awaited_once_with("production", page=1, page_size=100)
+    await retryable.close()
+
+
 async def test_delete_tag_sends_delete_to_tag_route() -> None:
     """Test deleting a tag sends DELETE /tags/{tagLabel}."""
     client = Client("https://api.linode.com/v4", "test-token")
