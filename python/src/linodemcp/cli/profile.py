@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, TextIO
 from linodemcp.config import (
     BuiltinOverride,
     Config,
+    UserProfileConfig,
     get_config_path,
     load_from_file,
     write_atomic,
@@ -58,15 +59,15 @@ PROFILE_USAGE = """\
 Usage: linodemcp profile <subcommand> [args]
 
 Read-only:
-  list             List all built-in and user-defined profiles.
-  show <name>      Show details for a single profile.
+  list                  List all built-in and user-defined profiles.
+  show <name>           Show details for a single profile.
 
 Mutators (atomic config write, comments and ordering not preserved):
-  use <name>       Switch the active profile.
-  enable <name>    Clear the disabled flag on a built-in profile.
-  disable <name>   Set the disabled flag on a built-in profile.
-
-Phase 7c will add: clone <src> <dst>, delete <name>.\
+  use <name>            Switch the active profile.
+  enable <name>         Clear the disabled flag on a built-in profile.
+  disable <name>        Set the disabled flag on a built-in profile.
+  clone <src> <dst>     Copy any profile into a new user-defined entry.
+  delete <name>         Remove a user-defined profile.\
 """
 
 
@@ -97,6 +98,8 @@ def run_profile_command(args: list[str], stdout: TextIO, stderr: TextIO) -> int:
         "use": run_profile_use,
         "enable": run_profile_enable,
         "disable": run_profile_disable,
+        "clone": run_profile_clone,
+        "delete": run_profile_delete,
     }
     if sub in mutator_handlers:
         return mutator_handlers[sub](rest, None, stdout, stderr)
@@ -169,6 +172,128 @@ def run_profile_disable(
     return _run_profile_toggle(
         args, config_path, stdout, stderr, disabled=True, verb="disabled"
     )
+
+
+def _validate_clone_dst(dst: str, stderr: TextIO) -> bool:
+    """Return True if the destination name passes the static guards."""
+    if not dst:
+        print("destination name cannot be empty", file=stderr)
+        return False
+    if dst in _BUILTIN_PROFILE_NAMES:
+        print(
+            f'destination "{dst}" collides with a built-in profile name; pick another.',
+            file=stderr,
+        )
+        return False
+    return True
+
+
+def run_profile_clone(
+    args: list[str],
+    config_path: Path | None,
+    stdout: TextIO,
+    stderr: TextIO,
+) -> int:
+    """Copy any profile into a new user-defined entry.
+
+    Source can be a built-in or a user-defined profile. Destination
+    must be a fresh name: it cannot collide with a built-in (those are
+    immutable in the catalog), with another user-defined entry (no
+    silent overwrite), or be empty. The clone captures the source's
+    description, allowed_tools, scopes, etc; the user can then edit
+    the YAML to customize.
+    """
+    expected_args = 2
+    if len(args) != expected_args:
+        print("Usage: linodemcp profile clone <src> <dst>", file=stderr)
+        return EXIT_USAGE_ERROR
+
+    src, dst = args[0], args[1]
+    if not _validate_clone_dst(dst, stderr):
+        return 1
+
+    path = config_path if config_path is not None else get_config_path()
+    cfg = _load_config_from_path(path, stderr)
+    if cfg is None:
+        return 1
+
+    if dst in (cfg.profiles or {}):
+        print(
+            f'user-defined profile "{dst}" already exists; pick another or '
+            "delete it first.",
+            file=stderr,
+        )
+        return 1
+
+    source = all_profiles(cfg).get(src)
+    if source is None:
+        print(f'source profile "{src}" not found.', file=stderr)
+        return 1
+
+    profiles = dict(cfg.profiles or {})
+    profiles[dst] = UserProfileConfig(
+        description=source.description,
+        allowed_tools=tuple(source.allowed_tools),
+        allowed_environments=tuple(source.allowed_environments),
+        required_token_scopes=tuple(source.required_token_scopes),
+        allow_yolo=source.allow_yolo,
+    )
+    cfg.profiles = profiles
+
+    return _write_and_report(
+        path, cfg, stdout, stderr, f"profile {dst} cloned from {src}"
+    )
+
+
+def run_profile_delete(
+    args: list[str],
+    config_path: Path | None,
+    stdout: TextIO,
+    stderr: TextIO,
+) -> int:
+    """Remove a user-defined profile by name.
+
+    Built-ins cannot be deleted (they live in code, not config) and
+    the currently-active profile cannot be removed since that would
+    prevent the server from starting.
+    """
+    if len(args) != 1:
+        print("Usage: linodemcp profile delete <name>", file=stderr)
+        return EXIT_USAGE_ERROR
+
+    name = args[0]
+
+    if name in _BUILTIN_PROFILE_NAMES:
+        print(
+            f'profile "{name}" is a built-in; built-ins cannot be deleted '
+            "(try `profile disable`).",
+            file=stderr,
+        )
+        return 1
+
+    path = config_path if config_path is not None else get_config_path()
+
+    cfg = _load_config_from_path(path, stderr)
+    if cfg is None:
+        return 1
+
+    if name not in (cfg.profiles or {}):
+        print(f'user-defined profile "{name}" not found.', file=stderr)
+        return 1
+
+    if resolve_active_name(cfg) == name:
+        print(
+            f'profile "{name}" is the active profile; switch first via '
+            "`profile use <other>` before deleting.",
+            file=stderr,
+        )
+        return 1
+
+    profiles = dict(cfg.profiles or {})
+    del profiles[name]
+    cfg.profiles = profiles
+
+    return _write_and_report(path, cfg, stdout, stderr, f"profile {name} deleted")
 
 
 def _run_profile_toggle(

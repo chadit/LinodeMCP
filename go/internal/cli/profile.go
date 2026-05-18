@@ -43,11 +43,11 @@ Read-only:
   show <name>      Show details for a single profile.
 
 Mutators (atomic config write, comments and ordering not preserved):
-  use <name>       Switch the active profile.
-  enable <name>    Clear the disabled flag on a built-in profile.
-  disable <name>   Set the disabled flag on a built-in profile.
-
-Phase 7c will add: clone <src> <dst>, delete <name>.`
+  use <name>            Switch the active profile.
+  enable <name>         Clear the disabled flag on a built-in profile.
+  disable <name>        Set the disabled flag on a built-in profile.
+  clone <src> <dst>     Copy any profile into a new user-defined entry.
+  delete <name>         Remove a user-defined profile.`
 
 // RunProfileCommand dispatches `linodemcp profile <subcommand> ...` and
 // returns the exit code. Unknown subcommand or empty args print usage to
@@ -71,6 +71,10 @@ func RunProfileCommand(args []string, stdout, stderr io.Writer) int {
 		return RunProfileEnable(args[1:], "", stdout, stderr)
 	case "disable":
 		return RunProfileDisable(args[1:], "", stdout, stderr)
+	case "clone":
+		return RunProfileClone(args[1:], "", stdout, stderr)
+	case "delete":
+		return RunProfileDelete(args[1:], "", stdout, stderr)
 	default:
 		writef(stderr, "unknown profile subcommand: %s\n\n%s\n", args[0], profileUsage)
 
@@ -372,6 +376,121 @@ func writeAndReport(
 	writef(stdout, "%s\n", success)
 
 	return 0
+}
+
+// RunProfileClone copies a source profile into a new user-defined
+// entry under dst. The source can be a built-in or a user-defined
+// profile. The dst name must be free: it cannot collide with a
+// built-in (those are immutable in the catalog), with another user-
+// defined entry (no silent overwrite), or be empty. The clone
+// captures the source's description, allowed_tools, scopes, etc; the
+// user can then edit the YAML to customize.
+func RunProfileClone(args []string, configPath string, stdout, stderr io.Writer) int {
+	const expectedArgs = 2
+
+	if len(args) != expectedArgs {
+		writeln(stderr, "Usage: linodemcp profile clone <src> <dst>")
+
+		return ExitUsageError
+	}
+
+	src, dst := args[0], args[1]
+
+	if dst == "" {
+		writeln(stderr, "destination name cannot be empty")
+
+		return 1
+	}
+
+	if isBuiltinName(dst) {
+		writef(stderr, "destination %q collides with a built-in profile name; pick another.\n", dst)
+
+		return 1
+	}
+
+	path := resolveConfigPath(configPath)
+
+	cfg, err := loadConfigFromPath(path, stderr)
+	if err != nil {
+		return 1
+	}
+
+	if _, exists := cfg.Profiles[dst]; exists {
+		writef(stderr, "user-defined profile %q already exists; pick another or delete it first.\n", dst)
+
+		return 1
+	}
+
+	source, ok := AllProfiles(cfg)[src]
+	if !ok {
+		writef(stderr, "source profile %q not found.\n", src)
+
+		return 1
+	}
+
+	if cfg.Profiles == nil {
+		cfg.Profiles = map[string]config.UserProfileConfig{}
+	}
+
+	cfg.Profiles[dst] = config.UserProfileConfig{
+		Description:         source.Description,
+		AllowedTools:        append([]string(nil), source.AllowedTools...),
+		AllowedEnvironments: append([]string(nil), source.AllowedEnvironments...),
+		RequiredTokenScopes: append([]string(nil), source.RequiredTokenScopes...),
+		AllowYolo:           source.AllowYolo,
+	}
+
+	return writeAndReport(
+		path, cfg, stdout, stderr,
+		"profile "+dst+" cloned from "+src,
+	)
+}
+
+// RunProfileDelete removes a user-defined profile by name. Built-ins
+// cannot be deleted (they live in code, not config) and the currently-
+// active profile cannot be removed since that would prevent the
+// server from starting.
+func RunProfileDelete(args []string, configPath string, stdout, stderr io.Writer) int {
+	if len(args) != 1 {
+		writeln(stderr, "Usage: linodemcp profile delete <name>")
+
+		return ExitUsageError
+	}
+
+	name := args[0]
+
+	if isBuiltinName(name) {
+		writef(stderr, "profile %q is a built-in; built-ins cannot be deleted (try `profile disable`).\n", name)
+
+		return 1
+	}
+
+	path := resolveConfigPath(configPath)
+
+	cfg, err := loadConfigFromPath(path, stderr)
+	if err != nil {
+		return 1
+	}
+
+	if _, exists := cfg.Profiles[name]; !exists {
+		writef(stderr, "user-defined profile %q not found.\n", name)
+
+		return 1
+	}
+
+	if ResolveActiveName(cfg) == name {
+		writef(
+			stderr,
+			"profile %q is the active profile; switch first via `profile use <other>` before deleting.\n",
+			name,
+		)
+
+		return 1
+	}
+
+	delete(cfg.Profiles, name)
+
+	return writeAndReport(path, cfg, stdout, stderr, "profile "+name+" deleted")
 }
 
 // isBuiltinName reports whether name matches any of the eight
