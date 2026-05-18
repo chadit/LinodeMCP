@@ -37,7 +37,7 @@ FEATURE_TOOLS_LIST = (
     "linode_instances_list,linode_instance_get,linode_regions_list,"
     "linode_types_list,linode_volumes_list,linode_volume_get,linode_image_create,linode_images_list,"
     "linode_sshkeys_list,linode_sshkey_get,linode_domains_list,linode_domain_get,"
-    "linode_domain_records_list,linode_firewalls_list,"
+    "linode_domain_records_list,linode_firewalls_list,linode_firewall_get,"
     "linode_nodebalancers_list,linode_nodebalancer_get,"
     "linode_stackscripts_list,linode_stackscript_create,linode_sshkey_create,linode_sshkey_update,linode_sshkey_delete,"
     "linode_instance_boot,linode_instance_reboot,linode_instance_shutdown,"

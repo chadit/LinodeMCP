@@ -1202,6 +1202,41 @@ async def test_list_firewalls() -> None:
         assert len(firewalls) == 1
         assert firewalls[0].id == 1
         assert firewalls[0].label == "web-fw"
+        mock_request.assert_awaited_once_with("GET", "/networking/firewalls")
+
+    await client.close()
+
+
+async def test_get_firewall() -> None:
+    """Test getting a firewall."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "id": 12345,
+        "label": "web-fw",
+        "status": "enabled",
+        "rules": {
+            "inbound": [],
+            "outbound": [],
+            "inbound_policy": "DROP",
+            "outbound_policy": "ACCEPT",
+        },
+        "tags": ["production"],
+        "created": "2024-01-01T00:00:00",
+        "updated": "2024-01-15T12:00:00",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        firewall = await client.get_firewall(12345)
+
+        assert firewall.id == 12345
+        assert firewall.label == "web-fw"
+        assert firewall.tags == ["production"]
+        mock_request.assert_awaited_once_with("GET", "/networking/firewalls/12345")
 
     await client.close()
 

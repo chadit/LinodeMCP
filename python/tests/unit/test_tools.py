@@ -33,8 +33,10 @@ from linodemcp.linode import (
     Transfer,
     Volume,
 )
+from linodemcp.profiles import Capability
 from linodemcp.tools import (
     create_linode_account_update_tool,
+    create_linode_firewall_get_tool,
     create_linode_image_create_tool,
     create_linode_instance_backup_create_tool,
     create_linode_instance_backup_get_tool,
@@ -91,6 +93,7 @@ from linodemcp.tools import (
     handle_linode_domains_list,
     handle_linode_firewall_create,
     handle_linode_firewall_delete,
+    handle_linode_firewall_get,
     handle_linode_firewall_update,
     handle_linode_firewalls_list,
     handle_linode_image_create,
@@ -1662,6 +1665,55 @@ async def test_handle_linode_domain_records_list_error(sample_config: Config) ->
 
         assert len(result) == 1
         assert "Failed" in result[0].text or "error" in result[0].text.lower()
+
+
+def test_create_linode_firewall_get_tool_schema() -> None:
+    """Test linode_firewall_get tool schema."""
+    tool, capability = create_linode_firewall_get_tool()
+
+    assert tool.name == "linode_firewall_get"
+    assert capability is Capability.Read
+    assert "firewall_id" in tool.inputSchema["properties"]
+    assert "firewall_id" in tool.inputSchema["required"]
+
+
+async def test_handle_linode_firewall_get(sample_config: Config) -> None:
+    """Test linode_firewall_get tool."""
+    mock_firewall = Firewall(
+        id=12345,
+        label="web-firewall",
+        status="enabled",
+        rules=FirewallRules(
+            inbound=[],
+            inbound_policy="DROP",
+            outbound=[],
+            outbound_policy="ACCEPT",
+        ),
+        tags=["production"],
+        created="2024-01-01T00:00:00",
+        updated="2024-01-15T12:00:00",
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_firewall.return_value = mock_firewall
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_firewall_get({"firewall_id": 12345}, sample_config)
+
+        assert len(result) == 1
+        assert "web-firewall" in result[0].text
+        mock_client.get_firewall.assert_awaited_once_with(12345)
+
+
+async def test_handle_linode_firewall_get_missing_id(sample_config: Config) -> None:
+    """Test linode_firewall_get validation."""
+    result = await handle_linode_firewall_get({}, sample_config)
+
+    assert len(result) == 1
+    assert "firewall_id is required" in result[0].text
 
 
 async def test_handle_linode_firewalls_list(sample_config: Config) -> None:
