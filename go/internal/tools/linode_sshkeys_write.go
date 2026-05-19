@@ -86,6 +86,78 @@ func handleLinodeSSHKeyCreateRequest(ctx context.Context, request *mcp.CallToolR
 	return MarshalToolResponse(response)
 }
 
+// NewLinodeSSHKeyUpdateTool creates a tool for updating an SSH key.
+func NewLinodeSSHKeyUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_sshkey_update",
+		mcp.WithDescription("Updates the label for an SSH key in your Linode profile."),
+		mcp.WithString(
+			paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
+		),
+		mcp.WithNumber(
+			"sshkey_id",
+			mcp.Required(),
+			mcp.Description("The ID of the SSH key to update"),
+		),
+		mcp.WithString(
+			"label",
+			mcp.Required(),
+			mcp.Description("The new label for the SSH key"),
+		),
+		mcp.WithBoolean(
+			paramConfirm,
+			mcp.Required(),
+			mcp.Description("Must be set to true to confirm SSH key update."),
+		),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeSSHKeyUpdateRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleLinodeSSHKeyUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	sshKeyID := request.GetInt("sshkey_id", 0)
+	label := request.GetString("label", "")
+
+	if result := RequireConfirm(request, "This updates an SSH key in your Linode profile. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	if sshKeyID <= 0 {
+		return mcp.NewToolResultError("sshkey_id must be a positive integer"), nil
+	}
+
+	if label == "" {
+		return mcp.NewToolResultError("label is required"), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	req := linode.UpdateSSHKeyRequest{Label: label}
+
+	updatedKey, err := client.UpdateSSHKey(ctx, sshKeyID, req)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("SSH key %d failed to change label: %v", sshKeyID, err)), nil
+	}
+
+	response := struct {
+		Message string         `json:"message"`
+		SSHKey  *linode.SSHKey `json:"ssh_key"`
+	}{
+		Message: fmt.Sprintf("SSH key %d updated successfully", sshKeyID),
+		SSHKey:  updatedKey,
+	}
+
+	return MarshalToolResponse(response)
+}
+
 // NewLinodeSSHKeyDeleteTool creates a tool for deleting an SSH key.
 func NewLinodeSSHKeyDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(

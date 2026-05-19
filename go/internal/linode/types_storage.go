@@ -52,3 +52,8 @@ type CreateSSHKeyRequest struct {
 	Label  string `json:"label"`
 	SSHKey string `json:"ssh_key"`
 }
+
+// UpdateSSHKeyRequest represents the request body for updating an SSH key.
+type UpdateSSHKeyRequest struct {
+	Label string `json:"label"`
+}

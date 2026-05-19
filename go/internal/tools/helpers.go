@@ -84,9 +84,10 @@ func prepareClient(request *mcp.CallToolRequest, cfg *config.Config) (*linode.Cl
 	return linode.NewClient(selectedEnv.Linode.APIURL, selectedEnv.Linode.Token, cfg), nil
 }
 
-// RequireConfirm checks the confirm parameter and returns an error result if not set.
+// RequireConfirm checks that confirm is the literal JSON boolean true.
 func RequireConfirm(request *mcp.CallToolRequest, message string) *mcp.CallToolResult {
-	if !request.GetBool(paramConfirm, false) {
+	confirm, confirmOK := request.GetArguments()[paramConfirm].(bool)
+	if !confirmOK || !confirm {
 		return mcp.NewToolResultError(message)
 	}
 

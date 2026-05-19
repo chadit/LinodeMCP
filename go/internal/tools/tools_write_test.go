@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -99,6 +100,170 @@ func TestLinodeSSHKeyCreateTool(t *testing.T) {
 	})
 }
 
+// End-to-end verification of the SSH key update workflow.
+func TestLinodeSSHKeyUpdateTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	tool, _, handler := tools.NewLinodeSSHKeyUpdateTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+		assert.Equal(t, "linode_sshkey_update", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, keySSHKeyID, "schema should include sshkey_id property")
+		assert.Contains(t, props, keyLabel, "schema should include label property")
+		assert.Contains(t, props, keyConfirm, "schema should include confirm property")
+	})
+
+	t.Run("confirm must be literal true before client call", func(t *testing.T) {
+		t.Parallel()
+
+		var callCount atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			callCount.Add(1)
+
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		t.Cleanup(srv.Close)
+
+		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, successHandler := tools.NewLinodeSSHKeyUpdateTool(successCfg)
+
+		tests := []struct {
+			name    string
+			confirm any
+			set     bool
+		}{
+			{name: "missing"},
+			{name: "false", confirm: false, set: true},
+			{name: "string true", confirm: boolStringTrue, set: true},
+			{name: "numeric one", confirm: 1, set: true},
+		}
+
+		for _, tt := range tests {
+			args := map[string]any{keySSHKeyID: float64(123), keyLabel: keyNameTest}
+			if tt.set {
+				args[keyConfirm] = tt.confirm
+			}
+
+			req := createRequestWithArgs(t, args)
+			result, err := successHandler(t.Context(), req)
+
+			require.NoError(t, err, "handler should not return Go error for %s", tt.name)
+			require.NotNil(t, result, "handler should return a result for %s", tt.name)
+			assert.True(t, result.IsError, "result should be a tool error for %s", tt.name)
+			assertErrorContains(t, result, errConfirmEqualsTrue)
+			assert.Zero(t, callCount.Load(), "confirm failures should happen before the client call for %s", tt.name)
+		}
+	})
+
+	validationTests := []struct {
+		name         string
+		args         map[string]any
+		wantContains string
+	}{
+		{name: "missing sshkey id", args: map[string]any{keyLabel: keyNameTest, keyConfirm: true}, wantContains: errSSHKeyIDPositive},
+		{name: "zero sshkey id", args: map[string]any{keySSHKeyID: float64(0), keyLabel: keyNameTest, keyConfirm: true}, wantContains: errSSHKeyIDPositive},
+		{name: "negative sshkey id", args: map[string]any{keySSHKeyID: float64(-1), keyLabel: keyNameTest, keyConfirm: true}, wantContains: errSSHKeyIDPositive},
+		{name: "malformed sshkey id with slash", args: map[string]any{keySSHKeyID: "123/45", keyLabel: keyNameTest, keyConfirm: true}, wantContains: errSSHKeyIDPositive},
+		{name: "malformed sshkey id with query", args: map[string]any{keySSHKeyID: "123?x=1", keyLabel: keyNameTest, keyConfirm: true}, wantContains: errSSHKeyIDPositive},
+		{name: "malformed sshkey id traversal", args: map[string]any{keySSHKeyID: "..", keyLabel: keyNameTest, keyConfirm: true}, wantContains: errSSHKeyIDPositive},
+		{name: caseMissingLabel, args: map[string]any{keySSHKeyID: float64(123), keyConfirm: true}, wantContains: errLabelRequired},
+	}
+	for _, tt := range validationTests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			req := createRequestWithArgs(t, tt.args)
+			result, err := handler(t.Context(), req)
+			require.NoError(t, err, "handler should not return Go error")
+			require.NotNil(t, result, "handler should return a result")
+			assert.True(t, result.IsError, "result should be a tool error")
+			assertErrorContains(t, result, tt.wantContains)
+		})
+	}
+
+	t.Run("api failure returns tool error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/profile/sshkeys/123", r.URL.Path, "request path should match SSH key endpoint")
+			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+			http.Error(w, "bad request", http.StatusBadRequest)
+		}))
+		defer srv.Close()
+
+		failureCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, failureHandler := tools.NewLinodeSSHKeyUpdateTool(failureCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keySSHKeyID: float64(123),
+			keyLabel:    keyNameTest,
+			keyConfirm:  true,
+		})
+		result, err := failureHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "failed to change label")
+	})
+
+	t.Run("successful update", func(t *testing.T) {
+		t.Parallel()
+
+		updatedKey := linode.SSHKey{
+			ID:    123,
+			Label: keyNameTest,
+		}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/profile/sshkeys/123", r.URL.Path, "request path should match SSH key endpoint")
+			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+
+			var req linode.UpdateSSHKeyRequest
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&req), "request body should decode")
+			assert.Equal(t, keyNameTest, req.Label, "request body should include the new label")
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(updatedKey), "encoding response should succeed")
+		}))
+		defer srv.Close()
+
+		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, successHandler := tools.NewLinodeSSHKeyUpdateTool(successCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keySSHKeyID: float64(123),
+			keyLabel:    keyNameTest,
+			keyConfirm:  true,
+		})
+		result, err := successHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.False(t, result.IsError, "result should not be an error")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent type")
+		assert.Contains(t, textContent.Text, "updated successfully", "response should confirm update")
+		assert.Contains(t, textContent.Text, keyNameTest, "response should contain the key label")
+	})
+}
+
 // End-to-end verification of the SSH key deletion workflow.
 func TestLinodeSSHKeyDeleteTool(t *testing.T) {
 	t.Parallel()
@@ -115,7 +280,7 @@ func TestLinodeSSHKeyDeleteTool(t *testing.T) {
 		require.NotNil(t, handler, "handler should not be nil")
 
 		props := tool.InputSchema.Properties
-		assert.Contains(t, props, "sshkey_id", "schema should include sshkey_id property")
+		assert.Contains(t, props, keySSHKeyID, "schema should include sshkey_id property")
 	})
 
 	t.Run("missing sshkey id", func(t *testing.T) {
@@ -143,7 +308,7 @@ func TestLinodeSSHKeyDeleteTool(t *testing.T) {
 		}}
 		_, _, successHandler := tools.NewLinodeSSHKeyDeleteTool(successCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"sshkey_id": float64(123), keyConfirm: true})
+		req := createRequestWithArgs(t, map[string]any{keySSHKeyID: float64(123), keyConfirm: true})
 		result, err := successHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
