@@ -289,6 +289,7 @@ from linodemcp.tools.linode_object_storage_write import (
     handle_linode_object_storage_ssl_upload,
 )
 from linodemcp.tools.linode_profile import (
+    create_linode_profile_preferences_update_tool,
     create_linode_profile_security_questions_answer_tool,
     create_linode_profile_security_questions_list_tool,
     create_linode_profile_tfa_disable_tool,
@@ -301,6 +302,7 @@ from linodemcp.tools.linode_profile import (
     create_linode_profile_tokens_list_tool,
     create_linode_profile_tool,
     handle_linode_profile,
+    handle_linode_profile_preferences_update,
     handle_linode_profile_security_questions_answer,
     handle_linode_profile_security_questions_list,
     handle_linode_profile_tfa_disable,
@@ -536,6 +538,7 @@ __all__ = [
     "create_linode_object_storage_ssl_upload_tool",
     "create_linode_object_storage_transfer_tool",
     "create_linode_object_storage_types_list_tool",
+    "create_linode_profile_preferences_update_tool",
     "create_linode_profile_security_questions_answer_tool",
     "create_linode_profile_security_questions_list_tool",
     "create_linode_profile_tfa_disable_tool",
@@ -708,6 +711,7 @@ __all__ = [
     "handle_linode_object_storage_transfer",
     "handle_linode_object_storage_types_list",
     "handle_linode_profile",
+    "handle_linode_profile_preferences_update",
     "handle_linode_profile_security_questions_answer",
     "handle_linode_profile_security_questions_list",
     "handle_linode_profile_tfa_disable",

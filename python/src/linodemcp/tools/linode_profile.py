@@ -1,6 +1,6 @@
 """Linode profile tool - user account profile information."""
 
-from typing import Any
+from typing import Any, cast
 
 from mcp.types import TextContent, Tool
 
@@ -64,6 +64,53 @@ async def handle_linode_profile(
         }
 
     return await execute_tool(cfg, arguments, "retrieve Linode profile", _call)
+
+
+def create_linode_profile_preferences_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_preferences_update tool."""
+    return Tool(
+        name="linode_profile_preferences_update",
+        description="Updates OAuth client-specific Linode profile preferences.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "preferences": {
+                    "type": "object",
+                    "description": (
+                        "Preference key/value object to save for this OAuth client"
+                    ),
+                    "additionalProperties": True,
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this preferences update.",
+                },
+            },
+            "required": ["preferences", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_profile_preferences_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_profile_preferences_update tool request."""
+    preferences_arg = arguments.get("preferences")
+    if not isinstance(preferences_arg, dict):
+        return error_response("preferences must be an object")
+    preferences = cast("dict[str, Any]", preferences_arg)
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates profile preferences. Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.update_profile_preferences(preferences)
+
+    return await execute_tool(
+        cfg, arguments, "update Linode profile preferences", _call
+    )
 
 
 def create_linode_profile_tfa_enable_tool() -> tuple[Tool, Capability]:

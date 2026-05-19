@@ -227,6 +227,22 @@ async def test_all_listed_tools_have_handlers(
     )
 
 
+async def test_profile_preferences_update_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Profile preferences update tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_profile_preferences_update_tool" in tools_mod.__all__
+    assert "handle_linode_profile_preferences_update" in tools_mod.__all__
+
+    registry_names = {entry.name for entry in get_tool_registry()}
+    assert "linode_profile_preferences_update" in registry_names
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_profile_preferences_update" in srv.registered_tool_names
+
+
 async def test_object_storage_bucket_access_allow_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

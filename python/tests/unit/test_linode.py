@@ -106,6 +106,76 @@ async def test_update_profile_sends_put_to_profile_route(
     await client.close()
 
 
+async def test_update_profile_preferences_sends_put_to_preferences_route() -> None:
+    """Updating profile preferences sends PUT /profile/preferences."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    preferences = {"dashboard": {"theme": "dark"}, "dismissed": ["welcome"]}
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = preferences
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.update_profile_preferences(preferences)
+
+    assert result == preferences
+    mock_request.assert_called_once_with("PUT", "/profile/preferences", preferences)
+
+    await client.close()
+
+
+async def test_update_profile_preferences_non_dict_response_empty() -> None:
+    """Unexpected profile preferences response shapes return an empty object."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = []
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.update_profile_preferences({})
+
+    assert result == {}
+    mock_request.assert_called_once_with("PUT", "/profile/preferences", {})
+
+    await client.close()
+
+
+async def test_update_profile_preferences_wraps_http_errors() -> None:
+    """HTTP errors from profile preferences updates are wrapped."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.update_profile_preferences({})
+
+    assert "UpdateProfilePreferences" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_update_profile_preferences_delegates_to_client() -> None:
+    """Retryable profile preferences update delegates to the base client."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+    preferences = {"dashboard": {"theme": "dark"}}
+
+    with patch.object(
+        client.client, "update_profile_preferences", new_callable=AsyncMock
+    ) as mock_update:
+        mock_update.return_value = preferences
+
+        result = await client.update_profile_preferences(preferences)
+
+    assert result == preferences
+    mock_update.assert_awaited_once_with(preferences)
+    await client.close()
+
+
 async def test_get_profile_parses_pat_scopes(
     sample_profile_data: dict[str, Any],
 ) -> None:

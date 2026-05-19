@@ -4,6 +4,8 @@ import json
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 from linodemcp.config import Config
 from linodemcp.linode import (
     UDF,
@@ -80,6 +82,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
+    create_linode_profile_preferences_update_tool,
     create_linode_profile_security_questions_answer_tool,
     create_linode_profile_security_questions_list_tool,
     create_linode_profile_tfa_disable_tool,
@@ -224,6 +227,7 @@ from linodemcp.tools import (
     handle_linode_object_storage_transfer,
     handle_linode_object_storage_types_list,
     handle_linode_profile,
+    handle_linode_profile_preferences_update,
     handle_linode_profile_security_questions_answer,
     handle_linode_profile_security_questions_list,
     handle_linode_profile_tfa_disable,
@@ -356,6 +360,91 @@ async def test_handle_linode_profile_missing_environment(sample_config: Config) 
 
     assert len(result) == 1
     assert "Error" in result[0].text or "error" in result[0].text
+
+
+def test_create_linode_profile_preferences_update_tool() -> None:
+    """Profile preferences update tool exposes confirm-gated schema."""
+    tool, capability = create_linode_profile_preferences_update_tool()
+
+    assert tool.name == "linode_profile_preferences_update"
+    assert capability == Capability.Write
+    assert tool.inputSchema["required"] == ["preferences", "confirm"]
+    assert tool.inputSchema["properties"]["preferences"]["type"] == "object"
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+
+
+async def test_handle_linode_profile_preferences_update_success(
+    sample_config: Config,
+) -> None:
+    """Handler updates profile preferences with confirm=true."""
+    preferences = {"dashboard": {"theme": "dark"}, "dismissed": ["welcome"]}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_profile_preferences.return_value = preferences
+        mock_client.__aenter__.return_value = mock_client
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_preferences_update(
+            {"preferences": preferences, "confirm": True}, sample_config
+        )
+
+    assert len(result) == 1
+    assert "dashboard" in result[0].text
+    mock_client.update_profile_preferences.assert_awaited_once_with(preferences)
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_handle_linode_profile_preferences_update_requires_boolean_confirm(
+    sample_config: Config, confirm: Any
+) -> None:
+    """Profile preferences update rejects missing or non-true confirm."""
+    arguments: dict[str, Any] = {"preferences": {"theme": "dark"}}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_profile_preferences_update(
+            arguments, sample_config
+        )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize("preferences", [None, [], "theme", 1, True])
+async def test_handle_linode_profile_preferences_update_requires_object(
+    sample_config: Config, preferences: Any
+) -> None:
+    """Profile preferences update validates preferences before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_profile_preferences_update(
+            {"preferences": preferences, "confirm": True}, sample_config
+        )
+
+    assert len(result) == 1
+    assert "preferences must be an object" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_profile_preferences_update_error(
+    sample_config: Config,
+) -> None:
+    """Handler surfaces client errors for profile preferences updates."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_profile_preferences.side_effect = RuntimeError("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_preferences_update(
+            {"preferences": {}, "confirm": True}, sample_config
+        )
+
+    assert len(result) == 1
+    assert "Failed to update Linode profile preferences" in result[0].text
 
 
 async def test_handle_linode_instances_list(
