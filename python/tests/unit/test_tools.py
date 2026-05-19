@@ -240,6 +240,7 @@ from linodemcp.tools import (
     handle_linode_nodebalancer_config_node_delete,
     handle_linode_nodebalancer_config_node_get,
     handle_linode_nodebalancer_config_node_update,
+    handle_linode_nodebalancer_config_nodes_list,
     handle_linode_nodebalancer_config_rebuild,
     handle_linode_nodebalancer_create,
     handle_linode_nodebalancer_delete,
@@ -3620,6 +3621,148 @@ async def test_handle_linode_nodebalancers_list_error(sample_config: Config) -> 
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_nodebalancers_list({}, sample_config)
+
+        assert len(result) == 1
+        assert "Failed" in result[0].text or "error" in result[0].text.lower()
+
+
+async def test_handle_linode_nodebalancer_config_nodes_list(
+    sample_config: Config,
+) -> None:
+    """Test linode_nodebalancer_config_nodes_list tool."""
+    mock_nodes = {
+        "data": [
+            {"id": 1, "label": "node-1", "address": "192.0.2.4:80"},
+            {"id": 2, "label": "node-2", "address": "192.0.2.5:80"},
+        ],
+        "page": 1,
+        "pages": 1,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_nodebalancer_config_nodes.return_value = mock_nodes
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_config_nodes_list(
+            {"nodebalancer_id": 8, "config_id": 6}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "node-1" in result[0].text
+        mock_client.list_nodebalancer_config_nodes.assert_called_once_with(
+            8, 6, page=None, page_size=None
+        )
+
+
+async def test_handle_linode_nodebalancer_config_nodes_list_with_pagination(
+    sample_config: Config,
+) -> None:
+    """Test linode_nodebalancer_config_nodes_list tool with pagination."""
+    mock_nodes: dict[str, Any] = {"data": [], "page": 2, "pages": 3}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_nodebalancer_config_nodes.return_value = mock_nodes
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_config_nodes_list(
+            {"nodebalancer_id": 8, "config_id": 6, "page": 2, "page_size": 50},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        data = json.loads(result[0].text)
+        assert data == mock_nodes
+        mock_client.list_nodebalancer_config_nodes.assert_called_once_with(
+            8, 6, page=2, page_size=50
+        )
+
+
+async def test_handle_linode_nodebalancer_config_nodes_list_missing_nodebalancer_id(
+    sample_config: Config,
+) -> None:
+    """Test linode_nodebalancer_config_nodes_list rejects missing nodebalancer_id."""
+    result = await handle_linode_nodebalancer_config_nodes_list(
+        {"config_id": 6}, sample_config
+    )
+    assert len(result) == 1
+    assert "nodebalancer_id must be a positive integer" in result[0].text
+
+
+async def test_handle_linode_nodebalancer_config_nodes_list_missing_config_id(
+    sample_config: Config,
+) -> None:
+    """Test linode_nodebalancer_config_nodes_list rejects missing config_id."""
+    result = await handle_linode_nodebalancer_config_nodes_list(
+        {"nodebalancer_id": 8}, sample_config
+    )
+    assert len(result) == 1
+    assert "config_id must be a positive integer" in result[0].text
+
+
+async def test_handle_linode_nodebalancer_config_nodes_list_invalid_page(
+    sample_config: Config,
+) -> None:
+    """Test linode_nodebalancer_config_nodes_list rejects non-integer page."""
+    result = await handle_linode_nodebalancer_config_nodes_list(
+        {"nodebalancer_id": 8, "config_id": 6, "page": "abc"}, sample_config
+    )
+    assert len(result) == 1
+    assert "page must be an integer" in result[0].text
+
+
+async def test_handle_linode_nodebalancer_config_nodes_list_bool_nodebalancer_id(
+    sample_config: Config,
+) -> None:
+    """Test linode_nodebalancer_config_nodes_list rejects bool nodebalancer_id."""
+    result = await handle_linode_nodebalancer_config_nodes_list(
+        {"nodebalancer_id": True, "config_id": 6}, sample_config
+    )
+    assert len(result) == 1
+    assert "nodebalancer_id must be a positive integer" in result[0].text
+
+
+async def test_handle_linode_nodebalancer_config_nodes_list_zero_nodebalancer_id(
+    sample_config: Config,
+) -> None:
+    """Test linode_nodebalancer_config_nodes_list rejects zero nodebalancer_id."""
+    result = await handle_linode_nodebalancer_config_nodes_list(
+        {"nodebalancer_id": 0, "config_id": 6}, sample_config
+    )
+    assert len(result) == 1
+    assert "nodebalancer_id must be a positive integer" in result[0].text
+
+
+async def test_handle_linode_nodebalancer_config_nodes_list_negative_config_id(
+    sample_config: Config,
+) -> None:
+    """Test linode_nodebalancer_config_nodes_list rejects negative config_id."""
+    result = await handle_linode_nodebalancer_config_nodes_list(
+        {"nodebalancer_id": 8, "config_id": -1}, sample_config
+    )
+    assert len(result) == 1
+    assert "config_id must be a positive integer" in result[0].text
+
+
+async def test_handle_linode_nodebalancer_config_nodes_list_error(
+    sample_config: Config,
+) -> None:
+    """Test linode_nodebalancer_config_nodes_list error handling."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_nodebalancer_config_nodes.side_effect = Exception("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_config_nodes_list(
+            {"nodebalancer_id": 8, "config_id": 6}, sample_config
+        )
 
         assert len(result) == 1
         assert "Failed" in result[0].text or "error" in result[0].text.lower()
