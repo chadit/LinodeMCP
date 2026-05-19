@@ -7,6 +7,7 @@ from linodemcp.tools.hello import (
     handle_hello,
 )
 from linodemcp.tools.linode_account import (
+    create_linode_account_support_ticket_attachment_create_tool,
     create_linode_account_support_ticket_close_tool,
     create_linode_account_support_ticket_create_tool,
     create_linode_account_support_ticket_get_tool,
@@ -20,6 +21,7 @@ from linodemcp.tools.linode_account import (
     create_linode_account_tool,
     create_linode_account_update_tool,
     handle_linode_account,
+    handle_linode_account_support_ticket_attachment_create,
     handle_linode_account_support_ticket_close,
     handle_linode_account_support_ticket_create,
     handle_linode_account_support_ticket_get,
@@ -424,6 +426,7 @@ __all__ = [
     "SSH_KEY_TRUNCATE_LIMIT",
     "RetryableClient",
     "create_hello_tool",
+    "create_linode_account_support_ticket_attachment_create_tool",
     "create_linode_account_support_ticket_close_tool",
     "create_linode_account_support_ticket_create_tool",
     "create_linode_account_support_ticket_get_tool",
@@ -600,6 +603,7 @@ __all__ = [
     "execute_tool",
     "handle_hello",
     "handle_linode_account",
+    "handle_linode_account_support_ticket_attachment_create",
     "handle_linode_account_support_ticket_close",
     "handle_linode_account_support_ticket_create",
     "handle_linode_account_support_ticket_get",

@@ -37,6 +37,7 @@ from linodemcp.linode import (
 )
 from linodemcp.profiles import Capability
 from linodemcp.tools import (
+    create_linode_account_support_ticket_attachment_create_tool,
     create_linode_account_support_ticket_close_tool,
     create_linode_account_support_ticket_create_tool,
     create_linode_account_support_ticket_get_tool,
@@ -110,6 +111,7 @@ from linodemcp.tools import (
     create_linode_vpcs_list_tool,
     handle_hello,
     handle_linode_account,
+    handle_linode_account_support_ticket_attachment_create,
     handle_linode_account_support_ticket_close,
     handle_linode_account_support_ticket_create,
     handle_linode_account_support_ticket_get,
@@ -1759,6 +1761,146 @@ async def test_account_support_ticket_reply_create_tool_is_exported_and_register
     registry = {entry.name: entry for entry in get_tool_registry()}
     assert (
         registry["linode_account_support_ticket_reply_create"].capability
+        is Capability.Write
+    )
+
+
+async def test_create_linode_account_support_ticket_attachment_create_tool() -> None:
+    """Test support ticket attachment create tool schema."""
+    tool, capability = create_linode_account_support_ticket_attachment_create_tool()
+
+    assert tool.name == "linode_account_support_ticket_attachment_create"
+    assert capability is Capability.Write
+    assert tool.inputSchema["required"] == ["ticket_id", "file", "confirm"]
+
+
+async def test_handle_linode_account_support_ticket_attachment_create_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Support ticket attachment creation requires confirmation."""
+    result = await handle_linode_account_support_ticket_attachment_create(
+        {"ticket_id": 123, "file": "/Users/e/a.txt"}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+
+
+async def test_handle_support_ticket_attachment_validates_ticket_id(
+    sample_config: Config,
+) -> None:
+    """Support ticket attachment creation validates ticket_id."""
+    result = await handle_linode_account_support_ticket_attachment_create(
+        {"confirm": True, "ticket_id": 0, "file": "/Users/e/a.txt"},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "ticket_id" in result[0].text
+
+
+async def test_handle_linode_account_support_ticket_attachment_create_requires_file(
+    sample_config: Config,
+) -> None:
+    """Support ticket attachment creation requires a non-empty file."""
+    result = await handle_linode_account_support_ticket_attachment_create(
+        {"confirm": True, "ticket_id": 123, "file": "   "},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "file" in result[0].text
+
+
+async def test_handle_support_ticket_attachment_requires_absolute_file(
+    sample_config: Config,
+) -> None:
+    """Support ticket attachment creation requires an absolute file path."""
+    result = await handle_linode_account_support_ticket_attachment_create(
+        {"confirm": True, "ticket_id": 123, "file": "attachment.txt"},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "absolute path" in result[0].text
+
+
+async def test_handle_support_ticket_attachment_requires_file_key(
+    sample_config: Config,
+) -> None:
+    """Support ticket attachment creation requires the file key."""
+    result = await handle_linode_account_support_ticket_attachment_create(
+        {"confirm": True, "ticket_id": 123},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "file" in result[0].text
+
+
+async def test_handle_linode_account_support_ticket_attachment_create(
+    sample_config: Config,
+) -> None:
+    """Test support ticket attachment create handler."""
+    response_data: dict[str, Any] = {"id": 789, "file": "attachment.txt"}
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_support_ticket_attachment.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_support_ticket_attachment_create(
+            {"confirm": True, "ticket_id": 123, "file": " /Users/e/a.txt "},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert json.loads(result[0].text) == {
+            "message": "Support ticket attachment created successfully",
+            "attachment": response_data,
+        }
+        mock_client.create_support_ticket_attachment.assert_awaited_once_with(
+            123, "/Users/e/a.txt"
+        )
+
+
+async def test_handle_support_ticket_attachment_reports_client_errors(
+    sample_config: Config,
+) -> None:
+    """Support ticket attachment creation reports client errors."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_support_ticket_attachment.side_effect = RuntimeError("boom")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_support_ticket_attachment_create(
+            {"confirm": True, "ticket_id": 123, "file": "/Users/e/a.txt"},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "Failed to create Linode support ticket attachment" in result[0].text
+
+
+async def test_account_support_ticket_attachment_create_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Support ticket attachment create tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+    from linodemcp.server import get_tool_registry
+
+    assert (
+        "create_linode_account_support_ticket_attachment_create_tool"
+        in tools_mod.__all__
+    )
+    assert "handle_linode_account_support_ticket_attachment_create" in tools_mod.__all__
+
+    registry = {entry.name: entry for entry in get_tool_registry()}
+    assert (
+        registry["linode_account_support_ticket_attachment_create"].capability
         is Capability.Write
     )
 
