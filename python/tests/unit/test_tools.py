@@ -83,6 +83,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
+    create_linode_nodebalancer_config_node_create_tool,
     create_linode_nodebalancer_config_node_delete_tool,
     create_linode_nodebalancer_config_node_get_tool,
     create_linode_nodebalancer_config_node_update_tool,
@@ -235,6 +236,7 @@ from linodemcp.tools import (
     handle_linode_lke_version_get,
     handle_linode_lke_versions_list,
     handle_linode_monitor_service_token_create,
+    handle_linode_nodebalancer_config_node_create,
     handle_linode_nodebalancer_config_node_delete,
     handle_linode_nodebalancer_config_node_get,
     handle_linode_nodebalancer_config_node_update,
@@ -3621,6 +3623,155 @@ async def test_handle_linode_nodebalancers_list_error(sample_config: Config) -> 
 
         assert len(result) == 1
         assert "Failed" in result[0].text or "error" in result[0].text.lower()
+
+
+def test_linode_nodebalancer_config_node_create_tool_definition() -> None:
+    """NodeBalancer config node create tool should require inputs and confirm."""
+    tool, capability = create_linode_nodebalancer_config_node_create_tool()
+    assert tool.name == "linode_nodebalancer_config_node_create"
+    assert capability == Capability.Write
+    required: list[str] = tool.inputSchema.get("required") or []
+    assert "nodebalancer_id" in required
+    assert "config_id" in required
+    assert "address" in required
+    assert "label" in required
+    assert "confirm" in required
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+
+
+@pytest.mark.parametrize("confirm_value", [None, False, "true", 1])
+async def test_handle_linode_nodebalancer_config_node_create_confirm_required(
+    sample_config: Config, confirm_value: object
+) -> None:
+    """Config node create rejects non-true boolean confirm before client call."""
+    arguments: dict[str, Any] = {
+        "nodebalancer_id": 8,
+        "config_id": 6,
+        "address": "192.0.2.4:80",
+        "label": "node-1",
+    }
+    if confirm_value is not None:
+        arguments["confirm"] = confirm_value
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_nodebalancer_config_node_create(
+            arguments, sample_config
+        )
+
+    assert len(result) == 1
+    assert "confirm" in result[0].text.lower()
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("nodebalancer_id", "8/9", "nodebalancer_id"),
+        ("config_id", "6?x", "config_id"),
+        ("nodebalancer_id", "..", "nodebalancer_id"),
+        ("address", None, "address"),
+        ("address", "", "address"),
+        ("label", None, "label"),
+        ("label", "ab", "label"),
+        ("label", "x" * 33, "label"),
+        ("mode", "invalid", "mode"),
+        ("subnet_id", 0, "subnet_id"),
+        ("weight", "50", "weight"),
+        ("weight", 0, "weight"),
+        ("weight", 256, "weight"),
+    ],
+)
+async def test_handle_linode_nodebalancer_config_node_create_validation_errors(
+    sample_config: Config, field: str, value: object, message: str
+) -> None:
+    """Config node create validates path params and body before client call."""
+    arguments: dict[str, Any] = {
+        "nodebalancer_id": 8,
+        "config_id": 6,
+        "address": "192.0.2.4:80",
+        "label": "node-1",
+        "confirm": True,
+    }
+    arguments[field] = value
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_nodebalancer_config_node_create(
+            arguments, sample_config
+        )
+
+    assert len(result) == 1
+    assert message in result[0].text.lower()
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_nodebalancer_config_node_create_success(
+    sample_config: Config,
+) -> None:
+    """Config node create calls the client with the expected body."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_nodebalancer_config_node.return_value = {
+            "id": 4,
+            "label": "node-1",
+            "address": "192.0.2.4:80",
+            "mode": "accept",
+            "weight": 50,
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_config_node_create(
+            {
+                "nodebalancer_id": 8,
+                "config_id": 6,
+                "address": "192.0.2.4:80",
+                "label": "node-1",
+                "mode": "accept",
+                "weight": 50,
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+    assert len(result) == 1
+    assert "node-1" in result[0].text
+    mock_client.create_nodebalancer_config_node.assert_awaited_once_with(
+        8,
+        6,
+        {
+            "address": "192.0.2.4:80",
+            "label": "node-1",
+            "mode": "accept",
+            "weight": 50,
+        },
+    )
+
+
+async def test_handle_linode_nodebalancer_config_node_create_error(
+    sample_config: Config,
+) -> None:
+    """Config node create propagates client errors through execute_tool."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_nodebalancer_config_node.side_effect = Exception("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_config_node_create(
+            {
+                "nodebalancer_id": 8,
+                "config_id": 6,
+                "address": "192.0.2.4:80",
+                "label": "node-1",
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+    assert len(result) == 1
+    assert "failed" in result[0].text.lower() or "error" in result[0].text.lower()
 
 
 async def test_handle_linode_nodebalancer_get(sample_config: Config) -> None:

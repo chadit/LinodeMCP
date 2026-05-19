@@ -1474,6 +1474,25 @@ def test_linode_nodebalancer_config_rebuild_registered() -> None:
     assert entries["linode_nodebalancer_config_rebuild"].capability == Capability.Write
 
 
+def test_linode_nodebalancer_config_node_create_exported() -> None:
+    """NodeBalancer config node create tool is exported."""
+    import linodemcp.tools as tools_mod
+
+    assert "create_linode_nodebalancer_config_node_create_tool" in tools_mod.__all__
+    assert "handle_linode_nodebalancer_config_node_create" in tools_mod.__all__
+
+
+def test_linode_nodebalancer_config_node_create_registered() -> None:
+    """NodeBalancer config node create tool is registered."""
+    from linodemcp.server import get_tool_registry
+
+    entries = {entry.name: entry for entry in get_tool_registry()}
+
+    assert "linode_nodebalancer_config_node_create" in entries
+    entry = entries["linode_nodebalancer_config_node_create"]
+    assert entry.capability == Capability.Write
+
+
 def test_linode_nodebalancer_config_node_update_exported() -> None:
     """NodeBalancer config node update tool is exported."""
     import linodemcp.tools as tools_mod
