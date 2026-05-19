@@ -3508,6 +3508,49 @@ async def test_get_nodebalancer() -> None:
     await client.close()
 
 
+async def test_get_nodebalancer_vpc_config() -> None:
+    """Test getting a NodeBalancer VPC configuration."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "id": 456,
+        "vpc_id": 789,
+        "subnet_id": 101,
+        "ipv4_range": "10.0.0.0/24",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        config = await client.get_nodebalancer_vpc_config(123, 456)
+
+        assert config["id"] == 456
+        assert config["vpc_id"] == 789
+        mock_request.assert_called_once_with("GET", "/nodebalancers/123/vpcs/456")
+
+    await client.close()
+
+
+async def test_get_nodebalancer_vpc_config_encodes_path_params() -> None:
+    """NodeBalancer VPC config path parameters are URL-encoded."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"id": 4}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.get_nodebalancer_vpc_config("1/2", "4?x")  # type: ignore[arg-type]
+
+        mock_request.assert_called_once_with("GET", "/nodebalancers/1%2F2/vpcs/4%3Fx")
+
+    await client.close()
+
+
 async def test_list_stackscripts() -> None:
     """Test listing stackscripts."""
     client = Client("https://api.linode.com/v4", "test-token")

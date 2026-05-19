@@ -111,17 +111,24 @@ def create_linode_nodebalancer_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def _positive_int_argument(arguments: dict[str, Any], name: str) -> int | None:
+    value = arguments.get(name)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        return None
+    return value
+
+
 async def handle_linode_nodebalancer_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_nodebalancer_get tool request."""
-    nodebalancer_id = arguments.get("nodebalancer_id", 0)
+    nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
 
-    if not nodebalancer_id:
-        return error_response("nodebalancer_id is required")
+    if nodebalancer_id is None:
+        return error_response("nodebalancer_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        nb = await client.get_nodebalancer(int(nodebalancer_id))
+        nb = await client.get_nodebalancer(nodebalancer_id)
         return {
             "id": nb.id,
             "label": nb.label,
@@ -141,3 +148,50 @@ async def handle_linode_nodebalancer_get(
         }
 
     return await execute_tool(cfg, arguments, "retrieve NodeBalancer", _call)
+
+
+def create_linode_nodebalancer_vpc_config_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_nodebalancer_vpc_config_get tool."""
+    return Tool(
+        name="linode_nodebalancer_vpc_config_get",
+        description="Gets a VPC configuration for a NodeBalancer.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "nodebalancer_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the NodeBalancer (required)",
+                },
+                "vpc_config_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": (
+                        "The ID of the NodeBalancer VPC configuration (required)"
+                    ),
+                },
+            },
+            "required": ["nodebalancer_id", "vpc_config_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_nodebalancer_vpc_config_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_nodebalancer_vpc_config_get tool request."""
+    nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
+    if nodebalancer_id is None:
+        return error_response("nodebalancer_id must be a positive integer")
+
+    vpc_config_id = _positive_int_argument(arguments, "vpc_config_id")
+    if vpc_config_id is None:
+        return error_response("vpc_config_id must be a positive integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_nodebalancer_vpc_config(nodebalancer_id, vpc_config_id)
+
+    return await execute_tool(
+        cfg, arguments, "retrieve NodeBalancer VPC configuration", _call
+    )

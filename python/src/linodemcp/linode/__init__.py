@@ -1848,13 +1848,30 @@ class Client:
 
     async def get_nodebalancer(self, nodebalancer_id: int) -> NodeBalancer:
         """Get a specific NodeBalancer."""
-        endpoint = f"/nodebalancers/{nodebalancer_id}"
+        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
+        endpoint = f"/nodebalancers/{encoded_nodebalancer_id}"
         try:
             response = await self.make_request("GET", endpoint)
             data = response.json()
             return self._parse_nodebalancer(data)
         except httpx.HTTPError as e:
             raise NetworkError("GetNodeBalancer", e) from e
+
+    async def get_nodebalancer_vpc_config(
+        self, nodebalancer_id: int, vpc_config_id: int
+    ) -> dict[str, Any]:
+        """Get a NodeBalancer VPC configuration."""
+        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
+        encoded_vpc_config_id = quote(str(vpc_config_id), safe="")
+        endpoint = (
+            f"/nodebalancers/{encoded_nodebalancer_id}/vpcs/{encoded_vpc_config_id}"
+        )
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetNodeBalancerVPCConfig", e) from e
 
     async def list_stackscripts(self) -> list[StackScript]:
         """List StackScripts."""
@@ -5888,6 +5905,17 @@ class RetryableClient:
         """Get a specific NodeBalancer with retry."""
         result: NodeBalancer = await self._execute_with_retry(
             self.client.get_nodebalancer, nodebalancer_id
+        )
+        return result
+
+    async def get_nodebalancer_vpc_config(
+        self, nodebalancer_id: int, vpc_config_id: int
+    ) -> dict[str, Any]:
+        """Get a NodeBalancer VPC configuration with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_nodebalancer_vpc_config,
+            nodebalancer_id,
+            vpc_config_id,
         )
         return result
 
