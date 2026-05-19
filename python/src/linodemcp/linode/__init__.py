@@ -2791,6 +2791,28 @@ class Client:
             logger.exception("HTTP error getting profile trusted device: %s", e)
             raise NetworkError("GetProfileDevice", e) from e
 
+    async def delete_profile_app(self, app_id: int) -> None:
+        """Revoke OAuth app access from the profile."""
+        encoded_app_id = quote(str(app_id), safe="")
+        endpoint = f"/profile/apps/{encoded_app_id}"
+        logger.info("Revoking profile app access", extra={"app_id": app_id})
+
+        try:
+            await self.make_request("DELETE", endpoint)
+            logger.info("Profile app access revoked", extra={"app_id": app_id})
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout revoking profile app access: %s", e)
+            raise NetworkError("DeleteProfileApp", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout revoking profile app access: %s", e)
+            raise NetworkError("DeleteProfileApp", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error revoking profile app access")
+            raise NetworkError("DeleteProfileApp", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error revoking profile app access: %s", e)
+            raise NetworkError("DeleteProfileApp", e) from e
+
     async def delete_profile_device(self, device_id: int) -> None:
         """Revoke a trusted profile device."""
         encoded_device_id = quote(str(device_id), safe="")
@@ -5994,6 +6016,10 @@ class RetryableClient:
             self.client.get_profile_device, device_id
         )
         return result
+
+    async def delete_profile_app(self, app_id: int) -> None:
+        """Revoke profile OAuth app access with retry."""
+        await self._execute_with_retry(self.client.delete_profile_app, app_id)
 
     async def delete_profile_device(self, device_id: int) -> None:
         """Revoke a profile trusted device with retry."""

@@ -83,6 +83,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
+    create_linode_profile_app_revoke_tool,
     create_linode_profile_device_get_tool,
     create_linode_profile_device_revoke_tool,
     create_linode_profile_devices_list_tool,
@@ -238,6 +239,7 @@ from linodemcp.tools import (
     handle_linode_object_storage_transfer,
     handle_linode_object_storage_types_list,
     handle_linode_profile,
+    handle_linode_profile_app_revoke,
     handle_linode_profile_device_get,
     handle_linode_profile_device_revoke,
     handle_linode_profile_devices_list,
@@ -10798,6 +10800,92 @@ async def test_handle_linode_profile_devices_list_error(
 
     assert len(result) == 1
     assert "Failed to" in result[0].text
+    assert "API error" in result[0].text
+
+
+def test_create_linode_profile_app_revoke_tool() -> None:
+    tool, capability = create_linode_profile_app_revoke_tool()
+
+    assert tool.name == "linode_profile_app_revoke"
+    assert capability is Capability.Destroy
+    assert tool.inputSchema["required"] == ["app_id", "confirm"]
+    assert tool.inputSchema["properties"]["app_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+
+
+def test_linode_profile_app_revoke_tool_is_exported_and_registered() -> None:
+    from linodemcp import tools as tools_mod
+    from linodemcp.server import get_tool_registry
+
+    assert "create_linode_profile_app_revoke_tool" in tools_mod.__all__
+    assert "handle_linode_profile_app_revoke" in tools_mod.__all__
+    registry = {entry.name: entry for entry in get_tool_registry()}
+    assert registry["linode_profile_app_revoke"].capability is Capability.Destroy
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_handle_linode_profile_app_revoke_requires_boolean_confirm(
+    confirm: object, sample_config: Config
+) -> None:
+    arguments: dict[str, object] = {"app_id": 123}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_profile_app_revoke(arguments, sample_config)
+
+    assert "Set confirm=true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "app_id", [None, 0, -1, True, "123", "/", "?", "..", "12/../34?x=1"]
+)
+async def test_handle_linode_profile_app_revoke_requires_positive_integer_app_id(
+    app_id: object, sample_config: Config
+) -> None:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_profile_app_revoke(
+            {"app_id": app_id, "confirm": True}, sample_config
+        )
+
+    assert "app_id must be a positive integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_profile_app_revoke_success(
+    sample_config: Config,
+) -> None:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_profile_app.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_app_revoke(
+            {"app_id": 123, "confirm": True}, sample_config
+        )
+
+    assert json.loads(result[0].text) == {
+        "message": "Profile app 123 revoked successfully"
+    }
+    mock_client.delete_profile_app.assert_awaited_once_with(123)
+
+
+async def test_handle_linode_profile_app_revoke_error(sample_config: Config) -> None:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_profile_app.side_effect = RuntimeError("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_app_revoke(
+            {"app_id": 123, "confirm": True}, sample_config
+        )
+
+    assert "Failed to revoke Linode profile OAuth app access" in result[0].text
     assert "API error" in result[0].text
 
 

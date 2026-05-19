@@ -784,6 +784,51 @@ async def handle_linode_profile_token_update(
     return await execute_tool(cfg, arguments, "update Linode profile token", _call)
 
 
+def create_linode_profile_app_revoke_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_app_revoke tool."""
+    return Tool(
+        name="linode_profile_app_revoke",
+        description="Revokes OAuth app access from the Linode profile by app ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "app_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "ID of the OAuth app authorization to revoke",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this destructive operation.",
+                },
+            },
+            "required": ["app_id", "confirm"],
+        },
+    ), Capability.Destroy
+
+
+async def handle_linode_profile_app_revoke(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_profile_app_revoke tool request."""
+    app_id = arguments.get("app_id")
+    if isinstance(app_id, bool) or not isinstance(app_id, int) or app_id < 1:
+        return error_response("app_id must be a positive integer")
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This revokes profile OAuth app access. Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, str]:
+        await client.delete_profile_app(app_id)
+        return {"message": f"Profile app {app_id} revoked successfully"}
+
+    return await execute_tool(
+        cfg, arguments, "revoke Linode profile OAuth app access", _call
+    )
+
+
 def create_linode_profile_device_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_profile_device_get tool."""
     return Tool(

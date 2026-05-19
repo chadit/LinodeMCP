@@ -4835,6 +4835,56 @@ async def test_update_profile_token_wraps_http_errors() -> None:
     await client.close()
 
 
+async def test_delete_profile_app_sends_delete_to_profile_app_route() -> None:
+    """Profile app revoke sends DELETE /profile/apps/{appId}."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        await client.delete_profile_app(12345)
+
+    mock_request.assert_awaited_once_with("DELETE", "/profile/apps/12345")
+    await client.close()
+
+
+async def test_delete_profile_app_encodes_path_parameter() -> None:
+    """Profile app path segment is URL-encoded at the client boundary."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        await client.delete_profile_app("12/../34?x=1")  # type: ignore[arg-type]
+
+    mock_request.assert_awaited_once_with(
+        "DELETE", "/profile/apps/12%2F..%2F34%3Fx%3D1"
+    )
+    await client.close()
+
+
+async def test_delete_profile_app_wraps_http_errors() -> None:
+    """Profile app revoke maps HTTP errors to DeleteProfileApp."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ReadTimeout("timeout")
+        with pytest.raises(NetworkError) as exc_info:
+            await client.delete_profile_app(12345)
+
+    assert exc_info.value.operation == "DeleteProfileApp"
+    await client.close()
+
+
+async def test_retryable_client_delete_profile_app_delegates() -> None:
+    """Retryable profile app revoke delegates to the client."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        client.client, "delete_profile_app", new_callable=AsyncMock
+    ) as mock_delete:
+        await client.delete_profile_app(12345)
+
+    mock_delete.assert_awaited_once_with(12345)
+    await client.close()
+
+
 async def test_delete_profile_token_sends_delete_to_profile_token_route() -> None:
     """Profile token revoke sends DELETE /profile/tokens/{tokenId}."""
     client = Client("https://api.linode.com/v4", "test-token")
