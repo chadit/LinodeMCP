@@ -265,3 +265,41 @@ async def handle_linode_nodebalancer_vpc_config_get(
     return await execute_tool(
         cfg, arguments, "retrieve NodeBalancer VPC configuration", _call
     )
+
+
+def create_linode_nodebalancer_stats_tool() -> tuple[Tool, Capability]:
+    """Create the linode_nodebalancer_stats tool."""
+    return Tool(
+        name="linode_nodebalancer_stats",
+        description=(
+            "Gets detailed statistics about a specific NodeBalancer by its ID, "
+            "including connections and traffic data."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "nodebalancer_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "NodeBalancer ID for stats (required)",
+                },
+            },
+            "required": ["nodebalancer_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_nodebalancer_stats(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_nodebalancer_stats tool request."""
+    nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
+
+    if nodebalancer_id is None:
+        return error_response("nodebalancer_id must be a positive integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_nodebalancer_stats(nodebalancer_id)
+
+    return await execute_tool(cfg, arguments, "retrieve NodeBalancer statistics", _call)
