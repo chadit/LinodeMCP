@@ -719,6 +719,7 @@ func volumeToolEntries(cfg *config.Config) []toolEntry {
 	return entriesFromFactories(cfg, []toolFactory{
 		tools.NewLinodeVolumesListTool,
 		tools.NewLinodeVolumeCreateTool,
+		tools.NewLinodeVolumeUpdateTool,
 		tools.NewLinodeVolumeAttachTool,
 		tools.NewLinodeVolumeDetachTool,
 		tools.NewLinodeVolumeResizeTool,

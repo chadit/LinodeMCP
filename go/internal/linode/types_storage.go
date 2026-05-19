@@ -41,6 +41,12 @@ type AttachVolumeRequest struct {
 	PersistAcrossBoots bool `json:"persist_across_boots,omitempty"`
 }
 
+// UpdateVolumeRequest represents the request body for updating a volume.
+type UpdateVolumeRequest struct {
+	Label *string  `json:"label,omitempty"`
+	Tags  []string `json:"tags,omitempty"`
+}
+
 // CreateSSHKeyRequest represents the request body for creating an SSH key.
 type CreateSSHKeyRequest struct {
 	Label  string `json:"label"`
