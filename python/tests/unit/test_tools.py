@@ -85,6 +85,7 @@ from linodemcp.tools import (
     create_linode_monitor_service_token_create_tool,
     create_linode_object_storage_quota_get_tool,
     create_linode_object_storage_quota_usage_tool,
+    create_linode_object_storage_quotas_list_tool,
     create_linode_placement_group_assign_tool,
     create_linode_placement_group_create_tool,
     create_linode_placement_group_delete_tool,
@@ -246,6 +247,7 @@ from linodemcp.tools import (
     handle_linode_object_storage_presigned_url,
     handle_linode_object_storage_quota_get,
     handle_linode_object_storage_quota_usage,
+    handle_linode_object_storage_quotas_list,
     handle_linode_object_storage_ssl_delete,
     handle_linode_object_storage_ssl_get,
     handle_linode_object_storage_ssl_upload,
@@ -5291,6 +5293,58 @@ async def test_handle_linode_object_storage_key_get_missing_id(
 
     assert len(result) == 1
     assert "key_id is required" in result[0].text
+
+
+def test_linode_object_storage_quotas_list_tool_schema() -> None:
+    """Quota list schema has no required route-specific arguments."""
+    tool, capability = create_linode_object_storage_quotas_list_tool()
+
+    assert capability is Capability.Read
+    assert tool.name == "linode_object_storage_quotas_list"
+    assert "required" not in tool.inputSchema
+
+
+async def test_handle_linode_object_storage_quotas_list(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_quotas_list tool."""
+    mock_quotas = [
+        {
+            "quota_id": "obj-buckets-us-sea-1.linodeobjects.com",
+            "quota_limit": 1000,
+        },
+    ]
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_object_storage_quotas.return_value = mock_quotas
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_object_storage_quotas_list({}, sample_config)
+
+        assert len(result) == 1
+        assert "obj-buckets-us-sea-1.linodeobjects.com" in result[0].text
+        assert '"count": 1' in result[0].text
+        mock_client.list_object_storage_quotas.assert_called_once_with()
+
+
+async def test_handle_linode_object_storage_quotas_list_error(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_quotas_list tool error handling."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_object_storage_quotas.side_effect = Exception("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_object_storage_quotas_list({}, sample_config)
+
+        assert len(result) == 1
+        assert "Failed to retrieve Object Storage quotas" in result[0].text
 
 
 def test_linode_object_storage_quota_get_tool_schema() -> None:

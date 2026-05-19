@@ -2894,6 +2894,74 @@ async def test_get_firewall() -> None:
     await client.close()
 
 
+async def test_list_object_storage_quotas_sends_exact_route() -> None:
+    """Object Storage quotas list uses the documented GET route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": [
+            {
+                "quota_id": "obj-buckets-us-sea-1.linodeobjects.com",
+                "quota_limit": 1000,
+            },
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        quotas = await client.list_object_storage_quotas()
+
+        assert quotas == mock_response.json.return_value["data"]
+        mock_request.assert_awaited_once_with("GET", "/object-storage/quotas")
+
+    await client.close()
+
+
+async def test_retryable_list_object_storage_quotas_delegates_to_client() -> None:
+    """Retryable client delegates quota list to the low-level client."""
+    base_client = AsyncMock()
+    base_client.list_object_storage_quotas.return_value = [{"quota_id": "obj-buckets"}]
+    retryable = RetryableClient.__new__(RetryableClient)
+    retryable.client = base_client
+
+    with patch.object(
+        RetryableClient, "_execute_with_retry", new_callable=AsyncMock
+    ) as execute_with_retry:
+        execute_with_retry.return_value = [{"quota_id": "obj-buckets"}]
+
+        result = await retryable.list_object_storage_quotas()
+
+        assert result == [{"quota_id": "obj-buckets"}]
+        execute_with_retry.assert_awaited_once_with(
+            base_client.list_object_storage_quotas
+        )
+
+
+async def test_list_object_storage_quotas_handles_empty_response_data() -> None:
+    """Object Storage quotas list tolerates missing response data."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        quotas = await client.list_object_storage_quotas()
+
+        assert quotas == []
+        mock_request.assert_awaited_once_with("GET", "/object-storage/quotas")
+
+    await client.close()
+
+
 async def test_get_object_storage_quota_sends_exact_route() -> None:
     """Object Storage quota get uses the documented GET route."""
     client = Client("https://api.linode.com/v4", "test-token")
