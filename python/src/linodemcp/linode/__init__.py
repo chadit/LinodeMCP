@@ -46,6 +46,9 @@ MIN_VOLUME_SIZE_GB = 10
 MAX_VOLUME_SIZE_GB = 10240
 MAX_LABEL_LENGTH = 64
 MAX_PROFILE_TOKEN_LABEL_LENGTH = 100
+PROFILE_SECURITY_QUESTION_COUNT = 3
+MIN_PROFILE_SECURITY_RESPONSE_LENGTH = 3
+MAX_PROFILE_SECURITY_RESPONSE_LENGTH = 17
 MIN_DISK_SIZE_MB = 1
 MAX_DISK_SIZE_MB = 524288
 
@@ -196,6 +199,54 @@ def build_profile_token_create_body(
             raise ValueError(msg)
         body["scopes"] = scopes
     return body
+
+
+def build_profile_security_questions_body(
+    security_questions: object,
+) -> dict[str, Any]:
+    """Validate profile security question answers and build request body."""
+    if not isinstance(security_questions, list):
+        msg = "security_questions must be a list"
+        raise TypeError(msg)
+    question_items = cast("list[object]", security_questions)
+    if len(question_items) != PROFILE_SECURITY_QUESTION_COUNT:
+        msg = "security_questions must contain exactly 3 answers"
+        raise ValueError(msg)
+    body_questions: list[dict[str, Any]] = []
+    question_ids: set[int] = set()
+    for item in question_items:
+        if not isinstance(item, dict):
+            msg = "security_questions entries must be objects"
+            raise TypeError(msg)
+        question = cast("dict[str, object]", item)
+
+        question_id = question.get("question_id")
+        if (
+            isinstance(question_id, bool)
+            or not isinstance(question_id, int)
+            or question_id < 1
+        ):
+            msg = "question_id must be a positive integer"
+            raise ValueError(msg)
+        if question_id in question_ids:
+            msg = "security_questions question_id values must be unique"
+            raise ValueError(msg)
+        question_ids.add(question_id)
+
+        response = question.get("response")
+        if not isinstance(response, str):
+            msg = "response must be a string"
+            raise TypeError(msg)
+        if (
+            len(response) < MIN_PROFILE_SECURITY_RESPONSE_LENGTH
+            or len(response) > MAX_PROFILE_SECURITY_RESPONSE_LENGTH
+        ):
+            msg = "response length must be between 3 and 17 characters"
+            raise ValueError(msg)
+
+        body_questions.append({"question_id": question_id, "response": response})
+
+    return {"security_questions": body_questions}
 
 
 # HTTP status code constants
@@ -2273,6 +2324,38 @@ class Client:
                 "HTTP error disabling profile two-factor authentication: %s", e
             )
             raise NetworkError("DisableProfileTFA", e) from e
+
+    async def answer_profile_security_questions(
+        self, security_questions: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Answer profile security questions."""
+        body = build_profile_security_questions_body(security_questions)
+        logger.info(
+            "Answering profile security questions",
+            extra={"security_question_count": len(security_questions)},
+        )
+
+        try:
+            response = await self.make_request(
+                "POST", "/profile/security-questions", body
+            )
+            result: dict[str, Any] = response.json()
+            logger.info("Profile security questions answered")
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception(
+                "Connection timeout answering profile security questions: %s", e
+            )
+            raise NetworkError("AnswerProfileSecurityQuestions", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout answering profile security questions: %s", e)
+            raise NetworkError("AnswerProfileSecurityQuestions", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error answering profile security questions")
+            raise NetworkError("AnswerProfileSecurityQuestions", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error answering profile security questions: %s", e)
+            raise NetworkError("AnswerProfileSecurityQuestions", e) from e
 
     async def create_profile_token(
         self,
@@ -5416,6 +5499,15 @@ class RetryableClient:
         """Disable profile two-factor authentication with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.disable_profile_tfa
+        )
+        return result
+
+    async def answer_profile_security_questions(
+        self, security_questions: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Answer profile security questions with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.answer_profile_security_questions, security_questions
         )
         return result
 

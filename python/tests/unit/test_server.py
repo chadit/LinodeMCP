@@ -853,6 +853,20 @@ async def test_linode_regions_availability_get_tool_is_exported_and_registered(
     assert "linode_regions_availability_get" in srv.registered_tool_names
 
 
+async def test_profile_security_questions_answer_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Profile security questions tool is exported and registered."""
+    import linodemcp.tools as tools_mod
+
+    assert "create_linode_profile_security_questions_answer_tool" in tools_mod.__all__
+    assert "handle_linode_profile_security_questions_answer" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert srv.active_profile.name == "full-access"
+    assert "linode_profile_security_questions_answer" in srv.registered_tool_names
+
+
 async def test_profile_tfa_enable_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

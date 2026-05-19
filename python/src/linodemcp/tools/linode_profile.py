@@ -5,7 +5,7 @@ from typing import Any
 from mcp.types import TextContent, Tool
 
 from linodemcp.config import Config
-from linodemcp.linode import RetryableClient
+from linodemcp.linode import RetryableClient, build_profile_security_questions_body
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
 
@@ -196,6 +196,73 @@ async def handle_linode_profile_tfa_enable_confirm(
 
     return await execute_tool(
         cfg, arguments, "confirm profile two-factor authentication", _call
+    )
+
+
+def create_linode_profile_security_questions_answer_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_security_questions_answer tool."""
+    return Tool(
+        name="linode_profile_security_questions_answer",
+        description="Answers profile security questions for the Linode account.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "security_questions": {
+                    "type": "array",
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "question_id": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "description": "ID of the security question",
+                            },
+                            "response": {
+                                "type": "string",
+                                "minLength": 3,
+                                "maxLength": 17,
+                                "description": "Answer for the security question",
+                            },
+                        },
+                        "required": ["question_id", "response"],
+                    },
+                    "description": "Security question answers to save",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to answer profile security questions.",
+                },
+            },
+            "required": ["security_questions", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_profile_security_questions_answer(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_profile_security_questions_answer tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This answers profile security questions. Set confirm=true to proceed."
+        )
+
+    security_questions = arguments.get("security_questions")
+    try:
+        body = build_profile_security_questions_body(security_questions)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
+    body_questions = body["security_questions"]
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.answer_profile_security_questions(body_questions)
+
+    return await execute_tool(
+        cfg, arguments, "answer profile security questions", _call
     )
 
 

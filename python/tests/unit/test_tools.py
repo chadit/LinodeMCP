@@ -80,6 +80,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
+    create_linode_profile_security_questions_answer_tool,
     create_linode_profile_tfa_disable_tool,
     create_linode_profile_tfa_enable_confirm_tool,
     create_linode_profile_tfa_enable_tool,
@@ -222,6 +223,7 @@ from linodemcp.tools import (
     handle_linode_object_storage_transfer,
     handle_linode_object_storage_types_list,
     handle_linode_profile,
+    handle_linode_profile_security_questions_answer,
     handle_linode_profile_tfa_disable,
     handle_linode_profile_tfa_enable,
     handle_linode_profile_tfa_enable_confirm,
@@ -9410,6 +9412,131 @@ async def test_handle_linode_profile_tfa_enable_confirm_error(
 
     assert len(result) == 1
     assert "Failed to" in result[0].text
+    assert "API error" in result[0].text
+
+
+def test_create_linode_profile_security_questions_answer_tool() -> None:
+    """Profile security questions tool exposes schema and write capability."""
+    tool, capability = create_linode_profile_security_questions_answer_tool()
+
+    assert tool.name == "linode_profile_security_questions_answer"
+    assert capability == Capability.Write
+    assert "security_questions" in tool.inputSchema["required"]
+    assert "confirm" in tool.inputSchema["required"]
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+
+
+async def test_handle_linode_profile_security_questions_answer_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Profile security questions rejects non-true confirm values first."""
+    for value in (None, False, "true", 1):
+        arguments: dict[str, Any] = {
+            "security_questions": [
+                {"question_id": 1, "response": "Gotham City"},
+                {"question_id": 2, "response": "Blue"},
+                {"question_id": 3, "response": "Pizza"},
+            ],
+        }
+        if value is not None:
+            arguments["confirm"] = value
+
+        with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+            result = await handle_linode_profile_security_questions_answer(
+                arguments, sample_config
+            )
+
+        assert "Set confirm=true" in result[0].text
+        mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_profile_security_questions_answer_validates_questions(
+    sample_config: Config,
+) -> None:
+    """Profile security questions validates input shape before client calls."""
+    invalid_values: tuple[Any, ...] = (
+        [],
+        "not-a-list",
+        [{"question_id": 0, "response": "Blue"}],
+        [{"question_id": True, "response": "Blue"}],
+        [{"question_id": 1, "response": "Blue"}],
+        [
+            {"question_id": 1, "response": "no"},
+            {"question_id": 2, "response": "Blue"},
+            {"question_id": 3, "response": "Pizza"},
+        ],
+    )
+
+    for security_questions in invalid_values:
+        with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+            result = await handle_linode_profile_security_questions_answer(
+                {"security_questions": security_questions, "confirm": True},
+                sample_config,
+            )
+
+        assert "Error" in result[0].text
+        mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_profile_security_questions_answer_success(
+    sample_config: Config,
+) -> None:
+    """Profile security questions handler calls the retryable client."""
+    questions = [
+        {"question_id": 1, "response": "Gotham City", "security_question": "ignored"},
+        {"question_id": 2, "response": "Blue"},
+        {"question_id": 3, "response": "Pizza"},
+    ]
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.answer_profile_security_questions.return_value = {
+            "security_questions": []
+        }
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_security_questions_answer(
+            {"security_questions": questions, "confirm": True}, sample_config
+        )
+
+    data = json.loads(result[0].text)
+    assert data == {"security_questions": []}
+    mock_client.answer_profile_security_questions.assert_awaited_once_with(
+        [
+            {"question_id": 1, "response": "Gotham City"},
+            {"question_id": 2, "response": "Blue"},
+            {"question_id": 3, "response": "Pizza"},
+        ]
+    )
+
+
+async def test_handle_linode_profile_security_questions_answer_error(
+    sample_config: Config,
+) -> None:
+    """Profile security questions handler propagates client errors."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.answer_profile_security_questions.side_effect = Exception(
+            "API error"
+        )
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_security_questions_answer(
+            {
+                "security_questions": [
+                    {"question_id": 1, "response": "Gotham City"},
+                    {"question_id": 2, "response": "Blue"},
+                    {"question_id": 3, "response": "Pizza"},
+                ],
+                "confirm": True,
+            },
+            sample_config,
+        )
+
     assert "API error" in result[0].text
 
 
