@@ -757,6 +757,51 @@ async def handle_linode_profile_token_update(
     return await execute_tool(cfg, arguments, "update Linode profile token", _call)
 
 
+def create_linode_profile_device_revoke_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_device_revoke tool."""
+    return Tool(
+        name="linode_profile_device_revoke",
+        description="Revokes a trusted device from the Linode profile by device ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "device_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "ID of the trusted device to revoke",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this destructive operation.",
+                },
+            },
+            "required": ["device_id", "confirm"],
+        },
+    ), Capability.Destroy
+
+
+async def handle_linode_profile_device_revoke(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_profile_device_revoke tool request."""
+    device_id = arguments.get("device_id")
+    if isinstance(device_id, bool) or not isinstance(device_id, int) or device_id < 1:
+        return error_response("device_id must be a positive integer")
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This revokes a trusted profile device. Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, str]:
+        await client.delete_profile_device(device_id)
+        return {"message": f"Profile trusted device {device_id} revoked successfully"}
+
+    return await execute_tool(
+        cfg, arguments, "revoke Linode profile trusted device", _call
+    )
+
+
 def create_linode_profile_token_revoke_tool() -> tuple[Tool, Capability]:
     """Create the linode_profile_token_revoke tool."""
     return Tool(

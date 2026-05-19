@@ -2700,6 +2700,32 @@ class Client:
             logger.exception("HTTP error getting profile login: %s", e)
             raise NetworkError("GetProfileLogin", e) from e
 
+    async def delete_profile_device(self, device_id: int) -> None:
+        """Revoke a trusted profile device."""
+        encoded_device_id = quote(str(device_id), safe="")
+        endpoint = f"/profile/devices/{encoded_device_id}"
+        logger.info("Revoking profile trusted device", extra={"device_id": device_id})
+
+        try:
+            await self.make_request("DELETE", endpoint)
+            logger.info(
+                "Profile trusted device revoked", extra={"device_id": device_id}
+            )
+        except httpx.ConnectTimeout as e:
+            logger.exception(
+                "Connection timeout revoking profile trusted device: %s", e
+            )
+            raise NetworkError("DeleteProfileDevice", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout revoking profile trusted device: %s", e)
+            raise NetworkError("DeleteProfileDevice", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error revoking profile trusted device")
+            raise NetworkError("DeleteProfileDevice", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error revoking profile trusted device: %s", e)
+            raise NetworkError("DeleteProfileDevice", e) from e
+
     async def delete_profile_token(self, token_id: int) -> None:
         """Revoke a personal access token."""
         encoded_token_id = quote(str(token_id), safe="")
@@ -5863,6 +5889,10 @@ class RetryableClient:
             self.client.get_profile_login, login_id
         )
         return result
+
+    async def delete_profile_device(self, device_id: int) -> None:
+        """Revoke a profile trusted device with retry."""
+        await self._execute_with_retry(self.client.delete_profile_device, device_id)
 
     async def delete_profile_token(self, token_id: int) -> None:
         """Revoke a profile token with retry."""

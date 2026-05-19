@@ -1139,3 +1139,19 @@ async def test_profile_token_revoke_tool_is_exported_and_registered(
     srv = Server(_full_access_config(sample_config))
     assert srv.active_profile.name == "full-access"
     assert "linode_profile_token_revoke" in srv.registered_tool_names
+
+
+async def test_profile_device_revoke_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    import linodemcp.tools as tools_mod
+
+    srv = Server(_full_access_config(sample_config))
+    registry_names = {entry.name for entry in get_tool_registry()}
+
+    assert srv.active_profile.name == "full-access"
+
+    assert "create_linode_profile_device_revoke_tool" in tools_mod.__all__
+    assert "handle_linode_profile_device_revoke" in tools_mod.__all__
+    assert "linode_profile_device_revoke" in registry_names
+    assert "linode_profile_device_revoke" in srv.registered_tool_names
