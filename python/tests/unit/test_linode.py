@@ -4835,6 +4835,59 @@ async def test_update_profile_token_wraps_http_errors() -> None:
     await client.close()
 
 
+async def test_list_profile_apps_sends_get_to_profile_apps_route() -> None:
+    """Profile apps list sends GET /profile/apps."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = httpx.Response(200, json={"data": [{"id": 123}], "page": 1, "pages": 1})
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        result = await client.list_profile_apps()
+
+    assert result == {"data": [{"id": 123}], "page": 1, "pages": 1}
+    mock_request.assert_awaited_once_with("GET", "/profile/apps")
+    await client.close()
+
+
+async def test_list_profile_apps_includes_pagination_query_params() -> None:
+    """Profile apps list includes page and page_size query params."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = httpx.Response(200, json={"data": [], "page": 2, "pages": 3})
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        await client.list_profile_apps(page=2, page_size=50)
+
+    mock_request.assert_awaited_once_with("GET", "/profile/apps?page=2&page_size=50")
+    await client.close()
+
+
+async def test_list_profile_apps_wraps_http_errors() -> None:
+    """Profile apps list maps HTTP errors to ListProfileApps."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ReadTimeout("timeout")
+        with pytest.raises(NetworkError, match="ListProfileApps"):
+            await client.list_profile_apps()
+    await client.close()
+
+
+async def test_retryable_client_list_profile_apps_delegates() -> None:
+    """RetryableClient delegates profile apps listing to Client."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        client.client, "list_profile_apps", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = {"data": [{"id": 123}]}
+        result = await client.list_profile_apps(page=2, page_size=50)
+
+    assert result == {"data": [{"id": 123}]}
+    mock_list.assert_awaited_once_with(page=2, page_size=50)
+    await client.close()
+
+
 async def test_get_profile_app_sends_get_to_profile_app_route() -> None:
     """Profile app get sends GET /profile/apps/{appId}."""
     client = Client("https://api.linode.com/v4", "test-token")
