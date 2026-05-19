@@ -4857,3 +4857,38 @@ async def test_delete_profile_token_encodes_path_parameter() -> None:
         "DELETE", "/profile/tokens/12%2F..%2F34%3Fx%3D1"
     )
     await client.close()
+
+
+async def test_delete_profile_device_uses_delete_method_and_encoded_path() -> None:
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        await client.delete_profile_device(123)
+
+    mock_request.assert_awaited_once_with("DELETE", "/profile/devices/123")
+    await client.close()
+
+
+async def test_delete_profile_device_encodes_path_parameter() -> None:
+    client = Client("https://api.linode.com/v4", "test-token")
+    unsafe_device_id: Any = "12/../34?x=1"
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        await client.delete_profile_device(unsafe_device_id)
+
+    mock_request.assert_awaited_once_with(
+        "DELETE", "/profile/devices/12%2F..%2F34%3Fx%3D1"
+    )
+    await client.close()
+
+
+async def test_retryable_client_delete_profile_device_delegates() -> None:
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        client.client, "delete_profile_device", new_callable=AsyncMock
+    ) as mock_delete:
+        await client.delete_profile_device(123)
+
+    mock_delete.assert_awaited_once_with(123)
+    await client.close()
