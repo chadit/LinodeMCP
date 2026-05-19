@@ -83,6 +83,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
+    create_linode_profile_app_get_tool,
     create_linode_profile_app_revoke_tool,
     create_linode_profile_device_get_tool,
     create_linode_profile_device_revoke_tool,
@@ -239,6 +240,7 @@ from linodemcp.tools import (
     handle_linode_object_storage_transfer,
     handle_linode_object_storage_types_list,
     handle_linode_profile,
+    handle_linode_profile_app_get,
     handle_linode_profile_app_revoke,
     handle_linode_profile_device_get,
     handle_linode_profile_device_revoke,
@@ -10800,6 +10802,69 @@ async def test_handle_linode_profile_devices_list_error(
 
     assert len(result) == 1
     assert "Failed to" in result[0].text
+    assert "API error" in result[0].text
+
+
+def test_create_linode_profile_app_get_tool() -> None:
+    tool, capability = create_linode_profile_app_get_tool()
+
+    assert tool.name == "linode_profile_app_get"
+    assert capability is Capability.Read
+    assert tool.inputSchema["required"] == ["app_id"]
+    assert tool.inputSchema["properties"]["app_id"]["minimum"] == 1
+
+
+def test_linode_profile_app_get_tool_is_exported_and_registered() -> None:
+    from linodemcp import tools as tools_mod
+    from linodemcp.server import get_tool_registry
+
+    assert "create_linode_profile_app_get_tool" in tools_mod.__all__
+    assert "handle_linode_profile_app_get" in tools_mod.__all__
+    registry = {entry.name: entry for entry in get_tool_registry()}
+    assert registry["linode_profile_app_get"].capability is Capability.Read
+
+
+@pytest.mark.parametrize(
+    "app_id", [None, 0, -1, True, "123", "/", "?", "..", "12/../34?x=1"]
+)
+async def test_handle_linode_profile_app_get_requires_positive_integer_app_id(
+    app_id: object, sample_config: Config
+) -> None:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_profile_app_get({"app_id": app_id}, sample_config)
+
+    assert "app_id must be a positive integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_profile_app_get_success(sample_config: Config) -> None:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_profile_app.return_value = {
+            "id": 123,
+            "label": "authorized-app",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_app_get({"app_id": 123}, sample_config)
+
+    assert json.loads(result[0].text) == {"id": 123, "label": "authorized-app"}
+    mock_client.get_profile_app.assert_awaited_once_with(123)
+
+
+async def test_handle_linode_profile_app_get_error(sample_config: Config) -> None:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_profile_app.side_effect = RuntimeError("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_app_get({"app_id": 123}, sample_config)
+
+    assert "Failed to retrieve Linode profile OAuth app authorization" in result[0].text
     assert "API error" in result[0].text
 
 
