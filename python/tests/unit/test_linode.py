@@ -4859,6 +4859,121 @@ async def test_delete_profile_token_encodes_path_parameter() -> None:
     await client.close()
 
 
+async def test_list_profile_devices_sends_get_to_profile_devices_route() -> None:
+    """Profile trusted device list sends GET /profile/devices."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {
+        "data": [
+            {"id": 123, "user_agent": "Mozilla/5.0"},
+            {"id": 456, "user_agent": "curl/8.0"},
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 2,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        result = await client.list_profile_devices()
+
+    assert result == [
+        {"id": 123, "user_agent": "Mozilla/5.0"},
+        {"id": 456, "user_agent": "curl/8.0"},
+    ]
+    mock_request.assert_awaited_once_with("GET", "/profile/devices")
+    await client.close()
+
+
+async def test_list_profile_devices_fetches_all_pages() -> None:
+    """Profile trusted device list fetches subsequent pages when present."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    first_response = MagicMock()
+    first_response.json.return_value = {
+        "data": [{"id": 123, "user_agent": "Mozilla/5.0"}],
+        "page": 1,
+        "pages": 2,
+        "results": 2,
+    }
+    second_response = MagicMock()
+    second_response.json.return_value = {
+        "data": [{"id": 456, "user_agent": "curl/8.0"}],
+        "page": 2,
+        "pages": 2,
+        "results": 2,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = [first_response, second_response]
+        result = await client.list_profile_devices()
+
+    assert result == [
+        {"id": 123, "user_agent": "Mozilla/5.0"},
+        {"id": 456, "user_agent": "curl/8.0"},
+    ]
+    assert [args.args for args in mock_request.await_args_list] == [
+        ("GET", "/profile/devices"),
+        ("GET", "/profile/devices?page=2"),
+    ]
+    await client.close()
+
+
+async def test_list_profile_devices_rejects_malformed_response() -> None:
+    """Profile trusted device list fails closed on malformed payloads."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    malformed_payloads: tuple[Any, ...] = (
+        None,
+        [],
+        {},
+        {"data": "not-a-list"},
+        {"data": ["not-an-object"]},
+        {"data": [], "pages": "not-an-int"},
+        {"data": [], "pages": True},
+        {"data": [], "pages": 0},
+    )
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        for payload in malformed_payloads:
+            response = MagicMock()
+            response.json.return_value = payload
+            mock_request.return_value = response
+            with pytest.raises(
+                (TypeError, ValueError), match="profile devices response"
+            ):
+                await client.list_profile_devices()
+
+    assert mock_request.await_count == len(malformed_payloads)
+    await client.close()
+
+
+async def test_retryable_client_list_profile_devices_delegates() -> None:
+    """Retryable profile trusted device list delegates to the client."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        client.client, "list_profile_devices", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = [{"id": 123}]
+        result = await client.list_profile_devices()
+
+    assert result == [{"id": 123}]
+    mock_list.assert_awaited_once_with()
+    await client.close()
+
+
+async def test_list_profile_devices_wraps_http_errors() -> None:
+    """Profile trusted device list maps HTTP errors to ListProfileDevices."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ReadTimeout("timeout")
+        with pytest.raises(NetworkError) as exc_info:
+            await client.list_profile_devices()
+
+    assert exc_info.value.operation == "ListProfileDevices"
+    await client.close()
+
+
 async def test_get_profile_device_uses_get_method_and_encoded_path() -> None:
     client = Client("https://api.linode.com/v4", "test-token")
     response = MagicMock()

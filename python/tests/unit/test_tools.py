@@ -85,6 +85,7 @@ from linodemcp.tools import (
     create_linode_monitor_service_token_create_tool,
     create_linode_profile_device_get_tool,
     create_linode_profile_device_revoke_tool,
+    create_linode_profile_devices_list_tool,
     create_linode_profile_login_get_tool,
     create_linode_profile_logins_list_tool,
     create_linode_profile_phone_number_delete_tool,
@@ -239,6 +240,7 @@ from linodemcp.tools import (
     handle_linode_profile,
     handle_linode_profile_device_get,
     handle_linode_profile_device_revoke,
+    handle_linode_profile_devices_list,
     handle_linode_profile_login_get,
     handle_linode_profile_logins_list,
     handle_linode_profile_phone_number_delete,
@@ -10740,6 +10742,59 @@ async def test_handle_linode_profile_token_update_error(
         result = await handle_linode_profile_token_update(
             {"token_id": 12345, "label": "new-label", "confirm": True}, sample_config
         )
+
+    assert len(result) == 1
+    assert "Failed to" in result[0].text
+    assert "API error" in result[0].text
+
+
+def test_create_linode_profile_devices_list_tool() -> None:
+    """Profile trusted device list tool exposes only environment arguments."""
+    tool, capability = create_linode_profile_devices_list_tool()
+
+    assert tool.name == "linode_profile_devices_list"
+    assert capability is Capability.Read
+    assert "required" not in tool.inputSchema
+    assert "environment" in tool.inputSchema["properties"]
+
+
+async def test_handle_linode_profile_devices_list_success(
+    sample_config: Config,
+) -> None:
+    """Profile trusted device list calls the retryable client."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.list_profile_devices.return_value = [
+            {"id": 123, "user_agent": "Mozilla/5.0"},
+            {"id": 456, "user_agent": "curl/8.0"},
+        ]
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_devices_list({}, sample_config)
+
+    assert json.loads(result[0].text) == {
+        "devices": [
+            {"id": 123, "user_agent": "Mozilla/5.0"},
+            {"id": 456, "user_agent": "curl/8.0"},
+        ]
+    }
+    mock_client.list_profile_devices.assert_awaited_once_with()
+
+
+async def test_handle_linode_profile_devices_list_error(
+    sample_config: Config,
+) -> None:
+    """Profile trusted device list surfaces client errors."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.list_profile_devices.side_effect = Exception("API error")
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_devices_list({}, sample_config)
 
     assert len(result) == 1
     assert "Failed to" in result[0].text
