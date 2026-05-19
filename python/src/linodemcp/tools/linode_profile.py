@@ -66,6 +66,33 @@ async def handle_linode_profile(
     return await execute_tool(cfg, arguments, "retrieve Linode profile", _call)
 
 
+def create_linode_profile_preferences_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_preferences_get tool."""
+    return Tool(
+        name="linode_profile_preferences_get",
+        description="Gets OAuth client-specific Linode profile preferences.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+            },
+        },
+    ), Capability.Read
+
+
+async def handle_linode_profile_preferences_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_profile_preferences_get tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_profile_preferences()
+
+    return await execute_tool(
+        cfg, arguments, "retrieve Linode profile preferences", _call
+    )
+
+
 def create_linode_profile_preferences_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_profile_preferences_update tool."""
     return Tool(
