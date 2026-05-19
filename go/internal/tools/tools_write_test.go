@@ -2064,3 +2064,150 @@ func assertErrorContains(t *testing.T, result *mcp.CallToolResult, expected stri
 	require.True(t, ok, "expected TextContent type")
 	assert.Contains(t, textContent.Text, expected, "error text should contain expected substring")
 }
+
+// End-to-end verification of the volume update workflow.
+func TestLinodeVolumeUpdateTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	tool, _, handler := tools.NewLinodeVolumeUpdateTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+		assert.Equal(t, "linode_volume_update", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, "volume_id", "schema should include volume_id property")
+		assert.Contains(t, props, "label", "schema should include label property")
+		assert.Contains(t, props, "tags", "schema should include tags property")
+		assert.Contains(t, props, "confirm", "schema should include confirm property")
+	})
+
+	t.Run(caseRequiresConfirm, func(t *testing.T) {
+		t.Parallel()
+		req := createRequestWithArgs(t, map[string]any{keyVolumeID: float64(333)})
+		result, err := handler(t.Context(), req)
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, errConfirmEqualsTrue)
+	})
+
+	t.Run("missing volume_id", func(t *testing.T) {
+		t.Parallel()
+		req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
+		result, err := handler(t.Context(), req)
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "volume_id is required")
+	})
+
+	t.Run("missing label and tags", func(t *testing.T) {
+		t.Parallel()
+		req := createRequestWithArgs(t, map[string]any{keyVolumeID: float64(333), keyConfirm: true})
+		result, err := handler(t.Context(), req)
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "at least one of label or tags is required")
+	})
+
+	t.Run("successful update with label", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/volumes/333", r.URL.Path, "request path should match volume endpoint")
+			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(linode.Volume{ID: 333, Label: "updated-volume", Size: 20, Region: "us-east", Status: "active"}))
+		}))
+		defer srv.Close()
+
+		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, successHandler := tools.NewLinodeVolumeUpdateTool(successCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyVolumeID: float64(333),
+			keyLabel:    "updated-volume",
+			keyConfirm:  true,
+		})
+		result, err := successHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.False(t, result.IsError, "result should not be an error")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent type")
+		assert.Contains(t, textContent.Text, "updated successfully", "response should confirm update")
+	})
+
+	t.Run("successful update with tags", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/volumes/444", r.URL.Path, "request path should match volume endpoint")
+			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(linode.Volume{ID: 444, Label: "tagged-volume", Size: 50, Region: "us-west", Status: "active", Tags: []string{"production", "db"}}))
+		}))
+		defer srv.Close()
+
+		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, successHandler := tools.NewLinodeVolumeUpdateTool(successCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyVolumeID: float64(444),
+			"tags":      "production, db",
+			keyConfirm:  true,
+		})
+		result, err := successHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.False(t, result.IsError, "result should not be an error")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent type")
+		assert.Contains(t, textContent.Text, "updated successfully", "response should confirm update")
+	})
+
+	t.Run("updater error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"errors": [{"reason": "internal server error"}]}`)) // errcheck: test mock; write failure is acceptable
+		}))
+		defer srv.Close()
+
+		errorCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, errorHandler := tools.NewLinodeVolumeUpdateTool(errorCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyVolumeID: float64(333),
+			keyLabel:    "new-label",
+			keyConfirm:  true,
+		})
+		result, err := errorHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.True(t, result.IsError, "result should be a tool error")
+		tc, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, tc.Text, "update failed", "response should mention failure")
+	})
+}

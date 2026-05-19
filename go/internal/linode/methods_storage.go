@@ -153,6 +153,28 @@ func (c *Client) httpDeleteVolume(ctx context.Context, volumeID int) error {
 	return c.handleResponse(resp, nil)
 }
 
+// UpdateVolume updates a volume's label or tags.
+func (c *Client) httpUpdateVolume(ctx context.Context, volumeID int, req *UpdateVolumeRequest) (*Volume, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointVolumes+"/%d", volumeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateVolume", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }() // errcheck: body close is best-effort; all volume methods use this pattern
+
+	var volume Volume
+	if err := c.handleResponse(resp, &volume); err != nil {
+		return nil, err
+	}
+
+	return &volume, nil
+}
+
 // ListSSHKeys retrieves all SSH keys from the authenticated user's profile.
 func (c *Client) httpListSSHKeys(ctx context.Context) ([]SSHKey, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

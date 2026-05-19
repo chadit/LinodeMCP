@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -314,6 +315,101 @@ func handleLinodeVolumeResizeRequest(ctx context.Context, request *mcp.CallToolR
 		Volume  *linode.Volume `json:"volume"`
 	}{
 		Message: fmt.Sprintf("Volume %d resize to %d GB initiated successfully", volumeID, size),
+		Volume:  volume,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+// NewLinodeVolumeUpdateTool creates a tool for updating a volume's label or tags.
+func NewLinodeVolumeUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_volume_update",
+		mcp.WithDescription("Updates a block storage volume's label or tags."),
+		mcp.WithString(
+			paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
+		),
+		mcp.WithNumber(
+			"volume_id",
+			mcp.Required(),
+			mcp.Description("The ID of the volume to update"),
+		),
+		mcp.WithString(
+			"label",
+			mcp.Description("New label for the volume (1-32 chars, alphanumeric, hyphens, underscores)"),
+		),
+		mcp.WithString(
+			"tags",
+			mcp.Description("Comma-separated list of tags to assign to the volume"),
+		),
+		mcp.WithBoolean(
+			paramConfirm,
+			mcp.Required(),
+			mcp.Description("Must be set to true to confirm the update."),
+		),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeVolumeUpdateRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleLinodeVolumeUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This updates a block storage volume. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	volumeID := request.GetInt("volume_id", 0)
+
+	if volumeID == 0 {
+		return mcp.NewToolResultError("volume_id is required"), nil
+	}
+
+	label := request.GetString("label", "")
+	tagsRaw := request.GetString("tags", "")
+
+	if label == "" && tagsRaw == "" {
+		return mcp.NewToolResultError("at least one of label or tags is required"), nil
+	}
+
+	req := linode.UpdateVolumeRequest{}
+
+	if label != "" {
+		req.Label = &label
+	}
+
+	if tagsRaw != "" {
+		var tags []string
+
+		for t := range strings.SplitSeq(tagsRaw, ",") {
+			if trimmed := strings.TrimSpace(t); trimmed != "" {
+				tags = append(tags, trimmed)
+			}
+		}
+
+		req.Tags = tags
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	volume, err := client.UpdateVolume(ctx, volumeID, &req)
+	if err != nil {
+		msg := fmt.Sprint("volume ", volumeID, " update failed: ", err)
+
+		return mcp.NewToolResultError(msg), nil
+	}
+
+	response := struct {
+		Message string         `json:"message"`
+		Volume  *linode.Volume `json:"volume"`
+	}{
+		Message: fmt.Sprintf("Volume %d updated successfully", volumeID),
 		Volume:  volume,
 	}
 

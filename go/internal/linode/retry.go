@@ -565,6 +565,21 @@ func (c *Client) DeleteVolume(ctx context.Context, volumeID int) error {
 	})
 }
 
+// UpdateVolume updates a volume's label or tags with automatic retry on transient failures.
+func (c *Client) UpdateVolume(ctx context.Context, volumeID int, req *UpdateVolumeRequest) (*Volume, error) {
+	var volume *Volume
+
+	err := c.executeWithRetry(ctx, "UpdateVolume", func() error {
+		var err error
+
+		volume, err = c.httpUpdateVolume(ctx, volumeID, req)
+
+		return err
+	})
+
+	return volume, err
+}
+
 // CreateNodeBalancer creates a new NodeBalancer with automatic retry on transient failures.
 func (c *Client) CreateNodeBalancer(ctx context.Context, req CreateNodeBalancerRequest) (*NodeBalancer, error) {
 	var nodeBalancer *NodeBalancer
