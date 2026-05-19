@@ -30,7 +30,7 @@ _GROUP_ID_PROP: dict[str, Any] = {
 }
 _LINODES_PROP: dict[str, Any] = {
     "type": "array",
-    "description": "Linode IDs to unassign from the placement group.",
+    "description": "Linode IDs to assign or unassign from the placement group.",
     "items": {"type": "integer", "minimum": 1},
     "minItems": 1,
 }
@@ -66,6 +66,49 @@ def _parse_linode_ids(
             )
         parsed.append(linode_id)
     return parsed, None
+
+
+def create_linode_placement_group_assign_tool() -> tuple[Tool, Capability]:
+    """Create the linode_placement_group_assign tool."""
+    return Tool(
+        name="linode_placement_group_assign",
+        description="Assigns Linodes to a placement group",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "group_id": _GROUP_ID_PROP,
+                "linodes": _LINODES_PROP,
+                "confirm": _CONFIRM_PROP,
+            },
+            "required": ["group_id", "linodes", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_placement_group_assign(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_placement_group_assign tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
+
+    group_id = _parse_positive_int(arguments.get("group_id"), "group_id")
+    if isinstance(group_id, list):
+        return group_id
+
+    linodes, linodes_error = _parse_linode_ids(arguments)
+    if linodes_error is not None:
+        return linodes_error
+    if linodes is None:
+        return error_response("linodes must be a non-empty array of positive integers")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.assign_placement_group(group_id, linodes)
+
+    return await execute_tool(
+        cfg, arguments, "assign Linodes to placement group", _call
+    )
 
 
 def create_linode_placement_group_unassign_tool() -> tuple[Tool, Capability]:

@@ -1797,6 +1797,72 @@ async def test_create_ipv6_range_posts_route_target_body() -> None:
     await client.close()
 
 
+async def test_assign_placement_group_posts_linode_body() -> None:
+    """Assigning a placement group should POST the Linode IDs."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {"linodes": [123, 456]}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        result = await client.assign_placement_group(789, [123, 456])
+
+        assert result == {"linodes": [123, 456]}
+        mock_request.assert_awaited_once_with(
+            "POST",
+            "/placement/groups/789/assign",
+            {"linodes": [123, 456]},
+        )
+
+    await client.close()
+
+
+async def test_assign_placement_group_encodes_group_path() -> None:
+    """Placement group ID interpolation should encode the path segment."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {}
+    group_id: Any = "12/../?x=1"
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        await client.assign_placement_group(group_id, [123])
+
+        mock_request.assert_awaited_once_with(
+            "POST",
+            "/placement/groups/12%2F..%2F%3Fx%3D1/assign",
+            {"linodes": [123]},
+        )
+
+    await client.close()
+
+
+async def test_retryable_assign_placement_group_delegates_to_client() -> None:
+    """Retryable client should delegate placement group assign."""
+    client = RetryableClient(
+        "https://api.linode.com/v4",
+        "test-token",
+        RetryConfig(max_retries=1, base_delay=0.01),
+    )
+    response_data = {"linodes": [123]}
+
+    with patch.object(
+        client.client,
+        "assign_placement_group",
+        new_callable=AsyncMock,
+    ) as mock_assign:
+        mock_assign.return_value = response_data
+
+        result = await client.assign_placement_group(789, [123])
+
+        assert result == response_data
+        mock_assign.assert_awaited_once_with(789, [123])
+
+    await client.close()
+
+
 async def test_unassign_placement_group_posts_linode_body() -> None:
     """Unassigning a placement group should POST the Linode IDs."""
     client = Client("https://api.linode.com/v4", "test-token")

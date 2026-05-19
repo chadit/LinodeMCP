@@ -4373,6 +4373,19 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("CreateIPv6Range", e) from e
 
+    async def assign_placement_group(
+        self, group_id: int, linodes: list[int]
+    ) -> dict[str, Any]:
+        """Assign Linodes to a placement group."""
+        encoded_group_id = quote(str(group_id), safe="")
+        endpoint = f"/placement/groups/{encoded_group_id}/assign"
+        try:
+            response = await self.make_request("POST", endpoint, {"linodes": linodes})
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("AssignPlacementGroup", e) from e
+
     async def unassign_placement_group(
         self, group_id: int, linodes: list[int]
     ) -> dict[str, Any]:
@@ -6790,6 +6803,15 @@ class RetryableClient:
             prefix_length,
             linode_id,
             route_target,
+        )
+        return result
+
+    async def assign_placement_group(
+        self, group_id: int, linodes: list[int]
+    ) -> dict[str, Any]:
+        """Assign Linodes to a placement group with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.assign_placement_group, group_id, linodes
         )
         return result
 
