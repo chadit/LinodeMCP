@@ -1950,6 +1950,16 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListObjectStorageClusters", e) from e
 
+    async def list_object_storage_endpoints(self) -> list[dict[str, Any]]:
+        """List Object Storage endpoints."""
+        try:
+            response = await self.make_request("GET", "/object-storage/endpoints")
+            data = response.json()
+            endpoints: list[dict[str, Any]] = data.get("data", [])
+            return endpoints
+        except httpx.HTTPError as e:
+            raise NetworkError("ListObjectStorageEndpoints", e) from e
+
     async def list_object_storage_types(self) -> list[dict[str, Any]]:
         """List Object Storage types/pricing."""
         try:
@@ -5913,6 +5923,13 @@ class RetryableClient:
         """List Object Storage types/pricing with retry."""
         result: list[dict[str, Any]] = await self._execute_with_retry(
             self.client.list_object_storage_types
+        )
+        return result
+
+    async def list_object_storage_endpoints(self) -> list[dict[str, Any]]:
+        """List Object Storage endpoints with retry."""
+        result: list[dict[str, Any]] = await self._execute_with_retry(
+            self.client.list_object_storage_endpoints
         )
         return result
 
