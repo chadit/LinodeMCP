@@ -3224,6 +3224,46 @@ async def test_retryable_get_object_storage_quota_usage_delegates_to_client() ->
         )
 
 
+async def test_cancel_object_storage_sends_exact_route() -> None:
+    """Test cancelling Object Storage sends the exact documented route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"message": "scheduled"}
+        mock_request.return_value = mock_response
+
+        result = await client.cancel_object_storage()
+
+        assert result == {"message": "scheduled"}
+        mock_request.assert_awaited_once_with("POST", "/object-storage/cancel")
+
+    await client.close()
+
+
+async def test_retryable_cancel_object_storage_delegates_without_retry() -> None:
+    """RetryableClient should not replay Object Storage cancellation."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(
+            client.client, "cancel_object_storage", new_callable=AsyncMock
+        ) as cancel_object_storage,
+        patch.object(
+            client, "_execute_with_retry", new_callable=AsyncMock
+        ) as execute_with_retry,
+    ):
+        cancel_object_storage.return_value = {"message": "scheduled"}
+
+        result = await client.cancel_object_storage()
+
+        assert result == {"message": "scheduled"}
+        cancel_object_storage.assert_awaited_once_with()
+        execute_with_retry.assert_not_called()
+
+    await client.close()
+
+
 async def test_allow_object_storage_bucket_access() -> None:
     """Test allowing Object Storage bucket access."""
     client = Client("https://api.linode.com/v4", "test-token")

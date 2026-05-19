@@ -2010,6 +2010,15 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetObjectStorageTransfer", e) from e
 
+    async def cancel_object_storage(self) -> dict[str, Any]:
+        """Cancel Object Storage service for the account."""
+        try:
+            response = await self.make_request("POST", "/object-storage/cancel")
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("CancelObjectStorage", e) from e
+
     async def list_object_storage_quotas(self) -> list[dict[str, Any]]:
         """List Object Storage quotas."""
         try:
@@ -5970,6 +5979,11 @@ class RetryableClient:
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_object_storage_transfer
         )
+        return result
+
+    async def cancel_object_storage(self) -> dict[str, Any]:
+        """Cancel Object Storage service for the account without retry replay."""
+        result: dict[str, Any] = await self.client.cancel_object_storage()
         return result
 
     async def list_object_storage_quotas(self) -> list[dict[str, Any]]:

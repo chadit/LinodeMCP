@@ -46,6 +46,52 @@ def _validate_bucket_acl(acl: str) -> str | None:
     return None
 
 
+def create_linode_object_storage_cancel_tool() -> tuple[Tool, Capability]:
+    """Create the linode_object_storage_cancel tool."""
+    return Tool(
+        name="linode_object_storage_cancel",
+        description=(
+            "Cancels Object Storage service for the account. "
+            "Requires confirm=true because this is a destructive "
+            "account-level operation."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to confirm Object Storage cancellation"
+                    ),
+                },
+            },
+            "required": ["confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_object_storage_cancel(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_object_storage_cancel tool request."""
+    if arguments.get("confirm") is not True:
+        return [TextContent(type="text", text="confirm=true is required")]
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.cancel_object_storage()
+        if result:
+            return result
+        return {"message": "Object Storage cancellation requested"}
+
+    return await execute_tool(cfg, arguments, "cancel Object Storage", _call)
+
+
 def create_linode_object_storage_bucket_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_bucket_create tool."""
     return Tool(
