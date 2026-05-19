@@ -303,3 +303,56 @@ async def handle_linode_nodebalancer_stats(
         return await client.get_nodebalancer_stats(nodebalancer_id)
 
     return await execute_tool(cfg, arguments, "retrieve NodeBalancer statistics", _call)
+
+
+def create_linode_nodebalancer_firewalls_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_nodebalancer_firewalls_list tool."""
+    return Tool(
+        name="linode_nodebalancer_firewalls_list",
+        description=("Lists firewalls assigned to a specific NodeBalancer by its ID."),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "nodebalancer_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the NodeBalancer (required)",
+                },
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
+            },
+            "required": ["nodebalancer_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_nodebalancer_firewalls_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_nodebalancer_firewalls_list tool request."""
+    nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
+    if nodebalancer_id is None:
+        return error_response("nodebalancer_id must be a positive integer")
+
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.list_nodebalancer_firewalls(
+            nodebalancer_id, page=page, page_size=page_size
+        )
+
+    return await execute_tool(cfg, arguments, "retrieve NodeBalancer firewalls", _call)

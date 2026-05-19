@@ -1933,6 +1933,29 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateNodeBalancerFirewalls", e) from e
 
+    async def list_nodebalancer_firewalls(
+        self,
+        nodebalancer_id: int,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
+        """List firewalls assigned to a NodeBalancer."""
+        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
+        endpoint = f"/nodebalancers/{encoded_nodebalancer_id}/firewalls"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListNodeBalancerFirewalls", e) from e
+
     async def list_stackscripts(self) -> list[StackScript]:
         """List StackScripts."""
         try:
@@ -6011,6 +6034,20 @@ class RetryableClient:
         return await self.client.update_nodebalancer_firewalls(
             nodebalancer_id, firewall_ids, page=page, page_size=page_size
         )
+
+    async def list_nodebalancer_firewalls(
+        self,
+        nodebalancer_id: int,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
+        """List firewalls assigned to a NodeBalancer with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_nodebalancer_firewalls(
+                nodebalancer_id, page=page, page_size=page_size
+            )
+        )
+        return result
 
     async def list_stackscripts(self) -> list[StackScript]:
         """List StackScripts with retry."""
