@@ -275,6 +275,22 @@ async def test_placement_group_unassign_tool_is_exported_and_registered(
     assert "linode_placement_group_unassign" in srv.registered_tool_names
 
 
+async def test_placement_group_update_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Placement group update tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_placement_group_update_tool" in tools_mod.__all__
+    assert "handle_linode_placement_group_update" in tools_mod.__all__
+
+    registry = {entry.name: entry for entry in get_tool_registry()}
+    assert registry["linode_placement_group_update"].capability is not None
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_placement_group_update" in srv.registered_tool_names
+
+
 async def test_profile_preferences_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
