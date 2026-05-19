@@ -33,7 +33,7 @@ class VersionInfo:
 
 
 FEATURE_TOOLS_LIST = (
-    "hello,version,linode_profile,linode_profile_tfa_enable_confirm,linode_account,linode_account_update,"
+    "hello,version,linode_profile,linode_profile_tfa_enable,linode_profile_tfa_enable_confirm,linode_account,linode_account_update,"
     "linode_instances_list,linode_instance_get,linode_regions_list,"
     "linode_regions_availability_list,linode_regions_availability_get,"
     "linode_types_list,linode_volumes_list,linode_volume_get,linode_volume_types_list,linode_image_create,linode_images_list,"

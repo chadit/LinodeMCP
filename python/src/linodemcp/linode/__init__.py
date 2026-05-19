@@ -2178,6 +2178,38 @@ class Client:
             logger.exception("HTTP error deleting SSH key: %s", e)
             raise NetworkError("DeleteSSHKey", e) from e
 
+    async def create_profile_tfa_secret(self) -> dict[str, Any]:
+        """Create a two-factor authentication secret."""
+        logger.info("Creating profile two-factor authentication secret")
+
+        try:
+            response = await self.make_request("POST", "/profile/tfa-enable")
+            result: dict[str, Any] = response.json()
+            logger.info("Profile two-factor authentication secret created")
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception(
+                "Connection timeout creating profile two-factor authentication "
+                "secret: %s",
+                e,
+            )
+            raise NetworkError("CreateProfileTFASecret", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception(
+                "Read timeout creating profile two-factor authentication secret: %s", e
+            )
+            raise NetworkError("CreateProfileTFASecret", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception(
+                "HTTP error creating profile two-factor authentication secret"
+            )
+            raise NetworkError("CreateProfileTFASecret", e) from e
+        except httpx.HTTPError as e:
+            logger.exception(
+                "HTTP error creating profile two-factor authentication secret: %s", e
+            )
+            raise NetworkError("CreateProfileTFASecret", e) from e
+
     async def confirm_profile_tfa_enable(
         self, tfa_code: str | None = None
     ) -> dict[str, Any]:
@@ -5335,6 +5367,13 @@ class RetryableClient:
     async def delete_ssh_key(self, ssh_key_id: int) -> None:
         """Delete SSH key with retry."""
         await self._execute_with_retry(self.client.delete_ssh_key, ssh_key_id)
+
+    async def create_profile_tfa_secret(self) -> dict[str, Any]:
+        """Create a profile two-factor authentication secret with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.create_profile_tfa_secret
+        )
+        return result
 
     async def confirm_profile_tfa_enable(
         self, tfa_code: str | None = None
