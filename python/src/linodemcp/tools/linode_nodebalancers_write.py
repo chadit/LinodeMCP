@@ -267,6 +267,69 @@ async def handle_linode_nodebalancer_config_rebuild(
     return await execute_tool(cfg, arguments, "rebuild NodeBalancer config", _call)
 
 
+def create_linode_nodebalancer_config_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_nodebalancer_config_delete tool."""
+    return Tool(
+        name="linode_nodebalancer_config_delete",
+        description=(
+            "Deletes a NodeBalancer config. "
+            "WARNING: This removes the config and its backend nodes."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "nodebalancer_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the NodeBalancer (required)",
+                },
+                "config_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": (
+                        "The ID of the NodeBalancer config to delete (required)"
+                    ),
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm deletion.",
+                },
+            },
+            "required": ["nodebalancer_id", "config_id", "confirm"],
+        },
+    ), Capability.Destroy
+
+
+async def handle_linode_nodebalancer_config_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_nodebalancer_config_delete tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response("confirm must be true")
+
+    nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
+    if nodebalancer_id is None:
+        return error_response("nodebalancer_id must be a positive integer")
+
+    config_id = _positive_int_argument(arguments, "config_id")
+    if config_id is None:
+        return error_response("config_id must be a positive integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_nodebalancer_config(nodebalancer_id, config_id)
+        return {
+            "message": (
+                f"NodeBalancer config {config_id} deleted from "
+                f"NodeBalancer {nodebalancer_id}"
+            ),
+            "nodebalancer_id": nodebalancer_id,
+            "config_id": config_id,
+        }
+
+    return await execute_tool(cfg, arguments, "delete NodeBalancer config", _call)
+
+
 def create_linode_nodebalancer_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_nodebalancer_create tool."""
     return Tool(

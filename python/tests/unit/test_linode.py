@@ -4154,6 +4154,81 @@ async def test_retryable_update_nodebalancer_config_node_does_not_replay() -> No
     await retryable.close()
 
 
+async def test_delete_nodebalancer_config() -> None:
+    """Test deleting a NodeBalancer config."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = MagicMock(status_code=200)
+
+        await client.delete_nodebalancer_config(8, 6)
+
+        mock_request.assert_called_once_with("DELETE", "/nodebalancers/8/configs/6")
+
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    ("nodebalancer_id", "config_id", "encoded_nodebalancer_id", "encoded_config_id"),
+    [
+        ("1/2", "6", "1%2F2", "6"),
+        ("8", "6?x", "8", "6%3Fx"),
+        ("8", "../6", "8", "..%2F6"),
+    ],
+)
+async def test_delete_nodebalancer_config_encodes_path_params(
+    nodebalancer_id: str,
+    config_id: str,
+    encoded_nodebalancer_id: str,
+    encoded_config_id: str,
+) -> None:
+    """NodeBalancer config delete path parameters are URL-encoded."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = MagicMock(status_code=200)
+
+        await client.delete_nodebalancer_config(
+            cast("Any", nodebalancer_id), cast("Any", config_id)
+        )
+
+        mock_request.assert_called_once_with(
+            "DELETE",
+            (f"/nodebalancers/{encoded_nodebalancer_id}/configs/{encoded_config_id}"),
+        )
+
+    await client.close()
+
+
+async def test_delete_nodebalancer_config_wraps_http_errors() -> None:
+    """Test deleting a NodeBalancer config wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.delete_nodebalancer_config(8, 6)
+
+    assert "DeleteNodeBalancerConfig" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_delete_nodebalancer_config_does_not_replay() -> None:
+    """RetryableClient delegates config delete once without retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "delete_nodebalancer_config", new_callable=AsyncMock
+    ) as mock_delete:
+        mock_delete.side_effect = httpx.HTTPError("transient")
+        with pytest.raises(httpx.HTTPError):
+            await retryable.delete_nodebalancer_config(8, 6)
+
+    mock_delete.assert_awaited_once_with(8, 6)
+    await retryable.close()
+
+
 async def test_delete_nodebalancer_config_node() -> None:
     """Test deleting a NodeBalancer config node."""
     client = Client("https://api.linode.com/v4", "test-token")
