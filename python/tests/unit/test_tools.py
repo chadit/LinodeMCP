@@ -83,6 +83,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
+    create_linode_object_storage_quota_usage_tool,
     create_linode_placement_group_assign_tool,
     create_linode_placement_group_create_tool,
     create_linode_placement_group_delete_tool,
@@ -242,6 +243,7 @@ from linodemcp.tools import (
     handle_linode_object_storage_object_acl_get,
     handle_linode_object_storage_object_acl_update,
     handle_linode_object_storage_presigned_url,
+    handle_linode_object_storage_quota_usage,
     handle_linode_object_storage_ssl_delete,
     handle_linode_object_storage_ssl_get,
     handle_linode_object_storage_ssl_upload,
@@ -5287,6 +5289,85 @@ async def test_handle_linode_object_storage_key_get_missing_id(
 
     assert len(result) == 1
     assert "key_id is required" in result[0].text
+
+
+def test_linode_object_storage_quota_usage_tool_schema() -> None:
+    """Quota usage schema requires the quota ID."""
+    tool, capability = create_linode_object_storage_quota_usage_tool()
+
+    assert capability is Capability.Read
+    assert tool.name == "linode_object_storage_quota_usage"
+    assert tool.inputSchema["required"] == ["obj_quota_id"]
+    assert tool.inputSchema["properties"]["obj_quota_id"]["type"] == "integer"
+
+
+async def test_handle_linode_object_storage_quota_usage(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_quota_usage tool."""
+    mock_usage = {"quota_id": 123, "usage": {"objects": 7}}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_object_storage_quota_usage.return_value = mock_usage
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_object_storage_quota_usage(
+            {"obj_quota_id": 123}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "quota_id" in result[0].text
+        assert "123" in result[0].text
+        mock_client.get_object_storage_quota_usage.assert_called_once_with(123)
+
+
+async def test_handle_linode_object_storage_quota_usage_requires_id(
+    sample_config: Config,
+) -> None:
+    """Quota usage requires obj_quota_id."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_object_storage_quota_usage({}, sample_config)
+
+    assert len(result) == 1
+    assert "obj_quota_id must be a positive integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize("bad_id", ["1/2", "1?x=1", "..", 0, -1, True, 1.9])
+async def test_handle_linode_object_storage_quota_usage_rejects_bad_id(
+    sample_config: Config, bad_id: Any
+) -> None:
+    """Quota usage rejects malformed path parameters before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_object_storage_quota_usage(
+            {"obj_quota_id": bad_id}, sample_config
+        )
+
+    assert len(result) == 1
+    assert "obj_quota_id must be a positive integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_object_storage_quota_usage_error(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_quota_usage tool error handling."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_object_storage_quota_usage.side_effect = Exception("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_object_storage_quota_usage(
+            {"obj_quota_id": 123}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "Failed to retrieve Object Storage quota usage" in result[0].text
 
 
 async def test_handle_linode_object_storage_transfer(

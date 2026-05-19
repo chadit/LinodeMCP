@@ -2894,6 +2894,72 @@ async def test_get_firewall() -> None:
     await client.close()
 
 
+async def test_get_object_storage_quota_usage_sends_exact_route() -> None:
+    """Object Storage quota usage uses the documented GET route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "quota_id": 123,
+        "s3_endpoint": "us-east-1.linodeobjects.com",
+        "usage": {
+            "objects": 7,
+            "size": 1048576,
+        },
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        usage = await client.get_object_storage_quota_usage(123)
+
+        assert usage == mock_response.json.return_value
+        mock_request.assert_awaited_once_with("GET", "/object-storage/quotas/123/usage")
+
+    await client.close()
+
+
+async def test_get_object_storage_quota_usage_encodes_path_param() -> None:
+    """Quota ID is encoded at the low-level client boundary."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"usage": {}}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.get_object_storage_quota_usage("quota/../?x=1")
+
+        mock_request.assert_awaited_once_with(
+            "GET", "/object-storage/quotas/quota%2F..%2F%3Fx%3D1/usage"
+        )
+
+    await client.close()
+
+
+async def test_retryable_get_object_storage_quota_usage_delegates_to_client() -> None:
+    """Retryable client delegates quota usage to the low-level client."""
+    base_client = AsyncMock()
+    base_client.get_object_storage_quota_usage.return_value = {"usage": {}}
+    retryable = RetryableClient.__new__(RetryableClient)
+    retryable.client = base_client
+
+    with patch.object(
+        RetryableClient, "_execute_with_retry", new_callable=AsyncMock
+    ) as execute_with_retry:
+        execute_with_retry.return_value = {"usage": {}}
+
+        result = await retryable.get_object_storage_quota_usage(123)
+
+        assert result == {"usage": {}}
+        execute_with_retry.assert_awaited_once_with(
+            base_client.get_object_storage_quota_usage, 123
+        )
+
+
 async def test_allow_object_storage_bucket_access() -> None:
     """Test allowing Object Storage bucket access."""
     client = Client("https://api.linode.com/v4", "test-token")
