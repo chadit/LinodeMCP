@@ -11,4 +11,9 @@ var (
 	// first, or pick a different name. We refuse silent overwrite so
 	// a stray reroll doesn't lose work.
 	ErrDraftExists = errors.New("draft already exists")
+	// ErrDraftNotFound is returned by the Phase 8.3 _show and
+	// (future) _save handlers when the named draft is not in the
+	// registry. Get itself returns a boolean, so this sentinel is
+	// only used at the tool-handler boundary.
+	ErrDraftNotFound = errors.New("draft not found")
 )

@@ -16,6 +16,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/internal/profiles/builder"
 	"github.com/chadit/LinodeMCP/internal/tools"
 	"github.com/chadit/LinodeMCP/pkg/contracts"
 )
@@ -64,6 +65,11 @@ type Server struct {
 	// tools slice. The map value is the index into tools for O(1) lookup
 	// when rebuilding the slice after a reload.
 	registered map[string]*toolWrapper
+
+	// draftRegistry holds Phase 8 profile-builder drafts. One per server
+	// process. Drafts live in memory only; the Phase 8.5 _draft_save tool
+	// is the bridge from this registry back into Config.Profiles.
+	draftRegistry *builder.Registry
 }
 
 // New creates a new LinodeMCP server. Returns an error if config is nil or if
@@ -82,10 +88,11 @@ func New(cfg *config.Config) (*Server, error) {
 	)
 
 	srv := &Server{
-		config:     cfg,
-		mcp:        mcpServer,
-		tools:      make([]contracts.Tool, 0),
-		registered: make(map[string]*toolWrapper),
+		config:        cfg,
+		mcp:           mcpServer,
+		tools:         make([]contracts.Tool, 0),
+		registered:    make(map[string]*toolWrapper),
+		draftRegistry: builder.NewRegistry(),
 	}
 
 	srv.allEntries = collectAllToolEntries(cfg)
@@ -111,10 +118,16 @@ func New(cfg *config.Config) (*Server, error) {
 func builderToolEntries(srv *Server) []toolEntry {
 	listTool, listCap, listHandler := tools.NewLinodeProfileListToolsTool(srv.ToolCatalog)
 	catTool, catCap, catHandler := tools.NewLinodeProfileListCategoriesTool(srv.ToolCatalog)
+	newTool, newCap, newHandler := tools.NewLinodeProfileDraftNewTool(srv.draftRegistry, srv.LookupProfile)
+	showTool, showCap, showHandler := tools.NewLinodeProfileDraftShowTool(srv.draftRegistry)
+	discardTool, discardCap, discardHandler := tools.NewLinodeProfileDraftDiscardTool(srv.draftRegistry)
 
 	return []toolEntry{
 		{tool: listTool, capability: listCap, handler: listHandler},
 		{tool: catTool, capability: catCap, handler: catHandler},
+		{tool: newTool, capability: newCap, handler: newHandler},
+		{tool: showTool, capability: showCap, handler: showHandler},
+		{tool: discardTool, capability: discardCap, handler: discardHandler},
 	}
 }
 
@@ -167,6 +180,36 @@ func (s *Server) ActiveProfile() profiles.Profile {
 	defer s.profileMu.RUnlock()
 
 	return s.activeProfile
+}
+
+// LookupProfile resolves a profile by name across both built-in and
+// user-defined entries. Used by Phase 8.3 _draft_new with the
+// optional clone_from parameter. Returns the materialized Profile and
+// true on hit; the zero Profile and false on miss. Ignores the
+// Disabled flag so users can clone from disabled built-ins like
+// full-access and emergency. User-defined entries shadow built-ins
+// by name, matching ResolveActiveProfile's precedence.
+func (s *Server) LookupProfile(name string) (profiles.Profile, bool) {
+	s.profileMu.RLock()
+	defer s.profileMu.RUnlock()
+
+	descriptors := make([]profiles.ToolDescriptor, len(s.allEntries))
+	for i := range s.allEntries {
+		descriptors[i] = profiles.ToolDescriptor{
+			Name:       s.allEntries[i].tool.Name,
+			Capability: s.allEntries[i].capability,
+		}
+	}
+
+	return profiles.LookupProfile(name, s.config, descriptors)
+}
+
+// DraftRegistry returns the server's in-memory profile-builder draft
+// registry. Phase 8.3+ builder tool handlers acquire it through this
+// accessor; tests inject a fresh registry by constructing their own
+// Server. The returned pointer is stable for the server's lifetime.
+func (s *Server) DraftRegistry() *builder.Registry {
+	return s.draftRegistry
 }
 
 // ToolCatalog returns the full set of tools the server could register,

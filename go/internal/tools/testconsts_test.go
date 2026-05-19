@@ -9,6 +9,7 @@ const (
 	// Environment config keys and labels.
 	envKeyDefault   = "default"
 	envLabelDefault = "Default"
+	envProd         = "prod"
 	apiURLLinodeV4  = "https://api.linode.com/v4"
 	tokenTest       = "test-token"
 

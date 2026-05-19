@@ -16,6 +16,7 @@ from linodemcp.profiles.errors import (
 )
 from linodemcp.profiles.loader import (
     DEFAULT_PROFILE_NAME,
+    lookup_profile,
     resolve_active_profile,
 )
 from linodemcp.profiles.profile import Profile
@@ -57,6 +58,7 @@ __all__ = [
     "builtin_profiles",
     "compare_scopes",
     "flatten_grants",
+    "lookup_profile",
     "parse_pat_scopes",
     "profile_is_elevated",
     "required_scopes",

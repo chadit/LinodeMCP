@@ -96,3 +96,13 @@ var (
 	ErrSubnetIDRequired = errors.New("subnet_id is required")
 	ErrSubnetIDInvalid  = errors.New("subnet_id must be a valid integer")
 )
+
+// Sentinel errors for Phase 8.3 profile-builder draft tools. Callers
+// match with errors.Is.
+var (
+	// ErrDraftNameMissing reports that the name argument was empty.
+	ErrDraftNameMissing = errors.New("name argument is required")
+	// ErrCloneSourceMissing reports that clone_from named a profile
+	// that doesn't exist in built-ins or user config.
+	ErrCloneSourceMissing = errors.New("clone_from profile not found")
+)

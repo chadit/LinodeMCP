@@ -38,7 +38,49 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PROFILE_NAME = "default"
 
-__all__ = ["DEFAULT_PROFILE_NAME", "resolve_active_profile"]
+__all__ = ["DEFAULT_PROFILE_NAME", "lookup_profile", "resolve_active_profile"]
+
+
+def lookup_profile(
+    name: str,
+    cfg: Config,
+    registry: Sequence[ToolDescriptor],
+) -> Profile | None:
+    """Resolve a profile by name across built-ins and user-defined entries.
+
+    Mirror of Go ``profiles.LookupProfile``. The Phase 8.3 ``_draft_new``
+    handler uses this to seed a new draft from the named ``clone_from``
+    profile. Unlike :func:`resolve_active_profile` this ignores the
+    Disabled flag: callers may clone from a disabled built-in like
+    ``full-access`` or ``emergency``. User-defined entries shadow
+    built-ins by name (same precedence as the active resolver).
+
+    Returns the materialized ``Profile`` on hit or ``None`` on miss.
+    Empty ``name`` returns ``None``; callers that need
+    empty-equals-default semantics fall back themselves.
+    """
+    if not name:
+        return None
+
+    if name in cfg.profiles:
+        return _resolve_user_profile(name, cfg.profiles[name], registry)
+
+    builtins = builtin_profiles(registry)
+    found = builtins.get(name)
+    if found is None:
+        return None
+
+    # Strip the disabled flag so a clone from a disabled built-in
+    # doesn't carry the flag into the new draft.
+    return Profile(
+        name=found.name,
+        description=found.description,
+        allowed_tools=found.allowed_tools,
+        allowed_environments=found.allowed_environments,
+        required_token_scopes=found.required_token_scopes,
+        allow_yolo=found.allow_yolo,
+        disabled=False,
+    )
 
 
 def _expand_patterns(

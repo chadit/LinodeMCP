@@ -21,14 +21,20 @@ from linodemcp.profiles import (
     ScopeValidationResult,
     TokenNotConfiguredError,
     ToolDescriptor,
+    lookup_profile,
     resolve_active_profile,
     validate_scopes,
 )
+from linodemcp.profiles.builder import Registry as DraftRegistry
 from linodemcp.tools import (
     handle_hello,
     handle_version,
 )
 from linodemcp.tools.linode_profile_builder import set_tool_catalog_provider
+from linodemcp.tools.linode_profile_draft import (
+    set_draft_registry,
+    set_profile_resolver,
+)
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -165,6 +171,16 @@ class Server:
         # immutable after construction; the closure captures the same
         # list every handler call reads.
         set_tool_catalog_provider(lambda: self._descriptors)
+        # Phase 8.3: wire the draft registry and clone-source resolver
+        # so the _draft_new/_show/_discard handlers see the same
+        # registry instance and can resolve clone_from against the
+        # live config + descriptor list. One Registry per server
+        # process; drafts do not persist across restarts.
+        self._draft_registry = DraftRegistry()
+        set_draft_registry(self._draft_registry)
+        set_profile_resolver(
+            lambda name: lookup_profile(name, config, self._descriptors)
+        )
         self._active_profile = resolve_active_profile(config, self._descriptors)
         self._allowed_tool_names = frozenset(self._active_profile.allowed_tools)
         # _allowed_entries and _config_handlers are declared+initialized

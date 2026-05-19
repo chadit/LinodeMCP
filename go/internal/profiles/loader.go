@@ -64,6 +64,41 @@ func ResolveActiveProfile(cfg *config.Config, registry []ToolDescriptor) (Profil
 	return Profile{}, fmt.Errorf("active profile %q: %w", name, ErrActiveProfileUnknown)
 }
 
+// LookupProfile resolves a profile by name across both built-ins and
+// user-defined entries, returning the materialized Profile and true on
+// hit, or the zero Profile and false on miss. Unlike ResolveActiveProfile
+// it ignores the Disabled flag: the Phase 8 builder uses this to clone
+// from any profile in the catalog, including disabled built-ins like
+// full-access and emergency. User-defined entries shadow built-ins by
+// name, matching the precedence ResolveActiveProfile uses.
+//
+// nil cfg or empty name both return (Profile{}, false); callers that
+// need empty-equals-default semantics should fall back themselves.
+func LookupProfile(name string, cfg *config.Config, registry []ToolDescriptor) (Profile, bool) {
+	if cfg == nil || name == "" {
+		return Profile{}, false
+	}
+
+	if userCfg, ok := cfg.Profiles[name]; ok {
+		userCopy := userCfg
+
+		return resolveUserDefined(name, &userCopy, registry), true
+	}
+
+	builtins := BuiltinProfiles(registry)
+	if builtin, ok := builtins[name]; ok {
+		// Strip Disabled so a cloned-from-disabled draft doesn't carry
+		// the flag into the new profile. The user can re-disable via
+		// config after the save.
+		resolved := builtin
+		resolved.Disabled = false
+
+		return resolved, true
+	}
+
+	return Profile{}, false
+}
+
 // resolveBuiltin applies override toggles (currently just Disabled) to a
 // resolved built-in profile. The returned Profile keeps the catalog's
 // AllowedTools verbatim; only the disable state is mutable from config.
