@@ -89,7 +89,7 @@ _TOOL_CATEGORIES: tuple[tuple[str, tuple[str, ...]], ...] = (
             "linode_stackscript_",
         ),
     ),
-    ("account", ("linode_account_", "linode_profile_token_")),
+    ("account", ("linode_account_", "linode_profile_token_", "linode_profile_tfa_")),
     ("block_storage", ("linode_volume_", "linode_volumes_")),
     ("object_storage", ("linode_object_storage_",)),
     # dns lists ``linode_domain_record_`` before ``linode_domain_`` for the
