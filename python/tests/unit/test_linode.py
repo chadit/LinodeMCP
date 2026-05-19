@@ -1797,6 +1797,60 @@ async def test_create_ipv6_range_posts_route_target_body() -> None:
     await client.close()
 
 
+async def test_list_placement_groups_sends_get_with_pagination() -> None:
+    """Placement groups list sends query pagination params."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data: dict[str, Any] = {
+        "data": [{"id": 123, "label": "pg-a"}],
+        "page": 2,
+        "pages": 3,
+        "results": 51,
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.list_placement_groups(page=2, page_size=25)
+
+    assert result == response_data
+    mock_request.assert_awaited_once_with(
+        "GET", "/placement/groups?page=2&page_size=25"
+    )
+    await client.close()
+
+
+async def test_list_placement_groups_wraps_http_errors() -> None:
+    """Placement groups list wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.list_placement_groups()
+
+    assert "ListPlacementGroups" in str(exc_info.value)
+    await client.close()
+
+
+async def test_retryable_list_placement_groups_delegates_to_client() -> None:
+    """Retryable client delegates placement groups list calls."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "list_placement_groups", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = {"data": []}
+        result = await retryable.list_placement_groups(page=1, page_size=100)
+
+    assert result == {"data": []}
+    mock_list.assert_awaited_once_with(page=1, page_size=100)
+    await retryable.close()
+
+
 async def test_create_placement_group_posts_required_body() -> None:
     """Creating a placement group should POST the documented body."""
     client = Client("https://api.linode.com/v4", "test-token")

@@ -4377,6 +4377,26 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("CreateIPv6Range", e) from e
 
+    async def list_placement_groups(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List placement groups."""
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        query_string = urlencode(params) if params else ""
+        endpoint = (
+            f"/placement/groups?{query_string}" if query_string else "/placement/groups"
+        )
+        try:
+            response = await self.make_request("GET", endpoint)
+            placement_groups: dict[str, Any] = response.json()
+            return placement_groups
+        except httpx.HTTPError as e:
+            raise NetworkError("ListPlacementGroups", e) from e
+
     async def create_placement_group(
         self,
         label: str,
@@ -6882,6 +6902,15 @@ class RetryableClient:
             prefix_length,
             linode_id,
             route_target,
+        )
+        return result
+
+    async def list_placement_groups(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List placement groups with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_placement_groups(page=page, page_size=page_size)
         )
         return result
 

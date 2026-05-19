@@ -89,6 +89,7 @@ from linodemcp.tools import (
     create_linode_placement_group_get_tool,
     create_linode_placement_group_unassign_tool,
     create_linode_placement_group_update_tool,
+    create_linode_placement_groups_list_tool,
     create_linode_profile_app_get_tool,
     create_linode_profile_app_revoke_tool,
     create_linode_profile_apps_list_tool,
@@ -252,6 +253,7 @@ from linodemcp.tools import (
     handle_linode_placement_group_get,
     handle_linode_placement_group_unassign,
     handle_linode_placement_group_update,
+    handle_linode_placement_groups_list,
     handle_linode_profile,
     handle_linode_profile_app_get,
     handle_linode_profile_app_revoke,
@@ -11182,6 +11184,96 @@ async def test_handle_linode_profile_device_revoke_error(sample_config: Config) 
         )
 
     assert "Failed to revoke Linode profile trusted device" in result[0].text
+    assert "API error" in result[0].text
+
+
+def test_create_linode_placement_groups_list_tool() -> None:
+    """Placement groups list tool schema supports optional pagination."""
+    tool, capability = create_linode_placement_groups_list_tool()
+
+    assert tool.name == "linode_placement_groups_list"
+    assert capability is Capability.Read
+    assert "page" not in tool.inputSchema.get("required", [])
+    assert "page_size" not in tool.inputSchema.get("required", [])
+    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
+    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+
+
+def test_linode_placement_groups_list_tool_is_exported_and_registered() -> None:
+    """Placement groups list tool is exported and registered."""
+    from linodemcp import tools as tools_mod
+    from linodemcp.server import get_tool_registry
+
+    assert "create_linode_placement_groups_list_tool" in tools_mod.__all__
+    assert "handle_linode_placement_groups_list" in tools_mod.__all__
+
+    registry = {entry.name: entry for entry in get_tool_registry()}
+    assert registry["linode_placement_groups_list"].capability is Capability.Read
+
+
+@pytest.mark.parametrize(
+    ("arguments", "error"),
+    [
+        ({"page": 0}, "page must be at least 1"),
+        ({"page": True}, "page must be an integer"),
+        ({"page": "2"}, "page must be an integer"),
+        ({"page_size": 24}, "page_size must be at least 25"),
+        ({"page_size": 501}, "page_size must be at most 500"),
+        ({"page_size": False}, "page_size must be an integer"),
+        ({"page_size": "25"}, "page_size must be an integer"),
+    ],
+)
+async def test_handle_linode_placement_groups_list_rejects_invalid_pagination(
+    arguments: dict[str, Any], error: str, sample_config: Config
+) -> None:
+    """Placement groups list validates pagination arguments."""
+    result = await handle_linode_placement_groups_list(arguments, sample_config)
+
+    assert len(result) == 1
+    assert error in result[0].text
+
+
+async def test_handle_linode_placement_groups_list_success(
+    sample_config: Config,
+) -> None:
+    """Placement groups list handler returns client response."""
+    response_data: dict[str, Any] = {
+        "data": [{"id": 123, "label": "pg-a"}],
+        "page": 2,
+        "pages": 3,
+        "results": 51,
+    }
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_placement_groups.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_placement_groups_list(
+            {"page": 2, "page_size": 25}, sample_config
+        )
+
+    assert len(result) == 1
+    assert json.loads(result[0].text) == response_data
+    mock_client.list_placement_groups.assert_awaited_once_with(page=2, page_size=25)
+
+
+async def test_handle_linode_placement_groups_list_reports_client_errors(
+    sample_config: Config,
+) -> None:
+    """Placement groups list handler reports client exceptions."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_placement_groups.side_effect = RuntimeError("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_placement_groups_list({}, sample_config)
+
+    assert len(result) == 1
     assert "API error" in result[0].text
 
 
