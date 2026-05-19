@@ -377,3 +377,83 @@ async def handle_linode_nodebalancer_delete(
         }
 
     return await execute_tool(cfg, arguments, "delete NodeBalancer", _call)
+
+
+def create_linode_nodebalancer_config_node_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_nodebalancer_config_node_delete tool."""
+    return Tool(
+        name="linode_nodebalancer_config_node_delete",
+        description=(
+            "Deletes a node from a NodeBalancer config. "
+            "WARNING: This removes the backend node from the load balancer."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "nodebalancer_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the NodeBalancer (required)",
+                },
+                "config_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the NodeBalancer config (required)",
+                },
+                "node_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the node to delete (required)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm deletion.",
+                },
+            },
+            "required": ["nodebalancer_id", "config_id", "node_id", "confirm"],
+        },
+    ), Capability.Destroy
+
+
+async def handle_linode_nodebalancer_config_node_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_nodebalancer_config_node_delete tool request."""
+    nodebalancer_id = arguments.get("nodebalancer_id", 0)
+    config_id = arguments.get("config_id", 0)
+    node_id = arguments.get("node_id", 0)
+    confirm = arguments.get("confirm", False)
+
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text="Error: This is destructive. Set confirm=true to proceed.",
+            )
+        ]
+
+    if not nodebalancer_id:
+        return error_response("nodebalancer_id is required")
+
+    if not config_id:
+        return error_response("config_id is required")
+
+    if not node_id:
+        return error_response("node_id is required")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_nodebalancer_config_node(
+            int(nodebalancer_id), int(config_id), int(node_id)
+        )
+        return {
+            "message": (
+                f"Node {node_id} deleted from NodeBalancer {nodebalancer_id} "
+                f"config {config_id}"
+            ),
+            "nodebalancer_id": nodebalancer_id,
+            "config_id": config_id,
+            "node_id": node_id,
+        }
+
+    return await execute_tool(cfg, arguments, "delete NodeBalancer config node", _call)
