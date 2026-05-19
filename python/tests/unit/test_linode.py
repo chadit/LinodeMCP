@@ -1,7 +1,7 @@
 """Unit tests for Linode client."""
 
 import asyncio
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -3690,6 +3690,96 @@ async def test_retryable_update_nodebalancer_firewalls_does_not_replay() -> None
             )
 
     mock_update.assert_awaited_once_with(8, [123], page=1, page_size=100)
+    await retryable.close()
+
+
+async def test_rebuild_nodebalancer_config() -> None:
+    """Test rebuilding a NodeBalancer config."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"rebuilt": True}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.rebuild_nodebalancer_config(8, 6)
+
+        assert result == {"rebuilt": True}
+        mock_request.assert_called_once_with(
+            "POST", "/nodebalancers/8/configs/6/rebuild", {}
+        )
+
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    ("nodebalancer_id", "config_id", "encoded_nodebalancer_id", "encoded_config_id"),
+    [
+        ("1/2", "4?x", "1%2F2", "4%3Fx"),
+        ("..", "..", "..", ".."),
+    ],
+)
+async def test_rebuild_nodebalancer_config_encodes_path_params(
+    nodebalancer_id: str,
+    config_id: str,
+    encoded_nodebalancer_id: str,
+    encoded_config_id: str,
+) -> None:
+    """NodeBalancer config rebuild path parameters are URL-encoded."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.rebuild_nodebalancer_config(
+            cast("Any", nodebalancer_id),
+            cast("Any", config_id),
+        )
+
+        mock_request.assert_called_once_with(
+            "POST",
+            (
+                f"/nodebalancers/{encoded_nodebalancer_id}/configs/"
+                f"{encoded_config_id}/rebuild"
+            ),
+            {},
+        )
+
+    await client.close()
+
+
+async def test_rebuild_nodebalancer_config_wraps_http_errors() -> None:
+    """Test rebuilding a NodeBalancer config wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.rebuild_nodebalancer_config(8, 6)
+
+    assert "RebuildNodeBalancerConfig" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_rebuild_nodebalancer_config_does_not_replay() -> None:
+    """RetryableClient delegates config rebuild once without retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "rebuild_nodebalancer_config", new_callable=AsyncMock
+    ) as mock_rebuild:
+        mock_rebuild.side_effect = httpx.HTTPError("transient")
+        with pytest.raises(httpx.HTTPError):
+            await retryable.rebuild_nodebalancer_config(8, 6)
+
+    mock_rebuild.assert_awaited_once_with(8, 6)
     await retryable.close()
 
 
