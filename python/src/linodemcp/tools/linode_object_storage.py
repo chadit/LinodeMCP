@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
@@ -12,6 +13,14 @@ from linodemcp.tools.helpers import execute_tool
 if TYPE_CHECKING:
     from linodemcp.config import Config
     from linodemcp.linode import RetryableClient
+
+
+_CLUSTER_ID_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$")
+
+
+def _valid_cluster_id(cluster_id: str) -> bool:
+    """Return whether a cluster ID is safe for the legacy cluster route."""
+    return bool(_CLUSTER_ID_RE.fullmatch(cluster_id))
 
 
 def create_linode_object_storage_buckets_list_tool() -> tuple[Tool, Capability]:
@@ -260,6 +269,52 @@ async def handle_linode_object_storage_clusters_list(
         }
 
     return await execute_tool(cfg, arguments, "retrieve Object Storage clusters", _call)
+
+
+def create_linode_object_storage_cluster_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_object_storage_cluster_get tool."""
+    return Tool(
+        name="linode_object_storage_cluster_get",
+        description="Gets details about a specific Object Storage cluster.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "cluster_id": {
+                    "type": "string",
+                    "pattern": r"^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$",
+                    "description": "The legacy Object Storage cluster ID (required)",
+                },
+            },
+            "required": ["cluster_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_object_storage_cluster_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_object_storage_cluster_get tool request."""
+    cluster_id = arguments.get("cluster_id", "")
+
+    if not cluster_id:
+        return _error_response("cluster_id is required")
+    if not isinstance(cluster_id, str):
+        return _error_response("cluster_id must be a string")
+    if not _valid_cluster_id(cluster_id):
+        return _error_response(
+            "cluster_id must contain only letters, numbers, and hyphens"
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_object_storage_cluster(cluster_id)
+
+    return await execute_tool(cfg, arguments, "retrieve Object Storage cluster", _call)
 
 
 def create_linode_object_storage_types_list_tool() -> tuple[Tool, Capability]:

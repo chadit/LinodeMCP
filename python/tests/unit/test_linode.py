@@ -1928,6 +1928,79 @@ async def test_create_placement_group_rejects_invalid_values(
     await client.close()
 
 
+async def test_get_object_storage_cluster_sends_get_to_cluster_route() -> None:
+    """Object Storage cluster get sends GET to the single-cluster route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    cluster = {
+        "id": "us-east-1",
+        "region": "us-east",
+        "domain": "us-east-1.linodeobjects.com",
+        "status": "available",
+    }
+
+    mock_response = MagicMock()
+    mock_response.json.return_value = cluster
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.get_object_storage_cluster("us-east-1")
+
+    assert result == cluster
+    mock_request.assert_called_once_with("GET", "/object-storage/clusters/us-east-1")
+    await client.close()
+
+
+async def test_get_object_storage_cluster_url_encodes_cluster_id() -> None:
+    """Object Storage cluster path parameter is URL-encoded."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"id": "escaped"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.get_object_storage_cluster("us/east?1..")
+
+    assert result == {"id": "escaped"}
+    mock_request.assert_called_once_with(
+        "GET", "/object-storage/clusters/us%2Feast%3F1.."
+    )
+    await client.close()
+
+
+async def test_get_object_storage_cluster_wraps_http_errors() -> None:
+    """Object Storage cluster get wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.get_object_storage_cluster("us-east-1")
+
+    assert "GetObjectStorageCluster" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_get_object_storage_cluster_delegates_to_client() -> None:
+    """Retryable Object Storage cluster get delegates to the base client."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+    cluster = {"id": "us-east-1"}
+
+    with patch.object(
+        client.client, "get_object_storage_cluster", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = cluster
+
+        result = await client.get_object_storage_cluster("us-east-1")
+
+    assert result == cluster
+    mock_get.assert_awaited_once_with("us-east-1")
+    await client.close()
+
+
 async def test_create_placement_group_wraps_http_errors() -> None:
     """Creating a placement group should wrap HTTP errors."""
     client = Client("https://api.linode.com/v4", "test-token")
