@@ -669,6 +669,33 @@ async def handle_linode_profile_logins_list(
     return await execute_tool(cfg, arguments, "list Linode profile logins", _call)
 
 
+def create_linode_profile_devices_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_devices_list tool."""
+    return Tool(
+        name="linode_profile_devices_list",
+        description="Lists trusted devices for the Linode profile.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+            },
+        },
+    ), Capability.Read
+
+
+async def handle_linode_profile_devices_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_profile_devices_list tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return {"devices": await client.list_profile_devices()}
+
+    return await execute_tool(
+        cfg, arguments, "list Linode profile trusted devices", _call
+    )
+
+
 def create_linode_profile_login_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_profile_login_get tool."""
     return Tool(
