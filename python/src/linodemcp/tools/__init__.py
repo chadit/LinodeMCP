@@ -230,10 +230,12 @@ from linodemcp.tools.linode_networking import (
 )
 from linodemcp.tools.linode_nodebalancers import (
     create_linode_nodebalancer_get_tool,
+    create_linode_nodebalancer_stats_tool,
     create_linode_nodebalancer_vpc_config_get_tool,
     create_linode_nodebalancer_vpc_configs_list_tool,
     create_linode_nodebalancers_list_tool,
     handle_linode_nodebalancer_get,
+    handle_linode_nodebalancer_stats,
     handle_linode_nodebalancer_vpc_config_get,
     handle_linode_nodebalancer_vpc_configs_list,
     handle_linode_nodebalancers_list,
@@ -577,6 +579,7 @@ __all__ = [
     "create_linode_nodebalancer_create_tool",
     "create_linode_nodebalancer_delete_tool",
     "create_linode_nodebalancer_get_tool",
+    "create_linode_nodebalancer_stats_tool",
     "create_linode_nodebalancer_update_tool",
     "create_linode_nodebalancer_vpc_config_get_tool",
     "create_linode_nodebalancer_vpc_configs_list_tool",
@@ -778,6 +781,7 @@ __all__ = [
     "handle_linode_nodebalancer_create",
     "handle_linode_nodebalancer_delete",
     "handle_linode_nodebalancer_get",
+    "handle_linode_nodebalancer_stats",
     "handle_linode_nodebalancer_update",
     "handle_linode_nodebalancer_vpc_config_get",
     "handle_linode_nodebalancer_vpc_configs_list",

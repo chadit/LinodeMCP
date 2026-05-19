@@ -1433,3 +1433,21 @@ def test_linode_nodebalancer_vpc_config_get_registered() -> None:
 
     assert "linode_nodebalancer_vpc_config_get" in entries
     assert entries["linode_nodebalancer_vpc_config_get"].capability == Capability.Read
+
+
+def test_linode_nodebalancer_stats_exported() -> None:
+    """NodeBalancer stats tool is exported."""
+    import linodemcp.tools as tools_mod
+
+    assert "create_linode_nodebalancer_stats_tool" in tools_mod.__all__
+    assert "handle_linode_nodebalancer_stats" in tools_mod.__all__
+
+
+def test_linode_nodebalancer_stats_registered() -> None:
+    """NodeBalancer stats tool is registered."""
+    from linodemcp.server import get_tool_registry
+
+    entries = {entry.name: entry for entry in get_tool_registry()}
+
+    assert "linode_nodebalancer_stats" in entries
+    assert entries["linode_nodebalancer_stats"].capability == Capability.Read

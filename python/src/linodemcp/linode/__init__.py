@@ -1857,6 +1857,17 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetNodeBalancer", e) from e
 
+    async def get_nodebalancer_stats(self, nodebalancer_id: int) -> dict[str, Any]:
+        """Get statistics for a specific NodeBalancer."""
+        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
+        endpoint = f"/nodebalancers/{encoded_nodebalancer_id}/stats"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetNodeBalancerStats", e) from e
+
     async def get_nodebalancer_vpc_config(
         self, nodebalancer_id: int, vpc_config_id: int
     ) -> dict[str, Any]:
@@ -5928,6 +5939,13 @@ class RetryableClient:
         """Get a specific NodeBalancer with retry."""
         result: NodeBalancer = await self._execute_with_retry(
             self.client.get_nodebalancer, nodebalancer_id
+        )
+        return result
+
+    async def get_nodebalancer_stats(self, nodebalancer_id: int) -> dict[str, Any]:
+        """Get NodeBalancer statistics with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_nodebalancer_stats, nodebalancer_id
         )
         return result
 

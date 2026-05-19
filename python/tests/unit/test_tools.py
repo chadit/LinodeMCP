@@ -83,6 +83,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
+    create_linode_nodebalancer_stats_tool,
     create_linode_nodebalancer_vpc_config_get_tool,
     create_linode_nodebalancer_vpc_configs_list_tool,
     create_linode_object_storage_cancel_tool,
@@ -231,6 +232,7 @@ from linodemcp.tools import (
     handle_linode_nodebalancer_create,
     handle_linode_nodebalancer_delete,
     handle_linode_nodebalancer_get,
+    handle_linode_nodebalancer_stats,
     handle_linode_nodebalancer_update,
     handle_linode_nodebalancer_vpc_config_get,
     handle_linode_nodebalancer_vpc_configs_list,
@@ -12605,3 +12607,69 @@ async def test_handle_linode_placement_group_unassign_reports_client_errors(
 
     assert "Failed to unassign Linodes from placement group" in result[0].text
     assert "API error" in result[0].text
+
+
+async def test_create_linode_nodebalancer_stats_tool_definition() -> None:
+    """Test linode_nodebalancer_stats tool definition."""
+    tool, capability = create_linode_nodebalancer_stats_tool()
+    assert tool.name == "linode_nodebalancer_stats"
+    assert capability == Capability.Read
+    assert tool.inputSchema["properties"]["nodebalancer_id"]["minimum"] == 1
+    assert tool.inputSchema["required"] == ["nodebalancer_id"]
+
+
+async def test_handle_linode_nodebalancer_stats(sample_config: Config) -> None:
+    """Test linode_nodebalancer_stats tool."""
+    mock_stats = {
+        "data": {
+            "connections": [[1526391300000, 0]],
+            "traffic": {
+                "in": [[1526391300000, 631.21]],
+                "out": [[1526391300000, 103.44]],
+            },
+        },
+        "title": "linode.com - balancer12345 (12345) - day (5 min avg)",
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_nodebalancer_stats.return_value = mock_stats
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_stats(
+            {"nodebalancer_id": 1}, sample_config
+        )
+
+        assert len(result) == 1
+        content = result[0].text
+        assert "connections" in content
+        assert "traffic" in content
+        mock_client.get_nodebalancer_stats.assert_called_once_with(1)
+
+
+async def test_handle_linode_nodebalancer_stats_missing_id(
+    sample_config: Config,
+) -> None:
+    """Test linode_nodebalancer_stats tool with missing ID."""
+    result = await handle_linode_nodebalancer_stats({}, sample_config)
+    assert len(result) == 1
+    assert "Error" in result[0].text or "required" in result[0].text.lower()
+
+
+async def test_handle_linode_nodebalancer_stats_error(sample_config: Config) -> None:
+    """Test linode_nodebalancer_stats tool error handling."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_nodebalancer_stats.side_effect = Exception("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_stats(
+            {"nodebalancer_id": 1}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "Failed" in result[0].text or "error" in result[0].text.lower()

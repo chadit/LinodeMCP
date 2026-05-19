@@ -3644,6 +3644,67 @@ async def test_get_nodebalancer_vpc_config_encodes_path_params() -> None:
     await client.close()
 
 
+async def test_get_nodebalancer_stats() -> None:
+    """Test getting NodeBalancer statistics."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": {
+            "connections": [[1526391300000, 0]],
+            "traffic": {
+                "in": [[1526391300000, 631.21]],
+                "out": [[1526391300000, 103.44]],
+            },
+        },
+        "title": "linode.com - balancer12345 (12345) - day (5 min avg)",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        stats = await client.get_nodebalancer_stats(1)
+
+        assert stats["data"]["connections"] == [[1526391300000, 0]]
+        mock_request.assert_called_once_with("GET", "/nodebalancers/1/stats")
+
+    await client.close()
+
+
+async def test_get_nodebalancer_stats_encodes_path_params() -> None:
+    """NodeBalancer stats path parameter is URL-encoded."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"data": {}}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.get_nodebalancer_stats("1/2")  # type: ignore[arg-type]
+
+        mock_request.assert_called_once_with("GET", "/nodebalancers/1%2F2/stats")
+
+    await client.close()
+
+
+async def test_get_nodebalancer_stats_wraps_http_errors() -> None:
+    """NodeBalancer stats HTTP errors are wrapped in NetworkError."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPStatusError(
+            "Not Found", request=MagicMock(), response=MagicMock(status_code=404)
+        )
+
+        with pytest.raises(NetworkError, match="GetNodeBalancerStats"):
+            await client.get_nodebalancer_stats(1)
+
+    await client.close()
+
+
 async def test_list_stackscripts() -> None:
     """Test listing stackscripts."""
     client = Client("https://api.linode.com/v4", "test-token")
