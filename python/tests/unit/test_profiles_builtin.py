@@ -85,6 +85,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_sshkey_create", Capability.Write),
         # Monitor (no built-in elevates it currently except full-access).
         ToolDescriptor("linode_monitor_service_token_create", Capability.Write),
+        ToolDescriptor("linode_profile_phone_number_delete", Capability.Write),
         ToolDescriptor("linode_profile_phone_number_verify", Capability.Write),
         ToolDescriptor("linode_profile_security_questions_answer", Capability.Write),
         ToolDescriptor("linode_profile_tfa_disable", Capability.Write),
@@ -228,6 +229,11 @@ def test_storage_admin_includes_backups_but_not_other_compute() -> None:
     assert "linode_object_storage_bucket_create" in storage_tools
     # No general compute write access.
     assert "linode_instance_create" not in storage_tools
+
+
+def test_profile_phone_number_delete_is_account_category() -> None:
+    """Phone-number deletion is an account-profile write tool."""
+    assert categories("linode_profile_phone_number_delete") == ["account"]
 
 
 def test_profile_phone_number_verify_is_account_category() -> None:

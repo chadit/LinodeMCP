@@ -2376,6 +2376,28 @@ class Client:
             logger.exception("HTTP error verifying profile phone number: %s", e)
             raise NetworkError("VerifyProfilePhoneNumber", e) from e
 
+    async def delete_profile_phone_number(self) -> dict[str, Any]:
+        """Delete the verified profile phone number."""
+        logger.info("Deleting profile phone number")
+
+        try:
+            response = await self.make_request("DELETE", "/profile/phone-number")
+            result: dict[str, Any] = response.json()
+            logger.info("Profile phone number deleted")
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout deleting profile phone number: %s", e)
+            raise NetworkError("DeleteProfilePhoneNumber", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout deleting profile phone number: %s", e)
+            raise NetworkError("DeleteProfilePhoneNumber", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error deleting profile phone number")
+            raise NetworkError("DeleteProfilePhoneNumber", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error deleting profile phone number: %s", e)
+            raise NetworkError("DeleteProfilePhoneNumber", e) from e
+
     async def list_profile_security_questions(self) -> dict[str, Any]:
         """List available profile security questions."""
         logger.info("Listing profile security questions")
@@ -5597,6 +5619,13 @@ class RetryableClient:
         """Verify a profile phone number with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.verify_profile_phone_number, otp_code
+        )
+        return result
+
+    async def delete_profile_phone_number(self) -> dict[str, Any]:
+        """Delete the profile phone number with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.delete_profile_phone_number
         )
         return result
 

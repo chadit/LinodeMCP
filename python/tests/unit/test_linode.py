@@ -3938,6 +3938,49 @@ async def test_verify_profile_phone_number_sends_post_with_otp_code() -> None:
     await client.close()
 
 
+async def test_delete_profile_phone_number_sends_delete_to_phone_number_route() -> None:
+    """Profile phone number delete sends DELETE with no body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        result = await client.delete_profile_phone_number()
+
+    assert result == {}
+    mock_request.assert_called_once_with("DELETE", "/profile/phone-number")
+    await client.close()
+
+
+async def test_retryable_delete_profile_phone_number_delegates_to_client() -> None:
+    """Retryable profile phone deletion forwards to the client."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        client.client, "delete_profile_phone_number", new_callable=AsyncMock
+    ) as mock_delete:
+        mock_delete.return_value = {}
+        result = await client.delete_profile_phone_number()
+
+    assert result == {}
+    mock_delete.assert_awaited_once_with()
+    await client.close()
+
+
+async def test_delete_profile_phone_number_wraps_http_errors() -> None:
+    """Profile phone number deletion maps HTTP errors to operation name."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ReadTimeout("timeout")
+        with pytest.raises(NetworkError) as exc_info:
+            await client.delete_profile_phone_number()
+
+    assert exc_info.value.operation == "DeleteProfilePhoneNumber"
+    await client.close()
+
+
 async def test_retryable_verify_profile_phone_number_delegates_to_client() -> None:
     """Retryable profile phone verification forwards the one-time code."""
     client = RetryableClient("https://api.linode.com/v4", "test-token")
