@@ -57,6 +57,56 @@ async def handle_linode_object_storage_buckets_list(
     return await execute_tool(cfg, arguments, "retrieve Object Storage buckets", _call)
 
 
+def create_linode_object_storage_buckets_region_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_object_storage_buckets_region_list tool."""
+    return Tool(
+        name="linode_object_storage_buckets_region_list",
+        description="Lists Object Storage buckets in a region.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "region_id": {
+                    "type": "string",
+                    "description": (
+                        "The region or legacy cluster ID to list buckets for"
+                    ),
+                },
+            },
+            "required": ["region_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_object_storage_buckets_region_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_object_storage_buckets_region_list tool request."""
+    region_id = arguments.get("region_id", "")
+
+    if not region_id:
+        return _error_response("region_id is required")
+    if not isinstance(region_id, str) or not _valid_cluster_id(region_id):
+        return _error_response("region_id must be a valid region or cluster ID")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        buckets = await client.list_object_storage_buckets_for_region(region_id)
+        return {
+            "count": len(buckets),
+            "region_id": region_id,
+            "buckets": buckets,
+        }
+
+    return await execute_tool(
+        cfg, arguments, "retrieve Object Storage buckets for region", _call
+    )
+
+
 def create_linode_object_storage_bucket_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_bucket_get tool."""
     return Tool(

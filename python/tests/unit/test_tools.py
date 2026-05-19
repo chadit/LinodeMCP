@@ -239,6 +239,7 @@ from linodemcp.tools import (
     handle_linode_object_storage_bucket_delete,
     handle_linode_object_storage_bucket_get,
     handle_linode_object_storage_buckets_list,
+    handle_linode_object_storage_buckets_region_list,
     handle_linode_object_storage_cancel,
     handle_linode_object_storage_cluster_get,
     handle_linode_object_storage_clusters_list,
@@ -4964,6 +4965,83 @@ async def test_handle_linode_object_storage_buckets_list_error(
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_object_storage_buckets_list({}, sample_config)
+
+        assert len(result) == 1
+        assert "Failed" in result[0].text
+
+
+async def test_handle_linode_object_storage_buckets_region_list(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_buckets_region_list tool."""
+    mock_buckets = [
+        {
+            "label": "app-data",
+            "region": "us-ord",
+            "hostname": "app-data.us-ord-1.linodeobjects.com",
+        },
+    ]
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_object_storage_buckets_for_region.return_value = mock_buckets
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_object_storage_buckets_region_list(
+            {"region_id": "us-ord"}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "app-data" in result[0].text
+        assert '"count": 1' in result[0].text
+        mock_client.list_object_storage_buckets_for_region.assert_called_once_with(
+            "us-ord"
+        )
+
+
+async def test_handle_linode_object_storage_buckets_region_list_missing_region_id(
+    sample_config: Config,
+) -> None:
+    """Test region-scoped bucket list with missing region_id."""
+    result = await handle_linode_object_storage_buckets_region_list({}, sample_config)
+
+    assert len(result) == 1
+    assert "region_id is required" in result[0].text
+
+
+async def test_handle_linode_object_storage_buckets_region_list_rejects_bad_region_id(
+    sample_config: Config,
+) -> None:
+    """Test region-scoped bucket list rejects malformed path values."""
+    for region_id in ("us/ord", "us?ord", ".."):
+        with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+            result = await handle_linode_object_storage_buckets_region_list(
+                {"region_id": region_id}, sample_config
+            )
+
+            assert len(result) == 1
+            assert "region_id must be a valid region or cluster ID" in result[0].text
+            mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_object_storage_buckets_region_list_error(
+    sample_config: Config,
+) -> None:
+    """Test region-scoped bucket list error handling."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_object_storage_buckets_for_region.side_effect = Exception(
+            "API error"
+        )
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_object_storage_buckets_region_list(
+            {"region_id": "us-ord"}, sample_config
+        )
 
         assert len(result) == 1
         assert "Failed" in result[0].text

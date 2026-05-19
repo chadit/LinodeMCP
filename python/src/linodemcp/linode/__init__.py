@@ -1906,6 +1906,21 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListObjectStorageBuckets", e) from e
 
+    async def list_object_storage_buckets_for_region(
+        self, region_id: str
+    ) -> list[dict[str, Any]]:
+        """List Object Storage buckets in a region."""
+        encoded_region_id = quote(str(region_id), safe="")
+        try:
+            response = await self.make_request(
+                "GET", f"/object-storage/buckets/{encoded_region_id}"
+            )
+            data = response.json()
+            buckets: list[dict[str, Any]] = data.get("data", [])
+            return buckets
+        except httpx.HTTPError as e:
+            raise NetworkError("ListObjectStorageBucketsForRegion", e) from e
+
     async def get_object_storage_bucket(
         self, region: str, label: str
     ) -> dict[str, Any]:
@@ -5911,6 +5926,15 @@ class RetryableClient:
         """List Object Storage buckets with retry."""
         result: list[dict[str, Any]] = await self._execute_with_retry(
             self.client.list_object_storage_buckets
+        )
+        return result
+
+    async def list_object_storage_buckets_for_region(
+        self, region_id: str
+    ) -> list[dict[str, Any]]:
+        """List Object Storage buckets in a region with retry."""
+        result: list[dict[str, Any]] = await self._execute_with_retry(
+            self.client.list_object_storage_buckets_for_region, region_id
         )
         return result
 

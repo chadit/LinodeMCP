@@ -50,7 +50,7 @@ FEATURE_TOOLS_LIST = (
     "linode_volume_detach,linode_volume_resize,linode_volume_update,linode_volume_delete,"
     "linode_nodebalancer_create,linode_nodebalancer_update,"
     "linode_nodebalancer_delete,"
-    "linode_object_storage_buckets_list,linode_object_storage_bucket_get,"
+    "linode_object_storage_buckets_list,linode_object_storage_buckets_region_list,linode_object_storage_bucket_get,"
     "linode_object_storage_bucket_contents,linode_object_storage_cluster_get,linode_object_storage_clusters_list,"
     "linode_object_storage_endpoints_list,"
     "linode_object_storage_type_list,linode_object_storage_keys_list,"

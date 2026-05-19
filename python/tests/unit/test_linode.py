@@ -3224,6 +3224,76 @@ async def test_retryable_get_object_storage_quota_usage_delegates_to_client() ->
         )
 
 
+async def test_list_object_storage_buckets_for_region_sends_exact_route() -> None:
+    """Region-scoped Object Storage bucket list sends the documented route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "data": [
+                {
+                    "label": "app-data",
+                    "region": "us-ord",
+                    "hostname": "app-data.us-ord-1.linodeobjects.com",
+                }
+            ]
+        }
+        mock_request.return_value = mock_response
+
+        result = await client.list_object_storage_buckets_for_region("us-ord")
+
+        assert result == [
+            {
+                "label": "app-data",
+                "region": "us-ord",
+                "hostname": "app-data.us-ord-1.linodeobjects.com",
+            }
+        ]
+        mock_request.assert_awaited_once_with("GET", "/object-storage/buckets/us-ord")
+
+    await client.close()
+
+
+async def test_list_object_storage_buckets_for_region_encodes_region_id() -> None:
+    """Region ID path parameter is encoded at the client boundary."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"data": []}
+        mock_request.return_value = mock_response
+
+        result = await client.list_object_storage_buckets_for_region("us/../?x=1")
+
+        assert result == []
+        mock_request.assert_awaited_once_with(
+            "GET", "/object-storage/buckets/us%2F..%2F%3Fx%3D1"
+        )
+
+    await client.close()
+
+
+async def test_retryable_list_object_storage_buckets_for_region_delegates() -> None:
+    """Retryable client delegates region-scoped bucket listing."""
+    base_client = AsyncMock()
+    base_client.list_object_storage_buckets_for_region.return_value = []
+    retryable = RetryableClient.__new__(RetryableClient)
+    retryable.client = base_client
+
+    with patch.object(
+        RetryableClient, "_execute_with_retry", new_callable=AsyncMock
+    ) as execute_with_retry:
+        execute_with_retry.return_value = []
+
+        result = await retryable.list_object_storage_buckets_for_region("us-ord")
+
+        assert result == []
+        execute_with_retry.assert_awaited_once_with(
+            base_client.list_object_storage_buckets_for_region, "us-ord"
+        )
+
+
 async def test_cancel_object_storage_sends_exact_route() -> None:
     """Test cancelling Object Storage sends the exact documented route."""
     client = Client("https://api.linode.com/v4", "test-token")
