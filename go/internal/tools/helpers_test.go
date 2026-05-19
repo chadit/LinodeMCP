@@ -121,14 +121,16 @@ func TestRequireConfirm(t *testing.T) {
 			wantNil: false,
 		},
 		{
-			name:    "string true coerced via ParseBool",
-			args:    map[string]any{keyConfirm: "true"},
-			wantNil: true,
+			name:      "string true rejected",
+			args:      map[string]any{keyConfirm: boolStringTrue},
+			wantNil:   false,
+			checkBody: errConfirmEqualsTrue,
 		},
 		{
-			name:    "integer one coerced via GetBool",
-			args:    map[string]any{keyConfirm: 1},
-			wantNil: true,
+			name:      "integer one rejected",
+			args:      map[string]any{keyConfirm: 1},
+			wantNil:   false,
+			checkBody: errConfirmEqualsTrue,
 		},
 		{
 			name:    "string yes not recognized by GetBool",

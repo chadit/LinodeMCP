@@ -89,6 +89,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		// Security (SSH keys)
 		{Name: "linode_sshkeys_list", Capability: profiles.CapRead},
 		{Name: "linode_sshkey_create", Capability: profiles.CapWrite},
+		{Name: "linode_sshkey_update", Capability: profiles.CapWrite},
 		{Name: "linode_sshkey_delete", Capability: profiles.CapDestroy},
 
 		// A tool with CapAdmin (not yet used by any built-in)

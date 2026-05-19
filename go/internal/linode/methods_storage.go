@@ -216,6 +216,29 @@ func (c *Client) httpCreateSSHKey(ctx context.Context, req CreateSSHKeyRequest) 
 	return &sshKey, nil
 }
 
+// UpdateSSHKey updates an SSH key in the user's profile.
+func (c *Client) httpUpdateSSHKey(ctx context.Context, sshKeyID int, req UpdateSSHKeyRequest) (*SSHKey, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointSSHKeys+"/%d", sshKeyID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateSSHKey", Err: err}
+	}
+
+	// The response body is fully consumed by handleResponse; close errors do not change the API result.
+	defer func() { _ = resp.Body.Close() }()
+
+	var sshKey SSHKey
+	if err := c.handleResponse(resp, &sshKey); err != nil {
+		return nil, err
+	}
+
+	return &sshKey, nil
+}
+
 // DeleteSSHKey deletes an SSH key from the user's profile.
 func (c *Client) httpDeleteSSHKey(ctx context.Context, sshKeyID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

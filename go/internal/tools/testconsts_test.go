@@ -40,6 +40,7 @@ const (
 	keyIsTruncated    = "is_truncated"
 	keyNextMarker     = "next_marker"
 	keyKeyID          = "key_id"
+	keySSHKeyID       = "sshkey_id"
 
 	// Tool-specific resource ID keys.
 	keyLinodeID       = "linode_id"
@@ -112,6 +113,7 @@ const (
 	ip192168_1_2       = "192.168.1.2"
 	ip203_0_113_1      = "203.0.113.1"
 	notANumber         = "not-a-number"
+	boolStringTrue     = "true"
 	aclPublicRead      = "public-read"
 	objectPhotoJPG     = "photo.jpg"
 	filesystemExt4     = "ext4"
@@ -139,6 +141,7 @@ const (
 
 	// Validation error message values.
 	errLabelRequired      = "label is required"
+	errSSHKeyIDPositive   = "sshkey_id must be a positive integer"
 	errRegionRequired     = "region is required"
 	errTypeRequired       = "type is required"
 	errFirewallIDRequired = "firewall_id is required"

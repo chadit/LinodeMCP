@@ -338,6 +338,21 @@ func (c *Client) CreateSSHKey(ctx context.Context, req CreateSSHKeyRequest) (*SS
 	return sshKey, err
 }
 
+// UpdateSSHKey updates an SSH key with automatic retry on transient failures.
+func (c *Client) UpdateSSHKey(ctx context.Context, sshKeyID int, req UpdateSSHKeyRequest) (*SSHKey, error) {
+	var sshKey *SSHKey
+
+	err := c.executeWithRetry(ctx, "UpdateSSHKey", func() error {
+		var err error
+
+		sshKey, err = c.httpUpdateSSHKey(ctx, sshKeyID, req)
+
+		return err
+	})
+
+	return sshKey, err
+}
+
 // DeleteSSHKey deletes an SSH key with automatic retry on transient failures.
 func (c *Client) DeleteSSHKey(ctx context.Context, sshKeyID int) error {
 	return c.executeWithRetry(ctx, "DeleteSSHKey", func() error {

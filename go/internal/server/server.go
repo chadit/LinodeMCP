@@ -677,6 +677,7 @@ func computeToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeSSHKeysListTool,
 		tools.NewLinodeStackScriptsListTool,
 		tools.NewLinodeSSHKeyCreateTool,
+		tools.NewLinodeSSHKeyUpdateTool,
 		tools.NewLinodeSSHKeyDeleteTool,
 		tools.NewLinodeInstanceBootTool,
 		tools.NewLinodeInstanceRebootTool,
