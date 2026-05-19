@@ -94,6 +94,7 @@ _TOOL_CATEGORIES: tuple[tuple[str, tuple[str, ...]], ...] = (
         (
             "linode_account_",
             "linode_profile_preferences_",
+            "linode_profile_phone_number_",
             "linode_profile_security_",
             "linode_profile_token_",
             "linode_profile_tfa_",

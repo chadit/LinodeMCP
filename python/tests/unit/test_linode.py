@@ -3921,6 +3921,51 @@ async def test_confirm_profile_tfa_enable_wraps_http_errors() -> None:
     await client.close()
 
 
+async def test_verify_profile_phone_number_sends_post_with_otp_code() -> None:
+    """Profile phone number verification sends POST with documented body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        result = await client.verify_profile_phone_number("123456")
+
+    assert result == {}
+    mock_request.assert_called_once_with(
+        "POST", "/profile/phone-number/verify", {"otp_code": "123456"}
+    )
+    await client.close()
+
+
+async def test_retryable_verify_profile_phone_number_delegates_to_client() -> None:
+    """Retryable profile phone verification forwards the one-time code."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        client.client, "verify_profile_phone_number", new_callable=AsyncMock
+    ) as mock_verify:
+        mock_verify.return_value = {}
+        result = await client.verify_profile_phone_number("123456")
+
+    assert result == {}
+    mock_verify.assert_awaited_once_with("123456")
+    await client.close()
+
+
+async def test_verify_profile_phone_number_wraps_http_errors() -> None:
+    """Profile phone number verification maps HTTP errors to operation name."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ReadTimeout("timeout")
+        with pytest.raises(NetworkError) as exc_info:
+            await client.verify_profile_phone_number("123456")
+
+    assert exc_info.value.operation == "VerifyProfilePhoneNumber"
+    await client.close()
+
+
 async def test_disable_profile_tfa_sends_post_to_disable_route() -> None:
     """Profile TFA disable sends POST with no body."""
     client = Client("https://api.linode.com/v4", "test-token")
