@@ -1399,6 +1399,24 @@ async def test_profile_device_revoke_tool_is_exported_and_registered(
     assert "linode_profile_device_revoke" in srv.registered_tool_names
 
 
+def test_linode_nodebalancer_vpc_configs_list_exported() -> None:
+    """NodeBalancer VPC configs list tool is exported."""
+    import linodemcp.tools as tools_mod
+
+    assert "create_linode_nodebalancer_vpc_configs_list_tool" in tools_mod.__all__
+    assert "handle_linode_nodebalancer_vpc_configs_list" in tools_mod.__all__
+
+
+def test_linode_nodebalancer_vpc_configs_list_registered() -> None:
+    """NodeBalancer VPC configs list tool is registered."""
+    from linodemcp.server import get_tool_registry
+
+    entries = {entry.name: entry for entry in get_tool_registry()}
+
+    assert "linode_nodebalancer_vpc_configs_list" in entries
+    assert entries["linode_nodebalancer_vpc_configs_list"].capability == Capability.Read
+
+
 def test_linode_nodebalancer_vpc_config_get_exported() -> None:
     """NodeBalancer VPC config get tool is exported."""
     import linodemcp.tools as tools_mod
