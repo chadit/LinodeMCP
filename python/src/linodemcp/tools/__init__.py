@@ -243,9 +243,11 @@ from linodemcp.tools.linode_nodebalancers import (
 from linodemcp.tools.linode_nodebalancers_write import (
     create_linode_nodebalancer_create_tool,
     create_linode_nodebalancer_delete_tool,
+    create_linode_nodebalancer_firewalls_update_tool,
     create_linode_nodebalancer_update_tool,
     handle_linode_nodebalancer_create,
     handle_linode_nodebalancer_delete,
+    handle_linode_nodebalancer_firewalls_update,
     handle_linode_nodebalancer_update,
 )
 from linodemcp.tools.linode_object_storage import (
@@ -578,6 +580,7 @@ __all__ = [
     "create_linode_monitor_service_token_create_tool",
     "create_linode_nodebalancer_create_tool",
     "create_linode_nodebalancer_delete_tool",
+    "create_linode_nodebalancer_firewalls_update_tool",
     "create_linode_nodebalancer_get_tool",
     "create_linode_nodebalancer_stats_tool",
     "create_linode_nodebalancer_update_tool",
@@ -780,6 +783,7 @@ __all__ = [
     "handle_linode_monitor_service_token_create",
     "handle_linode_nodebalancer_create",
     "handle_linode_nodebalancer_delete",
+    "handle_linode_nodebalancer_firewalls_update",
     "handle_linode_nodebalancer_get",
     "handle_linode_nodebalancer_stats",
     "handle_linode_nodebalancer_update",

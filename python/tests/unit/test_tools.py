@@ -83,6 +83,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
+    create_linode_nodebalancer_firewalls_update_tool,
     create_linode_nodebalancer_stats_tool,
     create_linode_nodebalancer_vpc_config_get_tool,
     create_linode_nodebalancer_vpc_configs_list_tool,
@@ -231,6 +232,7 @@ from linodemcp.tools import (
     handle_linode_monitor_service_token_create,
     handle_linode_nodebalancer_create,
     handle_linode_nodebalancer_delete,
+    handle_linode_nodebalancer_firewalls_update,
     handle_linode_nodebalancer_get,
     handle_linode_nodebalancer_stats,
     handle_linode_nodebalancer_update,
@@ -5022,6 +5024,184 @@ async def test_handle_linode_volume_delete(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "deleted" in result[0].text.lower()
+
+
+async def test_linode_nodebalancer_firewalls_update_tool_definition() -> None:
+    """Test linode_nodebalancer_firewalls_update tool definition."""
+    tool, capability = create_linode_nodebalancer_firewalls_update_tool()
+
+    assert tool.name == "linode_nodebalancer_firewalls_update"
+    assert capability == Capability.Write
+    assert tool.inputSchema["properties"]["nodebalancer_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["firewall_ids"]["type"] == "array"
+    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
+    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["required"] == [
+        "nodebalancer_id",
+        "firewall_ids",
+        "confirm",
+    ]
+
+
+async def test_handle_linode_nodebalancer_firewalls_update(
+    sample_config: Config,
+) -> None:
+    """Test linode_nodebalancer_firewalls_update tool."""
+    mock_firewalls = {
+        "data": [{"id": 123, "label": "web-fw"}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_nodebalancer_firewalls.return_value = mock_firewalls
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_firewalls_update(
+            {
+                "nodebalancer_id": 8,
+                "firewall_ids": [123],
+                "page": 1,
+                "page_size": 25,
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        data = json.loads(result[0].text)
+        assert data["data"][0]["id"] == 123
+        mock_client.update_nodebalancer_firewalls.assert_called_once_with(
+            8, [123], page=1, page_size=25
+        )
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({"nodebalancer_id": 8, "firewall_ids": [123]}, "confirm must be true"),
+        (
+            {"nodebalancer_id": 8, "firewall_ids": [123], "confirm": False},
+            "confirm must be true",
+        ),
+        (
+            {"nodebalancer_id": 8, "firewall_ids": [123], "confirm": "true"},
+            "confirm must be true",
+        ),
+        (
+            {"nodebalancer_id": 8, "firewall_ids": [123], "confirm": 1},
+            "confirm must be true",
+        ),
+        (
+            {"firewall_ids": [123], "confirm": True},
+            "nodebalancer_id must be a positive integer",
+        ),
+        (
+            {"nodebalancer_id": 0, "firewall_ids": [123], "confirm": True},
+            "nodebalancer_id",
+        ),
+        (
+            {"nodebalancer_id": "8", "firewall_ids": [123], "confirm": True},
+            "nodebalancer_id",
+        ),
+        (
+            {"nodebalancer_id": True, "firewall_ids": [123], "confirm": True},
+            "nodebalancer_id",
+        ),
+        (
+            {"nodebalancer_id": "1/2", "firewall_ids": [123], "confirm": True},
+            "nodebalancer_id",
+        ),
+        (
+            {"nodebalancer_id": "1?x", "firewall_ids": [123], "confirm": True},
+            "nodebalancer_id",
+        ),
+        (
+            {"nodebalancer_id": "..", "firewall_ids": [123], "confirm": True},
+            "nodebalancer_id",
+        ),
+        (
+            {"nodebalancer_id": 8, "confirm": True},
+            "firewall_ids must be a list of positive integers",
+        ),
+        (
+            {"nodebalancer_id": 8, "firewall_ids": [0], "confirm": True},
+            "firewall_ids must be a list of positive integers",
+        ),
+        (
+            {"nodebalancer_id": 8, "firewall_ids": ["123"], "confirm": True},
+            "firewall_ids must be a list of positive integers",
+        ),
+        (
+            {"nodebalancer_id": 8, "firewall_ids": [True], "confirm": True},
+            "firewall_ids must be a list of positive integers",
+        ),
+        (
+            {"nodebalancer_id": 8, "firewall_ids": [], "page": 0, "confirm": True},
+            "page must be at least 1",
+        ),
+        (
+            {"nodebalancer_id": 8, "firewall_ids": [], "page": "1", "confirm": True},
+            "page must be an integer",
+        ),
+        (
+            {
+                "nodebalancer_id": 8,
+                "firewall_ids": [],
+                "page_size": 24,
+                "confirm": True,
+            },
+            "page_size must be at least 25",
+        ),
+        (
+            {
+                "nodebalancer_id": 8,
+                "firewall_ids": [],
+                "page_size": 501,
+                "confirm": True,
+            },
+            "page_size must be at most 500",
+        ),
+    ],
+)
+async def test_handle_linode_nodebalancer_firewalls_update_invalid_arguments(
+    sample_config: Config, arguments: dict[str, Any], message: str
+) -> None:
+    """NodeBalancer firewall update rejects invalid arguments before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_nodebalancer_firewalls_update(
+            arguments, sample_config
+        )
+
+    assert len(result) == 1
+    assert message in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_nodebalancer_firewalls_update_error(
+    sample_config: Config,
+) -> None:
+    """Test linode_nodebalancer_firewalls_update error handling."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_nodebalancer_firewalls.side_effect = Exception("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_firewalls_update(
+            {"nodebalancer_id": 8, "firewall_ids": [], "confirm": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "Failed" in result[0].text or "error" in result[0].text.lower()
 
 
 async def test_handle_linode_nodebalancer_create_no_confirm(

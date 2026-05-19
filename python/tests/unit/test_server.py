@@ -1435,6 +1435,26 @@ def test_linode_nodebalancer_vpc_config_get_registered() -> None:
     assert entries["linode_nodebalancer_vpc_config_get"].capability == Capability.Read
 
 
+def test_linode_nodebalancer_firewalls_update_exported() -> None:
+    """NodeBalancer firewall update tool is exported."""
+    import linodemcp.tools as tools_mod
+
+    assert "create_linode_nodebalancer_firewalls_update_tool" in tools_mod.__all__
+    assert "handle_linode_nodebalancer_firewalls_update" in tools_mod.__all__
+
+
+def test_linode_nodebalancer_firewalls_update_registered() -> None:
+    """NodeBalancer firewall update tool is registered."""
+    from linodemcp.server import get_tool_registry
+
+    entries = {entry.name: entry for entry in get_tool_registry()}
+
+    assert "linode_nodebalancer_firewalls_update" in entries
+    assert (
+        entries["linode_nodebalancer_firewalls_update"].capability == Capability.Write
+    )
+
+
 def test_linode_nodebalancer_stats_exported() -> None:
     """NodeBalancer stats tool is exported."""
     import linodemcp.tools as tools_mod
