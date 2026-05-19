@@ -3781,6 +3781,49 @@ async def test_confirm_profile_tfa_enable_wraps_http_errors() -> None:
     await client.close()
 
 
+async def test_disable_profile_tfa_sends_post_to_disable_route() -> None:
+    """Profile TFA disable sends POST with no body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        result = await client.disable_profile_tfa()
+
+    assert result == {}
+    mock_request.assert_called_once_with("POST", "/profile/tfa-disable")
+    await client.close()
+
+
+async def test_retryable_disable_profile_tfa_delegates_to_client() -> None:
+    """Retryable profile TFA disable delegates to the client."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        client.client, "disable_profile_tfa", new_callable=AsyncMock
+    ) as mock_disable:
+        mock_disable.return_value = {}
+        result = await client.disable_profile_tfa()
+
+    assert result == {}
+    mock_disable.assert_awaited_once_with()
+    await client.close()
+
+
+async def test_disable_profile_tfa_wraps_http_errors() -> None:
+    """Profile TFA disable maps HTTP errors to DisableProfileTFA."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ReadTimeout("timeout")
+        with pytest.raises(NetworkError) as exc_info:
+            await client.disable_profile_tfa()
+
+    assert exc_info.value.operation == "DisableProfileTFA"
+    await client.close()
+
+
 async def test_create_profile_token_sends_post_to_profile_tokens_route() -> None:
     """Profile token create sends POST /profile/tokens with documented body."""
     client = Client("https://api.linode.com/v4", "test-token")
