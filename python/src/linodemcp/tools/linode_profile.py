@@ -199,6 +199,33 @@ async def handle_linode_profile_tfa_enable_confirm(
     )
 
 
+def create_linode_profile_security_questions_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_security_questions_list tool."""
+    return Tool(
+        name="linode_profile_security_questions_list",
+        description="Lists available Linode profile security questions.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+            },
+        },
+    ), Capability.Read
+
+
+async def handle_linode_profile_security_questions_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_profile_security_questions_list tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.list_profile_security_questions()
+
+    return await execute_tool(
+        cfg, arguments, "list Linode profile security questions", _call
+    )
+
+
 def create_linode_profile_security_questions_answer_tool() -> tuple[Tool, Capability]:
     """Create the linode_profile_security_questions_answer tool."""
     return Tool(

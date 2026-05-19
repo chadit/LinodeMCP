@@ -853,6 +853,19 @@ async def test_linode_regions_availability_get_tool_is_exported_and_registered(
     assert "linode_regions_availability_get" in srv.registered_tool_names
 
 
+async def test_profile_security_questions_list_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Profile security questions list tool is exported and registered."""
+    import linodemcp.tools as tools_mod
+
+    assert "create_linode_profile_security_questions_list_tool" in tools_mod.__all__
+    assert "handle_linode_profile_security_questions_list" in tools_mod.__all__
+
+    srv = Server(sample_config)
+    assert "linode_profile_security_questions_list" in srv.registered_tool_names
+
+
 async def test_profile_security_questions_answer_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

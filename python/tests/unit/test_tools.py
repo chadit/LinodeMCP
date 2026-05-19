@@ -81,6 +81,7 @@ from linodemcp.tools import (
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
     create_linode_profile_security_questions_answer_tool,
+    create_linode_profile_security_questions_list_tool,
     create_linode_profile_tfa_disable_tool,
     create_linode_profile_tfa_enable_confirm_tool,
     create_linode_profile_tfa_enable_tool,
@@ -224,6 +225,7 @@ from linodemcp.tools import (
     handle_linode_object_storage_types_list,
     handle_linode_profile,
     handle_linode_profile_security_questions_answer,
+    handle_linode_profile_security_questions_list,
     handle_linode_profile_tfa_disable,
     handle_linode_profile_tfa_enable,
     handle_linode_profile_tfa_enable_confirm,
@@ -9412,6 +9414,54 @@ async def test_handle_linode_profile_tfa_enable_confirm_error(
 
     assert len(result) == 1
     assert "Failed to" in result[0].text
+    assert "API error" in result[0].text
+
+
+def test_create_linode_profile_security_questions_list_tool() -> None:
+    """Profile security questions list tool exposes a read-only schema."""
+    tool, capability = create_linode_profile_security_questions_list_tool()
+
+    assert tool.name == "linode_profile_security_questions_list"
+    assert capability == Capability.Read
+    assert "required" not in tool.inputSchema
+
+
+async def test_handle_linode_profile_security_questions_list_success(
+    sample_config: Config,
+) -> None:
+    """Profile security questions list handler calls the retryable client."""
+    payload = {
+        "security_questions": [
+            {"id": 1, "question": "In what city were you born?"},
+            {"id": 2, "question": "What was your first pet's name?"},
+        ]
+    }
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.list_profile_security_questions.return_value = payload
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_security_questions_list({}, sample_config)
+
+    assert json.loads(result[0].text) == payload
+    mock_client.list_profile_security_questions.assert_awaited_once_with()
+
+
+async def test_handle_linode_profile_security_questions_list_error(
+    sample_config: Config,
+) -> None:
+    """Profile security questions list handler propagates client errors."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.list_profile_security_questions.side_effect = Exception("API error")
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_security_questions_list({}, sample_config)
+
     assert "API error" in result[0].text
 
 
