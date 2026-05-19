@@ -3779,6 +3779,121 @@ async def test_create_profile_token_wraps_http_errors() -> None:
     await client.close()
 
 
+async def test_list_profile_tokens_sends_get_to_profile_tokens_route() -> None:
+    """Profile token list sends GET /profile/tokens with no body or query."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {
+        "data": [
+            {"id": 12345, "label": "api-token"},
+            {"id": 67890, "label": "ci-token"},
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 2,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        result = await client.list_profile_tokens()
+
+    assert result == [
+        {"id": 12345, "label": "api-token"},
+        {"id": 67890, "label": "ci-token"},
+    ]
+    mock_request.assert_called_once_with("GET", "/profile/tokens")
+    await client.close()
+
+
+async def test_list_profile_tokens_fetches_all_pages() -> None:
+    """Profile token list fetches subsequent pages when present."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    first_response = MagicMock()
+    first_response.json.return_value = {
+        "data": [{"id": 12345, "label": "api-token"}],
+        "page": 1,
+        "pages": 2,
+        "results": 2,
+    }
+    second_response = MagicMock()
+    second_response.json.return_value = {
+        "data": [{"id": 67890, "label": "ci-token"}],
+        "page": 2,
+        "pages": 2,
+        "results": 2,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = [first_response, second_response]
+        result = await client.list_profile_tokens()
+
+    assert result == [
+        {"id": 12345, "label": "api-token"},
+        {"id": 67890, "label": "ci-token"},
+    ]
+    assert [args.args for args in mock_request.await_args_list] == [
+        ("GET", "/profile/tokens"),
+        ("GET", "/profile/tokens?page=2"),
+    ]
+    await client.close()
+
+
+async def test_list_profile_tokens_rejects_malformed_response() -> None:
+    """Profile token list fails closed on malformed payloads."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    malformed_payloads: tuple[Any, ...] = (
+        None,
+        [],
+        {},
+        {"data": "not-a-list"},
+        {"data": ["not-an-object"]},
+        {"data": [], "pages": "not-an-int"},
+        {"data": [], "pages": True},
+        {"data": [], "pages": 0},
+    )
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        for payload in malformed_payloads:
+            response = MagicMock()
+            response.json.return_value = payload
+            mock_request.return_value = response
+            with pytest.raises(
+                (TypeError, ValueError), match="profile tokens response"
+            ):
+                await client.list_profile_tokens()
+
+    assert mock_request.await_count == len(malformed_payloads)
+    await client.close()
+
+
+async def test_retryable_list_profile_tokens_delegates_to_client() -> None:
+    """Retryable profile token list forwards to the base client."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        client.client, "list_profile_tokens", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = [{"id": 12345, "label": "api-token"}]
+        result = await client.list_profile_tokens()
+
+    assert result == [{"id": 12345, "label": "api-token"}]
+    mock_list.assert_awaited_once_with()
+    await client.close()
+
+
+async def test_list_profile_tokens_wraps_http_errors() -> None:
+    """Profile token list maps HTTP errors to ListProfileTokens."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ReadTimeout("timeout")
+        with pytest.raises(NetworkError) as exc_info:
+            await client.list_profile_tokens()
+
+    assert exc_info.value.operation == "ListProfileTokens"
+    await client.close()
+
+
 async def test_get_profile_token_sends_get_to_profile_token_route() -> None:
     """Profile token get sends GET /profile/tokens/{tokenId}."""
     client = Client("https://api.linode.com/v4", "test-token")

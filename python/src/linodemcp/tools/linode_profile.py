@@ -143,6 +143,32 @@ async def handle_linode_profile_token_create(
     return await execute_tool(cfg, arguments, "create Linode profile token", _call)
 
 
+def create_linode_profile_tokens_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_tokens_list tool."""
+    return Tool(
+        name="linode_profile_tokens_list",
+        description="Lists Linode personal access tokens.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+            },
+        },
+    ), Capability.Read
+
+
+async def handle_linode_profile_tokens_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_profile_tokens_list tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        tokens = await client.list_profile_tokens()
+        return {"tokens": [_redact_profile_token(token) for token in tokens]}
+
+    return await execute_tool(cfg, arguments, "list Linode profile tokens", _call)
+
+
 def create_linode_profile_token_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_profile_token_get tool."""
     return Tool(

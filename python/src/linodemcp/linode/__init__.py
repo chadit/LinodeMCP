@@ -2209,6 +2209,66 @@ class Client:
             logger.exception("HTTP error creating profile token: %s", e)
             raise NetworkError("CreateProfileToken", e) from e
 
+    def _parse_profile_tokens_page(
+        self, response: httpx.Response
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Parse one /profile/tokens page and return tokens plus total pages."""
+        data_raw: Any = response.json()
+        if not isinstance(data_raw, dict):
+            msg = "profile tokens response must be an object"
+            raise TypeError(msg)
+        data = cast("dict[str, Any]", data_raw)
+        pages_raw = data.get("pages", 1)
+        if not isinstance(pages_raw, int) or isinstance(pages_raw, bool):
+            msg = "profile tokens response pages must be an integer"
+            raise TypeError(msg)
+        if pages_raw < 1:
+            msg = "profile tokens response pages must be positive"
+            raise ValueError(msg)
+        items_raw = data.get("data")
+        if not isinstance(items_raw, list):
+            msg = "profile tokens response data must be a list"
+            raise TypeError(msg)
+        items = cast("list[object]", items_raw)
+        tokens: list[dict[str, Any]] = []
+        for item in items:
+            if not isinstance(item, dict):
+                msg = "profile tokens response data entries must be objects"
+                raise TypeError(msg)
+            tokens.append(cast("dict[str, Any]", item))
+        return tokens, pages_raw
+
+    async def list_profile_tokens(self) -> list[dict[str, Any]]:
+        """List personal access tokens."""
+        logger.info("Listing profile tokens")
+
+        try:
+            tokens: list[dict[str, Any]] = []
+            page = 1
+            pages = 1
+            while page <= pages:
+                endpoint = "/profile/tokens"
+                if page > 1:
+                    endpoint = f"/profile/tokens?page={page}"
+                response = await self.make_request("GET", endpoint)
+                page_tokens, pages = self._parse_profile_tokens_page(response)
+                tokens.extend(page_tokens)
+                page += 1
+            logger.info("Profile tokens listed", extra={"token_count": len(tokens)})
+            return tokens
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout listing profile tokens: %s", e)
+            raise NetworkError("ListProfileTokens", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout listing profile tokens: %s", e)
+            raise NetworkError("ListProfileTokens", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error listing profile tokens")
+            raise NetworkError("ListProfileTokens", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error listing profile tokens: %s", e)
+            raise NetworkError("ListProfileTokens", e) from e
+
     async def get_profile_token(self, token_id: int) -> dict[str, Any]:
         """Get a personal access token."""
         encoded_token_id = quote(str(token_id), safe="")
@@ -5255,6 +5315,13 @@ class RetryableClient:
             )
 
         result: dict[str, Any] = await self._execute_with_retry(_create_profile_token)
+        return result
+
+    async def list_profile_tokens(self) -> list[dict[str, Any]]:
+        """List profile tokens with retry."""
+        result: list[dict[str, Any]] = await self._execute_with_retry(
+            self.client.list_profile_tokens
+        )
         return result
 
     async def get_profile_token(self, token_id: int) -> dict[str, Any]:
