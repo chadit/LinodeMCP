@@ -290,6 +290,7 @@ from linodemcp.tools.linode_object_storage_write import (
 )
 from linodemcp.tools.linode_profile import (
     create_linode_profile_tfa_enable_confirm_tool,
+    create_linode_profile_tfa_enable_tool,
     create_linode_profile_token_create_tool,
     create_linode_profile_token_get_tool,
     create_linode_profile_token_revoke_tool,
@@ -297,6 +298,7 @@ from linodemcp.tools.linode_profile import (
     create_linode_profile_tokens_list_tool,
     create_linode_profile_tool,
     handle_linode_profile,
+    handle_linode_profile_tfa_enable,
     handle_linode_profile_tfa_enable_confirm,
     handle_linode_profile_token_create,
     handle_linode_profile_token_get,
@@ -529,6 +531,7 @@ __all__ = [
     "create_linode_object_storage_transfer_tool",
     "create_linode_object_storage_types_list_tool",
     "create_linode_profile_tfa_enable_confirm_tool",
+    "create_linode_profile_tfa_enable_tool",
     "create_linode_profile_token_create_tool",
     "create_linode_profile_token_get_tool",
     "create_linode_profile_token_revoke_tool",
@@ -696,6 +699,7 @@ __all__ = [
     "handle_linode_object_storage_transfer",
     "handle_linode_object_storage_types_list",
     "handle_linode_profile",
+    "handle_linode_profile_tfa_enable",
     "handle_linode_profile_tfa_enable_confirm",
     "handle_linode_profile_token_create",
     "handle_linode_profile_token_get",

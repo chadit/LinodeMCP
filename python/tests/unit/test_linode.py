@@ -3667,6 +3667,55 @@ class TestRetryableClientRateLimiter:
         await client.close()
 
 
+async def test_create_profile_tfa_secret_sends_post_to_enable_route() -> None:
+    """Profile TFA secret creation sends POST with no body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {
+        "secret": "5FXX6KLACOC33GTC",
+        "expiry": "2026-01-01T00:00:00",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        result = await client.create_profile_tfa_secret()
+
+    assert result == {
+        "secret": "5FXX6KLACOC33GTC",
+        "expiry": "2026-01-01T00:00:00",
+    }
+    mock_request.assert_called_once_with("POST", "/profile/tfa-enable")
+    await client.close()
+
+
+async def test_retryable_create_profile_tfa_secret_delegates_to_client() -> None:
+    """Retryable profile TFA secret creation delegates to the client."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        client.client, "create_profile_tfa_secret", new_callable=AsyncMock
+    ) as mock_create:
+        mock_create.return_value = {"secret": "5FXX6KLACOC33GTC"}
+        result = await client.create_profile_tfa_secret()
+
+    assert result == {"secret": "5FXX6KLACOC33GTC"}
+    mock_create.assert_awaited_once_with()
+    await client.close()
+
+
+async def test_create_profile_tfa_secret_wraps_http_errors() -> None:
+    """Profile TFA secret creation maps HTTP errors to CreateProfileTFASecret."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ReadTimeout("timeout")
+        with pytest.raises(NetworkError) as exc_info:
+            await client.create_profile_tfa_secret()
+
+    assert exc_info.value.operation == "CreateProfileTFASecret"
+    await client.close()
+
+
 async def test_confirm_profile_tfa_enable_sends_post_to_confirm_route() -> None:
     """Profile TFA enable confirm sends POST with documented body."""
     client = Client("https://api.linode.com/v4", "test-token")

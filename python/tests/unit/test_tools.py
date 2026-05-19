@@ -81,6 +81,7 @@ from linodemcp.tools import (
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
     create_linode_profile_tfa_enable_confirm_tool,
+    create_linode_profile_tfa_enable_tool,
     create_linode_profile_token_create_tool,
     create_linode_profile_token_get_tool,
     create_linode_profile_token_revoke_tool,
@@ -220,6 +221,7 @@ from linodemcp.tools import (
     handle_linode_object_storage_transfer,
     handle_linode_object_storage_types_list,
     handle_linode_profile,
+    handle_linode_profile_tfa_enable,
     handle_linode_profile_tfa_enable_confirm,
     handle_linode_profile_token_create,
     handle_linode_profile_token_get,
@@ -9177,6 +9179,81 @@ async def test_handle_linode_monitor_service_token_create_error(
     result = await handle_linode_monitor_service_token_create(
         {"service_type": "dbaas", "entity_ids": [1], "confirm": True}, sample_config
     )
+    assert len(result) == 1
+    assert "Failed to" in result[0].text
+    assert "API error" in result[0].text
+
+
+def test_create_linode_profile_tfa_enable_tool() -> None:
+    """Profile TFA enable tool exposes a strict confirmation gate."""
+    tool, capability = create_linode_profile_tfa_enable_tool()
+
+    assert tool.name == "linode_profile_tfa_enable"
+    assert capability is Capability.Write
+    assert tool.inputSchema["required"] == ["confirm"]
+    assert "environment" in tool.inputSchema["properties"]
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+
+
+async def test_handle_linode_profile_tfa_enable_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Profile TFA enable requires explicit boolean confirmation."""
+    for confirm in (None, False, "true", 1):
+        arguments: dict[str, Any] = {}
+        if confirm is not None:
+            arguments["confirm"] = confirm
+
+        result = await handle_linode_profile_tfa_enable(arguments, sample_config)
+
+        assert len(result) == 1
+        assert "confirm=true" in result[0].text
+
+
+async def test_handle_linode_profile_tfa_enable_success(
+    sample_config: Config,
+) -> None:
+    """Profile TFA enable calls the retryable client."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.create_profile_tfa_secret.return_value = {
+            "secret": "5FXX6KLACOC33GTC",
+            "expiry": "2026-01-01T00:00:00",
+        }
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_tfa_enable(
+            {"confirm": True}, sample_config
+        )
+
+    assert json.loads(result[0].text) == {
+        "warning": (
+            "IMPORTANT: Save this two-factor authentication secret now. "
+            "It must be confirmed before two-factor authentication is enabled."
+        ),
+        "secret": "5FXX6KLACOC33GTC",
+        "expiry": "2026-01-01T00:00:00",
+    }
+    mock_client.create_profile_tfa_secret.assert_awaited_once_with()
+
+
+async def test_handle_linode_profile_tfa_enable_error(
+    sample_config: Config,
+) -> None:
+    """Profile TFA enable surfaces client errors."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.create_profile_tfa_secret.side_effect = Exception("API error")
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_tfa_enable(
+            {"confirm": True}, sample_config
+        )
+
     assert len(result) == 1
     assert "Failed to" in result[0].text
     assert "API error" in result[0].text

@@ -66,6 +66,53 @@ async def handle_linode_profile(
     return await execute_tool(cfg, arguments, "retrieve Linode profile", _call)
 
 
+def create_linode_profile_tfa_enable_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_tfa_enable tool."""
+    return Tool(
+        name="linode_profile_tfa_enable",
+        description=(
+            "Generates a two-factor authentication secret for the Linode profile."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to generate a profile TFA secret.",
+                },
+            },
+            "required": ["confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_profile_tfa_enable(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_profile_tfa_enable tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This generates a profile two-factor authentication secret. "
+            "Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        secret = await client.create_profile_tfa_secret()
+        return {
+            **secret,
+            "warning": (
+                "IMPORTANT: Save this two-factor authentication secret now. "
+                "It must be confirmed before two-factor authentication is "
+                "enabled."
+            ),
+        }
+
+    return await execute_tool(
+        cfg, arguments, "generate profile two-factor authentication secret", _call
+    )
+
+
 def create_linode_profile_tfa_enable_confirm_tool() -> tuple[Tool, Capability]:
     """Create the linode_profile_tfa_enable_confirm tool."""
     return Tool(
