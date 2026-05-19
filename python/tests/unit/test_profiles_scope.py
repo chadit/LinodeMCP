@@ -66,6 +66,11 @@ def test_meta_returns_empty() -> None:
             Capability.Write,
             [Scope.NodeBalancersReadWrite],
         ),
+        (
+            "linode_nodebalancer_config_delete",
+            Capability.Destroy,
+            [Scope.NodeBalancersReadWrite],
+        ),
         ("linode_firewall_create", Capability.Write, [Scope.FirewallReadWrite]),
         ("linode_account", Capability.Read, [Scope.AccountReadOnly]),
         ("linode_profile", Capability.Read, [Scope.AccountReadOnly]),

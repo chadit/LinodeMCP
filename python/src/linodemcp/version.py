@@ -49,7 +49,7 @@ FEATURE_TOOLS_LIST = (
     "linode_domain_record_create,linode_domain_record_update,"
     "linode_domain_record_delete,linode_volume_create,linode_volume_attach,"
     "linode_volume_detach,linode_volume_resize,linode_volume_update,linode_volume_delete,"
-    "linode_nodebalancer_config_node_create,linode_nodebalancer_config_nodes_list,linode_nodebalancer_config_node_get,linode_nodebalancer_config_rebuild,linode_nodebalancer_config_node_update,linode_nodebalancer_create,linode_nodebalancer_update,"
+    "linode_nodebalancer_config_delete,linode_nodebalancer_config_node_create,linode_nodebalancer_config_nodes_list,linode_nodebalancer_config_node_get,linode_nodebalancer_config_rebuild,linode_nodebalancer_config_node_update,linode_nodebalancer_create,linode_nodebalancer_update,"
     "linode_nodebalancer_firewalls_update,linode_nodebalancer_delete,"
     "linode_object_storage_buckets_list,linode_object_storage_buckets_region_list,linode_object_storage_bucket_get,"
     "linode_object_storage_bucket_contents,linode_object_storage_cluster_get,linode_object_storage_clusters_list,"

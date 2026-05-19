@@ -1950,6 +1950,45 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("RebuildNodeBalancerConfig", e) from e
 
+    async def delete_nodebalancer_config(
+        self, nodebalancer_id: int, config_id: int
+    ) -> None:
+        """Delete a NodeBalancer config."""
+        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
+        encoded_config_id = quote(str(config_id), safe="")
+        endpoint = (
+            f"/nodebalancers/{encoded_nodebalancer_id}/configs/{encoded_config_id}"
+        )
+        logger.info(
+            "Deleting NodeBalancer config",
+            extra={
+                "nodebalancer_id": nodebalancer_id,
+                "config_id": config_id,
+            },
+        )
+        try:
+            await self.make_request("DELETE", endpoint)
+            logger.info(
+                "NodeBalancer config deleted",
+                extra={
+                    "nodebalancer_id": nodebalancer_id,
+                    "config_id": config_id,
+                },
+            )
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout deleting config: %s", e)
+            raise NetworkError("DeleteNodeBalancerConfig", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout deleting config: %s", e)
+            raise NetworkError("DeleteNodeBalancerConfig", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception(
+                "HTTP error deleting config: status %d", e.response.status_code
+            )
+            raise NetworkError("DeleteNodeBalancerConfig", e) from e
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteNodeBalancerConfig", e) from e
+
     async def list_nodebalancer_config_nodes(
         self,
         nodebalancer_id: int,
@@ -6188,6 +6227,12 @@ class RetryableClient:
     ) -> dict[str, Any]:
         """Rebuild a NodeBalancer config without replay retry."""
         return await self.client.rebuild_nodebalancer_config(nodebalancer_id, config_id)
+
+    async def delete_nodebalancer_config(
+        self, nodebalancer_id: int, config_id: int
+    ) -> None:
+        """Delete a NodeBalancer config without replay retry."""
+        return await self.client.delete_nodebalancer_config(nodebalancer_id, config_id)
 
     async def list_nodebalancer_config_nodes(
         self,
