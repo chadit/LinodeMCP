@@ -85,6 +85,7 @@ from linodemcp.tools import (
     create_linode_monitor_service_token_create_tool,
     create_linode_profile_app_get_tool,
     create_linode_profile_app_revoke_tool,
+    create_linode_profile_apps_list_tool,
     create_linode_profile_device_get_tool,
     create_linode_profile_device_revoke_tool,
     create_linode_profile_devices_list_tool,
@@ -242,6 +243,7 @@ from linodemcp.tools import (
     handle_linode_profile,
     handle_linode_profile_app_get,
     handle_linode_profile_app_revoke,
+    handle_linode_profile_apps_list,
     handle_linode_profile_device_get,
     handle_linode_profile_device_revoke,
     handle_linode_profile_devices_list,
@@ -10802,6 +10804,87 @@ async def test_handle_linode_profile_devices_list_error(
 
     assert len(result) == 1
     assert "Failed to" in result[0].text
+    assert "API error" in result[0].text
+
+
+def test_create_linode_profile_apps_list_tool() -> None:
+    tool, capability = create_linode_profile_apps_list_tool()
+
+    assert tool.name == "linode_profile_apps_list"
+    assert capability is Capability.Read
+    assert "required" not in tool.inputSchema
+    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
+    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+
+
+def test_linode_profile_apps_list_tool_is_exported_and_registered() -> None:
+    from linodemcp import tools as tools_mod
+    from linodemcp.server import get_tool_registry
+
+    assert "create_linode_profile_apps_list_tool" in tools_mod.__all__
+    assert "handle_linode_profile_apps_list" in tools_mod.__all__
+    registry = {entry.name: entry for entry in get_tool_registry()}
+    assert registry["linode_profile_apps_list"].capability is Capability.Read
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({"page": 0}, "page must be at least 1"),
+        ({"page": True}, "page must be an integer"),
+        ({"page": "1"}, "page must be an integer"),
+        ({"page_size": 24}, "page_size must be at least 25"),
+        ({"page_size": 501}, "page_size must be at most 500"),
+        ({"page_size": True}, "page_size must be an integer"),
+        ({"page_size": "50"}, "page_size must be an integer"),
+    ],
+)
+async def test_handle_linode_profile_apps_list_rejects_invalid_pagination(
+    arguments: dict[str, object], message: str, sample_config: Config
+) -> None:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_profile_apps_list(arguments, sample_config)
+
+    assert message in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_profile_apps_list_success(sample_config: Config) -> None:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_profile_apps.return_value = {
+            "data": [{"id": 123, "label": "authorized-app"}],
+            "page": 2,
+            "pages": 3,
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_apps_list(
+            {"page": 2, "page_size": 50}, sample_config
+        )
+
+    assert json.loads(result[0].text) == {
+        "data": [{"id": 123, "label": "authorized-app"}],
+        "page": 2,
+        "pages": 3,
+    }
+    mock_client.list_profile_apps.assert_awaited_once_with(page=2, page_size=50)
+
+
+async def test_handle_linode_profile_apps_list_error(sample_config: Config) -> None:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_profile_apps.side_effect = RuntimeError("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_apps_list({}, sample_config)
+
+    assert "Failed to list Linode profile OAuth app authorizations" in result[0].text
     assert "API error" in result[0].text
 
 

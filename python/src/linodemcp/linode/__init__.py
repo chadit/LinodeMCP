@@ -2791,6 +2791,41 @@ class Client:
             logger.exception("HTTP error getting profile trusted device: %s", e)
             raise NetworkError("GetProfileDevice", e) from e
 
+    async def list_profile_apps(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List OAuth app authorizations from the profile."""
+        endpoint = "/profile/apps"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
+
+        logger.info("Listing profile app authorizations")
+
+        try:
+            response = await self.make_request("GET", endpoint)
+            result: dict[str, Any] = response.json()
+            logger.info("Profile app authorizations listed")
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception(
+                "Connection timeout listing profile app authorizations: %s", e
+            )
+            raise NetworkError("ListProfileApps", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout listing profile app authorizations: %s", e)
+            raise NetworkError("ListProfileApps", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error listing profile app authorizations")
+            raise NetworkError("ListProfileApps", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error listing profile app authorizations: %s", e)
+            raise NetworkError("ListProfileApps", e) from e
+
     async def get_profile_app(self, app_id: int) -> dict[str, Any]:
         """Get an OAuth app authorization from the profile."""
         encoded_app_id = quote(str(app_id), safe="")
@@ -6040,6 +6075,15 @@ class RetryableClient:
         """Get a profile trusted device with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_profile_device, device_id
+        )
+        return result
+
+    async def list_profile_apps(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List profile OAuth app authorizations with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_profile_apps(page=page, page_size=page_size)
         )
         return result
 
