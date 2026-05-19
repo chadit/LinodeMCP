@@ -2700,6 +2700,32 @@ class Client:
             logger.exception("HTTP error getting profile login: %s", e)
             raise NetworkError("GetProfileLogin", e) from e
 
+    async def get_profile_device(self, device_id: int) -> dict[str, Any]:
+        """Get a trusted profile device."""
+        encoded_device_id = quote(str(device_id), safe="")
+        endpoint = f"/profile/devices/{encoded_device_id}"
+        logger.info("Getting profile trusted device", extra={"device_id": device_id})
+
+        try:
+            response = await self.make_request("GET", endpoint)
+            result: dict[str, Any] = response.json()
+            logger.info(
+                "Profile trusted device retrieved", extra={"device_id": device_id}
+            )
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout getting profile trusted device: %s", e)
+            raise NetworkError("GetProfileDevice", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout getting profile trusted device: %s", e)
+            raise NetworkError("GetProfileDevice", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error getting profile trusted device")
+            raise NetworkError("GetProfileDevice", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error getting profile trusted device: %s", e)
+            raise NetworkError("GetProfileDevice", e) from e
+
     async def delete_profile_device(self, device_id: int) -> None:
         """Revoke a trusted profile device."""
         encoded_device_id = quote(str(device_id), safe="")
@@ -5887,6 +5913,13 @@ class RetryableClient:
         """Get a profile login with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_profile_login, login_id
+        )
+        return result
+
+    async def get_profile_device(self, device_id: int) -> dict[str, Any]:
+        """Get a profile trusted device with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_profile_device, device_id
         )
         return result
 

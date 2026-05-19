@@ -4859,6 +4859,69 @@ async def test_delete_profile_token_encodes_path_parameter() -> None:
     await client.close()
 
 
+async def test_get_profile_device_uses_get_method_and_encoded_path() -> None:
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {
+        "id": 123,
+        "created": "2018-01-01T01:01:01",
+        "expiry": "2018-01-31T01:01:01",
+        "last_authenticated": "2018-01-05T12:57:12",
+        "last_remote_addr": "203.0.113.1",
+        "user_agent": "Mozilla/5.0",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        result = await client.get_profile_device(123)
+
+    assert result["id"] == 123
+    mock_request.assert_awaited_once_with("GET", "/profile/devices/123")
+    await client.close()
+
+
+async def test_get_profile_device_encodes_path_parameter() -> None:
+    client = Client("https://api.linode.com/v4", "test-token")
+    unsafe_device_id: Any = "12/../34?x=1"
+    response = MagicMock()
+    response.json.return_value = {"id": 123}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        await client.get_profile_device(unsafe_device_id)
+
+    mock_request.assert_awaited_once_with(
+        "GET", "/profile/devices/12%2F..%2F34%3Fx%3D1"
+    )
+    await client.close()
+
+
+async def test_retryable_client_get_profile_device_delegates() -> None:
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        client.client, "get_profile_device", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = {"id": 123}
+        result = await client.get_profile_device(123)
+
+    assert result == {"id": 123}
+    mock_get.assert_awaited_once_with(123)
+    await client.close()
+
+
+async def test_get_profile_device_wraps_http_errors() -> None:
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ReadTimeout("timeout")
+        with pytest.raises(NetworkError) as exc_info:
+            await client.get_profile_device(123)
+
+    assert exc_info.value.operation == "GetProfileDevice"
+    await client.close()
+
+
 async def test_delete_profile_device_uses_delete_method_and_encoded_path() -> None:
     client = Client("https://api.linode.com/v4", "test-token")
 
