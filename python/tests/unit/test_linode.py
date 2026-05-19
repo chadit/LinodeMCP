@@ -3824,6 +3824,128 @@ async def test_disable_profile_tfa_wraps_http_errors() -> None:
     await client.close()
 
 
+async def test_answer_profile_security_questions_sends_post_to_route() -> None:
+    """Profile security questions sends POST with documented body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {"security_questions": []}
+    questions = [
+        {"question_id": 1, "response": "Gotham City", "security_question": "ignored"},
+        {"question_id": 2, "response": "Blue"},
+        {"question_id": 3, "response": "Pizza"},
+    ]
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        result = await client.answer_profile_security_questions(questions)
+
+    assert result == {"security_questions": []}
+    mock_request.assert_called_once_with(
+        "POST",
+        "/profile/security-questions",
+        {
+            "security_questions": [
+                {"question_id": 1, "response": "Gotham City"},
+                {"question_id": 2, "response": "Blue"},
+                {"question_id": 3, "response": "Pizza"},
+            ]
+        },
+    )
+    await client.close()
+
+
+async def test_answer_profile_security_questions_validates_before_request() -> None:
+    """Profile security questions validates documented body fields first."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    invalid_calls: tuple[object, ...] = (
+        [],
+        "not-a-list",
+        [
+            "not-an-object",
+            {"question_id": 2, "response": "Blue"},
+            {"question_id": 3, "response": "Pizza"},
+        ],
+        [
+            {"question_id": 0, "response": "Blue"},
+            {"question_id": 2, "response": "Green"},
+            {"question_id": 3, "response": "Pizza"},
+        ],
+        [
+            {"question_id": True, "response": "Blue"},
+            {"question_id": 2, "response": "Green"},
+            {"question_id": 3, "response": "Pizza"},
+        ],
+        [
+            {"question_id": 1, "response": "no"},
+            {"question_id": 2, "response": "Blue"},
+            {"question_id": 3, "response": "Pizza"},
+        ],
+        [
+            {"question_id": 1, "response": "x" * 18},
+            {"question_id": 2, "response": "Blue"},
+            {"question_id": 3, "response": "Pizza"},
+        ],
+        [
+            {"question_id": 1},
+            {"question_id": 2, "response": "Blue"},
+            {"question_id": 3, "response": "Pizza"},
+        ],
+        [
+            {"question_id": 1, "response": None},
+            {"question_id": 2, "response": "Blue"},
+            {"question_id": 3, "response": "Pizza"},
+        ],
+        [
+            {"question_id": 1, "response": "Blue"},
+            {"question_id": 1, "response": "Red"},
+            {"question_id": 3, "response": "Pizza"},
+        ],
+    )
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        for security_questions in invalid_calls:
+            with pytest.raises((TypeError, ValueError)):
+                await client.answer_profile_security_questions(security_questions)  # type: ignore[arg-type]
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_retryable_answer_security_questions_delegates_to_client() -> None:
+    """Retryable profile security questions forwards the body list."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+    questions = [{"question_id": 1, "response": "Gotham City"}]
+
+    with patch.object(
+        client.client, "answer_profile_security_questions", new_callable=AsyncMock
+    ) as mock_answer:
+        mock_answer.return_value = {"security_questions": []}
+        result = await client.answer_profile_security_questions(questions)
+
+    assert result == {"security_questions": []}
+    mock_answer.assert_awaited_once_with(questions)
+    await client.close()
+
+
+async def test_answer_profile_security_questions_wraps_http_errors() -> None:
+    """Profile security questions maps HTTP errors to operation name."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ReadTimeout("timeout")
+        with pytest.raises(NetworkError) as exc_info:
+            await client.answer_profile_security_questions(
+                [
+                    {"question_id": 1, "response": "Gotham City"},
+                    {"question_id": 2, "response": "Blue"},
+                    {"question_id": 3, "response": "Pizza"},
+                ]
+            )
+
+    assert exc_info.value.operation == "AnswerProfileSecurityQuestions"
+    await client.close()
+
+
 async def test_create_profile_token_sends_post_to_profile_tokens_route() -> None:
     """Profile token create sends POST /profile/tokens with documented body."""
     client = Client("https://api.linode.com/v4", "test-token")
