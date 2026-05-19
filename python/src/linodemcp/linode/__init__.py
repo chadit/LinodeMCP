@@ -2325,6 +2325,30 @@ class Client:
             )
             raise NetworkError("DisableProfileTFA", e) from e
 
+    async def list_profile_security_questions(self) -> dict[str, Any]:
+        """List available profile security questions."""
+        logger.info("Listing profile security questions")
+
+        try:
+            response = await self.make_request("GET", "/profile/security-questions")
+            result: dict[str, Any] = response.json()
+            logger.info("Profile security questions listed")
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception(
+                "Connection timeout listing profile security questions: %s", e
+            )
+            raise NetworkError("ListProfileSecurityQuestions", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout listing profile security questions: %s", e)
+            raise NetworkError("ListProfileSecurityQuestions", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error listing profile security questions")
+            raise NetworkError("ListProfileSecurityQuestions", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error listing profile security questions: %s", e)
+            raise NetworkError("ListProfileSecurityQuestions", e) from e
+
     async def answer_profile_security_questions(
         self, security_questions: list[dict[str, Any]]
     ) -> dict[str, Any]:
@@ -5499,6 +5523,13 @@ class RetryableClient:
         """Disable profile two-factor authentication with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.disable_profile_tfa
+        )
+        return result
+
+    async def list_profile_security_questions(self) -> dict[str, Any]:
+        """List available profile security questions with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.list_profile_security_questions
         )
         return result
 

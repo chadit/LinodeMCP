@@ -33,6 +33,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("hello", Capability.Meta),
         ToolDescriptor("version", Capability.Meta),
         ToolDescriptor("linode_profile", Capability.Read),
+        ToolDescriptor("linode_profile_security_questions_list", Capability.Read),
         ToolDescriptor("linode_account", Capability.Read),
         # Compute reads + mutations.
         ToolDescriptor("linode_instances_list", Capability.Read),

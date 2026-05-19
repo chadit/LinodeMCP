@@ -3824,6 +3824,59 @@ async def test_disable_profile_tfa_wraps_http_errors() -> None:
     await client.close()
 
 
+async def test_list_profile_security_questions_sends_get_to_route() -> None:
+    """Profile security questions list sends GET to the documented route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {
+        "security_questions": [
+            {"id": 1, "question": "In what city were you born?"},
+            {"id": 2, "question": "What was your first pet's name?"},
+        ]
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        result = await client.list_profile_security_questions()
+
+    assert result == {
+        "security_questions": [
+            {"id": 1, "question": "In what city were you born?"},
+            {"id": 2, "question": "What was your first pet's name?"},
+        ]
+    }
+    mock_request.assert_called_once_with("GET", "/profile/security-questions")
+    await client.close()
+
+
+async def test_retryable_list_profile_security_questions_delegates_to_client() -> None:
+    """Retryable profile security questions listing delegates to Client."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        client.client, "list_profile_security_questions", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = {"security_questions": []}
+        result = await client.list_profile_security_questions()
+
+    assert result == {"security_questions": []}
+    mock_list.assert_awaited_once_with()
+    await client.close()
+
+
+async def test_list_profile_security_questions_wraps_http_errors() -> None:
+    """Profile security questions list maps HTTP errors to operation name."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ReadTimeout("timeout")
+        with pytest.raises(NetworkError) as exc_info:
+            await client.list_profile_security_questions()
+
+    assert exc_info.value.operation == "ListProfileSecurityQuestions"
+    await client.close()
+
+
 async def test_answer_profile_security_questions_sends_post_to_route() -> None:
     """Profile security questions sends POST with documented body."""
     client = Client("https://api.linode.com/v4", "test-token")

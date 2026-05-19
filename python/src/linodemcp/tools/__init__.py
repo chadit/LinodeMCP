@@ -290,6 +290,7 @@ from linodemcp.tools.linode_object_storage_write import (
 )
 from linodemcp.tools.linode_profile import (
     create_linode_profile_security_questions_answer_tool,
+    create_linode_profile_security_questions_list_tool,
     create_linode_profile_tfa_disable_tool,
     create_linode_profile_tfa_enable_confirm_tool,
     create_linode_profile_tfa_enable_tool,
@@ -301,6 +302,7 @@ from linodemcp.tools.linode_profile import (
     create_linode_profile_tool,
     handle_linode_profile,
     handle_linode_profile_security_questions_answer,
+    handle_linode_profile_security_questions_list,
     handle_linode_profile_tfa_disable,
     handle_linode_profile_tfa_enable,
     handle_linode_profile_tfa_enable_confirm,
@@ -535,6 +537,7 @@ __all__ = [
     "create_linode_object_storage_transfer_tool",
     "create_linode_object_storage_types_list_tool",
     "create_linode_profile_security_questions_answer_tool",
+    "create_linode_profile_security_questions_list_tool",
     "create_linode_profile_tfa_disable_tool",
     "create_linode_profile_tfa_enable_confirm_tool",
     "create_linode_profile_tfa_enable_tool",
@@ -706,6 +709,7 @@ __all__ = [
     "handle_linode_object_storage_types_list",
     "handle_linode_profile",
     "handle_linode_profile_security_questions_answer",
+    "handle_linode_profile_security_questions_list",
     "handle_linode_profile_tfa_disable",
     "handle_linode_profile_tfa_enable",
     "handle_linode_profile_tfa_enable_confirm",
