@@ -83,6 +83,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_sshkey_create", Capability.Write),
         # Monitor (no built-in elevates it currently except full-access).
         ToolDescriptor("linode_monitor_service_token_create", Capability.Write),
+        ToolDescriptor("linode_profile_tfa_disable", Capability.Write),
         ToolDescriptor("linode_profile_tfa_enable", Capability.Write),
         ToolDescriptor("linode_profile_tfa_enable_confirm", Capability.Write),
         # Admin tool (synthetic). Never selected by any built-in.

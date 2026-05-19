@@ -113,6 +113,45 @@ async def handle_linode_profile_tfa_enable(
     )
 
 
+def create_linode_profile_tfa_disable_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_tfa_disable tool."""
+    return Tool(
+        name="linode_profile_tfa_disable",
+        description="Disables two-factor authentication for the Linode profile.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to disable profile two-factor authentication."
+                    ),
+                },
+            },
+            "required": ["confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_profile_tfa_disable(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_profile_tfa_disable tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This disables profile two-factor authentication. "
+            "Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.disable_profile_tfa()
+
+    return await execute_tool(
+        cfg, arguments, "disable profile two-factor authentication", _call
+    )
+
+
 def create_linode_profile_tfa_enable_confirm_tool() -> tuple[Tool, Capability]:
     """Create the linode_profile_tfa_enable_confirm tool."""
     return Tool(

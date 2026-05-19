@@ -2246,6 +2246,34 @@ class Client:
             )
             raise NetworkError("ConfirmProfileTFAEnable", e) from e
 
+    async def disable_profile_tfa(self) -> dict[str, Any]:
+        """Disable two-factor authentication."""
+        logger.info("Disabling profile two-factor authentication")
+
+        try:
+            response = await self.make_request("POST", "/profile/tfa-disable")
+            result: dict[str, Any] = response.json()
+            logger.info("Profile two-factor authentication disabled")
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception(
+                "Connection timeout disabling profile two-factor authentication: %s", e
+            )
+            raise NetworkError("DisableProfileTFA", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception(
+                "Read timeout disabling profile two-factor authentication: %s", e
+            )
+            raise NetworkError("DisableProfileTFA", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error disabling profile two-factor authentication")
+            raise NetworkError("DisableProfileTFA", e) from e
+        except httpx.HTTPError as e:
+            logger.exception(
+                "HTTP error disabling profile two-factor authentication: %s", e
+            )
+            raise NetworkError("DisableProfileTFA", e) from e
+
     async def create_profile_token(
         self,
         expiry: str | None = None,
@@ -5381,6 +5409,13 @@ class RetryableClient:
         """Confirm profile two-factor authentication enablement with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.confirm_profile_tfa_enable, tfa_code
+        )
+        return result
+
+    async def disable_profile_tfa(self) -> dict[str, Any]:
+        """Disable profile two-factor authentication with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.disable_profile_tfa
         )
         return result
 
