@@ -61,6 +61,38 @@ def _optional_non_empty_string(arguments: dict[str, Any], name: str) -> str | No
     return value
 
 
+def _node_create_fields(arguments: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
+    try:
+        address = _optional_non_empty_string(arguments, "address")
+        label = _optional_non_empty_string(arguments, "label")
+        mode = _optional_non_empty_string(arguments, "mode")
+        subnet_id = _optional_int_argument(arguments, "subnet_id", 1)
+        weight = _optional_int_argument(arguments, "weight", 1, 255)
+    except (TypeError, ValueError) as exc:
+        return {}, str(exc)
+
+    if address is None:
+        return {}, "address is required"
+    if label is None:
+        return {}, "label is required"
+    if not (NODE_LABEL_MIN_LENGTH <= len(label) <= NODE_LABEL_MAX_LENGTH):
+        return {}, "label must be 3 to 32 characters"
+    if mode is not None and mode not in NODE_MODE_VALUES:
+        return {}, "mode must be one of accept, reject, drain, backup"
+
+    return {
+        key: value
+        for key, value in {
+            "address": address,
+            "label": label,
+            "mode": mode,
+            "subnet_id": subnet_id,
+            "weight": weight,
+        }.items()
+        if value is not None
+    }, None
+
+
 def _node_update_fields(arguments: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
     try:
         address = _optional_non_empty_string(arguments, "address")
@@ -424,6 +456,109 @@ async def handle_linode_nodebalancer_delete(
         }
 
     return await execute_tool(cfg, arguments, "delete NodeBalancer", _call)
+
+
+def create_linode_nodebalancer_config_node_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_nodebalancer_config_node_create tool."""
+    return Tool(
+        name="linode_nodebalancer_config_node_create",
+        description=(
+            "Creates a backend node in a NodeBalancer config. "
+            "Requires confirm because live backend routing may change."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "nodebalancer_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the NodeBalancer (required)",
+                },
+                "config_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the NodeBalancer config (required)",
+                },
+                "address": {
+                    "type": "string",
+                    "description": "Backend address and port, such as 10.0.0.45:80.",
+                },
+                "label": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 32,
+                    "description": "Display label for the node.",
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["accept", "reject", "drain", "backup"],
+                    "description": "Backend traffic mode for this node.",
+                },
+                "subnet_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "VPC subnet ID for VPC backend nodes.",
+                },
+                "weight": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 255,
+                    "description": "Backend selection weight from 1 to 255.",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to create the NodeBalancer config node."
+                    ),
+                },
+            },
+            "required": [
+                "nodebalancer_id",
+                "config_id",
+                "address",
+                "label",
+                "confirm",
+            ],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_nodebalancer_config_node_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_nodebalancer_config_node_create tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response("confirm must be true")
+
+    nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
+    if nodebalancer_id is None:
+        return error_response("nodebalancer_id must be a positive integer")
+
+    config_id = _positive_int_argument(arguments, "config_id")
+    if config_id is None:
+        return error_response("config_id must be a positive integer")
+
+    fields, field_error = _node_create_fields(arguments)
+    if field_error is not None:
+        return error_response(field_error)
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.create_nodebalancer_config_node(
+            nodebalancer_id, config_id, fields
+        )
+        if result:
+            return result
+        return {
+            "message": (
+                f"Node create requested for NodeBalancer "
+                f"{nodebalancer_id} config {config_id}"
+            ),
+            "nodebalancer_id": nodebalancer_id,
+            "config_id": config_id,
+        }
+
+    return await execute_tool(cfg, arguments, "create NodeBalancer config node", _call)
 
 
 def create_linode_nodebalancer_config_node_update_tool() -> tuple[Tool, Capability]:
