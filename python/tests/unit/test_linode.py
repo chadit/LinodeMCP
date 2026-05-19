@@ -3601,6 +3601,98 @@ async def test_retryable_list_nodebalancer_vpc_configs_delegates_to_client() -> 
     await retryable.close()
 
 
+async def test_update_nodebalancer_firewalls() -> None:
+    """Test updating NodeBalancer firewall assignments."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": [{"id": 123, "label": "web-fw"}],
+        "page": 2,
+        "pages": 3,
+        "results": 6,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.update_nodebalancer_firewalls(
+            8, [123, 456], page=2, page_size=25
+        )
+
+        assert result["data"][0]["id"] == 123
+        assert result["results"] == 6
+        mock_request.assert_called_once_with(
+            "PUT",
+            "/nodebalancers/8/firewalls?page=2&page_size=25",
+            {"firewall_ids": [123, 456]},
+        )
+
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    ("nodebalancer_id", "encoded"),
+    [
+        ("1/2", "1%2F2"),
+        ("1?x", "1%3Fx"),
+        ("..", ".."),
+    ],
+)
+async def test_update_nodebalancer_firewalls_encodes_path_params(
+    nodebalancer_id: str, encoded: str
+) -> None:
+    """NodeBalancer firewall update path parameter is URL-encoded."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"data": []}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.update_nodebalancer_firewalls(nodebalancer_id, [])  # type: ignore[arg-type]
+
+        mock_request.assert_called_once_with(
+            "PUT", f"/nodebalancers/{encoded}/firewalls", {"firewall_ids": []}
+        )
+
+    await client.close()
+
+
+async def test_update_nodebalancer_firewalls_wraps_http_errors() -> None:
+    """Test updating NodeBalancer firewalls wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.update_nodebalancer_firewalls(8, [123])
+
+    assert "UpdateNodeBalancerFirewalls" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_update_nodebalancer_firewalls_does_not_replay() -> None:
+    """RetryableClient delegates firewall assignment updates once without retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "update_nodebalancer_firewalls", new_callable=AsyncMock
+    ) as mock_update:
+        mock_update.side_effect = httpx.HTTPError("transient")
+        with pytest.raises(httpx.HTTPError):
+            await retryable.update_nodebalancer_firewalls(
+                8, [123], page=1, page_size=100
+            )
+
+    mock_update.assert_awaited_once_with(8, [123], page=1, page_size=100)
+    await retryable.close()
+
+
 async def test_get_nodebalancer_vpc_config() -> None:
     """Test getting a NodeBalancer VPC configuration."""
     client = Client("https://api.linode.com/v4", "test-token")

@@ -1907,6 +1907,32 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListNodeBalancerVPCConfigs", e) from e
 
+    async def update_nodebalancer_firewalls(
+        self,
+        nodebalancer_id: int,
+        firewall_ids: list[int],
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
+        """Update firewall assignments for a NodeBalancer."""
+        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
+        endpoint = f"/nodebalancers/{encoded_nodebalancer_id}/firewalls"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
+        try:
+            response = await self.make_request(
+                "PUT", endpoint, {"firewall_ids": firewall_ids}
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateNodeBalancerFirewalls", e) from e
+
     async def list_stackscripts(self) -> list[StackScript]:
         """List StackScripts."""
         try:
@@ -5973,6 +5999,18 @@ class RetryableClient:
             )
         )
         return result
+
+    async def update_nodebalancer_firewalls(
+        self,
+        nodebalancer_id: int,
+        firewall_ids: list[int],
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
+        """Update NodeBalancer firewall assignments without replay retry."""
+        return await self.client.update_nodebalancer_firewalls(
+            nodebalancer_id, firewall_ids, page=page, page_size=page_size
+        )
 
     async def list_stackscripts(self) -> list[StackScript]:
         """List StackScripts with retry."""
