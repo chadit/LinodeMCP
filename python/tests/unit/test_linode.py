@@ -3895,6 +3895,143 @@ async def test_create_nodebalancer_config_node_wraps_http_errors() -> None:
     await client.close()
 
 
+async def test_list_nodebalancer_config_nodes() -> None:
+    """Test listing NodeBalancer config nodes."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": [
+            {"id": 1, "label": "node-1", "address": "192.0.2.4:80", "weight": 100},
+            {"id": 2, "label": "node-2", "address": "192.0.2.5:80", "weight": 200},
+        ],
+        "page": 1,
+        "pages": 1,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.list_nodebalancer_config_nodes(8, 6)
+
+        assert result == {
+            "data": [
+                {"id": 1, "label": "node-1", "address": "192.0.2.4:80", "weight": 100},
+                {"id": 2, "label": "node-2", "address": "192.0.2.5:80", "weight": 200},
+            ],
+            "page": 1,
+            "pages": 1,
+        }
+        mock_request.assert_called_once_with(
+            "GET",
+            "/nodebalancers/8/configs/6/nodes",
+        )
+
+    await client.close()
+
+
+async def test_list_nodebalancer_config_nodes_with_pagination() -> None:
+    """Test listing NodeBalancer config nodes with pagination params."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"data": [], "page": 2, "pages": 3}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.list_nodebalancer_config_nodes(8, 6, page=2, page_size=50)
+
+        assert result == {"data": [], "page": 2, "pages": 3}
+        mock_request.assert_called_once_with(
+            "GET",
+            "/nodebalancers/8/configs/6/nodes?page=2&page_size=50",
+        )
+
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    (
+        "nodebalancer_id",
+        "config_id",
+        "encoded_nodebalancer_id",
+        "encoded_config_id",
+    ),
+    [
+        ("1/2", "4", "1%2F2", "4"),
+        ("8", "3?x", "8", "3%3Fx"),
+        ("..", "../6", "..", "..%2F6"),
+    ],
+)
+async def test_list_nodebalancer_config_nodes_encodes_path_params(
+    nodebalancer_id: str,
+    config_id: str,
+    encoded_nodebalancer_id: str,
+    encoded_config_id: str,
+) -> None:
+    """NodeBalancer config node list path parameters are URL-encoded."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"data": []}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.list_nodebalancer_config_nodes(
+            cast("Any", nodebalancer_id),
+            cast("Any", config_id),
+        )
+
+        mock_request.assert_called_once_with(
+            "GET",
+            (
+                f"/nodebalancers/{encoded_nodebalancer_id}/configs/"
+                f"{encoded_config_id}/nodes"
+            ),
+        )
+
+    await client.close()
+
+
+async def test_list_nodebalancer_config_nodes_wraps_http_errors() -> None:
+    """Test listing NodeBalancer config nodes wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.list_nodebalancer_config_nodes(8, 6)
+
+    assert "ListNodeBalancerConfigNodes" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_list_nodebalancer_config_nodes() -> None:
+    """RetryableClient delegates config node list with retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"data": [{"id": 1}]}
+
+    with patch.object(
+        retryable.client, "make_request", new_callable=AsyncMock
+    ) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await retryable.list_nodebalancer_config_nodes(8, 6)
+
+        assert result == {"data": [{"id": 1}]}
+
+    await retryable.close()
+
+
 async def test_retryable_create_nodebalancer_config_node_does_not_replay() -> None:
     """RetryableClient delegates config node create once without retry."""
     retryable = RetryableClient("https://api.linode.com/v4", "test-token")
