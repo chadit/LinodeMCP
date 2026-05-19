@@ -4399,6 +4399,15 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UnassignPlacementGroup", e) from e
 
+    async def delete_placement_group(self, group_id: int) -> None:
+        """Delete a placement group."""
+        encoded_group_id = quote(str(group_id), safe="")
+        endpoint = f"/placement/groups/{encoded_group_id}"
+        try:
+            await self.make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeletePlacementGroup", e) from e
+
     async def get_ipv6_range(self, ipv6_range: str) -> dict[str, Any]:
         """Get an IPv6 range."""
         encoded_range = quote(ipv6_range, safe="")
@@ -6823,6 +6832,10 @@ class RetryableClient:
             self.client.unassign_placement_group, group_id, linodes
         )
         return result
+
+    async def delete_placement_group(self, group_id: int) -> None:
+        """Delete placement group with retry."""
+        await self._execute_with_retry(self.client.delete_placement_group, group_id)
 
     async def get_ipv6_range(self, ipv6_range: str) -> dict[str, Any]:
         """Get IPv6 range with retry."""

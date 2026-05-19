@@ -68,6 +68,41 @@ def _parse_linode_ids(
     return parsed, None
 
 
+def create_linode_placement_group_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_placement_group_delete tool."""
+    return Tool(
+        name="linode_placement_group_delete",
+        description="Deletes a placement group",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "group_id": _GROUP_ID_PROP,
+                "confirm": _CONFIRM_PROP,
+            },
+            "required": ["group_id", "confirm"],
+        },
+    ), Capability.Destroy
+
+
+async def handle_linode_placement_group_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_placement_group_delete tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
+
+    group_id = _parse_positive_int(arguments.get("group_id"), "group_id")
+    if isinstance(group_id, list):
+        return group_id
+
+    async def _call(client: RetryableClient) -> dict[str, str]:
+        await client.delete_placement_group(group_id)
+        return {"message": f"Placement group {group_id} deleted successfully"}
+
+    return await execute_tool(cfg, arguments, "delete placement group", _call)
+
+
 def create_linode_placement_group_assign_tool() -> tuple[Tool, Capability]:
     """Create the linode_placement_group_assign tool."""
     return Tool(

@@ -84,6 +84,7 @@ from linodemcp.tools import (
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
     create_linode_placement_group_assign_tool,
+    create_linode_placement_group_delete_tool,
     create_linode_placement_group_unassign_tool,
     create_linode_profile_app_get_tool,
     create_linode_profile_app_revoke_tool,
@@ -243,6 +244,7 @@ from linodemcp.tools import (
     handle_linode_object_storage_transfer,
     handle_linode_object_storage_types_list,
     handle_linode_placement_group_assign,
+    handle_linode_placement_group_delete,
     handle_linode_placement_group_unassign,
     handle_linode_profile,
     handle_linode_profile_app_get,
@@ -11174,6 +11176,85 @@ async def test_handle_linode_profile_device_revoke_error(sample_config: Config) 
         )
 
     assert "Failed to revoke Linode profile trusted device" in result[0].text
+    assert "API error" in result[0].text
+
+
+def test_create_linode_placement_group_delete_tool() -> None:
+    """Placement group delete tool schema requires confirmation."""
+    tool, capability = create_linode_placement_group_delete_tool()
+
+    assert tool.name == "linode_placement_group_delete"
+    assert capability is Capability.Destroy
+    assert tool.inputSchema["required"] == ["group_id", "confirm"]
+    assert tool.inputSchema["properties"]["group_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_handle_linode_placement_group_delete_requires_boolean_confirm(
+    confirm: object, sample_config: Config
+) -> None:
+    arguments: dict[str, object] = {"group_id": 789}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_placement_group_delete(arguments, sample_config)
+
+    assert "confirm=true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize("group_id", [None, 0, -1, True, "789", "/", "?", ".."])
+async def test_handle_linode_placement_group_delete_requires_positive_group_id(
+    group_id: object, sample_config: Config
+) -> None:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_placement_group_delete(
+            {"group_id": group_id, "confirm": True}, sample_config
+        )
+
+    assert "group_id must be a positive integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_placement_group_delete_success(
+    sample_config: Config,
+) -> None:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_placement_group.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_placement_group_delete(
+            {"group_id": 789, "confirm": True},
+            sample_config,
+        )
+
+    assert json.loads(result[0].text) == {
+        "message": "Placement group 789 deleted successfully"
+    }
+    mock_client.delete_placement_group.assert_awaited_once_with(789)
+
+
+async def test_handle_linode_placement_group_delete_reports_client_errors(
+    sample_config: Config,
+) -> None:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_placement_group.side_effect = RuntimeError("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_placement_group_delete(
+            {"group_id": 789, "confirm": True},
+            sample_config,
+        )
+
+    assert "Failed to delete placement group" in result[0].text
     assert "API error" in result[0].text
 
 
