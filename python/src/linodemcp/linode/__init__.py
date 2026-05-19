@@ -1325,6 +1325,17 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateProfile", e) from e
 
+    async def get_profile_preferences(self) -> dict[str, Any]:
+        """Get OAuth client-specific profile preferences."""
+        try:
+            response = await self.make_request("GET", "/profile/preferences")
+            data: Any = response.json()
+            if isinstance(data, dict):
+                return cast("dict[str, Any]", data)
+            return {}
+        except httpx.HTTPError as e:
+            raise NetworkError("GetProfilePreferences", e) from e
+
     async def update_profile_preferences(
         self, preferences: dict[str, Any]
     ) -> dict[str, Any]:
@@ -4921,6 +4932,13 @@ class RetryableClient:
         """Update Linode user profile with retry."""
         result: Profile = await self._execute_with_retry(
             lambda: self.client.update_profile(**fields)
+        )
+        return result
+
+    async def get_profile_preferences(self) -> dict[str, Any]:
+        """Get OAuth client-specific profile preferences with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_profile_preferences
         )
         return result
 

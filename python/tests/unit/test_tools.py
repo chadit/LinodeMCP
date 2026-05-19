@@ -82,6 +82,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
+    create_linode_profile_preferences_get_tool,
     create_linode_profile_preferences_update_tool,
     create_linode_profile_security_questions_answer_tool,
     create_linode_profile_security_questions_list_tool,
@@ -227,6 +228,7 @@ from linodemcp.tools import (
     handle_linode_object_storage_transfer,
     handle_linode_object_storage_types_list,
     handle_linode_profile,
+    handle_linode_profile_preferences_get,
     handle_linode_profile_preferences_update,
     handle_linode_profile_security_questions_answer,
     handle_linode_profile_security_questions_list,
@@ -360,6 +362,51 @@ async def test_handle_linode_profile_missing_environment(sample_config: Config) 
 
     assert len(result) == 1
     assert "Error" in result[0].text or "error" in result[0].text
+
+
+def test_create_linode_profile_preferences_get_tool() -> None:
+    """Profile preferences get tool exposes read-only schema."""
+    tool, capability = create_linode_profile_preferences_get_tool()
+
+    assert tool.name == "linode_profile_preferences_get"
+    assert capability == Capability.Read
+    assert "required" not in tool.inputSchema
+
+
+async def test_handle_linode_profile_preferences_get_success(
+    sample_config: Config,
+) -> None:
+    """Handler gets profile preferences."""
+    preferences = {"dashboard": {"theme": "dark"}, "dismissed": ["welcome"]}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_profile_preferences.return_value = preferences
+        mock_client.__aenter__.return_value = mock_client
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_preferences_get({}, sample_config)
+
+    assert len(result) == 1
+    assert "dashboard" in result[0].text
+    mock_client.get_profile_preferences.assert_awaited_once_with()
+
+
+async def test_handle_linode_profile_preferences_get_error(
+    sample_config: Config,
+) -> None:
+    """Handler surfaces client errors for profile preferences reads."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_profile_preferences.side_effect = RuntimeError("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_preferences_get({}, sample_config)
+
+    assert len(result) == 1
+    assert "Failed to retrieve Linode profile preferences" in result[0].text
 
 
 def test_create_linode_profile_preferences_update_tool() -> None:
