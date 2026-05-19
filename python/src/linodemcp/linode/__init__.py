@@ -2015,6 +2015,24 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("DeleteNodeBalancerConfigNode", e) from e
 
+    async def get_nodebalancer_config_node(
+        self, nodebalancer_id: int, config_id: int, node_id: int
+    ) -> dict[str, Any]:
+        """Get a node from a NodeBalancer config."""
+        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
+        encoded_config_id = quote(str(config_id), safe="")
+        encoded_node_id = quote(str(node_id), safe="")
+        endpoint = (
+            f"/nodebalancers/{encoded_nodebalancer_id}/configs/"
+            f"{encoded_config_id}/nodes/{encoded_node_id}"
+        )
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetNodeBalancerConfigNode", e) from e
+
     async def list_nodebalancer_firewalls(
         self,
         nodebalancer_id: int,
@@ -6142,6 +6160,18 @@ class RetryableClient:
         return await self.client.delete_nodebalancer_config_node(
             nodebalancer_id, config_id, node_id
         )
+
+    async def get_nodebalancer_config_node(
+        self, nodebalancer_id: int, config_id: int, node_id: int
+    ) -> dict[str, Any]:
+        """Get a NodeBalancer config node with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_nodebalancer_config_node,
+            nodebalancer_id,
+            config_id,
+            node_id,
+        )
+        return result
 
     async def list_nodebalancer_firewalls(
         self,
