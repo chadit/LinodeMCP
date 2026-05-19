@@ -296,10 +296,12 @@ from linodemcp.tools.linode_placement_groups import (
 )
 from linodemcp.tools.linode_placement_groups_write import (
     create_linode_placement_group_assign_tool,
+    create_linode_placement_group_create_tool,
     create_linode_placement_group_delete_tool,
     create_linode_placement_group_unassign_tool,
     create_linode_placement_group_update_tool,
     handle_linode_placement_group_assign,
+    handle_linode_placement_group_create,
     handle_linode_placement_group_delete,
     handle_linode_placement_group_unassign,
     handle_linode_placement_group_update,
@@ -580,6 +582,7 @@ __all__ = [
     "create_linode_object_storage_transfer_tool",
     "create_linode_object_storage_types_list_tool",
     "create_linode_placement_group_assign_tool",
+    "create_linode_placement_group_create_tool",
     "create_linode_placement_group_delete_tool",
     "create_linode_placement_group_get_tool",
     "create_linode_placement_group_unassign_tool",
@@ -770,6 +773,7 @@ __all__ = [
     "handle_linode_object_storage_transfer",
     "handle_linode_object_storage_types_list",
     "handle_linode_placement_group_assign",
+    "handle_linode_placement_group_create",
     "handle_linode_placement_group_delete",
     "handle_linode_placement_group_get",
     "handle_linode_placement_group_unassign",

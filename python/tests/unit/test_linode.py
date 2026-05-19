@@ -1797,6 +1797,127 @@ async def test_create_ipv6_range_posts_route_target_body() -> None:
     await client.close()
 
 
+async def test_create_placement_group_posts_required_body() -> None:
+    """Creating a placement group should POST the documented body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {
+        "id": 789,
+        "label": "pg-a",
+        "region": "us-mia",
+        "placement_group_type": "anti_affinity:local",
+        "placement_group_policy": "strict",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        result = await client.create_placement_group(
+            "pg-a", "us-mia", "anti_affinity:local", "strict"
+        )
+
+        assert result == response.json.return_value
+        mock_request.assert_awaited_once_with(
+            "POST",
+            "/placement/groups",
+            {
+                "label": "pg-a",
+                "region": "us-mia",
+                "placement_group_type": "anti_affinity:local",
+                "placement_group_policy": "strict",
+            },
+        )
+
+    await client.close()
+
+
+@pytest.mark.parametrize("label", ["", "-bad", "bad-", "bad/label", "bad?label"])
+async def test_create_placement_group_rejects_invalid_label(label: str) -> None:
+    """Creating a placement group should reject invalid labels locally."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match="label must start and end"),
+    ):
+        await client.create_placement_group(
+            label, "us-mia", "anti_affinity:local", "strict"
+        )
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    ("region", "placement_group_type", "placement_group_policy", "error"),
+    [
+        ("", "anti_affinity:local", "strict", "region is required"),
+        ("us-mia", "affinity:local", "strict", "placement_group_type"),
+        ("us-mia", "anti_affinity:local", "best-effort", "placement_group_policy"),
+    ],
+)
+async def test_create_placement_group_rejects_invalid_values(
+    region: str, placement_group_type: str, placement_group_policy: str, error: str
+) -> None:
+    """Creating a placement group should reject invalid body values locally."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match=error),
+    ):
+        await client.create_placement_group(
+            "pg-a", region, placement_group_type, placement_group_policy
+        )
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_create_placement_group_wraps_http_errors() -> None:
+    """Creating a placement group should wrap HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.create_placement_group(
+                "pg-a", "us-mia", "anti_affinity:local", "strict"
+            )
+
+    assert "CreatePlacementGroup" in str(exc_info.value)
+    await client.close()
+
+
+async def test_retryable_create_placement_group_delegates_to_client() -> None:
+    """Retryable client should delegate placement group creation."""
+    client = RetryableClient(
+        "https://api.linode.com/v4",
+        "test-token",
+        RetryConfig(max_retries=1, base_delay=0.01),
+    )
+    response_data = {"id": 789, "label": "pg-a"}
+
+    with patch.object(
+        client.client,
+        "create_placement_group",
+        new_callable=AsyncMock,
+    ) as mock_create:
+        mock_create.return_value = response_data
+
+        result = await client.create_placement_group(
+            "pg-a", "us-mia", "anti_affinity:local", "strict"
+        )
+
+        assert result == response_data
+        mock_create.assert_awaited_once_with(
+            "pg-a", "us-mia", "anti_affinity:local", "strict"
+        )
+
+    await client.close()
+
+
 async def test_get_placement_group_sends_get() -> None:
     """Getting a placement group should issue GET for the group path."""
     client = Client("https://api.linode.com/v4", "test-token")
