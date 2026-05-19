@@ -784,6 +784,44 @@ async def handle_linode_profile_token_update(
     return await execute_tool(cfg, arguments, "update Linode profile token", _call)
 
 
+def create_linode_profile_app_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_app_get tool."""
+    return Tool(
+        name="linode_profile_app_get",
+        description=(
+            "Retrieves an OAuth app authorization from the Linode profile by app ID."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "app_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "ID of the OAuth app authorization to retrieve",
+                },
+            },
+            "required": ["app_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_profile_app_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_profile_app_get tool request."""
+    app_id = arguments.get("app_id")
+    if isinstance(app_id, bool) or not isinstance(app_id, int) or app_id < 1:
+        return error_response("app_id must be a positive integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_profile_app(app_id)
+
+    return await execute_tool(
+        cfg, arguments, "retrieve Linode profile OAuth app authorization", _call
+    )
+
+
 def create_linode_profile_app_revoke_tool() -> tuple[Tool, Capability]:
     """Create the linode_profile_app_revoke tool."""
     return Tool(
