@@ -83,6 +83,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
+    create_linode_object_storage_endpoints_list_tool,
     create_linode_object_storage_quota_get_tool,
     create_linode_object_storage_quota_usage_tool,
     create_linode_object_storage_quotas_list_tool,
@@ -237,6 +238,7 @@ from linodemcp.tools import (
     handle_linode_object_storage_bucket_get,
     handle_linode_object_storage_buckets_list,
     handle_linode_object_storage_clusters_list,
+    handle_linode_object_storage_endpoints_list,
     handle_linode_object_storage_key_create,
     handle_linode_object_storage_key_delete,
     handle_linode_object_storage_key_get,
@@ -5200,6 +5202,59 @@ async def test_handle_linode_object_storage_types_list_error(
 
 
 # Phase 2: Access Key & Transfer Tests
+
+
+def test_linode_object_storage_endpoints_list_tool_schema() -> None:
+    """Object Storage endpoints list schema has no route-specific arguments."""
+    tool, capability = create_linode_object_storage_endpoints_list_tool()
+
+    assert capability is Capability.Read
+    assert tool.name == "linode_object_storage_endpoints_list"
+    assert "required" not in tool.inputSchema
+
+
+async def test_handle_linode_object_storage_endpoints_list(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_endpoints_list tool."""
+    mock_endpoints = [
+        {
+            "endpoint_type": "E1",
+            "region": "us-sea",
+            "s3_endpoint": "us-sea-1.linodeobjects.com",
+        }
+    ]
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_object_storage_endpoints.return_value = mock_endpoints
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_object_storage_endpoints_list({}, sample_config)
+
+        assert len(result) == 1
+        assert "us-sea-1.linodeobjects.com" in result[0].text
+        assert '"count": 1' in result[0].text
+        mock_client.list_object_storage_endpoints.assert_called_once_with()
+
+
+async def test_handle_linode_object_storage_endpoints_list_error(
+    sample_config: Config,
+) -> None:
+    """Test linode_object_storage_endpoints_list tool error handling."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_object_storage_endpoints.side_effect = Exception("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_object_storage_endpoints_list({}, sample_config)
+
+        assert len(result) == 1
+        assert "Failed to retrieve Object Storage endpoints" in result[0].text
 
 
 async def test_handle_linode_object_storage_keys_list(

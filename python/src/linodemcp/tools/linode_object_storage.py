@@ -299,6 +299,42 @@ async def handle_linode_object_storage_types_list(
     return await execute_tool(cfg, arguments, "retrieve Object Storage types", _call)
 
 
+def create_linode_object_storage_endpoints_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_object_storage_endpoints_list tool."""
+    return Tool(
+        name="linode_object_storage_endpoints_list",
+        description="Lists Object Storage endpoints available to your account.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+            },
+        },
+    ), Capability.Read
+
+
+async def handle_linode_object_storage_endpoints_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_object_storage_endpoints_list tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        endpoints = await client.list_object_storage_endpoints()
+        return {
+            "count": len(endpoints),
+            "endpoints": endpoints,
+        }
+
+    return await execute_tool(
+        cfg, arguments, "retrieve Object Storage endpoints", _call
+    )
+
+
 # Phase 2: Read-Only Access Key & Transfer Tools
 
 

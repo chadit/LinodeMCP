@@ -2923,6 +2923,56 @@ async def test_list_object_storage_quotas_sends_exact_route() -> None:
     await client.close()
 
 
+async def test_list_object_storage_endpoints_sends_exact_route() -> None:
+    """Object Storage endpoints list uses the documented GET route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": [
+            {
+                "endpoint_type": "E1",
+                "region": "us-sea",
+                "s3_endpoint": "us-sea-1.linodeobjects.com",
+            }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        endpoints = await client.list_object_storage_endpoints()
+
+        assert endpoints == mock_response.json.return_value["data"]
+        mock_request.assert_awaited_once_with("GET", "/object-storage/endpoints")
+
+    await client.close()
+
+
+async def test_retryable_list_object_storage_endpoints_delegates_to_client() -> None:
+    """Retryable client delegates endpoint list to the low-level client."""
+    base_client = AsyncMock()
+    base_client.list_object_storage_endpoints.return_value = [{"region": "us-sea"}]
+    retryable = RetryableClient.__new__(RetryableClient)
+    retryable.client = base_client
+
+    with patch.object(
+        RetryableClient, "_execute_with_retry", new_callable=AsyncMock
+    ) as execute_with_retry:
+        execute_with_retry.return_value = [{"region": "us-sea"}]
+
+        result = await retryable.list_object_storage_endpoints()
+
+        assert result == [{"region": "us-sea"}]
+        execute_with_retry.assert_awaited_once_with(
+            base_client.list_object_storage_endpoints
+        )
+
+
 async def test_retryable_list_object_storage_quotas_delegates_to_client() -> None:
     """Retryable client delegates quota list to the low-level client."""
     base_client = AsyncMock()
