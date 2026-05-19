@@ -1989,6 +1989,17 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetObjectStorageTransfer", e) from e
 
+    async def get_object_storage_quota(self, obj_quota_id: str) -> dict[str, Any]:
+        """Get a single Object Storage quota."""
+        encoded_quota_id = quote(obj_quota_id, safe="")
+        endpoint = f"/object-storage/quotas/{encoded_quota_id}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            quota: dict[str, Any] = response.json()
+            return quota
+        except httpx.HTTPError as e:
+            raise NetworkError("GetObjectStorageQuota", e) from e
+
     async def get_object_storage_quota_usage(
         self, obj_quota_id: int | str
     ) -> dict[str, Any]:
@@ -5913,6 +5924,13 @@ class RetryableClient:
         """Get Object Storage transfer usage with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_object_storage_transfer
+        )
+        return result
+
+    async def get_object_storage_quota(self, obj_quota_id: str) -> dict[str, Any]:
+        """Get a single Object Storage quota with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_object_storage_quota, obj_quota_id
         )
         return result
 

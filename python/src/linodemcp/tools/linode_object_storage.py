@@ -409,6 +409,61 @@ async def handle_linode_object_storage_transfer(
     )
 
 
+def create_linode_object_storage_quota_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_object_storage_quota_get tool."""
+    return Tool(
+        name="linode_object_storage_quota_get",
+        description="Gets a single Object Storage quota by quota ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "obj_quota_id": {
+                    "type": "string",
+                    "description": (
+                        "The Object Storage quota ID, formatted as "
+                        "<quota_type>-<s3_endpoint>."
+                    ),
+                },
+            },
+            "required": ["obj_quota_id"],
+        },
+    ), Capability.Read
+
+
+def _parse_object_storage_quota_id(value: Any) -> str | None:
+    """Parse an Object Storage quota ID tool argument."""
+    if not isinstance(value, str):
+        return None
+    parsed = value.strip()
+    if not parsed:
+        return None
+    if any(separator in parsed for separator in ("/", "?", "#")):
+        return None
+    if ".." in parsed:
+        return None
+    return parsed
+
+
+async def handle_linode_object_storage_quota_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_object_storage_quota_get tool request."""
+    obj_quota_id = _parse_object_storage_quota_id(arguments.get("obj_quota_id"))
+    if obj_quota_id is None:
+        return _error_response("obj_quota_id must be a valid Object Storage quota ID")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_object_storage_quota(obj_quota_id)
+
+    return await execute_tool(cfg, arguments, "retrieve Object Storage quota", _call)
+
+
 def create_linode_object_storage_quota_usage_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_quota_usage tool."""
     return Tool(
