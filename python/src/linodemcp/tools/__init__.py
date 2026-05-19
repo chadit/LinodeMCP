@@ -292,6 +292,7 @@ from linodemcp.tools.linode_object_storage_write import (
 )
 from linodemcp.tools.linode_profile import (
     create_linode_profile_login_get_tool,
+    create_linode_profile_logins_list_tool,
     create_linode_profile_phone_number_delete_tool,
     create_linode_profile_phone_number_send_tool,
     create_linode_profile_phone_number_verify_tool,
@@ -310,6 +311,7 @@ from linodemcp.tools.linode_profile import (
     create_linode_profile_tool,
     handle_linode_profile,
     handle_linode_profile_login_get,
+    handle_linode_profile_logins_list,
     handle_linode_profile_phone_number_delete,
     handle_linode_profile_phone_number_send,
     handle_linode_profile_phone_number_verify,
@@ -552,6 +554,7 @@ __all__ = [
     "create_linode_object_storage_transfer_tool",
     "create_linode_object_storage_types_list_tool",
     "create_linode_profile_login_get_tool",
+    "create_linode_profile_logins_list_tool",
     "create_linode_profile_phone_number_delete_tool",
     "create_linode_profile_phone_number_send_tool",
     "create_linode_profile_phone_number_verify_tool",
@@ -731,6 +734,7 @@ __all__ = [
     "handle_linode_object_storage_types_list",
     "handle_linode_profile",
     "handle_linode_profile_login_get",
+    "handle_linode_profile_logins_list",
     "handle_linode_profile_phone_number_delete",
     "handle_linode_profile_phone_number_send",
     "handle_linode_profile_phone_number_verify",

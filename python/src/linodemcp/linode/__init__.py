@@ -2561,6 +2561,66 @@ class Client:
             tokens.append(cast("dict[str, Any]", item))
         return tokens, pages_raw
 
+    def _parse_profile_logins_page(
+        self, response: httpx.Response
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Parse a paginated profile logins response."""
+        data_raw = response.json()
+        if not isinstance(data_raw, dict):
+            msg = "profile logins response must be an object"
+            raise TypeError(msg)
+        data = cast("dict[str, Any]", data_raw)
+        pages_raw = data.get("pages", 1)
+        if not isinstance(pages_raw, int) or isinstance(pages_raw, bool):
+            msg = "profile logins response pages must be an integer"
+            raise TypeError(msg)
+        if pages_raw < 1:
+            msg = "profile logins response pages must be positive"
+            raise ValueError(msg)
+        items_raw = data.get("data")
+        if not isinstance(items_raw, list):
+            msg = "profile logins response data must be a list"
+            raise TypeError(msg)
+        items = cast("list[object]", items_raw)
+        logins: list[dict[str, Any]] = []
+        for item in items:
+            if not isinstance(item, dict):
+                msg = "profile logins response data entries must be objects"
+                raise TypeError(msg)
+            logins.append(cast("dict[str, Any]", item))
+        return logins, pages_raw
+
+    async def list_profile_logins(self) -> list[dict[str, Any]]:
+        """List profile logins."""
+        logger.info("Listing profile logins")
+
+        try:
+            logins: list[dict[str, Any]] = []
+            page = 1
+            pages = 1
+            while page <= pages:
+                endpoint = "/profile/logins"
+                if page > 1:
+                    endpoint = f"/profile/logins?page={page}"
+                response = await self.make_request("GET", endpoint)
+                page_logins, pages = self._parse_profile_logins_page(response)
+                logins.extend(page_logins)
+                page += 1
+            logger.info("Profile logins listed", extra={"login_count": len(logins)})
+            return logins
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout listing profile logins: %s", e)
+            raise NetworkError("ListProfileLogins", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout listing profile logins: %s", e)
+            raise NetworkError("ListProfileLogins", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error listing profile logins")
+            raise NetworkError("ListProfileLogins", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error listing profile logins: %s", e)
+            raise NetworkError("ListProfileLogins", e) from e
+
     async def list_profile_tokens(self) -> list[dict[str, Any]]:
         """List personal access tokens."""
         logger.info("Listing profile tokens")
@@ -5787,6 +5847,13 @@ class RetryableClient:
         """Get a profile token with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_profile_token, token_id
+        )
+        return result
+
+    async def list_profile_logins(self) -> list[dict[str, Any]]:
+        """List profile logins with retry."""
+        result: list[dict[str, Any]] = await self._execute_with_retry(
+            self.client.list_profile_logins
         )
         return result
 

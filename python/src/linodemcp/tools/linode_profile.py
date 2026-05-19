@@ -644,6 +644,31 @@ async def handle_linode_profile_token_get(
     return await execute_tool(cfg, arguments, "retrieve Linode profile token", _call)
 
 
+def create_linode_profile_logins_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_logins_list tool."""
+    return Tool(
+        name="linode_profile_logins_list",
+        description="Lists recent successful Linode profile logins.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+            },
+        },
+    ), Capability.Read
+
+
+async def handle_linode_profile_logins_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_profile_logins_list tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return {"logins": await client.list_profile_logins()}
+
+    return await execute_tool(cfg, arguments, "list Linode profile logins", _call)
+
+
 def create_linode_profile_login_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_profile_login_get tool."""
     return Tool(

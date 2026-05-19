@@ -4617,6 +4617,121 @@ async def test_get_profile_token_wraps_http_errors() -> None:
     await client.close()
 
 
+async def test_list_profile_logins_sends_get_to_profile_logins_route() -> None:
+    """Profile login list sends GET /profile/logins with no body or query."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {
+        "data": [
+            {"id": 12345, "ip": "192.0.2.10"},
+            {"id": 67890, "ip": "192.0.2.11"},
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 2,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        result = await client.list_profile_logins()
+
+    assert result == [
+        {"id": 12345, "ip": "192.0.2.10"},
+        {"id": 67890, "ip": "192.0.2.11"},
+    ]
+    mock_request.assert_called_once_with("GET", "/profile/logins")
+    await client.close()
+
+
+async def test_list_profile_logins_fetches_all_pages() -> None:
+    """Profile login list fetches subsequent pages when present."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    first_response = MagicMock()
+    first_response.json.return_value = {
+        "data": [{"id": 12345, "ip": "192.0.2.10"}],
+        "page": 1,
+        "pages": 2,
+        "results": 2,
+    }
+    second_response = MagicMock()
+    second_response.json.return_value = {
+        "data": [{"id": 67890, "ip": "192.0.2.11"}],
+        "page": 2,
+        "pages": 2,
+        "results": 2,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = [first_response, second_response]
+        result = await client.list_profile_logins()
+
+    assert result == [
+        {"id": 12345, "ip": "192.0.2.10"},
+        {"id": 67890, "ip": "192.0.2.11"},
+    ]
+    assert [args.args for args in mock_request.await_args_list] == [
+        ("GET", "/profile/logins"),
+        ("GET", "/profile/logins?page=2"),
+    ]
+    await client.close()
+
+
+async def test_list_profile_logins_rejects_malformed_response() -> None:
+    """Profile login list fails closed on malformed payloads."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    malformed_payloads: tuple[Any, ...] = (
+        None,
+        [],
+        {},
+        {"data": "not-a-list"},
+        {"data": ["not-an-object"]},
+        {"data": [], "pages": "not-an-int"},
+        {"data": [], "pages": True},
+        {"data": [], "pages": 0},
+    )
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        for payload in malformed_payloads:
+            response = MagicMock()
+            response.json.return_value = payload
+            mock_request.return_value = response
+            with pytest.raises(
+                (TypeError, ValueError), match="profile logins response"
+            ):
+                await client.list_profile_logins()
+
+    assert mock_request.await_count == len(malformed_payloads)
+    await client.close()
+
+
+async def test_list_profile_logins_wraps_http_errors() -> None:
+    """Profile login list maps HTTP errors to ListProfileLogins."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ReadTimeout("timeout")
+        with pytest.raises(NetworkError) as exc_info:
+            await client.list_profile_logins()
+
+    assert exc_info.value.operation == "ListProfileLogins"
+    await client.close()
+
+
+async def test_retryable_list_profile_logins_delegates_to_client() -> None:
+    """Retryable profile login list forwards to the base client."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        client.client, "list_profile_logins", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = [{"id": 12345, "ip": "192.0.2.10"}]
+        result = await client.list_profile_logins()
+
+    assert result == [{"id": 12345, "ip": "192.0.2.10"}]
+    mock_list.assert_awaited_once_with()
+    await client.close()
+
+
 async def test_get_profile_login_sends_get_to_profile_login_route() -> None:
     """Profile login get sends GET /profile/logins/{loginId}."""
     client = Client("https://api.linode.com/v4", "test-token")
