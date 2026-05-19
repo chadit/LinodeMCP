@@ -459,3 +459,83 @@ func TestClientMalformedJSONResponse(t *testing.T) {
 
 	assert.ErrorAs(t, err, &syntaxErr, "error chain should contain a json.SyntaxError")
 }
+
+// TestClientUpdateProfileSuccess verifies that UpdateProfile sends a PUT
+// request to /profile with the correct body and returns the updated Profile.
+func TestClientUpdateProfileSuccess(t *testing.T) {
+	t.Parallel()
+
+	updatedProfile := linode.Profile{
+		Username:           "testuser",
+		Email:              "updated@example.com",
+		UID:                1234,
+		EmailNotifications: true,
+		Timezone:           "US/Eastern",
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, "/profile", r.URL.Path, "request path should be /profile")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		var body map[string]any
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		assert.Equal(t, "updated@example.com", body["email"])
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(updatedProfile))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	email := "updated@example.com"
+	result, err := client.UpdateProfile(t.Context(), &linode.UpdateProfileRequest{
+		Email: &email,
+	})
+
+	require.NoError(t, err, "UpdateProfile should succeed on 200 response")
+	assert.Equal(t, "updated@example.com", result.Email)
+	assert.Equal(t, "US/Eastern", result.Timezone)
+}
+
+// TestClientUpdateProfileNetworkError verifies that UpdateProfile returns a
+// NetworkError when the HTTP request fails to reach the server.
+func TestClientUpdateProfileNetworkError(t *testing.T) {
+	t.Parallel()
+
+	client := linode.NewClient("http://127.0.0.1:1", "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.UpdateProfile(t.Context(), &linode.UpdateProfileRequest{})
+
+	require.Error(t, err, "UpdateProfile should fail when the server is unreachable")
+
+	var netErr *linode.NetworkError
+
+	assert.ErrorAs(t, err, &netErr, "error should be a NetworkError")
+}
+
+// TestClientUpdateProfileAPIError verifies that UpdateProfile propagates
+// API errors (non-2xx) through the handleResponse error chain.
+func TestClientUpdateProfileAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, err := w.Write([]byte(`{"errors":[{"field":"email","reason":"invalid email format"}]}`))
+		assert.NoError(t, err)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.UpdateProfile(t.Context(), &linode.UpdateProfileRequest{})
+
+	require.Error(t, err, "UpdateProfile should fail on 400 response")
+
+	var apiErr *linode.APIError
+
+	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
+	assert.Equal(t, 400, apiErr.StatusCode)
+}

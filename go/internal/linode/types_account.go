@@ -108,3 +108,15 @@ type Promo struct {
 	ServiceType              string `json:"service_type"`
 	ThisMonthCreditRemaining string `json:"this_month_credit_remaining"`
 }
+
+// UpdateProfileRequest contains the updatable fields for PUT /v4/profile.
+// All fields are pointers so omitted fields are not sent in the request body.
+type UpdateProfileRequest struct {
+	AuthorizedKeys     *[]string `json:"authorized_keys,omitempty"`
+	Email              *string   `json:"email,omitempty"`
+	EmailNotifications *bool     `json:"email_notifications,omitempty"`
+	LishAuthMethod     *string   `json:"lish_auth_method,omitempty"`
+	Restricted         *bool     `json:"restricted,omitempty"`
+	Timezone           *string   `json:"timezone,omitempty"`
+	TwoFactorAuth      *bool     `json:"two_factor_auth,omitempty"`
+}

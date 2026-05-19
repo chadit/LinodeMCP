@@ -21,7 +21,7 @@ func (c *Client) httpGetProfile(ctx context.Context) (*Profile, error) {
 		return nil, &NetworkError{Operation: "GetProfile", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _ = resp.Body.Close() }() // errcheck: body close is best-effort; all account methods use this pattern
 
 	var profile Profile
 	if err := c.handleResponse(resp, &profile); err != nil {
@@ -73,4 +73,24 @@ func (c *Client) httpGetAccount(ctx context.Context) (*Account, error) {
 	}
 
 	return &account, nil
+}
+
+// httpUpdateProfile updates the authenticated user's profile via PUT /v4/profile.
+func (c *Client) httpUpdateProfile(ctx context.Context, req *UpdateProfileRequest) (*Profile, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpointProfile, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateProfile", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }() // errcheck: body close is best-effort; all account methods use this pattern
+
+	var profile Profile
+	if err := c.handleResponse(resp, &profile); err != nil {
+		return nil, err
+	}
+
+	return &profile, nil
 }
