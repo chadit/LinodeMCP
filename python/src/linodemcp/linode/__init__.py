@@ -12,7 +12,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from dataclasses import field as dc_field
 from datetime import datetime
-from typing import Any, TypeVar, cast
+from pathlib import Path
+from typing import Any, BinaryIO, TypeVar, cast
 from urllib.parse import quote, urlencode
 
 import httpx
@@ -1819,6 +1820,18 @@ class Client:
             return data
         except httpx.HTTPError as e:
             raise NetworkError("CloseSupportTicket", e) from e
+
+    async def create_support_ticket_attachment(
+        self, ticket_id: int, file: str
+    ) -> dict[str, Any]:
+        """Create an attachment for a support ticket from a local file path."""
+        endpoint = f"/support/tickets/{ticket_id}/attachments"
+        try:
+            response = await self.make_file_request("POST", endpoint, file)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateSupportTicketAttachment", e) from e
 
     async def list_nodebalancers(self) -> list[NodeBalancer]:
         """List NodeBalancers."""
@@ -4418,6 +4431,31 @@ class Client:
 
         return response
 
+    async def make_file_request(
+        self, method: str, endpoint: str, file_path: str
+    ) -> httpx.Response:
+        """Make a multipart file upload request to the Linode API."""
+        url = self.base_url + endpoint
+        path = Path(file_path)
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "User-Agent": "LinodeMCP/1.0",
+        }
+
+        with path.open("rb") as file_obj:
+            file_handle: BinaryIO = file_obj
+            response = await self.client.request(
+                method,
+                url,
+                headers=headers,
+                files={"file": (path.name, file_handle)},
+            )
+
+        if response.status_code >= HTTP_BAD_REQUEST:
+            self._handle_error_response(response)
+
+        return response
+
     def _handle_error_response(self, response: httpx.Response) -> None:
         """Handle error responses from the API."""
         try:
@@ -5305,6 +5343,15 @@ class RetryableClient:
         """Close a support ticket with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.close_support_ticket, ticket_id
+        )
+        return result
+
+    async def create_support_ticket_attachment(
+        self, ticket_id: int, file: str
+    ) -> dict[str, Any]:
+        """Create a support ticket attachment with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.create_support_ticket_attachment, ticket_id, file
         )
         return result
 

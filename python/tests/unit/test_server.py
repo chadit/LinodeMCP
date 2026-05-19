@@ -594,6 +594,53 @@ async def test_account_support_ticket_reply_create_tool_is_exported_and_register
     assert "linode_account_support_ticket_reply_create" in srv.registered_tool_names
 
 
+async def test_account_support_ticket_attachment_create_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Support ticket attachment create tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert (
+        "create_linode_account_support_ticket_attachment_create_tool"
+        in tools_mod.__all__
+    )
+    assert "handle_linode_account_support_ticket_attachment_create" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert (
+        "linode_account_support_ticket_attachment_create" in srv.registered_tool_names
+    )
+
+
+async def test_account_support_ticket_attachment_create_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Support ticket attachment create is callable through server dispatch."""
+    srv = Server(_full_access_config(sample_config))
+    response_data: dict[str, Any] = {"id": 789, "file": "attachment.txt"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_support_ticket_attachment.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await srv.dispatch(
+            "linode_account_support_ticket_attachment_create",
+            {"ticket_id": 123, "file": "/Users/e/a.txt", "confirm": True},
+        )
+
+    assert len(result) == 1
+    assert json.loads(result[0].text) == {
+        "message": "Support ticket attachment created successfully",
+        "attachment": response_data,
+    }
+    mock_client.create_support_ticket_attachment.assert_awaited_once_with(
+        123, "/Users/e/a.txt"
+    )
+
+
 async def test_default_profile_filters_to_read_only(sample_config: Config) -> None:
     """Server with no active_profile registers only Read+Meta tools.
 

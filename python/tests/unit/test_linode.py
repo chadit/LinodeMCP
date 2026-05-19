@@ -990,6 +990,76 @@ async def test_retryable_create_support_ticket_reply_delegates_to_client() -> No
     await retryable.close()
 
 
+async def test_create_support_ticket_attachment_route(tmp_path: Any) -> None:
+    """Test support ticket attachment creation sends multipart file upload."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    attachment = tmp_path / "attachment.txt"
+    attachment.write_text("attachment-content")
+
+    response_data: dict[str, Any] = {}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.create_support_ticket_attachment(123, str(attachment))
+
+    assert result == response_data
+    mock_request.assert_awaited_once()
+    await_args = mock_request.await_args
+    assert await_args is not None
+    args = await_args.args
+    kwargs = await_args.kwargs
+    assert args == (
+        "POST",
+        "https://api.linode.com/v4/support/tickets/123/attachments",
+    )
+    assert kwargs["headers"] == {
+        "Authorization": "Bearer test-token",
+        "User-Agent": "LinodeMCP/1.0",
+    }
+    filename, file_obj = kwargs["files"]["file"]
+    assert filename == "attachment.txt"
+    assert file_obj.name == str(attachment)
+
+    await client.close()
+
+
+async def test_create_support_ticket_attachment_wraps_http_errors(
+    tmp_path: Any,
+) -> None:
+    """Test support ticket attachment creation wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    attachment = tmp_path / "attachment.txt"
+    attachment.write_text("attachment-content")
+
+    with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.create_support_ticket_attachment(123, str(attachment))
+
+    assert "CreateSupportTicketAttachment" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_create_support_ticket_attachment_delegates_to_client() -> None:
+    """Test RetryableClient delegates support ticket attachment creation."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "create_support_ticket_attachment", new_callable=AsyncMock
+    ) as mock_create:
+        mock_create.return_value = {"id": 789}
+        result = await retryable.create_support_ticket_attachment(123, "/Users/e/a.txt")
+
+    assert result == {"id": 789}
+    mock_create.assert_awaited_once_with(123, "/Users/e/a.txt")
+    await retryable.close()
+
+
 async def test_close_support_ticket_sends_post_to_ticket_close_route() -> None:
     """Test support ticket close sends documented POST route."""
     client = Client("https://api.linode.com/v4", "test-token")

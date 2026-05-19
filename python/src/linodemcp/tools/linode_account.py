@@ -1,5 +1,6 @@
 """Linode account tool - authenticated user account information."""
 
+from pathlib import Path
 from typing import Any, cast
 
 from mcp.types import TextContent, Tool
@@ -716,4 +717,66 @@ async def handle_linode_account_support_ticket_reply_create(
 
     return await execute_tool(
         cfg, arguments, "create Linode support ticket reply", _call
+    )
+
+
+def create_linode_account_support_ticket_attachment_create_tool() -> tuple[
+    Tool, Capability
+]:
+    """Create the linode_account_support_ticket_attachment_create tool."""
+    return Tool(
+        name="linode_account_support_ticket_attachment_create",
+        description="Creates an attachment on a Linode support ticket.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "ticket_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Support ticket ID to attach the file to",
+                },
+                "file": {
+                    "type": "string",
+                    "description": ("Local, absolute path to the file to attach"),
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this mutating operation.",
+                },
+            },
+            "required": ["ticket_id", "file", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_account_support_ticket_attachment_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_support_ticket_attachment_create tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This creates a support ticket attachment. Set confirm=true to proceed."
+        )
+
+    ticket_id = arguments.get("ticket_id")
+    if not isinstance(ticket_id, int) or isinstance(ticket_id, bool) or ticket_id < 1:
+        return error_response("ticket_id must be a positive integer")
+
+    file = arguments.get("file")
+    if not isinstance(file, str) or not file.strip():
+        return error_response("file is required")
+    file_path = file.strip()
+    if not Path(file_path).is_absolute():
+        return error_response("file must be a local, absolute path")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        attachment = await client.create_support_ticket_attachment(ticket_id, file_path)
+        return {
+            "message": "Support ticket attachment created successfully",
+            "attachment": attachment,
+        }
+
+    return await execute_tool(
+        cfg, arguments, "create Linode support ticket attachment", _call
     )
