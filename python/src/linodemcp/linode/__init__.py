@@ -1950,6 +1950,52 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("RebuildNodeBalancerConfig", e) from e
 
+    async def update_nodebalancer_config(
+        self, nodebalancer_id: int, config_id: int, fields: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update a NodeBalancer config."""
+        if (
+            not isinstance(nodebalancer_id, int)  # pyright: ignore[reportUnnecessaryIsInstance]
+            or isinstance(nodebalancer_id, bool)
+            or nodebalancer_id < 1
+        ):
+            raise ValueError("nodebalancer_id must be a positive integer")
+        if (
+            not isinstance(config_id, int)  # pyright: ignore[reportUnnecessaryIsInstance]
+            or isinstance(config_id, bool)
+            or config_id < 1
+        ):
+            raise ValueError("config_id must be a positive integer")
+        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
+        encoded_config_id = quote(str(config_id), safe="")
+        endpoint = (
+            f"/nodebalancers/{encoded_nodebalancer_id}/configs/{encoded_config_id}"
+        )
+        logger.info(
+            "Updating NodeBalancer config",
+            extra={
+                "nodebalancer_id": nodebalancer_id,
+                "config_id": config_id,
+            },
+        )
+        try:
+            response = await self.make_request("PUT", endpoint, fields)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout updating config: %s", e)
+            raise NetworkError("UpdateNodeBalancerConfig", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout updating config: %s", e)
+            raise NetworkError("UpdateNodeBalancerConfig", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception(
+                "HTTP error updating config: status %d", e.response.status_code
+            )
+            raise NetworkError("UpdateNodeBalancerConfig", e) from e
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateNodeBalancerConfig", e) from e
+
     async def delete_nodebalancer_config(
         self, nodebalancer_id: int, config_id: int
     ) -> None:
@@ -6227,6 +6273,14 @@ class RetryableClient:
     ) -> dict[str, Any]:
         """Rebuild a NodeBalancer config without replay retry."""
         return await self.client.rebuild_nodebalancer_config(nodebalancer_id, config_id)
+
+    async def update_nodebalancer_config(
+        self, nodebalancer_id: int, config_id: int, fields: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update a NodeBalancer config without replay retry."""
+        return await self.client.update_nodebalancer_config(
+            nodebalancer_id, config_id, fields
+        )
 
     async def delete_nodebalancer_config(
         self, nodebalancer_id: int, config_id: int

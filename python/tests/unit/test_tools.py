@@ -89,6 +89,7 @@ from linodemcp.tools import (
     create_linode_nodebalancer_config_node_get_tool,
     create_linode_nodebalancer_config_node_update_tool,
     create_linode_nodebalancer_config_rebuild_tool,
+    create_linode_nodebalancer_config_update_tool,
     create_linode_nodebalancer_firewalls_list_tool,
     create_linode_nodebalancer_firewalls_update_tool,
     create_linode_nodebalancer_stats_tool,
@@ -244,6 +245,7 @@ from linodemcp.tools import (
     handle_linode_nodebalancer_config_node_update,
     handle_linode_nodebalancer_config_nodes_list,
     handle_linode_nodebalancer_config_rebuild,
+    handle_linode_nodebalancer_config_update,
     handle_linode_nodebalancer_create,
     handle_linode_nodebalancer_delete,
     handle_linode_nodebalancer_firewalls_list,
@@ -13969,6 +13971,173 @@ async def test_handle_linode_nodebalancer_firewalls_list_error(
 
         result = await handle_linode_nodebalancer_firewalls_list(
             {"nodebalancer_id": 8}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "Failed" in result[0].text or "error" in result[0].text.lower()
+
+
+def test_linode_nodebalancer_config_update_tool_definition() -> None:
+    """Test linode_nodebalancer_config_update tool definition."""
+    tool, capability = create_linode_nodebalancer_config_update_tool()
+
+    assert tool.name == "linode_nodebalancer_config_update"
+    assert capability == Capability.Write
+    assert tool.inputSchema["properties"]["nodebalancer_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["config_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["required"] == [
+        "nodebalancer_id",
+        "config_id",
+        "confirm",
+    ]
+
+
+async def test_handle_linode_nodebalancer_config_update(
+    sample_config: Config,
+) -> None:
+    """Test linode_nodebalancer_config_update tool."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_nodebalancer_config.return_value = {
+            "id": 6,
+            "nodebalancer_id": 8,
+            "port": 443,
+            "protocol": "https",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_config_update(
+            {
+                "nodebalancer_id": 8,
+                "config_id": 6,
+                "port": 443,
+                "protocol": "https",
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        data = json.loads(result[0].text)
+        assert data["id"] == 6
+        assert data["port"] == 443
+        mock_client.update_nodebalancer_config.assert_called_once_with(
+            8, 6, {"port": 443, "protocol": "https"}
+        )
+
+
+async def test_handle_linode_nodebalancer_config_update_empty_response(
+    sample_config: Config,
+) -> None:
+    """Test linode_nodebalancer_config_update formats an empty response."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_nodebalancer_config.return_value = {}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_config_update(
+            {"nodebalancer_id": 8, "config_id": 6, "confirm": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        data = json.loads(result[0].text)
+        assert data["nodebalancer_id"] == 8
+        assert data["config_id"] == 6
+        assert "update requested" in data["message"]
+        mock_client.update_nodebalancer_config.assert_called_once_with(8, 6, {})
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({}, "confirm must be true"),
+        ({"confirm": False}, "confirm must be true"),
+        ({"confirm": "true"}, "confirm must be true"),
+        ({"confirm": 1}, "confirm must be true"),
+        (
+            {"nodebalancer_id": 0, "config_id": 6, "confirm": True},
+            "nodebalancer_id",
+        ),
+        (
+            {"nodebalancer_id": "8", "config_id": 6, "confirm": True},
+            "nodebalancer_id",
+        ),
+        (
+            {"nodebalancer_id": True, "config_id": 6, "confirm": True},
+            "nodebalancer_id",
+        ),
+        (
+            {"nodebalancer_id": "1/2", "config_id": 6, "confirm": True},
+            "nodebalancer_id",
+        ),
+        (
+            {"nodebalancer_id": "1?x", "config_id": 6, "confirm": True},
+            "nodebalancer_id",
+        ),
+        (
+            {"nodebalancer_id": "..", "config_id": 6, "confirm": True},
+            "nodebalancer_id",
+        ),
+        (
+            {"nodebalancer_id": 8, "config_id": 0, "confirm": True},
+            "config_id",
+        ),
+        (
+            {"nodebalancer_id": 8, "config_id": "6", "confirm": True},
+            "config_id",
+        ),
+        (
+            {"nodebalancer_id": 8, "config_id": False, "confirm": True},
+            "config_id",
+        ),
+        (
+            {"nodebalancer_id": 8, "config_id": "4/5", "confirm": True},
+            "config_id",
+        ),
+        (
+            {"nodebalancer_id": 8, "config_id": "4?x", "confirm": True},
+            "config_id",
+        ),
+        (
+            {"nodebalancer_id": 8, "config_id": "..", "confirm": True},
+            "config_id",
+        ),
+    ],
+)
+async def test_handle_linode_nodebalancer_config_update_invalid_arguments(
+    sample_config: Config, arguments: dict[str, Any], message: str
+) -> None:
+    """NodeBalancer config update rejects invalid arguments before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_nodebalancer_config_update(
+            arguments, sample_config
+        )
+
+    assert len(result) == 1
+    assert message in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_nodebalancer_config_update_error(
+    sample_config: Config,
+) -> None:
+    """Test linode_nodebalancer_config_update error handling."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_nodebalancer_config.side_effect = Exception("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_config_update(
+            {"nodebalancer_id": 8, "config_id": 6, "confirm": True},
+            sample_config,
         )
 
         assert len(result) == 1

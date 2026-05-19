@@ -809,3 +809,173 @@ async def handle_linode_nodebalancer_config_node_delete(
         }
 
     return await execute_tool(cfg, arguments, "delete NodeBalancer config node", _call)
+
+
+def create_linode_nodebalancer_config_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_nodebalancer_config_update tool."""
+    return Tool(
+        name="linode_nodebalancer_config_update",
+        description=(
+            "Updates an existing NodeBalancer config. "
+            "Requires confirm because live routing may be affected."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "nodebalancer_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the NodeBalancer (required)",
+                },
+                "config_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": (
+                        "The ID of the NodeBalancer config to update (required)"
+                    ),
+                },
+                "port": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535,
+                    "description": "Port the NodeBalancer listens on for this config.",
+                },
+                "protocol": {
+                    "type": "string",
+                    "enum": ["tcp", "udp", "http", "https"],
+                    "description": "Protocol for this config.",
+                },
+                "algorithm": {
+                    "type": "string",
+                    "enum": ["roundrobin", "leastconn", "source", "ring_hash"],
+                    "description": "Backend selection algorithm.",
+                },
+                "check": {
+                    "type": "string",
+                    "enum": ["none", "connection", "http", "http_body"],
+                    "description": "Health check type for backends.",
+                },
+                "check_passive": {
+                    "type": "boolean",
+                    "description": "Mark backend down on 5xx responses.",
+                },
+                "check_attempts": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 30,
+                    "description": "Check attempts before marking backend down.",
+                },
+                "check_body": {
+                    "type": "string",
+                    "description": "Required text in check response body.",
+                },
+                "check_interval": {
+                    "type": "integer",
+                    "minimum": 2,
+                    "maximum": 3600,
+                    "description": "Seconds between health checks.",
+                },
+                "check_path": {
+                    "type": "string",
+                    "description": "URL path for HTTP health checks.",
+                },
+                "check_timeout": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 30,
+                    "description": "Seconds to wait for a check attempt.",
+                },
+                "stickiness": {
+                    "type": "string",
+                    "enum": ["none", "table", "session", "source_ip", "http_cookie"],
+                    "description": "Session stickiness mode.",
+                },
+                "proxy_protocol": {
+                    "type": "string",
+                    "enum": ["none", "v1", "v2"],
+                    "description": "Proxy protocol version (TCP only).",
+                },
+                "cipher_suite": {
+                    "type": "string",
+                    "enum": ["recommended", "legacy"],
+                    "description": "SSL cipher suite (HTTPS only).",
+                },
+                "ssl_cert": {
+                    "type": "string",
+                    "description": "PEM-formatted SSL certificate (HTTPS only).",
+                },
+                "ssl_key": {
+                    "type": "string",
+                    "description": "PEM-formatted SSL private key (HTTPS only).",
+                },
+                "udp_check_port": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535,
+                    "description": "Health check port for UDP configs.",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to update the NodeBalancer config.",
+                },
+            },
+            "required": ["nodebalancer_id", "config_id", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_nodebalancer_config_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_nodebalancer_config_update tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response("confirm must be true")
+
+    nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
+    if nodebalancer_id is None:
+        return error_response("nodebalancer_id must be a positive integer")
+
+    config_id = _positive_int_argument(arguments, "config_id")
+    if config_id is None:
+        return error_response("config_id must be a positive integer")
+
+    fields: dict[str, Any] = {}
+    for key in (
+        "port",
+        "protocol",
+        "algorithm",
+        "check",
+        "check_passive",
+        "check_attempts",
+        "check_body",
+        "check_interval",
+        "check_path",
+        "check_timeout",
+        "stickiness",
+        "proxy_protocol",
+        "cipher_suite",
+        "ssl_cert",
+        "ssl_key",
+        "udp_check_port",
+    ):
+        value = arguments.get(key)
+        if value is not None:
+            fields[key] = value
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.update_nodebalancer_config(
+            nodebalancer_id, config_id, fields
+        )
+        if result:
+            return result
+        return {
+            "message": (
+                f"NodeBalancer config {config_id} update requested "
+                f"for NodeBalancer {nodebalancer_id}"
+            ),
+            "nodebalancer_id": nodebalancer_id,
+            "config_id": config_id,
+        }
+
+    return await execute_tool(cfg, arguments, "update NodeBalancer config", _call)

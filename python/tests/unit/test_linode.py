@@ -7300,3 +7300,127 @@ async def test_retryable_client_delete_profile_device_delegates() -> None:
 
     mock_delete.assert_awaited_once_with(123)
     await client.close()
+
+
+async def test_update_nodebalancer_config() -> None:
+    """Test updating a NodeBalancer config."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "id": 6,
+        "nodebalancer_id": 8,
+        "port": 443,
+        "protocol": "https",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.update_nodebalancer_config(
+            8, 6, {"port": 443, "protocol": "https"}
+        )
+
+        assert result == {
+            "id": 6,
+            "nodebalancer_id": 8,
+            "port": 443,
+            "protocol": "https",
+        }
+        mock_request.assert_called_once_with(
+            "PUT", "/nodebalancers/8/configs/6", {"port": 443, "protocol": "https"}
+        )
+
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    ("nodebalancer_id", "config_id", "encoded_nodebalancer_id", "encoded_config_id"),
+    [
+        (8, 6, "8", "6"),
+        (999, 42, "999", "42"),
+    ],
+)
+async def test_update_nodebalancer_config_encodes_path_params(
+    nodebalancer_id: int,
+    config_id: int,
+    encoded_nodebalancer_id: str,
+    encoded_config_id: str,
+) -> None:
+    """NodeBalancer config update path parameters are URL-encoded."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.update_nodebalancer_config(
+            nodebalancer_id,
+            config_id,
+            {"port": 80},
+        )
+
+        mock_request.assert_called_once_with(
+            "PUT",
+            (f"/nodebalancers/{encoded_nodebalancer_id}/configs/{encoded_config_id}"),
+            {"port": 80},
+        )
+
+    await client.close()
+
+
+async def test_update_nodebalancer_config_rejects_invalid_ids() -> None:
+    """NodeBalancer config update rejects non-positive-integer IDs."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    for bad_nb, bad_cfg in [
+        (0, 6),
+        (-1, 6),
+        (True, 6),
+        ("1/2", 6),
+        ("..", 6),
+        (8, 0),
+        (8, -1),
+        (8, True),
+        (8, "4/5"),
+        (8, ".."),
+    ]:
+        with pytest.raises(ValueError, match="must be a positive integer"):
+            await client.update_nodebalancer_config(
+                cast("Any", bad_nb), cast("Any", bad_cfg), {}
+            )
+
+    await client.close()
+
+
+async def test_update_nodebalancer_config_wraps_http_errors() -> None:
+    """Test updating a NodeBalancer config wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.update_nodebalancer_config(8, 6, {"port": 80})
+
+    assert "UpdateNodeBalancerConfig" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_update_nodebalancer_config_does_not_replay() -> None:
+    """RetryableClient delegates config update once without retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "update_nodebalancer_config", new_callable=AsyncMock
+    ) as mock_update:
+        mock_update.side_effect = httpx.HTTPError("transient")
+        with pytest.raises(httpx.HTTPError):
+            await retryable.update_nodebalancer_config(8, 6, {"port": 80})
+
+    mock_update.assert_awaited_once_with(8, 6, {"port": 80})
+    await retryable.close()
