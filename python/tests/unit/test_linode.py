@@ -1905,6 +1905,68 @@ async def test_unassign_placement_group_encodes_group_path() -> None:
     await client.close()
 
 
+async def test_delete_placement_group_sends_delete() -> None:
+    """Deleting a placement group should issue DELETE for the group path."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        await client.delete_placement_group(789)
+
+        mock_request.assert_awaited_once_with("DELETE", "/placement/groups/789")
+
+    await client.close()
+
+
+async def test_delete_placement_group_encodes_group_path() -> None:
+    """Placement group delete should encode the group path segment."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    group_id: Any = "12/../?x=1"
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        await client.delete_placement_group(group_id)
+
+        mock_request.assert_awaited_once_with(
+            "DELETE",
+            "/placement/groups/12%2F..%2F%3Fx%3D1",
+        )
+
+    await client.close()
+
+
+async def test_delete_placement_group_wraps_http_errors() -> None:
+    """Deleting a placement group should wrap HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.delete_placement_group(789)
+
+    assert "DeletePlacementGroup" in str(exc_info.value)
+    await client.close()
+
+
+async def test_retryable_delete_placement_group_delegates_to_client() -> None:
+    """Retryable client should delegate placement group deletion."""
+    client = RetryableClient(
+        "https://api.linode.com/v4",
+        "test-token",
+        RetryConfig(max_retries=1, base_delay=0.01),
+    )
+
+    with patch.object(
+        client.client,
+        "delete_placement_group",
+        new_callable=AsyncMock,
+    ) as mock_delete:
+        await client.delete_placement_group(789)
+
+        mock_delete.assert_awaited_once_with(789)
+
+    await client.close()
+
+
 async def test_retryable_unassign_placement_group_delegates_to_client() -> None:
     """Retryable client should delegate placement group unassign."""
     client = RetryableClient(
