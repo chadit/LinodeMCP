@@ -83,6 +83,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
+    create_linode_object_storage_cancel_tool,
     create_linode_object_storage_cluster_get_tool,
     create_linode_object_storage_endpoints_list_tool,
     create_linode_object_storage_quota_get_tool,
@@ -238,6 +239,7 @@ from linodemcp.tools import (
     handle_linode_object_storage_bucket_delete,
     handle_linode_object_storage_bucket_get,
     handle_linode_object_storage_buckets_list,
+    handle_linode_object_storage_cancel,
     handle_linode_object_storage_cluster_get,
     handle_linode_object_storage_clusters_list,
     handle_linode_object_storage_endpoints_list,
@@ -5768,6 +5770,73 @@ async def test_handle_linode_object_storage_bucket_access_get_error(
 
 
 # Phase 3: Object Storage Write Bucket Tool Tests
+
+
+def test_linode_object_storage_cancel_tool_schema() -> None:
+    """Object Storage cancel tool should require boolean confirmation."""
+    tool, capability = create_linode_object_storage_cancel_tool()
+
+    assert capability is Capability.Write
+    assert tool.name == "linode_object_storage_cancel"
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert "confirm" in tool.inputSchema["required"]
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_handle_object_storage_cancel_requires_boolean_true_confirm(
+    confirm: object,
+    sample_config: Config,
+) -> None:
+    """Object Storage cancel should reject non-true confirm before client use."""
+    arguments: dict[str, object] = {}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        result = await handle_linode_object_storage_cancel(arguments, sample_config)
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+    mock_cls.assert_not_called()
+
+
+async def test_handle_object_storage_cancel_success(
+    sample_config: Config,
+) -> None:
+    """Object Storage cancel should call the retryable client."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.cancel_object_storage.return_value = {"message": "scheduled"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_object_storage_cancel(
+            {"confirm": True}, sample_config
+        )
+
+    assert len(result) == 1
+    assert "scheduled" in result[0].text
+    mock_client.cancel_object_storage.assert_called_once_with()
+
+
+async def test_handle_object_storage_cancel_error(
+    sample_config: Config,
+) -> None:
+    """Object Storage cancel should report client errors."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.cancel_object_storage.side_effect = Exception("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_object_storage_cancel(
+            {"confirm": True}, sample_config
+        )
+
+    assert len(result) == 1
+    assert "Failed" in result[0].text
 
 
 async def test_handle_object_storage_bucket_create_requires_confirm(

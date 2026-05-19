@@ -15,6 +15,7 @@ from linodemcp.linode import Profile
 from linodemcp.profiles import (
     ActiveProfileDisabledError,
     ActiveProfileUnknownError,
+    Capability,
 )
 from linodemcp.server import Server, get_tool_registry
 from linodemcp.tools import handle_hello, handle_version
@@ -353,6 +354,22 @@ async def test_profile_preferences_update_tool_is_exported_and_registered(
 
     srv = Server(_full_access_config(sample_config))
     assert "linode_profile_preferences_update" in srv.registered_tool_names
+
+
+async def test_object_storage_cancel_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Object Storage cancel tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_object_storage_cancel_tool" in tools_mod.__all__
+    assert "handle_linode_object_storage_cancel" in tools_mod.__all__
+
+    registry = {entry.name: entry for entry in get_tool_registry()}
+    assert registry["linode_object_storage_cancel"].capability is Capability.Write
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_object_storage_cancel" in srv.registered_tool_names
 
 
 async def test_object_storage_bucket_access_allow_tool_is_exported_and_registered(
