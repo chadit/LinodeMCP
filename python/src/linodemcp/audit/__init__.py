@@ -24,13 +24,17 @@ from linodemcp.audit.redact import (
     redaction_field_set,
     redaction_fields,
 )
+from linodemcp.audit.sink import CapturingSink, NoopSink, Sink
 
 __all__ = [
     "EVENT_ID_PREFIX",
     "REDACTED_VALUE",
     "Capability",
+    "CapturingSink",
     "Event",
     "Mode",
+    "NoopSink",
+    "Sink",
     "Status",
     "is_redacted",
     "new_event",

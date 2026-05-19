@@ -8,11 +8,13 @@ import (
 	"log"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/chadit/LinodeMCP/internal/appinfo"
+	"github.com/chadit/LinodeMCP/internal/audit"
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -70,6 +72,13 @@ type Server struct {
 	// process. Drafts live in memory only; the Phase 8.5 _draft_save tool
 	// is the bridge from this registry back into Config.Profiles.
 	draftRegistry *builder.Registry
+
+	// auditSink consumes audit events emitted by the per-handler
+	// capture middleware (Phase 1b). Defaults to NoopSink so Phase
+	// 1b ships without a real sink; Phase 2 swaps in the JSONL
+	// writer. Tests inject a CapturingSink via SetAuditSink to
+	// assert handler-call events.
+	auditSink audit.Sink
 }
 
 // New creates a new LinodeMCP server. Returns an error if config is nil or if
@@ -93,6 +102,7 @@ func New(cfg *config.Config) (*Server, error) {
 		tools:         make([]contracts.Tool, 0),
 		registered:    make(map[string]*toolWrapper),
 		draftRegistry: builder.NewRegistry(),
+		auditSink:     audit.NoopSink{},
 	}
 
 	srv.allEntries = collectAllToolEntries(cfg)
@@ -486,6 +496,18 @@ func (s *Server) ReloadProfile(cfg *config.Config) error {
 	return nil
 }
 
+// SetAuditSink swaps the audit sink. Phase 2 main wires this to the
+// JSONL writer at startup; tests use it to inject CapturingSink
+// before exercising the dispatch path. Passing nil restores the
+// NoopSink default rather than producing a nil-deref crash.
+func (s *Server) SetAuditSink(sink audit.Sink) {
+	if sink == nil {
+		sink = audit.NoopSink{}
+	}
+
+	s.auditSink = sink
+}
+
 // addTool registers a tool with mcp-go and the local list, wrapping the
 // handler so each in-flight invocation is tracked in s.inflight. Shutdown
 // uses that WaitGroup to drain handlers before returning. Takes the tool by
@@ -493,13 +515,22 @@ func (s *Server) ReloadProfile(cfg *config.Config) error {
 // so we deref at the call boundary. Capability is stashed on the wrapper so
 // invariant tests and the audit middleware can read it without a side table.
 //
+// Phase 1b adds audit-event capture: every reaching handler builds an
+// Event at entry and writes it to s.auditSink at exit. The default
+// sink is NoopSink, so Phase 1b ships without observable behavior
+// change; Phase 2 swaps in the JSONL writer.
+//
 // Caller MUST hold s.profileMu in write mode. addTool mutates s.tools and
 // s.registered, both of which are guarded by that mutex.
 func (s *Server) addTool(tool *mcp.Tool, capability profiles.Capability, handler toolHandler) {
+	toolName := tool.Name
+	auditCapability := profilesCapabilityToAudit(capability)
+
 	wrapped := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		s.shutdownMu.Lock()
 		if s.shuttingDown {
 			s.shutdownMu.Unlock()
+			s.writeRefusalAuditEvent(toolName, auditCapability, &req, errServerShuttingDown)
 
 			return nil, errServerShuttingDown
 		}
@@ -509,7 +540,15 @@ func (s *Server) addTool(tool *mcp.Tool, capability profiles.Capability, handler
 
 		defer s.inflight.Done()
 
-		return handler(ctx, req)
+		evt := s.newAuditEvent(toolName, auditCapability, &req)
+		start := time.Now()
+
+		result, err := handler(ctx, req)
+
+		finalizeAuditEvent(&evt, start, err)
+		s.auditSink.Write(&evt)
+
+		return result, err
 	}
 
 	s.mcp.AddTool(*tool, wrapped)
@@ -517,6 +556,89 @@ func (s *Server) addTool(tool *mcp.Tool, capability profiles.Capability, handler
 	wrapper := &toolWrapper{tool: *tool, capability: capability}
 	s.tools = append(s.tools, wrapper)
 	s.registered[tool.Name] = wrapper
+}
+
+// newAuditEvent constructs an audit event for a reaching handler.
+// Reads the active profile name under the profile read-lock so a
+// concurrent hot-reload doesn't observe a torn pointer. Request is
+// passed by pointer because mcp.CallToolRequest is ~80 bytes;
+// gocritic flags the value form for hot-path callers.
+func (s *Server) newAuditEvent(
+	toolName string,
+	capability audit.Capability,
+	req *mcp.CallToolRequest,
+) audit.Event {
+	args := req.GetArguments()
+	environment, _ := args["environment"].(string)
+
+	s.profileMu.RLock()
+	profileName := s.activeProfile.Name
+	s.profileMu.RUnlock()
+
+	return audit.NewEvent(
+		toolName,
+		capability,
+		args,
+		environment,
+		profileName,
+		"",
+		0,
+		appinfo.Version,
+	)
+}
+
+// writeRefusalAuditEvent records a refusal at the shutdown gate. The
+// handler never ran, so latency is zero and the error message names
+// the refusal reason (errServerShuttingDown today). Future refusal
+// sources (Phase 4 dry-run gate, validation failures) can call this
+// same helper with their own error value.
+func (s *Server) writeRefusalAuditEvent(
+	toolName string,
+	capability audit.Capability,
+	req *mcp.CallToolRequest,
+	refusalErr error,
+) {
+	evt := s.newAuditEvent(toolName, capability, req)
+	evt.Finalize(audit.StatusRefused, 0, refusalErr.Error(), "")
+	s.auditSink.Write(&evt)
+}
+
+// finalizeAuditEvent sets status/latency/error based on handler
+// outcome. Success when err is nil; Error otherwise. Result-summary
+// generation lands in Phase 2; for Phase 1b it stays empty.
+func finalizeAuditEvent(evt *audit.Event, start time.Time, err error) {
+	latency := time.Since(start)
+
+	if err == nil {
+		evt.Finalize(audit.StatusSuccess, latency, "", "")
+
+		return
+	}
+
+	evt.Finalize(audit.StatusError, latency, err.Error(), "")
+}
+
+// profilesCapabilityToAudit translates the profiles capability tag
+// into the audit-wire capability string. Kept here rather than in
+// the audit package so the audit package stays dependency-free of
+// profiles (per the package comment in event.go).
+func profilesCapabilityToAudit(capability profiles.Capability) audit.Capability {
+	switch capability {
+	case profiles.CapRead:
+		return audit.CapabilityRead
+	case profiles.CapWrite:
+		return audit.CapabilityWrite
+	case profiles.CapDestroy:
+		return audit.CapabilityDestroy
+	case profiles.CapAdmin:
+		return audit.CapabilityAdmin
+	case profiles.CapMeta:
+		return audit.CapabilityMeta
+	case profiles.CapUnknown:
+		return ""
+	default:
+		return ""
+	}
 }
 
 // entryFromFactory invokes a tool factory and packages its three return

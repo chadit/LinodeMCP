@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
@@ -13,6 +14,8 @@ from mcp.server.stdio import stdio_server
 from mcp.types import Tool
 
 import linodemcp.tools as tools_module
+from linodemcp.audit import Capability as AuditCapability
+from linodemcp.audit import NoopSink, Sink, Status, new_event
 from linodemcp.config import get_config_path
 from linodemcp.linode import RetryableClient
 from linodemcp.profiles import (
@@ -38,6 +41,7 @@ from linodemcp.tools.linode_profile_draft import (
 )
 from linodemcp.tools.linode_profile_draft_mutate import set_mutator_catalog_provider
 from linodemcp.tools.linode_profile_draft_save import set_save_config_path_provider
+from linodemcp.version import VERSION as LINODEMCP_VERSION
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -129,6 +133,33 @@ def _build_tool_registry() -> list[ToolEntry]:
 _TOOL_REGISTRY = _build_tool_registry()
 
 
+def _elapsed_ms(start_ns: int) -> int:
+    """Compute elapsed milliseconds from a monotonic-ns start tick."""
+    return (time.monotonic_ns() - start_ns) // 1_000_000
+
+
+def _audit_capability(capability: Capability) -> AuditCapability:
+    """Translate the profiles capability tag into the audit-wire form.
+
+    Mirrors the Go ``profilesCapabilityToAudit`` helper. Kept in the
+    server module rather than the audit package so the audit package
+    stays dependency-free of profiles.
+    """
+    match capability:
+        case Capability.Read:
+            return AuditCapability.READ
+        case Capability.Write:
+            return AuditCapability.WRITE
+        case Capability.Destroy:
+            return AuditCapability.DESTROY
+        case Capability.Admin:
+            return AuditCapability.ADMIN
+        case Capability.Meta:
+            return AuditCapability.META
+        case _:
+            return AuditCapability.READ
+
+
 def get_tool_registry() -> list[ToolEntry]:
     """Return the eagerly-built registry for tests and introspection.
 
@@ -151,6 +182,10 @@ class Server:
         self.config = config
         self.mcp = MCPServer(config.server.name)
         self._inflight = 0
+        # Phase 1b: audit sink defaults to NoopSink so dispatch logs
+        # nothing yet. Phase 2 swaps in the JSONL writer; tests inject
+        # CapturingSink via set_audit_sink before exercising dispatch.
+        self._audit_sink: Sink = NoopSink()
         self._idle = asyncio.Event()
         self._idle.set()
 
@@ -221,15 +256,73 @@ class Server:
         Wraps the handler call so shutdown() can drain active requests
         before the process exits. Public so tests can drive the dispatch
         path without going through the stdio MCP transport.
+
+        Phase 1b adds audit-event capture around the inner dispatch:
+        every reaching tool call builds an Event at entry and writes
+        it to ``_audit_sink`` at exit, with status reflecting the
+        outcome (success / error / refused).
         """
         self._inflight += 1
         self._idle.clear()
+
+        start_ns = time.monotonic_ns()
+        environment = arguments.get("environment", "") if arguments else ""
+        if not isinstance(environment, str):
+            environment = ""
+
+        event = new_event(
+            tool=name,
+            capability=self._capability_for(name),
+            args=arguments,
+            environment=environment,
+            profile=self._active_profile.name,
+            session_id="",
+            credential_generation=0,
+            linodemcp_version=LINODEMCP_VERSION,
+        )
+
         try:
-            return await self._dispatch_inner(name, arguments)
+            result = await self._dispatch_inner(name, arguments)
+            event.finalize(Status.SUCCESS, _elapsed_ms(start_ns), "", "")
+            self._audit_sink.write(event)
+            return result
+        except ValueError as exc:
+            # _dispatch_inner raises ValueError for unknown / filtered
+            # tool names. Audit as refused, not error: the handler
+            # never ran.
+            event.finalize(Status.REFUSED, _elapsed_ms(start_ns), str(exc), "")
+            self._audit_sink.write(event)
+            raise
+        except Exception as exc:
+            event.finalize(Status.ERROR, _elapsed_ms(start_ns), str(exc), "")
+            self._audit_sink.write(event)
+            raise
         finally:
             self._inflight -= 1
             if self._inflight == 0:
                 self._idle.set()
+
+    def set_audit_sink(self, sink: Sink | None) -> None:
+        """Swap the audit sink.
+
+        Phase 2 main wires this to the JSONL writer at startup; tests
+        inject a CapturingSink before exercising the dispatch path.
+        Passing None restores the NoopSink default rather than
+        producing a None-deref on the next call.
+        """
+        self._audit_sink = sink if sink is not None else NoopSink()
+
+    def _capability_for(self, name: str) -> AuditCapability:
+        """Translate the registered tool's capability into the audit wire form.
+
+        Returns ``CapabilityRead`` for unknown / filtered tools as a
+        defensive default; those calls also get marked refused, so
+        the capability value isn't load-bearing in the refusal path.
+        """
+        for entry in self._allowed_entries:
+            if entry.name == name:
+                return _audit_capability(entry.capability)
+        return AuditCapability.READ
 
     async def validate_scopes(self) -> ScopeValidationResult:
         """Phase 6.4c: validate the active token's scopes.
