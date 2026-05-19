@@ -2178,6 +2178,42 @@ class Client:
             logger.exception("HTTP error deleting SSH key: %s", e)
             raise NetworkError("DeleteSSHKey", e) from e
 
+    async def confirm_profile_tfa_enable(
+        self, tfa_code: str | None = None
+    ) -> dict[str, Any]:
+        """Confirm two-factor authentication enablement."""
+        body: dict[str, Any] = {}
+        if tfa_code is not None:
+            body["tfa_code"] = tfa_code
+
+        logger.info("Confirming profile two-factor authentication enablement")
+
+        try:
+            response = await self.make_request(
+                "POST", "/profile/tfa-enable-confirm", body
+            )
+            result: dict[str, Any] = response.json()
+            logger.info("Profile two-factor authentication enablement confirmed")
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception(
+                "Connection timeout confirming profile two-factor authentication: %s", e
+            )
+            raise NetworkError("ConfirmProfileTFAEnable", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception(
+                "Read timeout confirming profile two-factor authentication: %s", e
+            )
+            raise NetworkError("ConfirmProfileTFAEnable", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error confirming profile two-factor authentication")
+            raise NetworkError("ConfirmProfileTFAEnable", e) from e
+        except httpx.HTTPError as e:
+            logger.exception(
+                "HTTP error confirming profile two-factor authentication: %s", e
+            )
+            raise NetworkError("ConfirmProfileTFAEnable", e) from e
+
     async def create_profile_token(
         self,
         expiry: str | None = None,
@@ -5299,6 +5335,15 @@ class RetryableClient:
     async def delete_ssh_key(self, ssh_key_id: int) -> None:
         """Delete SSH key with retry."""
         await self._execute_with_retry(self.client.delete_ssh_key, ssh_key_id)
+
+    async def confirm_profile_tfa_enable(
+        self, tfa_code: str | None = None
+    ) -> dict[str, Any]:
+        """Confirm profile two-factor authentication enablement with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.confirm_profile_tfa_enable, tfa_code
+        )
+        return result
 
     async def create_profile_token(
         self,

@@ -66,6 +66,53 @@ async def handle_linode_profile(
     return await execute_tool(cfg, arguments, "retrieve Linode profile", _call)
 
 
+def create_linode_profile_tfa_enable_confirm_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_tfa_enable_confirm tool."""
+    return Tool(
+        name="linode_profile_tfa_enable_confirm",
+        description=(
+            "Confirms enabling two-factor authentication for the Linode profile."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "tfa_code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Two-factor authentication code to confirm setup",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this profile update.",
+                },
+            },
+            "required": ["tfa_code", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_profile_tfa_enable_confirm(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_profile_tfa_enable_confirm tool request."""
+    tfa_code = arguments.get("tfa_code")
+    if not isinstance(tfa_code, str) or not tfa_code.strip():
+        return error_response("tfa_code must be a non-empty string")
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This confirms profile two-factor authentication. "
+            "Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.confirm_profile_tfa_enable(tfa_code=tfa_code.strip())
+
+    return await execute_tool(
+        cfg, arguments, "confirm profile two-factor authentication", _call
+    )
+
+
 def create_linode_profile_token_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_profile_token_create tool."""
     return Tool(

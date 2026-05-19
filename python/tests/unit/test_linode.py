@@ -3667,6 +3667,71 @@ class TestRetryableClientRateLimiter:
         await client.close()
 
 
+async def test_confirm_profile_tfa_enable_sends_post_to_confirm_route() -> None:
+    """Profile TFA enable confirm sends POST with documented body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {
+        "scratch": "setup-token",
+        "expiry": "2026-01-01T00:00:00",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        result = await client.confirm_profile_tfa_enable("123456")
+
+    assert result == {
+        "scratch": "setup-token",
+        "expiry": "2026-01-01T00:00:00",
+    }
+    mock_request.assert_called_once_with(
+        "POST", "/profile/tfa-enable-confirm", {"tfa_code": "123456"}
+    )
+    await client.close()
+
+
+async def test_confirm_profile_tfa_enable_allows_empty_body_when_code_omitted() -> None:
+    """Profile TFA enable confirm can omit the optional tfa_code body field."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        await client.confirm_profile_tfa_enable()
+
+    mock_request.assert_called_once_with("POST", "/profile/tfa-enable-confirm", {})
+    await client.close()
+
+
+async def test_retryable_confirm_profile_tfa_enable_delegates_to_client() -> None:
+    """Retryable profile TFA enable confirm forwards the body field."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        client.client, "confirm_profile_tfa_enable", new_callable=AsyncMock
+    ) as mock_confirm:
+        mock_confirm.return_value = {"scratch": "setup-token"}
+        result = await client.confirm_profile_tfa_enable("123456")
+
+    assert result == {"scratch": "setup-token"}
+    mock_confirm.assert_awaited_once_with("123456")
+    await client.close()
+
+
+async def test_confirm_profile_tfa_enable_wraps_http_errors() -> None:
+    """Profile TFA enable confirm maps HTTP errors to ConfirmProfileTFAEnable."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ReadTimeout("timeout")
+        with pytest.raises(NetworkError) as exc_info:
+            await client.confirm_profile_tfa_enable("123456")
+
+    assert exc_info.value.operation == "ConfirmProfileTFAEnable"
+    await client.close()
+
+
 async def test_create_profile_token_sends_post_to_profile_tokens_route() -> None:
     """Profile token create sends POST /profile/tokens with documented body."""
     client = Client("https://api.linode.com/v4", "test-token")
