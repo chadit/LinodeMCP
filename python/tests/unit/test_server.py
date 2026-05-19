@@ -1455,6 +1455,25 @@ def test_linode_nodebalancer_firewalls_update_registered() -> None:
     )
 
 
+def test_linode_nodebalancer_config_rebuild_exported() -> None:
+    """NodeBalancer config rebuild tool is exported."""
+    import linodemcp.tools as tools_mod
+
+    assert "create_linode_nodebalancer_config_rebuild_tool" in tools_mod.__all__
+    assert "handle_linode_nodebalancer_config_rebuild" in tools_mod.__all__
+
+
+def test_linode_nodebalancer_config_rebuild_registered() -> None:
+    """NodeBalancer config rebuild tool is registered."""
+    from linodemcp.server import get_tool_registry
+
+    # Tool registration is discovered dynamically from linodemcp.tools.__all__.
+    entries = {entry.name: entry for entry in get_tool_registry()}
+
+    assert "linode_nodebalancer_config_rebuild" in entries
+    assert entries["linode_nodebalancer_config_rebuild"].capability == Capability.Write
+
+
 def test_linode_nodebalancer_stats_exported() -> None:
     """NodeBalancer stats tool is exported."""
     import linodemcp.tools as tools_mod
