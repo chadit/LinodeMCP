@@ -409,6 +409,40 @@ async def handle_linode_object_storage_transfer(
     )
 
 
+def create_linode_object_storage_quotas_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_object_storage_quotas_list tool."""
+    return Tool(
+        name="linode_object_storage_quotas_list",
+        description="Lists Object Storage quotas on your Linode account.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+            },
+        },
+    ), Capability.Read
+
+
+async def handle_linode_object_storage_quotas_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_object_storage_quotas_list tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        quotas = await client.list_object_storage_quotas()
+        return {
+            "count": len(quotas),
+            "quotas": quotas,
+        }
+
+    return await execute_tool(cfg, arguments, "retrieve Object Storage quotas", _call)
+
+
 def create_linode_object_storage_quota_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_quota_get tool."""
     return Tool(
