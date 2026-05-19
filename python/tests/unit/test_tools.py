@@ -84,6 +84,7 @@ from linodemcp.tools import (
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
     create_linode_nodebalancer_config_node_delete_tool,
+    create_linode_nodebalancer_config_node_get_tool,
     create_linode_nodebalancer_config_node_update_tool,
     create_linode_nodebalancer_config_rebuild_tool,
     create_linode_nodebalancer_firewalls_list_tool,
@@ -235,6 +236,7 @@ from linodemcp.tools import (
     handle_linode_lke_versions_list,
     handle_linode_monitor_service_token_create,
     handle_linode_nodebalancer_config_node_delete,
+    handle_linode_nodebalancer_config_node_get,
     handle_linode_nodebalancer_config_node_update,
     handle_linode_nodebalancer_config_rebuild,
     handle_linode_nodebalancer_create,
@@ -13489,6 +13491,78 @@ async def test_handle_linode_nodebalancer_firewalls_list_invalid_arguments(
     assert len(result) == 1
     assert message in result[0].text
     mock_client_class.assert_not_called()
+
+
+async def test_linode_nodebalancer_config_node_get_tool_definition() -> None:
+    """Test linode_nodebalancer_config_node_get tool definition."""
+    tool, _capability = create_linode_nodebalancer_config_node_get_tool()
+    assert tool.name == "linode_nodebalancer_config_node_get"
+    assert "nodebalancer_id" in tool.inputSchema["properties"]
+    assert "config_id" in tool.inputSchema["properties"]
+    assert "node_id" in tool.inputSchema["properties"]
+    assert set(tool.inputSchema["required"]) == {
+        "nodebalancer_id",
+        "config_id",
+        "node_id",
+    }
+
+
+async def test_handle_linode_nodebalancer_config_node_get(
+    sample_config: Config,
+) -> None:
+    """Test linode_nodebalancer_config_node_get tool."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_cls.return_value.__aenter__.return_value = mock_client
+        mock_client.get_nodebalancer_config_node.return_value = {
+            "id": 4,
+            "label": "node-1",
+            "address": "192.168.1.10:80",
+            "weight": 100,
+            "mode": "accept",
+        }
+
+        result = await handle_linode_nodebalancer_config_node_get(
+            {"nodebalancer_id": 8, "config_id": 6, "node_id": 4},
+            sample_config,
+        )
+
+        mock_client.get_nodebalancer_config_node.assert_called_once_with(8, 6, 4)
+        response = result[0].text
+        assert '"id": 4' in response
+
+
+async def test_handle_linode_nodebalancer_config_node_get_invalid_arguments(
+    sample_config: Config,
+) -> None:
+    """Test linode_nodebalancer_config_node_get with invalid arguments."""
+    for args in [
+        {},
+        {"nodebalancer_id": 8, "config_id": 6},
+        {"nodebalancer_id": 8, "node_id": 4},
+        {"config_id": 6, "node_id": 4},
+        {"nodebalancer_id": -1, "config_id": 6, "node_id": 4},
+    ]:
+        result = await handle_linode_nodebalancer_config_node_get(args, sample_config)
+        response = result[0].text
+        assert "error" in response.lower()
+
+
+async def test_handle_linode_nodebalancer_config_node_get_error(
+    sample_config: Config,
+) -> None:
+    """Test linode_nodebalancer_config_node_get error handling."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_cls.return_value.__aenter__.return_value = mock_client
+        mock_client.get_nodebalancer_config_node.side_effect = Exception("API error")
+
+        result = await handle_linode_nodebalancer_config_node_get(
+            {"nodebalancer_id": 8, "config_id": 6, "node_id": 4},
+            sample_config,
+        )
+        response = result[0].text
+        assert "error" in response.lower()
 
 
 async def test_handle_linode_nodebalancer_firewalls_list_error(

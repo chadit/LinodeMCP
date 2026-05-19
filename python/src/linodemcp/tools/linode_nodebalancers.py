@@ -356,3 +356,61 @@ async def handle_linode_nodebalancer_firewalls_list(
         )
 
     return await execute_tool(cfg, arguments, "retrieve NodeBalancer firewalls", _call)
+
+
+def create_linode_nodebalancer_config_node_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_nodebalancer_config_node_get tool."""
+    return Tool(
+        name="linode_nodebalancer_config_node_get",
+        description=(
+            "Gets detailed information about a specific node in a NodeBalancer config."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "nodebalancer_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the NodeBalancer (required)",
+                },
+                "config_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the NodeBalancer config (required)",
+                },
+                "node_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the node (required)",
+                },
+            },
+            "required": ["nodebalancer_id", "config_id", "node_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_nodebalancer_config_node_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_nodebalancer_config_node_get tool request."""
+    nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
+    if nodebalancer_id is None:
+        return error_response("nodebalancer_id must be a positive integer")
+
+    config_id = _positive_int_argument(arguments, "config_id")
+    if config_id is None:
+        return error_response("config_id must be a positive integer")
+
+    node_id = _positive_int_argument(arguments, "node_id")
+    if node_id is None:
+        return error_response("node_id must be a positive integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_nodebalancer_config_node(
+            nodebalancer_id, config_id, node_id
+        )
+
+    return await execute_tool(
+        cfg, arguments, "retrieve NodeBalancer config node", _call
+    )
