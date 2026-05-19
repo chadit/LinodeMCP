@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any, cast
 
 from mcp.types import Tool
@@ -34,6 +35,17 @@ _LINODES_PROP: dict[str, Any] = {
     "items": {"type": "integer", "minimum": 1},
     "minItems": 1,
 }
+_LABEL_PROP: dict[str, Any] = {
+    "type": "string",
+    "minLength": 1,
+    "pattern": r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$",
+    "description": "New placement group label.",
+}
+_LABEL_ERROR = (
+    "label must start and end with an alphanumeric character and contain only "
+    "alphanumeric characters, hyphens, underscores, or periods"
+)
+_LABEL_PATTERN = re.compile(_LABEL_PROP["pattern"])
 
 
 def _parse_positive_int(value: Any, name: str) -> int | list[TextContent]:
@@ -101,6 +113,45 @@ async def handle_linode_placement_group_delete(
         return {"message": f"Placement group {group_id} deleted successfully"}
 
     return await execute_tool(cfg, arguments, "delete placement group", _call)
+
+
+def create_linode_placement_group_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_placement_group_update tool."""
+    return Tool(
+        name="linode_placement_group_update",
+        description="Updates a placement group",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "group_id": _GROUP_ID_PROP,
+                "label": _LABEL_PROP,
+                "confirm": _CONFIRM_PROP,
+            },
+            "required": ["group_id", "label", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_placement_group_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_placement_group_update tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
+
+    group_id = _parse_positive_int(arguments.get("group_id"), "group_id")
+    if isinstance(group_id, list):
+        return group_id
+
+    label = arguments.get("label")
+    if not isinstance(label, str) or not _LABEL_PATTERN.fullmatch(label):
+        return error_response(_LABEL_ERROR)
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.update_placement_group(group_id, label)
+
+    return await execute_tool(cfg, arguments, "update placement group", _call)
 
 
 def create_linode_placement_group_assign_tool() -> tuple[Tool, Capability]:

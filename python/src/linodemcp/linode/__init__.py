@@ -22,6 +22,10 @@ T = TypeVar("T")
 
 logger = logging.getLogger(__name__)
 
+_PLACEMENT_GROUP_LABEL_PATTERN = re.compile(
+    r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$"
+)
+
 # Validation patterns
 VALID_SSH_KEY_PREFIXES = (
     "ssh-rsa",
@@ -4408,6 +4412,26 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("DeletePlacementGroup", e) from e
 
+    async def update_placement_group(self, group_id: int, label: str) -> dict[str, Any]:
+        """Update a placement group."""
+        if not _PLACEMENT_GROUP_LABEL_PATTERN.fullmatch(label):
+            raise ValueError(
+                "label must start and end with an alphanumeric character "
+                "and contain only alphanumeric characters, hyphens, "
+                "underscores, or periods"
+            )
+
+        encoded_group_id = quote(str(group_id), safe="")
+        endpoint = f"/placement/groups/{encoded_group_id}"
+        body: dict[str, Any] = {"label": label}
+
+        try:
+            response = await self.make_request("PUT", endpoint, body)
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdatePlacementGroup", e) from e
+
     async def get_ipv6_range(self, ipv6_range: str) -> dict[str, Any]:
         """Get an IPv6 range."""
         encoded_range = quote(ipv6_range, safe="")
@@ -6836,6 +6860,13 @@ class RetryableClient:
     async def delete_placement_group(self, group_id: int) -> None:
         """Delete placement group with retry."""
         await self._execute_with_retry(self.client.delete_placement_group, group_id)
+
+    async def update_placement_group(self, group_id: int, label: str) -> dict[str, Any]:
+        """Update placement group with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.update_placement_group, group_id, label
+        )
+        return result
 
     async def get_ipv6_range(self, ipv6_range: str) -> dict[str, Any]:
         """Get IPv6 range with retry."""

@@ -1967,6 +1967,101 @@ async def test_retryable_delete_placement_group_delegates_to_client() -> None:
     await client.close()
 
 
+async def test_update_placement_group_puts_label_body() -> None:
+    """Updating a placement group should PUT the label body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {"id": 789, "label": "new-label"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        result = await client.update_placement_group(789, "new-label")
+
+        assert result == {"id": 789, "label": "new-label"}
+        mock_request.assert_awaited_once_with(
+            "PUT",
+            "/placement/groups/789",
+            {"label": "new-label"},
+        )
+
+    await client.close()
+
+
+async def test_update_placement_group_encodes_group_path() -> None:
+    """Placement group update should encode the group path segment."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {}
+    group_id: Any = "12/../?x=1"
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        await client.update_placement_group(group_id, "new-label")
+
+        mock_request.assert_awaited_once_with(
+            "PUT",
+            "/placement/groups/12%2F..%2F%3Fx%3D1",
+            {"label": "new-label"},
+        )
+
+    await client.close()
+
+
+@pytest.mark.parametrize("label", ["", "/", "?", "..", "bad/label", "bad?label"])
+async def test_update_placement_group_rejects_invalid_label(label: str) -> None:
+    """Updating a placement group should reject invalid labels locally."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match="label must start and end"),
+    ):
+        await client.update_placement_group(789, label)
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_update_placement_group_wraps_http_errors() -> None:
+    """Updating a placement group should wrap HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.update_placement_group(789, "new-label")
+
+    assert "UpdatePlacementGroup" in str(exc_info.value)
+    await client.close()
+
+
+async def test_retryable_update_placement_group_delegates_to_client() -> None:
+    """Retryable client should delegate placement group update."""
+    client = RetryableClient(
+        "https://api.linode.com/v4",
+        "test-token",
+        RetryConfig(max_retries=1, base_delay=0.01),
+    )
+    response_data = {"id": 789, "label": "new-label"}
+
+    with patch.object(
+        client.client,
+        "update_placement_group",
+        new_callable=AsyncMock,
+    ) as mock_update:
+        mock_update.return_value = response_data
+
+        result = await client.update_placement_group(789, "new-label")
+
+        assert result == response_data
+        mock_update.assert_awaited_once_with(789, "new-label")
+
+    await client.close()
+
+
 async def test_retryable_unassign_placement_group_delegates_to_client() -> None:
     """Retryable client should delegate placement group unassign."""
     client = RetryableClient(
