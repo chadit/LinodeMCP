@@ -317,6 +317,42 @@ async def handle_linode_profile_phone_number_verify(
     )
 
 
+def create_linode_profile_phone_number_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_phone_number_delete tool."""
+    return Tool(
+        name="linode_profile_phone_number_delete",
+        description="Deletes the verified Linode profile phone number.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to delete this profile phone number.",
+                },
+            },
+            "required": ["confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_profile_phone_number_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_profile_phone_number_delete tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This deletes a profile phone number. Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.delete_profile_phone_number()
+
+    return await execute_tool(
+        cfg, arguments, "delete Linode profile phone number", _call
+    )
+
+
 def create_linode_profile_security_questions_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_profile_security_questions_list tool."""
     return Tool(

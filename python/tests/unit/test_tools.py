@@ -82,6 +82,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
+    create_linode_profile_phone_number_delete_tool,
     create_linode_profile_phone_number_verify_tool,
     create_linode_profile_preferences_get_tool,
     create_linode_profile_preferences_update_tool,
@@ -229,6 +230,7 @@ from linodemcp.tools import (
     handle_linode_object_storage_transfer,
     handle_linode_object_storage_types_list,
     handle_linode_profile,
+    handle_linode_profile_phone_number_delete,
     handle_linode_profile_phone_number_verify,
     handle_linode_profile_preferences_get,
     handle_linode_profile_preferences_update,
@@ -9548,6 +9550,80 @@ async def test_handle_linode_profile_tfa_enable_confirm_error(
 
         result = await handle_linode_profile_tfa_enable_confirm(
             {"tfa_code": "123456", "confirm": True}, sample_config
+        )
+
+    assert len(result) == 1
+    assert "Failed to" in result[0].text
+    assert "API error" in result[0].text
+
+
+def test_create_linode_profile_phone_number_delete_tool() -> None:
+    """Profile phone number delete tool exposes schema and write capability."""
+    tool, capability = create_linode_profile_phone_number_delete_tool()
+
+    assert tool.name == "linode_profile_phone_number_delete"
+    assert capability is Capability.Write
+    assert tool.inputSchema["required"] == ["confirm"]
+    assert "environment" in tool.inputSchema["properties"]
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+
+
+async def test_handle_linode_profile_phone_number_delete_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Profile phone number delete requires explicit boolean confirmation."""
+    for confirm in (None, False, "true", 1):
+        arguments: dict[str, Any] = {}
+        if confirm is not None:
+            arguments["confirm"] = confirm
+
+        with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = None
+            mock_client_class.return_value = mock_client
+
+            result = await handle_linode_profile_phone_number_delete(
+                arguments, sample_config
+            )
+
+        assert len(result) == 1
+        assert "confirm=true" in result[0].text
+        mock_client.delete_profile_phone_number.assert_not_called()
+
+
+async def test_handle_linode_profile_phone_number_delete_success(
+    sample_config: Config,
+) -> None:
+    """Profile phone number delete calls the retryable client."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.delete_profile_phone_number.return_value = {}
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_phone_number_delete(
+            {"confirm": True}, sample_config
+        )
+
+    assert json.loads(result[0].text) == {}
+    mock_client.delete_profile_phone_number.assert_awaited_once_with()
+
+
+async def test_handle_linode_profile_phone_number_delete_error(
+    sample_config: Config,
+) -> None:
+    """Profile phone number delete surfaces client errors."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.delete_profile_phone_number.side_effect = Exception("API error")
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_phone_number_delete(
+            {"confirm": True}, sample_config
         )
 
     assert len(result) == 1
