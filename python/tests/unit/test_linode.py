@@ -4617,6 +4617,63 @@ async def test_get_profile_token_wraps_http_errors() -> None:
     await client.close()
 
 
+async def test_get_profile_login_sends_get_to_profile_login_route() -> None:
+    """Profile login get sends GET /profile/logins/{loginId}."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {"id": 12345, "ip": "192.0.2.10"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        result = await client.get_profile_login(12345)
+
+    assert result == {"id": 12345, "ip": "192.0.2.10"}
+    mock_request.assert_called_once_with("GET", "/profile/logins/12345")
+    await client.close()
+
+
+async def test_get_profile_login_encodes_path_parameter() -> None:
+    """Profile login get path segment is URL-encoded at the client boundary."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {"id": 12345, "ip": "192.0.2.10"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        await client.get_profile_login("12/../34?x=1")  # type: ignore[arg-type]
+
+    mock_request.assert_called_once_with("GET", "/profile/logins/12%2F..%2F34%3Fx%3D1")
+    await client.close()
+
+
+async def test_get_profile_login_wraps_http_errors() -> None:
+    """Profile login get maps HTTP errors to GetProfileLogin."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ReadTimeout("timeout")
+        with pytest.raises(NetworkError) as exc_info:
+            await client.get_profile_login(12345)
+
+    assert exc_info.value.operation == "GetProfileLogin"
+    await client.close()
+
+
+async def test_retryable_get_profile_login_delegates_to_client() -> None:
+    """Retryable profile login get delegates to the client."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        client.client, "get_profile_login", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = {"id": 12345, "ip": "192.0.2.10"}
+        result = await client.get_profile_login(12345)
+
+    assert result == {"id": 12345, "ip": "192.0.2.10"}
+    mock_get.assert_awaited_once_with(12345)
+    await client.close()
+
+
 async def test_update_profile_token_sends_put_to_profile_token_route() -> None:
     """Profile token update sends PUT /profile/tokens/{tokenId}."""
     client = Client("https://api.linode.com/v4", "test-token")

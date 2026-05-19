@@ -83,6 +83,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
+    create_linode_profile_login_get_tool,
     create_linode_profile_phone_number_delete_tool,
     create_linode_profile_phone_number_send_tool,
     create_linode_profile_phone_number_verify_tool,
@@ -233,6 +234,7 @@ from linodemcp.tools import (
     handle_linode_object_storage_transfer,
     handle_linode_object_storage_types_list,
     handle_linode_profile,
+    handle_linode_profile_login_get,
     handle_linode_profile_phone_number_delete,
     handle_linode_profile_phone_number_send,
     handle_linode_profile_phone_number_verify,
@@ -10429,6 +10431,87 @@ async def test_handle_linode_profile_token_get_error(
 
         result = await handle_linode_profile_token_get(
             {"token_id": 12345}, sample_config
+        )
+
+    assert len(result) == 1
+    assert "Failed to" in result[0].text
+    assert "API error" in result[0].text
+
+
+def test_create_linode_profile_login_get_tool() -> None:
+    """Profile login get tool exposes login_id."""
+    tool, capability = create_linode_profile_login_get_tool()
+
+    assert tool.name == "linode_profile_login_get"
+    assert capability is Capability.Read
+    assert tool.inputSchema["required"] == ["login_id"]
+    assert tool.inputSchema["properties"]["login_id"]["minimum"] == 1
+
+
+async def test_handle_linode_profile_login_get_requires_login_id(
+    sample_config: Config,
+) -> None:
+    """Profile login get validates login_id before calling the client."""
+    for login_id in (
+        None,
+        True,
+        False,
+        0,
+        -1,
+        "123",
+        "12/../34?x=1",
+        "..",
+        "/",
+        "?",
+    ):
+        result = await handle_linode_profile_login_get(
+            {"login_id": login_id}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "login_id" in result[0].text
+
+
+async def test_handle_linode_profile_login_get_success(
+    sample_config: Config,
+) -> None:
+    """Profile login get calls the retryable client and returns login details."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.get_profile_login.return_value = {
+            "id": 12345,
+            "ip": "192.0.2.10",
+            "datetime": "2024-01-02T03:04:05",
+        }
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_login_get(
+            {"login_id": 12345}, sample_config
+        )
+
+    assert json.loads(result[0].text) == {
+        "id": 12345,
+        "ip": "192.0.2.10",
+        "datetime": "2024-01-02T03:04:05",
+    }
+    mock_client.get_profile_login.assert_awaited_once_with(12345)
+
+
+async def test_handle_linode_profile_login_get_error(
+    sample_config: Config,
+) -> None:
+    """Profile login get surfaces client errors."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.get_profile_login.side_effect = Exception("API error")
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_login_get(
+            {"login_id": 12345}, sample_config
         )
 
     assert len(result) == 1
