@@ -24,3 +24,16 @@ class DraftExistsError(ValueError):
     def __init__(self, name: str) -> None:
         super().__init__(f"draft already exists: {name}")
         self.name = name
+
+
+class DraftNotFoundError(LookupError):
+    """Raised by Phase 8.4 mutator methods when the draft is not in the registry.
+
+    The Phase 8.3 ``Registry.get`` returns ``None`` for misses; the
+    mutators raise this instead so callers can match the same shape
+    they use for the show/save error path.
+    """
+
+    def __init__(self, name: str) -> None:
+        super().__init__(f"draft not found: {name}")
+        self.draft_name = name

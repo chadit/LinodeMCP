@@ -35,6 +35,7 @@ from linodemcp.tools.linode_profile_draft import (
     set_draft_registry,
     set_profile_resolver,
 )
+from linodemcp.tools.linode_profile_draft_mutate import set_mutator_catalog_provider
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -181,6 +182,9 @@ class Server:
         set_profile_resolver(
             lambda name: lookup_profile(name, config, self._descriptors)
         )
+        # Phase 8.4: wire the mutator catalog bridge. _draft_add_tools
+        # expands wildcards against the live catalog at call time.
+        set_mutator_catalog_provider(lambda: self._descriptors)
         self._active_profile = resolve_active_profile(config, self._descriptors)
         self._allowed_tool_names = frozenset(self._active_profile.allowed_tools)
         # _allowed_entries and _config_handlers are declared+initialized

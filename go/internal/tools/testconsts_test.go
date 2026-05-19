@@ -116,6 +116,16 @@ const (
 	objectPhotoJPG     = "photo.jpg"
 	filesystemExt4     = "ext4"
 
+	// Builder-tool test fixtures: tool names + arg keys reused across
+	// linode_profile_builder_test.go, linode_profile_draft_test.go, and
+	// linode_profile_draft_mutate_test.go.
+	toolInstanceBoot   = "linode_instance_boot"
+	toolInstanceReboot = "linode_instance_reboot"
+	toolHello          = "hello"
+	keyTools           = "tools"
+	keyAllowYolo       = "allow_yolo"
+	envNonexistent     = "nonexistent"
+
 	// LKE Kubernetes versions.
 	lkeVersion128 = "1.28"
 	lkeVersion129 = "1.29"

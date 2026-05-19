@@ -124,3 +124,151 @@ func (r *Registry) List() []string {
 
 	return names
 }
+
+// AddTools expands the given patterns against the catalog, merges the
+// matches into the named draft's AllowedTools (deduplicated), and
+// returns the sorted list of newly-added names. Names already on the
+// draft are not duplicated and not reported in the return value.
+//
+// Returns ErrDraftNotFound when the draft is not in the registry.
+// An empty patterns slice or one that matches nothing returns an
+// empty slice and no error: tools may want to call _add_tools with
+// zero patterns to confirm the draft still exists.
+func (r *Registry) AddTools(
+	draftName string,
+	patterns []string,
+	catalog []profiles.ToolDescriptor,
+) ([]string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	draft, ok := r.drafts[draftName]
+	if !ok {
+		return nil, ErrDraftNotFound
+	}
+
+	matched := MatchPatterns(patterns, catalog)
+	existing := make(map[string]struct{}, len(draft.AllowedTools))
+
+	for _, name := range draft.AllowedTools {
+		existing[name] = struct{}{}
+	}
+
+	added := make([]string, 0, len(matched))
+
+	for _, name := range matched {
+		if _, dup := existing[name]; dup {
+			continue
+		}
+
+		existing[name] = struct{}{}
+
+		added = append(added, name)
+	}
+
+	merged := make([]string, 0, len(existing))
+	for name := range existing {
+		merged = append(merged, name)
+	}
+
+	slices.Sort(merged)
+	slices.Sort(added)
+
+	draft.AllowedTools = merged
+
+	return added, nil
+}
+
+// RemoveTools expands the patterns against the draft's CURRENT
+// AllowedTools and removes the matches. Patterns target the draft's
+// state directly so a wildcard like "linode_instance_*" removes
+// exactly the instance tools the draft already had, regardless of
+// what the live catalog contains.
+//
+// Returns ErrDraftNotFound when the draft is not in the registry.
+// Returns the sorted list of removed names.
+func (r *Registry) RemoveTools(draftName string, patterns []string) ([]string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	draft, ok := r.drafts[draftName]
+	if !ok {
+		return nil, ErrDraftNotFound
+	}
+
+	// Build a synthetic catalog of the draft's current tools so
+	// MatchPatterns drives over them. Capability isn't used by the
+	// matcher; the zero value is fine.
+	catalog := make([]profiles.ToolDescriptor, len(draft.AllowedTools))
+	for i, name := range draft.AllowedTools {
+		catalog[i] = profiles.ToolDescriptor{Name: name}
+	}
+
+	matched := MatchPatterns(patterns, catalog)
+	removeSet := make(map[string]struct{}, len(matched))
+
+	for _, name := range matched {
+		removeSet[name] = struct{}{}
+	}
+
+	kept := make([]string, 0, len(draft.AllowedTools))
+
+	for _, name := range draft.AllowedTools {
+		if _, rm := removeSet[name]; rm {
+			continue
+		}
+
+		kept = append(kept, name)
+	}
+
+	draft.AllowedTools = kept
+
+	return matched, nil
+}
+
+// SetAllowedEnvironments replaces the draft's AllowedEnvironments
+// with the given list. Empty slice and nil are both valid (means
+// "any environment", matching profiles.Profile semantics).
+//
+// Returns ErrDraftNotFound when the draft is not in the registry.
+func (r *Registry) SetAllowedEnvironments(draftName string, envs []string) error {
+	return r.mutate(draftName, func(draft *Draft) {
+		draft.AllowedEnvironments = slices.Clone(envs)
+	})
+}
+
+// SetRequiredTokenScopes replaces the draft's RequiredTokenScopes
+// with the given list. Empty slice and nil are both valid (means
+// "no scope requirement declared").
+//
+// Returns ErrDraftNotFound when the draft is not in the registry.
+func (r *Registry) SetRequiredTokenScopes(draftName string, scopes []string) error {
+	return r.mutate(draftName, func(draft *Draft) {
+		draft.RequiredTokenScopes = slices.Clone(scopes)
+	})
+}
+
+// SetAllowYolo sets the draft's AllowYolo flag.
+//
+// Returns ErrDraftNotFound when the draft is not in the registry.
+func (r *Registry) SetAllowYolo(draftName string, allow bool) error {
+	return r.mutate(draftName, func(draft *Draft) {
+		draft.AllowYolo = allow
+	})
+}
+
+// mutate is the locked-and-found helper that the per-field setters
+// share. Keeps the per-setter body to a single field assignment.
+func (r *Registry) mutate(draftName string, apply func(*Draft)) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	draft, ok := r.drafts[draftName]
+	if !ok {
+		return ErrDraftNotFound
+	}
+
+	apply(draft)
+
+	return nil
+}

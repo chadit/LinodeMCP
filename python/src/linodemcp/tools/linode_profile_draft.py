@@ -46,6 +46,17 @@ def set_draft_registry(registry: Registry | None) -> None:
     _draft_registry = registry
 
 
+def get_draft_registry() -> Registry | None:
+    """Return the registered draft registry, or ``None`` if unset.
+
+    Phase 8.4 mutator handlers read the registry through this getter
+    rather than touching the module-private ``_draft_registry``
+    directly; pyright strict's reportPrivateUsage flags the
+    underscore-prefixed name when imported from outside this module.
+    """
+    return _draft_registry
+
+
 def set_profile_resolver(
     resolver: Callable[[str], Profile | None] | None,
 ) -> None:
@@ -320,6 +331,7 @@ __all__ = [
     "create_linode_profile_draft_discard_tool",
     "create_linode_profile_draft_new_tool",
     "create_linode_profile_draft_show_tool",
+    "get_draft_registry",
     "handle_linode_profile_draft_discard",
     "handle_linode_profile_draft_new",
     "handle_linode_profile_draft_show",
