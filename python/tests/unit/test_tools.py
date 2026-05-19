@@ -83,6 +83,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
+    create_linode_nodebalancer_vpc_config_get_tool,
     create_linode_object_storage_cancel_tool,
     create_linode_object_storage_cluster_get_tool,
     create_linode_object_storage_endpoints_list_tool,
@@ -230,6 +231,7 @@ from linodemcp.tools import (
     handle_linode_nodebalancer_delete,
     handle_linode_nodebalancer_get,
     handle_linode_nodebalancer_update,
+    handle_linode_nodebalancer_vpc_config_get,
     handle_linode_nodebalancers_list,
     handle_linode_object_storage_bucket_access_allow,
     handle_linode_object_storage_bucket_access_get,
@@ -3658,6 +3660,98 @@ async def test_handle_linode_nodebalancer_get_error(sample_config: Config) -> No
 
         result = await handle_linode_nodebalancer_get(
             {"nodebalancer_id": 1}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "Failed" in result[0].text or "error" in result[0].text.lower()
+
+
+async def test_linode_nodebalancer_vpc_config_get_tool_definition() -> None:
+    """Test linode_nodebalancer_vpc_config_get tool definition."""
+    tool, capability = create_linode_nodebalancer_vpc_config_get_tool()
+
+    assert tool.name == "linode_nodebalancer_vpc_config_get"
+    assert capability == Capability.Read
+    assert tool.inputSchema["properties"]["nodebalancer_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["vpc_config_id"]["minimum"] == 1
+    assert tool.inputSchema["required"] == ["nodebalancer_id", "vpc_config_id"]
+
+
+async def test_handle_linode_nodebalancer_vpc_config_get(
+    sample_config: Config,
+) -> None:
+    """Test linode_nodebalancer_vpc_config_get tool."""
+    mock_config = {
+        "id": 456,
+        "vpc_id": 789,
+        "subnet_id": 101,
+        "ipv4_range": "10.0.0.0/24",
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_nodebalancer_vpc_config.return_value = mock_config
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_vpc_config_get(
+            {"nodebalancer_id": 123, "vpc_config_id": 456}, sample_config
+        )
+
+        assert len(result) == 1
+        data = json.loads(result[0].text)
+        assert data["id"] == 456
+        assert data["vpc_id"] == 789
+        mock_client.get_nodebalancer_vpc_config.assert_called_once_with(123, 456)
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({}, "nodebalancer_id must be a positive integer"),
+        ({"nodebalancer_id": 0, "vpc_config_id": 456}, "nodebalancer_id"),
+        ({"nodebalancer_id": "123", "vpc_config_id": 456}, "nodebalancer_id"),
+        ({"nodebalancer_id": True, "vpc_config_id": 456}, "nodebalancer_id"),
+        ({"nodebalancer_id": "1/2", "vpc_config_id": 456}, "nodebalancer_id"),
+        ({"nodebalancer_id": "1?x", "vpc_config_id": 456}, "nodebalancer_id"),
+        ({"nodebalancer_id": "..", "vpc_config_id": 456}, "nodebalancer_id"),
+        ({"nodebalancer_id": 123}, "vpc_config_id"),
+        ({"nodebalancer_id": 123, "vpc_config_id": 0}, "vpc_config_id"),
+        ({"nodebalancer_id": 123, "vpc_config_id": "456"}, "vpc_config_id"),
+        ({"nodebalancer_id": 123, "vpc_config_id": False}, "vpc_config_id"),
+        ({"nodebalancer_id": 123, "vpc_config_id": "4/5"}, "vpc_config_id"),
+        ({"nodebalancer_id": 123, "vpc_config_id": "4?x"}, "vpc_config_id"),
+        ({"nodebalancer_id": 123, "vpc_config_id": ".."}, "vpc_config_id"),
+    ],
+)
+async def test_handle_linode_nodebalancer_vpc_config_get_invalid_ids(
+    sample_config: Config, arguments: dict[str, Any], message: str
+) -> None:
+    """NodeBalancer VPC config get rejects invalid path parameters."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_nodebalancer_vpc_config_get(
+            arguments, sample_config
+        )
+
+    assert len(result) == 1
+    assert message in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_nodebalancer_vpc_config_get_error(
+    sample_config: Config,
+) -> None:
+    """Test linode_nodebalancer_vpc_config_get error handling."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_nodebalancer_vpc_config.side_effect = Exception("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_vpc_config_get(
+            {"nodebalancer_id": 123, "vpc_config_id": 456}, sample_config
         )
 
         assert len(result) == 1
