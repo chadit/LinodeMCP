@@ -125,6 +125,7 @@ const (
 	keyTools           = "tools"
 	keyAllowYolo       = "allow_yolo"
 	envNonexistent     = "nonexistent"
+	draftNonexistent   = "nonexistent-draft"
 
 	// LKE Kubernetes versions.
 	lkeVersion128 = "1.28"

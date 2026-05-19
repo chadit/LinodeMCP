@@ -229,7 +229,7 @@ func TestDraftShowRefusesUnknown(t *testing.T) {
 	_, _, showHandler := tools.NewLinodeProfileDraftShowTool(reg)
 
 	req := mcp.CallToolRequest{}
-	req.Params.Arguments = map[string]any{keyName: "nonexistent-draft"}
+	req.Params.Arguments = map[string]any{keyName: draftNonexistent}
 
 	_, err := showHandler(t.Context(), req)
 
@@ -278,9 +278,9 @@ func TestDraftDiscardIdempotent(t *testing.T) {
 	reg := builder.NewRegistry()
 	_, _, discardHandler := tools.NewLinodeProfileDraftDiscardTool(reg)
 
-	out := callDraftHandler(t, discardHandler, map[string]any{keyName: "nonexistent-draft"})
+	out := callDraftHandler(t, discardHandler, map[string]any{keyName: draftNonexistent})
 
-	assert.Equal(t, "nonexistent-draft", out[keyName])
+	assert.Equal(t, draftNonexistent, out[keyName])
 	assert.Equal(t, false, out["discarded"])
 }
 

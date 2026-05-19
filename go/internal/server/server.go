@@ -124,6 +124,7 @@ func builderToolEntries(srv *Server) []toolEntry {
 	addToolsTool, addToolsCap, addToolsHandler := tools.NewLinodeProfileDraftAddToolsTool(srv.draftRegistry, srv.ToolCatalog)
 	removeToolsTool, removeToolsCap, removeToolsHandler := tools.NewLinodeProfileDraftRemoveToolsTool(srv.draftRegistry)
 	setTool, setCap, setHandler := tools.NewLinodeProfileDraftSetTool(srv.draftRegistry)
+	saveTool, saveCap, saveHandler := tools.NewLinodeProfileDraftSaveTool(srv.draftRegistry, config.GetConfigPath)
 
 	return []toolEntry{
 		{tool: listTool, capability: listCap, handler: listHandler},
@@ -134,6 +135,7 @@ func builderToolEntries(srv *Server) []toolEntry {
 		{tool: addToolsTool, capability: addToolsCap, handler: addToolsHandler},
 		{tool: removeToolsTool, capability: removeToolsCap, handler: removeToolsHandler},
 		{tool: setTool, capability: setCap, handler: setHandler},
+		{tool: saveTool, capability: saveCap, handler: saveHandler},
 	}
 }
 

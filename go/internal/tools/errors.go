@@ -106,3 +106,20 @@ var (
 	// that doesn't exist in built-ins or user config.
 	ErrCloneSourceMissing = errors.New("clone_from profile not found")
 )
+
+// Sentinel errors for Phase 8.5 draft save. Save is the only builder
+// tool that mutates the config file, so it carries its own validation
+// surface.
+var (
+	// ErrConfirmRequired reports that the save was called without
+	// confirm=true. Mirrors every other confirmation-gated write tool.
+	ErrConfirmRequired = errors.New("confirm=true is required for draft save")
+	// ErrSaveBuiltinName reports that the save target name matches a
+	// built-in profile. Built-ins live in code and cannot be shadowed
+	// by user-defined entries.
+	ErrSaveBuiltinName = errors.New("cannot save over built-in profile name")
+	// ErrConfigPathUnknown reports that the server is running without
+	// a known config path on disk. Phase 8.5 save needs a target
+	// path to write to.
+	ErrConfigPathUnknown = errors.New("config path not configured")
+)

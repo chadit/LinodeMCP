@@ -15,6 +15,12 @@ import threading
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from linodemcp.profiles.builder.diff import (
+    Diff,
+    FieldDiff,
+    compute_diff,
+    draft_as_user_profile,
+)
 from linodemcp.profiles.builder.errors import (
     DraftExistsError,
     DraftNameEmptyError,
@@ -240,10 +246,14 @@ class Registry:
 
 
 __all__ = [
+    "Diff",
     "Draft",
     "DraftExistsError",
     "DraftNameEmptyError",
     "DraftNotFoundError",
+    "FieldDiff",
     "Registry",
+    "compute_diff",
+    "draft_as_user_profile",
     "match_patterns",
 ]

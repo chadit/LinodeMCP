@@ -13,6 +13,7 @@ from mcp.server.stdio import stdio_server
 from mcp.types import Tool
 
 import linodemcp.tools as tools_module
+from linodemcp.config import get_config_path
 from linodemcp.linode import RetryableClient
 from linodemcp.profiles import (
     Capability,
@@ -36,6 +37,7 @@ from linodemcp.tools.linode_profile_draft import (
     set_profile_resolver,
 )
 from linodemcp.tools.linode_profile_draft_mutate import set_mutator_catalog_provider
+from linodemcp.tools.linode_profile_draft_save import set_save_config_path_provider
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -185,6 +187,12 @@ class Server:
         # Phase 8.4: wire the mutator catalog bridge. _draft_add_tools
         # expands wildcards against the live catalog at call time.
         set_mutator_catalog_provider(lambda: self._descriptors)
+        # Phase 8.5: wire the save tool to the config path. Save reads
+        # fresh from disk on every call to avoid stomping concurrent
+        # edits, then writes back via write_atomic. The provider is a
+        # lambda over get_config_path so LINODEMCP_CONFIG_PATH env
+        # overrides apply at call time.
+        set_save_config_path_provider(lambda: str(get_config_path()))
         self._active_profile = resolve_active_profile(config, self._descriptors)
         self._allowed_tool_names = frozenset(self._active_profile.allowed_tools)
         # _allowed_entries and _config_handlers are declared+initialized
