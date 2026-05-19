@@ -47,6 +47,53 @@ def _firewall_ids_argument(arguments: dict[str, Any]) -> list[int] | None:
     return firewall_ids
 
 
+NODE_LABEL_MIN_LENGTH = 3
+NODE_LABEL_MAX_LENGTH = 32
+NODE_MODE_VALUES = {"accept", "reject", "drain", "backup"}
+
+
+def _optional_non_empty_string(arguments: dict[str, Any], name: str) -> str | None:
+    value = arguments.get(name)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise TypeError(f"{name} must be a non-empty string")
+    return value
+
+
+def _node_update_fields(arguments: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
+    try:
+        address = _optional_non_empty_string(arguments, "address")
+        label = _optional_non_empty_string(arguments, "label")
+        mode = _optional_non_empty_string(arguments, "mode")
+        subnet_id = _optional_int_argument(arguments, "subnet_id", 1)
+        weight = _optional_int_argument(arguments, "weight", 1, 255)
+    except (TypeError, ValueError) as exc:
+        return {}, str(exc)
+
+    if label is not None and not (
+        NODE_LABEL_MIN_LENGTH <= len(label) <= NODE_LABEL_MAX_LENGTH
+    ):
+        return {}, "label must be 3 to 32 characters"
+    if mode is not None and mode not in NODE_MODE_VALUES:
+        return {}, "mode must be one of accept, reject, drain, backup"
+
+    fields = {
+        key: value
+        for key, value in {
+            "address": address,
+            "label": label,
+            "mode": mode,
+            "subnet_id": subnet_id,
+            "weight": weight,
+        }.items()
+        if value is not None
+    }
+    if not fields:
+        return {}, "at least one update field is required"
+    return fields, None
+
+
 def create_linode_nodebalancer_firewalls_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_nodebalancer_firewalls_update tool."""
     return Tool(
@@ -377,6 +424,113 @@ async def handle_linode_nodebalancer_delete(
         }
 
     return await execute_tool(cfg, arguments, "delete NodeBalancer", _call)
+
+
+def create_linode_nodebalancer_config_node_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_nodebalancer_config_node_update tool."""
+    return Tool(
+        name="linode_nodebalancer_config_node_update",
+        description=(
+            "Updates a node in a NodeBalancer config. "
+            "Requires confirm because live backend routing may change."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "nodebalancer_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the NodeBalancer (required)",
+                },
+                "config_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the NodeBalancer config (required)",
+                },
+                "node_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the node to update (required)",
+                },
+                "address": {
+                    "type": "string",
+                    "description": "Backend address and port, such as 10.0.0.45:80.",
+                },
+                "label": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 32,
+                    "description": "Display label for the node.",
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["accept", "reject", "drain", "backup"],
+                    "description": "Backend traffic mode for this node.",
+                },
+                "subnet_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "VPC subnet ID for VPC backend nodes.",
+                },
+                "weight": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 255,
+                    "description": "Backend selection weight from 1 to 255.",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to update the NodeBalancer config node."
+                    ),
+                },
+            },
+            "required": ["nodebalancer_id", "config_id", "node_id", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_nodebalancer_config_node_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_nodebalancer_config_node_update tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response("confirm must be true")
+
+    nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
+    if nodebalancer_id is None:
+        return error_response("nodebalancer_id must be a positive integer")
+
+    config_id = _positive_int_argument(arguments, "config_id")
+    if config_id is None:
+        return error_response("config_id must be a positive integer")
+
+    node_id = _positive_int_argument(arguments, "node_id")
+    if node_id is None:
+        return error_response("node_id must be a positive integer")
+
+    fields, field_error = _node_update_fields(arguments)
+    if field_error is not None:
+        return error_response(field_error)
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.update_nodebalancer_config_node(
+            nodebalancer_id, config_id, node_id, fields
+        )
+        if result:
+            return result
+        return {
+            "message": (
+                f"Node {node_id} update requested for NodeBalancer "
+                f"{nodebalancer_id} config {config_id}"
+            ),
+            "nodebalancer_id": nodebalancer_id,
+            "config_id": config_id,
+            "node_id": node_id,
+        }
+
+    return await execute_tool(cfg, arguments, "update NodeBalancer config node", _call)
 
 
 def create_linode_nodebalancer_config_node_delete_tool() -> tuple[Tool, Capability]:

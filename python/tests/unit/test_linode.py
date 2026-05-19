@@ -3783,6 +3783,112 @@ async def test_retryable_rebuild_nodebalancer_config_does_not_replay() -> None:
     await retryable.close()
 
 
+async def test_update_nodebalancer_config_node() -> None:
+    """Test updating a NodeBalancer config node."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"id": 4, "address": "192.0.2.4:80"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.update_nodebalancer_config_node(
+            8, 6, 4, {"address": "192.0.2.4:80", "weight": 50}
+        )
+
+        assert result == {"id": 4, "address": "192.0.2.4:80"}
+        mock_request.assert_called_once_with(
+            "PUT",
+            "/nodebalancers/8/configs/6/nodes/4",
+            {"address": "192.0.2.4:80", "weight": 50},
+        )
+
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    (
+        "nodebalancer_id",
+        "config_id",
+        "node_id",
+        "encoded_nodebalancer_id",
+        "encoded_config_id",
+        "encoded_node_id",
+    ),
+    [
+        ("1/2", "4", "7", "1%2F2", "4", "7"),
+        ("8", "3?x", "7", "8", "3%3Fx", "7"),
+        ("8", "6", "../5", "8", "6", "..%2F5"),
+    ],
+)
+async def test_update_nodebalancer_config_node_encodes_path_params(
+    nodebalancer_id: str,
+    config_id: str,
+    node_id: str,
+    encoded_nodebalancer_id: str,
+    encoded_config_id: str,
+    encoded_node_id: str,
+) -> None:
+    """NodeBalancer config node update path parameters are URL-encoded."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.update_nodebalancer_config_node(
+            cast("Any", nodebalancer_id),
+            cast("Any", config_id),
+            cast("Any", node_id),
+            {"mode": "drain"},
+        )
+
+        mock_request.assert_called_once_with(
+            "PUT",
+            (
+                f"/nodebalancers/{encoded_nodebalancer_id}/configs/"
+                f"{encoded_config_id}/nodes/{encoded_node_id}"
+            ),
+            {"mode": "drain"},
+        )
+
+    await client.close()
+
+
+async def test_update_nodebalancer_config_node_wraps_http_errors() -> None:
+    """Test updating a NodeBalancer config node wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.update_nodebalancer_config_node(8, 6, 4, {"mode": "reject"})
+
+    assert "UpdateNodeBalancerConfigNode" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_update_nodebalancer_config_node_does_not_replay() -> None:
+    """RetryableClient delegates config node update once without retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "update_nodebalancer_config_node", new_callable=AsyncMock
+    ) as mock_update:
+        mock_update.side_effect = httpx.HTTPError("transient")
+        with pytest.raises(httpx.HTTPError):
+            await retryable.update_nodebalancer_config_node(8, 6, 4, {"mode": "reject"})
+
+    mock_update.assert_awaited_once_with(8, 6, 4, {"mode": "reject"})
+    await retryable.close()
+
+
 async def test_delete_nodebalancer_config_node() -> None:
     """Test deleting a NodeBalancer config node."""
     client = Client("https://api.linode.com/v4", "test-token")
