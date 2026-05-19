@@ -607,6 +607,49 @@ To mount a config file instead of using environment variables:
 
 This gives you a single gateway endpoint that bundles LinodeMCP with any other MCP servers you've registered. See the [Context Forge docs](https://ibm.github.io/mcp-context-forge/) for the full setup guide.
 
+## Profiles
+
+Profiles control which tools the AI client can see. The server filters the tool list at registration time, so the model literally cannot invoke anything outside the active profile. Eight built-ins ship with the binary:
+
+- `default` and `readonly-full`: read-only across every category. Safe default.
+- `compute-admin`, `network-admin`, `kubernetes-admin`, `storage-admin`: read everywhere plus write + destroy on the named category.
+- `full-access` and `emergency`: ship disabled. Enable them when you genuinely need them, then disable again.
+
+Switch profiles via the CLI:
+
+```bash
+linodemcp profile list                 # what's available, which is active
+linodemcp profile show readonly-full   # full details for one
+linodemcp profile use compute-admin    # switch the active profile
+```
+
+Mutators write the config file atomically and the server hot-reloads without a restart.
+
+User-defined profiles live under `profiles:` in your config:
+
+```yaml
+active_profile: dns-admin
+
+profiles:
+  dns-admin:
+    description: "DNS write access plus read-everywhere"
+    allowed_tools:
+      - "linode_domain_*"
+      - "linode_domain_record_*"
+      - "*"   # read-everything alongside the DNS writes
+    denied_tools:
+      - "linode_instance_*_create"
+      - "linode_instance_*_delete"
+    allowed_environments: ["prod"]
+    required_token_scopes:
+      - "domains:read_write"
+      - "linodes:read_only"
+```
+
+The AI can also help compose profiles via the `linode_profile_*` builder tools. Those run inside the MCP conversation; the user activates the saved profile separately.
+
+For the full reference (schema, capability tags, builder workflow, token-scope validation, security model), see [docs/profiles.md](docs/profiles.md). For copy-paste starting points, see [docs/profile-recipes.md](docs/profile-recipes.md). For host-specific wiring, see [docs/host-integrations/](docs/host-integrations/README.md).
+
 ## Development
 
 ### Go Development
