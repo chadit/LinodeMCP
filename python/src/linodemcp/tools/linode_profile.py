@@ -644,6 +644,40 @@ async def handle_linode_profile_token_get(
     return await execute_tool(cfg, arguments, "retrieve Linode profile token", _call)
 
 
+def create_linode_profile_login_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_login_get tool."""
+    return Tool(
+        name="linode_profile_login_get",
+        description="Retrieves a Linode profile login by login ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "login_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "ID of the profile login to retrieve",
+                },
+            },
+            "required": ["login_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_profile_login_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_profile_login_get tool request."""
+    login_id = arguments.get("login_id")
+    if isinstance(login_id, bool) or not isinstance(login_id, int) or login_id < 1:
+        return error_response("login_id must be a positive integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_profile_login(login_id)
+
+    return await execute_tool(cfg, arguments, "retrieve Linode profile login", _call)
+
+
 def create_linode_profile_token_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_profile_token_update tool."""
     return Tool(

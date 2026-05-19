@@ -2616,6 +2616,30 @@ class Client:
             logger.exception("HTTP error getting profile token: %s", e)
             raise NetworkError("GetProfileToken", e) from e
 
+    async def get_profile_login(self, login_id: int) -> dict[str, Any]:
+        """Get a profile login."""
+        encoded_login_id = quote(str(login_id), safe="")
+        endpoint = f"/profile/logins/{encoded_login_id}"
+        logger.info("Getting profile login", extra={"login_id": login_id})
+
+        try:
+            response = await self.make_request("GET", endpoint)
+            result: dict[str, Any] = response.json()
+            logger.info("Profile login retrieved", extra={"login_id": login_id})
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout getting profile login: %s", e)
+            raise NetworkError("GetProfileLogin", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout getting profile login: %s", e)
+            raise NetworkError("GetProfileLogin", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error getting profile login")
+            raise NetworkError("GetProfileLogin", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error getting profile login: %s", e)
+            raise NetworkError("GetProfileLogin", e) from e
+
     async def delete_profile_token(self, token_id: int) -> None:
         """Revoke a personal access token."""
         encoded_token_id = quote(str(token_id), safe="")
@@ -5763,6 +5787,13 @@ class RetryableClient:
         """Get a profile token with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_profile_token, token_id
+        )
+        return result
+
+    async def get_profile_login(self, login_id: int) -> dict[str, Any]:
+        """Get a profile login with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_profile_login, login_id
         )
         return result
 
