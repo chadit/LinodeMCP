@@ -83,6 +83,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
+    create_linode_nodebalancer_config_node_delete_tool,
     create_linode_nodebalancer_config_rebuild_tool,
     create_linode_nodebalancer_firewalls_list_tool,
     create_linode_nodebalancer_firewalls_update_tool,
@@ -232,6 +233,7 @@ from linodemcp.tools import (
     handle_linode_lke_version_get,
     handle_linode_lke_versions_list,
     handle_linode_monitor_service_token_create,
+    handle_linode_nodebalancer_config_node_delete,
     handle_linode_nodebalancer_config_rebuild,
     handle_linode_nodebalancer_create,
     handle_linode_nodebalancer_delete,
@@ -5455,6 +5457,81 @@ async def test_handle_linode_nodebalancer_delete(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "deleted" in result[0].text.lower()
+
+
+async def test_linode_nodebalancer_config_node_delete_tool_definition() -> None:
+    """Test linode_nodebalancer_config_node_delete tool definition."""
+    tool, _ = create_linode_nodebalancer_config_node_delete_tool()
+    assert tool.name == "linode_nodebalancer_config_node_delete"
+    assert tool.inputSchema["required"] == [
+        "nodebalancer_id",
+        "config_id",
+        "node_id",
+        "confirm",
+    ]
+
+
+async def test_handle_linode_nodebalancer_config_node_delete(
+    sample_config: Config,
+) -> None:
+    """Test linode_nodebalancer_config_node_delete tool."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_nodebalancer_config_node.return_value = None
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_config_node_delete(
+            {"nodebalancer_id": 12345, "config_id": 6, "node_id": 7, "confirm": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "deleted" in result[0].text.lower()
+        mock_client.delete_nodebalancer_config_node.assert_called_once_with(12345, 6, 7)
+
+
+@pytest.mark.parametrize("confirm_value", [False, None])
+async def test_handle_linode_nodebalancer_config_node_delete_confirm_rejected(
+    confirm_value: object, sample_config: Config
+) -> None:
+    """Missing/false confirm is rejected before client call."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_config_node_delete(
+            {
+                "nodebalancer_id": 12345,
+                "config_id": 6,
+                "node_id": 7,
+                "confirm": confirm_value,
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "confirm=true" in result[0].text.lower()
+        mock_client.delete_nodebalancer_config_node.assert_not_called()
+
+
+async def test_handle_linode_nodebalancer_config_node_delete_missing_args(
+    sample_config: Config,
+) -> None:
+    """Missing required args are rejected before client call."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_config_node_delete(
+            {"nodebalancer_id": 12345, "confirm": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "config_id is required" in result[0].text.lower()
+        mock_client.delete_nodebalancer_config_node.assert_not_called()
 
 
 # Object Storage tools

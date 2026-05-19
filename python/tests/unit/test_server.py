@@ -1474,6 +1474,25 @@ def test_linode_nodebalancer_config_rebuild_registered() -> None:
     assert entries["linode_nodebalancer_config_rebuild"].capability == Capability.Write
 
 
+def test_linode_nodebalancer_config_node_delete_exported() -> None:
+    """NodeBalancer config node delete tool is exported."""
+    import linodemcp.tools as tools_mod
+
+    assert "create_linode_nodebalancer_config_node_delete_tool" in tools_mod.__all__
+    assert "handle_linode_nodebalancer_config_node_delete" in tools_mod.__all__
+
+
+def test_linode_nodebalancer_config_node_delete_registered() -> None:
+    """NodeBalancer config node delete tool is registered."""
+    from linodemcp.server import get_tool_registry
+
+    entries = {entry.name: entry for entry in get_tool_registry()}
+
+    assert "linode_nodebalancer_config_node_delete" in entries
+    entry = entries["linode_nodebalancer_config_node_delete"]
+    assert entry.capability == Capability.Destroy
+
+
 def test_linode_nodebalancer_stats_exported() -> None:
     """NodeBalancer stats tool is exported."""
     import linodemcp.tools as tools_mod
