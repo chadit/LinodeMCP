@@ -411,6 +411,19 @@ async def test_object_storage_endpoints_list_tool_is_exported_and_registered(
     assert "linode_object_storage_endpoints_list" in srv.registered_tool_names
 
 
+async def test_object_storage_buckets_region_list_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Object Storage region bucket list tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_object_storage_buckets_region_list_tool" in tools_mod.__all__
+    assert "handle_linode_object_storage_buckets_region_list" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_object_storage_buckets_region_list" in srv.registered_tool_names
+
+
 async def test_object_storage_quota_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
