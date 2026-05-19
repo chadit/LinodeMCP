@@ -273,6 +273,65 @@ async def handle_linode_profile_tfa_enable_confirm(
     )
 
 
+def create_linode_profile_phone_number_send_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_phone_number_send tool."""
+    return Tool(
+        name="linode_profile_phone_number_send",
+        description="Sends a verification code to a Linode profile phone number.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "iso_code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": (
+                        "ISO 3166-1 alpha-2 country code for the phone number"
+                    ),
+                },
+                "phone_number": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Phone number to receive the verification code",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to send a verification code to this phone number."
+                    ),
+                },
+            },
+            "required": ["iso_code", "phone_number", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_profile_phone_number_send(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_profile_phone_number_send tool request."""
+    iso_code = arguments.get("iso_code")
+    if not isinstance(iso_code, str) or not iso_code.strip():
+        return error_response("iso_code must be a non-empty string")
+    phone_number = arguments.get("phone_number")
+    if not isinstance(phone_number, str) or not phone_number.strip():
+        return error_response("phone_number must be a non-empty string")
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This sends a profile phone number verification code. "
+            "Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.send_profile_phone_number_verification(
+            iso_code.strip(), phone_number.strip()
+        )
+
+    return await execute_tool(
+        cfg, arguments, "send Linode profile phone number verification code", _call
+    )
+
+
 def create_linode_profile_phone_number_verify_tool() -> tuple[Tool, Capability]:
     """Create the linode_profile_phone_number_verify tool."""
     return Tool(

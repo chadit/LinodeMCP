@@ -2351,6 +2351,40 @@ class Client:
             )
             raise NetworkError("DisableProfileTFA", e) from e
 
+    async def send_profile_phone_number_verification(
+        self, iso_code: str, phone_number: str
+    ) -> dict[str, Any]:
+        """Send a profile phone number verification code."""
+        body = {"iso_code": iso_code, "phone_number": phone_number}
+        logger.info("Sending profile phone number verification code")
+
+        try:
+            response = await self.make_request("POST", "/profile/phone-number", body)
+            result: dict[str, Any] = response.json()
+            logger.info("Profile phone number verification code sent")
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception(
+                "Connection timeout sending profile phone number verification code: %s",
+                e,
+            )
+            raise NetworkError("SendProfilePhoneNumberVerification", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception(
+                "Read timeout sending profile phone number verification code: %s", e
+            )
+            raise NetworkError("SendProfilePhoneNumberVerification", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception(
+                "HTTP error sending profile phone number verification code"
+            )
+            raise NetworkError("SendProfilePhoneNumberVerification", e) from e
+        except httpx.HTTPError as e:
+            logger.exception(
+                "HTTP error sending profile phone number verification code: %s", e
+            )
+            raise NetworkError("SendProfilePhoneNumberVerification", e) from e
+
     async def verify_profile_phone_number(self, otp_code: str) -> dict[str, Any]:
         """Verify a profile phone number with a one-time SMS code."""
         body = {"otp_code": otp_code}
@@ -5612,6 +5646,15 @@ class RetryableClient:
         """Disable profile two-factor authentication with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.disable_profile_tfa
+        )
+        return result
+
+    async def send_profile_phone_number_verification(
+        self, iso_code: str, phone_number: str
+    ) -> dict[str, Any]:
+        """Send a profile phone number verification code with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.send_profile_phone_number_verification, iso_code, phone_number
         )
         return result
 

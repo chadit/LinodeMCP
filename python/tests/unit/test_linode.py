@@ -3921,6 +3921,57 @@ async def test_confirm_profile_tfa_enable_wraps_http_errors() -> None:
     await client.close()
 
 
+async def test_send_profile_phone_number_verification_sends_post_with_body() -> None:
+    """Profile phone number send posts the documented verification body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        result = await client.send_profile_phone_number_verification(
+            "US", "+15551234567"
+        )
+
+    assert result == {}
+    mock_request.assert_called_once_with(
+        "POST",
+        "/profile/phone-number",
+        {"iso_code": "US", "phone_number": "+15551234567"},
+    )
+    await client.close()
+
+
+async def test_retryable_send_profile_phone_number_verification_delegates() -> None:
+    """Retryable profile phone send forwards the country code and number."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        client.client, "send_profile_phone_number_verification", new_callable=AsyncMock
+    ) as mock_send:
+        mock_send.return_value = {}
+        result = await client.send_profile_phone_number_verification(
+            "US", "+15551234567"
+        )
+
+    assert result == {}
+    mock_send.assert_awaited_once_with("US", "+15551234567")
+    await client.close()
+
+
+async def test_send_profile_phone_number_verification_wraps_http_errors() -> None:
+    """Profile phone number send maps HTTP errors to operation name."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ReadTimeout("timeout")
+        with pytest.raises(NetworkError) as exc_info:
+            await client.send_profile_phone_number_verification("US", "+15551234567")
+
+    assert exc_info.value.operation == "SendProfilePhoneNumberVerification"
+    await client.close()
+
+
 async def test_verify_profile_phone_number_sends_post_with_otp_code() -> None:
     """Profile phone number verification sends POST with documented body."""
     client = Client("https://api.linode.com/v4", "test-token")
