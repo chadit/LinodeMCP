@@ -409,6 +409,59 @@ async def handle_linode_object_storage_transfer(
     )
 
 
+def create_linode_object_storage_quota_usage_tool() -> tuple[Tool, Capability]:
+    """Create the linode_object_storage_quota_usage tool."""
+    return Tool(
+        name="linode_object_storage_quota_usage",
+        description="Gets Object Storage quota usage data by quota ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "obj_quota_id": {
+                    "type": "integer",
+                    "description": "The Object Storage quota ID to retrieve usage for.",
+                },
+            },
+            "required": ["obj_quota_id"],
+        },
+    ), Capability.Read
+
+
+def _parse_positive_int_argument(value: Any) -> int | None:
+    """Parse a positive integer tool argument."""
+    if isinstance(value, (bool, float)):
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed <= 0:
+        return None
+    return parsed
+
+
+async def handle_linode_object_storage_quota_usage(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_object_storage_quota_usage tool request."""
+    obj_quota_id = _parse_positive_int_argument(arguments.get("obj_quota_id"))
+    if obj_quota_id is None:
+        return _error_response("obj_quota_id must be a positive integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_object_storage_quota_usage(obj_quota_id)
+
+    return await execute_tool(
+        cfg, arguments, "retrieve Object Storage quota usage", _call
+    )
+
+
 def create_linode_object_storage_bucket_access_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_bucket_access_get tool."""
     return Tool(

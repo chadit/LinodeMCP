@@ -368,6 +368,19 @@ async def test_object_storage_bucket_access_allow_tool_is_exported_and_registere
     assert "linode_object_storage_bucket_access_allow" in srv.registered_tool_names
 
 
+async def test_object_storage_quota_usage_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Object Storage quota usage tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_object_storage_quota_usage_tool" in tools_mod.__all__
+    assert "handle_linode_object_storage_quota_usage" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_object_storage_quota_usage" in srv.registered_tool_names
+
+
 async def test_domain_record_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
