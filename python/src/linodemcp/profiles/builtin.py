@@ -81,6 +81,8 @@ _TOOL_CATEGORIES: tuple[tuple[str, tuple[str, ...]], ...] = (
         (
             "linode_instance_",
             "linode_instances_",
+            "linode_placement_group_",
+            "linode_placement_groups_",
             "linode_regions_",
             "linode_types_",
             "linode_image_",
