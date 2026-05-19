@@ -1797,6 +1797,81 @@ async def test_create_ipv6_range_posts_route_target_body() -> None:
     await client.close()
 
 
+async def test_get_placement_group_sends_get() -> None:
+    """Getting a placement group should issue GET for the group path."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {"id": 789, "label": "pg-a"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        result = await client.get_placement_group(789)
+
+        assert result == {"id": 789, "label": "pg-a"}
+        mock_request.assert_awaited_once_with("GET", "/placement/groups/789")
+
+    await client.close()
+
+
+async def test_get_placement_group_encodes_group_path() -> None:
+    """Placement group get should encode the group path segment."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {}
+    group_id: Any = "12/../?x=1"
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        await client.get_placement_group(group_id)
+
+        mock_request.assert_awaited_once_with(
+            "GET",
+            "/placement/groups/12%2F..%2F%3Fx%3D1",
+        )
+
+    await client.close()
+
+
+async def test_get_placement_group_wraps_http_errors() -> None:
+    """Getting a placement group should wrap HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.get_placement_group(789)
+
+    assert "GetPlacementGroup" in str(exc_info.value)
+    await client.close()
+
+
+async def test_retryable_get_placement_group_delegates_to_client() -> None:
+    """Retryable client should delegate placement group get."""
+    client = RetryableClient(
+        "https://api.linode.com/v4",
+        "test-token",
+        RetryConfig(max_retries=1, base_delay=0.01),
+    )
+    response_data = {"id": 789, "label": "pg-a"}
+
+    with patch.object(
+        client.client,
+        "get_placement_group",
+        new_callable=AsyncMock,
+    ) as mock_get:
+        mock_get.return_value = response_data
+
+        result = await client.get_placement_group(789)
+
+        assert result == response_data
+        mock_get.assert_awaited_once_with(789)
+
+    await client.close()
+
+
 async def test_assign_placement_group_posts_linode_body() -> None:
     """Assigning a placement group should POST the Linode IDs."""
     client = Client("https://api.linode.com/v4", "test-token")

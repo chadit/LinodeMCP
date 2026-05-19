@@ -85,6 +85,7 @@ from linodemcp.tools import (
     create_linode_monitor_service_token_create_tool,
     create_linode_placement_group_assign_tool,
     create_linode_placement_group_delete_tool,
+    create_linode_placement_group_get_tool,
     create_linode_placement_group_unassign_tool,
     create_linode_placement_group_update_tool,
     create_linode_profile_app_get_tool,
@@ -246,6 +247,7 @@ from linodemcp.tools import (
     handle_linode_object_storage_types_list,
     handle_linode_placement_group_assign,
     handle_linode_placement_group_delete,
+    handle_linode_placement_group_get,
     handle_linode_placement_group_unassign,
     handle_linode_placement_group_update,
     handle_linode_profile,
@@ -11178,6 +11180,68 @@ async def test_handle_linode_profile_device_revoke_error(sample_config: Config) 
         )
 
     assert "Failed to revoke Linode profile trusted device" in result[0].text
+    assert "API error" in result[0].text
+
+
+def test_create_linode_placement_group_get_tool() -> None:
+    """Placement group get tool schema requires only group_id."""
+    tool, capability = create_linode_placement_group_get_tool()
+
+    assert tool.name == "linode_placement_group_get"
+    assert capability is Capability.Read
+    assert tool.inputSchema["required"] == ["group_id"]
+    assert tool.inputSchema["properties"]["group_id"]["minimum"] == 1
+
+
+@pytest.mark.parametrize("group_id", [None, 0, -1, True, "789", "/", "?", ".."])
+async def test_handle_linode_placement_group_get_requires_positive_group_id(
+    group_id: object, sample_config: Config
+) -> None:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_placement_group_get(
+            {"group_id": group_id}, sample_config
+        )
+
+    assert "group_id must be a positive integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_placement_group_get_success(
+    sample_config: Config,
+) -> None:
+    response_data = {"id": 789, "label": "pg-a"}
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_placement_group.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_placement_group_get(
+            {"group_id": 789},
+            sample_config,
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.get_placement_group.assert_awaited_once_with(789)
+
+
+async def test_handle_linode_placement_group_get_reports_client_errors(
+    sample_config: Config,
+) -> None:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_placement_group.side_effect = RuntimeError("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_placement_group_get(
+            {"group_id": 789},
+            sample_config,
+        )
+
+    assert "Failed to get placement group" in result[0].text
     assert "API error" in result[0].text
 
 
