@@ -47,6 +47,11 @@ def test_meta_returns_empty() -> None:
         ),
         ("linode_vpcs_list", Capability.Read, [Scope.VPCReadOnly]),
         (
+            "linode_nodebalancer_vpc_configs_list",
+            Capability.Read,
+            [Scope.NodeBalancersReadOnly],
+        ),
+        (
             "linode_nodebalancer_update",
             Capability.Write,
             [Scope.NodeBalancersReadWrite],

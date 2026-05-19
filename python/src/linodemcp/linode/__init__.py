@@ -1873,6 +1873,29 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetNodeBalancerVPCConfig", e) from e
 
+    async def list_nodebalancer_vpc_configs(
+        self,
+        nodebalancer_id: int,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
+        """List VPC configurations for a NodeBalancer."""
+        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
+        endpoint = f"/nodebalancers/{encoded_nodebalancer_id}/vpcs"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListNodeBalancerVPCConfigs", e) from e
+
     async def list_stackscripts(self) -> list[StackScript]:
         """List StackScripts."""
         try:
@@ -5916,6 +5939,20 @@ class RetryableClient:
             self.client.get_nodebalancer_vpc_config,
             nodebalancer_id,
             vpc_config_id,
+        )
+        return result
+
+    async def list_nodebalancer_vpc_configs(
+        self,
+        nodebalancer_id: int,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
+        """List VPC configurations for a NodeBalancer with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_nodebalancer_vpc_configs(
+                nodebalancer_id, page=page, page_size=page_size
+            )
         )
         return result
 

@@ -118,6 +118,21 @@ def _positive_int_argument(arguments: dict[str, Any], name: str) -> int | None:
     return value
 
 
+def _optional_int_argument(
+    arguments: dict[str, Any], name: str, minimum: int, maximum: int | None = None
+) -> int | None:
+    value = arguments.get(name)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{name} must be an integer")
+    if value < minimum:
+        raise ValueError(f"{name} must be at least {minimum}")
+    if maximum is not None and value > maximum:
+        raise ValueError(f"{name} must be at most {maximum}")
+    return value
+
+
 async def handle_linode_nodebalancer_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -175,6 +190,61 @@ def create_linode_nodebalancer_vpc_config_get_tool() -> tuple[Tool, Capability]:
             "required": ["nodebalancer_id", "vpc_config_id"],
         },
     ), Capability.Read
+
+
+def create_linode_nodebalancer_vpc_configs_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_nodebalancer_vpc_configs_list tool."""
+    return Tool(
+        name="linode_nodebalancer_vpc_configs_list",
+        description="Lists VPC configurations for a NodeBalancer.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "nodebalancer_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the NodeBalancer (required)",
+                },
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
+            },
+            "required": ["nodebalancer_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_nodebalancer_vpc_configs_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_nodebalancer_vpc_configs_list tool request."""
+    nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
+    if nodebalancer_id is None:
+        return error_response("nodebalancer_id must be a positive integer")
+
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.list_nodebalancer_vpc_configs(
+            nodebalancer_id, page=page, page_size=page_size
+        )
+
+    return await execute_tool(
+        cfg, arguments, "retrieve NodeBalancer VPC configurations", _call
+    )
 
 
 async def handle_linode_nodebalancer_vpc_config_get(
