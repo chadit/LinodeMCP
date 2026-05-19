@@ -84,6 +84,7 @@ from linodemcp.tools import (
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
     create_linode_nodebalancer_config_node_delete_tool,
+    create_linode_nodebalancer_config_node_update_tool,
     create_linode_nodebalancer_config_rebuild_tool,
     create_linode_nodebalancer_firewalls_list_tool,
     create_linode_nodebalancer_firewalls_update_tool,
@@ -234,6 +235,7 @@ from linodemcp.tools import (
     handle_linode_lke_versions_list,
     handle_linode_monitor_service_token_create,
     handle_linode_nodebalancer_config_node_delete,
+    handle_linode_nodebalancer_config_node_update,
     handle_linode_nodebalancer_config_rebuild,
     handle_linode_nodebalancer_create,
     handle_linode_nodebalancer_delete,
@@ -5457,6 +5459,324 @@ async def test_handle_linode_nodebalancer_delete(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "deleted" in result[0].text.lower()
+
+
+async def test_linode_nodebalancer_config_node_update_tool_definition() -> None:
+    """Test linode_nodebalancer_config_node_update tool definition."""
+    tool, capability = create_linode_nodebalancer_config_node_update_tool()
+    assert tool.name == "linode_nodebalancer_config_node_update"
+    assert capability == Capability.Write
+    assert tool.inputSchema["properties"]["nodebalancer_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["config_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["node_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["mode"]["enum"] == [
+        "accept",
+        "reject",
+        "drain",
+        "backup",
+    ]
+    assert tool.inputSchema["properties"]["weight"]["maximum"] == 255
+    assert tool.inputSchema["required"] == [
+        "nodebalancer_id",
+        "config_id",
+        "node_id",
+        "confirm",
+    ]
+
+
+async def test_handle_linode_nodebalancer_config_node_update(
+    sample_config: Config,
+) -> None:
+    """Test linode_nodebalancer_config_node_update tool."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_nodebalancer_config_node.return_value = {
+            "id": 7,
+            "address": "192.0.2.7:80",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_config_node_update(
+            {
+                "nodebalancer_id": 12345,
+                "config_id": 6,
+                "node_id": 7,
+                "address": "192.0.2.7:80",
+                "label": "web-7",
+                "mode": "drain",
+                "subnet_id": 123,
+                "weight": 50,
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        data = json.loads(result[0].text)
+        assert data == {"id": 7, "address": "192.0.2.7:80"}
+        mock_client.update_nodebalancer_config_node.assert_called_once_with(
+            12345,
+            6,
+            7,
+            {
+                "address": "192.0.2.7:80",
+                "label": "web-7",
+                "mode": "drain",
+                "subnet_id": 123,
+                "weight": 50,
+            },
+        )
+
+
+async def test_handle_linode_nodebalancer_config_node_update_empty_response(
+    sample_config: Config,
+) -> None:
+    """Test linode_nodebalancer_config_node_update formats an empty response."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_nodebalancer_config_node.return_value = {}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_config_node_update(
+            {
+                "nodebalancer_id": 12345,
+                "config_id": 6,
+                "node_id": 7,
+                "mode": "reject",
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        data = json.loads(result[0].text)
+        assert data["nodebalancer_id"] == 12345
+        assert data["config_id"] == 6
+        assert data["node_id"] == 7
+        assert "update requested" in data["message"]
+        mock_client.update_nodebalancer_config_node.assert_called_once_with(
+            12345, 6, 7, {"mode": "reject"}
+        )
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({}, "confirm must be true"),
+        ({"confirm": False}, "confirm must be true"),
+        ({"confirm": "true"}, "confirm must be true"),
+        ({"confirm": 1}, "confirm must be true"),
+        (
+            {"nodebalancer_id": 12345, "config_id": 6, "node_id": 7, "confirm": True},
+            "at least one update field is required",
+        ),
+        (
+            {"nodebalancer_id": 0, "config_id": 6, "node_id": 7, "confirm": True},
+            "nodebalancer_id",
+        ),
+        (
+            {"nodebalancer_id": "12345", "config_id": 6, "node_id": 7, "confirm": True},
+            "nodebalancer_id",
+        ),
+        (
+            {"nodebalancer_id": True, "config_id": 6, "node_id": 7, "confirm": True},
+            "nodebalancer_id",
+        ),
+        (
+            {"nodebalancer_id": "1/2", "config_id": 6, "node_id": 7, "confirm": True},
+            "nodebalancer_id",
+        ),
+        (
+            {"nodebalancer_id": "1?x", "config_id": 6, "node_id": 7, "confirm": True},
+            "nodebalancer_id",
+        ),
+        (
+            {"nodebalancer_id": "..", "config_id": 6, "node_id": 7, "confirm": True},
+            "nodebalancer_id",
+        ),
+        (
+            {"nodebalancer_id": 12345, "config_id": 0, "node_id": 7, "confirm": True},
+            "config_id",
+        ),
+        (
+            {"nodebalancer_id": 12345, "config_id": "6", "node_id": 7, "confirm": True},
+            "config_id",
+        ),
+        (
+            {
+                "nodebalancer_id": 12345,
+                "config_id": False,
+                "node_id": 7,
+                "confirm": True,
+            },
+            "config_id",
+        ),
+        (
+            {
+                "nodebalancer_id": 12345,
+                "config_id": "4/5",
+                "node_id": 7,
+                "confirm": True,
+            },
+            "config_id",
+        ),
+        (
+            {
+                "nodebalancer_id": 12345,
+                "config_id": "4?x",
+                "node_id": 7,
+                "confirm": True,
+            },
+            "config_id",
+        ),
+        (
+            {
+                "nodebalancer_id": 12345,
+                "config_id": "..",
+                "node_id": 7,
+                "confirm": True,
+            },
+            "config_id",
+        ),
+        (
+            {"nodebalancer_id": 12345, "config_id": 6, "node_id": 0, "confirm": True},
+            "node_id",
+        ),
+        (
+            {"nodebalancer_id": 12345, "config_id": 6, "node_id": "7", "confirm": True},
+            "node_id",
+        ),
+        (
+            {
+                "nodebalancer_id": 12345,
+                "config_id": 6,
+                "node_id": False,
+                "confirm": True,
+            },
+            "node_id",
+        ),
+        (
+            {
+                "nodebalancer_id": 12345,
+                "config_id": 6,
+                "node_id": "7/8",
+                "confirm": True,
+            },
+            "node_id",
+        ),
+        (
+            {
+                "nodebalancer_id": 12345,
+                "config_id": 6,
+                "node_id": "7?x",
+                "confirm": True,
+            },
+            "node_id",
+        ),
+        (
+            {
+                "nodebalancer_id": 12345,
+                "config_id": 6,
+                "node_id": "..",
+                "confirm": True,
+            },
+            "node_id",
+        ),
+        (
+            {
+                "nodebalancer_id": 12345,
+                "config_id": 6,
+                "node_id": 7,
+                "address": "",
+                "confirm": True,
+            },
+            "address must be a non-empty string",
+        ),
+        (
+            {
+                "nodebalancer_id": 12345,
+                "config_id": 6,
+                "node_id": 7,
+                "label": "ab",
+                "confirm": True,
+            },
+            "label must be 3 to 32 characters",
+        ),
+        (
+            {
+                "nodebalancer_id": 12345,
+                "config_id": 6,
+                "node_id": 7,
+                "mode": "invalid",
+                "confirm": True,
+            },
+            "mode must be one of accept, reject, drain, backup",
+        ),
+        (
+            {
+                "nodebalancer_id": 12345,
+                "config_id": 6,
+                "node_id": 7,
+                "subnet_id": 0,
+                "confirm": True,
+            },
+            "subnet_id must be at least 1",
+        ),
+        (
+            {
+                "nodebalancer_id": 12345,
+                "config_id": 6,
+                "node_id": 7,
+                "weight": 256,
+                "confirm": True,
+            },
+            "weight must be at most 255",
+        ),
+    ],
+)
+async def test_handle_linode_nodebalancer_config_node_update_invalid_arguments(
+    sample_config: Config, arguments: dict[str, Any], message: str
+) -> None:
+    """NodeBalancer config node update rejects invalid arguments before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_nodebalancer_config_node_update(
+            arguments, sample_config
+        )
+
+    assert len(result) == 1
+    assert message in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_nodebalancer_config_node_update_error(
+    sample_config: Config,
+) -> None:
+    """Test linode_nodebalancer_config_node_update error handling."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_nodebalancer_config_node.side_effect = Exception("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_config_node_update(
+            {
+                "nodebalancer_id": 12345,
+                "config_id": 6,
+                "node_id": 7,
+                "mode": "reject",
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+    assert len(result) == 1
+    assert "Failed" in result[0].text or "error" in result[0].text.lower()
 
 
 async def test_linode_nodebalancer_config_node_delete_tool_definition() -> None:
