@@ -83,6 +83,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
+    create_linode_profile_device_get_tool,
     create_linode_profile_device_revoke_tool,
     create_linode_profile_login_get_tool,
     create_linode_profile_logins_list_tool,
@@ -236,6 +237,7 @@ from linodemcp.tools import (
     handle_linode_object_storage_transfer,
     handle_linode_object_storage_types_list,
     handle_linode_profile,
+    handle_linode_profile_device_get,
     handle_linode_profile_device_revoke,
     handle_linode_profile_login_get,
     handle_linode_profile_logins_list,
@@ -10741,6 +10743,70 @@ async def test_handle_linode_profile_token_update_error(
 
     assert len(result) == 1
     assert "Failed to" in result[0].text
+    assert "API error" in result[0].text
+
+
+def test_create_linode_profile_device_get_tool() -> None:
+    tool, capability = create_linode_profile_device_get_tool()
+
+    assert tool.name == "linode_profile_device_get"
+    assert capability is Capability.Read
+    assert tool.inputSchema["required"] == ["device_id"]
+    assert tool.inputSchema["properties"]["device_id"]["minimum"] == 1
+
+
+@pytest.mark.parametrize("device_id", [None, 0, -1, True, "123", "/", "?", ".."])
+async def test_handle_linode_profile_device_get_requires_positive_integer_device_id(
+    device_id: object, sample_config: Config
+) -> None:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_profile_device_get(
+            {"device_id": device_id}, sample_config
+        )
+
+    assert "device_id must be a positive integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_profile_device_get_success(
+    sample_config: Config,
+) -> None:
+    device = {
+        "id": 123,
+        "created": "2018-01-01T01:01:01",
+        "expiry": "2018-01-31T01:01:01",
+        "last_authenticated": "2018-01-05T12:57:12",
+        "last_remote_addr": "203.0.113.1",
+        "user_agent": "Mozilla/5.0",
+    }
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_profile_device.return_value = device
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_device_get(
+            {"device_id": 123}, sample_config
+        )
+
+    assert json.loads(result[0].text) == device
+    mock_client.get_profile_device.assert_awaited_once_with(123)
+
+
+async def test_handle_linode_profile_device_get_error(sample_config: Config) -> None:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_profile_device.side_effect = RuntimeError("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_device_get(
+            {"device_id": 123}, sample_config
+        )
+
+    assert "Failed to retrieve Linode profile trusted device" in result[0].text
     assert "API error" in result[0].text
 
 

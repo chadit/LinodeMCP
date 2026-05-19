@@ -757,6 +757,42 @@ async def handle_linode_profile_token_update(
     return await execute_tool(cfg, arguments, "update Linode profile token", _call)
 
 
+def create_linode_profile_device_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_device_get tool."""
+    return Tool(
+        name="linode_profile_device_get",
+        description="Retrieves a trusted device from the Linode profile by device ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "device_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "ID of the trusted device to retrieve",
+                },
+            },
+            "required": ["device_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_profile_device_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_profile_device_get tool request."""
+    device_id = arguments.get("device_id")
+    if isinstance(device_id, bool) or not isinstance(device_id, int) or device_id < 1:
+        return error_response("device_id must be a positive integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_profile_device(device_id)
+
+    return await execute_tool(
+        cfg, arguments, "retrieve Linode profile trusted device", _call
+    )
+
+
 def create_linode_profile_device_revoke_tool() -> tuple[Tool, Capability]:
     """Create the linode_profile_device_revoke tool."""
     return Tool(
