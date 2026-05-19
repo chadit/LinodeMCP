@@ -84,6 +84,7 @@ from linodemcp.tools import (
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_token_create_tool,
     create_linode_placement_group_assign_tool,
+    create_linode_placement_group_create_tool,
     create_linode_placement_group_delete_tool,
     create_linode_placement_group_get_tool,
     create_linode_placement_group_unassign_tool,
@@ -246,6 +247,7 @@ from linodemcp.tools import (
     handle_linode_object_storage_transfer,
     handle_linode_object_storage_types_list,
     handle_linode_placement_group_assign,
+    handle_linode_placement_group_create,
     handle_linode_placement_group_delete,
     handle_linode_placement_group_get,
     handle_linode_placement_group_unassign,
@@ -11242,6 +11244,191 @@ async def test_handle_linode_placement_group_get_reports_client_errors(
         )
 
     assert "Failed to get placement group" in result[0].text
+    assert "API error" in result[0].text
+
+
+def test_create_linode_placement_group_create_tool() -> None:
+    """Placement group create tool schema requires confirmation."""
+    tool, capability = create_linode_placement_group_create_tool()
+
+    assert tool.name == "linode_placement_group_create"
+    assert capability is Capability.Write
+    assert tool.inputSchema["required"] == [
+        "label",
+        "region",
+        "placement_group_type",
+        "placement_group_policy",
+        "confirm",
+    ]
+    assert tool.inputSchema["properties"]["label"]["minLength"] == 1
+    assert tool.inputSchema["properties"]["region"]["minLength"] == 1
+    assert tool.inputSchema["properties"]["placement_group_type"]["enum"] == [
+        "anti_affinity:local"
+    ]
+    assert tool.inputSchema["properties"]["placement_group_policy"]["enum"] == [
+        "strict",
+        "flexible",
+    ]
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_handle_linode_placement_group_create_requires_boolean_confirm(
+    confirm: object, sample_config: Config
+) -> None:
+    arguments: dict[str, object] = {
+        "label": "pg-a",
+        "region": "us-mia",
+        "placement_group_type": "anti_affinity:local",
+        "placement_group_policy": "strict",
+    }
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_placement_group_create(arguments, sample_config)
+
+    assert "confirm=true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "label",
+    [None, "", True, 1, [], {}, "/", "?", "..", "bad/label", "bad?label"],
+)
+async def test_handle_linode_placement_group_create_requires_valid_label(
+    label: object, sample_config: Config
+) -> None:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_placement_group_create(
+            {
+                "label": label,
+                "region": "us-mia",
+                "placement_group_type": "anti_affinity:local",
+                "placement_group_policy": "strict",
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+    assert "label must start and end" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize("region", [None, "", True, 1, [], {}])
+async def test_handle_linode_placement_group_create_requires_valid_region(
+    region: object, sample_config: Config
+) -> None:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_placement_group_create(
+            {
+                "label": "pg-a",
+                "region": region,
+                "placement_group_type": "anti_affinity:local",
+                "placement_group_policy": "strict",
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+    assert "region must be a non-empty string" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "placement_group_type", [None, "", "affinity:local", "anti-affinity:local", 1]
+)
+async def test_handle_linode_placement_group_create_requires_valid_type(
+    placement_group_type: object, sample_config: Config
+) -> None:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_placement_group_create(
+            {
+                "label": "pg-a",
+                "region": "us-mia",
+                "placement_group_type": placement_group_type,
+                "placement_group_policy": "strict",
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+    assert "placement_group_type must be anti_affinity:local" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "placement_group_policy", [None, "", "best-effort", "STRICT", 1]
+)
+async def test_handle_linode_placement_group_create_requires_valid_policy(
+    placement_group_policy: object, sample_config: Config
+) -> None:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_placement_group_create(
+            {
+                "label": "pg-a",
+                "region": "us-mia",
+                "placement_group_type": "anti_affinity:local",
+                "placement_group_policy": placement_group_policy,
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+    assert "placement_group_policy must be strict or flexible" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_placement_group_create_success(
+    sample_config: Config,
+) -> None:
+    response_data = {"id": 789, "label": "pg-a"}
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_placement_group.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_placement_group_create(
+            {
+                "label": "pg-a",
+                "region": "us-mia",
+                "placement_group_type": "anti_affinity:local",
+                "placement_group_policy": "strict",
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.create_placement_group.assert_awaited_once_with(
+        "pg-a", "us-mia", "anti_affinity:local", "strict"
+    )
+
+
+async def test_handle_linode_placement_group_create_reports_client_errors(
+    sample_config: Config,
+) -> None:
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_placement_group.side_effect = RuntimeError("API error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_placement_group_create(
+            {
+                "label": "pg-a",
+                "region": "us-mia",
+                "placement_group_type": "anti_affinity:local",
+                "placement_group_policy": "strict",
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+    assert "Failed to create placement group" in result[0].text
     assert "API error" in result[0].text
 
 

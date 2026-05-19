@@ -4377,6 +4377,41 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("CreateIPv6Range", e) from e
 
+    async def create_placement_group(
+        self,
+        label: str,
+        region: str,
+        placement_group_type: str,
+        placement_group_policy: str,
+    ) -> dict[str, Any]:
+        """Create a placement group."""
+        if not _PLACEMENT_GROUP_LABEL_PATTERN.fullmatch(label):
+            raise ValueError(
+                "label must start and end with an alphanumeric character "
+                "and contain only alphanumeric characters, hyphens, "
+                "underscores, or periods"
+            )
+        if not region:
+            raise ValueError("region is required")
+        if placement_group_type != "anti_affinity:local":
+            raise ValueError("placement_group_type must be anti_affinity:local")
+        if placement_group_policy not in {"strict", "flexible"}:
+            raise ValueError("placement_group_policy must be strict or flexible")
+
+        body: dict[str, Any] = {
+            "label": label,
+            "region": region,
+            "placement_group_type": placement_group_type,
+            "placement_group_policy": placement_group_policy,
+        }
+
+        try:
+            response = await self.make_request("POST", "/placement/groups", body)
+            placement_group: dict[str, Any] = response.json()
+            return placement_group
+        except httpx.HTTPError as e:
+            raise NetworkError("CreatePlacementGroup", e) from e
+
     async def get_placement_group(self, group_id: int) -> dict[str, Any]:
         """Get a placement group."""
         encoded_group_id = quote(str(group_id), safe="")
@@ -6847,6 +6882,23 @@ class RetryableClient:
             prefix_length,
             linode_id,
             route_target,
+        )
+        return result
+
+    async def create_placement_group(
+        self,
+        label: str,
+        region: str,
+        placement_group_type: str,
+        placement_group_policy: str,
+    ) -> dict[str, Any]:
+        """Create placement group with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.create_placement_group,
+            label,
+            region,
+            placement_group_type,
+            placement_group_policy,
         )
         return result
 

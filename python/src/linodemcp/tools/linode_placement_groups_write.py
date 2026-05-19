@@ -41,11 +41,28 @@ _LABEL_PROP: dict[str, Any] = {
     "pattern": r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$",
     "description": "New placement group label.",
 }
+_REGION_PROP: dict[str, Any] = {
+    "type": "string",
+    "minLength": 1,
+    "description": "Region where the placement group is created.",
+}
+_PLACEMENT_GROUP_TYPE_PROP: dict[str, Any] = {
+    "type": "string",
+    "enum": ["anti_affinity:local"],
+    "description": "Placement group type.",
+}
+_PLACEMENT_GROUP_POLICY_PROP: dict[str, Any] = {
+    "type": "string",
+    "enum": ["strict", "flexible"],
+    "description": "Placement group policy.",
+}
 _LABEL_ERROR = (
     "label must start and end with an alphanumeric character and contain only "
     "alphanumeric characters, hyphens, underscores, or periods"
 )
 _LABEL_PATTERN = re.compile(_LABEL_PROP["pattern"])
+_PLACEMENT_GROUP_TYPES = {"anti_affinity:local"}
+_PLACEMENT_GROUP_POLICIES = {"strict", "flexible"}
 
 
 def _parse_positive_int(value: Any, name: str) -> int | list[TextContent]:
@@ -78,6 +95,69 @@ def _parse_linode_ids(
             )
         parsed.append(linode_id)
     return parsed, None
+
+
+def create_linode_placement_group_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_placement_group_create tool."""
+    return Tool(
+        name="linode_placement_group_create",
+        description="Creates a placement group",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "label": _LABEL_PROP,
+                "region": _REGION_PROP,
+                "placement_group_type": _PLACEMENT_GROUP_TYPE_PROP,
+                "placement_group_policy": _PLACEMENT_GROUP_POLICY_PROP,
+                "confirm": _CONFIRM_PROP,
+            },
+            "required": [
+                "label",
+                "region",
+                "placement_group_type",
+                "placement_group_policy",
+                "confirm",
+            ],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_placement_group_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_placement_group_create tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
+
+    label = arguments.get("label")
+    if not isinstance(label, str) or not _LABEL_PATTERN.fullmatch(label):
+        return error_response(_LABEL_ERROR)
+
+    region = arguments.get("region")
+    if not isinstance(region, str) or not region:
+        return error_response("region must be a non-empty string")
+
+    placement_group_type = arguments.get("placement_group_type")
+    if (
+        not isinstance(placement_group_type, str)
+        or placement_group_type not in _PLACEMENT_GROUP_TYPES
+    ):
+        return error_response("placement_group_type must be anti_affinity:local")
+
+    placement_group_policy = arguments.get("placement_group_policy")
+    if (
+        not isinstance(placement_group_policy, str)
+        or placement_group_policy not in _PLACEMENT_GROUP_POLICIES
+    ):
+        return error_response("placement_group_policy must be strict or flexible")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.create_placement_group(
+            label, region, placement_group_type, placement_group_policy
+        )
+
+    return await execute_tool(cfg, arguments, "create placement group", _call)
 
 
 def create_linode_placement_group_delete_tool() -> tuple[Tool, Capability]:
