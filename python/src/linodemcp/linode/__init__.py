@@ -2351,6 +2351,31 @@ class Client:
             )
             raise NetworkError("DisableProfileTFA", e) from e
 
+    async def verify_profile_phone_number(self, otp_code: str) -> dict[str, Any]:
+        """Verify a profile phone number with a one-time SMS code."""
+        body = {"otp_code": otp_code}
+        logger.info("Verifying profile phone number")
+
+        try:
+            response = await self.make_request(
+                "POST", "/profile/phone-number/verify", body
+            )
+            result: dict[str, Any] = response.json()
+            logger.info("Profile phone number verified")
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout verifying profile phone number: %s", e)
+            raise NetworkError("VerifyProfilePhoneNumber", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout verifying profile phone number: %s", e)
+            raise NetworkError("VerifyProfilePhoneNumber", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error verifying profile phone number")
+            raise NetworkError("VerifyProfilePhoneNumber", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error verifying profile phone number: %s", e)
+            raise NetworkError("VerifyProfilePhoneNumber", e) from e
+
     async def list_profile_security_questions(self) -> dict[str, Any]:
         """List available profile security questions."""
         logger.info("Listing profile security questions")
@@ -5565,6 +5590,13 @@ class RetryableClient:
         """Disable profile two-factor authentication with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.disable_profile_tfa
+        )
+        return result
+
+    async def verify_profile_phone_number(self, otp_code: str) -> dict[str, Any]:
+        """Verify a profile phone number with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.verify_profile_phone_number, otp_code
         )
         return result
 

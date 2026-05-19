@@ -273,6 +273,50 @@ async def handle_linode_profile_tfa_enable_confirm(
     )
 
 
+def create_linode_profile_phone_number_verify_tool() -> tuple[Tool, Capability]:
+    """Create the linode_profile_phone_number_verify tool."""
+    return Tool(
+        name="linode_profile_phone_number_verify",
+        description="Verifies the Linode profile phone number using an SMS code.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "otp_code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "One-time code received by SMS",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to verify this profile phone number.",
+                },
+            },
+            "required": ["otp_code", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_profile_phone_number_verify(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_profile_phone_number_verify tool request."""
+    otp_code = arguments.get("otp_code")
+    if not isinstance(otp_code, str) or not otp_code.strip():
+        return error_response("otp_code must be a non-empty string")
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This verifies a profile phone number. Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.verify_profile_phone_number(otp_code.strip())
+
+    return await execute_tool(
+        cfg, arguments, "verify Linode profile phone number", _call
+    )
+
+
 def create_linode_profile_security_questions_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_profile_security_questions_list tool."""
     return Tool(
