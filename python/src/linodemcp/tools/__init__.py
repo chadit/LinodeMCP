@@ -290,6 +290,10 @@ from linodemcp.tools.linode_object_storage_write import (
     handle_linode_object_storage_ssl_get,
     handle_linode_object_storage_ssl_upload,
 )
+from linodemcp.tools.linode_placement_groups import (
+    create_linode_placement_group_get_tool,
+    handle_linode_placement_group_get,
+)
 from linodemcp.tools.linode_placement_groups_write import (
     create_linode_placement_group_assign_tool,
     create_linode_placement_group_delete_tool,
@@ -577,6 +581,7 @@ __all__ = [
     "create_linode_object_storage_types_list_tool",
     "create_linode_placement_group_assign_tool",
     "create_linode_placement_group_delete_tool",
+    "create_linode_placement_group_get_tool",
     "create_linode_placement_group_unassign_tool",
     "create_linode_placement_group_update_tool",
     "create_linode_profile_app_get_tool",
@@ -766,6 +771,7 @@ __all__ = [
     "handle_linode_object_storage_types_list",
     "handle_linode_placement_group_assign",
     "handle_linode_placement_group_delete",
+    "handle_linode_placement_group_get",
     "handle_linode_placement_group_unassign",
     "handle_linode_placement_group_update",
     "handle_linode_profile",
