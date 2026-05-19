@@ -1664,6 +1664,21 @@ func (c *Client) ResetInstancePassword(ctx context.Context, linodeID int, rootPa
 	})
 }
 
+// UpdateProfile updates the user profile with automatic retry on transient failures.
+func (c *Client) UpdateProfile(ctx context.Context, req *UpdateProfileRequest) (*Profile, error) {
+	var profile *Profile
+
+	err := c.executeWithRetry(ctx, "UpdateProfile", func() error {
+		var err error
+
+		profile, err = c.httpUpdateProfile(ctx, req)
+
+		return err
+	})
+
+	return profile, err
+}
+
 func (c *Client) executeWithRetry(ctx context.Context, operation string, retryFunc func() error) error {
 	if err := c.circuit.Allow(); err != nil {
 		return fmt.Errorf("%s: %w", operation, err)
