@@ -135,6 +135,11 @@ type AllocateIPRequest struct {
 	Public bool   `json:"public"`
 }
 
+// UpdateIPRDNSRequest represents the request body for updating an IP address RDNS.
+type UpdateIPRDNSRequest struct {
+	RDNS *string `json:"rdns"`
+}
+
 // CloneInstanceRequest represents the request body for cloning a Linode instance.
 type CloneInstanceRequest struct {
 	Region         string `json:"region,omitempty"`

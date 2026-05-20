@@ -195,6 +195,7 @@ func TestRequiredScopesPrefixOrdering(t *testing.T) {
 		"linode_instance_backups_list",
 		"linode_instance_disk_create",
 		"linode_instance_ip_allocate",
+		"linode_instance_ip_update_rdns",
 	}
 
 	for _, tool := range cases {

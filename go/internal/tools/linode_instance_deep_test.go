@@ -12,6 +12,7 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
@@ -1044,7 +1045,7 @@ func TestLinodeInstanceIPGetTool(t *testing.T) {
 		wantContains string
 	}{
 		{name: caseMissingLinodeID, args: map[string]any{keyAddress: ip203_0_113_1}, wantContains: errLinodeIDRequired},
-		{name: "missing address", args: map[string]any{keyLinodeID: float64(123)}, wantContains: "address is required"},
+		{name: caseMissingAddress, args: map[string]any{keyLinodeID: float64(123)}, wantContains: errAddressRequired},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1062,7 +1063,7 @@ func TestLinodeInstanceIPGetTool(t *testing.T) {
 		t.Parallel()
 
 		ipAddr := linode.IPAddress{
-			Address: ip203_0_113_1, Gateway: "203.0.113.0", SubnetMask: "255.255.255.0",
+			Address: ip203_0_113_1, Gateway: "203.0.113.0", SubnetMask: subnetMaskFixture,
 			Prefix: 24, Type: keyIPv4, Public: true, Region: regionUSEast, LinodeID: 123,
 		}
 
@@ -1134,7 +1135,7 @@ func TestLinodeInstanceIPAllocateTool(t *testing.T) {
 		t.Parallel()
 
 		ipAddr := linode.IPAddress{
-			Address: "198.51.100.5", Gateway: "198.51.100.0", SubnetMask: "255.255.255.0",
+			Address: "198.51.100.5", Gateway: "198.51.100.0", SubnetMask: subnetMaskFixture,
 			Prefix: 24, Type: keyIPv4, Public: true, Region: regionUSEast, LinodeID: 123,
 		}
 
@@ -1169,6 +1170,140 @@ func TestLinodeInstanceIPAllocateTool(t *testing.T) {
 	})
 }
 
+// TestLinodeInstanceIPUpdateRDNSTool verifies the instance IP RDNS update tool
+// registers correctly, validates confirm and required fields, and updates RDNS.
+func TestLinodeInstanceIPUpdateRDNSTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	tool, capability, handler := tools.NewLinodeInstanceIPUpdateRDNSTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+		assert.Equal(t, "linode_instance_ip_update_rdns", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapWrite, capability, "tool should require write capability")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, keyLinodeID, "schema should include linode_id")
+		assert.Contains(t, props, keyAddress, "schema should include address")
+		assert.Contains(t, props, keyRDNS, "schema should include rdns")
+		assert.Contains(t, props, keyConfirm, "schema should include confirm")
+	})
+
+	validationTests := []struct {
+		name         string
+		args         map[string]any
+		wantContains string
+	}{
+		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyRDNS: rdnsTestExampleOrg}, wantContains: errConfirmEqualsTrue},
+		{name: "false confirm", args: map[string]any{keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyRDNS: rdnsTestExampleOrg, keyConfirm: false}, wantContains: errConfirmEqualsTrue},
+		{name: "string confirm", args: map[string]any{keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyRDNS: rdnsTestExampleOrg, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
+		{name: "numeric confirm", args: map[string]any{keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyRDNS: rdnsTestExampleOrg, keyConfirm: float64(1)}, wantContains: errConfirmEqualsTrue},
+		{name: caseMissingLinodeID, args: map[string]any{keyAddress: ip203_0_113_1, keyRDNS: rdnsTestExampleOrg, keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: caseMissingAddress, args: map[string]any{keyLinodeID: float64(123), keyRDNS: rdnsTestExampleOrg, keyConfirm: true}, wantContains: errAddressRequired},
+		{name: "address with slash", args: map[string]any{keyLinodeID: float64(123), keyAddress: "203.0.113.1/24", keyRDNS: rdnsTestExampleOrg, keyConfirm: true}, wantContains: errAddressValidIP},
+		{name: "address with query separator", args: map[string]any{keyLinodeID: float64(123), keyAddress: "203.0.113.1?bad=1", keyRDNS: rdnsTestExampleOrg, keyConfirm: true}, wantContains: errAddressValidIP},
+		{name: "address with dot traversal", args: map[string]any{keyLinodeID: float64(123), keyAddress: "203.0.113.1..", keyRDNS: rdnsTestExampleOrg, keyConfirm: true}, wantContains: errAddressValidIP},
+		{name: "missing rdns", args: map[string]any{keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyConfirm: true}, wantContains: "rdns is required"},
+	}
+	for _, tt := range validationTests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			req := createRequestWithArgs(t, tt.args)
+			result, err := handler(t.Context(), req)
+			require.NoError(t, err, "handler should not return Go error")
+			require.NotNil(t, result, "handler should return a result")
+			assert.True(t, result.IsError, "result should be a tool error")
+			assertErrorContains(t, result, tt.wantContains)
+		})
+	}
+
+	t.Run("client error maps to tool error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/linode/instances/123/ips/203.0.113.1", r.URL.Path, "request path should match")
+			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"invalid rdns"}]}`))
+			assert.NoError(t, writeErr, "writing error response should not fail")
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeInstanceIPUpdateRDNSTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyRDNS: rdnsTestExampleOrg, keyConfirm: true,
+		})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "Failed to assign RDNS")
+		assertErrorContains(t, result, "invalid rdns")
+	})
+
+	t.Run("successful rdns update", func(t *testing.T) {
+		t.Parallel()
+
+		ipAddr := linode.IPAddress{
+			Address: ip203_0_113_1, Gateway: "203.0.113.0", SubnetMask: subnetMaskFixture,
+			Prefix: 24, Type: keyIPv4, Public: true, Region: regionUSEast, LinodeID: 123, RDNS: rdnsTestExampleOrg,
+		}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/linode/instances/123/ips/203.0.113.1", r.URL.Path, "request path should match")
+			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+
+			var body map[string]*string
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode")
+
+			rdns := body[keyRDNS]
+			if assert.NotNil(t, rdns, "rdns should be present") {
+				assert.Equal(t, rdnsTestExampleOrg, *rdns, "rdns should match request")
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(ipAddr), "encoding response should not fail")
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeInstanceIPUpdateRDNSTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyRDNS: rdnsTestExampleOrg, keyConfirm: true,
+		})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.False(t, result.IsError, "result should not be a tool error")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, rdnsTestExampleOrg, "response should contain updated RDNS")
+		assert.Contains(t, textContent.Text, "updated", "response should confirm update")
+	})
+}
+
 // TestLinodeInstanceIPDeleteTool verifies the instance IP delete tool
 // registers correctly, validates required fields, and removes IP addresses.
 func TestLinodeInstanceIPDeleteTool(t *testing.T) {
@@ -1195,7 +1330,7 @@ func TestLinodeInstanceIPDeleteTool(t *testing.T) {
 		wantContains string
 	}{
 		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyAddress: ip203_0_113_1}, wantContains: errConfirmEqualsTrue},
-		{name: "missing address", args: map[string]any{keyLinodeID: float64(123), keyConfirm: true}, wantContains: "address is required"},
+		{name: caseMissingAddress, args: map[string]any{keyLinodeID: float64(123), keyConfirm: true}, wantContains: errAddressRequired},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
