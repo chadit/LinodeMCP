@@ -1969,3 +1969,16 @@ async def test_ipv4_share_rejects_missing_linode_id(
     )
     text = result[0].text
     assert "linode_id" in text.lower()
+
+
+async def test_networking_ip_update_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Networking IP update tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_networking_ip_update_tool" in tools_mod.__all__
+    assert "handle_linode_networking_ip_update" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_networking_ip_update" in srv.registered_tool_names

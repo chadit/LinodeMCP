@@ -5297,6 +5297,21 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateInstanceIP", e) from e
 
+    async def update_networking_ip(
+        self,
+        address: str,
+        rdns: str | None,
+    ) -> dict[str, Any]:
+        """Update reverse DNS for a networking-level IP address."""
+        endpoint = f"/networking/ips/{quote(address, safe='')}"
+        try:
+            body: dict[str, Any] = {"rdns": rdns}
+            response = await self.make_request("PUT", endpoint, body)
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateNetworkingIP", e) from e
+
     async def delete_instance_ip(self, instance_id: int, address: str) -> None:
         """Delete an IP address from an instance."""
         endpoint = f"/linode/instances/{instance_id}/ips/{address}"
@@ -7960,6 +7975,19 @@ class RetryableClient:
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.update_instance_ip,
             instance_id,
+            address,
+            rdns,
+        )
+        return result
+
+    async def update_networking_ip(
+        self,
+        address: str,
+        rdns: str | None,
+    ) -> dict[str, Any]:
+        """Update networking IP RDNS with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.update_networking_ip,
             address,
             rdns,
         )
