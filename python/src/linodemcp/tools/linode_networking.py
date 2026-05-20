@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from mcp.types import TextContent, Tool
 
@@ -140,7 +140,10 @@ async def handle_linode_ipv4_share(
     ips = arguments.get("ips")
     linode_id = arguments.get("linode_id")
 
-    if not ips or not isinstance(ips, list) or len(ips) == 0:
+    if not isinstance(ips, list):
+        return error_response("ips must be a non-empty list of IPv4 addresses")
+    typed_ips = cast("list[str]", ips)
+    if len(typed_ips) == 0:
         return error_response("ips must be a non-empty list of IPv4 addresses")
     if linode_id is None:
         return error_response("linode_id is required")
@@ -148,12 +151,111 @@ async def handle_linode_ipv4_share(
         return error_response("linode_id must be an integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        result = await client.share_ipv4s(ips, linode_id)
+        result = await client.share_ipv4s(typed_ips, linode_id)
         return {
             "message": f"IPv4 addresses shared with Linode {linode_id}",
             "linode_id": linode_id,
-            "ips": ips,
+            "ips": typed_ips,
             "result": result,
         }
 
     return await execute_tool(cfg, arguments, "share IPv4 addresses", _call)
+
+
+def create_linode_ipv4_assign_tool() -> tuple[Tool, Capability]:
+    """Create the linode_ipv4_assign tool."""
+    return Tool(
+        name="linode_ipv4_assign",
+        description="Assigns IPv4 addresses to Linodes in a region",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "region": {
+                    "type": "string",
+                    "description": "Region ID for the assignments (required)",
+                },
+                "assignments": {
+                    "type": "array",
+                    "description": "IPv4 assignment objects with address and linode_id",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "address": {
+                                "type": "string",
+                                "description": "IPv4 address to assign",
+                            },
+                            "linode_id": {
+                                "type": "integer",
+                                "description": "Linode ID receiving the address",
+                            },
+                        },
+                        "required": ["address", "linode_id"],
+                    },
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm assigning IPv4 addresses.",
+                },
+            },
+            "required": ["region", "assignments", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_ipv4_assign(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_ipv4_assign tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This modifies network assignments. Set confirm=true to proceed."
+        )
+
+    region = arguments.get("region")
+    assignments = arguments.get("assignments")
+
+    if not isinstance(region, str) or not region.strip():
+        return error_response("region is required")
+    if not isinstance(assignments, list):
+        return error_response(
+            "assignments must be a non-empty list of assignment objects"
+        )
+    raw_assignments = cast("list[object]", assignments)
+    if not raw_assignments:
+        return error_response(
+            "assignments must be a non-empty list of assignment objects"
+        )
+
+    typed_assignments: list[dict[str, Any]] = []
+    assignment_error: str | None = None
+    for assignment in raw_assignments:
+        if not isinstance(assignment, dict):
+            assignment_error = (
+                "assignments must be a non-empty list of assignment objects"
+            )
+            break
+        assignment_dict = cast("dict[str, Any]", assignment)
+        address = assignment_dict.get("address")
+        linode_id = assignment_dict.get("linode_id")
+        if not isinstance(address, str) or not address.strip():
+            assignment_error = "each assignment requires address"
+            break
+        if not isinstance(linode_id, int):
+            assignment_error = "each assignment requires integer linode_id"
+            break
+        typed_assignments.append(assignment_dict)
+
+    if assignment_error is not None:
+        return error_response(assignment_error)
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.assign_ipv4s(region, typed_assignments)
+        return {
+            "message": f"IPv4 assignments completed in region {region}",
+            "region": region,
+            "assignments": typed_assignments,
+            "result": result,
+        }
+
+    return await execute_tool(cfg, arguments, "assign IPv4 addresses", _call)
