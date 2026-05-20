@@ -7938,3 +7938,70 @@ async def test_retryable_update_nodebalancer_config_does_not_replay() -> None:
 
     mock_update.assert_awaited_once_with(8, 6, {"port": 80})
     await retryable.close()
+
+
+async def test_update_networking_ip_sends_put_to_networking_ips_route() -> None:
+    """Updating networking IP RDNS sends PUT to the exact route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "address": "198.51.100.5",
+        "rdns": "example.example.com",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.update_networking_ip(
+            "198.51.100.5",
+            "example.example.com",
+        )
+
+    assert result["rdns"] == "example.example.com"
+    mock_request.assert_called_once_with(
+        "PUT",
+        "/networking/ips/198.51.100.5",
+        {"rdns": "example.example.com"},
+    )
+
+    await client.close()
+
+
+async def test_update_networking_ip_url_encodes_address() -> None:
+    """Path param address is URL-encoded at the client boundary."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"address": "2001:db8::1", "rdns": None}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.update_networking_ip(
+            "2001:db8::1",
+            None,
+        )
+
+    # IPv6 colons should be percent-encoded
+    call_args = mock_request.call_args
+    assert call_args[0][1] == "/networking/ips/2001%3Adb8%3A%3A1"
+
+    await client.close()
+
+
+async def test_retryable_update_networking_ip_delegates_to_client() -> None:
+    """RetryableClient delegates update_networking_ip to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "update_networking_ip", new_callable=AsyncMock
+    ) as mock_update:
+        mock_update.return_value = {"address": "10.0.0.1", "rdns": "host.example.com"}
+        result = await retryable.update_networking_ip("10.0.0.1", "host.example.com")
+
+    assert result["rdns"] == "host.example.com"
+    mock_update.assert_awaited_once_with("10.0.0.1", "host.example.com")
+    await retryable.close()
