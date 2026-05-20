@@ -43,6 +43,19 @@ const (
 )
 
 const (
+	// DefaultAuditRetentionDays is the default rotated-log retention
+	// window. Keep in sync with audit.DefaultAuditRetentionDays, which
+	// is the sweeper's intrinsic default when no config is supplied
+	// (the config package stays a leaf and does not import audit).
+	DefaultAuditRetentionDays = 14
+
+	// DefaultAuditSQLiteBusyTimeoutMS is the default SQLite busy_timeout
+	// in milliseconds, applied when the SQLite sink is enabled but no
+	// explicit timeout is configured. Consumed by the Phase 3b sink.
+	DefaultAuditSQLiteBusyTimeoutMS = 5000
+)
+
+const (
 	appDirName     = "linodemcp"
 	configDirName  = ".config"
 	configFileJSON = "config.json"
@@ -99,6 +112,30 @@ type Config struct {
 	ActiveProfile            string                       `json:"active_profile"             yaml:"active_profile"`
 	Profiles                 map[string]UserProfileConfig `json:"profiles"                   yaml:"profiles"`
 	ProfilesBuiltinOverrides map[string]BuiltinOverride   `json:"profiles_builtin_overrides" yaml:"profiles_builtin_overrides"`
+	Audit                    AuditConfig                  `json:"audit"                      yaml:"audit"`
+}
+
+// AuditConfig holds audit-log settings. The JSONL sink is always on
+// (Phase 2); these fields tune retention and the optional SQLite sink
+// (Phase 3b).
+//
+// RetentionDays is a pointer so an explicit 0 ("never delete") is
+// distinguishable from "unset" (nil → defaults to
+// DefaultAuditRetentionDays). After setDefaults runs it is always
+// non-nil, so consumers can dereference safely.
+type AuditConfig struct {
+	RetentionDays *int              `json:"retention_days" yaml:"retention_days"`
+	SQLite        AuditSQLiteConfig `json:"sqlite"         yaml:"sqlite"`
+}
+
+// AuditSQLiteConfig holds the optional SQLite audit sink settings.
+// Disabled by default; when enabled, audit events dual-write to both
+// JSONL and SQLite. An empty Path resolves to audit.db alongside the
+// JSONL log. Consumed by the Phase 3b sink.
+type AuditSQLiteConfig struct {
+	Enabled       bool   `json:"enabled"         yaml:"enabled"`
+	Path          string `json:"path"            yaml:"path"`
+	BusyTimeoutMS int    `json:"busy_timeout_ms" yaml:"busy_timeout_ms"`
 }
 
 // UserProfileConfig is the YAML/JSON shape for a single user-defined profile
@@ -263,6 +300,18 @@ func setDefaults(cfg *Config) {
 	setServerDefaults(cfg)
 	setResilienceDefaults(cfg)
 	setObservabilityDefaults(cfg)
+	setAuditDefaults(cfg)
+}
+
+func setAuditDefaults(cfg *Config) {
+	if cfg.Audit.RetentionDays == nil {
+		days := DefaultAuditRetentionDays
+		cfg.Audit.RetentionDays = &days
+	}
+
+	if cfg.Audit.SQLite.BusyTimeoutMS == 0 {
+		cfg.Audit.SQLite.BusyTimeoutMS = DefaultAuditSQLiteBusyTimeoutMS
+	}
 }
 
 func setServerDefaults(cfg *Config) {
@@ -368,6 +417,29 @@ func applyEnvironmentOverrides(cfg *Config) {
 	applyObservabilityOverrides(cfg)
 	applyOTELOverrides(cfg)
 	applyLinodeOverrides(cfg)
+	applyAuditOverrides(cfg)
+}
+
+func applyAuditOverrides(cfg *Config) {
+	if v := os.Getenv("LINODEMCP_AUDIT_RETENTION_DAYS"); v != "" {
+		if days, err := strconv.Atoi(v); err == nil {
+			cfg.Audit.RetentionDays = &days
+		}
+	}
+
+	if v := os.Getenv("LINODEMCP_AUDIT_SQLITE_ENABLED"); v != "" {
+		cfg.Audit.SQLite.Enabled = v == boolTrue || v == "1"
+	}
+
+	if v := os.Getenv("LINODEMCP_AUDIT_SQLITE_PATH"); v != "" {
+		cfg.Audit.SQLite.Path = v
+	}
+
+	if v := os.Getenv("LINODEMCP_AUDIT_SQLITE_BUSY_TIMEOUT_MS"); v != "" {
+		if ms, err := strconv.Atoi(v); err == nil {
+			cfg.Audit.SQLite.BusyTimeoutMS = ms
+		}
+	}
 }
 
 func applyServerOverrides(cfg *Config) {
@@ -497,6 +569,10 @@ func validateConfig(cfg *Config) error {
 				return fmt.Errorf("%w: environment '%s'", ErrMissingToken, envName)
 			}
 		}
+	}
+
+	if cfg.Audit.RetentionDays != nil && *cfg.Audit.RetentionDays < 0 {
+		return ErrNegativeRetentionDays
 	}
 
 	return nil

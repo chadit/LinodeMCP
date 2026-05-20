@@ -9,7 +9,6 @@ from pathlib import Path
 import structlog
 
 from linodemcp.audit import (
-    DEFAULT_AUDIT_RETENTION_DAYS,
     JSONLSink,
     RetentionSweeper,
     resolve_default_audit_dir,
@@ -131,6 +130,7 @@ async def _run_scope_validation(
 def _start_audit(
     server: Server,
     log: structlog.stdlib.BoundLogger,
+    retention_days: int,
 ) -> tuple[JSONLSink | None, asyncio.Task[None] | None]:
     """Open the JSONL sink, attach it, and start the retention sweeper.
 
@@ -153,12 +153,12 @@ def _start_audit(
     server.set_audit_sink(sink)
     log.info("audit JSONL sink open", path=sink.path)
 
-    # Phase 2b: sweep rotated logs older than the retention window in
-    # the background. The window is the package default until the
-    # audit config block lands (Phase 3).
+    # Phase 2b/3a: sweep rotated logs older than the retention window
+    # in the background. The window comes from audit.retention_days
+    # config (0 = never delete).
     sweeper = RetentionSweeper(
         str(Path(sink.path).parent),
-        DEFAULT_AUDIT_RETENTION_DAYS,
+        retention_days,
     )
     sweeper_task = asyncio.create_task(sweeper.run())
     return sink, sweeper_task
@@ -251,7 +251,7 @@ async def async_main() -> int:
         # lands on disk, and start the background retention sweeper. On
         # sink failure the server keeps its NoopSink default and no
         # sweeper runs; audit never blocks startup.
-        audit_sink, sweeper_task = _start_audit(server, log)
+        audit_sink, sweeper_task = _start_audit(server, log, cfg.audit.retention_days)
 
         _wire_profile_hot_reload(watcher, server, log)
 

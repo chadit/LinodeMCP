@@ -225,14 +225,15 @@ func run() int {
 			}
 		}()
 
-		// Phase 2b: sweep rotated logs older than the retention window
-		// in the background. Tied to ctx so it stops on shutdown. The
-		// retention window is the package default until the audit
-		// config block lands (Phase 3).
+		// Phase 2b/3a: sweep rotated logs older than the retention
+		// window in the background. Tied to ctx so it stops on
+		// shutdown. The window comes from audit.retention_days config
+		// (0 = never delete); setDefaults guarantees the pointer is
+		// non-nil.
 		auditDir := filepath.Dir(auditSink.Path())
 		sweeper := audit.NewRetentionSweeper(
 			auditDir,
-			audit.DefaultAuditRetentionDays,
+			*cfg.Audit.RetentionDays,
 			audit.WithSweepLogger(log),
 		)
 

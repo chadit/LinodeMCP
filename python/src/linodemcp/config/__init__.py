@@ -1,5 +1,6 @@
 """Configuration management for LinodeMCP."""
 
+import contextlib
 import json
 import logging
 import os
@@ -154,6 +155,47 @@ class BuiltinOverride:
     disabled: bool = False
 
 
+# Default rotated-log retention window in days. Keep in sync with
+# linodemcp.audit.DEFAULT_AUDIT_RETENTION_DAYS, which is the sweeper's
+# intrinsic default when no config is supplied (config stays a leaf and
+# does not import the audit package).
+DEFAULT_AUDIT_RETENTION_DAYS = 14
+
+# Default SQLite busy_timeout in milliseconds, applied when the SQLite
+# sink is enabled but no explicit timeout is configured. Consumed by
+# the Phase 3b sink.
+DEFAULT_AUDIT_SQLITE_BUSY_TIMEOUT_MS = 5000
+
+
+@dataclass
+class AuditSQLiteConfig:
+    """Optional SQLite audit sink settings.
+
+    Disabled by default; when enabled, audit events dual-write to both
+    JSONL and SQLite. An empty ``path`` resolves to audit.db alongside
+    the JSONL log. Consumed by the Phase 3b sink.
+    """
+
+    enabled: bool = False
+    path: str = ""
+    busy_timeout_ms: int = DEFAULT_AUDIT_SQLITE_BUSY_TIMEOUT_MS
+
+
+@dataclass
+class AuditConfig:
+    """Audit-log settings.
+
+    The JSONL sink is always on (Phase 2); these fields tune retention
+    and the optional SQLite sink (Phase 3b). ``retention_days`` of 0
+    means "never delete"; an absent key defaults to
+    DEFAULT_AUDIT_RETENTION_DAYS. The absent-vs-zero distinction is
+    handled at parse time via ``dict.get`` returning None.
+    """
+
+    retention_days: int = DEFAULT_AUDIT_RETENTION_DAYS
+    sqlite: AuditSQLiteConfig = field(default_factory=AuditSQLiteConfig)
+
+
 @dataclass
 class Config:
     """Full LinodeMCP configuration."""
@@ -171,6 +213,7 @@ class Config:
     profiles_builtin_overrides: dict[str, BuiltinOverride] = field(
         default_factory=dict[str, BuiltinOverride]
     )
+    audit: AuditConfig = field(default_factory=AuditConfig)
 
     def select_environment(self, user_input: str) -> EnvironmentConfig:
         """Select a Linode environment from the config."""
@@ -366,6 +409,39 @@ def _apply_environment_overrides(data: dict[str, Any]) -> None:
         if not data["environments"]["default"].get("label"):
             data["environments"]["default"]["label"] = "Default"
 
+    _apply_audit_overrides(data)
+
+
+def _apply_audit_overrides(data: dict[str, Any]) -> None:
+    """Apply LINODEMCP_AUDIT_* environment overrides onto the raw dict."""
+    retention = os.getenv("LINODEMCP_AUDIT_RETENTION_DAYS")
+    sqlite_enabled = os.getenv("LINODEMCP_AUDIT_SQLITE_ENABLED")
+    sqlite_path = os.getenv("LINODEMCP_AUDIT_SQLITE_PATH")
+    sqlite_timeout = os.getenv("LINODEMCP_AUDIT_SQLITE_BUSY_TIMEOUT_MS")
+
+    if not any((retention, sqlite_enabled, sqlite_path, sqlite_timeout)):
+        return
+
+    data.setdefault("audit", {})
+    audit = data["audit"]
+
+    if retention is not None:
+        with contextlib.suppress(ValueError):
+            audit["retention_days"] = int(retention)
+
+    if sqlite_enabled is None and sqlite_path is None and sqlite_timeout is None:
+        return
+
+    audit.setdefault("sqlite", {})
+    sqlite = audit["sqlite"]
+    if sqlite_enabled is not None:
+        sqlite["enabled"] = sqlite_enabled.lower() in ("true", "1")
+    if sqlite_path:
+        sqlite["path"] = sqlite_path
+    if sqlite_timeout is not None:
+        with contextlib.suppress(ValueError):
+            sqlite["busy_timeout_ms"] = int(sqlite_timeout)
+
 
 def validate_config(cfg: Config) -> None:
     """Validate configuration."""
@@ -399,6 +475,10 @@ def validate_config(cfg: Config) -> None:
                     "Linode token is required when API URL is provided"
                 )
                 raise ConfigInvalidError(msg)
+
+    if cfg.audit.retention_days < 0:
+        msg = "audit.retention_days cannot be negative"
+        raise ConfigInvalidError(msg)
 
 
 def _parse_string_tuple(raw: Any) -> tuple[str, ...]:
@@ -536,6 +616,38 @@ def _data_to_config(data: dict[str, Any]) -> Config:
         profiles_builtin_overrides=_parse_builtin_overrides(
             data.get("profiles_builtin_overrides")
         ),
+        audit=_parse_audit(data.get("audit")),
+    )
+
+
+def _parse_audit(raw: Any) -> AuditConfig:
+    """Build an AuditConfig from the raw ``audit`` block.
+
+    An absent ``retention_days`` key defaults to
+    DEFAULT_AUDIT_RETENTION_DAYS; an explicit 0 is preserved as
+    "never delete" because ``dict.get`` returns None only when the key
+    is absent.
+    """
+    audit_data = cast("dict[str, Any]", raw) if isinstance(raw, dict) else {}
+    sqlite_raw = audit_data.get("sqlite")
+    sqlite_data = (
+        cast("dict[str, Any]", sqlite_raw) if isinstance(sqlite_raw, dict) else {}
+    )
+
+    retention_raw = audit_data.get("retention_days")
+    retention_days = (
+        DEFAULT_AUDIT_RETENTION_DAYS if retention_raw is None else int(retention_raw)
+    )
+
+    return AuditConfig(
+        retention_days=retention_days,
+        sqlite=AuditSQLiteConfig(
+            enabled=bool(sqlite_data.get("enabled", False)),
+            path=str(sqlite_data.get("path", "")),
+            busy_timeout_ms=int(
+                sqlite_data.get("busy_timeout_ms", DEFAULT_AUDIT_SQLITE_BUSY_TIMEOUT_MS)
+            ),
+        ),
     )
 
 
@@ -646,6 +758,14 @@ def _config_to_data(cfg: Config) -> dict[str, Any]:
         "active_profile": cfg.active_profile,
         "profiles": profiles,
         "profiles_builtin_overrides": overrides,
+        "audit": {
+            "retention_days": cfg.audit.retention_days,
+            "sqlite": {
+                "enabled": cfg.audit.sqlite.enabled,
+                "path": cfg.audit.sqlite.path,
+                "busy_timeout_ms": cfg.audit.sqlite.busy_timeout_ms,
+            },
+        },
     }
 
 

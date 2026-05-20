@@ -16,6 +16,9 @@ var (
 	ErrMissingAPIURL        = errors.New("api URL is required when token is provided")
 	ErrMissingToken         = errors.New("token is required when API URL is provided")
 	ErrWatcherStopped       = errors.New("config watcher stopped")
+	// ErrNegativeRetentionDays is returned when audit.retention_days is
+	// set below zero. Zero means "never delete"; negative is nonsense.
+	ErrNegativeRetentionDays = errors.New("audit.retention_days cannot be negative")
 	// ErrNilConfig is returned by WriteAtomic when the caller passes
 	// nil instead of a Config pointer. Callers can match with
 	// errors.Is to distinguish the programmer-error path from on-disk
