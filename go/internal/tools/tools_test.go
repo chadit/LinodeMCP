@@ -1143,3 +1143,146 @@ func TestLinodeAccountUpdateTool(t *testing.T) {
 		assert.Contains(t, textContent.Text, emailUpdatedExample, "response should contain updated email")
 	})
 }
+
+// End-to-end verification of the SSH key get workflow.
+func TestLinodeSSHKeyGetTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, _, handler := tools.NewLinodeSSHKeyGetTool(cfg)
+
+		assert.Equal(t, "linode_sshkey_get", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	t.Run("missing sshkey id", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeSSHKeyGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "tool errors are returned as error results, not Go errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "should return an error result for missing sshkey_id")
+	})
+
+	t.Run("zero sshkey id", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeSSHKeyGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keySSHKeyID: float64(0)})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "tool errors are returned as error results, not Go errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "should return an error result for zero sshkey_id")
+	})
+
+	t.Run("negative sshkey id", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeSSHKeyGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keySSHKeyID: float64(-1)})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError, "should reject negative sshkey_id")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		sshKey := linode.SSHKey{
+			ID:      42,
+			Label:   "test-key",
+			SSHKey:  "ssh-rsa AAAA test@example.com",
+			Created: "2024-01-01T00:00:00Z",
+		}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/profile/sshkeys/42", r.URL.Path, "request path should include SSH key ID")
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(sshKey))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeSSHKeyGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keySSHKeyID: float64(42)})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+	})
+}
+
+func TestLinodeSSHKeyGetToolAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, err := w.Write([]byte(`{"errors":[{"reason":"Not found"}]}`))
+		assert.NoError(t, err)
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {
+				Label:  envLabelDefault,
+				Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+			},
+		},
+	}
+	_, _, handler := tools.NewLinodeSSHKeyGetTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{keySSHKeyID: float64(999)})
+	result, err := handler(t.Context(), req)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError, "should return an error result for API 404")
+}

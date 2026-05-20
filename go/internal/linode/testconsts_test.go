@@ -11,8 +11,9 @@ const (
 	keyResults = "results"
 
 	// Common JSON field names used in test fixtures.
-	keyID    = "id"
-	keyLabel = "label"
+	keyID     = "id"
+	keyLabel  = "label"
+	keySSHKey = "ssh_key"
 
 	// fwLabelNew is the firewall label reused across the retry-wrapper tests.
 	fwLabelNew = "new-fw"

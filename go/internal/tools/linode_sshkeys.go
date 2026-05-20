@@ -11,6 +11,49 @@ import (
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
+// NewLinodeSSHKeyGetTool creates a tool for getting a single SSH key by ID.
+func NewLinodeSSHKeyGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_sshkey_get",
+		mcp.WithDescription("Retrieves details of a single SSH key by its ID"),
+		mcp.WithString(
+			paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
+		),
+		mcp.WithNumber(
+			"sshkey_id",
+			mcp.Required(),
+			mcp.Description("The ID of the SSH key to retrieve"),
+		),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeSSHKeyGetRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleLinodeSSHKeyGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	sshKeyID := request.GetInt("sshkey_id", 0)
+
+	if sshKeyID <= 0 {
+		return mcp.NewToolResultError("sshkey_id must be a positive integer"), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	sshKey, err := client.GetSSHKey(ctx, sshKeyID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve SSH key: %v", err)), nil
+	}
+
+	return MarshalToolResponse(sshKey)
+}
+
 // NewLinodeSSHKeyListTool creates a tool for listing SSH keys.
 func NewLinodeSSHKeyListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(

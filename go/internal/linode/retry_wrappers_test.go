@@ -493,3 +493,66 @@ func TestRetryWrappersBodyForwardedOnRetry(t *testing.T) {
 	assert.Contains(t, string(capturedBody), `"label"`, "retried request body should contain the label field")
 	assert.Contains(t, string(capturedBody), `"test-fw"`, "retried request body should contain the label value")
 }
+
+func TestGetSSHKeyRetries(t *testing.T) {
+	t.Parallel()
+
+	t.Run("happy path retries on transient error", func(t *testing.T) {
+		t.Parallel()
+
+		var requestCount atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			count := requestCount.Add(1)
+			if count == 1 {
+				w.WriteHeader(http.StatusInternalServerError)
+				_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+				assert.NoError(t, err, "writing error response should succeed")
+
+				return
+			}
+
+			assert.Equal(t, "/profile/sshkeys/42", r.URL.Path, "request path should include SSH key ID")
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyID:     42,
+				keyLabel:  "my-key",
+				keySSHKey: "ssh-rsa AAAA test@example.com",
+				"created": "2024-01-01T00:00:00Z",
+			}), "encoding SSH key response should not fail")
+		}))
+		defer srv.Close()
+
+		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+		sshKey, err := client.GetSSHKey(t.Context(), 42)
+		require.NoError(t, err, "GetSSHKey should succeed after retry")
+		require.NotNil(t, sshKey, "sshKey should not be nil")
+		assert.Equal(t, 42, sshKey.ID, "SSH key ID should match")
+		assert.Equal(t, "my-key", sshKey.Label, "SSH key label should match")
+		assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+	})
+
+	t.Run("no retry on 401", func(t *testing.T) {
+		t.Parallel()
+
+		var requestCount atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			requestCount.Add(1)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_, err := w.Write([]byte(`{"errors":[{"reason":"Invalid Token"}]}`))
+			assert.NoError(t, err, "writing error response should succeed")
+		}))
+		defer srv.Close()
+
+		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+		_, err := client.GetSSHKey(t.Context(), 42)
+		require.Error(t, err, "GetSSHKey should fail on 401")
+		require.ErrorContains(t, err, "Invalid Token", "error should contain the auth failure reason")
+		assert.Equal(t, int32(1), requestCount.Load(), "should not retry on 401")
+	})
+}
