@@ -1633,7 +1633,7 @@ class Client:
         """Share IPv4 addresses with a Linode."""
         try:
             body: dict[str, Any] = {"ips": ips, "linode_id": linode_id}
-            response = await self.make_request("POST", "/networking/ipv4/share", body)
+            response = await self.make_request("POST", "/networking/ips/share", body)
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
