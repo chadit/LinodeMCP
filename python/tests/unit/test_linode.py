@@ -2780,6 +2780,57 @@ async def test_retryable_client_delete_vlan() -> None:
     await client.close()
 
 
+async def test_client_share_ipv4s(linode_client: Client) -> None:
+    """Test Client.share_ipv4s sends POST /networking/ipv4/share."""
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"success": True, "shared": ["192.168.1.1"]}
+    with patch.object(
+        linode_client,
+        "make_request",
+        new_callable=AsyncMock,
+    ) as mock_req:
+        mock_req.return_value = mock_response
+        result = await linode_client.share_ipv4s(["192.168.1.1"], 12345)
+        mock_req.assert_awaited_once_with(
+            "POST",
+            "/networking/ipv4/share",
+            {"ips": ["192.168.1.1"], "linode_id": 12345},
+        )
+        assert result == {"success": True, "shared": ["192.168.1.1"]}
+
+
+async def test_client_share_ipv4s_network_error(linode_client: Client) -> None:
+    """Test Client.share_ipv4s raises NetworkError on HTTP failure."""
+    with patch.object(
+        linode_client,
+        "make_request",
+        new_callable=AsyncMock,
+    ) as mock_req:
+        mock_req.side_effect = httpx.ConnectError("connection refused")
+        with pytest.raises(NetworkError) as exc_info:
+            await linode_client.share_ipv4s(["192.168.1.1"], 12345)
+        assert "ShareIPv4s" in str(exc_info.value)
+
+
+async def test_retryable_client_share_ipv4s() -> None:
+    """Test retryable client delegates IPv4 sharing."""
+    client = RetryableClient(
+        "https://api.linode.com/v4", "test-token", RetryConfig(max_retries=3)
+    )
+    expected_result = {"success": True, "shared": ["192.168.1.1"]}
+
+    with patch.object(
+        client.client, "share_ipv4s", new_callable=AsyncMock
+    ) as mock_share:
+        mock_share.return_value = expected_result
+        result = await client.share_ipv4s(["192.168.1.1"], 12345)
+
+        assert result == expected_result
+        mock_share.assert_awaited_once_with(["192.168.1.1"], 12345)
+
+    await client.close()
+
+
 async def test_retryable_client_retry_on_rate_limit(
     sample_profile_data: dict[str, Any],
 ) -> None:

@@ -1629,6 +1629,16 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("DeleteVLAN", e) from e
 
+    async def share_ipv4s(self, ips: list[str], linode_id: int) -> dict[str, Any]:
+        """Share IPv4 addresses with a Linode."""
+        try:
+            body: dict[str, Any] = {"ips": ips, "linode_id": linode_id}
+            response = await self.make_request("POST", "/networking/ipv4/share", body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ShareIPv4s", e) from e
+
     async def list_tags(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -6182,6 +6192,13 @@ class RetryableClient:
     async def delete_vlan(self, region_id: str, label: str) -> None:
         """Delete VLAN with retry."""
         await self._execute_with_retry(self.client.delete_vlan, region_id, label)
+
+    async def share_ipv4s(self, ips: list[str], linode_id: int) -> dict[str, Any]:
+        """Share IPv4s with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.share_ipv4s, ips, linode_id
+        )
+        return result
 
     async def list_tags(
         self, page: int | None = None, page_size: int | None = None

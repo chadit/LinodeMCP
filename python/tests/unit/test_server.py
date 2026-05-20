@@ -1694,3 +1694,110 @@ def test_linode_nodebalancer_config_update_registered() -> None:
 
     assert "linode_nodebalancer_config_update" in entries
     assert entries["linode_nodebalancer_config_update"].capability == Capability.Write
+
+
+async def test_ipv4_share_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """IPv4 share tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_ipv4_share_tool" in tools_mod.__all__
+    assert "handle_linode_ipv4_share" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_ipv4_share" in srv.registered_tool_names
+
+
+async def test_ipv4_share_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """IPv4 share is callable through server dispatch with confirm=true."""
+    response_data = {"success": True, "shared": ["192.168.1.1"]}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.share_ipv4s.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_ipv4_share",
+            {
+                "confirm": True,
+                "ips": ["192.168.1.1"],
+                "linode_id": 12345,
+            },
+        )
+
+    result_json = json.loads(result[0].text)
+    assert result_json["linode_id"] == 12345
+    assert result_json["ips"] == ["192.168.1.1"]
+    mock_client.share_ipv4s.assert_awaited_once_with(["192.168.1.1"], 12345)
+
+
+async def test_ipv4_share_rejects_missing_confirm(
+    sample_config: Config,
+) -> None:
+    """IPv4 share should reject calls without confirm=true."""
+    srv = Server(_full_access_config(sample_config))
+    result = await srv.dispatch(
+        "linode_ipv4_share",
+        {
+            "ips": ["192.168.1.1"],
+            "linode_id": 12345,
+        },
+    )
+    text = result[0].text
+    assert "confirm" in text.lower()
+
+
+async def test_ipv4_share_rejects_false_confirm(
+    sample_config: Config,
+) -> None:
+    """IPv4 share should reject calls with confirm=false."""
+    srv = Server(_full_access_config(sample_config))
+    result = await srv.dispatch(
+        "linode_ipv4_share",
+        {
+            "confirm": False,
+            "ips": ["192.168.1.1"],
+            "linode_id": 12345,
+        },
+    )
+    text = result[0].text
+    assert "confirm" in text.lower()
+
+
+async def test_ipv4_share_rejects_missing_ips(
+    sample_config: Config,
+) -> None:
+    """IPv4 share should reject calls without ips."""
+    srv = Server(_full_access_config(sample_config))
+    result = await srv.dispatch(
+        "linode_ipv4_share",
+        {
+            "confirm": True,
+            "linode_id": 12345,
+        },
+    )
+    text = result[0].text
+    assert "ips" in text.lower()
+
+
+async def test_ipv4_share_rejects_missing_linode_id(
+    sample_config: Config,
+) -> None:
+    """IPv4 share should reject calls without linode_id."""
+    srv = Server(_full_access_config(sample_config))
+    result = await srv.dispatch(
+        "linode_ipv4_share",
+        {
+            "confirm": True,
+            "ips": ["192.168.1.1"],
+        },
+    )
+    text = result[0].text
+    assert "linode_id" in text.lower()

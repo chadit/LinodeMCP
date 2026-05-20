@@ -97,3 +97,63 @@ async def handle_linode_vlan_delete(
         }
 
     return await execute_tool(cfg, arguments, "delete VLAN", _call)
+
+
+def create_linode_ipv4_share_tool() -> tuple[Tool, Capability]:
+    """Create the linode_ipv4_share tool."""
+    return Tool(
+        name="linode_ipv4_share",
+        description="Shares IPv4 addresses with a Linode",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "ips": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of IPv4 addresses to share (required)",
+                },
+                "linode_id": {
+                    "type": "integer",
+                    "description": "Linode ID to share the IPs with (required)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm sharing IPs.",
+                },
+            },
+            "required": ["ips", "linode_id", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_ipv4_share(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_ipv4_share tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return error_response(
+            "This modifies network state. Set confirm=true to proceed."
+        )
+
+    ips = arguments.get("ips")
+    linode_id = arguments.get("linode_id")
+
+    if not ips or not isinstance(ips, list) or len(ips) == 0:
+        return error_response("ips must be a non-empty list of IPv4 addresses")
+    if linode_id is None:
+        return error_response("linode_id is required")
+    if not isinstance(linode_id, int):
+        return error_response("linode_id must be an integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.share_ipv4s(ips, linode_id)
+        return {
+            "message": f"IPv4 addresses shared with Linode {linode_id}",
+            "linode_id": linode_id,
+            "ips": ips,
+            "result": result,
+        }
+
+    return await execute_tool(cfg, arguments, "share IPv4 addresses", _call)

@@ -227,8 +227,10 @@ from linodemcp.tools.linode_monitor_write import (
     handle_linode_monitor_service_token_create,
 )
 from linodemcp.tools.linode_networking import (
+    create_linode_ipv4_share_tool,
     create_linode_vlan_delete_tool,
     create_linode_vlans_list_tool,
+    handle_linode_ipv4_share,
     handle_linode_vlan_delete,
     handle_linode_vlans_list,
 )
@@ -581,6 +583,7 @@ __all__ = [
     "create_linode_instance_shutdown_tool",
     "create_linode_instance_update_tool",
     "create_linode_instances_list_tool",
+    "create_linode_ipv4_share_tool",
     "create_linode_ipv6_pools_list_tool",
     "create_linode_ipv6_range_create_tool",
     "create_linode_ipv6_range_delete_tool",
@@ -800,6 +803,7 @@ __all__ = [
     "handle_linode_instance_shutdown",
     "handle_linode_instance_update",
     "handle_linode_instances_list",
+    "handle_linode_ipv4_share",
     "handle_linode_ipv6_pools_list",
     "handle_linode_ipv6_range_create",
     "handle_linode_ipv6_range_delete",
