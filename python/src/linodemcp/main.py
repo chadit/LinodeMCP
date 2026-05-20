@@ -6,6 +6,7 @@ import sys
 
 import structlog
 
+from linodemcp.audit import JSONLSink, resolve_default_audit_dir
 from linodemcp.cli import run_profile_command
 from linodemcp.config import Config, ConfigError, get_config_path
 from linodemcp.config.watcher import ConfigWatcher
@@ -120,6 +121,45 @@ async def _run_scope_validation(
     return True
 
 
+def _attach_audit_sink(
+    server: Server,
+    log: structlog.stdlib.BoundLogger,
+) -> JSONLSink | None:
+    """Open the rolling JSONL sink and attach it to the server.
+
+    Returns the open sink so the caller can close it on shutdown, or
+    None on failure after logging the cause. On failure the server
+    keeps its default NoopSink; audit never blocks startup.
+    """
+    audit_dir = resolve_default_audit_dir()
+    try:
+        sink = JSONLSink(audit_dir)
+    except OSError as exc:
+        log.warning(
+            "audit JSONL sink unavailable; continuing without audit",
+            directory=audit_dir,
+            error=str(exc),
+        )
+        return None
+
+    server.set_audit_sink(sink)
+    log.info("audit JSONL sink open", path=sink.path)
+    return sink
+
+
+def _close_audit_sink(
+    sink: JSONLSink | None,
+    log: structlog.stdlib.BoundLogger,
+) -> None:
+    """Close the audit sink so final events land and the file releases."""
+    if sink is None:
+        return
+    try:
+        sink.close()
+    except OSError as exc:
+        log.warning("audit JSONL sink close error", error=str(exc))
+
+
 def _wire_profile_hot_reload(
     watcher: ConfigWatcher,
     server: Server,
@@ -175,8 +215,16 @@ async def async_main() -> int:
     tool_helpers.set_live_config_source(watcher.get)
 
     server: Server | None = None
+    audit_sink: JSONLSink | None = None
     try:
         server = Server(cfg)
+
+        # Phase 2a: replace the default NoopSink with a rolling JSONL
+        # writer so every tool call lands on disk. On failure the
+        # server keeps its NoopSink default; audit never blocks
+        # startup.
+        audit_sink = _attach_audit_sink(server, log)
+
         _wire_profile_hot_reload(watcher, server, log)
 
         # Phase 6.4c: validate the active token's scopes against the
@@ -210,6 +258,8 @@ async def async_main() -> int:
         except Exception as exc:
             log.exception("config watcher stop error", error=str(exc))
         tool_helpers.set_live_config_source(None)
+
+        _close_audit_sink(audit_sink, log)
 
         try:
             obs.shutdown()

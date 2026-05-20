@@ -17,6 +17,16 @@ from linodemcp.audit.event import (
     new_event,
     new_event_id,
 )
+from linodemcp.audit.jsonl import (
+    ACTIVE_LOG_FILE_NAME,
+    JSONLSink,
+    JSONLSinkClosedError,
+)
+from linodemcp.audit.path import (
+    SYSTEM_AUDIT_DIR,
+    USER_AUDIT_DIR_RELATIVE,
+    resolve_default_audit_dir,
+)
 from linodemcp.audit.redact import (
     REDACTED_VALUE,
     is_redacted,
@@ -27,11 +37,16 @@ from linodemcp.audit.redact import (
 from linodemcp.audit.sink import CapturingSink, NoopSink, Sink
 
 __all__ = [
+    "ACTIVE_LOG_FILE_NAME",
     "EVENT_ID_PREFIX",
     "REDACTED_VALUE",
+    "SYSTEM_AUDIT_DIR",
+    "USER_AUDIT_DIR_RELATIVE",
     "Capability",
     "CapturingSink",
     "Event",
+    "JSONLSink",
+    "JSONLSinkClosedError",
     "Mode",
     "NoopSink",
     "Sink",
@@ -42,4 +57,5 @@ __all__ = [
     "redact",
     "redaction_field_set",
     "redaction_fields",
+    "resolve_default_audit_dir",
 ]
