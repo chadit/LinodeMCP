@@ -873,6 +873,7 @@ func objectStorageToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeObjectStorageObjectACLUpdateTool,
 		tools.NewLinodeObjectStorageSSLGetTool,
 		tools.NewLinodeObjectStorageSSLDeleteTool,
+		tools.NewLinodeObjectStorageSSLUploadTool,
 	})
 }
 

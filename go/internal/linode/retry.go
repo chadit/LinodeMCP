@@ -918,6 +918,21 @@ func (c *Client) DeleteBucketSSL(ctx context.Context, region, label string) erro
 	})
 }
 
+// UploadBucketSSL uploads an SSL/TLS certificate to a bucket with automatic retry.
+func (c *Client) UploadBucketSSL(ctx context.Context, region, label string, req UploadBucketSSLRequest) (*BucketSSL, error) {
+	var result *BucketSSL
+
+	err := c.executeWithRetry(ctx, "UploadBucketSSL", func() error {
+		var retryErr error
+
+		result, retryErr = c.httpUploadBucketSSL(ctx, region, label, req)
+
+		return retryErr
+	})
+
+	return result, err
+}
+
 // LKE (Kubernetes Engine) operations
 
 // ListLKEClusters retrieves all LKE clusters with automatic retry on transient failures.

@@ -434,3 +434,25 @@ func (c *Client) httpDeleteBucketSSL(ctx context.Context, region, label string) 
 
 	return c.handleResponse(resp, nil)
 }
+
+// UploadBucketSSL uploads an SSL/TLS certificate to an Object Storage bucket.
+func (c *Client) httpUploadBucketSSL(ctx context.Context, region, label string, req UploadBucketSSLRequest) (*BucketSSL, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/ssl", url.PathEscape(region), url.PathEscape(label))
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UploadBucketSSL", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var result BucketSSL
+	if err := c.handleResponse(resp, &result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}

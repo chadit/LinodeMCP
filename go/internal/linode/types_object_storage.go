@@ -103,6 +103,12 @@ type BucketSSL struct {
 	SSL bool `json:"ssl"`
 }
 
+// UploadBucketSSLRequest represents the request body for uploading an SSL certificate to a bucket.
+type UploadBucketSSLRequest struct {
+	Certificate string `json:"certificate"`
+	PrivateKey  string `json:"private_key"`
+}
+
 // ObjectStorageKey represents a Linode Object Storage access key.
 type ObjectStorageKey struct {
 	Label        string                         `json:"label"`

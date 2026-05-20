@@ -15,6 +15,8 @@ const (
 
 	// Common JSON request/response keys.
 	keyConfirm        = "confirm"
+	keyCertificate    = "certificate"
+	keyPrivateKey     = "private_key"
 	keyEmail          = "email"
 	keyLabel          = "label"
 	keyRegion         = "region"
@@ -83,6 +85,8 @@ const (
 	statusSuccessful    = "successful"
 	classStandard       = "standard"
 	bucketTest          = "my-bucket"
+	testCertPEM         = "-----BEGIN CERTIFICATE-----\ntest\n-----END CERTIFICATE-----"
+	testKeyPEM          = "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----"
 	keyNameTest         = "my-key"
 	labelDataVol        = "data-vol"
 	labelBackupVol      = "backup-vol"
