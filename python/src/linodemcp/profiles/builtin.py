@@ -122,6 +122,7 @@ _TOOL_CATEGORIES: tuple[tuple[str, tuple[str, ...]], ...] = (
             "linode_nodebalancers_",
             "linode_vlan_",
             "linode_vlans_",
+            "linode_ipv4_",
             "linode_ipv6_range_",
         ),
     ),
