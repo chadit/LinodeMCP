@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"time"
 )
@@ -26,6 +27,11 @@ type APIError struct {
 	Message    string        `json:"message"`
 	Field      string        `json:"field,omitempty"`
 	RetryAfter time.Duration `json:"retry_after,omitempty"`
+	// Method is the HTTP method of the request that produced this error. It
+	// drives retry safety for 5xx responses: a server error on a
+	// non-idempotent request (POST) may have been applied before the error
+	// surfaced, so it must not be replayed. Not part of the API payload.
+	Method string `json:"-"`
 }
 
 func (e *APIError) Error() string {
@@ -108,14 +114,58 @@ func (e *RetryableError) Error() string {
 
 func (e *RetryableError) Unwrap() error { return e.Err }
 
+// requestError wraps a transport-level failure (timeout, connection reset,
+// DNS, refused) with the HTTP method of the request that produced it. The
+// method drives retry safety: a transport failure on a non-idempotent request
+// (POST) may have reached and been processed by the server before the error
+// surfaced locally, so replaying it could duplicate the side effect.
+type requestError struct {
+	Method string
+	Err    error
+}
+
+func (e *requestError) Error() string { return "request failed: " + e.Err.Error() }
+
+func (e *requestError) Unwrap() error { return e.Err }
+
+// isIdempotentMethod reports whether replaying a failed request of this HTTP
+// method is safe. GET, HEAD, PUT, DELETE, and OPTIONS are idempotent by HTTP
+// semantics: a retry converges to the same end state. POST (and PATCH) are
+// not, so a failure that might already have been applied must not be retried.
+// An unknown or empty method is treated as non-idempotent to stay on the safe
+// side.
+func isIdempotentMethod(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodPut, http.MethodDelete, http.MethodOptions:
+		return true
+	default:
+		return false
+	}
+}
+
+// isRetryable reports whether err is a transient failure worth retrying.
+// A rate-limit (429) is always safe to replay because the request was rejected
+// before processing. A 5xx or a transport failure may have been applied
+// server-side, so those are retried only when the underlying request was
+// idempotent.
 func isRetryable(err error) bool {
 	if _, ok := errors.AsType[*RetryableError](err); ok {
 		return true
 	}
 
 	if apiErr, ok := errors.AsType[*APIError](err); ok {
-		return apiErr.IsRateLimitError() || apiErr.IsServerError()
+		if apiErr.IsRateLimitError() {
+			return true
+		}
+
+		return apiErr.IsServerError() && isIdempotentMethod(apiErr.Method)
 	}
 
-	return isNetworkError(err) || isTimeoutError(err)
+	if isNetworkError(err) || isTimeoutError(err) {
+		reqErr, ok := errors.AsType[*requestError](err)
+
+		return ok && isIdempotentMethod(reqErr.Method)
+	}
+
+	return false
 }

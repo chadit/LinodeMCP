@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -164,7 +165,9 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, paylo
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
+		// Carry the method so the retry layer can tell whether replaying this
+		// failed request is safe (idempotent) or risks a duplicate side effect.
+		return nil, &requestError{Method: method, Err: err}
 	}
 
 	return resp, nil
@@ -187,7 +190,16 @@ func (c *Client) handleResponse(resp *http.Response, target any) error {
 	}
 
 	if resp.StatusCode >= httpBadRequest {
-		return c.handleErrorResponse(resp.StatusCode, body, resp)
+		err := c.handleErrorResponse(resp.StatusCode, body, resp)
+
+		// Stamp the request method onto the API error so the retry layer can
+		// decide whether a 5xx is safe to replay. Done here (one place) rather
+		// than at every APIError construction site.
+		if apiErr, ok := errors.AsType[*APIError](err); ok && resp.Request != nil {
+			apiErr.Method = resp.Request.Method
+		}
+
+		return err
 	}
 
 	if target != nil {
