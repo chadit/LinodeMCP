@@ -12,6 +12,20 @@ if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 
+def create_linode_nodebalancer_types_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_nodebalancer_types_list tool."""
+    return Tool(
+        name="linode_nodebalancer_types_list",
+        description="Lists all available NodeBalancer types.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+            },
+        },
+    ), Capability.Read
+
+
 def create_linode_nodebalancers_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_nodebalancers_list tool."""
     return Tool(
@@ -37,6 +51,31 @@ def create_linode_nodebalancers_list_tool() -> tuple[Tool, Capability]:
             },
         },
     ), Capability.Read
+
+
+async def handle_linode_nodebalancer_types_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_nodebalancer_types_list tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        types = await client.list_nodebalancer_types()
+
+        types_data = [
+            {
+                "id": t.get("id", ""),
+                "label": t.get("label", ""),
+                "price": t.get("price", {}),
+            }
+            for t in types
+        ]
+
+        return {
+            "count": len(types),
+            "types": types_data,
+        }
+
+    return await execute_tool(cfg, arguments, "retrieve NodeBalancer types", _call)
 
 
 async def handle_linode_nodebalancers_list(

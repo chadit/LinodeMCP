@@ -1846,6 +1846,16 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListNodeBalancers", e) from e
 
+    async def list_nodebalancer_types(self) -> list[dict[str, Any]]:
+        """List NodeBalancer types."""
+        try:
+            response = await self.make_request("GET", "/nodebalancers/types")
+            data = response.json()
+            types: list[dict[str, Any]] = data.get("data", [])
+            return types
+        except httpx.HTTPError as e:
+            raise NetworkError("ListNodeBalancerTypes", e) from e
+
     async def get_nodebalancer(self, nodebalancer_id: int) -> NodeBalancer:
         """Get a specific NodeBalancer."""
         encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
@@ -6272,6 +6282,13 @@ class RetryableClient:
         """List NodeBalancers with retry."""
         result: list[NodeBalancer] = await self._execute_with_retry(
             self.client.list_nodebalancers
+        )
+        return result
+
+    async def list_nodebalancer_types(self) -> list[dict[str, Any]]:
+        """List NodeBalancer types with retry."""
+        result: list[dict[str, Any]] = await self._execute_with_retry(
+            self.client.list_nodebalancer_types
         )
         return result
 
