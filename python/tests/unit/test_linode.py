@@ -3477,6 +3477,37 @@ async def test_list_nodebalancers() -> None:
     await client.close()
 
 
+async def test_list_nodebalancer_types_sends_get_to_nodebalancer_types_route() -> None:
+    """Test listing nodebalancer types sends GET /nodebalancers/types."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response_data = {
+        "data": [
+            {
+                "id": "nodebalancer-type-1",
+                "label": "NodeBalancer Type 1",
+                "price": {"hourly": 0.015, "monthly": 10.00},
+            },
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        types = await client.list_nodebalancer_types()
+
+    assert types == response_data["data"]
+    mock_request.assert_called_once_with("GET", "/nodebalancers/types")
+
+    await client.close()
+
+
 async def test_get_nodebalancer() -> None:
     """Test getting a specific nodebalancer."""
     client = Client("https://api.linode.com/v4", "test-token")
