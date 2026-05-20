@@ -1639,6 +1639,21 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ShareIPv4s", e) from e
 
+    async def assign_ipv4s(
+        self, region: str, assignments: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Assign IPv4 addresses to Linodes."""
+        try:
+            body: dict[str, Any] = {
+                "region": region,
+                "assignments": assignments,
+            }
+            response = await self.make_request("POST", "/networking/ipv4/assign", body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("AssignIPv4s", e) from e
+
     async def list_tags(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -6199,6 +6214,12 @@ class RetryableClient:
             self.client.share_ipv4s, ips, linode_id
         )
         return result
+
+    async def assign_ipv4s(
+        self, region: str, assignments: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Assign IPv4s without replay retry."""
+        return await self.client.assign_ipv4s(region, assignments)
 
     async def list_tags(
         self, page: int | None = None, page_size: int | None = None

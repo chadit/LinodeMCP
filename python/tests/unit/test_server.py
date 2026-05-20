@@ -1696,6 +1696,174 @@ def test_linode_nodebalancer_config_update_registered() -> None:
     assert entries["linode_nodebalancer_config_update"].capability == Capability.Write
 
 
+async def test_ipv4_assign_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """IPv4 assign tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_ipv4_assign_tool" in tools_mod.__all__
+    assert "handle_linode_ipv4_assign" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_ipv4_assign" in srv.registered_tool_names
+
+
+async def test_ipv4_assign_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """IPv4 assign is callable through server dispatch with confirm=true."""
+    assignments = [{"address": "192.0.2.1", "linode_id": 123}]
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.assign_ipv4s.return_value = {}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_ipv4_assign",
+            {
+                "confirm": True,
+                "region": "us-east",
+                "assignments": assignments,
+            },
+        )
+
+    result_json = json.loads(result[0].text)
+    assert result_json["region"] == "us-east"
+    assert result_json["assignments"] == assignments
+    mock_client.assign_ipv4s.assert_awaited_once_with("us-east", assignments)
+
+
+async def test_ipv4_assign_rejects_missing_confirm_before_client(
+    sample_config: Config,
+) -> None:
+    """IPv4 assign should reject missing confirm before client creation."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_ipv4_assign",
+            {
+                "region": "us-east",
+                "assignments": [{"address": "192.0.2.1", "linode_id": 123}],
+            },
+        )
+
+    assert "confirm" in result[0].text.lower()
+    mock_client_class.assert_not_called()
+
+
+async def test_ipv4_assign_rejects_false_confirm_before_client(
+    sample_config: Config,
+) -> None:
+    """IPv4 assign should reject false confirm before client creation."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_ipv4_assign",
+            {
+                "confirm": False,
+                "region": "us-east",
+                "assignments": [{"address": "192.0.2.1", "linode_id": 123}],
+            },
+        )
+
+    assert "confirm" in result[0].text.lower()
+    mock_client_class.assert_not_called()
+
+
+async def test_ipv4_assign_rejects_string_confirm_before_client(
+    sample_config: Config,
+) -> None:
+    """IPv4 assign should reject string confirm before client creation."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_ipv4_assign",
+            {
+                "confirm": "true",
+                "region": "us-east",
+                "assignments": [{"address": "192.0.2.1", "linode_id": 123}],
+            },
+        )
+
+    assert "confirm" in result[0].text.lower()
+    mock_client_class.assert_not_called()
+
+
+async def test_ipv4_assign_rejects_numeric_confirm_before_client(
+    sample_config: Config,
+) -> None:
+    """IPv4 assign should reject numeric confirm before client creation."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_ipv4_assign",
+            {
+                "confirm": 1,
+                "region": "us-east",
+                "assignments": [{"address": "192.0.2.1", "linode_id": 123}],
+            },
+        )
+
+    assert "confirm" in result[0].text.lower()
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize("region", [None, "", "   ", 123])
+async def test_ipv4_assign_rejects_invalid_region(
+    sample_config: Config, region: Any
+) -> None:
+    """IPv4 assign should reject missing or invalid region."""
+    arguments: dict[str, Any] = {
+        "confirm": True,
+        "assignments": [{"address": "192.0.2.1", "linode_id": 123}],
+    }
+    if region is not None:
+        arguments["region"] = region
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_ipv4_assign", arguments)
+
+    assert "region" in result[0].text.lower()
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("assignments", "expected"),
+    [
+        ("192.0.2.1", "assignments"),
+        ([], "assignments"),
+        (["192.0.2.1"], "assignments"),
+        ([{"linode_id": 123}], "address"),
+        ([{"address": "", "linode_id": 123}], "address"),
+        ([{"address": "192.0.2.1"}], "linode_id"),
+        ([{"address": "192.0.2.1", "linode_id": "123"}], "linode_id"),
+    ],
+)
+async def test_ipv4_assign_rejects_invalid_assignments(
+    sample_config: Config, assignments: Any, expected: str
+) -> None:
+    """IPv4 assign should reject malformed assignments."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_ipv4_assign",
+            {
+                "confirm": True,
+                "region": "us-east",
+                "assignments": assignments,
+            },
+        )
+
+    assert expected in result[0].text.lower()
+    mock_client_class.assert_not_called()
+
+
 async def test_ipv4_share_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
