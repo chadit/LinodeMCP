@@ -255,3 +255,25 @@ func (c *Client) httpResizeInstance(ctx context.Context, instanceID int, req Res
 
 	return c.handleResponse(resp, nil)
 }
+
+// UpdateInstance updates a Linode instance's editable fields.
+func (c *Client) httpUpdateInstance(ctx context.Context, instanceID int, req *UpdateInstanceRequest) (*Instance, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointInstances+"/%d", instanceID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateInstance", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var instance Instance
+	if err := c.handleResponse(resp, &instance); err != nil {
+		return nil, err
+	}
+
+	return &instance, nil
+}

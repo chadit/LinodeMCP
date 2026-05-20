@@ -267,3 +267,14 @@ type ResizeInstanceRequest struct {
 	MigrationType string `json:"migration_type,omitempty"`
 	AllowAutoDisk bool   `json:"allow_auto_disk,omitempty"`
 }
+
+// UpdateInstanceRequest represents the request body for updating a Linode
+// instance. All fields are optional; only provided fields are updated.
+type UpdateInstanceRequest struct {
+	Label             string   `json:"label,omitempty"`
+	Group             string   `json:"group,omitempty"`
+	Tags              []string `json:"tags,omitempty"`
+	WatchdogEnabled   *bool    `json:"watchdog_enabled,omitempty"`
+	Alerts            *Alerts  `json:"alerts,omitempty"`
+	MaintenancePolicy string   `json:"maintenance_policy,omitempty"`
+}
