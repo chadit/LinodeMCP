@@ -1848,6 +1848,78 @@ async def test_list_ipv6_ranges_sends_get_with_pagination() -> None:
     await client.close()
 
 
+async def test_list_ipv6_pools_sends_get() -> None:
+    """Listing IPv6 pools should send GET /networking/ipv6/pools."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": [
+            {
+                "range": "2001:0db8::",
+                "region": "us-east",
+                "prefix": 124,
+                "route_target": "2001:0db8::f",
+            }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.list_ipv6_pools()
+
+        assert result == mock_response.json.return_value
+        mock_request.assert_awaited_once_with("GET", "/networking/ipv6/pools")
+
+    await client.close()
+
+
+async def test_list_ipv6_pools_sends_get_with_pagination() -> None:
+    """Listing IPv6 pools with pagination should include query params."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": [],
+        "page": 1,
+        "pages": 1,
+        "results": 0,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.list_ipv6_pools(page=2, page_size=50)
+
+        mock_request.assert_awaited_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "GET"
+        assert "page=2" in call_args[0][1]
+        assert "page_size=50" in call_args[0][1]
+
+    await client.close()
+
+
+async def test_list_ipv6_pools_wraps_http_errors() -> None:
+    """IPv6 pools list wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.list_ipv6_pools()
+
+    assert "ListIPv6Pools" in str(exc_info.value)
+    await client.close()
+
+
 async def test_list_placement_groups_sends_get_with_pagination() -> None:
     """Placement groups list sends query pagination params."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -2540,6 +2612,33 @@ async def test_retryable_list_ipv6_ranges_delegates_to_client() -> None:
         mock_list.return_value = expected_response
 
         result = await client.list_ipv6_ranges()
+
+        assert result == expected_response
+        mock_list.assert_awaited_once_with(page=None, page_size=None)
+
+    await client.close()
+
+
+async def test_retryable_list_ipv6_pools_delegates_to_client() -> None:
+    """Retryable client should delegate IPv6 pools listing."""
+    client = RetryableClient(
+        "https://api.linode.com/v4",
+        "test-token",
+        RetryConfig(max_retries=1, base_delay=0.01),
+    )
+    expected_response = {
+        "data": [{"range": "2001:0db8::", "region": "us-east", "prefix": 124}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch.object(
+        client.client, "list_ipv6_pools", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = expected_response
+
+        result = await client.list_ipv6_pools()
 
         assert result == expected_response
         mock_list.assert_awaited_once_with(page=None, page_size=None)

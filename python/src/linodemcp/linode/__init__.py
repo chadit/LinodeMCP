@@ -4879,6 +4879,28 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListIPv6Ranges", e) from e
 
+    async def list_ipv6_pools(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List IPv6 pools."""
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        query_string = urlencode(params) if params else ""
+        endpoint = (
+            f"/networking/ipv6/pools?{query_string}"
+            if query_string
+            else "/networking/ipv6/pools"
+        )
+        try:
+            response = await self.make_request("GET", endpoint)
+            ipv6_pools: dict[str, Any] = response.json()
+            return ipv6_pools
+        except httpx.HTTPError as e:
+            raise NetworkError("ListIPv6Pools", e) from e
+
     async def list_placement_groups(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -7635,6 +7657,15 @@ class RetryableClient:
         """List IPv6 ranges with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             lambda: self.client.list_ipv6_ranges(page=page, page_size=page_size)
+        )
+        return result
+
+    async def list_ipv6_pools(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List IPv6 pools with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_ipv6_pools(page=page, page_size=page_size)
         )
         return result
 
