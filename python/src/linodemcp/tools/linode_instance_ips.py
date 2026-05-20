@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
@@ -106,9 +107,9 @@ async def handle_linode_instance_ip_get(
     if isinstance(iid, list):
         return iid
 
-    address = arguments.get("address", "")
-    if not address:
-        return _error_response("address is required")
+    address = _parse_ip_address_argument(arguments)
+    if isinstance(address, list):
+        return address
 
     async def _call(
         client: RetryableClient,
@@ -116,6 +117,55 @@ async def handle_linode_instance_ip_get(
         return await client.get_instance_ip(iid, address)
 
     return await execute_tool(cfg, arguments, "get instance IP", _call)
+
+
+def _parse_ip_address_argument(arguments: dict[str, Any]) -> str | list[TextContent]:
+    """Parse and validate an IP address argument."""
+    address = arguments.get("address")
+    if not address:
+        return _error_response("address is required")
+    if not isinstance(address, str):
+        return _error_response("address must be a string")
+    try:
+        ipaddress.ip_address(address)
+    except ValueError:
+        return _error_response("address must be a valid IP address")
+    return address
+
+
+def create_linode_networking_ip_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_networking_ip_get tool."""
+    return Tool(
+        name="linode_networking_ip_get",
+        description=("Gets details of a networking-level IP address"),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "address": {
+                    "type": "string",
+                    "description": ("The IP address to look up (required)"),
+                },
+            },
+            "required": ["address"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_networking_ip_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_networking_ip_get tool request."""
+    address = _parse_ip_address_argument(arguments)
+    if isinstance(address, list):
+        return address
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        return await client.get_networking_ip(address)
+
+    return await execute_tool(cfg, arguments, "get networking IP", _call)
 
 
 def create_linode_instance_ip_allocate_tool() -> tuple[Tool, Capability]:
@@ -215,9 +265,9 @@ async def handle_linode_instance_ip_update(
     if isinstance(iid, list):
         return iid
 
-    address = arguments.get("address", "")
-    if not address:
-        return _error_response("address is required")
+    address = _parse_ip_address_argument(arguments)
+    if isinstance(address, list):
+        return address
 
     if "rdns" not in arguments:
         return _error_response("rdns is required")
@@ -269,11 +319,9 @@ async def handle_linode_networking_ip_update(
     if not confirm:
         return _error_response("Set confirm=true to proceed.")
 
-    address = arguments.get("address")
-    if not address:
-        return _error_response("address is required")
-    if not isinstance(address, str):
-        return _error_response("address must be a string")
+    address = _parse_ip_address_argument(arguments)
+    if isinstance(address, list):
+        return address
 
     if "rdns" not in arguments:
         return _error_response("rdns is required")
@@ -331,9 +379,9 @@ async def handle_linode_instance_ip_delete(
     if isinstance(iid, list):
         return iid
 
-    address = arguments.get("address", "")
-    if not address:
-        return _error_response("address is required")
+    address = _parse_ip_address_argument(arguments)
+    if isinstance(address, list):
+        return address
 
     async def _call(
         client: RetryableClient,

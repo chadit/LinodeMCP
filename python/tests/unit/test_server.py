@@ -1982,3 +1982,108 @@ async def test_networking_ip_update_tool_is_exported_and_registered(
 
     srv = Server(_full_access_config(sample_config))
     assert "linode_networking_ip_update" in srv.registered_tool_names
+
+
+async def test_networking_ip_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Networking IP get tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_networking_ip_get_tool" in tools_mod.__all__
+    assert "handle_linode_networking_ip_get" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_networking_ip_get" in srv.registered_tool_names
+
+
+async def test_networking_ip_get_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Networking IP get is callable through server dispatch."""
+    response_data = {"address": "198.51.100.5", "rdns": "example.example.com"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_networking_ip.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_networking_ip_get", {"address": "198.51.100.5"}
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.get_networking_ip.assert_awaited_once_with("198.51.100.5")
+
+
+@pytest.mark.parametrize(
+    "address",
+    ["", 123, "198.51.100.5/32", "198.51.100.5?x=1", ".."],
+)
+async def test_networking_ip_get_rejects_malformed_address_before_client(
+    sample_config: Config, address: Any
+) -> None:
+    """Networking IP get rejects malformed address values before client creation."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_networking_ip_get", {"address": address})
+
+    assert "address" in result[0].text.lower()
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "address",
+    ["", 123, "198.51.100.5/32", "198.51.100.5?x=1", ".."],
+)
+async def test_networking_ip_update_rejects_malformed_address_before_client(
+    sample_config: Config, address: Any
+) -> None:
+    """Networking IP update rejects malformed address before client creation."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_networking_ip_update",
+            {"address": address, "rdns": None, "confirm": True},
+        )
+
+    assert "address" in result[0].text.lower()
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "arguments"),
+    [
+        ("linode_instance_ip_get", {"instance_id": "123", "address": "../bad"}),
+        (
+            "linode_instance_ip_update",
+            {
+                "instance_id": "123",
+                "address": "198.51.100.5/32",
+                "rdns": None,
+                "confirm": True,
+            },
+        ),
+        (
+            "linode_instance_ip_delete",
+            {
+                "instance_id": "123",
+                "address": "198.51.100.5?x=1",
+                "confirm": True,
+            },
+        ),
+    ],
+)
+async def test_instance_ip_tools_reject_malformed_address_before_client(
+    sample_config: Config, tool_name: str, arguments: dict[str, Any]
+) -> None:
+    """Instance IP tools reject malformed addresses before client creation."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(tool_name, arguments)
+
+    assert "address" in result[0].text.lower()
+    mock_client_class.assert_not_called()
