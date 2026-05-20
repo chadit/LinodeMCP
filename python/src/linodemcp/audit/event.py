@@ -145,6 +145,36 @@ class Event:
             "credential_generation": self.credential_generation,
         }
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Event:
+        """Reconstruct an Event from a ``to_dict`` wire object.
+
+        Inverse of :meth:`to_dict`, used by the JSONL reader to parse
+        log lines back into events. The ``ts`` field accepts the
+        trailing ``Z`` form that ``to_dict`` writes. Enum fields parse
+        through their value constructors.
+        """
+        return cls(
+            ts=datetime.fromisoformat(str(data["ts"])),
+            ts_unix_ns=int(data["ts_unix_ns"]),
+            event_id=str(data["event_id"]),
+            tool=str(data["tool"]),
+            tool_capability=Capability(data["tool_capability"]),
+            environment=str(data["environment"]),
+            profile=str(data["profile"]),
+            mode=Mode(data["mode"]),
+            plan_id=data["plan_id"],
+            args=data.get("args") or {},
+            args_redacted=data.get("args_redacted") or [],
+            status=Status(data["status"]),
+            latency_ms=int(data["latency_ms"]),
+            result_summary=str(data["result_summary"]),
+            error=data["error"],
+            linodemcp_version=str(data["linodemcp_version"]),
+            session_id=str(data["session_id"]),
+            credential_generation=int(data["credential_generation"]),
+        )
+
 
 def new_event(
     tool: str,

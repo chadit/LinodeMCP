@@ -27,6 +27,12 @@ from linodemcp.audit.path import (
     USER_AUDIT_DIR_RELATIVE,
     resolve_default_audit_dir,
 )
+from linodemcp.audit.reader import (
+    DEFAULT_RECENT_LIMIT,
+    MAX_RECENT_LIMIT,
+    RecentQuery,
+    read_recent,
+)
 from linodemcp.audit.redact import (
     REDACTED_VALUE,
     is_redacted,
@@ -44,8 +50,10 @@ from linodemcp.audit.sink import CapturingSink, NoopSink, Sink
 __all__ = [
     "ACTIVE_LOG_FILE_NAME",
     "DEFAULT_AUDIT_RETENTION_DAYS",
+    "DEFAULT_RECENT_LIMIT",
     "DEFAULT_RETENTION_SWEEP_INTERVAL_SECONDS",
     "EVENT_ID_PREFIX",
+    "MAX_RECENT_LIMIT",
     "REDACTED_VALUE",
     "SYSTEM_AUDIT_DIR",
     "USER_AUDIT_DIR_RELATIVE",
@@ -56,12 +64,14 @@ __all__ = [
     "JSONLSinkClosedError",
     "Mode",
     "NoopSink",
+    "RecentQuery",
     "RetentionSweeper",
     "Sink",
     "Status",
     "is_redacted",
     "new_event",
     "new_event_id",
+    "read_recent",
     "redact",
     "redaction_field_set",
     "redaction_fields",

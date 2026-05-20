@@ -75,7 +75,7 @@ class RetentionSweeper:
             if not entry.is_file():
                 continue
 
-            file_day = _parse_rotated_file_day(entry.name)
+            file_day = parse_rotated_file_day(entry.name)
             if file_day is None:
                 continue
 
@@ -138,7 +138,7 @@ class RetentionSweeper:
         return today - timedelta(days=self._retention_days)
 
 
-def _parse_rotated_file_day(name: str) -> date | None:
+def parse_rotated_file_day(name: str) -> date | None:
     """Extract the UTC day from a rotated file name.
 
     Matches ``audit-YYYY-MM-DD.log`` and ``audit-YYYY-MM-DD.log.gz``.
