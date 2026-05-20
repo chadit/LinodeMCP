@@ -1950,6 +1950,29 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("RebuildNodeBalancerConfig", e) from e
 
+    async def list_nodebalancer_configs(
+        self,
+        nodebalancer_id: int,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
+        """List configs for a NodeBalancer."""
+        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
+        endpoint = f"/nodebalancers/{encoded_nodebalancer_id}/configs"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListNodeBalancerConfigs", e) from e
+
     async def create_nodebalancer_config(
         self, nodebalancer_id: int, fields: dict[str, Any]
     ) -> dict[str, Any]:
@@ -6308,6 +6331,20 @@ class RetryableClient:
     ) -> dict[str, Any]:
         """Rebuild a NodeBalancer config without replay retry."""
         return await self.client.rebuild_nodebalancer_config(nodebalancer_id, config_id)
+
+    async def list_nodebalancer_configs(
+        self,
+        nodebalancer_id: int,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
+        """List NodeBalancer configs with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_nodebalancer_configs(
+                nodebalancer_id, page=page, page_size=page_size
+            )
+        )
+        return result
 
     async def create_nodebalancer_config(
         self, nodebalancer_id: int, fields: dict[str, Any]
