@@ -5254,13 +5254,23 @@ class Client:
 
     async def get_instance_ip(self, instance_id: int, address: str) -> dict[str, Any]:
         """Get a specific IP address for an instance."""
-        endpoint = f"/linode/instances/{instance_id}/ips/{address}"
+        endpoint = f"/linode/instances/{instance_id}/ips/{quote(address, safe='')}"
         try:
             response = await self.make_request("GET", endpoint)
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
             raise NetworkError("GetInstanceIP", e) from e
+
+    async def get_networking_ip(self, address: str) -> dict[str, Any]:
+        """Get a networking-level IP address."""
+        endpoint = f"/networking/ips/{quote(address, safe='')}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("GetNetworkingIP", e) from e
 
     async def allocate_instance_ip(
         self,
@@ -5288,7 +5298,7 @@ class Client:
         rdns: str | None,
     ) -> dict[str, Any]:
         """Update reverse DNS for a specific IP address on an instance."""
-        endpoint = f"/linode/instances/{instance_id}/ips/{address}"
+        endpoint = f"/linode/instances/{instance_id}/ips/{quote(address, safe='')}"
         try:
             body: dict[str, Any] = {"rdns": rdns}
             response = await self.make_request("PUT", endpoint, body)
@@ -5314,7 +5324,7 @@ class Client:
 
     async def delete_instance_ip(self, instance_id: int, address: str) -> None:
         """Delete an IP address from an instance."""
-        endpoint = f"/linode/instances/{instance_id}/ips/{address}"
+        endpoint = f"/linode/instances/{instance_id}/ips/{quote(address, safe='')}"
         try:
             await self.make_request("DELETE", endpoint)
         except httpx.HTTPError as e:
@@ -7947,6 +7957,13 @@ class RetryableClient:
         """Get instance IP with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_instance_ip, instance_id, address
+        )
+        return result
+
+    async def get_networking_ip(self, address: str) -> dict[str, Any]:
+        """Get networking IP with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_networking_ip, address
         )
         return result
 

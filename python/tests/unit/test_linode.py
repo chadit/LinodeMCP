@@ -465,6 +465,58 @@ async def test_update_instance_ip_sends_put_to_instance_ip_route() -> None:
     await client.close()
 
 
+async def test_get_instance_ip_url_encodes_address() -> None:
+    """Instance IP get URL-encodes the address path parameter."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"address": "2001:db8::1"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.get_instance_ip(123, "2001:db8::1")
+
+    call_args = mock_request.call_args
+    assert call_args[0][1] == "/linode/instances/123/ips/2001%3Adb8%3A%3A1"
+
+    await client.close()
+
+
+async def test_update_instance_ip_url_encodes_address() -> None:
+    """Instance IP update URL-encodes the address path parameter."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"address": "2001:db8::1", "rdns": None}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.update_instance_ip(123, "2001:db8::1", None)
+
+    call_args = mock_request.call_args
+    assert call_args[0][1] == "/linode/instances/123/ips/2001%3Adb8%3A%3A1"
+
+    await client.close()
+
+
+async def test_delete_instance_ip_url_encodes_address() -> None:
+    """Instance IP delete URL-encodes the address path parameter."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        await client.delete_instance_ip(123, "2001:db8::1")
+
+    mock_request.assert_awaited_once_with(
+        "DELETE", "/linode/instances/123/ips/2001%3Adb8%3A%3A1"
+    )
+
+    await client.close()
+
+
 async def test_list_instances(sample_instance_data: dict[str, Any]) -> None:
     """Test listing instances."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -7937,6 +7989,77 @@ async def test_retryable_update_nodebalancer_config_does_not_replay() -> None:
             await retryable.update_nodebalancer_config(8, 6, {"port": 80})
 
     mock_update.assert_awaited_once_with(8, 6, {"port": 80})
+    await retryable.close()
+
+
+async def test_get_networking_ip_sends_get_to_networking_ips_route() -> None:
+    """Getting a networking IP sends GET to the exact route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "address": "198.51.100.5",
+        "rdns": "example.example.com",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.get_networking_ip("198.51.100.5")
+
+    assert result["address"] == "198.51.100.5"
+    mock_request.assert_called_once_with("GET", "/networking/ips/198.51.100.5")
+
+    await client.close()
+
+
+async def test_get_networking_ip_url_encodes_address() -> None:
+    """Path param address is URL-encoded at the client boundary."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"address": "2001:db8::1", "rdns": None}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.get_networking_ip("2001:db8::1")
+
+    call_args = mock_request.call_args
+    assert call_args[0][1] == "/networking/ips/2001%3Adb8%3A%3A1"
+
+    await client.close()
+
+
+async def test_get_networking_ip_wraps_http_errors() -> None:
+    """Getting a networking IP wraps HTTP errors with operation context."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError, match="GetNetworkingIP"):
+            await client.get_networking_ip("198.51.100.5")
+
+    mock_request.assert_awaited_once_with("GET", "/networking/ips/198.51.100.5")
+
+    await client.close()
+
+
+async def test_retryable_get_networking_ip_delegates_to_client() -> None:
+    """RetryableClient delegates get_networking_ip to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "get_networking_ip", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = {"address": "10.0.0.1", "rdns": "host.example.com"}
+        result = await retryable.get_networking_ip("10.0.0.1")
+
+    assert result["address"] == "10.0.0.1"
+    mock_get.assert_awaited_once_with("10.0.0.1")
     await retryable.close()
 
 
