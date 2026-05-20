@@ -151,6 +151,22 @@ func TestToolWrapperMethods(t *testing.T) {
 	}
 }
 
+func TestToolDescriptorsIncludesImageCreate(t *testing.T) {
+	t.Parallel()
+
+	descriptors := server.ToolDescriptors(baseTestConfig())
+
+	for _, descriptor := range descriptors {
+		if descriptor.Name == "linode_image_create" {
+			assert.Equal(t, profiles.CapWrite, descriptor.Capability, "image creation should be a write capability")
+
+			return
+		}
+	}
+
+	t.Fatalf("linode_image_create descriptor not found")
+}
+
 // TestToolWrapperExecuteReturnsError verifies that calling Execute on a
 // toolWrapper returns ErrExecuteNotImplemented since handlers are dispatched
 // through the MCP server, not through the wrapper directly.

@@ -120,6 +120,26 @@ func (c *Client) httpListImages(ctx context.Context) ([]Image, error) {
 	return response.Data, nil
 }
 
+// CreateImage creates a private image from a Linode disk.
+func (c *Client) httpCreateImage(ctx context.Context, req *CreateImageRequest) (*Image, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointImages, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateImage", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var image Image
+	if err := c.handleResponse(resp, &image); err != nil {
+		return nil, err
+	}
+
+	return &image, nil
+}
+
 // ListStackScripts retrieves StackScripts available to the authenticated user.
 func (c *Client) httpListStackScripts(ctx context.Context) ([]StackScript, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

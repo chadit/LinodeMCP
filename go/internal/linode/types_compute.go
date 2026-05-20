@@ -210,6 +210,15 @@ type Image struct {
 	Deprecated   bool     `json:"deprecated"`
 }
 
+// CreateImageRequest represents the request body for creating a private image from a Linode disk.
+type CreateImageRequest struct {
+	DiskID      int      `json:"disk_id"`
+	Label       string   `json:"label,omitempty"`
+	Description string   `json:"description,omitempty"`
+	CloudInit   bool     `json:"cloud_init,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+}
+
 // StackScript represents a Linode StackScript for automated deployments.
 type StackScript struct {
 	Username          string   `json:"username"`

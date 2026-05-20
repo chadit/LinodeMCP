@@ -13,6 +13,7 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
@@ -2374,6 +2375,150 @@ func TestLinodeVolumeUpdateTool(t *testing.T) {
 		tc, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, tc.Text, "update failed", "response should mention failure")
+	})
+}
+
+// End-to-end verification of the image creation workflow.
+func TestLinodeImageCreateTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	tool, capability, handler := tools.NewLinodeImageCreateTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+		assert.Equal(t, "linode_image_create", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapWrite, capability, "create tool should be a write capability")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, "disk_id", "schema should include disk_id property")
+		assert.Contains(t, props, "label", "schema should include label property")
+		assert.Contains(t, props, "description", "schema should include description property")
+		assert.Contains(t, props, "cloud_init", "schema should include cloud_init property")
+		assert.Contains(t, props, "tags", "schema should include tags property")
+		assert.Contains(t, props, keyConfirm, "schema should include confirm property")
+	})
+
+	validationTests := []struct {
+		name         string
+		args         map[string]any
+		wantContains string
+	}{
+		{name: caseRequiresConfirm, args: map[string]any{keyDiskID: 123}, wantContains: errConfirmEqualsTrue},
+		{name: "false confirm rejected", args: map[string]any{keyDiskID: 123, keyConfirm: false}, wantContains: errConfirmEqualsTrue},
+		{name: "string confirm rejected", args: map[string]any{keyDiskID: 123, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
+		{name: "numeric confirm rejected", args: map[string]any{keyDiskID: 123, keyConfirm: 1}, wantContains: errConfirmEqualsTrue},
+		{name: "missing disk id", args: map[string]any{keyConfirm: true}, wantContains: tools.ErrDiskIDRequired.Error()},
+		{name: "zero disk id", args: map[string]any{keyDiskID: 0, keyConfirm: true}, wantContains: tools.ErrDiskIDRequired.Error()},
+		{name: "negative disk id", args: map[string]any{keyDiskID: -1, keyConfirm: true}, wantContains: tools.ErrDiskIDRequired.Error()},
+	}
+	for _, tt := range validationTests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var requestCount atomic.Int32
+
+			srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+				requestCount.Add(1)
+			}))
+			t.Cleanup(srv.Close)
+
+			validationCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			}}
+			_, _, validationHandler := tools.NewLinodeImageCreateTool(validationCfg)
+
+			req := createRequestWithArgs(t, tt.args)
+			result, err := validationHandler(t.Context(), req)
+			require.NoError(t, err, "handler should not return Go error")
+			require.NotNil(t, result, "handler should return a result")
+			assert.True(t, result.IsError, "result should be a tool error")
+			assertErrorContains(t, result, tt.wantContains)
+			assert.Equal(t, int32(0), requestCount.Load(), "validation should reject before client call")
+		})
+	}
+
+	t.Run("successful creation", func(t *testing.T) {
+		t.Parallel()
+
+		created := linode.Image{ID: "private/15", Label: "custom-image", Status: "creating", CreatedBy: "tester"}
+
+		var requestCount atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requestCount.Add(1)
+			assert.Equal(t, "/images", r.URL.Path, "request path should be /images")
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+
+			var body map[string]any
+			if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
+				return
+			}
+
+			assert.InEpsilon(t, 123, body[keyDiskID], 0, "disk_id should be sent")
+			assert.Equal(t, "custom-image", body["label"], "label should be sent")
+			assert.Equal(t, "test image", body["description"], "description should be sent")
+			assert.Equal(t, true, body["cloud_init"], "cloud_init should be sent")
+			assert.Equal(t, []any{"blue", "green"}, body["tags"], "tags should be sent")
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(created), "encoding response should succeed")
+		}))
+		defer srv.Close()
+
+		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, successHandler := tools.NewLinodeImageCreateTool(successCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyDiskID:     123,
+			keyLabel:      "custom-image",
+			"description": "test image",
+			"cloud_init":  true,
+			"tags":        "blue, green",
+			keyConfirm:    true,
+		})
+		result, err := successHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.False(t, result.IsError, "result should not be an error")
+		assert.Equal(t, int32(1), requestCount.Load(), "handler should call the client once")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent type")
+		assert.Contains(t, textContent.Text, "private/15", "response should contain the image ID")
+		assert.Contains(t, textContent.Text, "created successfully", "response should confirm creation")
+	})
+
+	t.Run("client error propagates", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_, err := w.Write([]byte(`{"errors":[{"reason":"disk not found"}]}`))
+			assert.NoError(t, err, "writing error response should succeed")
+		}))
+		t.Cleanup(srv.Close)
+
+		errCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, errHandler := tools.NewLinodeImageCreateTool(errCfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyDiskID: 123, keyConfirm: true})
+		result, err := errHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "Failed to create image")
 	})
 }
 

@@ -45,6 +45,77 @@ func fastRetryOpts() []linode.Option {
 	}
 }
 
+func TestCreateImageRouteAndRetrySafety(t *testing.T) {
+	t.Parallel()
+
+	t.Run("happy path uses exact POST images route and body", func(t *testing.T) {
+		t.Parallel()
+
+		var requestCount atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requestCount.Add(1)
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/images", r.URL.Path, "request path should be /images")
+
+			var body map[string]any
+			if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
+				return
+			}
+
+			assert.InEpsilon(t, 123, body["disk_id"], 0, "disk_id should be sent")
+			assert.Equal(t, "custom-image", body["label"], "label should be sent")
+			assert.Equal(t, "test image", body["description"], "description should be sent")
+			assert.Equal(t, true, body["cloud_init"], "cloud_init should be sent")
+			assert.Equal(t, []any{"blue", "green"}, body["tags"], "tags should be sent")
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyID:        "private/15",
+				keyLabel:     "custom-image",
+				"status":     "creating",
+				"created_by": "tester",
+			}), "encoding image response should not fail")
+		}))
+		t.Cleanup(srv.Close)
+
+		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+		image, err := client.CreateImage(t.Context(), &linode.CreateImageRequest{
+			DiskID:      123,
+			Label:       "custom-image",
+			Description: "test image",
+			CloudInit:   true,
+			Tags:        []string{"blue", "green"},
+		})
+
+		require.NoError(t, err, "CreateImage should succeed")
+		require.NotNil(t, image, "created image should not be nil")
+		assert.Equal(t, "private/15", image.ID, "image ID should match response")
+		assert.Equal(t, int32(1), requestCount.Load(), "CreateImage should make one request")
+	})
+
+	t.Run("transient server error is not replayed", func(t *testing.T) {
+		t.Parallel()
+
+		var requestCount atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			requestCount.Add(1)
+			w.WriteHeader(http.StatusInternalServerError)
+			_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			assert.NoError(t, err, "writing error response should succeed")
+		}))
+		t.Cleanup(srv.Close)
+
+		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+		image, err := client.CreateImage(t.Context(), &linode.CreateImageRequest{DiskID: 123})
+
+		require.Error(t, err, "CreateImage should return the first transient error")
+		assert.Nil(t, image, "image should be nil on error")
+		assert.Equal(t, int32(1), requestCount.Load(), "non-idempotent image creation must not be retried")
+	})
+}
+
 // Ensures the retry wrapper generator produces correct delegation for all method signatures used by the Linode client.
 func TestRetryWrappersDelegationPatterns(t *testing.T) {
 	t.Parallel()
@@ -295,7 +366,8 @@ func TestRetryNonIdempotentDoesNotReplay(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			requestCount.Add(1)
 			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			assert.NoError(t, err, "writing error response should succeed")
 		}))
 		defer srv.Close()
 
