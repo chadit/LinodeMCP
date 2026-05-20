@@ -5322,6 +5322,26 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateNetworkingIP", e) from e
 
+    async def allocate_networking_ip(
+        self,
+        linode_id: int,
+        ip_type: str,
+        public: bool = True,
+    ) -> dict[str, Any]:
+        """Allocate a new IP address at the networking level."""
+        endpoint = "/networking/ips"
+        try:
+            body: dict[str, Any] = {
+                "linode_id": linode_id,
+                "type": ip_type,
+                "public": public,
+            }
+            response = await self.make_request("POST", endpoint, body)
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("AllocateNetworkingIP", e) from e
+
     async def delete_instance_ip(self, instance_id: int, address: str) -> None:
         """Delete an IP address from an instance."""
         endpoint = f"/linode/instances/{instance_id}/ips/{quote(address, safe='')}"
@@ -8007,6 +8027,21 @@ class RetryableClient:
             self.client.update_networking_ip,
             address,
             rdns,
+        )
+        return result
+
+    async def allocate_networking_ip(
+        self,
+        linode_id: int,
+        ip_type: str,
+        public: bool = True,
+    ) -> dict[str, Any]:
+        """Allocate networking IP with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.allocate_networking_ip,
+            linode_id,
+            ip_type,
+            public,
         )
         return result
 

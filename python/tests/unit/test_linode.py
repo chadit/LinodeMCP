@@ -8048,6 +8048,38 @@ async def test_get_networking_ip_wraps_http_errors() -> None:
     await client.close()
 
 
+async def test_allocate_networking_ip_sends_post_to_networking_ips_route() -> None:
+    """Allocating a networking IP sends POST to the exact route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "address": "198.51.100.10",
+        "linode_id": 12345,
+        "type": "ipv4",
+        "public": True,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.allocate_networking_ip(
+            12345,
+            ip_type="ipv4",
+            public=True,
+        )
+
+    assert result["address"] == "198.51.100.10"
+    mock_request.assert_called_once_with(
+        "POST",
+        "/networking/ips",
+        {"linode_id": 12345, "type": "ipv4", "public": True},
+    )
+
+    await client.close()
+
+
 async def test_retryable_get_networking_ip_delegates_to_client() -> None:
     """RetryableClient delegates get_networking_ip to Client."""
     retryable = RetryableClient("https://api.linode.com/v4", "test-token")
@@ -8127,4 +8159,62 @@ async def test_retryable_update_networking_ip_delegates_to_client() -> None:
 
     assert result["rdns"] == "host.example.com"
     mock_update.assert_awaited_once_with("10.0.0.1", "host.example.com")
+    await retryable.close()
+
+
+async def test_allocate_networking_ip_wraps_http_errors() -> None:
+    """Allocating a networking IP wraps HTTP errors with operation context."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPStatusError(
+            "Server error",
+            request=MagicMock(),
+            response=MagicMock(status_code=500),
+        )
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.allocate_networking_ip(12345, "ipv4")
+
+    assert "AllocateNetworkingIP" in str(exc_info.value)
+
+    await client.close()
+
+
+async def test_retryable_allocate_networking_ip_delegates_to_client() -> None:
+    """RetryableClient delegates allocate_networking_ip to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "allocate_networking_ip", new_callable=AsyncMock
+    ) as mock_allocate:
+        mock_allocate.return_value = {"address": "198.51.100.10", "linode_id": 12345}
+        result = await retryable.allocate_networking_ip(12345, "ipv4", public=True)
+
+    assert result["address"] == "198.51.100.10"
+    mock_allocate.assert_awaited_once_with(12345, "ipv4", True)
+    await retryable.close()
+
+
+async def test_retryable_allocate_networking_ip_retries_transient_failure() -> None:
+    """RetryableClient retries allocate_networking_ip after transient NetworkError."""
+    retryable = RetryableClient(
+        "https://api.linode.com/v4",
+        "test-token",
+        RetryConfig(max_retries=2, base_delay=0.01),
+    )
+
+    success_response = {"address": "198.51.100.10", "linode_id": 12345}
+
+    with patch.object(
+        retryable.client, "allocate_networking_ip", new_callable=AsyncMock
+    ) as mock_allocate:
+        mock_allocate.side_effect = [
+            NetworkError("AllocateNetworkingIP", httpx.TimeoutException("timeout")),
+            success_response,
+        ]
+        result = await retryable.allocate_networking_ip(12345, "ipv4", public=True)
+
+    assert result["address"] == "198.51.100.10"
+    assert mock_allocate.call_count == 2
     await retryable.close()
