@@ -27,8 +27,9 @@ const (
 // tool-registration time. Stored as an atomic pointer to a function so
 // reads are lock-free and the global mutation is bounded to one place.
 //
-//nolint:gochecknoglobals // process-wide hot-reload bridge; touching every factory signature would be a 123-file refactor.
-var liveConfigSource atomic.Pointer[func() *config.Config]
+// Suppression must be inline on the offending declaration line so that
+// newer golangci-lint releases associate it with the var.
+var liveConfigSource atomic.Pointer[func() *config.Config] //nolint:gochecknoglobals // process-wide hot-reload bridge; touching every factory signature would be a 123-file refactor.
 
 // SetLiveConfigSource registers a function that returns the latest Config.
 // Pass nil to unregister. Safe for concurrent calls.

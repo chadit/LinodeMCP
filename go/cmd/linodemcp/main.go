@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/chadit/LinodeMCP/internal/appinfo"
+	"github.com/chadit/LinodeMCP/internal/audit"
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/observability"
 	"github.com/chadit/LinodeMCP/internal/profiles"
@@ -29,6 +30,30 @@ func main() {
 
 	exitCode := run()
 	os.Exit(exitCode)
+}
+
+// openAuditSink resolves the audit directory, opens a rolling
+// JSONL sink under it, and returns the open sink ready to attach to
+// the server. Returns nil on any failure after logging the cause;
+// the caller falls back to the server's default NoopSink so audit
+// never blocks startup.
+func openAuditSink(log interface {
+	Info(msg string, args ...any)
+	Warn(msg string, args ...any)
+},
+) *audit.JSONLSink {
+	auditDir := audit.ResolveDefaultAuditDir()
+
+	sink, err := audit.NewJSONLSink(auditDir)
+	if err != nil {
+		log.Warn("audit JSONL sink unavailable; continuing without audit", "dir", auditDir, "error", err)
+
+		return nil
+	}
+
+	log.Info("audit JSONL sink open", "path", sink.Path())
+
+	return sink
 }
 
 // runScopeValidation enforces the Phase 6.4 token-scope policy at
@@ -183,6 +208,21 @@ func run() int {
 		log.Error("failed to create server", "error", err)
 
 		return 1
+	}
+
+	// Phase 2a: replace the default NoopSink with a rolling JSONL
+	// writer so every tool call (success, error, refusal) lands on
+	// disk. If the sink fails to open, log and continue with the
+	// noop default; audit is a best-effort observation channel, not
+	// a hard prerequisite for the server.
+	if auditSink := openAuditSink(log); auditSink != nil {
+		srv.SetAuditSink(auditSink)
+
+		defer func() {
+			if closeErr := auditSink.Close(); closeErr != nil {
+				log.Warn("audit JSONL sink close error", "error", closeErr)
+			}
+		}()
 	}
 
 	// Phase 5: a config reload that changes active_profile or the active

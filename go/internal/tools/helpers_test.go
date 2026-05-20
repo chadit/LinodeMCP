@@ -21,10 +21,10 @@ type testItem struct {
 // main.go to bridge the config Watcher to tool handlers. Cannot observe
 // resolveConfig from outside the package (cairnlint forbids export_test.go),
 // but the hook's observable contract is "stored callbacks can be set and
-// cleared without panic", which this test pins.
-//
-//nolint:paralleltest // SetLiveConfigSource manipulates a process-wide hook.
-func TestSetLiveConfigSourceLifecycle(t *testing.T) {
+// cleared without panic", which this test pins. Suppression must be
+// inline on the func declaration so newer golangci-lint releases
+// associate the directive with the function.
+func TestSetLiveConfigSourceLifecycle(t *testing.T) { //nolint:paralleltest // SetLiveConfigSource manipulates a process-wide hook.
 	defer tools.SetLiveConfigSource(nil)
 
 	snapshot := &config.Config{Server: config.ServerConfig{Name: "snap"}}
