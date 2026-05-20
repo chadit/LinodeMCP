@@ -5307,6 +5307,35 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateInstanceIP", e) from e
 
+    async def list_networking_ips(
+        self, skip_ipv6_rdns: bool = False
+    ) -> list[dict[str, Any]]:
+        """List all IP addresses at the networking level."""
+        all_ips: list[dict[str, Any]] = []
+        page = 1
+        try:
+            while True:
+                endpoint = "/networking/ips"
+                query_parts: list[str] = []
+                if skip_ipv6_rdns:
+                    query_parts.append("skip_ipv6_rdns=true")
+                if page > 1:
+                    query_parts.append(f"page={page}")
+                if query_parts:
+                    endpoint += "?" + "&".join(query_parts)
+
+                response = await self.make_request("GET", endpoint)
+                data = response.json()
+                ips: list[dict[str, Any]] = data.get("data", [])
+                all_ips.extend(ips)
+
+                total_pages = data.get("pages", page)
+                if not isinstance(total_pages, int) or page >= total_pages:
+                    return all_ips
+                page += 1
+        except httpx.HTTPError as e:
+            raise NetworkError("ListNetworkingIPs", e) from e
+
     async def update_networking_ip(
         self,
         address: str,
@@ -8014,6 +8043,15 @@ class RetryableClient:
             instance_id,
             address,
             rdns,
+        )
+        return result
+
+    async def list_networking_ips(
+        self, skip_ipv6_rdns: bool = False
+    ) -> list[dict[str, Any]]:
+        """List networking IPs with retry."""
+        result: list[dict[str, Any]] = await self._execute_with_retry(
+            self.client.list_networking_ips, skip_ipv6_rdns
         )
         return result
 

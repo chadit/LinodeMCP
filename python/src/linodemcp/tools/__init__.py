@@ -139,6 +139,7 @@ from linodemcp.tools.linode_instance_ips import (
     create_linode_networking_ip_allocate_tool,
     create_linode_networking_ip_get_tool,
     create_linode_networking_ip_update_tool,
+    create_linode_networking_ips_list_tool,
     handle_linode_instance_ip_allocate,
     handle_linode_instance_ip_delete,
     handle_linode_instance_ip_get,
@@ -147,6 +148,7 @@ from linodemcp.tools.linode_instance_ips import (
     handle_linode_networking_ip_allocate,
     handle_linode_networking_ip_get,
     handle_linode_networking_ip_update,
+    handle_linode_networking_ips_list,
 )
 from linodemcp.tools.linode_instance_write import (
     create_linode_instance_boot_tool,
@@ -630,6 +632,7 @@ __all__ = [
     "create_linode_networking_ip_allocate_tool",
     "create_linode_networking_ip_get_tool",
     "create_linode_networking_ip_update_tool",
+    "create_linode_networking_ips_list_tool",
     "create_linode_nodebalancer_config_create_tool",
     "create_linode_nodebalancer_config_delete_tool",
     "create_linode_nodebalancer_config_get_tool",
@@ -854,6 +857,7 @@ __all__ = [
     "handle_linode_networking_ip_allocate",
     "handle_linode_networking_ip_get",
     "handle_linode_networking_ip_update",
+    "handle_linode_networking_ips_list",
     "handle_linode_nodebalancer_config_create",
     "handle_linode_nodebalancer_config_delete",
     "handle_linode_nodebalancer_config_get",

@@ -8048,6 +8048,125 @@ async def test_get_networking_ip_wraps_http_errors() -> None:
     await client.close()
 
 
+async def test_list_networking_ips_sends_get_to_networking_ips_route() -> None:
+    """Client.list_networking_ips sends GET /networking/ips."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": [{"address": "198.51.100.5", "type": "ipv4"}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.list_networking_ips()
+
+    assert result == [{"address": "198.51.100.5", "type": "ipv4"}]
+    mock_request.assert_awaited_once_with("GET", "/networking/ips")
+
+    await client.close()
+
+
+async def test_list_networking_ips_sends_skip_ipv6_rdns_query() -> None:
+    """Client.list_networking_ips passes skip_ipv6_rdns query when true."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"data": []}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.list_networking_ips(skip_ipv6_rdns=True)
+
+    assert result == []
+    mock_request.assert_awaited_once_with("GET", "/networking/ips?skip_ipv6_rdns=true")
+
+    await client.close()
+
+
+async def test_list_networking_ips_fetches_all_pages() -> None:
+    """Client.list_networking_ips follows pagination until all pages are read."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    first_response = MagicMock()
+    first_response.status_code = 200
+    first_response.json.return_value = {
+        "data": [{"address": "198.51.100.5", "type": "ipv4"}],
+        "page": 1,
+        "pages": 2,
+        "results": 2,
+    }
+    second_response = MagicMock()
+    second_response.status_code = 200
+    second_response.json.return_value = {
+        "data": [{"address": "2001:db8::1", "type": "ipv6"}],
+        "page": 2,
+        "pages": 2,
+        "results": 2,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = [first_response, second_response]
+
+        result = await client.list_networking_ips(skip_ipv6_rdns=True)
+
+    assert result == [
+        {"address": "198.51.100.5", "type": "ipv4"},
+        {"address": "2001:db8::1", "type": "ipv6"},
+    ]
+    assert mock_request.await_args_list[0].args == (
+        "GET",
+        "/networking/ips?skip_ipv6_rdns=true",
+    )
+    assert mock_request.await_args_list[1].args == (
+        "GET",
+        "/networking/ips?skip_ipv6_rdns=true&page=2",
+    )
+
+    await client.close()
+
+
+async def test_list_networking_ips_wraps_http_errors() -> None:
+    """Listing networking IPs wraps HTTP errors with operation context."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPStatusError(
+            "Server error",
+            request=MagicMock(),
+            response=MagicMock(status_code=500),
+        )
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.list_networking_ips()
+
+    assert "ListNetworkingIPs" in str(exc_info.value)
+
+    await client.close()
+
+
+async def test_retryable_list_networking_ips_delegates_to_client() -> None:
+    """RetryableClient delegates list_networking_ips to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "list_networking_ips", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = [{"address": "198.51.100.5"}]
+        result = await retryable.list_networking_ips(skip_ipv6_rdns=True)
+
+    assert result == [{"address": "198.51.100.5"}]
+    mock_list.assert_awaited_once_with(True)
+    await retryable.close()
+
+
 async def test_allocate_networking_ip_sends_post_to_networking_ips_route() -> None:
     """Allocating a networking IP sends POST to the exact route."""
     client = Client("https://api.linode.com/v4", "test-token")
