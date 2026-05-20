@@ -979,3 +979,154 @@ async def handle_linode_nodebalancer_config_update(
         }
 
     return await execute_tool(cfg, arguments, "update NodeBalancer config", _call)
+
+
+def create_linode_nodebalancer_config_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_nodebalancer_config_create tool."""
+    return Tool(
+        name="linode_nodebalancer_config_create",
+        description=(
+            "Creates a NodeBalancer configuration. "
+            "WARNING: This creates a new config on an existing NodeBalancer."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "nodebalancer_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The ID of the NodeBalancer (required)",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Label for the config (optional)",
+                },
+                "port": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535,
+                    "description": "Port the config listens on (default: 80)",
+                },
+                "protocol": {
+                    "type": "string",
+                    "enum": ["http", "udp"],
+                    "description": "Protocol (default: http)",
+                },
+                "algorithm": {
+                    "type": "string",
+                    "enum": ["roundrobin", "leastconn", "ring_hash"],
+                    "description": "Load balancing algorithm (default: roundrobin)",
+                },
+                "stickiness": {
+                    "type": "string",
+                    "enum": ["none", "table", "http_cookie", "drop_thin"],
+                    "description": "Session stickiness (default: none)",
+                },
+                "check": {
+                    "type": "string",
+                    "enum": ["none", "connection", "http", "http_body"],
+                    "description": "Health check type (default: none)",
+                },
+                "check_interval": {
+                    "type": "integer",
+                    "minimum": 2,
+                    "maximum": 3600,
+                    "description": "Health check interval in seconds (default: 5)",
+                },
+                "check_timeout": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 30,
+                    "description": "Health check timeout in seconds (default: 3)",
+                },
+                "check_attempts": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 30,
+                    "description": "Health check attempts (default: 3)",
+                },
+                "check_path": {
+                    "type": "string",
+                    "description": "URL path for HTTP health checks",
+                },
+                "check_body": {
+                    "type": "string",
+                    "description": "Required response body for http_body checks",
+                },
+                "check_passive": {
+                    "type": "boolean",
+                    "description": "Enable passive health checks (ignored for UDP)",
+                },
+                "proxy_protocol": {
+                    "type": "string",
+                    "enum": ["none", "v1", "v2"],
+                    "description": "Proxy protocol version (default: none)",
+                },
+                "udp_check_port": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535,
+                    "description": "TCP/HTTP health check port for UDP backends",
+                },
+                "nodes": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "Backend nodes to attach to this config",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to create the NodeBalancer config.",
+                },
+            },
+            "required": ["nodebalancer_id", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_nodebalancer_config_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_nodebalancer_config_create tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response("confirm must be true")
+
+    nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
+    if nodebalancer_id is None:
+        return error_response("nodebalancer_id must be a positive integer")
+
+    fields: dict[str, Any] = {}
+    for key in (
+        "label",
+        "port",
+        "protocol",
+        "algorithm",
+        "stickiness",
+        "check",
+        "check_interval",
+        "check_timeout",
+        "check_attempts",
+        "check_path",
+        "check_body",
+        "check_passive",
+        "proxy_protocol",
+        "udp_check_port",
+        "nodes",
+    ):
+        value = arguments.get(key)
+        if value is not None:
+            fields[key] = value
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.create_nodebalancer_config(nodebalancer_id, fields)
+        if result:
+            return result
+        return {
+            "message": (
+                f"NodeBalancer config create requested "
+                f"for NodeBalancer {nodebalancer_id}"
+            ),
+            "nodebalancer_id": nodebalancer_id,
+        }
+
+    return await execute_tool(cfg, arguments, "create NodeBalancer config", _call)
