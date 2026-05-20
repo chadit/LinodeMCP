@@ -10,11 +10,11 @@ import (
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
-// NewLinodeFirewallsListTool creates a tool for listing firewalls.
-func NewLinodeFirewallsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+// NewLinodeFirewallListTool creates a tool for listing firewalls.
+func NewLinodeFirewallListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newListTool(
 		cfg,
-		"linode_firewalls_list",
+		"linode_firewall_list",
 		"Lists all Cloud Firewalls on your account. Can filter by status or label.",
 		func(ctx context.Context, client *linode.Client) ([]linode.Firewall, error) {
 			return client.ListFirewalls(ctx)

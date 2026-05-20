@@ -26,10 +26,10 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		// Compute reads
 		{Name: toolInstancesList, Capability: profiles.CapRead},
 		{Name: "linode_instance_get", Capability: profiles.CapRead},
-		{Name: "linode_regions_list", Capability: profiles.CapRead},
-		{Name: "linode_types_list", Capability: profiles.CapRead},
-		{Name: "linode_images_list", Capability: profiles.CapRead},
-		{Name: "linode_stackscripts_list", Capability: profiles.CapRead},
+		{Name: "linode_region_list", Capability: profiles.CapRead},
+		{Name: "linode_type_list", Capability: profiles.CapRead},
+		{Name: "linode_image_list", Capability: profiles.CapRead},
+		{Name: "linode_stackscript_list", Capability: profiles.CapRead},
 		// Compute writes / destroys
 		{Name: "linode_instance_create", Capability: profiles.CapWrite},
 		{Name: "linode_stackscript_create", Capability: profiles.CapWrite},
@@ -45,12 +45,12 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_instance_password_reset", Capability: profiles.CapDestroy},
 
 		// Compute deep (backups, disks, IPs)
-		{Name: "linode_instance_backups_list", Capability: profiles.CapRead},
+		{Name: "linode_instance_backup_list", Capability: profiles.CapRead},
 		{Name: "linode_instance_backup_create", Capability: profiles.CapWrite},
-		{Name: "linode_instance_disks_list", Capability: profiles.CapRead},
+		{Name: "linode_instance_disk_list", Capability: profiles.CapRead},
 		{Name: "linode_instance_disk_create", Capability: profiles.CapWrite},
 		{Name: "linode_instance_disk_delete", Capability: profiles.CapDestroy},
-		{Name: "linode_instance_ips_list", Capability: profiles.CapRead},
+		{Name: "linode_instance_ip_list", Capability: profiles.CapRead},
 		{Name: "linode_instance_ip_allocate", Capability: profiles.CapWrite},
 		{Name: "linode_instance_ip_update_rdns", Capability: profiles.CapWrite},
 
@@ -61,35 +61,35 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: toolVolumeResize, Capability: profiles.CapWrite},
 
 		// Object storage
-		{Name: "linode_object_storage_buckets_list", Capability: profiles.CapRead},
+		{Name: "linode_object_storage_bucket_list", Capability: profiles.CapRead},
 		{Name: "linode_object_storage_bucket_create", Capability: profiles.CapWrite},
 		{Name: "linode_object_storage_bucket_delete", Capability: profiles.CapDestroy},
 
 		// Networking
-		{Name: "linode_firewalls_list", Capability: profiles.CapRead},
+		{Name: "linode_firewall_list", Capability: profiles.CapRead},
 		{Name: "linode_firewall_create", Capability: profiles.CapWrite},
 		{Name: "linode_firewall_delete", Capability: profiles.CapDestroy},
-		{Name: "linode_nodebalancers_list", Capability: profiles.CapRead},
+		{Name: "linode_nodebalancer_list", Capability: profiles.CapRead},
 		{Name: "linode_nodebalancer_create", Capability: profiles.CapWrite},
 
 		// DNS
-		{Name: "linode_domains_list", Capability: profiles.CapRead},
+		{Name: "linode_domain_list", Capability: profiles.CapRead},
 		{Name: "linode_domain_create", Capability: profiles.CapWrite},
 		{Name: "linode_domain_delete", Capability: profiles.CapDestroy},
 		{Name: "linode_domain_record_create", Capability: profiles.CapWrite},
 
 		// LKE
-		{Name: "linode_lke_clusters_list", Capability: profiles.CapRead},
+		{Name: "linode_lke_cluster_list", Capability: profiles.CapRead},
 		{Name: "linode_lke_cluster_create", Capability: profiles.CapWrite},
 		{Name: "linode_lke_cluster_delete", Capability: profiles.CapDestroy},
 
 		// VPCs
-		{Name: "linode_vpcs_list", Capability: profiles.CapRead},
+		{Name: "linode_vpc_list", Capability: profiles.CapRead},
 		{Name: "linode_vpc_create", Capability: profiles.CapWrite},
 		{Name: "linode_vpc_delete", Capability: profiles.CapDestroy},
 
 		// Security (SSH keys)
-		{Name: "linode_sshkeys_list", Capability: profiles.CapRead},
+		{Name: "linode_sshkey_list", Capability: profiles.CapRead},
 		{Name: "linode_sshkey_create", Capability: profiles.CapWrite},
 		{Name: "linode_sshkey_update", Capability: profiles.CapWrite},
 		{Name: "linode_sshkey_delete", Capability: profiles.CapDestroy},

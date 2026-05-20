@@ -52,7 +52,7 @@ func TestRequiredScopesReadVsWrite(t *testing.T) {
 		},
 		{
 			name:       "volume list",
-			toolName:   "linode_volumes_list",
+			toolName:   "linode_volume_list",
 			capability: profiles.CapRead,
 			want:       []profiles.Scope{profiles.ScopeVolumesReadOnly},
 		},
@@ -82,7 +82,7 @@ func TestRequiredScopesReadVsWrite(t *testing.T) {
 		},
 		{
 			name:       "vpc list",
-			toolName:   "linode_vpcs_list",
+			toolName:   "linode_vpc_list",
 			capability: profiles.CapRead,
 			want:       []profiles.Scope{profiles.ScopeVPCReadOnly},
 		},
@@ -192,7 +192,7 @@ func TestRequiredScopesPrefixOrdering(t *testing.T) {
 	t.Parallel()
 
 	cases := []string{
-		"linode_instance_backups_list",
+		"linode_instance_backup_list",
 		"linode_instance_disk_create",
 		"linode_instance_ip_allocate",
 		"linode_instance_ip_update_rdns",
@@ -224,7 +224,7 @@ func TestRequiredScopesSSHAndMonitorAreAccountScoped(t *testing.T) {
 	}{
 		{
 			name: "sshkeys list read",
-			tool: "linode_sshkeys_list",
+			tool: "linode_sshkey_list",
 			cap:  profiles.CapRead,
 			want: profiles.ScopeAccountReadOnly,
 		},

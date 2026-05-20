@@ -11,10 +11,10 @@ import (
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
-// NewLinodeTypesListTool creates a tool for listing Linode instance types.
-func NewLinodeTypesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+// NewLinodeTypeListTool creates a tool for listing Linode instance types.
+func NewLinodeTypeListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_types_list",
+		"linode_type_list",
 		mcp.WithDescription("Lists all available Linode instance types (plans) with pricing information. Can filter by class (standard, dedicated, gpu, highmem, premium)."),
 		mcp.WithString(
 			paramEnvironment,

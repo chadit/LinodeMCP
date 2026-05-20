@@ -11,11 +11,11 @@ import (
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
-// NewLinodeInstanceDisksListTool creates a tool for listing all disks on a Linode instance.
-func NewLinodeInstanceDisksListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+// NewLinodeInstanceDiskListTool creates a tool for listing all disks on a Linode instance.
+func NewLinodeInstanceDiskListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_instance_disks_list",
+		"linode_instance_disk_list",
 		"Lists all disks attached to a Linode instance.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),

@@ -25,7 +25,7 @@ func (c *Client) httpListObjectStorageBuckets(ctx context.Context) ([]ObjectStor
 		return nil, &NetworkError{Operation: "ListObjectStorageBuckets", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[ObjectStorageBucket]
 
@@ -48,7 +48,7 @@ func (c *Client) httpGetObjectStorageBucket(ctx context.Context, region, label s
 		return nil, &NetworkError{Operation: "GetObjectStorageBucket", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var bucket ObjectStorageBucket
 	if err := c.handleResponse(resp, &bucket); err != nil {
@@ -80,7 +80,7 @@ func (c *Client) httpListObjectStorageBucketContents(ctx context.Context, region
 		return nil, false, "", &NetworkError{Operation: "ListObjectStorageBucketContents", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response struct {
 		Data        []ObjectStorageObject `json:"data"`
@@ -105,7 +105,7 @@ func (c *Client) httpListObjectStorageClusters(ctx context.Context) ([]ObjectSto
 		return nil, &NetworkError{Operation: "ListObjectStorageClusters", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[ObjectStorageCluster]
 
@@ -126,7 +126,7 @@ func (c *Client) httpListObjectStorageTypes(ctx context.Context) ([]ObjectStorag
 		return nil, &NetworkError{Operation: "ListObjectStorageTypes", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[ObjectStorageType]
 
@@ -147,7 +147,7 @@ func (c *Client) httpListObjectStorageKeys(ctx context.Context) ([]ObjectStorage
 		return nil, &NetworkError{Operation: "ListObjectStorageKeys", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[ObjectStorageKey]
 
@@ -170,7 +170,7 @@ func (c *Client) httpGetObjectStorageKey(ctx context.Context, keyID int) (*Objec
 		return nil, &NetworkError{Operation: "GetObjectStorageKey", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var key ObjectStorageKey
 	if err := c.handleResponse(resp, &key); err != nil {
@@ -190,7 +190,7 @@ func (c *Client) httpGetObjectStorageTransfer(ctx context.Context) (*ObjectStora
 		return nil, &NetworkError{Operation: "GetObjectStorageTransfer", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var transfer ObjectStorageTransfer
 	if err := c.handleResponse(resp, &transfer); err != nil {
@@ -212,7 +212,7 @@ func (c *Client) httpGetObjectStorageBucketAccess(ctx context.Context, region, l
 		return nil, &NetworkError{Operation: "GetObjectStorageBucketAccess", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var access ObjectStorageBucketAccess
 	if err := c.handleResponse(resp, &access); err != nil {
@@ -232,7 +232,7 @@ func (c *Client) httpCreateObjectStorageBucket(ctx context.Context, req CreateOb
 		return nil, &NetworkError{Operation: "CreateObjectStorageBucket", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var bucket ObjectStorageBucket
 	if err := c.handleResponse(resp, &bucket); err != nil {
@@ -254,7 +254,7 @@ func (c *Client) httpDeleteObjectStorageBucket(ctx context.Context, region, labe
 		return &NetworkError{Operation: "DeleteObjectStorageBucket", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -271,7 +271,7 @@ func (c *Client) httpUpdateObjectStorageBucketAccess(ctx context.Context, region
 		return &NetworkError{Operation: "UpdateObjectStorageBucketAccess", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -288,7 +288,7 @@ func (c *Client) httpAllowObjectStorageBucketAccess(ctx context.Context, region,
 		return &NetworkError{Operation: "AllowObjectStorageBucketAccess", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }() // errcheck: response body close is best-effort after handleResponse
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -303,7 +303,7 @@ func (c *Client) httpCreateObjectStorageKey(ctx context.Context, req CreateObjec
 		return nil, &NetworkError{Operation: "CreateObjectStorageKey", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var key ObjectStorageKey
 	if err := c.handleResponse(resp, &key); err != nil {
@@ -325,7 +325,7 @@ func (c *Client) httpUpdateObjectStorageKey(ctx context.Context, keyID int, req 
 		return &NetworkError{Operation: "UpdateObjectStorageKey", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -342,7 +342,7 @@ func (c *Client) httpDeleteObjectStorageKey(ctx context.Context, keyID int) erro
 		return &NetworkError{Operation: "DeleteObjectStorageKey", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -359,7 +359,7 @@ func (c *Client) httpCreatePresignedURL(ctx context.Context, region, label strin
 		return nil, &NetworkError{Operation: "CreatePresignedURL", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var result PresignedURLResponse
 	if err := c.handleResponse(resp, &result); err != nil {
@@ -381,7 +381,7 @@ func (c *Client) httpGetObjectACL(ctx context.Context, region, label, name strin
 		return nil, &NetworkError{Operation: "GetObjectACL", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var result ObjectACL
 	if err := c.handleResponse(resp, &result); err != nil {
@@ -403,7 +403,7 @@ func (c *Client) httpUpdateObjectACL(ctx context.Context, region, label string, 
 		return nil, &NetworkError{Operation: "UpdateObjectACL", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var result ObjectACL
 	if err := c.handleResponse(resp, &result); err != nil {
@@ -425,7 +425,7 @@ func (c *Client) httpGetBucketSSL(ctx context.Context, region, label string) (*B
 		return nil, &NetworkError{Operation: "GetBucketSSL", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var result BucketSSL
 	if err := c.handleResponse(resp, &result); err != nil {
@@ -447,7 +447,7 @@ func (c *Client) httpDeleteBucketSSL(ctx context.Context, region, label string) 
 		return &NetworkError{Operation: "DeleteBucketSSL", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -464,7 +464,7 @@ func (c *Client) httpUploadBucketSSL(ctx context.Context, region, label string, 
 		return nil, &NetworkError{Operation: "UploadBucketSSL", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var result BucketSSL
 	if err := c.handleResponse(resp, &result); err != nil {

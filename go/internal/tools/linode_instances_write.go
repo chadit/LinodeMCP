@@ -207,7 +207,7 @@ func handleLinodeInstanceShutdownRequest(ctx context.Context, request *mcp.CallT
 func NewLinodeInstanceCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_instance_create",
-		mcp.WithDescription("Creates a new Linode instance under the current Linode Interfaces generation. WARNING: Billing starts immediately upon creation. Requires firewall_id (get one from linode_firewalls_list or create with linode_firewall_create). Note: VPC attachment via the current interface model is not yet supported by this tool; use linode_vpc_* tools after create."),
+		mcp.WithDescription("Creates a new Linode instance under the current Linode Interfaces generation. WARNING: Billing starts immediately upon creation. Requires firewall_id (get one from linode_firewall_list or create with linode_firewall_create). Note: VPC attachment via the current interface model is not yet supported by this tool; use linode_vpc_* tools after create."),
 		mcp.WithString(
 			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
@@ -265,7 +265,7 @@ func NewLinodeInstanceCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 	return tool, profiles.CapWrite, handler
 }
 
-const errFirewallIDRequired = "firewall_id is required for instance creation. Get a firewall ID from linode_firewalls_list, or create one with linode_firewall_create."
+const errFirewallIDRequired = "firewall_id is required for instance creation. Get a firewall ID from linode_firewall_list, or create one with linode_firewall_create."
 
 func handleLinodeInstanceCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	region := request.GetString("region", "")

@@ -18,12 +18,12 @@ func NewLinodeObjectStorageBucketCreateTool(cfg *config.Config) (mcp.Tool, profi
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_object_storage_bucket_create",
-		"Creates a new Object Storage bucket. WARNING: Billing starts immediately. Use linode_object_storage_clusters_list to find valid regions.",
+		"Creates a new Object Storage bucket. WARNING: Billing starts immediately. Use linode_object_storage_cluster_list to find valid regions.",
 		[]mcp.ToolOption{
 			mcp.WithString("label", mcp.Required(),
 				mcp.Description("Bucket label (3-63 chars, lowercase alphanumeric and hyphens, must start/end with alphanumeric)")),
 			mcp.WithString("region", mcp.Required(),
-				mcp.Description("Region for the bucket (e.g. us-east-1). Use linode_object_storage_clusters_list to find valid regions.")),
+				mcp.Description("Region for the bucket (e.g. us-east-1). Use linode_object_storage_cluster_list to find valid regions.")),
 			mcp.WithString("acl",
 				mcp.Description("Access control: private, public-read, authenticated-read, or public-read-write (default: private)")),
 			mcp.WithBoolean("cors_enabled",

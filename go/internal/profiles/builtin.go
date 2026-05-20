@@ -60,11 +60,8 @@ func Categories(toolName string) []string {
 	if hasAnyPrefix(
 		toolName,
 		"linode_instance_backup_",
-		"linode_instance_backups_",
 		"linode_instance_disk_",
-		"linode_instance_disks_",
 		"linode_instance_ip_",
-		"linode_instance_ips_",
 	) {
 		cats = append(cats, "compute_deep")
 	}
@@ -77,25 +74,21 @@ func Categories(toolName string) []string {
 	// compute: broad compute surface (instances, regions, types, images,
 	// stackscripts). Sub-resources under linode_instance_ that already
 	// matched compute_deep are still in compute too; profile rules use
-	// the union of categories, so duplication is harmless. Both singular
-	// and plural prefixes are listed so write tools that use the singular
-	// (e.g. linode_image_create, linode_stackscript_create) get routed
-	// alongside their list/get counterparts.
+	// the union of categories, so duplication is harmless. Tool names are
+	// singular across verbs (linode_image_list, linode_stackscript_create),
+	// so a single singular prefix per resource covers list/get/write tools.
 	if hasAnyPrefix(
 		toolName,
 		"linode_instance_",
-		"linode_instances_",
-		"linode_regions_",
-		"linode_types_",
+		"linode_region_",
+		"linode_type_",
 		"linode_image_",
-		"linode_images_",
 		"linode_stackscript_",
-		"linode_stackscripts_",
 	) {
 		cats = append(cats, "compute")
 	}
 
-	if hasAnyPrefix(toolName, "linode_volume_", "linode_volumes_") {
+	if strings.HasPrefix(toolName, "linode_volume_") {
 		cats = append(cats, "block_storage")
 	}
 
@@ -103,23 +96,15 @@ func Categories(toolName string) []string {
 		cats = append(cats, "object_storage")
 	}
 
-	if hasAnyPrefix(
-		toolName,
-		"linode_domain_",
-		"linode_domains_",
-		"linode_domain_record_",
-	) {
+	if strings.HasPrefix(toolName, "linode_domain_") {
 		cats = append(cats, "dns")
 	}
 
 	if hasAnyPrefix(
 		toolName,
 		"linode_firewall_",
-		"linode_firewalls_",
 		"linode_nodebalancer_",
-		"linode_nodebalancers_",
 		"linode_vlan_",
-		"linode_vlans_",
 		"linode_ipv6_range_",
 	) {
 		cats = append(cats, "networking")
@@ -129,11 +114,11 @@ func Categories(toolName string) []string {
 		cats = append(cats, "lke")
 	}
 
-	if hasAnyPrefix(toolName, "linode_vpc_", "linode_vpcs_") {
+	if strings.HasPrefix(toolName, "linode_vpc_") {
 		cats = append(cats, "vpcs")
 	}
 
-	if hasAnyPrefix(toolName, "linode_sshkey_", "linode_sshkeys_") {
+	if strings.HasPrefix(toolName, "linode_sshkey_") {
 		cats = append(cats, "security")
 	}
 
@@ -162,7 +147,7 @@ func isComputeAction(toolName string) bool {
 		"linode_instance_delete",
 		"linode_instance_resize",
 		"linode_instance_get",
-		"linode_instances_list":
+		"linode_instance_list":
 		return true
 	default:
 		return false

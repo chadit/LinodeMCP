@@ -26,11 +26,11 @@ func TestLinodeInstanceBackupsListTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, _, handler := tools.NewLinodeInstanceBackupsListTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceBackupListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_instance_backups_list", tool.Name, "tool name should match")
+		assert.Equal(t, "linode_instance_backup_list", tool.Name, "tool name should match")
 		assert.NotEmpty(t, tool.Description, "tool should have a description")
 		require.NotNil(t, handler, "handler should not be nil")
 	})
@@ -69,7 +69,7 @@ func TestLinodeInstanceBackupsListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, _, srvHandler := tools.NewLinodeInstanceBackupsListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeInstanceBackupListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyLinodeID: "123"})
 		result, err := srvHandler(t.Context(), req)
@@ -462,11 +462,11 @@ func TestLinodeInstanceDisksListTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, _, handler := tools.NewLinodeInstanceDisksListTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceDiskListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_instance_disks_list", tool.Name, "tool name should match")
+		assert.Equal(t, "linode_instance_disk_list", tool.Name, "tool name should match")
 		assert.NotEmpty(t, tool.Description, "tool should have a description")
 		require.NotNil(t, handler, "handler should not be nil")
 	})
@@ -503,7 +503,7 @@ func TestLinodeInstanceDisksListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, _, srvHandler := tools.NewLinodeInstanceDisksListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeInstanceDiskListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)})
 		result, err := srvHandler(t.Context(), req)
@@ -959,11 +959,11 @@ func TestLinodeInstanceIPsListTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, _, handler := tools.NewLinodeInstanceIPsListTool(cfg)
+	tool, _, handler := tools.NewLinodeInstanceIPListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_instance_ips_list", tool.Name, "tool name should match")
+		assert.Equal(t, "linode_instance_ip_list", tool.Name, "tool name should match")
 		assert.NotEmpty(t, tool.Description, "tool should have a description")
 		require.NotNil(t, handler, "handler should not be nil")
 	})
@@ -1004,7 +1004,7 @@ func TestLinodeInstanceIPsListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, _, srvHandler := tools.NewLinodeInstanceIPsListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeInstanceIPListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)})
 		result, err := srvHandler(t.Context(), req)

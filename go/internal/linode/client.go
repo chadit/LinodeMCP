@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -167,6 +168,16 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, paylo
 	}
 
 	return resp, nil
+}
+
+// drainClose closes a response body. A close error on a fully-read response is
+// not actionable for the caller, but it can signal a transport or
+// connection-reuse problem, so it is logged at warn (to stderr, keeping the
+// stdio MCP channel clean) rather than silently dropped.
+func drainClose(resp *http.Response) {
+	if err := resp.Body.Close(); err != nil {
+		slog.Warn("failed to close response body", "error", err)
+	}
 }
 
 func (c *Client) handleResponse(resp *http.Response, target any) error {

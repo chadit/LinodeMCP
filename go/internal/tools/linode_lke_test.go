@@ -20,11 +20,11 @@ func TestLinodeLKEClustersListTool(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeLKEClustersListTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEClusterListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_lke_clusters_list", tool.Name, "tool name should match")
+		assert.Equal(t, "linode_lke_cluster_list", tool.Name, "tool name should match")
 		assert.NotEmpty(t, tool.Description, "tool should have a description")
 		require.NotNil(t, handler, "handler should not be nil")
 	})
@@ -54,7 +54,7 @@ func TestLinodeLKEClustersListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, _, srvHandler := tools.NewLinodeLKEClustersListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEClusterListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := srvHandler(t.Context(), req)
@@ -94,7 +94,7 @@ func TestLinodeLKEClustersListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, _, srvHandler := tools.NewLinodeLKEClustersListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEClusterListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyLabel: "prod"})
 		result, err := srvHandler(t.Context(), req)
@@ -194,11 +194,11 @@ func TestLinodeLKEPoolsListTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, _, handler := tools.NewLinodeLKEPoolsListTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEPoolListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_lke_pools_list", tool.Name, "tool name should match")
+		assert.Equal(t, "linode_lke_pool_list", tool.Name, "tool name should match")
 		assert.NotEmpty(t, tool.Description, "tool should have a description")
 		require.NotNil(t, handler, "handler should not be nil")
 	})
@@ -235,7 +235,7 @@ func TestLinodeLKEPoolsListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, _, srvHandler := tools.NewLinodeLKEPoolsListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEPoolListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
 		result, err := srvHandler(t.Context(), req)
@@ -511,11 +511,11 @@ func TestLinodeLKEAPIEndpointsListTool(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeLKEAPIEndpointsListTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEAPIEndpointListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_lke_api_endpoints_list", tool.Name, "tool name should match")
+		assert.Equal(t, "linode_lke_api_endpoint_list", tool.Name, "tool name should match")
 		assert.NotEmpty(t, tool.Description, "tool should have a description")
 		require.NotNil(t, handler, "handler should not be nil")
 	})
@@ -541,7 +541,7 @@ func TestLinodeLKEAPIEndpointsListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, _, srvHandler := tools.NewLinodeLKEAPIEndpointsListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEAPIEndpointListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
 		result, err := srvHandler(t.Context(), req)
@@ -616,11 +616,11 @@ func TestLinodeLKEVersionsListTool(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeLKEVersionsListTool(cfg)
+	tool, _, handler := tools.NewLinodeLKEVersionListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_lke_versions_list", tool.Name, "tool name should match")
+		assert.Equal(t, "linode_lke_version_list", tool.Name, "tool name should match")
 		assert.NotEmpty(t, tool.Description, "tool should have a description")
 		require.NotNil(t, handler, "handler should not be nil")
 	})
@@ -644,7 +644,7 @@ func TestLinodeLKEVersionsListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, _, srvHandler := tools.NewLinodeLKEVersionsListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKEVersionListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := srvHandler(t.Context(), req)
@@ -727,11 +727,11 @@ func TestLinodeLKETypesListTool(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeLKETypesListTool(cfg)
+	tool, _, handler := tools.NewLinodeLKETypeListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_lke_types_list", tool.Name, "tool name should match")
+		assert.Equal(t, "linode_lke_type_list", tool.Name, "tool name should match")
 		assert.NotEmpty(t, tool.Description, "tool should have a description")
 		require.NotNil(t, handler, "handler should not be nil")
 	})
@@ -760,7 +760,7 @@ func TestLinodeLKETypesListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, _, srvHandler := tools.NewLinodeLKETypesListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKETypeListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := srvHandler(t.Context(), req)
@@ -781,11 +781,11 @@ func TestLinodeLKETierVersionsListTool(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeLKETierVersionsListTool(cfg)
+	tool, _, handler := tools.NewLinodeLKETierVersionListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_lke_tier_versions_list", tool.Name, "tool name should match")
+		assert.Equal(t, "linode_lke_tier_version_list", tool.Name, "tool name should match")
 		assert.NotEmpty(t, tool.Description, "tool should have a description")
 		require.NotNil(t, handler, "handler should not be nil")
 	})
@@ -812,7 +812,7 @@ func TestLinodeLKETierVersionsListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, _, srvHandler := tools.NewLinodeLKETierVersionsListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeLKETierVersionListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := srvHandler(t.Context(), req)

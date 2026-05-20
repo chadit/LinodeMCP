@@ -21,7 +21,7 @@ func (c *Client) httpGetProfile(ctx context.Context) (*Profile, error) {
 		return nil, &NetworkError{Operation: "GetProfile", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }() // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
 
 	var profile Profile
 	if err := c.handleResponse(resp, &profile); err != nil {
@@ -45,7 +45,7 @@ func (c *Client) httpGetProfileGrants(ctx context.Context) (*Grants, error) {
 		return nil, &NetworkError{Operation: "GetProfileGrants", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var grants Grants
 	if err := c.handleResponse(resp, &grants); err != nil {
@@ -65,7 +65,7 @@ func (c *Client) httpGetAccount(ctx context.Context) (*Account, error) {
 		return nil, &NetworkError{Operation: "GetAccount", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }() // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
 
 	var account Account
 	if err := c.handleResponse(resp, &account); err != nil {
@@ -85,7 +85,7 @@ func (c *Client) httpUpdateAccount(ctx context.Context, req *UpdateAccountReques
 		return nil, &NetworkError{Operation: "UpdateAccount", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }() // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
 
 	var account Account
 	if err := c.handleResponse(resp, &account); err != nil {
@@ -105,7 +105,7 @@ func (c *Client) httpUpdateProfile(ctx context.Context, req *UpdateProfileReques
 		return nil, &NetworkError{Operation: "UpdateProfile", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }() // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
 
 	var profile Profile
 	if err := c.handleResponse(resp, &profile); err != nil {

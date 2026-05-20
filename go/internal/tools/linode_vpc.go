@@ -12,11 +12,11 @@ import (
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
-// NewLinodeVPCsListTool creates a tool for listing all VPCs with optional label and region filtering.
-func NewLinodeVPCsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+// NewLinodeVPCListTool creates a tool for listing all VPCs with optional label and region filtering.
+func NewLinodeVPCListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newListTool(
 		cfg,
-		"linode_vpcs_list",
+		"linode_vpc_list",
 		"Lists all VPCs. Can filter by label or region.",
 		func(ctx context.Context, client *linode.Client) ([]linode.VPC, error) {
 			return client.ListVPCs(ctx)
@@ -133,11 +133,11 @@ func handleVPCIPListRequest(ctx context.Context, request *mcp.CallToolRequest, c
 	return MarshalToolResponse(response)
 }
 
-// NewLinodeVPCSubnetsListTool creates a tool for listing subnets in a specific VPC.
-func NewLinodeVPCSubnetsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+// NewLinodeVPCSubnetListTool creates a tool for listing subnets in a specific VPC.
+func NewLinodeVPCSubnetListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_vpc_subnets_list",
+		"linode_vpc_subnet_list",
 		"Lists all subnets for a specific VPC",
 		[]mcp.ToolOption{
 			mcp.WithString(

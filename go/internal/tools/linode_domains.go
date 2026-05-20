@@ -12,11 +12,11 @@ import (
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
-// NewLinodeDomainsListTool creates a tool for listing domains.
-func NewLinodeDomainsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+// NewLinodeDomainListTool creates a tool for listing domains.
+func NewLinodeDomainListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newListTool(
 		cfg,
-		"linode_domains_list",
+		"linode_domain_list",
 		"Lists all domains managed by your Linode account. Can filter by domain name or type (master/slave).",
 		func(ctx context.Context, client *linode.Client) ([]linode.Domain, error) {
 			return client.ListDomains(ctx)
@@ -76,10 +76,10 @@ func handleLinodeDomainGetRequest(ctx context.Context, request *mcp.CallToolRequ
 	return MarshalToolResponse(domain)
 }
 
-// NewLinodeDomainRecordsListTool creates a tool for listing domain records.
-func NewLinodeDomainRecordsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+// NewLinodeDomainRecordListTool creates a tool for listing domain records.
+func NewLinodeDomainRecordListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_domain_records_list",
+		"linode_domain_record_list",
 		mcp.WithDescription("Lists all DNS records for a specific domain. Can filter by record type or name."),
 		mcp.WithString(
 			paramEnvironment,

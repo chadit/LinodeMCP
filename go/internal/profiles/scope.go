@@ -159,36 +159,27 @@ func scopeCategory(toolName string) string {
 		return categoryObjectStorage
 	case strings.HasPrefix(toolName, "linode_lke_"):
 		return categoryLKE
-	case strings.HasPrefix(toolName, "linode_nodebalancer_"),
-		strings.HasPrefix(toolName, "linode_nodebalancers_"):
+	case strings.HasPrefix(toolName, "linode_nodebalancer_"):
 		return categoryNodeBalancers
-	case strings.HasPrefix(toolName, "linode_firewall_"),
-		strings.HasPrefix(toolName, "linode_firewalls_"):
+	case strings.HasPrefix(toolName, "linode_firewall_"):
 		return categoryFirewall
-	case strings.HasPrefix(toolName, "linode_domain_"),
-		strings.HasPrefix(toolName, "linode_domains_"):
+	case strings.HasPrefix(toolName, "linode_domain_"):
 		return categoryDomains
-	case strings.HasPrefix(toolName, "linode_volume_"),
-		strings.HasPrefix(toolName, "linode_volumes_"):
+	case strings.HasPrefix(toolName, "linode_volume_"):
 		return categoryVolumes
-	case strings.HasPrefix(toolName, "linode_stackscript_"),
-		strings.HasPrefix(toolName, "linode_stackscripts_"):
+	case strings.HasPrefix(toolName, "linode_stackscript_"):
 		return categoryStackScripts
-	case strings.HasPrefix(toolName, "linode_vpc_"),
-		strings.HasPrefix(toolName, "linode_vpcs_"):
+	case strings.HasPrefix(toolName, "linode_vpc_"):
 		return categoryVPC
-	case strings.HasPrefix(toolName, "linode_images_"),
-		strings.HasPrefix(toolName, "linode_image_"):
+	case strings.HasPrefix(toolName, "linode_image_"):
 		return categoryImages
 	case strings.HasPrefix(toolName, "linode_monitor_"),
-		strings.HasPrefix(toolName, "linode_sshkey_"),
-		strings.HasPrefix(toolName, "linode_sshkeys_"):
+		strings.HasPrefix(toolName, "linode_sshkey_"):
 		// Monitor and SSH-key tools live under account-scoped endpoints.
 		return categoryAccount
 	case strings.HasPrefix(toolName, "linode_instance_"),
-		strings.HasPrefix(toolName, "linode_instances_"),
-		strings.HasPrefix(toolName, "linode_regions_"),
-		strings.HasPrefix(toolName, "linode_types_"):
+		strings.HasPrefix(toolName, "linode_region_"),
+		strings.HasPrefix(toolName, "linode_type_"):
 		return categoryLinodes
 	}
 

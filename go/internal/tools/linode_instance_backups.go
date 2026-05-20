@@ -11,11 +11,11 @@ import (
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
-// NewLinodeInstanceBackupsListTool creates a tool for listing all backups for a Linode instance.
-func NewLinodeInstanceBackupsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+// NewLinodeInstanceBackupListTool creates a tool for listing all backups for a Linode instance.
+func NewLinodeInstanceBackupListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_instance_backups_list",
+		"linode_instance_backup_list",
 		"Lists all backups for a Linode instance, including automatic backups and manual snapshots.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),

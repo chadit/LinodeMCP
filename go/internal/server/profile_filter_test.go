@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	toolInstancesList     = "linode_instances_list"
+	toolInstancesList     = "linode_instance_list"
 	toolInstanceCreate    = "linode_instance_create"
-	toolVolumesList       = "linode_volumes_list"
+	toolVolumesList       = "linode_volume_list"
 	toolBucketAccessAllow = "linode_object_storage_bucket_access_allow"
 )
 

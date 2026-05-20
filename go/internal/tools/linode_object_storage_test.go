@@ -25,12 +25,12 @@ func TestLinodeObjectStorageBucketsListTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, _, handler := tools.NewLinodeObjectStorageBucketsListTool(cfg)
+	tool, _, handler := tools.NewLinodeObjectStorageBucketListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
 
-		assert.Equal(t, "linode_object_storage_buckets_list", tool.Name, "tool name should match")
+		assert.Equal(t, "linode_object_storage_bucket_list", tool.Name, "tool name should match")
 		assert.NotEmpty(t, tool.Description, "tool should have a description")
 		require.NotNil(t, handler, "handler should not be nil")
 	})
@@ -60,7 +60,7 @@ func TestLinodeObjectStorageBucketsListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, _, srvHandler := tools.NewLinodeObjectStorageBucketsListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeObjectStorageBucketListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := srvHandler(t.Context(), req)
@@ -82,7 +82,7 @@ func TestLinodeObjectStorageBucketsListTool(t *testing.T) {
 		emptyCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{},
 		}
-		_, _, emptyHandler := tools.NewLinodeObjectStorageBucketsListTool(emptyCfg)
+		_, _, emptyHandler := tools.NewLinodeObjectStorageBucketListTool(emptyCfg)
 
 		req := createRequestWithArgs(t, map[string]any{"environment": "nonexistent"})
 		result, err := emptyHandler(t.Context(), req)
@@ -331,12 +331,12 @@ func TestLinodeObjectStorageClustersListTool(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeObjectStorageClustersListTool(cfg)
+	tool, _, handler := tools.NewLinodeObjectStorageClusterListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
 
-		assert.Equal(t, "linode_object_storage_clusters_list", tool.Name, "tool name should match")
+		assert.Equal(t, "linode_object_storage_cluster_list", tool.Name, "tool name should match")
 		assert.NotEmpty(t, tool.Description, "tool should have a description")
 		require.NotNil(t, handler, "handler should not be nil")
 	})
@@ -366,7 +366,7 @@ func TestLinodeObjectStorageClustersListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, _, srvHandler := tools.NewLinodeObjectStorageClustersListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeObjectStorageClusterListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := srvHandler(t.Context(), req)
@@ -461,12 +461,12 @@ func TestLinodeObjectStorageKeysListTool(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeObjectStorageKeysListTool(cfg)
+	tool, _, handler := tools.NewLinodeObjectStorageKeyListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
 
-		assert.Equal(t, "linode_object_storage_keys_list", tool.Name, "tool name should match")
+		assert.Equal(t, "linode_object_storage_key_list", tool.Name, "tool name should match")
 		assert.NotEmpty(t, tool.Description, "tool should have a description")
 		require.NotNil(t, handler, "handler should not be nil")
 	})
@@ -500,7 +500,7 @@ func TestLinodeObjectStorageKeysListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, _, srvHandler := tools.NewLinodeObjectStorageKeysListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeObjectStorageKeyListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := srvHandler(t.Context(), req)
@@ -523,7 +523,7 @@ func TestLinodeObjectStorageKeysListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: "", Token: ""}},
 			},
 		}
-		_, _, incompleteHandler := tools.NewLinodeObjectStorageKeysListTool(incompleteCfg)
+		_, _, incompleteHandler := tools.NewLinodeObjectStorageKeyListTool(incompleteCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := incompleteHandler(t.Context(), req)

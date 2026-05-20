@@ -60,10 +60,10 @@ func handleLinodeInstanceGetRequest(ctx context.Context, request *mcp.CallToolRe
 	return MarshalToolResponse(instance)
 }
 
-// NewLinodeInstancesTool creates a tool for listing Linode instances.
-func NewLinodeInstancesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+// NewLinodeInstanceListTool creates a tool for listing Linode instances.
+func NewLinodeInstanceListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_instances_list",
+		"linode_instance_list",
 		mcp.WithDescription("Lists Linode instances with optional filtering by status"),
 		mcp.WithString(
 			paramEnvironment,
