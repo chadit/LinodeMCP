@@ -817,6 +817,7 @@ func computeToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeRegionListTool,
 		tools.NewLinodeTypeListTool,
 		tools.NewLinodeImageListTool,
+		tools.NewLinodeImageCreateTool,
 		tools.NewLinodeSSHKeyListTool,
 		tools.NewLinodeStackScriptListTool,
 		tools.NewLinodeStackScriptCreateTool,

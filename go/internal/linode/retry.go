@@ -180,6 +180,12 @@ func (c *Client) ListImages(ctx context.Context) ([]Image, error) {
 	return images, err
 }
 
+// CreateImage creates a private image from a Linode disk without automatic retry.
+// Replaying this non-idempotent create operation could create duplicate images.
+func (c *Client) CreateImage(ctx context.Context, req *CreateImageRequest) (*Image, error) {
+	return c.httpCreateImage(ctx, req)
+}
+
 // ListSSHKeys retrieves all SSH keys with automatic retry on transient failures.
 func (c *Client) ListSSHKeys(ctx context.Context) ([]SSHKey, error) {
 	var keys []SSHKey
