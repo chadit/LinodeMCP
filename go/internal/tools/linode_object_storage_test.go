@@ -2201,7 +2201,7 @@ func TestLinodeObjectStorageSSLUploadTool(t *testing.T) {
 			keyRegion:      regionUSEast1,
 			keyLabel:       bucketTest,
 			keyCertificate: "test-cert",
-			keyPrivateKey:  "test-key",
+			keyPrivateKey:  testKeyLabel,
 			keyConfirm:     false,
 		})
 		result, err := handler(t.Context(), req)
@@ -2263,7 +2263,7 @@ func TestLinodeObjectStorageSSLUploadTool(t *testing.T) {
 			keyRegion:      regionUSEast1,
 			keyLabel:       bucketTest,
 			keyCertificate: "test-cert",
-			keyPrivateKey:  "test-key",
+			keyPrivateKey:  testKeyLabel,
 			keyConfirm:     true,
 		})
 		result, err := emptyHandler(t.Context(), req)

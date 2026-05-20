@@ -157,6 +157,28 @@ func (c *Client) httpCreateDomainRecord(ctx context.Context, domainID int, req *
 	return &record, nil
 }
 
+// GetDomainRecord retrieves a single DNS record by ID within a domain.
+func (c *Client) httpGetDomainRecord(ctx context.Context, domainID, recordID int) (*DomainRecord, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointDomains+"/%d/records/%d", domainID, recordID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetDomainRecord", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var record DomainRecord
+	if err := c.handleResponse(resp, &record); err != nil {
+		return nil, err
+	}
+
+	return &record, nil
+}
+
 // UpdateDomainRecord updates an existing DNS record.
 func (c *Client) httpUpdateDomainRecord(ctx context.Context, domainID, recordID int, req *UpdateDomainRecordRequest) (*DomainRecord, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

@@ -1227,7 +1227,7 @@ func TestLinodeSSHKeyGetTool(t *testing.T) {
 
 		sshKey := linode.SSHKey{
 			ID:      42,
-			Label:   "test-key",
+			Label:   testKeyLabel,
 			SSHKey:  "ssh-rsa AAAA test@example.com",
 			Created: "2024-01-01T00:00:00Z",
 		}
@@ -1285,4 +1285,129 @@ func TestLinodeSSHKeyGetToolAPIError(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.True(t, result.IsError, "should return an error result for API 404")
+}
+
+func TestLinodeDomainRecordGetTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeDomainRecordGetTool(cfg)
+
+		assert.Equal(t, "linode_domain_record_get", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapRead, capability, "domain record get should be read-only")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	t.Run("missing domain id", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		_, _, handler := tools.NewLinodeDomainRecordGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyRecordID: 456})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "tool errors are returned as error results, not Go errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "should return an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "domain_id must be a positive integer", "should explain missing domain_id")
+	})
+
+	t.Run("missing record id", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		_, _, handler := tools.NewLinodeDomainRecordGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyDomainID: 123})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "tool errors are returned as error results, not Go errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "should return an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "record_id must be a positive integer", "should explain missing record_id")
+	})
+
+	t.Run("negative domain id", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		_, _, handler := tools.NewLinodeDomainRecordGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyDomainID: -1, keyRecordID: 456})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "tool errors are returned as error results, not Go errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "should return an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "domain_id must be a positive integer", "should explain invalid domain_id")
+	})
+
+	t.Run("negative record id", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		_, _, handler := tools.NewLinodeDomainRecordGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyDomainID: 123, keyRecordID: -1})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "tool errors are returned as error results, not Go errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "should return an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "record_id must be a positive integer", "should explain invalid record_id")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/domains/123/records/456", r.URL.Path, "request path should include domain and record IDs")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				"id":      456,
+				keyType:   "A",
+				keyName:   hostWWW,
+				keyTarget: ip203_0_113_1,
+			}), "encoding domain record response should not fail")
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeDomainRecordGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyDomainID: 123, keyRecordID: 456})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, `"id": 456`, "response should contain record ID")
+		assert.Contains(t, textContent.Text, hostWWW, "response should contain record name")
+		assert.Contains(t, textContent.Text, ip203_0_113_1, "response should contain target")
+	})
 }

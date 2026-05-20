@@ -89,6 +89,7 @@ const (
 	testCertPEM         = "-----BEGIN CERTIFICATE-----\ntest\n-----END CERTIFICATE-----"
 	testKeyPEM          = "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----"
 	keyNameTest         = "my-key"
+	testKeyLabel        = "test-key"
 	labelDataVol        = "data-vol"
 	labelBackupVol      = "backup-vol"
 	labelNew            = "new-label"

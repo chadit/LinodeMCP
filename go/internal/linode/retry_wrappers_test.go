@@ -129,7 +129,8 @@ func TestRetryWrappersDelegationPatterns(t *testing.T) {
 			count := requestCount.Add(1)
 			if count == 1 {
 				w.WriteHeader(http.StatusInternalServerError)
-				_, _ = w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+				_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+				assert.NoError(t, err, "writing transient error response should succeed")
 
 				return
 			}
@@ -164,7 +165,8 @@ func TestRetryWrappersDelegationPatterns(t *testing.T) {
 			count := requestCount.Add(1)
 			if count == 1 {
 				w.WriteHeader(http.StatusInternalServerError)
-				_, _ = w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+				_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+				assert.NoError(t, err, "writing transient error response should succeed")
 
 				return
 			}
@@ -554,5 +556,99 @@ func TestGetSSHKeyRetries(t *testing.T) {
 		require.Error(t, err, "GetSSHKey should fail on 401")
 		require.ErrorContains(t, err, "Invalid Token", "error should contain the auth failure reason")
 		assert.Equal(t, int32(1), requestCount.Load(), "should not retry on 401")
+	})
+}
+
+func TestGetDomainRecordRoute(t *testing.T) {
+	t.Parallel()
+
+	t.Run("happy path uses exact GET domain record route", func(t *testing.T) {
+		t.Parallel()
+
+		var requestCount atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requestCount.Add(1)
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/domains/123/records/456", r.URL.Path, "request path should include domain and record IDs")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+
+			body, err := io.ReadAll(r.Body)
+			assert.NoError(t, err, "request body should read")
+			assert.Empty(t, body, "GET request should not include a body")
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyID:     456,
+				"type":    "A",
+				"name":    "www",
+				"target":  "192.0.2.10",
+				"ttl_sec": 300,
+			}), "encoding domain record response should not fail")
+		}))
+		defer srv.Close()
+
+		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+		record, err := client.GetDomainRecord(t.Context(), 123, 456)
+		require.NoError(t, err, "GetDomainRecord should succeed")
+		require.NotNil(t, record, "record should not be nil")
+		assert.Equal(t, 456, record.ID, "record ID should match response")
+		assert.Equal(t, "A", record.Type, "record type should match response")
+		assert.Equal(t, "www", record.Name, "record name should match response")
+		assert.Equal(t, "192.0.2.10", record.Target, "record target should match response")
+		assert.Equal(t, int32(1), requestCount.Load(), "GetDomainRecord should make one request")
+	})
+
+	t.Run("transient server error retries read-only request", func(t *testing.T) {
+		t.Parallel()
+
+		var requestCount atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			count := requestCount.Add(1)
+			if count == 1 {
+				w.WriteHeader(http.StatusInternalServerError)
+				_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+				assert.NoError(t, err, "writing transient error response should succeed")
+
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyID: 456,
+			}), "encoding domain record response should not fail")
+		}))
+		defer srv.Close()
+
+		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+		record, err := client.GetDomainRecord(t.Context(), 123, 456)
+		require.NoError(t, err, "GetDomainRecord should succeed after retry")
+		require.NotNil(t, record, "record should not be nil")
+		assert.Equal(t, 456, record.ID, "record ID should match response")
+		assert.Equal(t, int32(2), requestCount.Load(), "read-only GET should retry once then succeed")
+	})
+
+	t.Run("permanent API error is not retried", func(t *testing.T) {
+		t.Parallel()
+
+		var requestCount atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			requestCount.Add(1)
+			w.WriteHeader(http.StatusNotFound)
+			_, err := w.Write([]byte(`{"errors":[{"reason":"record not found"}]}`))
+			assert.NoError(t, err, "writing not found response should succeed")
+		}))
+		defer srv.Close()
+
+		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+		record, err := client.GetDomainRecord(t.Context(), 123, 456)
+		require.Error(t, err, "GetDomainRecord should return permanent API errors")
+		assert.Nil(t, record, "record should be nil on error")
+		assert.Equal(t, int32(1), requestCount.Load(), "permanent API errors should not be retried")
 	})
 }
