@@ -344,6 +344,26 @@ func (s *Server) ToolInfos() []ToolInfo {
 	return out
 }
 
+// AllToolInfos returns one entry per tool the server could register,
+// independent of the active profile's filter. ToolInfos only sees the
+// tools the active profile exposes; this returns the full catalog from
+// allEntries. The audit redaction-coverage invariant uses this because
+// a sensitive arg must be redacted whenever ANY profile can expose the
+// tool, not just the profile that happens to be active.
+func (s *Server) AllToolInfos() []ToolInfo {
+	out := make([]ToolInfo, 0, len(s.allEntries))
+
+	for i := range s.allEntries {
+		out = append(out, ToolInfo{
+			Name:        s.allEntries[i].tool.Name,
+			Capability:  s.allEntries[i].capability,
+			InputSchema: s.allEntries[i].tool.InputSchema,
+		})
+	}
+
+	return out
+}
+
 // HandleMessage dispatches a JSON-RPC message into the underlying mcp-go
 // server. Exposes the in-process transport for tests and embedders that
 // don't go through stdio. Tool handlers invoked via this path are still

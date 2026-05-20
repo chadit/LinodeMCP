@@ -41,9 +41,11 @@ def test_redaction_list_matches_go_canonical() -> None:
         "kubeconfig",
         "pass",
         "password",
+        "private_key",
         "root_pass",
         "secret",
         "service_token",
+        "ssh_key",
         "token",
     }
     assert set(redaction_fields()) == expected

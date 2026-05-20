@@ -36,9 +36,11 @@ def redaction_fields() -> list[str]:
         "kubeconfig",
         "pass",
         "password",
+        "private_key",
         "root_pass",
         "secret",
         "service_token",
+        "ssh_key",
         "token",
     ]
 
