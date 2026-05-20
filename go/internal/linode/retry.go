@@ -822,6 +822,11 @@ func (c *Client) UpdateObjectStorageBucketAccess(ctx context.Context, region, la
 	})
 }
 
+// AllowObjectStorageBucketAccess applies bucket access settings without retrying the state-changing request.
+func (c *Client) AllowObjectStorageBucketAccess(ctx context.Context, region, label string, req AllowObjectStorageBucketAccessRequest) error {
+	return c.httpAllowObjectStorageBucketAccess(ctx, region, label, req)
+}
+
 // CreateObjectStorageKey creates a new Object Storage access key with automatic retry.
 func (c *Client) CreateObjectStorageKey(ctx context.Context, req CreateObjectStorageKeyRequest) (*ObjectStorageKey, error) {
 	var key *ObjectStorageKey

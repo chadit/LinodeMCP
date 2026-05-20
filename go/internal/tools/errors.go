@@ -62,6 +62,7 @@ var (
 	ErrBucketLabelXNPrefix  = errors.New("bucket label must not use the 'xn--' prefix (reserved for internationalized domain names)")
 	ErrBucketACLInvalid     = errors.New("acl must be one of: private, public-read, authenticated-read, public-read-write")
 	ErrBucketRegionRequired = errors.New("region is required")
+	ErrRegionInvalid        = errors.New("region must contain only lowercase letters, numbers, and hyphens")
 )
 
 // Sentinel errors for access key validation.

@@ -163,6 +163,86 @@ func handleObjectStorageBucketDeleteRequest(ctx context.Context, request *mcp.Ca
 	return MarshalToolResponse(response)
 }
 
+// NewLinodeObjectStorageBucketAccessAllowTool creates a tool for applying bucket access controls.
+func NewLinodeObjectStorageBucketAccessAllowTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_object_storage_bucket_access_allow",
+		"Applies access control settings for an Object Storage bucket. Changes ACL and/or CORS configuration.",
+		[]mcp.ToolOption{
+			mcp.WithString("region", mcp.Required(),
+				mcp.Description("Region of the bucket")),
+			mcp.WithString("label", mcp.Required(),
+				mcp.Description("Label of the bucket")),
+			mcp.WithString("acl",
+				mcp.Description("Access control: private, public-read, authenticated-read, or public-read-write")),
+			mcp.WithBoolean("cors_enabled",
+				mcp.Description("Whether to enable CORS on the bucket")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be set to true to confirm access changes.")),
+		},
+		handleObjectStorageBucketAccessAllowRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleObjectStorageBucketAccessAllowRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This operation changes bucket access controls. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	region := request.GetString("region", "")
+	label := request.GetString("label", "")
+	acl := request.GetString("acl", "")
+
+	if err := validateRegionSlug(region); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := validateBucketLabel(label); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if acl != "" {
+		if err := validateBucketACL(acl); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	req := linode.AllowObjectStorageBucketAccessRequest{
+		ACL: acl,
+	}
+
+	if _, ok := request.GetArguments()["cors_enabled"]; ok {
+		corsEnabled := request.GetBool("cors_enabled", false)
+		req.CORSEnabled = &corsEnabled
+	}
+
+	if err := client.AllowObjectStorageBucketAccess(ctx, region, label, req); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to apply access for bucket '%s' in %s: %v", label, region, err)), nil
+	}
+
+	response := struct {
+		Message string `json:"message"`
+		Region  string `json:"region"`
+		Label   string `json:"label"`
+		ACL     string `json:"acl,omitempty"`
+	}{
+		Message: fmt.Sprintf("Access settings for bucket '%s' in %s applied successfully", label, region),
+		Region:  region,
+		Label:   label,
+		ACL:     acl,
+	}
+
+	return MarshalToolResponse(response)
+}
+
 // NewLinodeObjectStorageBucketAccessUpdateTool creates a tool for updating bucket access controls.
 func NewLinodeObjectStorageBucketAccessUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(

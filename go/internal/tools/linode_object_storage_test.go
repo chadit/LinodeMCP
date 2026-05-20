@@ -900,7 +900,7 @@ func TestLinodeObjectStorageBucketCreateTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{
 			keyLabel:   bucketTest,
 			keyRegion:  regionUSEast1,
-			keyACL:     "private",
+			keyACL:     aclPrivate,
 			keyConfirm: true,
 		})
 		result, err := srvHandler(t.Context(), req)
@@ -1015,6 +1015,169 @@ func TestLinodeObjectStorageBucketDeleteTool(t *testing.T) {
 	})
 }
 
+func TestLinodeObjectStorageBucketAccessAllowTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	tool, _, handler := tools.NewLinodeObjectStorageBucketAccessAllowTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		assert.Equal(t, "linode_object_storage_bucket_access_allow", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, "region", "schema should include region property")
+		assert.Contains(t, props, "label", "schema should include label property")
+		assert.Contains(t, props, "acl", "schema should include acl property")
+		assert.Contains(t, props, "cors_enabled", "schema should include cors_enabled property")
+		assert.Contains(t, props, "confirm", "schema should include confirm property")
+	})
+
+	t.Run("validation", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			name     string
+			args     map[string]any
+			contains string
+		}{
+			{
+				name:     caseRequiresConfirm,
+				args:     map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest, keyACL: aclPublicRead},
+				contains: errConfirmEqualsTrue,
+			},
+			{
+				name:     "confirm false",
+				args:     map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest, keyACL: aclPublicRead, keyConfirm: false},
+				contains: errConfirmEqualsTrue,
+			},
+			{
+				name:     "confirm string rejected",
+				args:     map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest, keyACL: aclPublicRead, keyConfirm: "true"},
+				contains: errConfirmEqualsTrue,
+			},
+			{
+				name:     "confirm number rejected",
+				args:     map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest, keyACL: aclPublicRead, keyConfirm: 1},
+				contains: errConfirmEqualsTrue,
+			},
+			{
+				name:     errInvalidACL,
+				args:     map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest, keyACL: "bad-acl", keyConfirm: true},
+				contains: errACLMustBeOneOf,
+			},
+			{
+				name:     "region separator rejected",
+				args:     map[string]any{keyRegion: "us/east-1", keyLabel: bucketTest, keyACL: aclPublicRead, keyConfirm: true},
+				contains: errRegionInvalid,
+			},
+			{
+				name:     "region query separator rejected",
+				args:     map[string]any{keyRegion: "us-east-1?x=1", keyLabel: bucketTest, keyACL: aclPublicRead, keyConfirm: true},
+				contains: errRegionInvalid,
+			},
+			{
+				name:     "region traversal rejected",
+				args:     map[string]any{keyRegion: pathTraversalValue, keyLabel: bucketTest, keyACL: aclPublicRead, keyConfirm: true},
+				contains: errRegionInvalid,
+			},
+			{
+				name:     "label separator rejected",
+				args:     map[string]any{keyRegion: regionUSEast1, keyLabel: "bad/bucket", keyACL: aclPublicRead, keyConfirm: true},
+				contains: "bucket label must contain only lowercase letters, numbers, and hyphens",
+			},
+			{
+				name:     "label traversal rejected",
+				args:     map[string]any{keyRegion: regionUSEast1, keyLabel: pathTraversalValue, keyACL: aclPublicRead, keyConfirm: true},
+				contains: "bucket label must be at least 3 characters",
+			},
+		}
+
+		for _, testCase := range tests {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should not return an error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "result should be an error for %s", testCase.name)
+				assertErrorContains(t, result, testCase.contains)
+			})
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/access", r.URL.Path, "request path should match access endpoint")
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+
+			var body map[string]any
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should be JSON")
+			assert.Equal(t, aclPublicRead, body[keyACL], "acl should match")
+			assert.Equal(t, true, body["cors_enabled"], "cors setting should match")
+
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeObjectStorageBucketAccessAllowTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyRegion:      regionUSEast1,
+			keyLabel:       bucketTest,
+			keyACL:         aclPublicRead,
+			"cors_enabled": true,
+			keyConfirm:     true,
+		})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "result should not be an error")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "applied successfully", "response should confirm access change")
+	})
+
+	t.Run("missing environment", func(t *testing.T) {
+		t.Parallel()
+
+		emptyCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{},
+		}
+		_, _, emptyHandler := tools.NewLinodeObjectStorageBucketAccessAllowTool(emptyCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyRegion:  regionUSEast1,
+			keyLabel:   bucketTest,
+			keyACL:     aclPrivate,
+			keyConfirm: true,
+		})
+		result, err := emptyHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "result should be an error for missing environment")
+	})
+}
+
 // End-to-end verification of bucket access settings update.
 func TestLinodeObjectStorageBucketAccessUpdateTool(t *testing.T) {
 	t.Parallel()
@@ -1121,7 +1284,7 @@ func TestLinodeObjectStorageBucketAccessUpdateTool(t *testing.T) {
 		req := createRequestWithArgs(t, map[string]any{
 			keyRegion:  regionUSEast1,
 			keyLabel:   bucketTest,
-			keyACL:     "private",
+			keyACL:     aclPrivate,
 			keyConfirm: true,
 		})
 		result, err := emptyHandler(t.Context(), req)

@@ -276,6 +276,23 @@ func (c *Client) httpUpdateObjectStorageBucketAccess(ctx context.Context, region
 	return c.handleResponse(resp, nil)
 }
 
+// AllowObjectStorageBucketAccess applies bucket ACL and CORS settings.
+func (c *Client) httpAllowObjectStorageBucketAccess(ctx context.Context, region, label string, req AllowObjectStorageBucketAccessRequest) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/access", url.PathEscape(region), url.PathEscape(label))
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return &NetworkError{Operation: "AllowObjectStorageBucketAccess", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }() // errcheck: response body close is best-effort after handleResponse
+
+	return c.handleResponse(resp, nil)
+}
+
 // CreateObjectStorageKey creates a new Object Storage access key.
 func (c *Client) httpCreateObjectStorageKey(ctx context.Context, req CreateObjectStorageKeyRequest) (*ObjectStorageKey, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

@@ -55,6 +55,12 @@ type UpdateObjectStorageBucketAccessRequest struct {
 	CORSEnabled *bool  `json:"cors_enabled,omitempty"`
 }
 
+// AllowObjectStorageBucketAccessRequest represents the request body for applying bucket access settings.
+type AllowObjectStorageBucketAccessRequest struct {
+	ACL         string `json:"acl,omitempty"`
+	CORSEnabled *bool  `json:"cors_enabled,omitempty"`
+}
+
 // ObjectStorageKeyBucketAccess represents bucket-level permissions for an access key.
 type ObjectStorageKeyBucketAccess struct {
 	BucketName  string `json:"bucket_name"`
