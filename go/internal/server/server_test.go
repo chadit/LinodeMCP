@@ -151,20 +151,23 @@ func TestToolWrapperMethods(t *testing.T) {
 	}
 }
 
-func TestToolDescriptorsIncludesImageCreate(t *testing.T) {
+func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(baseTestConfig())
+	want := map[string]profiles.Capability{
+		"linode_image_create":      profiles.CapWrite,
+		"linode_domain_record_get": profiles.CapRead,
+	}
 
 	for _, descriptor := range descriptors {
-		if descriptor.Name == "linode_image_create" {
-			assert.Equal(t, profiles.CapWrite, descriptor.Capability, "image creation should be a write capability")
-
-			return
+		if capability, ok := want[descriptor.Name]; ok {
+			assert.Equal(t, capability, descriptor.Capability, "descriptor capability should match")
+			delete(want, descriptor.Name)
 		}
 	}
 
-	t.Fatalf("linode_image_create descriptor not found")
+	assert.Empty(t, want, "expected descriptors should be registered")
 }
 
 // TestToolWrapperExecuteReturnsError verifies that calling Execute on a

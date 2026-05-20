@@ -76,6 +76,59 @@ func handleLinodeDomainGetRequest(ctx context.Context, request *mcp.CallToolRequ
 	return MarshalToolResponse(domain)
 }
 
+// NewLinodeDomainRecordGetTool creates a tool for getting a single domain record.
+func NewLinodeDomainRecordGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_domain_record_get",
+		mcp.WithDescription("Gets detailed information about a specific DNS record within a domain."),
+		mcp.WithString(
+			paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
+		),
+		mcp.WithNumber(
+			"domain_id",
+			mcp.Required(),
+			mcp.Description("The ID of the domain that owns the record"),
+		),
+		mcp.WithNumber(
+			"record_id",
+			mcp.Required(),
+			mcp.Description("The ID of the domain record to retrieve"),
+		),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeDomainRecordGetRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleLinodeDomainRecordGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	domainID := request.GetInt("domain_id", 0)
+	recordID := request.GetInt("record_id", 0)
+
+	if domainID <= 0 {
+		return mcp.NewToolResultError("domain_id must be a positive integer"), nil
+	}
+
+	if recordID <= 0 {
+		return mcp.NewToolResultError("record_id must be a positive integer"), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	record, err := client.GetDomainRecord(ctx, domainID, recordID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve domain record %d for domain %d: %v", recordID, domainID, err)), nil
+	}
+
+	return MarshalToolResponse(record)
+}
+
 // NewLinodeDomainRecordListTool creates a tool for listing domain records.
 func NewLinodeDomainRecordListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(

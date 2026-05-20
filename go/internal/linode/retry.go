@@ -542,6 +542,21 @@ func (c *Client) DeleteDomain(ctx context.Context, domainID int) error {
 	})
 }
 
+// GetDomainRecord gets a domain record with automatic retry on transient failures.
+func (c *Client) GetDomainRecord(ctx context.Context, domainID, recordID int) (*DomainRecord, error) {
+	var record *DomainRecord
+
+	err := c.executeWithRetry(ctx, "GetDomainRecord", func() error {
+		var err error
+
+		record, err = c.httpGetDomainRecord(ctx, domainID, recordID)
+
+		return err
+	})
+
+	return record, err
+}
+
 // CreateDomainRecord creates a domain record with automatic retry on transient failures.
 func (c *Client) CreateDomainRecord(ctx context.Context, domainID int, req *CreateDomainRecordRequest) (*DomainRecord, error) {
 	var record *DomainRecord
