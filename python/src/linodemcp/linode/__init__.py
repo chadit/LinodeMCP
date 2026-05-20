@@ -1648,7 +1648,7 @@ class Client:
                 "region": region,
                 "assignments": assignments,
             }
-            response = await self.make_request("POST", "/networking/ipv4/assign", body)
+            response = await self.make_request("POST", "/networking/ips/assign", body)
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
