@@ -24,7 +24,7 @@ func (c *Client) httpListLKEClusters(ctx context.Context) ([]LKECluster, error) 
 		return nil, &NetworkError{Operation: "ListLKEClusters", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[LKECluster]
 
@@ -47,7 +47,7 @@ func (c *Client) httpGetLKECluster(ctx context.Context, clusterID int) (*LKEClus
 		return nil, &NetworkError{Operation: "GetLKECluster", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var cluster LKECluster
 	if err := c.handleResponse(resp, &cluster); err != nil {
@@ -67,7 +67,7 @@ func (c *Client) httpCreateLKECluster(ctx context.Context, req *CreateLKECluster
 		return nil, &NetworkError{Operation: "CreateLKECluster", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var cluster LKECluster
 	if err := c.handleResponse(resp, &cluster); err != nil {
@@ -89,7 +89,7 @@ func (c *Client) httpUpdateLKECluster(ctx context.Context, clusterID int, req Up
 		return nil, &NetworkError{Operation: "UpdateLKECluster", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var cluster LKECluster
 	if err := c.handleResponse(resp, &cluster); err != nil {
@@ -111,7 +111,7 @@ func (c *Client) httpDeleteLKECluster(ctx context.Context, clusterID int) error 
 		return &NetworkError{Operation: "DeleteLKECluster", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -128,7 +128,7 @@ func (c *Client) httpRecycleLKECluster(ctx context.Context, clusterID int) error
 		return &NetworkError{Operation: "RecycleLKECluster", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -145,7 +145,7 @@ func (c *Client) httpRegenerateLKECluster(ctx context.Context, clusterID int) er
 		return &NetworkError{Operation: "RegenerateLKECluster", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -162,7 +162,7 @@ func (c *Client) httpListLKENodePools(ctx context.Context, clusterID int) ([]LKE
 		return nil, &NetworkError{Operation: "ListLKENodePools", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[LKENodePool]
 
@@ -185,7 +185,7 @@ func (c *Client) httpGetLKENodePool(ctx context.Context, clusterID, poolID int) 
 		return nil, &NetworkError{Operation: "GetLKENodePool", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var pool LKENodePool
 	if err := c.handleResponse(resp, &pool); err != nil {
@@ -207,7 +207,7 @@ func (c *Client) httpCreateLKENodePool(ctx context.Context, clusterID int, req *
 		return nil, &NetworkError{Operation: "CreateLKENodePool", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var pool LKENodePool
 	if err := c.handleResponse(resp, &pool); err != nil {
@@ -229,7 +229,7 @@ func (c *Client) httpUpdateLKENodePool(ctx context.Context, clusterID, poolID in
 		return nil, &NetworkError{Operation: "UpdateLKENodePool", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var pool LKENodePool
 	if err := c.handleResponse(resp, &pool); err != nil {
@@ -251,7 +251,7 @@ func (c *Client) httpDeleteLKENodePool(ctx context.Context, clusterID, poolID in
 		return &NetworkError{Operation: "DeleteLKENodePool", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -268,7 +268,7 @@ func (c *Client) httpRecycleLKENodePool(ctx context.Context, clusterID, poolID i
 		return &NetworkError{Operation: "RecycleLKENodePool", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -285,7 +285,7 @@ func (c *Client) httpGetLKENode(ctx context.Context, clusterID int, nodeID strin
 		return nil, &NetworkError{Operation: "GetLKENode", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var node LKENode
 	if err := c.handleResponse(resp, &node); err != nil {
@@ -307,7 +307,7 @@ func (c *Client) httpDeleteLKENode(ctx context.Context, clusterID int, nodeID st
 		return &NetworkError{Operation: "DeleteLKENode", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -324,7 +324,7 @@ func (c *Client) httpRecycleLKENode(ctx context.Context, clusterID int, nodeID s
 		return &NetworkError{Operation: "RecycleLKENode", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -341,7 +341,7 @@ func (c *Client) httpGetLKEKubeconfig(ctx context.Context, clusterID int) (*LKEK
 		return nil, &NetworkError{Operation: "GetLKEKubeconfig", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var kubeconfig LKEKubeconfig
 	if err := c.handleResponse(resp, &kubeconfig); err != nil {
@@ -363,7 +363,7 @@ func (c *Client) httpDeleteLKEKubeconfig(ctx context.Context, clusterID int) err
 		return &NetworkError{Operation: "DeleteLKEKubeconfig", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -380,7 +380,7 @@ func (c *Client) httpGetLKEDashboard(ctx context.Context, clusterID int) (*LKEDa
 		return nil, &NetworkError{Operation: "GetLKEDashboard", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var dashboard LKEDashboard
 	if err := c.handleResponse(resp, &dashboard); err != nil {
@@ -402,7 +402,7 @@ func (c *Client) httpListLKEAPIEndpoints(ctx context.Context, clusterID int) ([]
 		return nil, &NetworkError{Operation: "ListLKEAPIEndpoints", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[LKEAPIEndpoint]
 
@@ -425,7 +425,7 @@ func (c *Client) httpDeleteLKEServiceToken(ctx context.Context, clusterID int) e
 		return &NetworkError{Operation: "DeleteLKEServiceToken", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -442,7 +442,7 @@ func (c *Client) httpGetLKEControlPlaneACL(ctx context.Context, clusterID int) (
 		return nil, &NetworkError{Operation: "GetLKEControlPlaneACL", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var acl LKEControlPlaneACL
 	if err := c.handleResponse(resp, &acl); err != nil {
@@ -464,7 +464,7 @@ func (c *Client) httpUpdateLKEControlPlaneACL(ctx context.Context, clusterID int
 		return nil, &NetworkError{Operation: "UpdateLKEControlPlaneACL", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var acl LKEControlPlaneACL
 	if err := c.handleResponse(resp, &acl); err != nil {
@@ -486,7 +486,7 @@ func (c *Client) httpDeleteLKEControlPlaneACL(ctx context.Context, clusterID int
 		return &NetworkError{Operation: "DeleteLKEControlPlaneACL", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -501,7 +501,7 @@ func (c *Client) httpListLKEVersions(ctx context.Context) ([]LKEVersion, error) 
 		return nil, &NetworkError{Operation: "ListLKEVersions", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[LKEVersion]
 
@@ -524,7 +524,7 @@ func (c *Client) httpGetLKEVersion(ctx context.Context, versionID string) (*LKEV
 		return nil, &NetworkError{Operation: "GetLKEVersion", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var version LKEVersion
 	if err := c.handleResponse(resp, &version); err != nil {
@@ -544,7 +544,7 @@ func (c *Client) httpListLKETypes(ctx context.Context) ([]LKEType, error) {
 		return nil, &NetworkError{Operation: "ListLKETypes", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[LKEType]
 
@@ -565,7 +565,7 @@ func (c *Client) httpListLKETierVersions(ctx context.Context) ([]LKETierVersion,
 		return nil, &NetworkError{Operation: "ListLKETierVersions", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[LKETierVersion]
 

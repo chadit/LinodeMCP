@@ -2376,3 +2376,152 @@ func TestLinodeVolumeUpdateTool(t *testing.T) {
 		assert.Contains(t, tc.Text, "update failed", "response should mention failure")
 	})
 }
+
+// End-to-end verification of the StackScript creation workflow.
+func TestLinodeStackScriptCreateTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	tool, _, handler := tools.NewLinodeStackScriptCreateTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+		assert.Equal(t, "linode_stackscript_create", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, "label", "schema should include label property")
+		assert.Contains(t, props, "script", "schema should include script property")
+		assert.Contains(t, props, "images", "schema should include images property")
+		assert.Contains(t, props, keyConfirm, "schema should include confirm property")
+	})
+
+	validationTests := []struct {
+		name         string
+		args         map[string]any
+		wantContains string
+	}{
+		{
+			name:         caseRequiresConfirm,
+			args:         map[string]any{keyLabel: testStackScriptLabel, keyScript: testStackScript, keyImages: testDebian12Image},
+			wantContains: errConfirmEqualsTrue,
+		},
+		{
+			name:         "missing label",
+			args:         map[string]any{keyScript: testStackScript, keyImages: testDebian12Image, keyConfirm: true},
+			wantContains: "label is required",
+		},
+		{
+			name:         "missing script",
+			args:         map[string]any{keyLabel: testStackScriptLabel, keyImages: testDebian12Image, keyConfirm: true},
+			wantContains: "script is required",
+		},
+		{
+			name:         "missing images",
+			args:         map[string]any{keyLabel: testStackScriptLabel, keyScript: testStackScript, keyConfirm: true},
+			wantContains: "images is required",
+		},
+	}
+	for _, tt := range validationTests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			req := createRequestWithArgs(t, tt.args)
+			result, err := handler(t.Context(), req)
+			require.NoError(t, err, "handler should not return Go error")
+			require.NotNil(t, result, "handler should return a result")
+			assert.True(t, result.IsError, "result should be a tool error")
+			assertErrorContains(t, result, tt.wantContains)
+		})
+	}
+
+	t.Run("successful creation", func(t *testing.T) {
+		t.Parallel()
+
+		created := linode.StackScript{
+			ID:       456,
+			Label:    testStackScriptLabel,
+			Script:   testStackScript + "\necho hello",
+			Images:   []string{testDebian12Image},
+			IsPublic: false,
+		}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/linode/stackscripts", r.URL.Path, "request path should match stackscript endpoint")
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(created), "encoding response should succeed")
+		}))
+		defer srv.Close()
+
+		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, successHandler := tools.NewLinodeStackScriptCreateTool(successCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyLabel:   testStackScriptLabel,
+			keyScript:  testStackScript + "\necho hello",
+			keyImages:  testDebian12Image,
+			keyConfirm: true,
+		})
+		result, err := successHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.False(t, result.IsError, "result should not be an error")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent type")
+		assert.Contains(t, textContent.Text, testStackScriptLabel, "response should contain the script label")
+		assert.Contains(t, textContent.Text, "created successfully", "response should confirm creation")
+	})
+
+	t.Run("client error propagates", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_, err := w.Write([]byte(`{"errors":[{"reason":"label is not unique"}]}`))
+			assert.NoError(t, err, "writing error response should succeed")
+		}))
+		t.Cleanup(srv.Close)
+
+		errCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, errHandler := tools.NewLinodeStackScriptCreateTool(errCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyLabel:   testStackScriptLabel,
+			keyScript:  testStackScript,
+			keyImages:  testDebian12Image,
+			keyConfirm: true,
+		})
+		result, err := errHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.True(t, result.IsError, "result should be a tool error")
+	})
+
+	t.Run("empty images after trim rejected", func(t *testing.T) {
+		t.Parallel()
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyLabel:   testStackScriptLabel,
+			keyScript:  testStackScript,
+			keyImages:  " , ",
+			keyConfirm: true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "images is required")
+	})
+}

@@ -30,7 +30,7 @@ func fixtureSourceProfile() profiles.Profile {
 	return profiles.Profile{
 		Name:                cloneSourceName,
 		Description:         "Compute admin clone source",
-		AllowedTools:        []string{"linode_instance_boot", "linode_instances_list"},
+		AllowedTools:        []string{"linode_instance_boot", "linode_instance_list"},
 		AllowedEnvironments: []string{envProd},
 		RequiredTokenScopes: []string{"linodes:read_write"},
 		AllowYolo:           false,

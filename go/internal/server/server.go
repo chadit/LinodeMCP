@@ -812,13 +812,14 @@ func coreToolEntries(cfg *config.Config) []toolEntry {
 
 func computeToolEntries(cfg *config.Config) []toolEntry {
 	return entriesFromFactories(cfg, []toolFactory{
-		tools.NewLinodeInstancesTool,
+		tools.NewLinodeInstanceListTool,
 		tools.NewLinodeInstanceGetTool,
-		tools.NewLinodeRegionsListTool,
-		tools.NewLinodeTypesListTool,
-		tools.NewLinodeImagesListTool,
-		tools.NewLinodeSSHKeysListTool,
-		tools.NewLinodeStackScriptsListTool,
+		tools.NewLinodeRegionListTool,
+		tools.NewLinodeTypeListTool,
+		tools.NewLinodeImageListTool,
+		tools.NewLinodeSSHKeyListTool,
+		tools.NewLinodeStackScriptListTool,
+		tools.NewLinodeStackScriptCreateTool,
 		tools.NewLinodeSSHKeyCreateTool,
 		tools.NewLinodeSSHKeyUpdateTool,
 		tools.NewLinodeSSHKeyDeleteTool,
@@ -833,8 +834,8 @@ func computeToolEntries(cfg *config.Config) []toolEntry {
 
 func networkingToolEntries(cfg *config.Config) []toolEntry {
 	return entriesFromFactories(cfg, []toolFactory{
-		tools.NewLinodeFirewallsListTool,
-		tools.NewLinodeNodeBalancersListTool,
+		tools.NewLinodeFirewallListTool,
+		tools.NewLinodeNodeBalancerListTool,
 		tools.NewLinodeNodeBalancerGetTool,
 		tools.NewLinodeFirewallCreateTool,
 		tools.NewLinodeFirewallUpdateTool,
@@ -847,9 +848,9 @@ func networkingToolEntries(cfg *config.Config) []toolEntry {
 
 func dnsToolEntries(cfg *config.Config) []toolEntry {
 	return entriesFromFactories(cfg, []toolFactory{
-		tools.NewLinodeDomainsListTool,
+		tools.NewLinodeDomainListTool,
 		tools.NewLinodeDomainGetTool,
-		tools.NewLinodeDomainRecordsListTool,
+		tools.NewLinodeDomainRecordListTool,
 		tools.NewLinodeDomainCreateTool,
 		tools.NewLinodeDomainUpdateTool,
 		tools.NewLinodeDomainDeleteTool,
@@ -861,7 +862,7 @@ func dnsToolEntries(cfg *config.Config) []toolEntry {
 
 func volumeToolEntries(cfg *config.Config) []toolEntry {
 	return entriesFromFactories(cfg, []toolFactory{
-		tools.NewLinodeVolumesListTool,
+		tools.NewLinodeVolumeListTool,
 		tools.NewLinodeVolumeCreateTool,
 		tools.NewLinodeVolumeUpdateTool,
 		tools.NewLinodeVolumeAttachTool,
@@ -873,12 +874,12 @@ func volumeToolEntries(cfg *config.Config) []toolEntry {
 
 func objectStorageToolEntries(cfg *config.Config) []toolEntry {
 	return entriesFromFactories(cfg, []toolFactory{
-		tools.NewLinodeObjectStorageBucketsListTool,
+		tools.NewLinodeObjectStorageBucketListTool,
 		tools.NewLinodeObjectStorageBucketGetTool,
 		tools.NewLinodeObjectStorageBucketContentsTool,
-		tools.NewLinodeObjectStorageClustersListTool,
+		tools.NewLinodeObjectStorageClusterListTool,
 		tools.NewLinodeObjectStorageTypeListTool,
-		tools.NewLinodeObjectStorageKeysListTool,
+		tools.NewLinodeObjectStorageKeyListTool,
 		tools.NewLinodeObjectStorageKeyGetTool,
 		tools.NewLinodeObjectStorageTransferTool,
 		tools.NewLinodeObjectStorageBucketAccessGetTool,
@@ -901,11 +902,11 @@ func objectStorageToolEntries(cfg *config.Config) []toolEntry {
 func vpcToolEntries(cfg *config.Config) []toolEntry {
 	return entriesFromFactories(cfg, []toolFactory{
 		// Read tools
-		tools.NewLinodeVPCsListTool,
+		tools.NewLinodeVPCListTool,
 		tools.NewLinodeVPCGetTool,
 		tools.NewLinodeVPCIPsListTool,
 		tools.NewLinodeVPCIPListTool,
-		tools.NewLinodeVPCSubnetsListTool,
+		tools.NewLinodeVPCSubnetListTool,
 		tools.NewLinodeVPCSubnetGetTool,
 		// Write tools
 		tools.NewLinodeVPCCreateTool,
@@ -920,14 +921,14 @@ func vpcToolEntries(cfg *config.Config) []toolEntry {
 func instanceDeepToolEntries(cfg *config.Config) []toolEntry {
 	return entriesFromFactories(cfg, []toolFactory{
 		// Backups
-		tools.NewLinodeInstanceBackupsListTool,
+		tools.NewLinodeInstanceBackupListTool,
 		tools.NewLinodeInstanceBackupGetTool,
 		tools.NewLinodeInstanceBackupCreateTool,
 		tools.NewLinodeInstanceBackupRestoreTool,
 		tools.NewLinodeInstanceBackupsEnableTool,
 		tools.NewLinodeInstanceBackupsCancelTool,
 		// Disks
-		tools.NewLinodeInstanceDisksListTool,
+		tools.NewLinodeInstanceDiskListTool,
 		tools.NewLinodeInstanceDiskGetTool,
 		tools.NewLinodeInstanceDiskCreateTool,
 		tools.NewLinodeInstanceDiskUpdateTool,
@@ -935,7 +936,7 @@ func instanceDeepToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeInstanceDiskCloneTool,
 		tools.NewLinodeInstanceDiskResizeTool,
 		// IPs
-		tools.NewLinodeInstanceIPsListTool,
+		tools.NewLinodeInstanceIPListTool,
 		tools.NewLinodeInstanceIPGetTool,
 		tools.NewLinodeInstanceIPAllocateTool,
 		tools.NewLinodeInstanceIPUpdateRDNSTool,
@@ -952,19 +953,19 @@ func instanceDeepToolEntries(cfg *config.Config) []toolEntry {
 func lkeToolEntries(cfg *config.Config) []toolEntry {
 	return entriesFromFactories(cfg, []toolFactory{
 		// Read tools
-		tools.NewLinodeLKEClustersListTool,
+		tools.NewLinodeLKEClusterListTool,
 		tools.NewLinodeLKEClusterGetTool,
-		tools.NewLinodeLKEPoolsListTool,
+		tools.NewLinodeLKEPoolListTool,
 		tools.NewLinodeLKEPoolGetTool,
 		tools.NewLinodeLKENodeGetTool,
 		tools.NewLinodeLKEKubeconfigGetTool,
 		tools.NewLinodeLKEDashboardGetTool,
-		tools.NewLinodeLKEAPIEndpointsListTool,
+		tools.NewLinodeLKEAPIEndpointListTool,
 		tools.NewLinodeLKEACLGetTool,
-		tools.NewLinodeLKEVersionsListTool,
+		tools.NewLinodeLKEVersionListTool,
 		tools.NewLinodeLKEVersionGetTool,
-		tools.NewLinodeLKETypesListTool,
-		tools.NewLinodeLKETierVersionsListTool,
+		tools.NewLinodeLKETypeListTool,
+		tools.NewLinodeLKETierVersionListTool,
 		// Write tools
 		tools.NewLinodeLKEClusterCreateTool,
 		tools.NewLinodeLKEClusterUpdateTool,

@@ -20,7 +20,7 @@ func (c *Client) httpListVPCs(ctx context.Context) ([]VPC, error) {
 		return nil, &NetworkError{Operation: "ListVPCs", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[VPC]
 
@@ -43,7 +43,7 @@ func (c *Client) httpGetVPC(ctx context.Context, vpcID int) (*VPC, error) {
 		return nil, &NetworkError{Operation: "GetVPC", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var vpc VPC
 	if err := c.handleResponse(resp, &vpc); err != nil {
@@ -63,7 +63,7 @@ func (c *Client) httpCreateVPC(ctx context.Context, req CreateVPCRequest) (*VPC,
 		return nil, &NetworkError{Operation: "CreateVPC", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var vpc VPC
 	if err := c.handleResponse(resp, &vpc); err != nil {
@@ -85,7 +85,7 @@ func (c *Client) httpUpdateVPC(ctx context.Context, vpcID int, req UpdateVPCRequ
 		return nil, &NetworkError{Operation: "UpdateVPC", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var vpc VPC
 	if err := c.handleResponse(resp, &vpc); err != nil {
@@ -107,7 +107,7 @@ func (c *Client) httpDeleteVPC(ctx context.Context, vpcID int) error {
 		return &NetworkError{Operation: "DeleteVPC", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -122,7 +122,7 @@ func (c *Client) httpListVPCIPs(ctx context.Context) ([]VPCIP, error) {
 		return nil, &NetworkError{Operation: "ListVPCIPs", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[VPCIP]
 
@@ -145,7 +145,7 @@ func (c *Client) httpListVPCIPAddresses(ctx context.Context, vpcID int) ([]VPCIP
 		return nil, &NetworkError{Operation: "ListVPCIPAddresses", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[VPCIP]
 
@@ -168,7 +168,7 @@ func (c *Client) httpListVPCSubnets(ctx context.Context, vpcID int) ([]VPCSubnet
 		return nil, &NetworkError{Operation: "ListVPCSubnets", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[VPCSubnet]
 
@@ -191,7 +191,7 @@ func (c *Client) httpGetVPCSubnet(ctx context.Context, vpcID, subnetID int) (*VP
 		return nil, &NetworkError{Operation: "GetVPCSubnet", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var subnet VPCSubnet
 	if err := c.handleResponse(resp, &subnet); err != nil {
@@ -213,7 +213,7 @@ func (c *Client) httpCreateVPCSubnet(ctx context.Context, vpcID int, req CreateS
 		return nil, &NetworkError{Operation: "CreateVPCSubnet", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var subnet VPCSubnet
 	if err := c.handleResponse(resp, &subnet); err != nil {
@@ -235,7 +235,7 @@ func (c *Client) httpUpdateVPCSubnet(ctx context.Context, vpcID, subnetID int, r
 		return nil, &NetworkError{Operation: "UpdateVPCSubnet", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var subnet VPCSubnet
 	if err := c.handleResponse(resp, &subnet); err != nil {
@@ -257,7 +257,7 @@ func (c *Client) httpDeleteVPCSubnet(ctx context.Context, vpcID, subnetID int) e
 		return &NetworkError{Operation: "DeleteVPCSubnet", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }

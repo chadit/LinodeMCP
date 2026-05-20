@@ -15,10 +15,10 @@ import (
 
 const defaultPresignedExpiry = 3600
 
-// NewLinodeObjectStorageBucketsListTool creates a tool for listing Object Storage buckets.
-func NewLinodeObjectStorageBucketsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+// NewLinodeObjectStorageBucketListTool creates a tool for listing Object Storage buckets.
+func NewLinodeObjectStorageBucketListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_object_storage_buckets_list",
+		"linode_object_storage_bucket_list",
 		mcp.WithDescription("Lists all Object Storage buckets across all regions for the authenticated user"),
 		mcp.WithString(
 			paramEnvironment,
@@ -228,10 +228,10 @@ func formatBucketContentsResponse(objects []linode.ObjectStorageObject, isTrunca
 	return MarshalToolResponse(response)
 }
 
-// NewLinodeObjectStorageClustersListTool creates a tool for listing Object Storage clusters.
-func NewLinodeObjectStorageClustersListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+// NewLinodeObjectStorageClusterListTool creates a tool for listing Object Storage clusters.
+func NewLinodeObjectStorageClusterListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_object_storage_clusters_list",
+		"linode_object_storage_cluster_list",
 		mcp.WithDescription("Lists available Object Storage clusters/regions where buckets can be created"),
 		mcp.WithString(
 			paramEnvironment,
@@ -308,10 +308,10 @@ func handleObjectStorageTypeListRequest(ctx context.Context, request *mcp.CallTo
 	return MarshalToolResponse(response)
 }
 
-// NewLinodeObjectStorageKeysListTool creates a tool for listing Object Storage access keys.
-func NewLinodeObjectStorageKeysListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+// NewLinodeObjectStorageKeyListTool creates a tool for listing Object Storage access keys.
+func NewLinodeObjectStorageKeyListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
-		"linode_object_storage_keys_list",
+		"linode_object_storage_key_list",
 		mcp.WithDescription("Lists all Object Storage access keys for the authenticated user"),
 		mcp.WithString(
 			paramEnvironment,

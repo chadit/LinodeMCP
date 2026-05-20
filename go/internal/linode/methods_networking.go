@@ -21,7 +21,7 @@ func (c *Client) httpListFirewalls(ctx context.Context) ([]Firewall, error) {
 		return nil, &NetworkError{Operation: "ListFirewalls", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[Firewall]
 
@@ -44,7 +44,7 @@ func (c *Client) httpGetFirewall(ctx context.Context, firewallID int) (*Firewall
 		return nil, &NetworkError{Operation: "GetFirewall", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var firewall Firewall
 	if err := c.handleResponse(resp, &firewall); err != nil {
@@ -64,7 +64,7 @@ func (c *Client) httpCreateFirewall(ctx context.Context, req CreateFirewallReque
 		return nil, &NetworkError{Operation: "CreateFirewall", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var firewall Firewall
 	if err := c.handleResponse(resp, &firewall); err != nil {
@@ -86,7 +86,7 @@ func (c *Client) httpUpdateFirewall(ctx context.Context, firewallID int, req Upd
 		return nil, &NetworkError{Operation: "UpdateFirewall", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var firewall Firewall
 	if err := c.handleResponse(resp, &firewall); err != nil {
@@ -108,7 +108,7 @@ func (c *Client) httpDeleteFirewall(ctx context.Context, firewallID int) error {
 		return &NetworkError{Operation: "DeleteFirewall", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -123,7 +123,7 @@ func (c *Client) httpListNodeBalancers(ctx context.Context) ([]NodeBalancer, err
 		return nil, &NetworkError{Operation: "ListNodeBalancers", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[NodeBalancer]
 
@@ -146,7 +146,7 @@ func (c *Client) httpGetNodeBalancer(ctx context.Context, nodeBalancerID int) (*
 		return nil, &NetworkError{Operation: "GetNodeBalancer", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var nodeBalancer NodeBalancer
 	if err := c.handleResponse(resp, &nodeBalancer); err != nil {
@@ -166,7 +166,7 @@ func (c *Client) httpCreateNodeBalancer(ctx context.Context, req CreateNodeBalan
 		return nil, &NetworkError{Operation: "CreateNodeBalancer", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var nodeBalancer NodeBalancer
 	if err := c.handleResponse(resp, &nodeBalancer); err != nil {
@@ -188,7 +188,7 @@ func (c *Client) httpUpdateNodeBalancer(ctx context.Context, nodeBalancerID int,
 		return nil, &NetworkError{Operation: "UpdateNodeBalancer", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var nodeBalancer NodeBalancer
 	if err := c.handleResponse(resp, &nodeBalancer); err != nil {
@@ -210,7 +210,7 @@ func (c *Client) httpDeleteNodeBalancer(ctx context.Context, nodeBalancerID int)
 		return &NetworkError{Operation: "DeleteNodeBalancer", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }

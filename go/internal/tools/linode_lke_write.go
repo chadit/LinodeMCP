@@ -62,15 +62,15 @@ func NewLinodeLKEClusterCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 		cfg,
 		"linode_lke_cluster_create",
 		"Creates a new LKE Kubernetes cluster. WARNING: This creates billable resources. "+
-			"Use linode_lke_versions_list to find valid k8s_version values, linode_regions_list for regions, "+
-			"and linode_lke_types_list for node types.",
+			"Use linode_lke_version_list to find valid k8s_version values, linode_region_list for regions, "+
+			"and linode_lke_type_list for node types.",
 		[]mcp.ToolOption{
 			mcp.WithString("label", mcp.Required(),
 				mcp.Description("Label for the cluster (3-32 characters)")),
 			mcp.WithString("region", mcp.Required(),
 				mcp.Description("Region for the cluster (e.g. us-east)")),
 			mcp.WithString("k8s_version", mcp.Required(),
-				mcp.Description("Kubernetes version (e.g. 1.29). Use linode_lke_versions_list to find valid values.")),
+				mcp.Description("Kubernetes version (e.g. 1.29). Use linode_lke_version_list to find valid values.")),
 			mcp.WithString("node_pools", mcp.Required(),
 				mcp.Description("JSON array of node pools: [{\"type\": \"g6-standard-2\", \"count\": 3}]. "+
 					"Optional per-pool fields: autoscaler ({\"enabled\": true, \"min\": 1, \"max\": 5}), tags.")),
@@ -170,7 +170,7 @@ func NewLinodeLKEClusterUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 			mcp.WithString("label",
 				mcp.Description("New label for the cluster (optional)")),
 			mcp.WithString("k8s_version",
-				mcp.Description("New Kubernetes version (optional). Use linode_lke_versions_list to find valid values.")),
+				mcp.Description("New Kubernetes version (optional). Use linode_lke_version_list to find valid values.")),
 			mcp.WithString("tags",
 				mcp.Description("Comma-separated tags for the cluster (optional, replaces existing tags)")),
 			mcp.WithBoolean("high_availability",
@@ -388,7 +388,7 @@ func NewLinodeLKEPoolCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 			mcp.WithNumber("cluster_id", mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
 			mcp.WithString("type", mcp.Required(),
-				mcp.Description("Linode type for pool nodes (e.g. g6-standard-2). Use linode_lke_types_list to find valid types.")),
+				mcp.Description("Linode type for pool nodes (e.g. g6-standard-2). Use linode_lke_type_list to find valid types.")),
 			mcp.WithNumber("count", mcp.Required(),
 				mcp.Description("Number of nodes in the pool (minimum 1)")),
 			mcp.WithBoolean("autoscaler_enabled",

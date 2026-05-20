@@ -12,11 +12,11 @@ import (
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
-// NewLinodeInstanceIPsListTool creates a tool for listing all IP addresses for a Linode instance.
-func NewLinodeInstanceIPsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+// NewLinodeInstanceIPListTool creates a tool for listing all IP addresses for a Linode instance.
+func NewLinodeInstanceIPListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
 		cfg,
-		"linode_instance_ips_list",
+		"linode_instance_ip_list",
 		"Lists all IP addresses (IPv4 and IPv6) for a Linode instance",
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),

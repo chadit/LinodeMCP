@@ -300,6 +300,21 @@ func (c *Client) ListStackScripts(ctx context.Context) ([]StackScript, error) {
 	return scripts, err
 }
 
+// CreateStackScript creates a new StackScript with automatic retry on transient failures.
+func (c *Client) CreateStackScript(ctx context.Context, req *CreateStackScriptRequest) (*StackScript, error) {
+	var script *StackScript
+
+	err := c.executeWithRetry(ctx, "CreateStackScript", func() error {
+		var err error
+
+		script, err = c.httpCreateStackScript(ctx, req)
+
+		return err
+	})
+
+	return script, err
+}
+
 // GetFirewall retrieves a single firewall by ID with automatic retry on transient failures.
 func (c *Client) GetFirewall(ctx context.Context, firewallID int) (*Firewall, error) {
 	var firewall *Firewall

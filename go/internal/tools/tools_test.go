@@ -106,9 +106,9 @@ func TestLinodeInstancesListTool(t *testing.T) {
 		t.Parallel()
 
 		cfg := &config.Config{}
-		tool, _, handler := tools.NewLinodeInstancesTool(cfg)
+		tool, _, handler := tools.NewLinodeInstanceListTool(cfg)
 
-		assert.Equal(t, "linode_instances_list", tool.Name, "tool name should match")
+		assert.Equal(t, "linode_instance_list", tool.Name, "tool name should match")
 		assert.NotEmpty(t, tool.Description, "tool should have a description")
 		require.NotNil(t, handler, "handler should not be nil")
 	})
@@ -119,7 +119,7 @@ func TestLinodeInstancesListTool(t *testing.T) {
 		cfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{},
 		}
-		_, _, handler := tools.NewLinodeInstancesTool(cfg)
+		_, _, handler := tools.NewLinodeInstanceListTool(cfg)
 
 		req := createRequestWithArgs(t, map[string]any{"environment": "nonexistent"})
 		result, err := handler(t.Context(), req)
@@ -140,7 +140,7 @@ func TestLinodeInstancesListTool(t *testing.T) {
 				},
 			},
 		}
-		_, _, handler := tools.NewLinodeInstancesTool(cfg)
+		_, _, handler := tools.NewLinodeInstanceListTool(cfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := handler(t.Context(), req)
@@ -177,7 +177,7 @@ func TestLinodeInstancesListTool(t *testing.T) {
 				},
 			},
 		}
-		_, _, handler := tools.NewLinodeInstancesTool(cfg)
+		_, _, handler := tools.NewLinodeInstanceListTool(cfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := handler(t.Context(), req)
@@ -430,9 +430,9 @@ func TestLinodeRegionsListTool(t *testing.T) {
 		t.Parallel()
 
 		cfg := &config.Config{}
-		tool, _, handler := tools.NewLinodeRegionsListTool(cfg)
+		tool, _, handler := tools.NewLinodeRegionListTool(cfg)
 
-		assert.Equal(t, "linode_regions_list", tool.Name, "tool name should match")
+		assert.Equal(t, "linode_region_list", tool.Name, "tool name should match")
 		assert.NotEmpty(t, tool.Description, "tool should have a description")
 		require.NotNil(t, handler, "handler should not be nil")
 	})
@@ -465,7 +465,7 @@ func TestLinodeRegionsListTool(t *testing.T) {
 				},
 			},
 		}
-		_, _, handler := tools.NewLinodeRegionsListTool(cfg)
+		_, _, handler := tools.NewLinodeRegionListTool(cfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := handler(t.Context(), req)
@@ -508,7 +508,7 @@ func TestLinodeRegionsListTool(t *testing.T) {
 				},
 			},
 		}
-		_, _, handler := tools.NewLinodeRegionsListTool(cfg)
+		_, _, handler := tools.NewLinodeRegionListTool(cfg)
 
 		req := createRequestWithArgs(t, map[string]any{"country": countryUS})
 		result, err := handler(t.Context(), req)
@@ -534,9 +534,9 @@ func TestLinodeTypesListTool(t *testing.T) {
 		t.Parallel()
 
 		cfg := &config.Config{}
-		tool, _, handler := tools.NewLinodeTypesListTool(cfg)
+		tool, _, handler := tools.NewLinodeTypeListTool(cfg)
 
-		assert.Equal(t, "linode_types_list", tool.Name, "tool name should match")
+		assert.Equal(t, "linode_type_list", tool.Name, "tool name should match")
 		assert.NotEmpty(t, tool.Description, "tool should have a description")
 		require.NotNil(t, handler, "handler should not be nil")
 	})
@@ -569,7 +569,7 @@ func TestLinodeTypesListTool(t *testing.T) {
 				},
 			},
 		}
-		_, _, handler := tools.NewLinodeTypesListTool(cfg)
+		_, _, handler := tools.NewLinodeTypeListTool(cfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := handler(t.Context(), req)
@@ -612,7 +612,7 @@ func TestLinodeTypesListTool(t *testing.T) {
 				},
 			},
 		}
-		_, _, handler := tools.NewLinodeTypesListTool(cfg)
+		_, _, handler := tools.NewLinodeTypeListTool(cfg)
 
 		req := createRequestWithArgs(t, map[string]any{"class": classStandard})
 		result, err := handler(t.Context(), req)
@@ -636,9 +636,9 @@ func TestLinodeVolumesListTool(t *testing.T) {
 		t.Parallel()
 
 		cfg := &config.Config{}
-		tool, _, handler := tools.NewLinodeVolumesListTool(cfg)
+		tool, _, handler := tools.NewLinodeVolumeListTool(cfg)
 
-		assert.Equal(t, "linode_volumes_list", tool.Name, "tool name should match")
+		assert.Equal(t, "linode_volume_list", tool.Name, "tool name should match")
 		assert.NotEmpty(t, tool.Description, "tool should have a description")
 		require.NotNil(t, handler, "handler should not be nil")
 	})
@@ -671,7 +671,7 @@ func TestLinodeVolumesListTool(t *testing.T) {
 				},
 			},
 		}
-		_, _, handler := tools.NewLinodeVolumesListTool(cfg)
+		_, _, handler := tools.NewLinodeVolumeListTool(cfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := handler(t.Context(), req)
@@ -713,7 +713,7 @@ func TestLinodeVolumesListTool(t *testing.T) {
 				},
 			},
 		}
-		_, _, handler := tools.NewLinodeVolumesListTool(cfg)
+		_, _, handler := tools.NewLinodeVolumeListTool(cfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyRegion: regionUSEast})
 		result, err := handler(t.Context(), req)
@@ -757,7 +757,7 @@ func TestLinodeVolumesListTool(t *testing.T) {
 				},
 			},
 		}
-		_, _, handler := tools.NewLinodeVolumesListTool(cfg)
+		_, _, handler := tools.NewLinodeVolumeListTool(cfg)
 
 		req := createRequestWithArgs(t, map[string]any{"label_contains": "backup"})
 		result, err := handler(t.Context(), req)
@@ -782,9 +782,9 @@ func TestLinodeImagesListTool(t *testing.T) {
 		t.Parallel()
 
 		cfg := &config.Config{}
-		tool, _, handler := tools.NewLinodeImagesListTool(cfg)
+		tool, _, handler := tools.NewLinodeImageListTool(cfg)
 
-		assert.Equal(t, "linode_images_list", tool.Name, "tool name should match")
+		assert.Equal(t, "linode_image_list", tool.Name, "tool name should match")
 		assert.NotEmpty(t, tool.Description, "tool should have a description")
 		require.NotNil(t, handler, "handler should not be nil")
 	})
@@ -817,7 +817,7 @@ func TestLinodeImagesListTool(t *testing.T) {
 				},
 			},
 		}
-		_, _, handler := tools.NewLinodeImagesListTool(cfg)
+		_, _, handler := tools.NewLinodeImageListTool(cfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := handler(t.Context(), req)
@@ -859,7 +859,7 @@ func TestLinodeImagesListTool(t *testing.T) {
 				},
 			},
 		}
-		_, _, handler := tools.NewLinodeImagesListTool(cfg)
+		_, _, handler := tools.NewLinodeImageListTool(cfg)
 
 		req := createRequestWithArgs(t, map[string]any{"is_public": "false"})
 		result, err := handler(t.Context(), req)
@@ -902,7 +902,7 @@ func TestLinodeImagesListTool(t *testing.T) {
 				},
 			},
 		}
-		_, _, handler := tools.NewLinodeImagesListTool(cfg)
+		_, _, handler := tools.NewLinodeImageListTool(cfg)
 
 		req := createRequestWithArgs(t, map[string]any{"deprecated": "true"})
 		result, err := handler(t.Context(), req)

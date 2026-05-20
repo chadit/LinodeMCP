@@ -156,7 +156,7 @@ func NewLinodeInstanceRebuildTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 			mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance to rebuild")),
 			mcp.WithString("image", mcp.Required(),
-				mcp.Description("The image to rebuild with (e.g. 'linode/ubuntu24.04'). Use linode_images_list to find valid values.")),
+				mcp.Description("The image to rebuild with (e.g. 'linode/ubuntu24.04'). Use linode_image_list to find valid values.")),
 			mcp.WithString("root_pass", mcp.Required(),
 				mcp.Description("Root password for the rebuilt instance (min 12 chars, must include upper, lower, and digits)")),
 			mcp.WithString("authorized_keys",

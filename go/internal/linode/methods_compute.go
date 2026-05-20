@@ -24,7 +24,7 @@ func (c *Client) httpListInstances(ctx context.Context) ([]Instance, error) {
 		return nil, &NetworkError{Operation: "ListInstances", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[Instance]
 
@@ -47,7 +47,7 @@ func (c *Client) httpGetInstance(ctx context.Context, instanceID int) (*Instance
 		return nil, &NetworkError{Operation: "GetInstance", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var instance Instance
 	if err := c.handleResponse(resp, &instance); err != nil {
@@ -67,7 +67,7 @@ func (c *Client) httpListRegions(ctx context.Context) ([]Region, error) {
 		return nil, &NetworkError{Operation: "ListRegions", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[Region]
 
@@ -88,7 +88,7 @@ func (c *Client) httpListTypes(ctx context.Context) ([]InstanceType, error) {
 		return nil, &NetworkError{Operation: "ListTypes", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[InstanceType]
 
@@ -109,7 +109,7 @@ func (c *Client) httpListImages(ctx context.Context) ([]Image, error) {
 		return nil, &NetworkError{Operation: "ListImages", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[Image]
 
@@ -130,7 +130,7 @@ func (c *Client) httpListStackScripts(ctx context.Context) ([]StackScript, error
 		return nil, &NetworkError{Operation: "ListStackScripts", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[StackScript]
 
@@ -139,6 +139,26 @@ func (c *Client) httpListStackScripts(ctx context.Context) ([]StackScript, error
 	}
 
 	return response.Data, nil
+}
+
+// CreateStackScript creates a new StackScript.
+func (c *Client) httpCreateStackScript(ctx context.Context, req *CreateStackScriptRequest) (*StackScript, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointStackScripts, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateStackScript", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var script StackScript
+	if err := c.handleResponse(resp, &script); err != nil {
+		return nil, err
+	}
+
+	return &script, nil
 }
 
 // BootInstance boots a Linode instance.
@@ -158,7 +178,7 @@ func (c *Client) httpBootInstance(ctx context.Context, instanceID int, configID 
 		return &NetworkError{Operation: "BootInstance", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -180,7 +200,7 @@ func (c *Client) httpRebootInstance(ctx context.Context, instanceID int, configI
 		return &NetworkError{Operation: "RebootInstance", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -197,7 +217,7 @@ func (c *Client) httpShutdownInstance(ctx context.Context, instanceID int) error
 		return &NetworkError{Operation: "ShutdownInstance", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -212,7 +232,7 @@ func (c *Client) httpCreateInstance(ctx context.Context, req *CreateInstanceRequ
 		return nil, &NetworkError{Operation: "CreateInstance", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var instance Instance
 	if err := c.handleResponse(resp, &instance); err != nil {
@@ -234,7 +254,7 @@ func (c *Client) httpDeleteInstance(ctx context.Context, instanceID int) error {
 		return &NetworkError{Operation: "DeleteInstance", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -251,7 +271,7 @@ func (c *Client) httpResizeInstance(ctx context.Context, instanceID int, req Res
 		return &NetworkError{Operation: "ResizeInstance", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -268,7 +288,7 @@ func (c *Client) httpUpdateInstance(ctx context.Context, instanceID int, req *Up
 		return nil, &NetworkError{Operation: "UpdateInstance", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var instance Instance
 	if err := c.handleResponse(resp, &instance); err != nil {

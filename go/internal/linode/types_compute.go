@@ -239,6 +239,16 @@ type UDF struct {
 	ManyOf  string `json:"manyof"`
 }
 
+// CreateStackScriptRequest represents the request body for creating a StackScript.
+type CreateStackScriptRequest struct {
+	Label       string   `json:"label"`
+	Script      string   `json:"script"`
+	Images      []string `json:"images"`
+	Description string   `json:"description,omitempty"`
+	IsPublic    bool     `json:"is_public,omitempty"`
+	RevNote     string   `json:"rev_note,omitempty"`
+}
+
 // CreateInstanceRequest represents the request body for creating a Linode
 // instance under the current Linode Interfaces generation. InterfaceGeneration
 // and Interfaces are required on the wire; the Linode API rejects with

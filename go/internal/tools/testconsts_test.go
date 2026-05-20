@@ -182,4 +182,9 @@ const (
 	caseMissingSubnetID   = "missing subnet id"
 	caseMissingDomainID   = "missing domain id"
 	caseMissingClusterID  = "missing cluster id"
+	testStackScript       = "#!/bin/bash"
+	keyImages             = "images"
+	testDebian12Image     = "linode/debian12"
+	keyScript             = "script"
+	testStackScriptLabel  = "test-script"
 )

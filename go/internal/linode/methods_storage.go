@@ -21,7 +21,7 @@ func (c *Client) httpListVolumes(ctx context.Context) ([]Volume, error) {
 		return nil, &NetworkError{Operation: "ListVolumes", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[Volume]
 
@@ -44,7 +44,7 @@ func (c *Client) httpGetVolume(ctx context.Context, volumeID int) (*Volume, erro
 		return nil, &NetworkError{Operation: "GetVolume", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var volume Volume
 	if err := c.handleResponse(resp, &volume); err != nil {
@@ -64,7 +64,7 @@ func (c *Client) httpCreateVolume(ctx context.Context, req *CreateVolumeRequest)
 		return nil, &NetworkError{Operation: "CreateVolume", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var volume Volume
 	if err := c.handleResponse(resp, &volume); err != nil {
@@ -86,7 +86,7 @@ func (c *Client) httpAttachVolume(ctx context.Context, volumeID int, req AttachV
 		return nil, &NetworkError{Operation: "AttachVolume", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var volume Volume
 	if err := c.handleResponse(resp, &volume); err != nil {
@@ -108,7 +108,7 @@ func (c *Client) httpDetachVolume(ctx context.Context, volumeID int) error {
 		return &NetworkError{Operation: "DetachVolume", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -126,7 +126,7 @@ func (c *Client) httpResizeVolume(ctx context.Context, volumeID, size int) (*Vol
 		return nil, &NetworkError{Operation: "ResizeVolume", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var volume Volume
 	if err := c.handleResponse(resp, &volume); err != nil {
@@ -148,7 +148,7 @@ func (c *Client) httpDeleteVolume(ctx context.Context, volumeID int) error {
 		return &NetworkError{Operation: "DeleteVolume", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -165,7 +165,7 @@ func (c *Client) httpUpdateVolume(ctx context.Context, volumeID int, req *Update
 		return nil, &NetworkError{Operation: "UpdateVolume", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }() // errcheck: body close is best-effort; all volume methods use this pattern
+	defer drainClose(resp)
 
 	var volume Volume
 	if err := c.handleResponse(resp, &volume); err != nil {
@@ -185,7 +185,7 @@ func (c *Client) httpListSSHKeys(ctx context.Context) ([]SSHKey, error) {
 		return nil, &NetworkError{Operation: "ListSSHKeys", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[SSHKey]
 
@@ -206,7 +206,7 @@ func (c *Client) httpCreateSSHKey(ctx context.Context, req CreateSSHKeyRequest) 
 		return nil, &NetworkError{Operation: "CreateSSHKey", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var sshKey SSHKey
 	if err := c.handleResponse(resp, &sshKey); err != nil {
@@ -229,7 +229,7 @@ func (c *Client) httpUpdateSSHKey(ctx context.Context, sshKeyID int, req UpdateS
 	}
 
 	// The response body is fully consumed by handleResponse; close errors do not change the API result.
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var sshKey SSHKey
 	if err := c.handleResponse(resp, &sshKey); err != nil {
@@ -251,7 +251,7 @@ func (c *Client) httpDeleteSSHKey(ctx context.Context, sshKeyID int) error {
 		return &NetworkError{Operation: "DeleteSSHKey", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }

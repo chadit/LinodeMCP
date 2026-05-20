@@ -11,11 +11,11 @@ import (
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
-// NewLinodeNodeBalancersListTool creates a tool for listing NodeBalancers.
-func NewLinodeNodeBalancersListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+// NewLinodeNodeBalancerListTool creates a tool for listing NodeBalancers.
+func NewLinodeNodeBalancerListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newListTool(
 		cfg,
-		"linode_nodebalancers_list",
+		"linode_nodebalancer_list",
 		"Lists all NodeBalancers on your account. Can filter by region or label.",
 		func(ctx context.Context, client *linode.Client) ([]linode.NodeBalancer, error) {
 			return client.ListNodeBalancers(ctx)

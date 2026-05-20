@@ -23,7 +23,7 @@ func (c *Client) httpListInstanceBackups(ctx context.Context, linodeID int) (*In
 		return nil, &NetworkError{Operation: "ListInstanceBackups", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var backups InstanceBackupsResponse
 	if err := c.handleResponse(resp, &backups); err != nil {
@@ -45,7 +45,7 @@ func (c *Client) httpGetInstanceBackup(ctx context.Context, linodeID, backupID i
 		return nil, &NetworkError{Operation: "GetInstanceBackup", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var backup InstanceBackup
 	if err := c.handleResponse(resp, &backup); err != nil {
@@ -67,7 +67,7 @@ func (c *Client) httpCreateInstanceBackup(ctx context.Context, linodeID int) (*I
 		return nil, &NetworkError{Operation: "CreateInstanceBackup", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var backup InstanceBackup
 	if err := c.handleResponse(resp, &backup); err != nil {
@@ -89,7 +89,7 @@ func (c *Client) httpRestoreInstanceBackup(ctx context.Context, linodeID, backup
 		return &NetworkError{Operation: "RestoreInstanceBackup", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -106,7 +106,7 @@ func (c *Client) httpEnableInstanceBackups(ctx context.Context, linodeID int) er
 		return &NetworkError{Operation: "EnableInstanceBackups", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -123,7 +123,7 @@ func (c *Client) httpCancelInstanceBackups(ctx context.Context, linodeID int) er
 		return &NetworkError{Operation: "CancelInstanceBackups", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -140,7 +140,7 @@ func (c *Client) httpListInstanceDisks(ctx context.Context, linodeID int) ([]Ins
 		return nil, &NetworkError{Operation: "ListInstanceDisks", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[InstanceDisk]
 
@@ -163,7 +163,7 @@ func (c *Client) httpGetInstanceDisk(ctx context.Context, linodeID, diskID int) 
 		return nil, &NetworkError{Operation: "GetInstanceDisk", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var disk InstanceDisk
 	if err := c.handleResponse(resp, &disk); err != nil {
@@ -185,7 +185,7 @@ func (c *Client) httpCreateInstanceDisk(ctx context.Context, linodeID int, req *
 		return nil, &NetworkError{Operation: "CreateInstanceDisk", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var disk InstanceDisk
 	if err := c.handleResponse(resp, &disk); err != nil {
@@ -207,7 +207,7 @@ func (c *Client) httpUpdateInstanceDisk(ctx context.Context, linodeID, diskID in
 		return nil, &NetworkError{Operation: "UpdateInstanceDisk", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var disk InstanceDisk
 	if err := c.handleResponse(resp, &disk); err != nil {
@@ -229,7 +229,7 @@ func (c *Client) httpDeleteInstanceDisk(ctx context.Context, linodeID, diskID in
 		return &NetworkError{Operation: "DeleteInstanceDisk", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -246,7 +246,7 @@ func (c *Client) httpCloneInstanceDisk(ctx context.Context, linodeID, diskID int
 		return nil, &NetworkError{Operation: "CloneInstanceDisk", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var disk InstanceDisk
 	if err := c.handleResponse(resp, &disk); err != nil {
@@ -268,7 +268,7 @@ func (c *Client) httpResizeInstanceDisk(ctx context.Context, linodeID, diskID in
 		return &NetworkError{Operation: "ResizeInstanceDisk", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -285,7 +285,7 @@ func (c *Client) httpListInstanceIPs(ctx context.Context, linodeID int) (*Instan
 		return nil, &NetworkError{Operation: "ListInstanceIPs", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var ips InstanceIPAddresses
 	if err := c.handleResponse(resp, &ips); err != nil {
@@ -307,7 +307,7 @@ func (c *Client) httpGetInstanceIP(ctx context.Context, linodeID int, address st
 		return nil, &NetworkError{Operation: "GetInstanceIP", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var ip IPAddress
 	if err := c.handleResponse(resp, &ip); err != nil {
@@ -329,7 +329,7 @@ func (c *Client) httpAllocateInstanceIP(ctx context.Context, linodeID int, req A
 		return nil, &NetworkError{Operation: "AllocateInstanceIP", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var ip IPAddress
 	if err := c.handleResponse(resp, &ip); err != nil {
@@ -352,7 +352,7 @@ func (c *Client) httpUpdateInstanceIP(ctx context.Context, linodeID int, address
 	}
 
 	// Ignore close errors after handleResponse consumes the response body.
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var ip IPAddress
 	if err := c.handleResponse(resp, &ip); err != nil {
@@ -374,7 +374,7 @@ func (c *Client) httpDeleteInstanceIP(ctx context.Context, linodeID int, address
 		return &NetworkError{Operation: "DeleteInstanceIP", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -391,7 +391,7 @@ func (c *Client) httpCloneInstance(ctx context.Context, linodeID int, req *Clone
 		return nil, &NetworkError{Operation: "CloneInstance", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var instance Instance
 	if err := c.handleResponse(resp, &instance); err != nil {
@@ -418,7 +418,7 @@ func (c *Client) httpMigrateInstance(ctx context.Context, linodeID int, region s
 		return &NetworkError{Operation: "MigrateInstance", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -435,7 +435,7 @@ func (c *Client) httpRebuildInstance(ctx context.Context, linodeID int, req *Reb
 		return nil, &NetworkError{Operation: "RebuildInstance", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var instance Instance
 	if err := c.handleResponse(resp, &instance); err != nil {
@@ -457,7 +457,7 @@ func (c *Client) httpRescueInstance(ctx context.Context, linodeID int, req Rescu
 		return &NetworkError{Operation: "RescueInstance", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -476,7 +476,7 @@ func (c *Client) httpResetInstancePassword(ctx context.Context, linodeID int, ro
 		return &NetworkError{Operation: "ResetInstancePassword", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }

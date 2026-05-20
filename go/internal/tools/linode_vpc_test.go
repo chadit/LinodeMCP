@@ -20,11 +20,11 @@ func TestLinodeVPCsListTool(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeVPCsListTool(cfg)
+	tool, _, handler := tools.NewLinodeVPCListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_vpcs_list", tool.Name, "tool name should match")
+		assert.Equal(t, "linode_vpc_list", tool.Name, "tool name should match")
 		assert.NotEmpty(t, tool.Description, "tool should have a description")
 		require.NotNil(t, handler, "handler should not be nil")
 	})
@@ -51,7 +51,7 @@ func TestLinodeVPCsListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, _, srvHandler := tools.NewLinodeVPCsListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeVPCListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := srvHandler(t.Context(), req)
@@ -88,7 +88,7 @@ func TestLinodeVPCsListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, _, srvHandler := tools.NewLinodeVPCsListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeVPCListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyLabel: "prod"})
 		result, err := srvHandler(t.Context(), req)
@@ -307,11 +307,11 @@ func TestLinodeVPCSubnetsListTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, _, handler := tools.NewLinodeVPCSubnetsListTool(cfg)
+	tool, _, handler := tools.NewLinodeVPCSubnetListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_vpc_subnets_list", tool.Name, "tool name should match")
+		assert.Equal(t, "linode_vpc_subnet_list", tool.Name, "tool name should match")
 		assert.NotEmpty(t, tool.Description, "tool should have a description")
 		require.NotNil(t, handler, "handler should not be nil")
 	})
@@ -348,7 +348,7 @@ func TestLinodeVPCSubnetsListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, _, srvHandler := tools.NewLinodeVPCSubnetsListTool(srvCfg)
+		_, _, srvHandler := tools.NewLinodeVPCSubnetListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyVPCID: "123"})
 		result, err := srvHandler(t.Context(), req)

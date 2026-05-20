@@ -16,6 +16,24 @@ import (
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
+// dropConn hijacks the request's connection and closes it without writing a
+// response. The client observes a transport error after it has already sent
+// the request, simulating the worst case for retries: the server may have
+// processed the call before the failure surfaced.
+func dropConn(w http.ResponseWriter) {
+	hj, ok := w.(http.Hijacker)
+	if !ok {
+		return
+	}
+
+	conn, _, err := hj.Hijack()
+	if err != nil {
+		return
+	}
+
+	_ = conn.Close()
+}
+
 // fastRetryOpts returns Option values with minimal delays for testing.
 func fastRetryOpts() []linode.Option {
 	return []linode.Option{
@@ -128,7 +146,7 @@ func TestRetryWrappersDelegationPatterns(t *testing.T) {
 		assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
 	})
 
-	t.Run("CreateFirewall request returns pointer", func(t *testing.T) {
+	t.Run("CreateFirewall delegates and retries on 429", func(t *testing.T) {
 		t.Parallel()
 
 		var requestCount atomic.Int32
@@ -136,8 +154,8 @@ func TestRetryWrappersDelegationPatterns(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			count := requestCount.Add(1)
 			if count == 1 {
-				w.WriteHeader(http.StatusInternalServerError)
-				_, _ = w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+				w.WriteHeader(http.StatusTooManyRequests)
+				_, _ = w.Write([]byte(`{"errors":[{"reason":"slow down"}]}`))
 
 				return
 			}
@@ -145,20 +163,19 @@ func TestRetryWrappersDelegationPatterns(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyID:    1,
-				keyLabel: "new-fw",
+				keyLabel: fwLabelNew,
 			}), "encoding created firewall response should not fail")
 		}))
 		defer srv.Close()
 
 		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
 
-		firewall, err := client.CreateFirewall(t.Context(), linode.CreateFirewallRequest{
-			Label: "new-fw",
-		})
-		require.NoError(t, err, "CreateFirewall should succeed after retry")
+		firewall, err := client.CreateFirewall(t.Context(), linode.CreateFirewallRequest{Label: fwLabelNew})
+		require.NoError(t, err, "CreateFirewall should succeed after a 429 retry")
 		require.NotNil(t, firewall, "created firewall should not be nil")
-		assert.Equal(t, "new-fw", firewall.Label, "firewall label should match the create request")
-		assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+		assert.Equal(t, fwLabelNew, firewall.Label, "firewall label should match the create request")
+		assert.Equal(t, int32(2), requestCount.Load(),
+			"a 429 is safe to replay because the request was rejected before processing")
 	})
 
 	t.Run("UpdateFirewall id and request returns pointer", func(t *testing.T) {
@@ -263,6 +280,77 @@ func TestRetryWrappersDelegationPatterns(t *testing.T) {
 	})
 }
 
+// TestRetryNonIdempotentDoesNotReplay verifies that a POST create is not
+// retried on failures that may already have been applied server-side. A 5xx
+// or a transport error (timeout, reset) on a create could mean the resource
+// was made but the response was lost, so replaying it risks a duplicate.
+func TestRetryNonIdempotentDoesNotReplay(t *testing.T) {
+	t.Parallel()
+
+	t.Run("no retry on 500", func(t *testing.T) {
+		t.Parallel()
+
+		var requestCount atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			requestCount.Add(1)
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+		}))
+		defer srv.Close()
+
+		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+		_, err := client.CreateFirewall(t.Context(), linode.CreateFirewallRequest{Label: fwLabelNew})
+		require.Error(t, err, "CreateFirewall should fail on 500")
+		assert.Equal(t, int32(1), requestCount.Load(),
+			"a POST create must not retry a 5xx that may already have been applied")
+	})
+
+	t.Run("no retry on transport error", func(t *testing.T) {
+		t.Parallel()
+
+		var requestCount atomic.Int32
+
+		// Hijack and drop the connection so the client sees a transport error
+		// after the request was already sent: the server-side-applied case.
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			requestCount.Add(1)
+
+			dropConn(w)
+		}))
+		defer srv.Close()
+
+		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+		_, err := client.CreateFirewall(t.Context(), linode.CreateFirewallRequest{Label: fwLabelNew})
+		require.Error(t, err, "CreateFirewall should fail on a transport error")
+		assert.Equal(t, int32(1), requestCount.Load(),
+			"a POST create must not retry a transport error that may have been processed")
+	})
+
+	t.Run("idempotent GET still retries on transport error", func(t *testing.T) {
+		t.Parallel()
+
+		var requestCount atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			requestCount.Add(1)
+
+			dropConn(w)
+		}))
+		defer srv.Close()
+
+		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+		_, err := client.ListRegions(t.Context())
+		require.Error(t, err, "ListRegions should fail when every attempt drops the connection")
+		// fastRetryOpts sets MaxRetries=3: 1 initial + 3 retries = 4 attempts.
+		assert.Equal(t, int32(4), requestCount.Load(),
+			"a GET is idempotent, so transport errors are still retried")
+	})
+}
+
 // TestRetryWrappersContextCancellationStopsRetry verifies that canceling
 // the context during a retry sequence stops further attempts and returns
 // a context-canceled error.
@@ -303,8 +391,10 @@ func TestRetryWrappersBodyForwardedOnRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		count := requestCount.Add(1)
 		if count == 1 {
-			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			// 429 is the one transient failure a non-idempotent POST still
+			// retries, so it is what exercises body re-send on this path.
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte(`{"errors":[{"reason":"slow down"}]}`))
 
 			return
 		}

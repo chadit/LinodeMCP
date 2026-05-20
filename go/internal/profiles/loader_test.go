@@ -110,7 +110,7 @@ func TestResolveActiveProfileWildcardExpansion(t *testing.T) {
 	require.NoError(t, err)
 	assert.ElementsMatch(
 		t,
-		[]string{toolVolumeCreate, toolVolumeDelete, toolVolumeResize},
+		[]string{toolVolumesList, toolVolumeCreate, toolVolumeDelete, toolVolumeResize},
 		got.AllowedTools,
 		"linode_volume_* must expand to every catalog entry with that prefix",
 	)

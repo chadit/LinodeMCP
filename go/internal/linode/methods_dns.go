@@ -20,7 +20,7 @@ func (c *Client) httpListDomains(ctx context.Context) ([]Domain, error) {
 		return nil, &NetworkError{Operation: "ListDomains", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[Domain]
 
@@ -43,7 +43,7 @@ func (c *Client) httpGetDomain(ctx context.Context, domainID int) (*Domain, erro
 		return nil, &NetworkError{Operation: "GetDomain", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var domain Domain
 	if err := c.handleResponse(resp, &domain); err != nil {
@@ -65,7 +65,7 @@ func (c *Client) httpListDomainRecords(ctx context.Context, domainID int) ([]Dom
 		return nil, &NetworkError{Operation: "ListDomainRecords", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var response PaginatedResponse[DomainRecord]
 
@@ -86,7 +86,7 @@ func (c *Client) httpCreateDomain(ctx context.Context, req *CreateDomainRequest)
 		return nil, &NetworkError{Operation: "CreateDomain", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var domain Domain
 	if err := c.handleResponse(resp, &domain); err != nil {
@@ -108,7 +108,7 @@ func (c *Client) httpUpdateDomain(ctx context.Context, domainID int, req *Update
 		return nil, &NetworkError{Operation: "UpdateDomain", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var domain Domain
 	if err := c.handleResponse(resp, &domain); err != nil {
@@ -130,7 +130,7 @@ func (c *Client) httpDeleteDomain(ctx context.Context, domainID int) error {
 		return &NetworkError{Operation: "DeleteDomain", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -147,7 +147,7 @@ func (c *Client) httpCreateDomainRecord(ctx context.Context, domainID int, req *
 		return nil, &NetworkError{Operation: "CreateDomainRecord", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var record DomainRecord
 	if err := c.handleResponse(resp, &record); err != nil {
@@ -169,7 +169,7 @@ func (c *Client) httpUpdateDomainRecord(ctx context.Context, domainID, recordID 
 		return nil, &NetworkError{Operation: "UpdateDomainRecord", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	var record DomainRecord
 	if err := c.handleResponse(resp, &record); err != nil {
@@ -191,7 +191,7 @@ func (c *Client) httpDeleteDomainRecord(ctx context.Context, domainID, recordID 
 		return &NetworkError{Operation: "DeleteDomainRecord", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }

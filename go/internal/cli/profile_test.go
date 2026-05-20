@@ -16,7 +16,7 @@ import (
 const (
 	testProfileComputeAdmin = "compute-admin"
 	testUserProfile         = "my-custom"
-	testVolumesListTool     = "linode_volumes_list"
+	testVolumesListTool     = "linode_volume_list"
 )
 
 // testCatalog returns a minimal config that the catalog/listing helpers
@@ -200,7 +200,7 @@ func TestPrintProfileDetailListsAllowedTools(t *testing.T) {
 
 	prof := profiles.Profile{
 		Name:         testProfileComputeAdmin,
-		AllowedTools: []string{"linode_instances_list", "linode_instance_create"},
+		AllowedTools: []string{"linode_instance_list", "linode_instance_create"},
 	}
 
 	var buf bytes.Buffer
@@ -208,7 +208,7 @@ func TestPrintProfileDetailListsAllowedTools(t *testing.T) {
 
 	out := buf.String()
 	assert.Contains(t, out, "Allowed tools (2):")
-	assert.Contains(t, out, "linode_instances_list")
+	assert.Contains(t, out, "linode_instance_list")
 	assert.Contains(t, out, "linode_instance_create")
 }
 
