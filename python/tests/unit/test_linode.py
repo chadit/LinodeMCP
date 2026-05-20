@@ -1797,6 +1797,57 @@ async def test_create_ipv6_range_posts_route_target_body() -> None:
     await client.close()
 
 
+async def test_list_ipv6_ranges_sends_get() -> None:
+    """Listing IPv6 ranges should send GET /networking/ipv6/ranges."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": [{"range": "2001:0db8::/64", "region": "us-east", "prefix": 64}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.list_ipv6_ranges()
+
+        assert result == mock_response.json.return_value
+        mock_request.assert_awaited_once_with("GET", "/networking/ipv6/ranges")
+
+    await client.close()
+
+
+async def test_list_ipv6_ranges_sends_get_with_pagination() -> None:
+    """Listing IPv6 ranges with pagination should include query params."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": [],
+        "page": 1,
+        "pages": 1,
+        "results": 0,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.list_ipv6_ranges(page=2, page_size=50)
+
+        mock_request.assert_awaited_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "GET"
+        assert "page=2" in call_args[0][1]
+        assert "page_size=50" in call_args[0][1]
+
+    await client.close()
+
+
 async def test_list_placement_groups_sends_get_with_pagination() -> None:
     """Placement groups list sends query pagination params."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -2465,6 +2516,33 @@ async def test_retryable_create_ipv6_range_delegates_to_client() -> None:
         await client.create_ipv6_range(64, linode_id=123)
 
         mock_create.assert_awaited_once_with(64, 123, None)
+
+    await client.close()
+
+
+async def test_retryable_list_ipv6_ranges_delegates_to_client() -> None:
+    """Retryable client should delegate IPv6 ranges listing."""
+    client = RetryableClient(
+        "https://api.linode.com/v4",
+        "test-token",
+        RetryConfig(max_retries=1, base_delay=0.01),
+    )
+    expected_response = {
+        "data": [{"range": "2001:0db8::/64", "region": "us-east"}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch.object(
+        client.client, "list_ipv6_ranges", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = expected_response
+
+        result = await client.list_ipv6_ranges()
+
+        assert result == expected_response
+        mock_list.assert_awaited_once_with(page=None, page_size=None)
 
     await client.close()
 

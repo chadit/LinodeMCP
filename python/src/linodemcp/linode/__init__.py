@@ -4857,6 +4857,28 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("CreateIPv6Range", e) from e
 
+    async def list_ipv6_ranges(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List IPv6 ranges."""
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        query_string = urlencode(params) if params else ""
+        endpoint = (
+            f"/networking/ipv6/ranges?{query_string}"
+            if query_string
+            else "/networking/ipv6/ranges"
+        )
+        try:
+            response = await self.make_request("GET", endpoint)
+            ipv6_ranges: dict[str, Any] = response.json()
+            return ipv6_ranges
+        except httpx.HTTPError as e:
+            raise NetworkError("ListIPv6Ranges", e) from e
+
     async def list_placement_groups(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -7604,6 +7626,15 @@ class RetryableClient:
             prefix_length,
             linode_id,
             route_target,
+        )
+        return result
+
+    async def list_ipv6_ranges(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List IPv6 ranges with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_ipv6_ranges(page=page, page_size=page_size)
         )
         return result
 
