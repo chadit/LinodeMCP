@@ -44,6 +44,7 @@ const (
 	keyNextMarker     = "next_marker"
 	keyKeyID          = "key_id"
 	keySSHKeyID       = "sshkey_id"
+	keyRDNS           = "rdns"
 
 	// Tool-specific resource ID keys.
 	keyLinodeID       = "linode_id"
@@ -117,6 +118,8 @@ const (
 	ip192168_1_1        = "192.168.1.1"
 	ip192168_1_2        = "192.168.1.2"
 	ip203_0_113_1       = "203.0.113.1"
+	rdnsTestExampleOrg  = "test.example.org"
+	subnetMaskFixture   = "255.255.255.0"
 	notANumber          = "not-a-number"
 	boolStringTrue      = "true"
 	emailUpdatedExample = "updated@example.com"
@@ -156,6 +159,8 @@ const (
 	errTypeRequired       = "type is required"
 	errFirewallIDRequired = "firewall_id is required"
 	errLinodeIDRequired   = "linode_id is required"
+	errAddressRequired    = "address is required"
+	errAddressValidIP     = "address must be a valid IP address"
 	errDomainIDRequired   = "domain_id is required"
 	errClusterIDRequired  = "cluster_id is required"
 	errVPCIDRequired      = "vpc_id is required"
@@ -168,6 +173,7 @@ const (
 	caseRequiresConfirm   = "requires confirm"
 	caseMissingConfirm    = "missing confirm"
 	caseMissingLabel      = "missing label"
+	caseMissingAddress    = "missing address"
 	caseMissingRegion     = "missing region"
 	caseMissingType       = "missing type"
 	caseMissingFirewallID = "missing firewall_id"

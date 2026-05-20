@@ -339,6 +339,29 @@ func (c *Client) httpAllocateInstanceIP(ctx context.Context, linodeID int, req A
 	return &ip, nil
 }
 
+// UpdateInstanceIP updates the reverse DNS for a Linode instance IP address.
+func (c *Client) httpUpdateInstanceIP(ctx context.Context, linodeID int, address string, req UpdateIPRDNSRequest) (*IPAddress, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%d/ips/%s", linodeID, url.PathEscape(address))
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateInstanceIP", Err: err}
+	}
+
+	// Ignore close errors after handleResponse consumes the response body.
+	defer func() { _ = resp.Body.Close() }()
+
+	var ip IPAddress
+	if err := c.handleResponse(resp, &ip); err != nil {
+		return nil, err
+	}
+
+	return &ip, nil
+}
+
 // DeleteInstanceIP removes an IP address from a Linode instance.
 func (c *Client) httpDeleteInstanceIP(ctx context.Context, linodeID int, address string) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

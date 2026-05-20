@@ -51,6 +51,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_instance_disk_delete", Capability: profiles.CapDestroy},
 		{Name: "linode_instance_ips_list", Capability: profiles.CapRead},
 		{Name: "linode_instance_ip_allocate", Capability: profiles.CapWrite},
+		{Name: "linode_instance_ip_update_rdns", Capability: profiles.CapWrite},
 
 		// Block storage
 		{Name: toolVolumesList, Capability: profiles.CapRead},

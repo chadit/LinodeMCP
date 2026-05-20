@@ -1648,6 +1648,21 @@ func (c *Client) AllocateInstanceIP(ctx context.Context, linodeID int, req Alloc
 	return ipAddr, err
 }
 
+// UpdateInstanceIP updates an IP address RDNS with automatic retry on transient failures.
+func (c *Client) UpdateInstanceIP(ctx context.Context, linodeID int, address string, req UpdateIPRDNSRequest) (*IPAddress, error) {
+	var ipAddr *IPAddress
+
+	err := c.executeWithRetry(ctx, "UpdateInstanceIP", func() error {
+		var retryErr error
+
+		ipAddr, retryErr = c.httpUpdateInstanceIP(ctx, linodeID, address, req)
+
+		return retryErr
+	})
+
+	return ipAddr, err
+}
+
 // DeleteInstanceIP removes an IP address with automatic retry on transient failures.
 func (c *Client) DeleteInstanceIP(ctx context.Context, linodeID int, address string) error {
 	return c.executeWithRetry(ctx, "DeleteInstanceIP", func() error {

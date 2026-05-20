@@ -918,6 +918,7 @@ func instanceDeepToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeInstanceIPsListTool,
 		tools.NewLinodeInstanceIPGetTool,
 		tools.NewLinodeInstanceIPAllocateTool,
+		tools.NewLinodeInstanceIPUpdateRDNSTool,
 		tools.NewLinodeInstanceIPDeleteTool,
 		// Actions
 		tools.NewLinodeInstanceCloneTool,
