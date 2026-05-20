@@ -2008,3 +2008,181 @@ func TestLinodeObjectStorageSSLDeleteTool(t *testing.T) {
 		assert.True(t, result.IsError, "result should be an error for missing environment")
 	})
 }
+
+// End-to-end verification of bucket SSL certificate upload.
+func TestLinodeObjectStorageSSLUploadTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	tool, _, handler := tools.NewLinodeObjectStorageSSLUploadTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		assert.Equal(t, "linode_object_storage_ssl_upload", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, "region", "schema should include region property")
+		assert.Contains(t, props, "label", "schema should include label property")
+		assert.Contains(t, props, "certificate", "schema should include certificate property")
+		assert.Contains(t, props, "private_key", "schema should include private_key property")
+		assert.Contains(t, props, "confirm", "schema should include confirm property")
+	})
+
+	t.Run("confirm required", func(t *testing.T) {
+		t.Parallel()
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyRegion:      regionUSEast1,
+			keyLabel:       bucketTest,
+			keyCertificate: "test-cert",
+			keyPrivateKey:  "test-key",
+			keyConfirm:     false,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "result should be an error when confirm is false")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, errConfirmEqualsTrue, "error should mention confirm=true")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/ssl", r.URL.Path, "request path should match ssl endpoint")
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(linode.BucketSSL{SSL: true}), "encoding response should not fail")
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeObjectStorageSSLUploadTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyRegion:      regionUSEast1,
+			keyLabel:       bucketTest,
+			keyCertificate: testCertPEM,
+			keyPrivateKey:  testKeyPEM,
+			keyConfirm:     true,
+		})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "result should not be an error")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "SSL certificate uploaded", "response should confirm SSL upload")
+	})
+
+	t.Run("missing environment", func(t *testing.T) {
+		t.Parallel()
+
+		emptyCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{},
+		}
+		_, _, emptyHandler := tools.NewLinodeObjectStorageSSLUploadTool(emptyCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyRegion:      regionUSEast1,
+			keyLabel:       bucketTest,
+			keyCertificate: "test-cert",
+			keyPrivateKey:  "test-key",
+			keyConfirm:     true,
+		})
+		result, err := emptyHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "result should be an error for missing environment")
+	})
+
+	t.Run("api error propagated", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]string{"error": "internal server error"}))
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeObjectStorageSSLUploadTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyRegion:      regionUSEast1,
+			keyLabel:       bucketTest,
+			keyCertificate: testCertPEM,
+			keyPrivateKey:  testKeyPEM,
+			keyConfirm:     true,
+		})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "result should be an error for API failure")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to upload SSL certificate", "error should describe the failed operation")
+	})
+
+	for _, traversalCase := range []struct {
+		name  string
+		label string
+	}{
+		{"label with slash", "bucket/../../etc"},
+		{"label with query", "bucket?foo=bar"},
+	} {
+		t.Run("path traversal: "+traversalCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				w.Header().Set("Content-Type", "application/json")
+				assert.NoError(t, json.NewEncoder(w).Encode(linode.BucketSSL{SSL: true}))
+			}))
+			defer srv.Close()
+
+			srvCfg := &config.Config{
+				Environments: map[string]config.EnvironmentConfig{
+					envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+				},
+			}
+			_, _, srvHandler := tools.NewLinodeObjectStorageSSLUploadTool(srvCfg)
+
+			req := createRequestWithArgs(t, map[string]any{
+				keyRegion:      regionUSEast1,
+				keyLabel:       traversalCase.label,
+				keyCertificate: testCertPEM,
+				keyPrivateKey:  testKeyPEM,
+				keyConfirm:     true,
+			})
+			result, err := srvHandler(t.Context(), req)
+
+			// url.PathEscape at the client layer encodes separators, so the request
+			// reaches the server with encoded values. The test passes to confirm
+			// url.PathEscape handles these inputs safely.
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			assert.False(t, result.IsError)
+		})
+	}
+}

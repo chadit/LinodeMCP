@@ -483,6 +483,8 @@ func handleObjectStorageKeyDeleteRequest(ctx context.Context, request *mcp.CallT
 }
 
 // NewLinodeObjectStorageObjectACLUpdateTool creates a tool for updating an object's ACL.
+//
+//nolint:dupl // follows the same tool factory pattern as all other NewLinode*Tool functions
 func NewLinodeObjectStorageObjectACLUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_object_storage_object_acl_update",
@@ -637,6 +639,108 @@ func handleObjectStorageSSLDeleteRequest(ctx context.Context, request *mcp.CallT
 		Message: fmt.Sprintf("SSL certificate deleted from bucket '%s' in region '%s'", label, region),
 		Region:  region,
 		Bucket:  label,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+// NewLinodeObjectStorageSSLUploadTool creates a tool for uploading an SSL certificate to a bucket.
+//
+//nolint:dupl // follows the same tool factory pattern as all other NewLinode*Tool functions
+func NewLinodeObjectStorageSSLUploadTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_object_storage_ssl_upload",
+		mcp.WithDescription("Uploads an SSL/TLS certificate to an Object Storage bucket. "+
+			"Requires confirm=true to proceed."),
+		mcp.WithString(
+			paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
+		),
+		mcp.WithString(
+			"region",
+			mcp.Required(),
+			mcp.Description("Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1')"),
+		),
+		mcp.WithString(
+			"label",
+			mcp.Required(),
+			mcp.Description("The bucket label (name)"),
+		),
+		mcp.WithString(
+			"certificate",
+			mcp.Required(),
+			mcp.Description("The PEM-encoded TLS/SSL certificate to upload"),
+		),
+		mcp.WithString(
+			"private_key",
+			mcp.Required(),
+			mcp.Description("The PEM-encoded private key for the certificate"),
+		),
+		mcp.WithBoolean(
+			paramConfirm,
+			mcp.Required(),
+			mcp.Description("Must be true to proceed. This uploads a certificate to the bucket."),
+		),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleObjectStorageSSLUploadRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleObjectStorageSSLUploadRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This uploads an SSL certificate to the bucket. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	region := request.GetString("region", "")
+	label := request.GetString("label", "")
+	certificate := request.GetString("certificate", "")
+	privateKey := request.GetString("private_key", "")
+
+	if region == "" {
+		return mcp.NewToolResultError("region is required"), nil
+	}
+
+	if label == "" {
+		return mcp.NewToolResultError("label is required"), nil
+	}
+
+	if certificate == "" {
+		return mcp.NewToolResultError("certificate is required"), nil
+	}
+
+	if privateKey == "" {
+		return mcp.NewToolResultError("private_key is required"), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	req := linode.UploadBucketSSLRequest{
+		Certificate: certificate,
+		PrivateKey:  privateKey,
+	}
+
+	ssl, err := client.UploadBucketSSL(ctx, region, label, req)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to upload SSL certificate for bucket '%s' in region '%s': %v", label, region, err)), nil
+	}
+
+	response := struct {
+		Message string            `json:"message"`
+		Region  string            `json:"region"`
+		Bucket  string            `json:"bucket"`
+		SSL     *linode.BucketSSL `json:"ssl"`
+	}{
+		Message: fmt.Sprintf("SSL certificate uploaded to bucket '%s' in region '%s'", label, region),
+		Region:  region,
+		Bucket:  label,
+		SSL:     ssl,
 	}
 
 	return MarshalToolResponse(response)
