@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import ipaddress
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from mcp.types import TextContent, Tool
 
@@ -335,6 +335,78 @@ async def handle_linode_networking_ip_update(
         return await client.update_networking_ip(address, rdns)
 
     return await execute_tool(cfg, arguments, "update networking IP", _call)
+
+
+def create_linode_networking_ip_allocate_tool() -> tuple[Tool, Capability]:
+    """Create the linode_networking_ip_allocate tool."""
+    return Tool(
+        name="linode_networking_ip_allocate",
+        description=("Allocates a new IP address at the networking level for a Linode"),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "linode_id": {
+                    "type": "integer",
+                    "description": ("The Linode ID to allocate the IP for"),
+                },
+                "type": {
+                    "type": "string",
+                    "description": ("IP type: ipv4 or ipv6 (required)"),
+                },
+                "public": {
+                    "type": "boolean",
+                    "description": ("Whether the IP is public (default true)"),
+                },
+                "confirm": _CONFIRM_PROP,
+            },
+            "required": [
+                "linode_id",
+                "type",
+                "confirm",
+            ],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_networking_ip_allocate(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_networking_ip_allocate tool request."""
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("Set confirm=true to proceed.")
+
+    errors = []
+    linode_id = arguments.get("linode_id")
+    if (
+        linode_id is None
+        or not isinstance(linode_id, int)
+        or isinstance(linode_id, bool)
+    ):
+        errors.append("linode_id must be an integer")
+
+    ip_type = arguments.get("type", "")
+    if not ip_type or not isinstance(ip_type, str):
+        errors.append("type must be a non-empty string")
+    elif ip_type not in ("ipv4", "ipv6"):
+        errors.append("type must be ipv4 or ipv6")
+
+    public = arguments.get("public", True)
+    if not isinstance(public, bool):
+        errors.append("public must be a boolean")
+
+    if errors:
+        return _error_response("; ".join(errors))
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        return await client.allocate_networking_ip(
+            cast("int", linode_id), ip_type=cast("str", ip_type), public=public
+        )
+
+    return await execute_tool(cfg, arguments, "allocate networking IP", _call)
 
 
 def create_linode_instance_ip_delete_tool() -> tuple[Tool, Capability]:

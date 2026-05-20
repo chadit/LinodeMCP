@@ -2087,3 +2087,152 @@ async def test_instance_ip_tools_reject_malformed_address_before_client(
 
     assert "address" in result[0].text.lower()
     mock_client_class.assert_not_called()
+
+
+async def test_networking_ip_allocate_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Networking IP allocate tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_networking_ip_allocate_tool" in tools_mod.__all__
+    assert "handle_linode_networking_ip_allocate" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_networking_ip_allocate" in srv.registered_tool_names
+
+
+async def test_networking_ip_allocate_rejects_missing_confirm_before_client(
+    sample_config: Config,
+) -> None:
+    """Networking IP allocate should reject missing confirm before client creation."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_networking_ip_allocate",
+            {"linode_id": 12345, "type": "ipv4"},
+        )
+
+    assert "confirm" in result[0].text.lower()
+    mock_client_class.assert_not_called()
+
+
+async def test_networking_ip_allocate_rejects_false_confirm_before_client(
+    sample_config: Config,
+) -> None:
+    """Networking IP allocate should reject false confirm before client creation."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_networking_ip_allocate",
+            {"linode_id": 12345, "type": "ipv4", "confirm": False},
+        )
+
+    assert "confirm" in result[0].text.lower()
+    mock_client_class.assert_not_called()
+
+
+async def test_networking_ip_allocate_dispatches_happy_path(
+    sample_config: Config,
+) -> None:
+    """Networking IP allocate calls client with validated arguments."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.allocate_networking_ip.return_value = {
+            "address": "198.51.100.10",
+            "linode_id": 12345,
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_networking_ip_allocate",
+            {
+                "linode_id": 12345,
+                "type": "ipv4",
+                "public": True,
+                "confirm": True,
+            },
+        )
+
+    mock_client.allocate_networking_ip.assert_awaited_once_with(
+        12345, ip_type="ipv4", public=True
+    )
+    result_json = json.loads(result[0].text)
+    assert result_json["address"] == "198.51.100.10"
+
+
+@pytest.mark.parametrize(
+    "linode_id",
+    [
+        (True,),
+        ("123",),
+        (None,),
+    ],
+)
+async def test_networking_ip_allocate_rejects_invalid_linode_id(
+    sample_config: Config, linode_id: Any
+) -> None:
+    """Networking IP allocate rejects invalid linode_id values."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_networking_ip_allocate",
+            {
+                "linode_id": linode_id,
+                "type": "ipv4",
+                "confirm": True,
+            },
+        )
+
+    assert "linode_id" in result[0].text.lower()
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "ip_type",
+    [
+        ("ipv5",),
+        (123,),
+        ("",),
+    ],
+)
+async def test_networking_ip_allocate_rejects_invalid_type(
+    sample_config: Config, ip_type: Any
+) -> None:
+    """Networking IP allocate rejects invalid type values."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_networking_ip_allocate",
+            {
+                "linode_id": 12345,
+                "type": ip_type,
+                "confirm": True,
+            },
+        )
+
+    assert "type" in result[0].text.lower()
+    mock_client_class.assert_not_called()
+
+
+async def test_networking_ip_allocate_rejects_non_bool_public(
+    sample_config: Config,
+) -> None:
+    """Networking IP allocate rejects non-boolean public values."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_networking_ip_allocate",
+            {
+                "linode_id": 12345,
+                "type": "ipv4",
+                "public": "yes",
+                "confirm": True,
+            },
+        )
+
+    assert "public" in result[0].text.lower()
+    mock_client_class.assert_not_called()
