@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from linodemcp.config import BuiltinOverride, UserProfileConfig
-from linodemcp.linode import Profile
+from linodemcp.linode import NetworkError, Profile
 from linodemcp.profiles import (
     ActiveProfileDisabledError,
     ActiveProfileUnknownError,
@@ -2086,6 +2086,80 @@ async def test_instance_ip_tools_reject_malformed_address_before_client(
         result = await srv.dispatch(tool_name, arguments)
 
     assert "address" in result[0].text.lower()
+    mock_client_class.assert_not_called()
+
+
+async def test_networking_ips_list_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Networking IPs list tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_networking_ips_list_tool" in tools_mod.__all__
+    assert "handle_linode_networking_ips_list" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_networking_ips_list" in srv.registered_tool_names
+
+
+async def test_networking_ips_list_dispatches_happy_path(
+    sample_config: Config,
+) -> None:
+    """Networking IPs list calls client with skip_ipv6_rdns."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_networking_ips.return_value = [
+            {"address": "198.51.100.5", "type": "ipv4"}
+        ]
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_networking_ips_list",
+            {"skip_ipv6_rdns": True},
+        )
+
+    mock_client.list_networking_ips.assert_awaited_once_with(skip_ipv6_rdns=True)
+    result_json = json.loads(result[0].text)
+    assert result_json["count"] == 1
+    assert result_json["ips"][0]["address"] == "198.51.100.5"
+
+
+async def test_networking_ips_list_returns_error_response_on_client_failure(
+    sample_config: Config,
+) -> None:
+    """Networking IPs list returns a tool error response when the client fails."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_networking_ips.side_effect = NetworkError(
+            "ListNetworkingIPs", RuntimeError("timeout")
+        )
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_networking_ips_list", {})
+
+    assert "failed to list networking ips" in result[0].text.lower()
+    assert "ListNetworkingIPs" in result[0].text
+
+
+@pytest.mark.parametrize("skip_ipv6_rdns", ["true", 1, None])
+async def test_networking_ips_list_rejects_invalid_skip_ipv6_rdns_before_client(
+    sample_config: Config, skip_ipv6_rdns: Any
+) -> None:
+    """Networking IPs list rejects non-boolean skip_ipv6_rdns values."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_networking_ips_list",
+            {"skip_ipv6_rdns": skip_ipv6_rdns},
+        )
+
+    assert "skip_ipv6_rdns" in result[0].text.lower()
     mock_client_class.assert_not_called()
 
 

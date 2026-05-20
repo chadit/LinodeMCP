@@ -337,6 +337,43 @@ async def handle_linode_networking_ip_update(
     return await execute_tool(cfg, arguments, "update networking IP", _call)
 
 
+def create_linode_networking_ips_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_networking_ips_list tool."""
+    return Tool(
+        name="linode_networking_ips_list",
+        description="Lists public IP addresses on the account",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+                "skip_ipv6_rdns": {
+                    "type": "boolean",
+                    "description": (
+                        "When true, omit IPv6 reverse DNS data from the response"
+                    ),
+                },
+            },
+        },
+    ), Capability.Read
+
+
+async def handle_linode_networking_ips_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_networking_ips_list tool request."""
+    skip_ipv6_rdns = arguments.get("skip_ipv6_rdns", False)
+    if not isinstance(skip_ipv6_rdns, bool):
+        return _error_response("skip_ipv6_rdns must be a boolean")
+
+    async def _call(
+        client: RetryableClient,
+    ) -> dict[str, Any]:
+        ips = await client.list_networking_ips(skip_ipv6_rdns=skip_ipv6_rdns)
+        return {"count": len(ips), "ips": ips}
+
+    return await execute_tool(cfg, arguments, "list networking IPs", _call)
+
+
 def create_linode_networking_ip_allocate_tool() -> tuple[Tool, Capability]:
     """Create the linode_networking_ip_allocate tool."""
     return Tool(
@@ -377,7 +414,7 @@ async def handle_linode_networking_ip_allocate(
     if not confirm:
         return _error_response("Set confirm=true to proceed.")
 
-    errors = []
+    errors: list[str] = []
     linode_id = arguments.get("linode_id")
     if (
         linode_id is None
