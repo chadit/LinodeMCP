@@ -351,6 +351,21 @@ func (c *Client) GetVolume(ctx context.Context, volumeID int) (*Volume, error) {
 	return volume, err
 }
 
+// GetSSHKey retrieves a single SSH key by ID with automatic retry on transient failures.
+func (c *Client) GetSSHKey(ctx context.Context, sshKeyID int) (*SSHKey, error) {
+	var sshKey *SSHKey
+
+	err := c.executeWithRetry(ctx, "GetSSHKey", func() error {
+		var err error
+
+		sshKey, err = c.httpGetSSHKey(ctx, sshKeyID)
+
+		return err
+	})
+
+	return sshKey, err
+}
+
 // CreateSSHKey creates a new SSH key with automatic retry on transient failures.
 func (c *Client) CreateSSHKey(ctx context.Context, req CreateSSHKeyRequest) (*SSHKey, error) {
 	var sshKey *SSHKey

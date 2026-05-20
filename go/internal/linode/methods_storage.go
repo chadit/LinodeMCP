@@ -196,6 +196,28 @@ func (c *Client) httpListSSHKeys(ctx context.Context) ([]SSHKey, error) {
 	return response.Data, nil
 }
 
+// GetSSHKey retrieves a single SSH key by its ID.
+func (c *Client) httpGetSSHKey(ctx context.Context, sshKeyID int) (*SSHKey, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointSSHKeys+"/%d", sshKeyID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetSSHKey", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var sshKey SSHKey
+	if err := c.handleResponse(resp, &sshKey); err != nil {
+		return nil, err
+	}
+
+	return &sshKey, nil
+}
+
 // CreateSSHKey creates a new SSH key in the user's profile.
 func (c *Client) httpCreateSSHKey(ctx context.Context, req CreateSSHKeyRequest) (*SSHKey, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
