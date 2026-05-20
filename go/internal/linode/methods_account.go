@@ -65,7 +65,27 @@ func (c *Client) httpGetAccount(ctx context.Context) (*Account, error) {
 		return nil, &NetworkError{Operation: "GetAccount", Err: err}
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _ = resp.Body.Close() }() // errcheck: body close is best-effort; all account methods use this pattern
+
+	var account Account
+	if err := c.handleResponse(resp, &account); err != nil {
+		return nil, err
+	}
+
+	return &account, nil
+}
+
+// httpUpdateAccount updates account billing/contact fields via PUT /v4/account.
+func (c *Client) httpUpdateAccount(ctx context.Context, req *UpdateAccountRequest) (*Account, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpointAccount, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateAccount", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }() // errcheck: body close is best-effort; all account methods use this pattern
 
 	var account Account
 	if err := c.handleResponse(resp, &account); err != nil {

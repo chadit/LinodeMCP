@@ -113,6 +113,13 @@ func (c *Client) GetAccount(ctx context.Context) (*Account, error) {
 	return account, err
 }
 
+// UpdateAccount updates account billing/contact fields without retrying the
+// mutating request. Retrying can replay account state changes after a transient
+// error, so this method delegates exactly once.
+func (c *Client) UpdateAccount(ctx context.Context, req *UpdateAccountRequest) (*Account, error) {
+	return c.httpUpdateAccount(ctx, req)
+}
+
 // ListRegions retrieves all regions with automatic retry on transient failures.
 func (c *Client) ListRegions(ctx context.Context) ([]Region, error) {
 	var regions []Region

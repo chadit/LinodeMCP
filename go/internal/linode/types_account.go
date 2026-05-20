@@ -97,6 +97,23 @@ type Account struct {
 	ActivePromotions  []Promo  `json:"active_promotions"`
 }
 
+// UpdateAccountRequest contains the editable fields for PUT /v4/account.
+// All fields are pointers so omitted fields are not sent in the request body.
+type UpdateAccountRequest struct {
+	Address1  *string `json:"address_1,omitempty"`
+	Address2  *string `json:"address_2,omitempty"`
+	City      *string `json:"city,omitempty"`
+	Company   *string `json:"company,omitempty"`
+	Country   *string `json:"country,omitempty"`
+	Email     *string `json:"email,omitempty"`
+	FirstName *string `json:"first_name,omitempty"`
+	LastName  *string `json:"last_name,omitempty"`
+	Phone     *string `json:"phone,omitempty"`
+	State     *string `json:"state,omitempty"`
+	TaxID     *string `json:"tax_id,omitempty"`
+	Zip       *string `json:"zip,omitempty"`
+}
+
 // Promo represents an active promotion on an account.
 type Promo struct {
 	Description              string `json:"description"`
