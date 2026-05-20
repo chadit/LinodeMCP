@@ -128,6 +128,33 @@ async def handle_linode_ipv6_range_get(
     return await execute_tool(cfg, arguments, "get IPv6 range", _call)
 
 
+def create_linode_ipv6_ranges_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_ipv6_ranges_list tool."""
+    return Tool(
+        name="linode_ipv6_ranges_list",
+        description="Lists all IPv6 ranges on the account",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+            },
+        },
+    ), Capability.Read
+
+
+async def handle_linode_ipv6_ranges_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_ipv6_ranges_list tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        response = await client.list_ipv6_ranges()
+        ranges: list[dict[str, Any]] = response.get("data", [])
+        return {"count": len(ranges), "ipv6_ranges": ranges}
+
+    return await execute_tool(cfg, arguments, "list IPv6 ranges", _call)
+
+
 def create_linode_vpc_ips_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_vpc_ips_list tool."""
     return Tool(

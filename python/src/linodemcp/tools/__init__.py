@@ -470,6 +470,7 @@ from linodemcp.tools.linode_volumes_write import (
 )
 from linodemcp.tools.linode_vpc import (
     create_linode_ipv6_range_get_tool,
+    create_linode_ipv6_ranges_list_tool,
     create_linode_vpc_get_tool,
     create_linode_vpc_ip_list_tool,
     create_linode_vpc_ips_list_tool,
@@ -477,6 +478,7 @@ from linodemcp.tools.linode_vpc import (
     create_linode_vpc_subnets_list_tool,
     create_linode_vpcs_list_tool,
     handle_linode_ipv6_range_get,
+    handle_linode_ipv6_ranges_list,
     handle_linode_vpc_get,
     handle_linode_vpc_ip_list,
     handle_linode_vpc_ips_list,
@@ -580,6 +582,7 @@ __all__ = [
     "create_linode_ipv6_range_create_tool",
     "create_linode_ipv6_range_delete_tool",
     "create_linode_ipv6_range_get_tool",
+    "create_linode_ipv6_ranges_list_tool",
     "create_linode_lke_acl_delete_tool",
     "create_linode_lke_acl_get_tool",
     "create_linode_lke_acl_update_tool",
@@ -797,6 +800,7 @@ __all__ = [
     "handle_linode_ipv6_range_create",
     "handle_linode_ipv6_range_delete",
     "handle_linode_ipv6_range_get",
+    "handle_linode_ipv6_ranges_list",
     "handle_linode_lke_acl_delete",
     "handle_linode_lke_acl_get",
     "handle_linode_lke_acl_update",
