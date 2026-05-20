@@ -1950,6 +1950,25 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("RebuildNodeBalancerConfig", e) from e
 
+    async def create_nodebalancer_config(
+        self, nodebalancer_id: int, fields: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Create a NodeBalancer config."""
+        if (
+            not isinstance(nodebalancer_id, int)  # pyright: ignore[reportUnnecessaryIsInstance]
+            or isinstance(nodebalancer_id, bool)
+            or nodebalancer_id < 1
+        ):
+            raise ValueError("nodebalancer_id must be a positive integer")
+        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
+        endpoint = f"/nodebalancers/{encoded_nodebalancer_id}/configs"
+        try:
+            response = await self.make_request("POST", endpoint, fields)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateNodeBalancerConfig", e) from e
+
     async def get_nodebalancer_config(
         self, nodebalancer_id: int, config_id: int
     ) -> dict[str, Any]:
@@ -6289,6 +6308,12 @@ class RetryableClient:
     ) -> dict[str, Any]:
         """Rebuild a NodeBalancer config without replay retry."""
         return await self.client.rebuild_nodebalancer_config(nodebalancer_id, config_id)
+
+    async def create_nodebalancer_config(
+        self, nodebalancer_id: int, fields: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Create a NodeBalancer config without replay retry."""
+        return await self.client.create_nodebalancer_config(nodebalancer_id, fields)
 
     async def get_nodebalancer_config(
         self, nodebalancer_id: int, config_id: int

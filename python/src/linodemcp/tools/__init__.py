@@ -253,6 +253,7 @@ from linodemcp.tools.linode_nodebalancers import (
     handle_linode_nodebalancers_list,
 )
 from linodemcp.tools.linode_nodebalancers_write import (
+    create_linode_nodebalancer_config_create_tool,
     create_linode_nodebalancer_config_delete_tool,
     create_linode_nodebalancer_config_node_create_tool,
     create_linode_nodebalancer_config_node_delete_tool,
@@ -263,6 +264,7 @@ from linodemcp.tools.linode_nodebalancers_write import (
     create_linode_nodebalancer_delete_tool,
     create_linode_nodebalancer_firewalls_update_tool,
     create_linode_nodebalancer_update_tool,
+    handle_linode_nodebalancer_config_create,
     handle_linode_nodebalancer_config_delete,
     handle_linode_nodebalancer_config_node_create,
     handle_linode_nodebalancer_config_node_delete,
@@ -603,6 +605,7 @@ __all__ = [
     "create_linode_lke_version_get_tool",
     "create_linode_lke_versions_list_tool",
     "create_linode_monitor_service_token_create_tool",
+    "create_linode_nodebalancer_config_create_tool",
     "create_linode_nodebalancer_config_delete_tool",
     "create_linode_nodebalancer_config_get_tool",
     "create_linode_nodebalancer_config_node_create_tool",
@@ -817,6 +820,7 @@ __all__ = [
     "handle_linode_lke_version_get",
     "handle_linode_lke_versions_list",
     "handle_linode_monitor_service_token_create",
+    "handle_linode_nodebalancer_config_create",
     "handle_linode_nodebalancer_config_delete",
     "handle_linode_nodebalancer_config_get",
     "handle_linode_nodebalancer_config_node_create",
