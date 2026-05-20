@@ -7302,6 +7302,102 @@ async def test_retryable_client_delete_profile_device_delegates() -> None:
     await client.close()
 
 
+async def test_get_nodebalancer_config() -> None:
+    """Test getting a NodeBalancer config."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "id": 6,
+        "nodebalancer_id": 8,
+        "port": 80,
+        "protocol": "http",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.get_nodebalancer_config(8, 6)
+
+        assert result == {
+            "id": 6,
+            "nodebalancer_id": 8,
+            "port": 80,
+            "protocol": "http",
+        }
+        mock_request.assert_called_once_with("GET", "/nodebalancers/8/configs/6")
+
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    ("nodebalancer_id", "config_id", "encoded_nodebalancer_id", "encoded_config_id"),
+    [
+        ("8/9", "6", "8%2F9", "6"),
+        ("8", "6?x", "8", "6%3Fx"),
+        ("8", "../6", "8", "..%2F6"),
+    ],
+)
+async def test_get_nodebalancer_config_encodes_path_params(
+    nodebalancer_id: str,
+    config_id: str,
+    encoded_nodebalancer_id: str,
+    encoded_config_id: str,
+) -> None:
+    """NodeBalancer config get path parameters are URL-encoded."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"id": 6}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.get_nodebalancer_config(
+            cast("Any", nodebalancer_id),
+            cast("Any", config_id),
+        )
+
+        mock_request.assert_called_once_with(
+            "GET",
+            f"/nodebalancers/{encoded_nodebalancer_id}/configs/{encoded_config_id}",
+        )
+
+    await client.close()
+
+
+async def test_get_nodebalancer_config_wraps_http_errors() -> None:
+    """Test getting a NodeBalancer config wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.get_nodebalancer_config(8, 6)
+
+    assert "GetNodeBalancerConfig" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_get_nodebalancer_config_retries_read() -> None:
+    """RetryableClient routes config get through the read retry helper."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable, "_execute_with_retry", new_callable=AsyncMock
+    ) as mock_retry:
+        mock_retry.return_value = {"id": 6}
+
+        result = await retryable.get_nodebalancer_config(8, 6)
+
+    assert result == {"id": 6}
+    mock_retry.assert_awaited_once_with(retryable.client.get_nodebalancer_config, 8, 6)
+    await retryable.close()
+
+
 async def test_update_nodebalancer_config() -> None:
     """Test updating a NodeBalancer config."""
     client = Client("https://api.linode.com/v4", "test-token")

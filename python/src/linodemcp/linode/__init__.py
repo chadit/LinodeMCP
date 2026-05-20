@@ -1950,6 +1950,22 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("RebuildNodeBalancerConfig", e) from e
 
+    async def get_nodebalancer_config(
+        self, nodebalancer_id: int, config_id: int
+    ) -> dict[str, Any]:
+        """Get a NodeBalancer config."""
+        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
+        encoded_config_id = quote(str(config_id), safe="")
+        endpoint = (
+            f"/nodebalancers/{encoded_nodebalancer_id}/configs/{encoded_config_id}"
+        )
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetNodeBalancerConfig", e) from e
+
     async def update_nodebalancer_config(
         self, nodebalancer_id: int, config_id: int, fields: dict[str, Any]
     ) -> dict[str, Any]:
@@ -6273,6 +6289,17 @@ class RetryableClient:
     ) -> dict[str, Any]:
         """Rebuild a NodeBalancer config without replay retry."""
         return await self.client.rebuild_nodebalancer_config(nodebalancer_id, config_id)
+
+    async def get_nodebalancer_config(
+        self, nodebalancer_id: int, config_id: int
+    ) -> dict[str, Any]:
+        """Get a NodeBalancer config with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_nodebalancer_config,
+            nodebalancer_id,
+            config_id,
+        )
+        return result
 
     async def update_nodebalancer_config(
         self, nodebalancer_id: int, config_id: int, fields: dict[str, Any]
