@@ -344,3 +344,110 @@ func TestRetryableClientGetInstanceRetries(t *testing.T) {
 	require.NoError(t, err, "GetInstance should succeed after retry")
 	assert.Equal(t, 99, instance.ID, "instance ID should match the request")
 }
+
+// TestRetryableClientUpdateInstanceSuccess verifies that UpdateInstance sends
+// a PUT request to the correct endpoint and returns the updated instance.
+func TestRetryableClientUpdateInstanceSuccess(t *testing.T) {
+	t.Parallel()
+
+	var callCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount.Add(1)
+
+		assert.Equal(t, http.MethodPut, r.Method, "should use PUT method")
+		assert.Equal(t, "/linode/instances/42", r.URL.Path, "endpoint should match")
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":42,"label":"updated-label","tags":["prod"],"status":"running"}`))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(
+		srv.URL, "token", nil,
+		linode.WithMaxRetries(3),
+		linode.WithBaseDelay(1*time.Millisecond),
+		linode.WithMaxDelay(10*time.Millisecond),
+		linode.WithBackoffFactor(2.0),
+		linode.WithJitter(false),
+	)
+
+	req := &linode.UpdateInstanceRequest{
+		Label: "updated-label",
+		Tags:  []string{"prod"},
+	}
+
+	instance, err := client.UpdateInstance(t.Context(), 42, req)
+	require.NoError(t, err, "UpdateInstance should succeed")
+	assert.Equal(t, 42, instance.ID, "instance ID should match")
+	assert.Equal(t, "updated-label", instance.Label, "label should match updated value")
+	assert.Equal(t, int32(1), callCount.Load(), "should only call the API once on success")
+}
+
+// TestRetryableClientUpdateInstanceRetries verifies that UpdateInstance retries
+// on a 500 server error and succeeds on the second attempt.
+func TestRetryableClientUpdateInstanceRetries(t *testing.T) {
+	t.Parallel()
+
+	var callCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		count := callCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"errors":[{"reason":"temporary"}]}`))
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":99,"label":"updated-ok","status":"running"}`))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(
+		srv.URL, "token", nil,
+		linode.WithMaxRetries(2),
+		linode.WithBaseDelay(1*time.Millisecond),
+		linode.WithMaxDelay(10*time.Millisecond),
+		linode.WithBackoffFactor(2.0),
+		linode.WithJitter(false),
+	)
+
+	req := &linode.UpdateInstanceRequest{Label: "updated-ok"}
+
+	instance, err := client.UpdateInstance(t.Context(), 99, req)
+	require.NoError(t, err, "UpdateInstance should succeed after retry")
+	assert.Equal(t, 99, instance.ID, "instance ID should match")
+	assert.Equal(t, int32(2), callCount.Load(), "should retry once then succeed")
+}
+
+// TestRetryableClientUpdateInstanceNoRetryOnAuthError verifies that
+// UpdateInstance does not retry on authentication errors (401).
+func TestRetryableClientUpdateInstanceNoRetryOnAuthError(t *testing.T) {
+	t.Parallel()
+
+	var callCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		callCount.Add(1)
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"errors":[{"reason":"unauthorized"}]}`))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(
+		srv.URL, "token", nil,
+		linode.WithMaxRetries(3),
+		linode.WithBaseDelay(1*time.Millisecond),
+		linode.WithMaxDelay(10*time.Millisecond),
+		linode.WithBackoffFactor(2.0),
+		linode.WithJitter(false),
+	)
+
+	req := &linode.UpdateInstanceRequest{Label: "auth-test-label"}
+
+	_, err := client.UpdateInstance(t.Context(), 42, req)
+	require.Error(t, err, "UpdateInstance should return an error on 401")
+	assert.Equal(t, int32(1), callCount.Load(), "should not retry on auth errors")
+}

@@ -410,6 +410,21 @@ func (c *Client) ResizeInstance(ctx context.Context, instanceID int, req ResizeI
 	})
 }
 
+// UpdateInstance updates a Linode instance with automatic retry on transient failures.
+func (c *Client) UpdateInstance(ctx context.Context, instanceID int, req *UpdateInstanceRequest) (*Instance, error) {
+	var instance *Instance
+
+	err := c.executeWithRetry(ctx, "UpdateInstance", func() error {
+		var err error
+
+		instance, err = c.httpUpdateInstance(ctx, instanceID, req)
+
+		return err
+	})
+
+	return instance, err
+}
+
 // CreateFirewall creates a new firewall with automatic retry on transient failures.
 func (c *Client) CreateFirewall(ctx context.Context, req CreateFirewallRequest) (*Firewall, error) {
 	var firewall *Firewall
