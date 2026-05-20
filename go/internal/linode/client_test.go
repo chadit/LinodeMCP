@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,6 +15,8 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
+
+const updateAccountEmail = "account-updated@example.com"
 
 // TestClientGetProfileSuccess verifies that GetProfile returns a fully
 // populated Profile when the API responds with 200 OK and valid JSON.
@@ -467,7 +470,7 @@ func TestClientUpdateProfileSuccess(t *testing.T) {
 
 	updatedProfile := linode.Profile{
 		Username:           "testuser",
-		Email:              "updated@example.com",
+		Email:              updateAccountEmail,
 		UID:                1234,
 		EmailNotifications: true,
 		Timezone:           "US/Eastern",
@@ -481,7 +484,7 @@ func TestClientUpdateProfileSuccess(t *testing.T) {
 
 		var body map[string]any
 		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		assert.Equal(t, "updated@example.com", body["email"])
+		assert.Equal(t, updateAccountEmail, body["email"])
 
 		w.Header().Set("Content-Type", "application/json")
 		assert.NoError(t, json.NewEncoder(w).Encode(updatedProfile))
@@ -490,13 +493,13 @@ func TestClientUpdateProfileSuccess(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	email := "updated@example.com"
+	email := updateAccountEmail
 	result, err := client.UpdateProfile(t.Context(), &linode.UpdateProfileRequest{
 		Email: &email,
 	})
 
 	require.NoError(t, err, "UpdateProfile should succeed on 200 response")
-	assert.Equal(t, "updated@example.com", result.Email)
+	assert.Equal(t, updateAccountEmail, result.Email)
 	assert.Equal(t, "US/Eastern", result.Timezone)
 }
 
@@ -538,4 +541,123 @@ func TestClientUpdateProfileAPIError(t *testing.T) {
 
 	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
 	assert.Equal(t, 400, apiErr.StatusCode)
+}
+
+// TestClientUpdateAccountSuccess verifies that UpdateAccount sends a PUT
+// request to /account with the exact body and returns the updated Account.
+func TestClientUpdateAccountSuccess(t *testing.T) {
+	t.Parallel()
+
+	updatedAccount := linode.Account{
+		FirstName: "Updated",
+		LastName:  "User",
+		Email:     "updated@example.com",
+		Company:   "TestCo",
+		Address1:  "123 Main St",
+		City:      "Philadelphia",
+		State:     "PA",
+		Zip:       "19106",
+		Country:   "US",
+		Phone:     "555-0100",
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, "/account", r.URL.Path, "request path should be /account")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		var body map[string]any
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		assert.Equal(t, "updated@example.com", body["email"])
+		assert.Equal(t, "Updated", body["first_name"])
+		assert.Equal(t, "123 Main St", body["address_1"])
+		assert.NotContains(t, body, "address_2", "omitted fields should not be sent")
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(updatedAccount))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
+
+	email := "updated@example.com"
+	firstName := "Updated"
+	address1 := "123 Main St"
+	result, err := client.UpdateAccount(t.Context(), &linode.UpdateAccountRequest{
+		Email:     &email,
+		FirstName: &firstName,
+		Address1:  &address1,
+	})
+
+	require.NoError(t, err, "UpdateAccount should succeed on 200 response")
+	assert.Equal(t, "updated@example.com", result.Email)
+	assert.Equal(t, "Updated", result.FirstName)
+	assert.Equal(t, "123 Main St", result.Address1)
+}
+
+// TestClientUpdateAccountNetworkError verifies that UpdateAccount returns a
+// NetworkError when the HTTP request fails to reach the server.
+func TestClientUpdateAccountNetworkError(t *testing.T) {
+	t.Parallel()
+
+	client := linode.NewClient("http://127.0.0.1:1", "my-token", nil, linode.WithMaxRetries(3))
+
+	_, err := client.UpdateAccount(t.Context(), &linode.UpdateAccountRequest{})
+
+	require.Error(t, err, "UpdateAccount should fail when the server is unreachable")
+
+	var netErr *linode.NetworkError
+
+	assert.ErrorAs(t, err, &netErr, "error should be a NetworkError")
+}
+
+// TestClientUpdateAccountAPIError verifies that UpdateAccount propagates
+// API errors through the handleResponse error chain.
+func TestClientUpdateAccountAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, err := w.Write([]byte(`{"errors":[{"field":"email","reason":"invalid email format"}]}`))
+		assert.NoError(t, err)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
+
+	_, err := client.UpdateAccount(t.Context(), &linode.UpdateAccountRequest{})
+
+	require.Error(t, err, "UpdateAccount should fail on 400 response")
+
+	var apiErr *linode.APIError
+
+	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
+	assert.Equal(t, http.StatusBadRequest, apiErr.StatusCode)
+}
+
+// TestClientUpdateAccountDoesNotRetry verifies the mutating account update is
+// not replayed after a transient HTTP error.
+func TestClientUpdateAccountDoesNotRetry(t *testing.T) {
+	t.Parallel()
+
+	var calls int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, "/account", r.URL.Path, "request path should be /account")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
+		assert.NoError(t, err)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
+
+	_, err := client.UpdateAccount(t.Context(), &linode.UpdateAccountRequest{})
+
+	require.Error(t, err, "UpdateAccount should fail on 500 response")
+	assert.Equal(t, int32(1), calls, "UpdateAccount must not retry and replay a mutating request")
 }
