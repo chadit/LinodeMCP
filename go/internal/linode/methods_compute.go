@@ -141,6 +141,26 @@ func (c *Client) httpListStackScripts(ctx context.Context) ([]StackScript, error
 	return response.Data, nil
 }
 
+// CreateStackScript creates a new StackScript.
+func (c *Client) httpCreateStackScript(ctx context.Context, req *CreateStackScriptRequest) (*StackScript, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointStackScripts, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateStackScript", Err: err}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var script StackScript
+	if err := c.handleResponse(resp, &script); err != nil {
+		return nil, err
+	}
+
+	return &script, nil
+}
+
 // BootInstance boots a Linode instance.
 func (c *Client) httpBootInstance(ctx context.Context, instanceID int, configID *int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

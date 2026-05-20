@@ -32,6 +32,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_stackscripts_list", Capability: profiles.CapRead},
 		// Compute writes / destroys
 		{Name: "linode_instance_create", Capability: profiles.CapWrite},
+		{Name: "linode_stackscript_create", Capability: profiles.CapWrite},
 		{Name: toolInstanceDelete, Capability: profiles.CapDestroy},
 		{Name: "linode_instance_boot", Capability: profiles.CapWrite},
 		{Name: "linode_instance_reboot", Capability: profiles.CapWrite},
@@ -313,11 +314,8 @@ func TestRequiredTokenScopesFullAccessIncludesLinodesWrite(t *testing.T) {
 	require.True(t, ok)
 
 	// Each entry below is a scope the synthetic catalog must produce for
-	// full-access. stackscripts:read_write is intentionally absent: the
-	// fixture has only a stackscripts list (read) tool, so no
-	// stackscripts write scope can be derived. images:read_only is
-	// present because instance_create pulls it in via the cross-category
-	// extras table.
+	// full-access. images:read_only is present because instance_create
+	// pulls it in via the cross-category extras table.
 	want := []string{
 		string(profiles.ScopeLinodesReadWrite),
 		string(profiles.ScopeVolumesReadWrite),
@@ -327,6 +325,7 @@ func TestRequiredTokenScopesFullAccessIncludesLinodesWrite(t *testing.T) {
 		string(profiles.ScopeLKEReadWrite),
 		string(profiles.ScopeObjectStorageReadWrite),
 		string(profiles.ScopeVPCReadWrite),
+		string(profiles.ScopeStackScriptsReadWrite),
 		string(profiles.ScopeImagesReadOnly),
 	}
 
