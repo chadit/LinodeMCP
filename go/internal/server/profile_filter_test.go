@@ -12,9 +12,10 @@ import (
 )
 
 const (
-	toolInstancesList  = "linode_instances_list"
-	toolInstanceCreate = "linode_instance_create"
-	toolVolumesList    = "linode_volumes_list"
+	toolInstancesList     = "linode_instances_list"
+	toolInstanceCreate    = "linode_instance_create"
+	toolVolumesList       = "linode_volumes_list"
+	toolBucketAccessAllow = "linode_object_storage_bucket_access_allow"
 )
 
 // toolNames extracts the registered tool name for each entry on the server.
@@ -51,6 +52,8 @@ func TestNewDefaultProfileFiltersToReadAndMeta(t *testing.T) {
 		"default profile must expose read tools like %s", toolInstancesList)
 	assert.NotContains(t, names, toolInstanceCreate,
 		"default profile must not expose write tools like %s", toolInstanceCreate)
+	assert.NotContains(t, names, toolBucketAccessAllow,
+		"default profile must not expose write tools like %s", toolBucketAccessAllow)
 
 	for _, info := range srv.ToolInfos() {
 		assert.Containsf(
@@ -90,6 +93,8 @@ func TestNewFullAccessRegistersEverything(t *testing.T) {
 		"full-access must expose write tools like %s", toolInstanceCreate)
 	assert.Contains(t, names, toolInstancesList,
 		"full-access must continue to expose read tools like %s", toolInstancesList)
+	assert.Contains(t, names, toolBucketAccessAllow,
+		"full-access must expose write tools like %s", toolBucketAccessAllow)
 
 	// The full-access tool set must be a strict superset of the default
 	// tool set. Comparing against a default-profile sibling avoids hard

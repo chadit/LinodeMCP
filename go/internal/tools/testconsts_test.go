@@ -122,6 +122,9 @@ const (
 	emailUpdatedExample = "updated@example.com"
 	nameUpdatedTest     = "Updated"
 	aclPublicRead       = "public-read"
+	aclPrivate          = "private"
+	errRegionInvalid    = "region must contain only lowercase letters, numbers, and hyphens"
+	pathTraversalValue  = ".."
 	objectPhotoJPG      = "photo.jpg"
 	filesystemExt4      = "ext4"
 

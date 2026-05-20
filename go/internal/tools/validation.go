@@ -103,6 +103,7 @@ func validateRootPassword(password string) error {
 var (
 	validDNSNameRegex     = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)*$|^@$|^$`)
 	validBucketLabelRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]{1,2}$`)
+	validRegionSlugRegex  = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*[a-z0-9]$`)
 )
 
 // validateDNSRecordName checks that the DNS record name does not exceed 253 characters
@@ -156,6 +157,19 @@ func validateFirewallPolicy(policy string) error {
 	upper := strings.ToUpper(policy)
 	if upper != "ACCEPT" && upper != "DROP" {
 		return fmt.Errorf("got '%s': %w", policy, ErrFirewallPolicyInvalid)
+	}
+
+	return nil
+}
+
+// validateRegionSlug checks that a region path parameter is a single slug segment.
+func validateRegionSlug(region string) error {
+	if region == "" {
+		return ErrBucketRegionRequired
+	}
+
+	if !validRegionSlugRegex.MatchString(region) {
+		return fmt.Errorf("got '%s': %w", region, ErrRegionInvalid)
 	}
 
 	return nil

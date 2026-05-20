@@ -176,7 +176,7 @@ func TestLinodeSSHKeyUpdateTool(t *testing.T) {
 		{name: "negative sshkey id", args: map[string]any{keySSHKeyID: float64(-1), keyLabel: keyNameTest, keyConfirm: true}, wantContains: errSSHKeyIDPositive},
 		{name: "malformed sshkey id with slash", args: map[string]any{keySSHKeyID: "123/45", keyLabel: keyNameTest, keyConfirm: true}, wantContains: errSSHKeyIDPositive},
 		{name: "malformed sshkey id with query", args: map[string]any{keySSHKeyID: "123?x=1", keyLabel: keyNameTest, keyConfirm: true}, wantContains: errSSHKeyIDPositive},
-		{name: "malformed sshkey id traversal", args: map[string]any{keySSHKeyID: "..", keyLabel: keyNameTest, keyConfirm: true}, wantContains: errSSHKeyIDPositive},
+		{name: "malformed sshkey id traversal", args: map[string]any{keySSHKeyID: pathTraversalValue, keyLabel: keyNameTest, keyConfirm: true}, wantContains: errSSHKeyIDPositive},
 		{name: caseMissingLabel, args: map[string]any{keySSHKeyID: float64(123), keyConfirm: true}, wantContains: errLabelRequired},
 	}
 	for _, tt := range validationTests {

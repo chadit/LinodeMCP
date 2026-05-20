@@ -543,6 +543,73 @@ func TestClientUpdateProfileAPIError(t *testing.T) {
 	assert.Equal(t, 400, apiErr.StatusCode)
 }
 
+func TestClientAllowObjectStorageBucketAccessSuccess(t *testing.T) {
+	t.Parallel()
+
+	corsEnabled := true
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/access", r.URL.Path, "request path should match access endpoint")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		var body map[string]any
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		assert.Equal(t, "public-read", body["acl"])
+		assert.Equal(t, true, body["cors_enabled"])
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	err := client.AllowObjectStorageBucketAccess(t.Context(), "us-east-1", "my-bucket", linode.AllowObjectStorageBucketAccessRequest{
+		ACL:         "public-read",
+		CORSEnabled: &corsEnabled,
+	})
+
+	require.NoError(t, err, "AllowObjectStorageBucketAccess should succeed on 200 response")
+}
+
+func TestClientAllowObjectStorageBucketAccessEscapesPathParams(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/object-storage/buckets/us%2Feast%3F1/..%2Fbucket/access", r.URL.EscapedPath(), "path params should be escaped")
+		assert.Empty(t, r.URL.RawQuery, "path params must not become query params")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	err := client.AllowObjectStorageBucketAccess(t.Context(), "us/east?1", "../bucket", linode.AllowObjectStorageBucketAccessRequest{})
+
+	require.NoError(t, err, "escaped path params should round-trip through the client")
+}
+
+func TestClientAllowObjectStorageBucketAccessDoesNotRetry(t *testing.T) {
+	t.Parallel()
+
+	var calls int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/access", r.URL.Path, "request path should match access endpoint")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
+		assert.NoError(t, err)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
+	err := client.AllowObjectStorageBucketAccess(t.Context(), "us-east-1", "my-bucket", linode.AllowObjectStorageBucketAccessRequest{})
+
+	require.Error(t, err, "AllowObjectStorageBucketAccess should fail on 500 response")
+	assert.Equal(t, int32(1), calls, "AllowObjectStorageBucketAccess must not retry and replay a state-changing request")
+}
+
 // TestClientUpdateAccountSuccess verifies that UpdateAccount sends a PUT
 // request to /account with the exact body and returns the updated Account.
 func TestClientUpdateAccountSuccess(t *testing.T) {
