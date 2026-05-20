@@ -469,6 +469,7 @@ from linodemcp.tools.linode_volumes_write import (
     handle_linode_volume_update,
 )
 from linodemcp.tools.linode_vpc import (
+    create_linode_ipv6_pools_list_tool,
     create_linode_ipv6_range_get_tool,
     create_linode_ipv6_ranges_list_tool,
     create_linode_vpc_get_tool,
@@ -477,6 +478,7 @@ from linodemcp.tools.linode_vpc import (
     create_linode_vpc_subnet_get_tool,
     create_linode_vpc_subnets_list_tool,
     create_linode_vpcs_list_tool,
+    handle_linode_ipv6_pools_list,
     handle_linode_ipv6_range_get,
     handle_linode_ipv6_ranges_list,
     handle_linode_vpc_get,
@@ -579,6 +581,7 @@ __all__ = [
     "create_linode_instance_shutdown_tool",
     "create_linode_instance_update_tool",
     "create_linode_instances_list_tool",
+    "create_linode_ipv6_pools_list_tool",
     "create_linode_ipv6_range_create_tool",
     "create_linode_ipv6_range_delete_tool",
     "create_linode_ipv6_range_get_tool",
@@ -797,6 +800,7 @@ __all__ = [
     "handle_linode_instance_shutdown",
     "handle_linode_instance_update",
     "handle_linode_instances_list",
+    "handle_linode_ipv6_pools_list",
     "handle_linode_ipv6_range_create",
     "handle_linode_ipv6_range_delete",
     "handle_linode_ipv6_range_get",

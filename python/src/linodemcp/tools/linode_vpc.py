@@ -155,6 +155,33 @@ async def handle_linode_ipv6_ranges_list(
     return await execute_tool(cfg, arguments, "list IPv6 ranges", _call)
 
 
+def create_linode_ipv6_pools_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_ipv6_pools_list tool."""
+    return Tool(
+        name="linode_ipv6_pools_list",
+        description="Lists all IPv6 pools on the account",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": _ENV_PROP,
+            },
+        },
+    ), Capability.Read
+
+
+async def handle_linode_ipv6_pools_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_ipv6_pools_list tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        response = await client.list_ipv6_pools()
+        pools: list[dict[str, Any]] = response.get("data", [])
+        return {"count": len(pools), "ipv6_pools": pools}
+
+    return await execute_tool(cfg, arguments, "list IPv6 pools", _call)
+
+
 def create_linode_vpc_ips_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_vpc_ips_list tool."""
     return Tool(
