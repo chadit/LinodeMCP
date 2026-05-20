@@ -34,10 +34,17 @@ from linodemcp.audit.redact import (
     redaction_field_set,
     redaction_fields,
 )
+from linodemcp.audit.retention import (
+    DEFAULT_AUDIT_RETENTION_DAYS,
+    DEFAULT_RETENTION_SWEEP_INTERVAL_SECONDS,
+    RetentionSweeper,
+)
 from linodemcp.audit.sink import CapturingSink, NoopSink, Sink
 
 __all__ = [
     "ACTIVE_LOG_FILE_NAME",
+    "DEFAULT_AUDIT_RETENTION_DAYS",
+    "DEFAULT_RETENTION_SWEEP_INTERVAL_SECONDS",
     "EVENT_ID_PREFIX",
     "REDACTED_VALUE",
     "SYSTEM_AUDIT_DIR",
@@ -49,6 +56,7 @@ __all__ = [
     "JSONLSinkClosedError",
     "Mode",
     "NoopSink",
+    "RetentionSweeper",
     "Sink",
     "Status",
     "is_redacted",

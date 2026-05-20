@@ -1,12 +1,19 @@
 """Main entry point for LinodeMCP server."""
 
 import asyncio
+import contextlib
 import logging
 import sys
+from pathlib import Path
 
 import structlog
 
-from linodemcp.audit import JSONLSink, resolve_default_audit_dir
+from linodemcp.audit import (
+    DEFAULT_AUDIT_RETENTION_DAYS,
+    JSONLSink,
+    RetentionSweeper,
+    resolve_default_audit_dir,
+)
 from linodemcp.cli import run_profile_command
 from linodemcp.config import Config, ConfigError, get_config_path
 from linodemcp.config.watcher import ConfigWatcher
@@ -121,15 +128,16 @@ async def _run_scope_validation(
     return True
 
 
-def _attach_audit_sink(
+def _start_audit(
     server: Server,
     log: structlog.stdlib.BoundLogger,
-) -> JSONLSink | None:
-    """Open the rolling JSONL sink and attach it to the server.
+) -> tuple[JSONLSink | None, asyncio.Task[None] | None]:
+    """Open the JSONL sink, attach it, and start the retention sweeper.
 
-    Returns the open sink so the caller can close it on shutdown, or
-    None on failure after logging the cause. On failure the server
-    keeps its default NoopSink; audit never blocks startup.
+    Returns ``(sink, sweeper_task)`` so the caller can tear both down
+    on shutdown. On sink-open failure returns ``(None, None)`` after
+    logging; the server keeps its NoopSink default and no sweeper
+    runs. Audit never blocks startup.
     """
     audit_dir = resolve_default_audit_dir()
     try:
@@ -140,18 +148,37 @@ def _attach_audit_sink(
             directory=audit_dir,
             error=str(exc),
         )
-        return None
+        return None, None
 
     server.set_audit_sink(sink)
     log.info("audit JSONL sink open", path=sink.path)
-    return sink
+
+    # Phase 2b: sweep rotated logs older than the retention window in
+    # the background. The window is the package default until the
+    # audit config block lands (Phase 3).
+    sweeper = RetentionSweeper(
+        str(Path(sink.path).parent),
+        DEFAULT_AUDIT_RETENTION_DAYS,
+    )
+    sweeper_task = asyncio.create_task(sweeper.run())
+    return sink, sweeper_task
 
 
-def _close_audit_sink(
+async def _stop_audit(
     sink: JSONLSink | None,
+    sweeper_task: asyncio.Task[None] | None,
     log: structlog.stdlib.BoundLogger,
 ) -> None:
-    """Close the audit sink so final events land and the file releases."""
+    """Stop the sweeper and close the sink on shutdown.
+
+    Cancels the sweeper task first so it stops touching the directory,
+    then closes the sink so final events land and the file releases.
+    """
+    if sweeper_task is not None:
+        sweeper_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await sweeper_task
+
     if sink is None:
         return
     try:
@@ -216,14 +243,15 @@ async def async_main() -> int:
 
     server: Server | None = None
     audit_sink: JSONLSink | None = None
+    sweeper_task: asyncio.Task[None] | None = None
     try:
         server = Server(cfg)
 
-        # Phase 2a: replace the default NoopSink with a rolling JSONL
-        # writer so every tool call lands on disk. On failure the
-        # server keeps its NoopSink default; audit never blocks
-        # startup.
-        audit_sink = _attach_audit_sink(server, log)
+        # Phase 2a/2b: attach the rolling JSONL sink so every tool call
+        # lands on disk, and start the background retention sweeper. On
+        # sink failure the server keeps its NoopSink default and no
+        # sweeper runs; audit never blocks startup.
+        audit_sink, sweeper_task = _start_audit(server, log)
 
         _wire_profile_hot_reload(watcher, server, log)
 
@@ -259,7 +287,7 @@ async def async_main() -> int:
             log.exception("config watcher stop error", error=str(exc))
         tool_helpers.set_live_config_source(None)
 
-        _close_audit_sink(audit_sink, log)
+        await _stop_audit(audit_sink, sweeper_task, log)
 
         try:
             obs.shutdown()

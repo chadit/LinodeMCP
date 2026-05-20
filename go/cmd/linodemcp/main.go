@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -223,6 +224,19 @@ func run() int {
 				log.Warn("audit JSONL sink close error", "error", closeErr)
 			}
 		}()
+
+		// Phase 2b: sweep rotated logs older than the retention window
+		// in the background. Tied to ctx so it stops on shutdown. The
+		// retention window is the package default until the audit
+		// config block lands (Phase 3).
+		auditDir := filepath.Dir(auditSink.Path())
+		sweeper := audit.NewRetentionSweeper(
+			auditDir,
+			audit.DefaultAuditRetentionDays,
+			audit.WithSweepLogger(log),
+		)
+
+		go sweeper.Run(ctx)
 	}
 
 	// Phase 5: a config reload that changes active_profile or the active
