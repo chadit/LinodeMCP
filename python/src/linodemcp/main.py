@@ -26,6 +26,7 @@ from linodemcp.profiles import (
 )
 from linodemcp.server import Server
 from linodemcp.tools import helpers as tool_helpers
+from linodemcp.tools.linode_audit_summary import set_audit_sqlite_path
 from linodemcp.version import get_version_info
 
 # Number of positional arguments required before sys.argv[1] is safe to
@@ -207,6 +208,10 @@ def _open_sqlite_sink(
         return None
 
     log.info("audit SQLite sink open", path=db_path)
+
+    # Phase 3d: let the summary query tool read the same database.
+    set_audit_sqlite_path(db_path)
+
     return sink
 
 

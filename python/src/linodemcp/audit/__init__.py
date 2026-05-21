@@ -47,6 +47,14 @@ from linodemcp.audit.retention import (
 )
 from linodemcp.audit.sink import CapturingSink, MultiSink, NoopSink, Sink
 from linodemcp.audit.sqlite import SQLiteSink
+from linodemcp.audit.summary import (
+    SummaryQuery,
+    SummaryRow,
+    UnknownGroupByColumnError,
+    load_window,
+    summarize,
+    validate_group_by,
+)
 
 __all__ = [
     "ACTIVE_LOG_FILE_NAME",
@@ -71,7 +79,11 @@ __all__ = [
     "SQLiteSink",
     "Sink",
     "Status",
+    "SummaryQuery",
+    "SummaryRow",
+    "UnknownGroupByColumnError",
     "is_redacted",
+    "load_window",
     "new_event",
     "new_event_id",
     "read_recent",
@@ -79,4 +91,6 @@ __all__ = [
     "redaction_field_set",
     "redaction_fields",
     "resolve_default_audit_dir",
+    "summarize",
+    "validate_group_by",
 ]

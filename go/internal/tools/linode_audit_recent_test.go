@@ -36,7 +36,7 @@ func TestLinodeAuditRecentDefinition(t *testing.T) {
 	require.NotNil(t, handler, "handler should not be nil")
 
 	props := tool.InputSchema.Properties
-	for _, param := range []string{"limit", "since", "until", "tool", "capability", "status", "include_meta"} {
+	for _, param := range []string{"limit", keySince, "until", "tool", "capability", "status", "include_meta"} {
 		assert.Contains(t, props, param, "schema should declare the %q filter", param)
 	}
 
@@ -86,7 +86,7 @@ func TestLinodeAuditRecentInvalidSince(t *testing.T) {
 
 	_, _, handler := tools.NewLinodeAuditRecentTool(&config.Config{})
 
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{"since": "not-a-timestamp"}))
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keySince: "not-a-timestamp"}))
 	require.NoError(t, err, "handler returns the error in the result, not as a Go error")
 	require.NotNil(t, result, "result must not be nil")
 	assert.True(t, result.IsError, "a malformed since must produce an error result")

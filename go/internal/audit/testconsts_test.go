@@ -17,4 +17,8 @@ const (
 	// goconst once they recur 3+ times across the package.
 	argKeyLabel = "label"
 	argKeyToken = "token"
+	// colTool and colStatus are summary group-by column names reused
+	// across the summary tests. Extracted to satisfy goconst.
+	colTool   = "tool"
+	colStatus = "status"
 )

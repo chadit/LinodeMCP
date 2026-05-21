@@ -87,6 +87,33 @@ def read_recent(directory: str, query: RecentQuery) -> list[Event]:
     return results
 
 
+def scan_events(
+    directory: str, since: datetime | None, include_meta: bool
+) -> list[Event]:
+    """Return every event at or after ``since`` (None = all), honoring
+    ``include_meta``. Unlike :func:`read_recent` there is no count limit:
+    aggregation (Phase 3d summary, 3f export) needs the whole window. A
+    missing directory returns an empty list.
+    """
+    base = Path(directory)
+    if not base.is_dir():
+        return []
+
+    events: list[Event] = []
+
+    for name in _ordered_audit_files(base):
+        for event in _read_events_from_file(base / name):
+            if not include_meta and event.tool_capability == "meta":
+                continue
+
+            if since is not None and event.ts < since:
+                continue
+
+            events.append(event)
+
+    return events
+
+
 def _matches(query: RecentQuery, event: Event) -> bool:
     """Report whether an event satisfies every set filter."""
     if not query.include_meta and event.tool_capability == "meta":

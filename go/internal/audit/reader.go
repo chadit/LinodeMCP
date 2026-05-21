@@ -60,13 +60,13 @@ func ReadRecent(dir string, query *RecentQuery) ([]Event, error) {
 		limit = MaxRecentLimit
 	}
 
-	root, err := os.OpenRoot(dir)
+	root, err := openReadRoot(dir)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
+		if errors.Is(err, errAuditDirMissing) {
 			return []Event{}, nil
 		}
 
-		return nil, fmt.Errorf("audit: open read root %s: %w", dir, err)
+		return nil, err
 	}
 
 	defer func() { _ = root.Close() }()
@@ -130,6 +130,23 @@ func (q *RecentQuery) matches(event *Event) bool {
 	}
 
 	return true
+}
+
+// openReadRoot opens an os.Root on dir for reading. A missing
+// directory returns errAuditDirMissing so callers can treat "queried
+// before the first event" as an empty result rather than a hard error
+// (and without a (nil, nil) return). Other open failures are wrapped.
+func openReadRoot(dir string) (*os.Root, error) {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, errAuditDirMissing
+		}
+
+		return nil, fmt.Errorf("audit: open read root %s: %w", dir, err)
+	}
+
+	return root, nil
 }
 
 // orderedAuditFiles returns the audit file names to scan, newest
