@@ -8401,9 +8401,7 @@ async def test_list_firewall_devices() -> None:
 
     assert result["results"] == 1
     assert result["data"][0]["id"] == 123
-    mock_request.assert_called_once_with(
-        "GET", "/networking/firewalls/12345/devices", params=None
-    )
+    mock_request.assert_called_once_with("GET", "/networking/firewalls/12345/devices")
     await client.close()
 
 
@@ -8419,7 +8417,7 @@ async def test_list_firewall_devices_encodes_firewall_id() -> None:
         await client.list_firewall_devices(cast("Any", "../12345"))
 
     mock_request.assert_called_once_with(
-        "GET", "/networking/firewalls/..%2F12345/devices", params=None
+        "GET", "/networking/firewalls/..%2F12345/devices"
     )
     await client.close()
 
@@ -8437,9 +8435,7 @@ async def test_list_firewall_devices_with_pagination() -> None:
 
     assert result["page"] == 2
     mock_request.assert_called_once_with(
-        "GET",
-        "/networking/firewalls/12345/devices",
-        params={"page": 2, "page_size": 25},
+        "GET", "/networking/firewalls/12345/devices?page=2&page_size=25"
     )
     await client.close()
 
@@ -8462,15 +8458,13 @@ async def test_retryable_list_firewall_devices_delegates_to_client() -> None:
     retryable = RetryableClient("https://api.linode.com/v4", "test-token")
 
     with patch.object(
-        retryable, "_execute_with_retry", new_callable=AsyncMock
-    ) as mock_retry:
-        mock_retry.return_value = {"data": []}
+        retryable.client, "list_firewall_devices", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = {"data": []}
         result = await retryable.list_firewall_devices(12345, page=2, page_size=25)
 
     assert result == {"data": []}
-    mock_retry.assert_awaited_once_with(
-        retryable.client.list_firewall_devices, 12345, page=2, page_size=25
-    )
+    mock_list.assert_awaited_once_with(12345, page=2, page_size=25)
     await retryable.close()
 
 

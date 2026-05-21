@@ -1688,8 +1688,10 @@ class Client:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
+        if params:
+            endpoint = f"{endpoint}?{urlencode(params)}"
         try:
-            response = await self.make_request("GET", endpoint, params=params or None)
+            response = await self.make_request("GET", endpoint)
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -6497,10 +6499,9 @@ class RetryableClient:
     ) -> dict[str, Any]:
         """List firewall devices with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
-            self.client.list_firewall_devices,
-            firewall_id,
-            page=page,
-            page_size=page_size,
+            lambda: self.client.list_firewall_devices(
+                firewall_id, page=page, page_size=page_size
+            )
         )
         return result
 
