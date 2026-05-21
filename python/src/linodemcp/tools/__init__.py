@@ -257,7 +257,9 @@ from linodemcp.tools.linode_lke_write import (
     handle_linode_lke_service_token_delete,
 )
 from linodemcp.tools.linode_monitor_write import (
+    create_linode_monitor_service_metrics_read_tool,
     create_linode_monitor_service_token_create_tool,
+    handle_linode_monitor_service_metrics_read,
     handle_linode_monitor_service_token_create,
 )
 from linodemcp.tools.linode_network_transfer import (
@@ -670,6 +672,7 @@ __all__ = [
     "create_linode_lke_types_list_tool",
     "create_linode_lke_version_get_tool",
     "create_linode_lke_versions_list_tool",
+    "create_linode_monitor_service_metrics_read_tool",
     "create_linode_monitor_service_token_create_tool",
     "create_linode_network_transfer_prices_tool",
     "create_linode_networking_ip_allocate_tool",
@@ -908,6 +911,7 @@ __all__ = [
     "handle_linode_lke_types_list",
     "handle_linode_lke_version_get",
     "handle_linode_lke_versions_list",
+    "handle_linode_monitor_service_metrics_read",
     "handle_linode_monitor_service_token_create",
     "handle_linode_network_transfer_prices",
     "handle_linode_networking_ip_allocate",

@@ -3709,6 +3709,40 @@ class Client:
             logger.exception("HTTP error creating monitor token: %s", e)
             raise NetworkError("CreateMonitorServiceToken", e) from e
 
+    async def read_monitor_service_metrics(self, service_type: str) -> dict[str, Any]:
+        """Read metrics for a Linode Metrics service entity type."""
+        if not service_type:
+            msg = "service_type is required"
+            raise ValueError(msg)
+
+        encoded = quote(service_type, safe="")
+        endpoint = f"/monitor/services/{encoded}/metrics"
+        logger.info(
+            "Reading monitor service metrics",
+            extra={"service_type": service_type},
+        )
+
+        try:
+            response = await self.make_request("POST", endpoint, {})
+            data: dict[str, Any] = response.json()
+            logger.info(
+                "Monitor service metrics read",
+                extra={"service_type": service_type},
+            )
+            return data
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout reading monitor metrics: %s", e)
+            raise NetworkError("ReadMonitorServiceMetrics", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout reading monitor metrics: %s", e)
+            raise NetworkError("ReadMonitorServiceMetrics", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error reading monitor metrics")
+            raise NetworkError("ReadMonitorServiceMetrics", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error reading monitor metrics: %s", e)
+            raise NetworkError("ReadMonitorServiceMetrics", e) from e
+
     async def boot_instance(
         self, instance_id: int, config_id: int | None = None
     ) -> None:
@@ -7509,6 +7543,13 @@ class RetryableClient:
         """Create a monitor service token with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.create_monitor_service_token, service_type, entity_ids
+        )
+        return result
+
+    async def read_monitor_service_metrics(self, service_type: str) -> dict[str, Any]:
+        """Read monitor service metrics with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.read_monitor_service_metrics, service_type
         )
         return result
 

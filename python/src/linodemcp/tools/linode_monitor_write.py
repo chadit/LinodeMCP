@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any, cast
 
 from mcp.types import TextContent, Tool
@@ -10,6 +11,36 @@ from linodemcp.tools.helpers import error_response, execute_tool
 if TYPE_CHECKING:
     from linodemcp.config import Config
     from linodemcp.linode import RetryableClient
+
+
+_SERVICE_TYPE_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def create_linode_monitor_service_metrics_read_tool() -> tuple[Tool, Capability]:
+    """Create the linode_monitor_service_metrics_read tool."""
+    return Tool(
+        name="linode_monitor_service_metrics_read",
+        description=("Reads metrics for a Linode Metrics service entity type."),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "service_type": {
+                    "type": "string",
+                    "description": (
+                        "Metrics service type, e.g. 'dbaas' or 'linode' (required)"
+                    ),
+                    "pattern": "^[A-Za-z0-9_-]+$",
+                },
+            },
+            "required": ["service_type"],
+        },
+    ), Capability.Read
 
 
 def create_linode_monitor_service_token_create_tool() -> tuple[Tool, Capability]:
@@ -53,6 +84,37 @@ def create_linode_monitor_service_token_create_tool() -> tuple[Tool, Capability]
             "required": ["service_type", "entity_ids", "confirm"],
         },
     ), Capability.Write
+
+
+def _validate_service_type(raw: object) -> str | None:
+    """Return a safe service_type slug or None for invalid input."""
+    if not isinstance(raw, str) or not raw:
+        return None
+    if not _SERVICE_TYPE_RE.fullmatch(raw):
+        return None
+    return raw
+
+
+async def handle_linode_monitor_service_metrics_read(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_monitor_service_metrics_read tool request."""
+    service_type = _validate_service_type(arguments.get("service_type"))
+    if service_type is None:
+        return error_response(
+            "service_type is required and must contain only letters, "
+            "numbers, '_' or '-'"
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        data = await client.read_monitor_service_metrics(service_type)
+        return {
+            "message": f"Monitor service metrics read for '{service_type}'",
+            "service_type": service_type,
+            "metrics": data,
+        }
+
+    return await execute_tool(cfg, arguments, "read monitor service metrics", _call)
 
 
 def _coerce_entity_ids(raw: object) -> list[int] | None:

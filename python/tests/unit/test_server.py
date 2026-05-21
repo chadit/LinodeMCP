@@ -2016,6 +2016,71 @@ def test_linode_nodebalancer_config_update_registered() -> None:
     assert entries["linode_nodebalancer_config_update"].capability == Capability.Write
 
 
+async def test_monitor_service_metrics_read_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Monitor service metrics read tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_monitor_service_metrics_read_tool" in tools_mod.__all__
+    assert "handle_linode_monitor_service_metrics_read" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_monitor_service_metrics_read_tool()
+    assert tool.name == "linode_monitor_service_metrics_read"
+    assert capability is Capability.Read
+    assert "confirm" not in tool.inputSchema["properties"]
+
+    registry = {entry.name: entry for entry in get_tool_registry()}
+    assert registry["linode_monitor_service_metrics_read"].capability is Capability.Read
+
+    srv = Server(sample_config)
+    assert "linode_monitor_service_metrics_read" in srv.registered_tool_names
+
+
+async def test_monitor_service_metrics_read_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Monitor service metrics read dispatches through the registered tool."""
+    response_data = {"data": [{"label": "cpu", "value": 1.0}]}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.read_monitor_service_metrics.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_monitor_service_metrics_read",
+            {"service_type": "linode"},
+        )
+
+    result_json = json.loads(result[0].text)
+    assert result_json["service_type"] == "linode"
+    assert result_json["metrics"] == response_data
+    mock_client.read_monitor_service_metrics.assert_awaited_once_with("linode")
+
+
+@pytest.mark.parametrize(
+    "service_type", [None, "", "   ", 123, "linode/v4", "linode?x=1", ".."]
+)
+async def test_monitor_service_metrics_read_rejects_invalid_service_type(
+    sample_config: Config, service_type: Any
+) -> None:
+    """Monitor metrics read rejects malformed path params before client creation."""
+    arguments: dict[str, Any] = {}
+    if service_type is not None:
+        arguments["service_type"] = service_type
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_monitor_service_metrics_read", arguments)
+
+    assert "service_type" in result[0].text.lower()
+    mock_client_class.assert_not_called()
+
+
 async def test_ipv4_assign_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
