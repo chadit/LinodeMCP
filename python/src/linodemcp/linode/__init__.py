@@ -3825,6 +3825,52 @@ class Client:
             logger.exception("HTTP error listing monitor metric definitions: %s", e)
             raise NetworkError("ListMonitorServiceMetricDefinitions", e) from e
 
+    async def delete_monitor_service_alert_definition(
+        self, service_type: str, alert_id: int
+    ) -> None:
+        """Delete an alert definition for a Linode Metrics service type."""
+        if not service_type:
+            msg = "service_type is required"
+            raise ValueError(msg)
+        if isinstance(alert_id, bool):
+            msg = "alert_id must be a valid integer"
+            raise TypeError(msg)
+        if alert_id <= 0:
+            msg = "alert_id must be a positive integer"
+            raise ValueError(msg)
+
+        encoded_service_type = quote(service_type, safe="")
+        encoded_alert_id = quote(str(alert_id), safe="")
+        endpoint = (
+            f"/monitor/services/{encoded_service_type}"
+            f"/alert-definitions/{encoded_alert_id}"
+        )
+        logger.info(
+            "Deleting monitor service alert definition",
+            extra={"service_type": service_type, "alert_id": alert_id},
+        )
+
+        try:
+            await self.make_request("DELETE", endpoint)
+            logger.info(
+                "Monitor service alert definition deleted",
+                extra={"service_type": service_type, "alert_id": alert_id},
+            )
+        except httpx.ConnectTimeout as e:
+            logger.exception(
+                "Connection timeout deleting monitor alert definition: %s", e
+            )
+            raise NetworkError("DeleteMonitorServiceAlertDefinition", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout deleting monitor alert definition: %s", e)
+            raise NetworkError("DeleteMonitorServiceAlertDefinition", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error deleting monitor alert definition")
+            raise NetworkError("DeleteMonitorServiceAlertDefinition", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error deleting monitor alert definition: %s", e)
+            raise NetworkError("DeleteMonitorServiceAlertDefinition", e) from e
+
     async def boot_instance(
         self, instance_id: int, config_id: int | None = None
     ) -> None:
@@ -7652,6 +7698,14 @@ class RetryableClient:
             self.client.list_monitor_service_metric_definitions, service_type
         )
         return result
+
+    async def delete_monitor_service_alert_definition(
+        self, service_type: str, alert_id: int
+    ) -> None:
+        """Delete a monitor service alert definition without retry replay."""
+        await self.client.delete_monitor_service_alert_definition(
+            service_type, alert_id
+        )
 
     async def boot_instance(
         self, instance_id: int, config_id: int | None = None

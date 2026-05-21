@@ -90,6 +90,9 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ),
         ToolDescriptor("linode_monitor_service_metrics_read", Capability.Read),
         ToolDescriptor("linode_monitor_service_token_create", Capability.Write),
+        ToolDescriptor(
+            "linode_monitor_service_alert_definition_delete", Capability.Destroy
+        ),
         ToolDescriptor("linode_profile_phone_number_delete", Capability.Write),
         ToolDescriptor("linode_profile_phone_number_verify", Capability.Write),
         ToolDescriptor("linode_profile_security_questions_answer", Capability.Write),
