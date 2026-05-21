@@ -13,6 +13,8 @@ from linodemcp.linode import (
     CircuitBreaker,
     CircuitOpenError,
     Client,
+    FirewallAddresses,
+    FirewallRule,
     FirewallRules,
     Grant,
     Grants,
@@ -3512,6 +3514,111 @@ async def test_retryable_get_firewall_rules_delegates_to_client() -> None:
 
         assert result is mock_rules
         mock_method.assert_awaited_once_with(12345)
+
+    await retryable.close()
+
+
+async def test_get_firewall_rule_version() -> None:
+    """Test getting a specific firewall rule version."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "action": "ACCEPT",
+        "protocol": "TCP",
+        "ports": "22",
+        "addresses": {"ipv4": ["0.0.0.0/0"], "ipv6": ["::/0"]},
+        "label": "allow-ssh",
+        "description": "Allow SSH traffic",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        rule = await client.get_firewall_rule_version(12345, "v1")
+
+        assert rule.action == "ACCEPT"
+        assert rule.protocol == "TCP"
+        assert rule.ports == "22"
+        assert rule.label == "allow-ssh"
+        mock_request.assert_awaited_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "GET"
+        assert "/history/rules/" in call_args[0][1]
+
+    await client.close()
+
+
+async def test_get_firewall_rule_version_encodes_path_params() -> None:
+    """Test that version path param is URL-encoded."""
+    from urllib.parse import quote
+
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "action": "ACCEPT",
+        "protocol": "TCP",
+        "ports": "22",
+        "addresses": {"ipv4": ["0.0.0.0/0"], "ipv6": ["::/0"]},
+        "label": "allow-ssh",
+        "description": "",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        # Test with a version containing path traversal characters
+        await client.get_firewall_rule_version(12345, "v1/../../../etc/passwd")
+
+        call_args = mock_request.call_args
+        endpoint = call_args[0][1]
+        expected_encoded = quote("v1/../../../etc/passwd", safe="")
+        expected_path = f"/networking/firewalls/12345/history/rules/{expected_encoded}"
+        assert endpoint == expected_path
+
+    await client.close()
+
+
+async def test_get_firewall_rule_version_wraps_http_errors() -> None:
+    """Test get_firewall_rule_version wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPStatusError(
+            "Not Found", request=MagicMock(), response=MagicMock(status_code=404)
+        )
+
+        with pytest.raises(NetworkError):
+            await client.get_firewall_rule_version(12345, "v1")
+
+    await client.close()
+
+
+async def test_retryable_get_firewall_rule_version_delegates_to_client() -> None:
+    """Test RetryableClient delegates firewall rule version get to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    mock_rule = FirewallRule(
+        action="ACCEPT",
+        protocol="TCP",
+        ports="22",
+        addresses=FirewallAddresses(ipv4=["0.0.0.0/0"], ipv6=["::/0"]),
+        label="allow-ssh",
+        description="Allow SSH traffic",
+    )
+
+    with patch.object(
+        retryable.client, "get_firewall_rule_version", new_callable=AsyncMock
+    ) as mock_method:
+        mock_method.return_value = mock_rule
+
+        result = await retryable.get_firewall_rule_version(12345, "v1")
+
+        assert result is mock_rule
+        mock_method.assert_awaited_once_with(12345, "v1")
 
     await retryable.close()
 

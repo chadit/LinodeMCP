@@ -2,9 +2,10 @@
 
 import json
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from mcp.types import TextContent
 
 from linodemcp.config import Config
 from linodemcp.linode import (
@@ -14678,3 +14679,86 @@ async def test_handle_linode_nodebalancer_config_create_error(
 
         assert len(result) == 1
         assert "Failed" in result[0].text or "error" in result[0].text.lower()
+
+
+async def test_handle_linode_firewall_rule_version_get(
+    sample_config: Config,
+) -> None:
+    """Test the firewall rule version get tool handler."""
+    from linodemcp.linode import FirewallAddresses, FirewallRule
+    from linodemcp.tools.linode_firewalls import handle_linode_firewall_rule_version_get
+
+    mock_rule = FirewallRule(
+        action="ACCEPT",
+        protocol="TCP",
+        ports="22",
+        addresses=FirewallAddresses(ipv4=["0.0.0.0/0"], ipv6=["::/0"]),
+        label="allow-ssh",
+        description="Allow SSH traffic",
+    )
+
+    async def mock_execute_tool(cfg, arguments, description, call_fn):
+        mock_client = MagicMock()
+        mock_client.get_firewall_rule_version = AsyncMock(return_value=mock_rule)
+        rule_data = await call_fn(mock_client)
+        return [TextContent(type="text", text=json.dumps(rule_data))]
+
+    with patch(
+        "linodemcp.tools.linode_firewalls.execute_tool", side_effect=mock_execute_tool
+    ):
+        result = await handle_linode_firewall_rule_version_get(
+            {"firewall_id": 12345, "version": "v1"}, sample_config
+        )
+        assert len(result) == 1
+        data = json.loads(result[0].text)
+        assert data["action"] == "ACCEPT"
+        assert data["label"] == "allow-ssh"
+
+
+async def test_handle_linode_firewall_rule_version_get_missing_args(
+    sample_config: Config,
+) -> None:
+    """Test the firewall rule version get tool rejects missing arguments."""
+    from linodemcp.tools.linode_firewalls import handle_linode_firewall_rule_version_get
+
+    result = await handle_linode_firewall_rule_version_get(
+        {"firewall_id": 12345}, sample_config
+    )
+    assert len(result) == 1
+    assert "version is required" in result[0].text
+
+    result = await handle_linode_firewall_rule_version_get(
+        {"version": "v1"}, sample_config
+    )
+    assert len(result) == 1
+    assert "firewall_id is required" in result[0].text
+
+    result = await handle_linode_firewall_rule_version_get({}, sample_config)
+    assert len(result) == 1
+    assert "firewall_id is required" in result[0].text
+
+    # Invalid firewall_id types
+    result = await handle_linode_firewall_rule_version_get(
+        {"firewall_id": True, "version": "v1"}, sample_config
+    )
+    assert len(result) == 1
+    assert "positive integer" in result[0].text or "valid integer" in result[0].text
+
+    result = await handle_linode_firewall_rule_version_get(
+        {"firewall_id": -1, "version": "v1"}, sample_config
+    )
+    assert len(result) == 1
+    assert "positive integer" in result[0].text
+
+    result = await handle_linode_firewall_rule_version_get(
+        {"firewall_id": 0, "version": "v1"}, sample_config
+    )
+    assert len(result) == 1
+    # 0 is falsy, caught by the "required" check
+    assert "required" in result[0].text
+
+    result = await handle_linode_firewall_rule_version_get(
+        {"firewall_id": "abc", "version": "v1"}, sample_config
+    )
+    assert len(result) == 1
+    assert "valid integer" in result[0].text
