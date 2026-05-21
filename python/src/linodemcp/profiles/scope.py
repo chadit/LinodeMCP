@@ -150,6 +150,7 @@ def _prefix_table() -> list[tuple[tuple[str, ...], str]]:
         (("linode_object_storage_",), _CAT_OBJECT_STORAGE),
         (("linode_lke_",), _CAT_LKE),
         (("linode_nodebalancer_", "linode_nodebalancers_"), _CAT_NODEBALANCERS),
+        (("linode_firewall_settings_",), _CAT_ACCOUNT),
         (("linode_firewall_", "linode_firewalls_"), _CAT_FIREWALL),
         (("linode_domain_", "linode_domains_"), _CAT_DOMAINS),
         (("linode_volume_", "linode_volumes_"), _CAT_VOLUMES),

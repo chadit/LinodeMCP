@@ -3365,6 +3365,84 @@ async def test_retryable_update_firewall_rules_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_update_firewall_settings() -> None:
+    """Test updating default firewalls."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    payload = {
+        "linode": 100,
+        "nodebalancer": 101,
+        "public_interface": 200,
+        "vpc_interface": 201,
+    }
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"default_firewall_ids": payload}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.update_firewall_settings(payload)
+
+    assert result == {"default_firewall_ids": payload}
+    mock_request.assert_awaited_once_with(
+        "PUT", "/networking/firewalls/settings", {"default_firewall_ids": payload}
+    )
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    ("default_firewall_ids", "message"),
+    [
+        ({}, "must contain at least one"),
+        ({"unknown": 100}, "unsupported keys"),
+        ({"linode": 0}, "linode must be a positive integer"),
+        ({"linode": -1}, "linode must be a positive integer"),
+        ({"linode": True}, "linode must be a positive integer"),
+        ({"linode": "100"}, "linode must be a positive integer"),
+    ],
+)
+async def test_update_firewall_settings_rejects_invalid_default_ids(
+    default_firewall_ids: Any, message: str
+) -> None:
+    """Test default firewall update rejects invalid IDs."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with pytest.raises(ValueError, match=message):
+        await client.update_firewall_settings(default_firewall_ids)
+
+    await client.close()
+
+
+async def test_update_firewall_settings_wraps_http_errors() -> None:
+    """Test default firewall update wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError, match="UpdateFirewallSettings"):
+            await client.update_firewall_settings({"linode": 100})
+
+    await client.close()
+
+
+async def test_retryable_update_firewall_settings_does_not_replay_put() -> None:
+    """Test RetryableClient delegates default firewall update once."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "update_firewall_settings", new_callable=AsyncMock
+    ) as mock_update:
+        mock_update.side_effect = httpx.HTTPError("transient")
+
+        with pytest.raises(httpx.HTTPError, match="transient"):
+            await retryable.update_firewall_settings({"linode": 100})
+
+    mock_update.assert_awaited_once_with({"linode": 100})
+    await retryable.close()
+
+
 async def test_list_firewalls() -> None:
     """Test listing firewalls."""
     client = Client("https://api.linode.com/v4", "test-token")

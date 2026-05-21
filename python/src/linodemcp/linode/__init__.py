@@ -1647,6 +1647,39 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetFirewall", e) from e
 
+    async def update_firewall_settings(
+        self, default_firewall_ids: dict[str, int]
+    ) -> dict[str, Any]:
+        """Update default firewalls."""
+        valid_keys = {
+            "linode",
+            "nodebalancer",
+            "public_interface",
+            "vpc_interface",
+        }
+        invalid_keys = set(default_firewall_ids) - valid_keys
+        if invalid_keys:
+            keys = ", ".join(sorted(invalid_keys))
+            msg = f"default_firewall_ids contains unsupported keys: {keys}"
+            raise ValueError(msg)
+        if not default_firewall_ids:
+            msg = "default_firewall_ids must contain at least one firewall ID"
+            raise ValueError(msg)
+        for key, value in default_firewall_ids.items():
+            if type(value) is not int or value <= 0:
+                msg = f"default_firewall_ids.{key} must be a positive integer"
+                raise ValueError(msg)
+
+        body = {"default_firewall_ids": default_firewall_ids}
+
+        try:
+            response = await self.make_request(
+                "PUT", "/networking/firewalls/settings", body
+            )
+            return cast("dict[str, Any]", response.json())
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateFirewallSettings", e) from e
+
     async def list_firewall_templates(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -7570,6 +7603,12 @@ class RetryableClient:
             outbound,
         )
         return result
+
+    async def update_firewall_settings(
+        self, default_firewall_ids: dict[str, int]
+    ) -> dict[str, Any]:
+        """Update default firewall settings without replaying the PUT."""
+        return await self.client.update_firewall_settings(default_firewall_ids)
 
     async def create_domain(
         self,

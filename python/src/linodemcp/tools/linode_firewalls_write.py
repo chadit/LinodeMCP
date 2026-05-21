@@ -19,6 +19,18 @@ def _is_firewall_rule_list(value: Any) -> TypeGuard[list[dict[str, Any]]]:
     return all(isinstance(rule, dict) for rule in rules)
 
 
+def _is_default_firewall_ids(value: Any) -> TypeGuard[dict[str, int]]:
+    if not isinstance(value, dict):
+        return False
+    ids = cast("dict[str, object]", value)
+    valid_keys = {"linode", "nodebalancer", "public_interface", "vpc_interface"}
+    if not ids or set(ids) - valid_keys:
+        return False
+    return all(
+        type(firewall_id) is int and firewall_id > 0 for firewall_id in ids.values()
+    )
+
+
 def create_linode_firewall_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_firewall_create tool."""
     return Tool(
@@ -305,6 +317,69 @@ async def handle_linode_firewall_rules_update(
         }
 
     return await execute_tool(cfg, arguments, "update firewall rules", _call)
+
+
+def create_linode_firewall_settings_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_firewall_settings_update tool."""
+    return Tool(
+        name="linode_firewall_settings_update",
+        description=(
+            "Updates the account default firewalls for Linodes, NodeBalancers, "
+            "public interfaces, and VPC interfaces."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "default_firewall_ids": {
+                    "type": "object",
+                    "description": (
+                        "Default firewall IDs keyed by linode, nodebalancer, "
+                        "public_interface, or vpc_interface."
+                    ),
+                    "additionalProperties": False,
+                    "minProperties": 1,
+                    "properties": {
+                        "linode": {"type": "integer", "minimum": 1},
+                        "nodebalancer": {"type": "integer", "minimum": 1},
+                        "public_interface": {"type": "integer", "minimum": 1},
+                        "vpc_interface": {"type": "integer", "minimum": 1},
+                    },
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to update default firewalls.",
+                },
+            },
+            "required": ["default_firewall_ids", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_firewall_settings_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_firewall_settings_update tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response("confirm must be true")
+
+    default_firewall_ids_raw = arguments.get("default_firewall_ids")
+    if not _is_default_firewall_ids(default_firewall_ids_raw):
+        return error_response(
+            "default_firewall_ids must be a non-empty object of positive "
+            "integer firewall IDs keyed by linode, nodebalancer, "
+            "public_interface, or vpc_interface"
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.update_firewall_settings(default_firewall_ids_raw)
+        updated = result.get("default_firewall_ids", default_firewall_ids_raw)
+        return {
+            "message": "Default firewall settings updated successfully",
+            "default_firewall_ids": updated,
+        }
+
+    return await execute_tool(cfg, arguments, "update default firewalls", _call)
 
 
 def create_linode_firewall_device_create_tool() -> tuple[Tool, Capability]:
