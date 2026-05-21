@@ -142,6 +142,40 @@ def create_linode_monitor_service_token_create_tool() -> tuple[Tool, Capability]
     ), Capability.Write
 
 
+def create_linode_monitor_service_alert_definition_get_tool() -> tuple[
+    Tool, Capability
+]:
+    """Create the linode_monitor_service_alert_definition_get tool."""
+    return Tool(
+        name="linode_monitor_service_alert_definition_get",
+        description="Gets an alert definition for a Linode Metrics service type.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "service_type": {
+                    "type": "string",
+                    "description": (
+                        "Metrics service type, e.g. 'dbaas' or 'linode' (required)"
+                    ),
+                    "pattern": "^[A-Za-z0-9_-]+$",
+                },
+                "alert_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Alert definition ID to get (required)",
+                },
+            },
+            "required": ["service_type", "alert_id"],
+        },
+    ), Capability.Read
+
+
 def create_linode_monitor_service_alert_definition_delete_tool() -> tuple[
     Tool, Capability
 ]:
@@ -305,6 +339,41 @@ async def handle_linode_monitor_service_token_create(
         }
 
     return await execute_tool(cfg, arguments, "create monitor service token", _call)
+
+
+async def handle_linode_monitor_service_alert_definition_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_monitor_service_alert_definition_get tool request."""
+    service_type = _validate_service_type(arguments.get("service_type"))
+    if service_type is None:
+        return error_response(
+            "service_type is required and must contain only letters, "
+            "numbers, '_' or '-'"
+        )
+
+    raw_alert_id = arguments.get("alert_id")
+    if type(raw_alert_id) is not int:
+        return error_response("alert_id must be a valid integer")
+    if raw_alert_id <= 0:
+        return error_response("alert_id must be a positive integer")
+    alert_id = raw_alert_id
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        data = await client.get_monitor_service_alert_definition(service_type, alert_id)
+        return {
+            "message": (
+                f"Monitor service alert definition {alert_id} "
+                f"retrieved for '{service_type}'"
+            ),
+            "service_type": service_type,
+            "alert_id": alert_id,
+            "alert_definition": data,
+        }
+
+    return await execute_tool(
+        cfg, arguments, "get monitor service alert definition", _call
+    )
 
 
 async def handle_linode_monitor_service_alert_definition_delete(
