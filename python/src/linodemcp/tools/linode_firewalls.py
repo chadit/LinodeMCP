@@ -286,6 +286,59 @@ def create_linode_firewall_rule_version_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def create_linode_firewall_device_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_firewall_device_get tool."""
+    return Tool(
+        name="linode_firewall_device_get",
+        description="Gets a specific device attached to a Cloud Firewall by ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "firewall_id": {
+                    "type": "integer",
+                    "description": ("The ID of the firewall (required)"),
+                },
+                "device_id": {
+                    "type": "integer",
+                    "description": ("The ID of the device (required)"),
+                },
+            },
+            "required": ["firewall_id", "device_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_firewall_device_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_firewall_device_get tool request."""
+    firewall_id = arguments.get("firewall_id", 0)
+    device_id = arguments.get("device_id", 0)
+    for _name, value, label in [
+        ("firewall_id", firewall_id, "firewall_id"),
+        ("device_id", device_id, "device_id"),
+    ]:
+        if not value:
+            return error_response(f"{label} is required")
+        if isinstance(value, bool):
+            return error_response(f"{label} must be a valid integer")
+        try:
+            parsed = int(value)
+            if parsed <= 0:
+                return error_response(f"{label} must be a positive integer")
+        except (ValueError, TypeError):
+            return error_response(f"{label} must be a valid integer")
+
+    fw_id = int(firewall_id)
+    dev_id = int(device_id)
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_firewall_device(fw_id, dev_id)
+
+    return await execute_tool(cfg, arguments, "retrieve firewall device", _call)
+
+
 async def handle_linode_firewall_rule_version_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:

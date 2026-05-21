@@ -14764,3 +14764,71 @@ async def test_handle_linode_firewall_rule_version_get_missing_args(
     )
     assert len(result) == 1
     assert "valid integer" in result[0].text
+
+
+async def test_handle_linode_firewall_device_get(
+    sample_config: Config,
+) -> None:
+    """Test the firewall device get tool handler."""
+    from linodemcp.tools.linode_firewalls import handle_linode_firewall_device_get
+
+    mock_device = {
+        "id": 456,
+        "label": "linode-123",
+        "type": "linode",
+        "created": "2018-01-01T01:01:01",
+        "updated": "2018-01-01T01:01:01",
+    }
+
+    async def mock_execute_tool(
+        cfg: Any, arguments: Any, description: Any, call_fn: Any
+    ) -> Any:
+        mock_client = MagicMock()
+        mock_client.get_firewall_device = AsyncMock(return_value=mock_device)
+        device_data = await call_fn(mock_client)
+        return [TextContent(type="text", text=json.dumps(device_data))]
+
+    with patch(
+        "linodemcp.tools.linode_firewalls.execute_tool", side_effect=mock_execute_tool
+    ):
+        result = await handle_linode_firewall_device_get(
+            {"firewall_id": 12345, "device_id": 456}, sample_config
+        )
+        assert len(result) == 1
+        data = json.loads(result[0].text)
+        assert data["id"] == 456
+        assert data["label"] == "linode-123"
+
+
+async def test_handle_linode_firewall_device_get_missing_args(
+    sample_config: Config,
+) -> None:
+    """Test the firewall device get tool rejects missing arguments."""
+    from linodemcp.tools.linode_firewalls import handle_linode_firewall_device_get
+
+    result = await handle_linode_firewall_device_get(
+        {"firewall_id": 12345}, sample_config
+    )
+    assert len(result) == 1
+    assert "device_id is required" in result[0].text
+
+    result = await handle_linode_firewall_device_get({"device_id": 456}, sample_config)
+    assert len(result) == 1
+    assert "firewall_id is required" in result[0].text
+
+    result = await handle_linode_firewall_device_get({}, sample_config)
+    assert len(result) == 1
+    assert "firewall_id is required" in result[0].text
+
+    # Invalid types
+    result = await handle_linode_firewall_device_get(
+        {"firewall_id": True, "device_id": 456}, sample_config
+    )
+    assert len(result) == 1
+    assert "positive integer" in result[0].text or "valid integer" in result[0].text
+
+    result = await handle_linode_firewall_device_get(
+        {"firewall_id": 12345, "device_id": "abc"}, sample_config
+    )
+    assert len(result) == 1
+    assert "valid integer" in result[0].text
