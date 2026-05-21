@@ -2029,6 +2029,111 @@ def test_linode_nodebalancer_config_update_registered() -> None:
     assert entries["linode_nodebalancer_config_update"].capability == Capability.Write
 
 
+async def test_monitor_service_alert_definition_create_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Monitor alert definition create tool is exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert (
+        "create_linode_monitor_service_alert_definition_create_tool"
+        in tools_mod.__all__
+    )
+    assert "handle_linode_monitor_service_alert_definition_create" in tools_mod.__all__
+
+    tool, capability = (
+        tools_mod.create_linode_monitor_service_alert_definition_create_tool()
+    )
+    assert tool.name == "linode_monitor_service_alert_definition_create"
+    assert capability is Capability.Write
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+
+    registry = {entry.name: entry for entry in get_tool_registry()}
+    assert (
+        registry["linode_monitor_service_alert_definition_create"].capability
+        is Capability.Write
+    )
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_monitor_service_alert_definition_create" in srv.registered_tool_names
+
+
+async def test_monitor_service_alert_definition_create_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Monitor alert definition create dispatches through the registered tool."""
+    response_data = {"id": 67890, "label": "CPU high"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_monitor_service_alert_definition.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_monitor_service_alert_definition_create",
+            {
+                "service_type": "linode",
+                "label": "CPU high",
+                "severity": 1,
+                "rule_criteria": {"rules": [{"metric": "cpu_usage"}]},
+                "trigger_conditions": {"criteria_condition": "ALL"},
+                "channel_ids": [10000],
+                "confirm": True,
+            },
+        )
+
+    result_json = json.loads(result[0].text)
+    assert result_json["service_type"] == "linode"
+    assert result_json["alert_definition"] == response_data
+    mock_client.create_monitor_service_alert_definition.assert_awaited_once_with(
+        "linode",
+        label="CPU high",
+        severity=1,
+        rule_criteria={"rules": [{"metric": "cpu_usage"}]},
+        trigger_conditions={"criteria_condition": "ALL"},
+        channel_ids=[10000],
+        description=None,
+        entity_ids=None,
+    )
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {},
+        {"service_type": ""},
+        {"service_type": "linode/v4", "confirm": True},
+        {"service_type": "linode?x=1", "confirm": True},
+        {"service_type": "..", "confirm": True},
+        {"service_type": "linode", "confirm": False},
+        {"service_type": "linode", "confirm": "true"},
+        {"service_type": "linode", "confirm": 1},
+        {"service_type": "linode", "label": "", "confirm": True},
+        {
+            "service_type": "linode",
+            "label": "CPU high",
+            "severity": True,
+            "confirm": True,
+        },
+    ],
+)
+async def test_monitor_service_alert_definition_create_rejects_invalid_args(
+    sample_config: Config, arguments: dict[str, Any]
+) -> None:
+    """Monitor alert definition create rejects malformed args before client use."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_monitor_service_alert_definition_create", arguments
+        )
+
+    assert "error" in result[0].text.lower()
+    mock_client_class.assert_not_called()
+
+
 async def test_monitor_service_alert_definition_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

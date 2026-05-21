@@ -142,6 +142,73 @@ def create_linode_monitor_service_token_create_tool() -> tuple[Tool, Capability]
     ), Capability.Write
 
 
+def create_linode_monitor_service_alert_definition_create_tool() -> tuple[
+    Tool, Capability
+]:
+    """Create the linode_monitor_service_alert_definition_create tool."""
+    return Tool(
+        name="linode_monitor_service_alert_definition_create",
+        description="Creates an alert definition for a Linode Metrics service type.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "service_type": {
+                    "type": "string",
+                    "description": (
+                        "Metrics service type, e.g. 'dbaas' or 'linode' (required)"
+                    ),
+                    "pattern": "^[A-Za-z0-9_-]+$",
+                },
+                "label": {"type": "string", "description": "Alert label (required)"},
+                "severity": {
+                    "type": "integer",
+                    "description": "Alert severity value (required)",
+                },
+                "rule_criteria": {
+                    "type": "object",
+                    "description": "Alert rule criteria (required)",
+                },
+                "trigger_conditions": {
+                    "type": "object",
+                    "description": "Alert trigger conditions (required)",
+                },
+                "channel_ids": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "minItems": 1,
+                    "description": "Notification channel IDs (required)",
+                },
+                "description": {"type": "string", "description": "Alert description"},
+                "entity_ids": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "minItems": 1,
+                    "description": "Optional service entity IDs",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this mutating operation.",
+                },
+            },
+            "required": [
+                "service_type",
+                "label",
+                "severity",
+                "rule_criteria",
+                "trigger_conditions",
+                "channel_ids",
+                "confirm",
+            ],
+        },
+    ), Capability.Write
+
+
 def create_linode_monitor_service_alert_definition_get_tool() -> tuple[
     Tool, Capability
 ]:
@@ -312,6 +379,65 @@ def _coerce_entity_ids(raw: object) -> list[int] | None:
     return result
 
 
+def _build_alert_definition_create_args(
+    arguments: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Validate tool args for alert-definition create."""
+    args: dict[str, Any] | None = None
+    error: str | None = None
+
+    service_type = _validate_service_type(arguments.get("service_type"))
+    label = arguments.get("label")
+    raw_severity = arguments.get("severity")
+    rule_criteria = arguments.get("rule_criteria")
+    trigger_conditions = arguments.get("trigger_conditions")
+    channel_ids = _coerce_entity_ids(arguments.get("channel_ids"))
+    description = arguments.get("description")
+    entity_ids = None
+    if "entity_ids" in arguments:
+        entity_ids = _coerce_entity_ids(arguments.get("entity_ids"))
+
+    if arguments.get("confirm") is not True:
+        error = (
+            "This creates a Linode Metrics alert definition. "
+            "Set confirm=true to proceed."
+        )
+    elif service_type is None:
+        error = (
+            "service_type is required and must contain only letters, "
+            "numbers, '_' or '-'"
+        )
+    elif not isinstance(label, str) or not label:
+        error = "label is required"
+    elif type(raw_severity) is not int:
+        error = "severity must be a valid integer"
+    elif raw_severity not in {0, 1, 2, 3}:
+        error = "severity must be one of 0, 1, 2, or 3"
+    elif not isinstance(rule_criteria, dict) or not rule_criteria:
+        error = "rule_criteria must be a non-empty object"
+    elif not isinstance(trigger_conditions, dict) or not trigger_conditions:
+        error = "trigger_conditions must be a non-empty object"
+    elif channel_ids is None:
+        error = "channel_ids must be a non-empty list of integers"
+    elif "entity_ids" in arguments and entity_ids is None:
+        error = "entity_ids must be a non-empty list of integers"
+    elif description is not None and not isinstance(description, str):
+        error = "description must be a string"
+    else:
+        args = {
+            "service_type": service_type,
+            "label": label,
+            "severity": raw_severity,
+            "rule_criteria": rule_criteria,
+            "trigger_conditions": trigger_conditions,
+            "channel_ids": channel_ids,
+            "description": description,
+            "entity_ids": entity_ids,
+        }
+
+    return args, error
+
+
 async def handle_linode_monitor_service_token_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -339,6 +465,39 @@ async def handle_linode_monitor_service_token_create(
         }
 
     return await execute_tool(cfg, arguments, "create monitor service token", _call)
+
+
+async def handle_linode_monitor_service_alert_definition_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_monitor_service_alert_definition_create tool request."""
+    parsed, error = _build_alert_definition_create_args(arguments)
+    if error is not None or parsed is None:
+        return error_response(error or "invalid alert definition create arguments")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        data = await client.create_monitor_service_alert_definition(
+            parsed["service_type"],
+            label=parsed["label"],
+            severity=parsed["severity"],
+            rule_criteria=parsed["rule_criteria"],
+            trigger_conditions=parsed["trigger_conditions"],
+            channel_ids=parsed["channel_ids"],
+            description=parsed["description"],
+            entity_ids=parsed["entity_ids"],
+        )
+        return {
+            "message": (
+                "Monitor service alert definition created for "
+                f"'{parsed['service_type']}'"
+            ),
+            "service_type": parsed["service_type"],
+            "alert_definition": data,
+        }
+
+    return await execute_tool(
+        cfg, arguments, "create monitor service alert definition", _call
+    )
 
 
 async def handle_linode_monitor_service_alert_definition_get(
