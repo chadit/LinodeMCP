@@ -83,6 +83,13 @@ type AccountAgreements struct {
 	PrivacyPolicy          bool `json:"privacy_policy"`
 }
 
+// AccountAvailability represents the account service availability for a region.
+type AccountAvailability struct {
+	Available   []string `json:"available"`
+	Region      string   `json:"region"`
+	Unavailable []string `json:"unavailable"`
+}
+
 // AcknowledgeAccountAgreementsRequest contains the optional agreement flags for
 // POST /account/agreements. Pointer booleans distinguish omitted fields from
 // explicit false values.

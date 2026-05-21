@@ -673,6 +673,73 @@ func TestClientGetAccountAgreementsAPIError(t *testing.T) {
 	assert.Equal(t, "forbidden", apiErr.Message)
 }
 
+// TestClientListAccountAvailabilitySuccess verifies ListAccountAvailability sends
+// a GET request to /account/availability with pagination query parameters.
+func TestClientListAccountAvailabilitySuccess(t *testing.T) {
+	t.Parallel()
+
+	availability := linode.PaginatedResponse[linode.AccountAvailability]{
+		Data: []linode.AccountAvailability{{
+			Available:   []string{"Linodes", "NodeBalancers"},
+			Region:      regionUSEast,
+			Unavailable: []string{"Kubernetes", "Block Storage"},
+		}},
+		Page:    2,
+		Pages:   3,
+		Results: 75,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/availability", r.URL.Path, "request path should be /account/availability")
+		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(availability))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.ListAccountAvailability(t.Context(), 2, 25)
+
+	require.NoError(t, err, "ListAccountAvailability should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, 2, result.Page)
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, regionUSEast, result.Data[0].Region)
+	assert.Equal(t, []string{"Linodes", "NodeBalancers"}, result.Data[0].Available)
+}
+
+// TestClientListAccountAvailabilityAPIError verifies ListAccountAvailability propagates API errors.
+func TestClientListAccountAvailabilityAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/availability", r.URL.Path, "request path should be /account/availability")
+		assert.Empty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.ListAccountAvailability(t.Context(), 0, 0)
+
+	require.Error(t, err, "ListAccountAvailability should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	require.NotNil(t, apiErr, "APIError should be present")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, "forbidden", apiErr.Message)
+}
+
 // TestClientAcknowledgeAccountAgreementsSuccess verifies that
 // AcknowledgeAccountAgreements sends a POST request to /account/agreements with
 // the exact body and returns the agreement statuses.
