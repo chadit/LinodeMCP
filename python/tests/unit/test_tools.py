@@ -87,6 +87,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_delete_tool,
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
+    create_linode_monitor_service_alert_definition_get_tool,
     create_linode_monitor_service_token_create_tool,
     create_linode_nodebalancer_config_create_tool,
     create_linode_nodebalancer_config_delete_tool,
@@ -249,6 +250,7 @@ from linodemcp.tools import (
     handle_linode_lke_types_list,
     handle_linode_lke_version_get,
     handle_linode_lke_versions_list,
+    handle_linode_monitor_service_alert_definition_get,
     handle_linode_monitor_service_token_create,
     handle_linode_nodebalancer_config_create,
     handle_linode_nodebalancer_config_delete,
@@ -11744,6 +11746,70 @@ async def test_handle_linode_instance_migrate_error(
     assert len(result) == 1
     assert "Failed to" in result[0].text
     assert "API error" in result[0].text
+
+
+def test_create_linode_monitor_service_alert_definition_get_tool() -> None:
+    """Tool definition advertises required service_type and alert_id."""
+    tool, capability = create_linode_monitor_service_alert_definition_get_tool()
+    assert tool.name == "linode_monitor_service_alert_definition_get"
+    assert capability is Capability.Read
+    schema = tool.inputSchema
+    assert "confirm" not in schema["properties"]
+    assert schema["required"] == ["service_type", "alert_id"]
+    assert schema["properties"]["service_type"]["pattern"] == "^[A-Za-z0-9_-]+$"
+    assert schema["properties"]["alert_id"]["type"] == "integer"
+    assert schema["properties"]["alert_id"]["minimum"] == 1
+
+
+async def test_handle_linode_monitor_service_alert_definition_get(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """Handler returns alert definition data from a successful client call."""
+    mock_linode_client.get_monitor_service_alert_definition.return_value = {
+        "id": 12345,
+        "label": "CPU high",
+    }
+    result = await handle_linode_monitor_service_alert_definition_get(
+        {"service_type": "dbaas", "alert_id": 12345}, sample_config
+    )
+    assert len(result) == 1
+    text = result[0].text
+    assert "CPU high" in text
+    assert "dbaas" in text
+    mock_linode_client.get_monitor_service_alert_definition.assert_awaited_once_with(
+        "dbaas", 12345
+    )
+
+
+@pytest.mark.parametrize("bad_service_type", ["", "bad/type", "bad?type", ".."])
+async def test_handle_linode_monitor_service_alert_definition_get_bad_service_type(
+    bad_service_type: str, sample_config: Config
+) -> None:
+    """Malformed service_type values return a validation error."""
+    result = await handle_linode_monitor_service_alert_definition_get(
+        {"service_type": bad_service_type, "alert_id": 12345}, sample_config
+    )
+    assert len(result) == 1
+    assert "service_type" in result[0].text
+    assert "Error" in result[0].text
+
+
+@pytest.mark.parametrize(
+    "bad_alert_id", [None, True, "12345", "1/2", "1?x", "..", 12.9, 0, -1]
+)
+async def test_handle_linode_monitor_service_alert_definition_get_bad_alert_id(
+    bad_alert_id: object, sample_config: Config
+) -> None:
+    """Malformed alert_id values return a validation error."""
+    args: dict[str, object] = {"service_type": "dbaas"}
+    if bad_alert_id is not None:
+        args["alert_id"] = bad_alert_id
+    result = await handle_linode_monitor_service_alert_definition_get(
+        args, sample_config
+    )
+    assert len(result) == 1
+    assert "alert_id" in result[0].text
+    assert "Error" in result[0].text
 
 
 def test_create_linode_monitor_service_token_create_tool() -> None:
