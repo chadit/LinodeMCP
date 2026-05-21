@@ -15134,7 +15134,7 @@ async def test_handle_linode_firewall_devices_list_with_pagination(
     """Test firewall devices list handler pagination."""
     from linodemcp.tools.linode_firewalls import handle_linode_firewall_devices_list
 
-    mock_devices = {"data": [], "page": 2, "pages": 5, "results": 0}
+    mock_devices: dict[str, Any] = {"data": [], "page": 2, "pages": 5, "results": 0}
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_firewall_devices.return_value = mock_devices
