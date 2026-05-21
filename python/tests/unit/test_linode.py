@@ -40,12 +40,14 @@ from linodemcp.linode import (
 from linodemcp.profiles import Capability
 from linodemcp.tools.linode_monitor_write import (
     create_linode_monitor_dashboard_get_tool,
+    create_linode_monitor_dashboards_list_tool,
     create_linode_monitor_service_alert_definition_create_tool,
     create_linode_monitor_service_alert_definition_delete_tool,
     create_linode_monitor_service_alert_definition_get_tool,
     create_linode_monitor_service_alert_definitions_list_tool,
     create_linode_monitor_service_dashboards_list_tool,
     handle_linode_monitor_dashboard_get,
+    handle_linode_monitor_dashboards_list,
     handle_linode_monitor_service_alert_definition_create,
     handle_linode_monitor_service_alert_definition_delete,
     handle_linode_monitor_service_alert_definition_get,
@@ -6250,6 +6252,41 @@ class TestMakeRequestBody:
 
         await client.close()
 
+    async def test_list_monitor_dashboards_get_shape(self) -> None:
+        """GET /monitor/dashboards returns the paginated dashboards payload."""
+        client = Client("https://api.linode.com/v4", "test-token")
+        response_data = {
+            "data": [{"id": 1, "label": "Resource Usage"}],
+            "page": 1,
+            "pages": 1,
+            "results": 1,
+        }
+        mock_response = MagicMock()
+        mock_response.json.return_value = response_data
+
+        with patch.object(
+            client, "make_request", new_callable=AsyncMock
+        ) as mock_request:
+            mock_request.return_value = mock_response
+            result = await client.list_monitor_dashboards()
+
+        assert result == response_data
+        mock_request.assert_awaited_once_with("GET", "/monitor/dashboards")
+        await client.close()
+
+    async def test_list_monitor_dashboards_wraps_http_errors(self) -> None:
+        """HTTP errors while listing monitor dashboards are wrapped."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        with patch.object(
+            client, "make_request", new_callable=AsyncMock
+        ) as mock_request:
+            mock_request.side_effect = httpx.ReadTimeout("boom")
+            with pytest.raises(NetworkError, match="ListMonitorDashboards"):
+                await client.list_monitor_dashboards()
+
+        await client.close()
+
     async def test_get_monitor_service_get_shape(self) -> None:
         """GET monitor service endpoint URL-encodes the service_type."""
         client = Client("https://api.linode.com/v4", "test-token")
@@ -6716,6 +6753,23 @@ class TestMakeRequestBody:
 
         mock_request.assert_not_called()
         await client.close()
+
+    async def test_retryable_list_monitor_dashboards_delegates_to_client(self) -> None:
+        """Retryable monitor dashboards list delegates to the client."""
+        retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+        payload = {"data": [{"id": 1, "label": "Resource Usage"}]}
+
+        with patch.object(
+            retryable,
+            "_execute_with_retry",
+            new_callable=AsyncMock,
+        ) as mock_execute:
+            mock_execute.return_value = payload
+            result = await retryable.list_monitor_dashboards()
+
+        assert result == payload
+        mock_execute.assert_awaited_once_with(retryable.client.list_monitor_dashboards)
+        await retryable.close()
 
     async def test_retryable_get_monitor_dashboard_delegates_to_client(self) -> None:
         """Retryable monitor dashboard get delegates to the client."""
@@ -10923,8 +10977,48 @@ async def test_monitor_dashboard_get_rejects_non_positive_dashboard_id(
     assert result[0].text == "Error: dashboard_id must be a positive integer"
 
 
-async def test_monitor_dashboards_tool_schema_and_handler_success() -> None:
-    """Monitor dashboards tool is read-only and returns handler output."""
+async def test_monitor_dashboards_list_tool_schema_and_handler_success() -> None:
+    """Monitor dashboards list tool is read-only and returns handler output."""
+    tool, capability = create_linode_monitor_dashboards_list_tool()
+    assert tool.name == "linode_monitor_dashboards_list"
+    assert capability == Capability.Read
+    assert "confirm" not in tool.inputSchema["properties"]
+    assert "required" not in tool.inputSchema
+
+    cfg = Config(
+        environments={
+            "default": EnvironmentConfig(
+                label="Default",
+                linode=LinodeConfig(
+                    api_url="https://api.linode.com/v4",
+                    token="test-token",
+                ),
+            )
+        }
+    )
+
+    response_payload = {
+        "data": [{"id": 1, "label": "Resource Usage"}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+    with patch.object(
+        RetryableClient,
+        "list_monitor_dashboards",
+        new_callable=AsyncMock,
+    ) as mock_list:
+        mock_list.return_value = response_payload
+
+        result = await handle_linode_monitor_dashboards_list({}, cfg)
+
+    mock_list.assert_awaited_once_with()
+    assert "Monitor dashboards listed" in result[0].text
+    assert "Resource Usage" in result[0].text
+
+
+async def test_monitor_service_dashboards_tool_schema_and_handler_success() -> None:
+    """Monitor service dashboards tool is read-only and returns handler output."""
     tool, capability = create_linode_monitor_service_dashboards_list_tool()
     assert tool.name == "linode_monitor_service_dashboards_list"
     assert capability == Capability.Read
