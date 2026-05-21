@@ -36,6 +36,26 @@ func NewLinodeAccountAgreementsTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeAccountAgreementsAcknowledgeTool creates a tool for acknowledging account agreements.
+func NewLinodeAccountAgreementsAcknowledgeTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_agreements_acknowledge",
+		"Acknowledges one or more account agreements.",
+		[]mcp.ToolOption{
+			mcp.WithBoolean("billing_agreement", mcp.Description("Acknowledge the billing agreement (optional)")),
+			mcp.WithBoolean("eu_model", mcp.Description("Acknowledge the EU model agreement (optional)")),
+			mcp.WithBoolean("master_service_agreement", mcp.Description("Acknowledge the master service agreement (optional)")),
+			mcp.WithBoolean("privacy_policy", mcp.Description("Acknowledge the privacy policy (optional)")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm account agreement acknowledgement.")),
+		},
+		handleLinodeAccountAgreementsAcknowledgeRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
 // NewLinodeAccountUpdateTool creates a tool for updating account billing/contact fields.
 func NewLinodeAccountUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -62,6 +82,83 @@ func NewLinodeAccountUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 	)
 
 	return tool, profiles.CapAdmin, handler
+}
+
+func handleLinodeAccountAgreementsAcknowledgeRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This acknowledges account agreements. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	req, validationMessage := acknowledgeAccountAgreementsRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	ackErr := client.AcknowledgeAccountAgreements(ctx, req)
+	if ackErr == nil {
+		response := struct {
+			Message string `json:"message"`
+		}{
+			Message: "Account agreements acknowledged successfully",
+		}
+
+		return MarshalToolResponse(response)
+	}
+
+	return mcp.NewToolResultError("Failed to acknowledge account agreements: " + ackErr.Error()), nil
+}
+
+func acknowledgeAccountAgreementsRequestFromTool(request *mcp.CallToolRequest) (*linode.AcknowledgeAccountAgreementsRequest, string) {
+	args := request.GetArguments()
+	req := linode.AcknowledgeAccountAgreementsRequest{}
+
+	var setCount int
+
+	setBool := func(name string, target **bool) string {
+		raw, exists := args[name]
+		if !exists {
+			return ""
+		}
+
+		value, ok := raw.(bool)
+		if !ok {
+			return name + " must be a boolean"
+		}
+
+		if !value {
+			return name + " must be true when provided"
+		}
+
+		*target = &value
+		setCount++
+
+		return ""
+	}
+
+	for _, field := range []struct {
+		name   string
+		target **bool
+	}{
+		{name: "billing_agreement", target: &req.BillingAgreement},
+		{name: "eu_model", target: &req.EUModel},
+		{name: "master_service_agreement", target: &req.MasterServiceAgreement},
+		{name: "privacy_policy", target: &req.PrivacyPolicy},
+	} {
+		if message := setBool(field.name, field.target); message != "" {
+			return nil, message
+		}
+	}
+
+	if setCount == 0 {
+		return nil, "at least one account agreement field is required"
+	}
+
+	return &req, ""
 }
 
 func handleLinodeAccountUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

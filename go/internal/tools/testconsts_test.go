@@ -46,6 +46,7 @@ const (
 	keySSHKeyID       = "sshkey_id"
 	keyRDNS           = "rdns"
 	keySince          = "since"
+	keyPrivacyPolicy  = "privacy_policy"
 
 	// Tool-specific resource ID keys.
 	keyLinodeID       = "linode_id"
