@@ -66,8 +66,10 @@ from linodemcp.tools.linode_domains_write import (
 )
 from linodemcp.tools.linode_firewalls import (
     create_linode_firewall_get_tool,
+    create_linode_firewall_rules_get_tool,
     create_linode_firewalls_list_tool,
     handle_linode_firewall_get,
+    handle_linode_firewall_rules_get,
     handle_linode_firewalls_list,
 )
 from linodemcp.tools.linode_firewalls_write import (
@@ -559,6 +561,7 @@ __all__ = [
     "create_linode_firewall_create_tool",
     "create_linode_firewall_delete_tool",
     "create_linode_firewall_get_tool",
+    "create_linode_firewall_rules_get_tool",
     "create_linode_firewall_rules_update_tool",
     "create_linode_firewall_update_tool",
     "create_linode_firewalls_list_tool",
@@ -785,6 +788,7 @@ __all__ = [
     "handle_linode_firewall_create",
     "handle_linode_firewall_delete",
     "handle_linode_firewall_get",
+    "handle_linode_firewall_rules_get",
     "handle_linode_firewall_rules_update",
     "handle_linode_firewall_update",
     "handle_linode_firewalls_list",
