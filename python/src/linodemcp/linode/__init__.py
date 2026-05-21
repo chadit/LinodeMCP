@@ -1660,6 +1660,16 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetFirewallRuleVersion", e) from e
 
+    async def list_firewall_rule_versions(self, firewall_id: int) -> list[Firewall]:
+        """List firewall rule versions (history)."""
+        endpoint = f"/networking/firewalls/{firewall_id}/history"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data = response.json()
+            return [self._parse_firewall(f) for f in data.get("data", [])]
+        except httpx.HTTPError as e:
+            raise NetworkError("ListFirewallRuleVersions", e) from e
+
     async def list_vlans(self) -> list[dict[str, Any]]:
         """List VLANs."""
         try:
@@ -6389,6 +6399,13 @@ class RetryableClient:
         """Get firewall rule version with retry."""
         result: FirewallRule = await self._execute_with_retry(
             self.client.get_firewall_rule_version, firewall_id, version
+        )
+        return result
+
+    async def list_firewall_rule_versions(self, firewall_id: int) -> list[Firewall]:
+        """List firewall rule versions with retry."""
+        result: list[Firewall] = await self._execute_with_retry(
+            self.client.list_firewall_rule_versions, firewall_id
         )
         return result
 
