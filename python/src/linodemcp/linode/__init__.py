@@ -3867,6 +3867,39 @@ class Client:
             logger.exception("HTTP error listing monitor dashboards: %s", e)
             raise NetworkError("ListMonitorServiceDashboards", e) from e
 
+    async def get_monitor_dashboard(self, dashboard_id: int) -> dict[str, Any]:
+        """Get a Linode Metrics dashboard by ID."""
+        if type(dashboard_id) is not int:
+            msg = "dashboard_id must be a valid integer"
+            raise TypeError(msg)
+        if dashboard_id <= 0:
+            msg = "dashboard_id must be a positive integer"
+            raise ValueError(msg)
+
+        encoded_dashboard_id = quote(str(dashboard_id), safe="")
+        endpoint = f"/monitor/dashboards/{encoded_dashboard_id}"
+        logger.info(
+            "Getting monitor dashboard",
+            extra={"dashboard_id": dashboard_id},
+        )
+
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout getting monitor dashboard: %s", e)
+            raise NetworkError("GetMonitorDashboard", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout getting monitor dashboard: %s", e)
+            raise NetworkError("GetMonitorDashboard", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error getting monitor dashboard")
+            raise NetworkError("GetMonitorDashboard", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error getting monitor dashboard: %s", e)
+            raise NetworkError("GetMonitorDashboard", e) from e
+
     async def read_monitor_service_metrics(self, service_type: str) -> dict[str, Any]:
         """Read metrics for a Linode Metrics service entity type."""
         if not service_type:
@@ -7951,6 +7984,13 @@ class RetryableClient:
         """List monitor service dashboards with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.list_monitor_service_dashboards, service_type
+        )
+        return result
+
+    async def get_monitor_dashboard(self, dashboard_id: int) -> dict[str, Any]:
+        """Get a monitor dashboard with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_monitor_dashboard, dashboard_id
         )
         return result
 

@@ -39,11 +39,13 @@ from linodemcp.linode import (
 )
 from linodemcp.profiles import Capability
 from linodemcp.tools.linode_monitor_write import (
+    create_linode_monitor_dashboard_get_tool,
     create_linode_monitor_service_alert_definition_create_tool,
     create_linode_monitor_service_alert_definition_delete_tool,
     create_linode_monitor_service_alert_definition_get_tool,
     create_linode_monitor_service_alert_definitions_list_tool,
     create_linode_monitor_service_dashboards_list_tool,
+    handle_linode_monitor_dashboard_get,
     handle_linode_monitor_service_alert_definition_create,
     handle_linode_monitor_service_alert_definition_delete,
     handle_linode_monitor_service_alert_definition_get,
@@ -6660,6 +6662,80 @@ class TestMakeRequestBody:
 
         await client.close()
 
+    async def test_get_monitor_dashboard_get_shape(self) -> None:
+        """GET monitor dashboard endpoint URL-encodes the dashboard_id."""
+        client = Client("https://api.linode.com/v4", "test-token")
+        response = MagicMock()
+        response.status_code = 200
+        response.json.return_value = {"id": 12345, "label": "Resource Usage"}
+
+        with patch.object(
+            client, "make_request", new_callable=AsyncMock
+        ) as mock_request:
+            mock_request.return_value = response
+            result = await client.get_monitor_dashboard(12345)
+
+        assert result == {"id": 12345, "label": "Resource Usage"}
+        mock_request.assert_awaited_once_with("GET", "/monitor/dashboards/12345")
+        await client.close()
+
+    @pytest.mark.parametrize(
+        "bad_dashboard_id", [True, "12345", "1/2", "1?x", "..", 12.9]
+    )
+    async def test_get_monitor_dashboard_rejects_invalid_dashboard_id(
+        self, bad_dashboard_id: object
+    ) -> None:
+        """Client rejects invalid dashboard IDs before making a request."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        with (
+            patch.object(
+                client, "make_request", new_callable=AsyncMock
+            ) as mock_request,
+            pytest.raises(TypeError, match="dashboard_id must be a valid integer"),
+        ):
+            await client.get_monitor_dashboard(cast("int", bad_dashboard_id))
+
+        mock_request.assert_not_called()
+        await client.close()
+
+    @pytest.mark.parametrize("bad_dashboard_id", [0, -1])
+    async def test_get_monitor_dashboard_rejects_non_positive_dashboard_id(
+        self, bad_dashboard_id: int
+    ) -> None:
+        """Client rejects non-positive dashboard IDs before making a request."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        with (
+            patch.object(
+                client, "make_request", new_callable=AsyncMock
+            ) as mock_request,
+            pytest.raises(ValueError, match="dashboard_id must be a positive integer"),
+        ):
+            await client.get_monitor_dashboard(bad_dashboard_id)
+
+        mock_request.assert_not_called()
+        await client.close()
+
+    async def test_retryable_get_monitor_dashboard_delegates_to_client(self) -> None:
+        """Retryable monitor dashboard get delegates to the client."""
+        retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+        payload = {"id": 12345, "label": "Resource Usage"}
+
+        with patch.object(
+            retryable,
+            "_execute_with_retry",
+            new_callable=AsyncMock,
+        ) as mock_execute:
+            mock_execute.return_value = payload
+            result = await retryable.get_monitor_dashboard(12345)
+
+        assert result == payload
+        mock_execute.assert_awaited_once_with(
+            retryable.client.get_monitor_dashboard, 12345
+        )
+        await retryable.close()
+
     async def test_list_monitor_service_dashboards_get_shape(self) -> None:
         """GET dashboards endpoint URL-encodes the service_type."""
         client = Client("https://api.linode.com/v4", "test-token")
@@ -10765,6 +10841,86 @@ async def test_monitor_alert_definitions_list_handler_rejects_malformed_service_
         "Error: service_type is required and must contain only letters, "
         "numbers, '_' or '-'"
     )
+
+
+async def test_monitor_dashboard_get_tool_schema_and_handler_success() -> None:
+    """Monitor dashboard get tool is read-only and returns output."""
+    tool, capability = create_linode_monitor_dashboard_get_tool()
+    assert tool.name == "linode_monitor_dashboard_get"
+    assert capability == Capability.Read
+    assert "confirm" not in tool.inputSchema["properties"]
+    assert tool.inputSchema["required"] == ["dashboard_id"]
+    assert tool.inputSchema["properties"]["dashboard_id"]["minimum"] == 1
+
+    cfg = Config(
+        environments={
+            "default": EnvironmentConfig(
+                label="Default",
+                linode=LinodeConfig(
+                    api_url="https://api.linode.com/v4",
+                    token="test-token",
+                ),
+            )
+        }
+    )
+    payload = {"id": 12345, "label": "Resource Usage"}
+
+    with patch.object(
+        RetryableClient,
+        "get_monitor_dashboard",
+        new_callable=AsyncMock,
+    ) as mock_get:
+        mock_get.return_value = payload
+        result = await handle_linode_monitor_dashboard_get({"dashboard_id": 12345}, cfg)
+
+    mock_get.assert_awaited_once_with(12345)
+    assert "Monitor dashboard 12345 retrieved" in result[0].text
+    assert "Resource Usage" in result[0].text
+
+
+@pytest.mark.parametrize(
+    "bad_dashboard_id", [None, True, "12345", "1/2", "1?x", "..", 12.9]
+)
+async def test_monitor_dashboard_get_rejects_invalid_dashboard_id(
+    bad_dashboard_id: object,
+) -> None:
+    """Handler rejects invalid dashboard IDs before client construction."""
+    cfg = Config()
+    args: dict[str, object] = {}
+    if bad_dashboard_id is not None:
+        args["dashboard_id"] = bad_dashboard_id
+
+    with patch.object(
+        RetryableClient,
+        "get_monitor_dashboard",
+        new_callable=AsyncMock,
+    ) as mock_get:
+        result = await handle_linode_monitor_dashboard_get(
+            cast("dict[str, Any]", args), cfg
+        )
+
+    mock_get.assert_not_called()
+    assert result[0].text == "Error: dashboard_id must be a valid integer"
+
+
+@pytest.mark.parametrize("bad_dashboard_id", [0, -1])
+async def test_monitor_dashboard_get_rejects_non_positive_dashboard_id(
+    bad_dashboard_id: int,
+) -> None:
+    """Handler rejects non-positive dashboard IDs before client construction."""
+    cfg = Config()
+
+    with patch.object(
+        RetryableClient,
+        "get_monitor_dashboard",
+        new_callable=AsyncMock,
+    ) as mock_get:
+        result = await handle_linode_monitor_dashboard_get(
+            {"dashboard_id": bad_dashboard_id}, cfg
+        )
+
+    mock_get.assert_not_called()
+    assert result[0].text == "Error: dashboard_id must be a positive integer"
 
 
 async def test_monitor_dashboards_tool_schema_and_handler_success() -> None:
