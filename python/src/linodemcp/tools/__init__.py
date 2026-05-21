@@ -20,6 +20,7 @@ from linodemcp.tools.linode_account import (
     create_linode_account_tags_list_tool,
     create_linode_account_tool,
     create_linode_account_update_tool,
+    create_linode_managed_stats_tool,
     handle_linode_account,
     handle_linode_account_support_ticket_attachment_create,
     handle_linode_account_support_ticket_close,
@@ -33,6 +34,7 @@ from linodemcp.tools.linode_account import (
     handle_linode_account_tag_objects_list,
     handle_linode_account_tags_list,
     handle_linode_account_update,
+    handle_linode_managed_stats,
 )
 from linodemcp.tools.linode_audit_health import (
     create_linode_audit_health_tool,
@@ -706,6 +708,7 @@ __all__ = [
     "create_linode_lke_types_list_tool",
     "create_linode_lke_version_get_tool",
     "create_linode_lke_versions_list_tool",
+    "create_linode_managed_stats_tool",
     "create_linode_monitor_alert_channels_list_tool",
     "create_linode_monitor_alert_definition_update_tool",
     "create_linode_monitor_alert_definitions_list_tool",
@@ -960,6 +963,7 @@ __all__ = [
     "handle_linode_lke_types_list",
     "handle_linode_lke_version_get",
     "handle_linode_lke_versions_list",
+    "handle_linode_managed_stats",
     "handle_linode_monitor_alert_channels_list",
     "handle_linode_monitor_alert_definition_update",
     "handle_linode_monitor_alert_definitions_list",
