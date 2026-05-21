@@ -449,6 +449,47 @@ async def handle_linode_firewall_rule_version_get(
     return await execute_tool(cfg, arguments, "retrieve firewall rule version", _call)
 
 
+def create_linode_firewall_templates_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_firewall_templates_list tool."""
+    return Tool(
+        name="linode_firewall_templates_list",
+        description="Lists Cloud Firewall Templates.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "page": {
+                    "type": "integer",
+                    "description": "Page number for pagination",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "description": "Page size for pagination",
+                },
+            },
+        },
+    ), Capability.Read
+
+
+async def handle_linode_firewall_templates_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_firewall_templates_list tool request."""
+    page, error = _parse_positive_integer_arg(arguments, "page", required=False)
+    if error is not None:
+        return error
+    page_size, error = _parse_positive_integer_arg(
+        arguments, "page_size", required=False
+    )
+    if error is not None:
+        return error
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.list_firewall_templates(page=page, page_size=page_size)
+
+    return await execute_tool(cfg, arguments, "list firewall templates", _call)
+
+
 def create_linode_firewall_template_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_firewall_template_get tool."""
     return Tool(

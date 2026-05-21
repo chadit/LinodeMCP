@@ -1647,6 +1647,24 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetFirewall", e) from e
 
+    async def list_firewall_templates(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List firewall templates."""
+        endpoint = "/networking/firewalls/templates"
+        params: dict[str, Any] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint = f"{endpoint}?{urlencode(params)}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            return cast("dict[str, Any]", response.json())
+        except httpx.HTTPError as e:
+            raise NetworkError("ListFirewallTemplates", e) from e
+
     async def get_firewall_template(
         self, slug: str, page: int | None = None, page_size: int | None = None
     ) -> FirewallTemplate:
@@ -3948,9 +3966,9 @@ class Client:
             raise ValueError("firewall_id must be a positive integer")
         if not str(firewall_id).strip():
             raise ValueError("firewall_id must be a positive integer")
-        if not isinstance(device_id, int) or device_id <= 0:
+        if type(device_id) is not int or device_id <= 0:
             raise ValueError("id must be a positive integer")
-        if not isinstance(device_type, str) or not device_type.strip():
+        if type(device_type) is not str or not device_type.strip():
             raise ValueError("type must be a non-empty string")
 
         safe_firewall_id = quote(str(firewall_id), safe="")
@@ -6513,6 +6531,15 @@ class RetryableClient:
         """Get a specific firewall with retry."""
         result: Firewall = await self._execute_with_retry(
             self.client.get_firewall, firewall_id
+        )
+        return result
+
+    async def list_firewall_templates(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List firewall templates with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.list_firewall_templates, page, page_size
         )
         return result
 

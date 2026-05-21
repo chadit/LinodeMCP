@@ -580,6 +580,81 @@ async def test_firewall_rules_update_tool_is_exported_and_registered(
     assert "linode_firewall_rules_update" in srv.registered_tool_names
 
 
+async def test_firewall_templates_list_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Firewall templates list tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_firewall_templates_list_tool" in tools_mod.__all__
+    assert "handle_linode_firewall_templates_list" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_firewall_templates_list_tool()
+    assert tool.name == "linode_firewall_templates_list"
+    assert capability is Capability.Read
+    assert "confirm" not in tool.inputSchema["properties"]
+
+    srv = Server(sample_config)
+    assert "linode_firewall_templates_list" in srv.registered_tool_names
+
+
+async def test_firewall_templates_list_handler_returns_templates(
+    sample_config: Config,
+) -> None:
+    """Firewall templates list handler returns client results."""
+    from linodemcp.tools import handle_linode_firewall_templates_list
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_firewall_templates.return_value = {
+            "data": [{"slug": "allow-http", "label": "Allow HTTP"}],
+            "page": 2,
+            "pages": 3,
+            "results": 1,
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_firewall_templates_list(
+            {"page": 2, "page_size": 25}, sample_config
+        )
+
+    assert len(result) == 1
+    payload = json.loads(result[0].text)
+    assert payload["data"][0]["slug"] == "allow-http"
+    mock_client.list_firewall_templates.assert_awaited_once_with(page=2, page_size=25)
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({"page": "bad"}, "page must be a valid integer"),
+        ({"page": True}, "page must be a valid integer"),
+        ({"page": 0}, "page must be a positive integer"),
+        ({"page": -1}, "page must be a positive integer"),
+        ({"page_size": "bad"}, "page_size must be a valid integer"),
+        ({"page_size": True}, "page_size must be a valid integer"),
+        ({"page_size": 0}, "page_size must be a positive integer"),
+        ({"page_size": -1}, "page_size must be a positive integer"),
+    ],
+)
+async def test_firewall_templates_list_rejects_invalid_pagination(
+    arguments: dict[str, Any],
+    message: str,
+    sample_config: Config,
+) -> None:
+    """Firewall templates list handler validates pagination before client calls."""
+    from linodemcp.tools import handle_linode_firewall_templates_list
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_firewall_templates_list(arguments, sample_config)
+
+    assert len(result) == 1
+    assert message in result[0].text
+    mock_client_class.assert_not_called()
+
+
 async def test_firewall_template_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

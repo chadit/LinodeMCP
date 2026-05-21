@@ -8354,6 +8354,25 @@ async def test_create_firewall_device_rejects_invalid_params(
     await client.close()
 
 
+@pytest.mark.parametrize(
+    ("device_id", "device_type"),
+    [
+        (cast("Any", "123"), "linode"),
+        (123, cast("Any", 123)),
+    ],
+)
+async def test_create_firewall_device_rejects_invalid_param_types(
+    device_id: Any, device_type: Any
+) -> None:
+    """Test create_firewall_device rejects invalid parameter types."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with pytest.raises(ValueError, match=r"positive integer|non-empty string"):
+        await client.create_firewall_device(12345, device_id, device_type)
+
+    await client.close()
+
+
 async def test_create_firewall_device_wraps_http_errors() -> None:
     """Test create_firewall_device wraps HTTP errors."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -8465,6 +8484,86 @@ async def test_retryable_list_firewall_devices_delegates_to_client() -> None:
 
     assert result == {"data": []}
     mock_list.assert_awaited_once_with(12345, page=2, page_size=25)
+    await retryable.close()
+
+
+async def test_list_firewall_templates() -> None:
+    """Test listing firewall templates."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": [
+            {
+                "slug": "allow-http",
+                "label": "Allow HTTP",
+                "description": "Allow HTTP traffic on port 80",
+                "rules": {
+                    "inbound": [],
+                    "outbound": [],
+                    "inbound_policy": "DROP",
+                    "outbound_policy": "ACCEPT",
+                },
+            }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+        result = await client.list_firewall_templates()
+
+    assert result["results"] == 1
+    assert result["data"][0]["slug"] == "allow-http"
+    mock_request.assert_awaited_once_with("GET", "/networking/firewalls/templates")
+    await client.close()
+
+
+async def test_list_firewall_templates_with_pagination() -> None:
+    """Test listing firewall templates with pagination parameters."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"data": [], "page": 2, "pages": 5, "results": 0}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+        result = await client.list_firewall_templates(page=2, page_size=25)
+
+    assert result["page"] == 2
+    mock_request.assert_awaited_once_with(
+        "GET", "/networking/firewalls/templates?page=2&page_size=25"
+    )
+    await client.close()
+
+
+async def test_list_firewall_templates_wraps_http_errors() -> None:
+    """Test list_firewall_templates wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+        with pytest.raises(NetworkError) as excinfo:
+            await client.list_firewall_templates()
+
+    assert "ListFirewallTemplates" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_list_firewall_templates_delegates_to_client() -> None:
+    """Test RetryableClient delegates firewall template list to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "list_firewall_templates", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = {"data": []}
+        result = await retryable.list_firewall_templates(page=2, page_size=25)
+
+    assert result == {"data": []}
+    mock_list.assert_awaited_once_with(2, 25)
     await retryable.close()
 
 
