@@ -1232,6 +1232,69 @@ def _parse_instance_interface(data: dict[str, Any]) -> InstanceInterface:
     )
 
 
+def _build_monitor_service_alert_definition_body(
+    *,
+    label: object,
+    severity: object,
+    rule_criteria: object,
+    trigger_conditions: object,
+    channel_ids: object,
+    description: object,
+    entity_ids: object,
+) -> dict[str, Any]:
+    """Validate and build a monitor service alert definition payload."""
+    if not isinstance(label, str) or not label:
+        msg = "label is required"
+        raise ValueError(msg)
+    if type(severity) is not int:
+        msg = "severity must be a valid integer"
+        raise TypeError(msg)
+    if severity not in {0, 1, 2, 3}:
+        msg = "severity must be one of 0, 1, 2, or 3"
+        raise ValueError(msg)
+    if not isinstance(rule_criteria, dict) or not rule_criteria:
+        msg = "rule_criteria must be a non-empty object"
+        raise ValueError(msg)
+    if not isinstance(trigger_conditions, dict) or not trigger_conditions:
+        msg = "trigger_conditions must be a non-empty object"
+        raise ValueError(msg)
+    if (
+        not isinstance(channel_ids, list)
+        or not channel_ids
+        or any(type(item) is not int for item in cast("list[object]", channel_ids))
+    ):
+        msg = "channel_ids must be a non-empty list of integers"
+        raise ValueError(msg)
+    if entity_ids is not None and (
+        not isinstance(entity_ids, list)
+        or not entity_ids
+        or any(type(item) is not int for item in cast("list[object]", entity_ids))
+    ):
+        msg = "entity_ids must be a non-empty list of integers"
+        raise ValueError(msg)
+    if description is not None and not isinstance(description, str):
+        msg = "description must be a string"
+        raise ValueError(msg)
+
+    checked_rule_criteria = cast("dict[str, Any]", rule_criteria)
+    checked_trigger_conditions = cast("dict[str, Any]", trigger_conditions)
+    checked_channel_ids = cast("list[int]", channel_ids)
+    checked_entity_ids = cast("list[int] | None", entity_ids)
+
+    body: dict[str, Any] = {
+        "label": label,
+        "severity": severity,
+        "rule_criteria": checked_rule_criteria,
+        "trigger_conditions": checked_trigger_conditions,
+        "channel_ids": checked_channel_ids,
+    }
+    if description is not None:
+        body["description"] = description
+    if checked_entity_ids is not None:
+        body["entity_ids"] = checked_entity_ids
+    return body
+
+
 class Client:
     """Linode API client."""
 
@@ -3824,6 +3887,63 @@ class Client:
         except httpx.HTTPError as e:
             logger.exception("HTTP error listing monitor metric definitions: %s", e)
             raise NetworkError("ListMonitorServiceMetricDefinitions", e) from e
+
+    async def create_monitor_service_alert_definition(
+        self,
+        service_type: str,
+        *,
+        label: str,
+        severity: int,
+        rule_criteria: dict[str, Any],
+        trigger_conditions: dict[str, Any],
+        channel_ids: list[int],
+        description: str | None = None,
+        entity_ids: list[int] | None = None,
+    ) -> dict[str, Any]:
+        """Create an alert definition for a Linode Metrics service type."""
+        if not service_type:
+            msg = "service_type is required"
+            raise ValueError(msg)
+        body = _build_monitor_service_alert_definition_body(
+            label=label,
+            severity=severity,
+            rule_criteria=rule_criteria,
+            trigger_conditions=trigger_conditions,
+            channel_ids=channel_ids,
+            description=description,
+            entity_ids=entity_ids,
+        )
+
+        encoded_service_type = quote(service_type, safe="")
+        endpoint = f"/monitor/services/{encoded_service_type}/alert-definitions"
+
+        logger.info(
+            "Creating monitor service alert definition",
+            extra={"service_type": service_type, "label": label},
+        )
+
+        try:
+            response = await self.make_request("POST", endpoint, body)
+            data: dict[str, Any] = response.json()
+            logger.info(
+                "Monitor service alert definition created",
+                extra={"service_type": service_type, "label": label},
+            )
+            return data
+        except httpx.ConnectTimeout as e:
+            logger.exception(
+                "Connection timeout creating monitor alert definition: %s", e
+            )
+            raise NetworkError("CreateMonitorServiceAlertDefinition", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout creating monitor alert definition: %s", e)
+            raise NetworkError("CreateMonitorServiceAlertDefinition", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error creating monitor alert definition")
+            raise NetworkError("CreateMonitorServiceAlertDefinition", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error creating monitor alert definition: %s", e)
+            raise NetworkError("CreateMonitorServiceAlertDefinition", e) from e
 
     async def get_monitor_service_alert_definition(
         self, service_type: str, alert_id: int
@@ -7744,6 +7864,33 @@ class RetryableClient:
         """List monitor service metric definitions with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.list_monitor_service_metric_definitions, service_type
+        )
+        return result
+
+    async def create_monitor_service_alert_definition(
+        self,
+        service_type: str,
+        *,
+        label: str,
+        severity: int,
+        rule_criteria: dict[str, Any],
+        trigger_conditions: dict[str, Any],
+        channel_ids: list[int],
+        description: str | None = None,
+        entity_ids: list[int] | None = None,
+    ) -> dict[str, Any]:
+        """Create a monitor service alert definition without retry replay."""
+        result: dict[
+            str, Any
+        ] = await self.client.create_monitor_service_alert_definition(
+            service_type,
+            label=label,
+            severity=severity,
+            rule_criteria=rule_criteria,
+            trigger_conditions=trigger_conditions,
+            channel_ids=channel_ids,
+            description=description,
+            entity_ids=entity_ids,
         )
         return result
 

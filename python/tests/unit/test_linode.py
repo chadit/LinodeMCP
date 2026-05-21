@@ -39,9 +39,11 @@ from linodemcp.linode import (
 )
 from linodemcp.profiles import Capability
 from linodemcp.tools.linode_monitor_write import (
+    create_linode_monitor_service_alert_definition_create_tool,
     create_linode_monitor_service_alert_definition_delete_tool,
     create_linode_monitor_service_alert_definition_get_tool,
     create_linode_monitor_service_dashboards_list_tool,
+    handle_linode_monitor_service_alert_definition_create,
     handle_linode_monitor_service_alert_definition_delete,
     handle_linode_monitor_service_alert_definition_get,
     handle_linode_monitor_service_dashboards_list,
@@ -6251,6 +6253,215 @@ class TestMakeRequestBody:
 
         await client.close()
 
+    async def test_create_monitor_service_alert_definition_post_shape(self) -> None:
+        """POST alert definition endpoint URL-encodes path params and sends body."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"id": 67890, "label": "CPU high"}
+        rule_criteria = {"rules": [{"metric": "cpu_usage", "operator": "gt"}]}
+        trigger_conditions = {"criteria_condition": "ALL"}
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = mock_response
+
+            result = await client.create_monitor_service_alert_definition(
+                "weird/type with space?and=query",
+                label="CPU high",
+                severity=1,
+                rule_criteria=rule_criteria,
+                trigger_conditions=trigger_conditions,
+                channel_ids=[10000],
+                description="High CPU usage",
+                entity_ids=[12345],
+            )
+
+            url_arg = mock_req.call_args[0][1]
+            assert result == {"id": 67890, "label": "CPU high"}
+            assert mock_req.call_args[0][0] == "POST"
+            assert url_arg.endswith(
+                "/monitor/services/"
+                "weird%2Ftype%20with%20space%3Fand%3Dquery"
+                "/alert-definitions"
+            )
+            assert mock_req.call_args[1]["json"] == {
+                "label": "CPU high",
+                "severity": 1,
+                "rule_criteria": rule_criteria,
+                "trigger_conditions": trigger_conditions,
+                "channel_ids": [10000],
+                "description": "High CPU usage",
+                "entity_ids": [12345],
+            }
+
+        await client.close()
+
+    async def test_create_monitor_service_alert_definition_rejects_invalid_inputs(
+        self,
+    ) -> None:
+        """Client rejects invalid create inputs before issuing a request."""
+        client = Client("https://api.linode.com/v4", "test-token")
+        rule_criteria = {"rules": [{"metric": "cpu_usage"}]}
+        trigger_conditions = {"criteria_condition": "ALL"}
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            with pytest.raises(ValueError, match="service_type"):
+                await client.create_monitor_service_alert_definition(
+                    "",
+                    label="CPU high",
+                    severity=1,
+                    rule_criteria=rule_criteria,
+                    trigger_conditions=trigger_conditions,
+                    channel_ids=[10000],
+                )
+            with pytest.raises(ValueError, match="label"):
+                await client.create_monitor_service_alert_definition(
+                    "dbaas",
+                    label="",
+                    severity=1,
+                    rule_criteria=rule_criteria,
+                    trigger_conditions=trigger_conditions,
+                    channel_ids=[10000],
+                )
+            with pytest.raises(TypeError, match="severity"):
+                await client.create_monitor_service_alert_definition(
+                    "dbaas",
+                    label="CPU high",
+                    severity=cast("Any", True),
+                    rule_criteria=rule_criteria,
+                    trigger_conditions=trigger_conditions,
+                    channel_ids=[10000],
+                )
+            with pytest.raises(ValueError, match="severity"):
+                await client.create_monitor_service_alert_definition(
+                    "dbaas",
+                    label="CPU high",
+                    severity=4,
+                    rule_criteria=rule_criteria,
+                    trigger_conditions=trigger_conditions,
+                    channel_ids=[10000],
+                )
+            with pytest.raises(ValueError, match="rule_criteria"):
+                await client.create_monitor_service_alert_definition(
+                    "dbaas",
+                    label="CPU high",
+                    severity=1,
+                    rule_criteria={},
+                    trigger_conditions=trigger_conditions,
+                    channel_ids=[10000],
+                )
+            with pytest.raises(ValueError, match="rule_criteria"):
+                await client.create_monitor_service_alert_definition(
+                    "dbaas",
+                    label="CPU high",
+                    severity=1,
+                    rule_criteria=cast("Any", ["bad"]),
+                    trigger_conditions=trigger_conditions,
+                    channel_ids=[10000],
+                )
+            with pytest.raises(ValueError, match="trigger_conditions"):
+                await client.create_monitor_service_alert_definition(
+                    "dbaas",
+                    label="CPU high",
+                    severity=1,
+                    rule_criteria=rule_criteria,
+                    trigger_conditions={},
+                    channel_ids=[10000],
+                )
+            with pytest.raises(ValueError, match="trigger_conditions"):
+                await client.create_monitor_service_alert_definition(
+                    "dbaas",
+                    label="CPU high",
+                    severity=1,
+                    rule_criteria=rule_criteria,
+                    trigger_conditions=cast("Any", True),
+                    channel_ids=[10000],
+                )
+            with pytest.raises(ValueError, match="channel_ids"):
+                await client.create_monitor_service_alert_definition(
+                    "dbaas",
+                    label="CPU high",
+                    severity=1,
+                    rule_criteria=rule_criteria,
+                    trigger_conditions=trigger_conditions,
+                    channel_ids=cast("Any", "bad"),
+                )
+            with pytest.raises(ValueError, match="channel_ids"):
+                await client.create_monitor_service_alert_definition(
+                    "dbaas",
+                    label="CPU high",
+                    severity=1,
+                    rule_criteria=rule_criteria,
+                    trigger_conditions=trigger_conditions,
+                    channel_ids=[],
+                )
+            with pytest.raises(ValueError, match="channel_ids"):
+                await client.create_monitor_service_alert_definition(
+                    "dbaas",
+                    label="CPU high",
+                    severity=1,
+                    rule_criteria=rule_criteria,
+                    trigger_conditions=trigger_conditions,
+                    channel_ids=[cast("Any", True)],
+                )
+            with pytest.raises(ValueError, match="description"):
+                await client.create_monitor_service_alert_definition(
+                    "dbaas",
+                    label="CPU high",
+                    severity=1,
+                    rule_criteria=rule_criteria,
+                    trigger_conditions=trigger_conditions,
+                    channel_ids=[10000],
+                    description=cast("Any", 123),
+                )
+            with pytest.raises(ValueError, match="entity_ids"):
+                await client.create_monitor_service_alert_definition(
+                    "dbaas",
+                    label="CPU high",
+                    severity=1,
+                    rule_criteria=rule_criteria,
+                    trigger_conditions=trigger_conditions,
+                    channel_ids=[10000],
+                    entity_ids=[],
+                )
+            with pytest.raises(ValueError, match="entity_ids"):
+                await client.create_monitor_service_alert_definition(
+                    "dbaas",
+                    label="CPU high",
+                    severity=1,
+                    rule_criteria=rule_criteria,
+                    trigger_conditions=trigger_conditions,
+                    channel_ids=[10000],
+                    entity_ids=[1, cast("Any", "bad")],
+                )
+            mock_req.assert_not_called()
+
+        await client.close()
+
+    async def test_create_monitor_service_alert_definition_wraps_http_errors(
+        self,
+    ) -> None:
+        """Client wraps HTTP errors with the create alert definition operation."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        with patch.object(
+            client, "make_request", new_callable=AsyncMock
+        ) as mock_request:
+            mock_request.side_effect = httpx.ReadTimeout("timeout")
+            with pytest.raises(NetworkError) as exc_info:
+                await client.create_monitor_service_alert_definition(
+                    "dbaas",
+                    label="CPU high",
+                    severity=1,
+                    rule_criteria={"rules": [{"metric": "cpu_usage"}]},
+                    trigger_conditions={"criteria_condition": "ALL"},
+                    channel_ids=[10000],
+                )
+
+        assert exc_info.value.operation == "CreateMonitorServiceAlertDefinition"
+        await client.close()
+
     async def test_get_monitor_service_alert_definition_get_shape(self) -> None:
         """GET alert definition endpoint URL-encodes path params."""
         client = Client("https://api.linode.com/v4", "test-token")
@@ -9794,6 +10005,48 @@ async def test_retryable_allocate_networking_ip_retries_transient_failure() -> N
     await retryable.close()
 
 
+async def test_retryable_create_monitor_service_alert_definition_does_not_retry() -> (
+    None
+):
+    """Mutating monitor alert definition create is not replayed on failure."""
+    retryable = RetryableClient(
+        "https://api.linode.com/v4",
+        "test-token",
+        RetryConfig(max_retries=2, base_delay=0.01),
+    )
+
+    with patch.object(
+        retryable.client,
+        "create_monitor_service_alert_definition",
+        new_callable=AsyncMock,
+    ) as mock_create:
+        mock_create.side_effect = NetworkError(
+            "CreateMonitorServiceAlertDefinition",
+            httpx.TimeoutException("timeout"),
+        )
+        with pytest.raises(NetworkError):
+            await retryable.create_monitor_service_alert_definition(
+                "dbaas",
+                label="CPU high",
+                severity=1,
+                rule_criteria={"rules": [{"metric": "cpu_usage"}]},
+                trigger_conditions={"criteria_condition": "ALL"},
+                channel_ids=[10000],
+            )
+
+    mock_create.assert_awaited_once_with(
+        "dbaas",
+        label="CPU high",
+        severity=1,
+        rule_criteria={"rules": [{"metric": "cpu_usage"}]},
+        trigger_conditions={"criteria_condition": "ALL"},
+        channel_ids=[10000],
+        description=None,
+        entity_ids=None,
+    )
+    await retryable.close()
+
+
 async def test_retryable_get_monitor_service_alert_definition_delegates_to_client() -> (
     None
 ):
@@ -9840,6 +10093,189 @@ async def test_retryable_delete_monitor_service_alert_definition_does_not_retry(
 
     mock_delete.assert_awaited_once_with("dbaas", 12345)
     await retryable.close()
+
+
+async def test_monitor_alert_definition_create_tool_schema_and_handler_success() -> (
+    None
+):
+    """Monitor alert definition create requires confirm and returns output."""
+    tool, capability = create_linode_monitor_service_alert_definition_create_tool()
+    assert tool.name == "linode_monitor_service_alert_definition_create"
+    assert capability == Capability.Write
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["service_type"]["pattern"] == (
+        "^[A-Za-z0-9_-]+$"
+    )
+    assert tool.inputSchema["required"] == [
+        "service_type",
+        "label",
+        "severity",
+        "rule_criteria",
+        "trigger_conditions",
+        "channel_ids",
+        "confirm",
+    ]
+
+    cfg = Config(
+        environments={
+            "default": EnvironmentConfig(
+                label="Default",
+                linode=LinodeConfig(
+                    api_url="https://api.linode.com/v4",
+                    token="test-token",
+                ),
+            )
+        }
+    )
+    response_payload = {"id": 67890, "label": "CPU high"}
+    rule_criteria = {"rules": [{"metric": "cpu_usage"}]}
+    trigger_conditions = {"criteria_condition": "ALL"}
+
+    with patch.object(
+        RetryableClient,
+        "create_monitor_service_alert_definition",
+        new_callable=AsyncMock,
+    ) as mock_create:
+        mock_create.return_value = response_payload
+        result = await handle_linode_monitor_service_alert_definition_create(
+            {
+                "service_type": "dbaas",
+                "label": "CPU high",
+                "severity": 1,
+                "rule_criteria": rule_criteria,
+                "trigger_conditions": trigger_conditions,
+                "channel_ids": [10000],
+                "description": "High CPU usage",
+                "entity_ids": [12345],
+                "confirm": True,
+            },
+            cfg,
+        )
+
+    mock_create.assert_awaited_once_with(
+        "dbaas",
+        label="CPU high",
+        severity=1,
+        rule_criteria=rule_criteria,
+        trigger_conditions=trigger_conditions,
+        channel_ids=[10000],
+        description="High CPU usage",
+        entity_ids=[12345],
+    )
+    assert "Monitor service alert definition created for 'dbaas'" in result[0].text
+    assert "CPU high" in result[0].text
+
+
+@pytest.mark.parametrize("bad_confirm", [None, False, "true", 1])
+async def test_monitor_alert_definition_create_requires_boolean_confirm(
+    bad_confirm: object,
+) -> None:
+    """Handler rejects missing/non-true confirm before client call."""
+    cfg = Config()
+    args: dict[str, object] = {
+        "service_type": "dbaas",
+        "label": "CPU high",
+        "severity": 1,
+        "rule_criteria": {"rules": [{"metric": "cpu_usage"}]},
+        "trigger_conditions": {"criteria_condition": "ALL"},
+        "channel_ids": [10000],
+    }
+    if bad_confirm is not None:
+        args["confirm"] = bad_confirm
+
+    with patch.object(
+        RetryableClient,
+        "create_monitor_service_alert_definition",
+        new_callable=AsyncMock,
+    ) as mock_create:
+        result = await handle_linode_monitor_service_alert_definition_create(
+            cast("dict[str, Any]", args), cfg
+        )
+
+    mock_create.assert_not_called()
+    assert result[0].text == (
+        "Error: This creates a Linode Metrics alert definition. "
+        "Set confirm=true to proceed."
+    )
+
+
+@pytest.mark.parametrize("bad_service_type", ["", "bad/type", "bad?type", ".."])
+async def test_monitor_alert_definition_create_rejects_malformed_service_type(
+    bad_service_type: str,
+) -> None:
+    """Handler rejects unsafe service type values before client construction."""
+    cfg = Config()
+
+    with patch.object(
+        RetryableClient,
+        "create_monitor_service_alert_definition",
+        new_callable=AsyncMock,
+    ) as mock_create:
+        result = await handle_linode_monitor_service_alert_definition_create(
+            {
+                "service_type": bad_service_type,
+                "label": "CPU high",
+                "severity": 1,
+                "rule_criteria": {"rules": [{"metric": "cpu_usage"}]},
+                "trigger_conditions": {"criteria_condition": "ALL"},
+                "channel_ids": [10000],
+                "confirm": True,
+            },
+            cfg,
+        )
+
+    mock_create.assert_not_called()
+    assert result[0].text == (
+        "Error: service_type is required and must contain only letters, "
+        "numbers, '_' or '-'"
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("label", "", "label is required"),
+        ("severity", True, "severity must be a valid integer"),
+        ("severity", 4, "severity must be one of 0, 1, 2, or 3"),
+        ("rule_criteria", {}, "rule_criteria must be a non-empty object"),
+        (
+            "trigger_conditions",
+            {},
+            "trigger_conditions must be a non-empty object",
+        ),
+        ("channel_ids", [], "channel_ids must be a non-empty list of integers"),
+        ("channel_ids", [True], "channel_ids must be a non-empty list of integers"),
+        ("entity_ids", ["bad"], "entity_ids must be a non-empty list of integers"),
+        ("description", 123, "description must be a string"),
+    ],
+)
+async def test_monitor_alert_definition_create_rejects_invalid_body_fields(
+    field: str, value: object, message: str
+) -> None:
+    """Handler rejects malformed create body fields before client construction."""
+    cfg = Config()
+    args: dict[str, object] = {
+        "service_type": "dbaas",
+        "label": "CPU high",
+        "severity": 1,
+        "rule_criteria": {"rules": [{"metric": "cpu_usage"}]},
+        "trigger_conditions": {"criteria_condition": "ALL"},
+        "channel_ids": [10000],
+        "confirm": True,
+    }
+    args[field] = value
+
+    with patch.object(
+        RetryableClient,
+        "create_monitor_service_alert_definition",
+        new_callable=AsyncMock,
+    ) as mock_create:
+        result = await handle_linode_monitor_service_alert_definition_create(
+            cast("dict[str, Any]", args), cfg
+        )
+
+    mock_create.assert_not_called()
+    assert result[0].text == f"Error: {message}"
 
 
 async def test_monitor_alert_definition_get_tool_schema_and_handler_success() -> None:
