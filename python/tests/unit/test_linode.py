@@ -42,10 +42,12 @@ from linodemcp.tools.linode_monitor_write import (
     create_linode_monitor_service_alert_definition_create_tool,
     create_linode_monitor_service_alert_definition_delete_tool,
     create_linode_monitor_service_alert_definition_get_tool,
+    create_linode_monitor_service_alert_definitions_list_tool,
     create_linode_monitor_service_dashboards_list_tool,
     handle_linode_monitor_service_alert_definition_create,
     handle_linode_monitor_service_alert_definition_delete,
     handle_linode_monitor_service_alert_definition_get,
+    handle_linode_monitor_service_alert_definitions_list,
     handle_linode_monitor_service_dashboards_list,
 )
 
@@ -6645,6 +6647,73 @@ class TestMakeRequestBody:
 
         await client.close()
 
+    async def test_list_monitor_service_alert_definitions_get_shape(self) -> None:
+        """GET alert definitions endpoint URL-encodes the service_type."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "data": [
+                {
+                    "id": 123,
+                    "label": "CPU Usage",
+                    "severity": 2,
+                }
+            ],
+            "page": 1,
+            "pages": 1,
+            "results": 1,
+        }
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = mock_response
+
+            result = await client.list_monitor_service_alert_definitions(
+                "weird/type with space?and=query"
+            )
+
+            url_arg = mock_req.call_args[0][1]
+            assert mock_req.call_args[0][0] == "GET"
+            assert url_arg.endswith(
+                "/monitor/services/"
+                "weird%2Ftype%20with%20space%3Fand%3Dquery/alert-definitions"
+            )
+            assert "json" not in mock_req.call_args[1]
+            assert result["data"][0]["label"] == "CPU Usage"
+
+        await client.close()
+
+    async def test_list_monitor_service_alert_definitions_rejects_empty_service_type(
+        self,
+    ) -> None:
+        """Client raises ValueError before issuing a request for empty service_type."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            with pytest.raises(ValueError, match="service_type"):
+                await client.list_monitor_service_alert_definitions("")
+            mock_req.assert_not_called()
+
+        await client.close()
+
+    async def test_list_monitor_service_alert_definitions_wraps_http_error(
+        self,
+    ) -> None:
+        """Client wraps HTTP errors while listing alert definitions."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        with patch.object(client, "make_request", new_callable=AsyncMock) as mock_req:
+            mock_req.side_effect = httpx.HTTPError("boom")
+            with pytest.raises(NetworkError) as exc_info:
+                await client.list_monitor_service_alert_definitions("dbaas")
+
+        assert exc_info.value.operation == "ListMonitorServiceAlertDefinitions"
+        mock_req.assert_awaited_once_with(
+            "GET", "/monitor/services/dbaas/alert-definitions"
+        )
+        await client.close()
+
     async def test_list_monitor_service_metric_definitions_get_shape(self) -> None:
         """GET metric definitions endpoint URL-encodes the service_type."""
         client = Client("https://api.linode.com/v4", "test-token")
@@ -10524,6 +10593,71 @@ async def test_monitor_alert_definition_delete_rejects_non_positive_alert_id(
 
     mock_delete.assert_not_called()
     assert result[0].text == "Error: alert_id must be a positive integer"
+
+
+async def test_monitor_alert_definitions_list_tool_schema_and_handler_success() -> None:
+    """Monitor alert definitions list tool is read-only and returns handler output."""
+    tool, capability = create_linode_monitor_service_alert_definitions_list_tool()
+    assert tool.name == "linode_monitor_service_alert_definitions_list"
+    assert capability == Capability.Read
+    assert "confirm" not in tool.inputSchema["properties"]
+    assert tool.inputSchema["required"] == ["service_type"]
+
+    cfg = Config(
+        environments={
+            "default": EnvironmentConfig(
+                label="Default",
+                linode=LinodeConfig(
+                    api_url="https://api.linode.com/v4",
+                    token="test-token",
+                ),
+            )
+        }
+    )
+
+    response_payload = {
+        "data": [{"id": 123, "label": "CPU Usage"}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+    with patch.object(
+        RetryableClient,
+        "list_monitor_service_alert_definitions",
+        new_callable=AsyncMock,
+    ) as mock_list:
+        mock_list.return_value = response_payload
+
+        result = await handle_linode_monitor_service_alert_definitions_list(
+            {"service_type": "dbaas"}, cfg
+        )
+
+    mock_list.assert_awaited_once_with("dbaas")
+    assert "Monitor service alert definitions listed for 'dbaas'" in result[0].text
+    assert "CPU Usage" in result[0].text
+
+
+@pytest.mark.parametrize("bad_service_type", ["", "bad/type", "bad?type", ".."])
+async def test_monitor_alert_definitions_list_handler_rejects_malformed_service_type(
+    bad_service_type: str,
+) -> None:
+    """Handler rejects unsafe service type values before client construction."""
+    cfg = Config()
+
+    with patch.object(
+        RetryableClient,
+        "list_monitor_service_alert_definitions",
+        new_callable=AsyncMock,
+    ) as mock_list:
+        result = await handle_linode_monitor_service_alert_definitions_list(
+            {"service_type": bad_service_type}, cfg
+        )
+
+    mock_list.assert_not_called()
+    assert result[0].text == (
+        "Error: service_type is required and must contain only letters, "
+        "numbers, '_' or '-'"
+    )
 
 
 async def test_monitor_dashboards_tool_schema_and_handler_success() -> None:
