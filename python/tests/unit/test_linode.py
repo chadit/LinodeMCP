@@ -39,6 +39,7 @@ from linodemcp.linode import (
 )
 from linodemcp.profiles import Capability
 from linodemcp.tools.linode_monitor_write import (
+    create_linode_monitor_alert_definitions_list_tool,
     create_linode_monitor_dashboard_get_tool,
     create_linode_monitor_dashboards_list_tool,
     create_linode_monitor_service_alert_definition_create_tool,
@@ -46,6 +47,7 @@ from linodemcp.tools.linode_monitor_write import (
     create_linode_monitor_service_alert_definition_get_tool,
     create_linode_monitor_service_alert_definitions_list_tool,
     create_linode_monitor_service_dashboards_list_tool,
+    handle_linode_monitor_alert_definitions_list,
     handle_linode_monitor_dashboard_get,
     handle_linode_monitor_dashboards_list,
     handle_linode_monitor_service_alert_definition_create,
@@ -6274,6 +6276,41 @@ class TestMakeRequestBody:
         mock_request.assert_awaited_once_with("GET", "/monitor/dashboards")
         await client.close()
 
+    async def test_list_monitor_alert_definitions_get_shape(self) -> None:
+        """GET /monitor/alert-definitions returns alert definitions."""
+        client = Client("https://api.linode.com/v4", "test-token")
+        response_data = {
+            "data": [{"id": 1, "label": "CPU Usage"}],
+            "page": 1,
+            "pages": 1,
+            "results": 1,
+        }
+        mock_response = MagicMock()
+        mock_response.json.return_value = response_data
+
+        with patch.object(
+            client, "make_request", new_callable=AsyncMock
+        ) as mock_request:
+            mock_request.return_value = mock_response
+            result = await client.list_monitor_alert_definitions()
+
+        assert result == response_data
+        mock_request.assert_awaited_once_with("GET", "/monitor/alert-definitions")
+        await client.close()
+
+    async def test_list_monitor_alert_definitions_wraps_http_errors(self) -> None:
+        """HTTP errors while listing monitor alert definitions are wrapped."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        with patch.object(
+            client, "make_request", new_callable=AsyncMock
+        ) as mock_request:
+            mock_request.side_effect = httpx.ReadTimeout("boom")
+            with pytest.raises(NetworkError, match="ListMonitorAlertDefinitions"):
+                await client.list_monitor_alert_definitions()
+
+        await client.close()
+
     async def test_list_monitor_dashboards_wraps_http_errors(self) -> None:
         """HTTP errors while listing monitor dashboards are wrapped."""
         client = Client("https://api.linode.com/v4", "test-token")
@@ -10422,6 +10459,26 @@ async def test_retryable_create_monitor_service_alert_definition_does_not_retry(
     await retryable.close()
 
 
+async def test_retryable_list_monitor_alert_definitions_delegates_to_client() -> None:
+    """Retryable monitor alert definitions list delegates to the client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+    payload = {"data": [{"id": 12345, "label": "CPU high"}]}
+
+    with patch.object(
+        retryable,
+        "_execute_with_retry",
+        new_callable=AsyncMock,
+    ) as mock_execute:
+        mock_execute.return_value = payload
+        result = await retryable.list_monitor_alert_definitions()
+
+    assert result == payload
+    mock_execute.assert_awaited_once_with(
+        retryable.client.list_monitor_alert_definitions
+    )
+    await retryable.close()
+
+
 async def test_retryable_get_monitor_service_alert_definition_delegates_to_client() -> (
     None
 ):
@@ -10899,6 +10956,46 @@ async def test_monitor_alert_definition_delete_rejects_non_positive_alert_id(
 
     mock_delete.assert_not_called()
     assert result[0].text == "Error: alert_id must be a positive integer"
+
+
+async def test_monitor_global_alert_definitions_list_tool_success() -> None:
+    """Global monitor alert definitions list is read-only and returns output."""
+    tool, capability = create_linode_monitor_alert_definitions_list_tool()
+    assert tool.name == "linode_monitor_alert_definitions_list"
+    assert capability == Capability.Read
+    assert "confirm" not in tool.inputSchema["properties"]
+    assert "required" not in tool.inputSchema
+
+    cfg = Config(
+        environments={
+            "default": EnvironmentConfig(
+                label="Default",
+                linode=LinodeConfig(
+                    api_url="https://api.linode.com/v4",
+                    token="test-token",
+                ),
+            )
+        }
+    )
+
+    response_payload = {
+        "data": [{"id": 123, "label": "CPU Usage"}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+    with patch.object(
+        RetryableClient,
+        "list_monitor_alert_definitions",
+        new_callable=AsyncMock,
+    ) as mock_list:
+        mock_list.return_value = response_payload
+
+        result = await handle_linode_monitor_alert_definitions_list({}, cfg)
+
+    mock_list.assert_awaited_once_with()
+    assert "Monitor alert definitions listed" in result[0].text
+    assert "CPU Usage" in result[0].text
 
 
 async def test_monitor_alert_definitions_list_tool_schema_and_handler_success() -> None:

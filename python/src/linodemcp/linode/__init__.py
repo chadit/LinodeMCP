@@ -3781,6 +3781,29 @@ class Client:
             logger.exception("HTTP error listing monitor dashboards: %s", e)
             raise NetworkError("ListMonitorDashboards", e) from e
 
+    async def list_monitor_alert_definitions(self) -> dict[str, Any]:
+        """List Linode Metrics alert definitions."""
+        logger.info("Listing monitor alert definitions")
+
+        try:
+            response = await self.make_request("GET", "/monitor/alert-definitions")
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.ConnectTimeout as e:
+            logger.exception(
+                "Connection timeout listing monitor alert definitions: %s", e
+            )
+            raise NetworkError("ListMonitorAlertDefinitions", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout listing monitor alert definitions: %s", e)
+            raise NetworkError("ListMonitorAlertDefinitions", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error listing monitor alert definitions")
+            raise NetworkError("ListMonitorAlertDefinitions", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error listing monitor alert definitions: %s", e)
+            raise NetworkError("ListMonitorAlertDefinitions", e) from e
+
     async def get_monitor_service(self, service_type: str) -> dict[str, Any]:
         """Get details for a supported Linode Metrics service type."""
         if not service_type:
@@ -8038,6 +8061,13 @@ class RetryableClient:
         """List monitor dashboards with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.list_monitor_dashboards
+        )
+        return result
+
+    async def list_monitor_alert_definitions(self) -> dict[str, Any]:
+        """List monitor alert definitions with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.list_monitor_alert_definitions
         )
         return result
 
