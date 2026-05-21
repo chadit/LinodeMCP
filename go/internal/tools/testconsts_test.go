@@ -47,6 +47,9 @@ const (
 	keyRDNS           = "rdns"
 	keySince          = "since"
 	keyPrivacyPolicy  = "privacy_policy"
+	keyRegionID       = "region_id"
+	keyErrors         = "errors"
+	keyReason         = "reason"
 
 	// Tool-specific resource ID keys.
 	keyLinodeID       = "linode_id"
@@ -69,12 +72,14 @@ const (
 	keyResults  = "results"
 
 	// Linode region IDs commonly used in fixtures.
-	regionUSEast   = "us-east"
-	regionUSEast1  = "us-east-1"
-	serviceLinodes = "Linodes"
-	regionUSWest   = "us-west"
-	regionEUWest   = "eu-west"
-	countryUS      = "us"
+	regionUSEast         = "us-east"
+	regionUSEast1        = "us-east-1"
+	serviceLinodes       = "Linodes"
+	serviceNodeBalancers = "NodeBalancers"
+	serviceBlockStorage  = "Block Storage"
+	regionUSWest         = "us-west"
+	regionEUWest         = "eu-west"
+	countryUS            = "us"
 
 	// Linode instance type IDs commonly used in fixtures.
 	typeG6Nanode1   = "g6-nanode-1"
@@ -173,6 +178,8 @@ const (
 	errACLMustBeOneOf     = "acl must be one of"
 	errInvalidACL         = "invalid ACL"
 	errConfirmEqualsTrue  = "confirm=true"
+	errForbidden          = "forbidden"
+	errRegionIDSlug       = "lowercase region slug"
 
 	// Validation case names used in table-driven test rows.
 	caseRequiresConfirm   = "requires confirm"

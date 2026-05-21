@@ -16,7 +16,9 @@ const (
 	keySSHKey = "ssh_key"
 
 	// Common region IDs used in API response fixtures.
-	regionUSEast = "us-east"
+	regionUSEast         = "us-east"
+	serviceLinodes       = "Linodes"
+	serviceNodeBalancers = "NodeBalancers"
 
 	// fwLabelNew is the firewall label reused across the retry-wrapper tests.
 	fwLabelNew = "new-fw"

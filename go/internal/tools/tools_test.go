@@ -490,9 +490,11 @@ func TestLinodeAccountAgreementsTool(t *testing.T) {
 			assert.Equal(t, "/account/agreements", r.URL.Path, "request path should be /account/agreements")
 
 			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
-			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-			assert.NoError(t, writeErr)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: errForbidden}},
+			}))
 		}))
 		defer srv.Close()
 
@@ -516,7 +518,145 @@ func TestLinodeAccountAgreementsTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, "Failed", "response should describe the API failure")
-		assert.Contains(t, textContent.Text, "forbidden", "response should include the API reason")
+		assert.Contains(t, textContent.Text, errForbidden, "response should include the API reason")
+	})
+}
+
+// End-to-end verification of regional account availability retrieval.
+func TestLinodeAccountAvailabilityGetTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountAvailabilityGetTool(cfg)
+
+		assert.Equal(t, "linode_account_availability_get", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		availability := linode.AccountAvailability{
+			Available:   []string{serviceLinodes, serviceNodeBalancers},
+			Region:      regionUSEast,
+			Unavailable: []string{"Kubernetes", serviceBlockStorage},
+		}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/account/availability/"+regionUSEast, r.URL.Path, "request path should include region")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(availability))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeAccountAvailabilityGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyRegionID: regionUSEast})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, regionUSEast, "response should contain region")
+		assert.Contains(t, textContent.Text, serviceLinodes, "response should contain available service")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/account/availability/"+regionUSEast, r.URL.Path, "request path should include region")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: errForbidden}},
+			}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeAccountAvailabilityGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyRegionID: regionUSEast})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to retrieve linode_account_availability_get", "response should identify failed tool")
+		assert.Contains(t, textContent.Text, errForbidden, "response should include API error detail")
+	})
+
+	t.Run("invalid region rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name        string
+			args        map[string]any
+			wantMessage string
+		}{
+			{name: caseMissingRegion, args: map[string]any{}, wantMessage: "region_id is required"},
+			{name: "empty", args: map[string]any{keyRegionID: ""}, wantMessage: "region_id must be a non-empty string"},
+			{name: "number", args: map[string]any{keyRegionID: 123}, wantMessage: "region_id must be a non-empty string"},
+			{name: "slash", args: map[string]any{keyRegionID: "us/east"}, wantMessage: errRegionIDSlug},
+			{name: "query", args: map[string]any{keyRegionID: "us-east?x=1"}, wantMessage: errRegionIDSlug},
+			{name: "dot traversal", args: map[string]any{keyRegionID: pathTraversalValue}, wantMessage: errRegionIDSlug},
+			{name: "whitespace", args: map[string]any{keyRegionID: "us east"}, wantMessage: errRegionIDSlug},
+			{name: "fragment", args: map[string]any{keyRegionID: "us-east#frag"}, wantMessage: errRegionIDSlug},
+			{name: "ampersand", args: map[string]any{keyRegionID: "us-east&x"}, wantMessage: errRegionIDSlug},
+			{name: "equals", args: map[string]any{keyRegionID: "us-east=1"}, wantMessage: errRegionIDSlug},
+			{name: "backslash", args: map[string]any{keyRegionID: `us\east`}, wantMessage: errRegionIDSlug},
+			{name: "uppercase", args: map[string]any{keyRegionID: "US-east"}, wantMessage: errRegionIDSlug},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeAccountAvailabilityGetTool(cfg)
+
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err)
+				require.NotNil(t, result)
+				assert.True(t, result.IsError, "validation failure should be an error result")
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, testCase.wantMessage)
+			})
+		}
 	})
 }
 
@@ -541,9 +681,9 @@ func TestLinodeAccountAvailabilityTool(t *testing.T) {
 
 		availability := linode.PaginatedResponse[linode.AccountAvailability]{
 			Data: []linode.AccountAvailability{{
-				Available:   []string{serviceLinodes, "NodeBalancers"},
+				Available:   []string{serviceLinodes, serviceNodeBalancers},
 				Region:      regionUSEast,
-				Unavailable: []string{"Kubernetes", "Block Storage"},
+				Unavailable: []string{"Kubernetes", serviceBlockStorage},
 			}},
 			Page:    2,
 			Pages:   3,
@@ -593,7 +733,7 @@ func TestLinodeAccountAvailabilityTool(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"errors": []map[string]string{{"reason": "forbidden"}},
+				keyErrors: []map[string]string{{keyReason: errForbidden}},
 			}))
 		}))
 		defer srv.Close()
@@ -617,7 +757,7 @@ func TestLinodeAccountAvailabilityTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, "Failed to retrieve linode_account_availability", "response should identify failed tool")
-		assert.Contains(t, textContent.Text, "forbidden", "response should include API error detail")
+		assert.Contains(t, textContent.Text, errForbidden, "response should include API error detail")
 	})
 
 	t.Run("invalid pagination rejects before client", func(t *testing.T) {
@@ -854,7 +994,7 @@ func TestLinodeRegionsListTool(t *testing.T) {
 		t.Parallel()
 
 		regions := []linode.Region{
-			{ID: regionUSEast, Label: "Newark, NJ", Country: countryUS, Capabilities: []string{"Linodes", "Block Storage"}, Status: statusOK},
+			{ID: regionUSEast, Label: "Newark, NJ", Country: countryUS, Capabilities: []string{"Linodes", serviceBlockStorage}, Status: statusOK},
 			{ID: regionEUWest, Label: "London, UK", Country: "uk", Capabilities: []string{"Linodes"}, Status: statusOK},
 		}
 
@@ -1488,9 +1628,11 @@ func TestLinodeAccountUpdateTool(t *testing.T) {
 			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
 			assert.Equal(t, "/account", r.URL.Path, "request path should be /account")
 
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
-			_, err := w.Write([]byte(`{"errors":[{"field":"email","reason":"invalid email format"}]}`))
-			assert.NoError(t, err)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{"field": "email", keyReason: "invalid email format"}},
+			}))
 		}))
 		defer srv.Close()
 
@@ -1676,9 +1818,11 @@ func TestLinodeSSHKeyGetToolAPIError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
-		_, err := w.Write([]byte(`{"errors":[{"reason":"Not found"}]}`))
-		assert.NoError(t, err)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: "Not found"}},
+		}))
 	}))
 	defer srv.Close()
 
