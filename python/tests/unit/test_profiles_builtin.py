@@ -84,6 +84,9 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_sshkey_get", Capability.Read),
         ToolDescriptor("linode_sshkey_create", Capability.Write),
         # Monitor.
+        ToolDescriptor(
+            "linode_monitor_service_metric_definitions_list", Capability.Read
+        ),
         ToolDescriptor("linode_monitor_service_metrics_read", Capability.Read),
         ToolDescriptor("linode_monitor_service_token_create", Capability.Write),
         ToolDescriptor("linode_profile_phone_number_delete", Capability.Write),

@@ -6263,6 +6263,55 @@ class TestMakeRequestBody:
 
         await client.close()
 
+    async def test_list_monitor_service_metric_definitions_get_shape(self) -> None:
+        """GET metric definitions endpoint URL-encodes the service_type."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "data": [
+                {
+                    "label": "CPU Usage",
+                    "metric": "cpu_usage",
+                    "metric_type": "gauge",
+                }
+            ],
+            "page": 1,
+            "pages": 1,
+            "results": 1,
+        }
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = mock_response
+
+            result = await client.list_monitor_service_metric_definitions(
+                "weird/type with space"
+            )
+
+            url_arg = mock_req.call_args[0][1]
+            assert mock_req.call_args[0][0] == "GET"
+            assert url_arg.endswith(
+                "/monitor/services/weird%2Ftype%20with%20space/metric-definitions"
+            )
+            assert "json" not in mock_req.call_args[1]
+            assert result["data"][0]["metric"] == "cpu_usage"
+
+        await client.close()
+
+    async def test_list_monitor_service_metric_definitions_rejects_empty_service_type(
+        self,
+    ) -> None:
+        """Client raises ValueError before issuing a request for empty service_type."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            with pytest.raises(ValueError, match="service_type"):
+                await client.list_monitor_service_metric_definitions("")
+            mock_req.assert_not_called()
+
+        await client.close()
+
     async def test_read_monitor_service_metrics_rejects_empty_service_type(
         self,
     ) -> None:

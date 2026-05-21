@@ -43,6 +43,35 @@ def create_linode_monitor_service_metrics_read_tool() -> tuple[Tool, Capability]
     ), Capability.Read
 
 
+def create_linode_monitor_service_metric_definitions_list_tool() -> tuple[
+    Tool, Capability
+]:
+    """Create the linode_monitor_service_metric_definitions_list tool."""
+    return Tool(
+        name="linode_monitor_service_metric_definitions_list",
+        description=("Lists metric definitions for a Linode Metrics service type."),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "service_type": {
+                    "type": "string",
+                    "description": (
+                        "Metrics service type, e.g. 'dbaas' or 'linode' (required)"
+                    ),
+                    "pattern": "^[A-Za-z0-9_-]+$",
+                },
+            },
+            "required": ["service_type"],
+        },
+    ), Capability.Read
+
+
 def create_linode_monitor_service_token_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_monitor_service_token_create tool."""
     return Tool(
@@ -115,6 +144,32 @@ async def handle_linode_monitor_service_metrics_read(
         }
 
     return await execute_tool(cfg, arguments, "read monitor service metrics", _call)
+
+
+async def handle_linode_monitor_service_metric_definitions_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_monitor_service_metric_definitions_list tool request."""
+    service_type = _validate_service_type(arguments.get("service_type"))
+    if service_type is None:
+        return error_response(
+            "service_type is required and must contain only letters, "
+            "numbers, '_' or '-'"
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        data = await client.list_monitor_service_metric_definitions(service_type)
+        return {
+            "message": (
+                f"Monitor service metric definitions listed for '{service_type}'"
+            ),
+            "service_type": service_type,
+            "metric_definitions": data,
+        }
+
+    return await execute_tool(
+        cfg, arguments, "list monitor service metric definitions", _call
+    )
 
 
 def _coerce_entity_ids(raw: object) -> list[int] | None:
