@@ -14850,22 +14850,17 @@ async def test_handle_linode_firewall_template_get_rejects_path_traversal(
     assert "path separators" in result[0].text
 
 
-
 async def test_handle_linode_firewall_template_get_rejects_non_string_slug(
     sample_config: Config,
 ) -> None:
     """Test that non-string slug values are rejected."""
     # Test with int
-    result = await handle_linode_firewall_template_get(
-        {"slug": 123}, sample_config
-    )
+    result = await handle_linode_firewall_template_get({"slug": 123}, sample_config)
     assert len(result) == 1
     assert "must be a string" in result[0].text
 
     # Test with bool
-    result = await handle_linode_firewall_template_get(
-        {"slug": True}, sample_config
-    )
+    result = await handle_linode_firewall_template_get({"slug": True}, sample_config)
     assert len(result) == 1
     assert "must be a string" in result[0].text
 
