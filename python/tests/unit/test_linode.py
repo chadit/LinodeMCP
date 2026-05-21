@@ -3229,6 +3229,138 @@ async def test_get_domain_record() -> None:
     await client.close()
 
 
+async def test_update_firewall_rules() -> None:
+    """Test updating firewall rules."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "inbound": [
+            {
+                "action": "ACCEPT",
+                "protocol": "TCP",
+                "ports": "22",
+                "addresses": {"ipv4": ["0.0.0.0/0"], "ipv6": ["::/0"]},
+                "label": "allow-ssh",
+                "description": "",
+            }
+        ],
+        "outbound": [],
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.update_firewall_rules(
+            12345,
+            inbound=[
+                {
+                    "action": "ACCEPT",
+                    "protocol": "TCP",
+                    "ports": "22",
+                    "addresses": {"ipv4": ["0.0.0.0/0"], "ipv6": ["::/0"]},
+                    "label": "allow-ssh",
+                    "description": "",
+                }
+            ],
+            outbound=[],
+        )
+
+        assert result["inbound"] == [
+            {
+                "action": "ACCEPT",
+                "protocol": "TCP",
+                "ports": "22",
+                "addresses": {"ipv4": ["0.0.0.0/0"], "ipv6": ["::/0"]},
+                "label": "allow-ssh",
+                "description": "",
+            }
+        ]
+        assert result["outbound"] == []
+        mock_request.assert_awaited_once()
+        args, _kwargs = mock_request.await_args_list[0]
+        assert args[0] == "PUT"
+        assert args[1] == "/networking/firewalls/12345/rules"
+        assert args[2] == {
+            "inbound": [
+                {
+                    "action": "ACCEPT",
+                    "protocol": "TCP",
+                    "ports": "22",
+                    "addresses": {"ipv4": ["0.0.0.0/0"], "ipv6": ["::/0"]},
+                    "label": "allow-ssh",
+                    "description": "",
+                }
+            ],
+            "outbound": [],
+        }
+
+    await client.close()
+
+
+@pytest.mark.parametrize("firewall_id", [0, -1, "12345", True])
+async def test_update_firewall_rules_rejects_invalid_firewall_id(
+    firewall_id: Any,
+) -> None:
+    """Test firewall rule update rejects invalid firewall IDs."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with pytest.raises(ValueError, match="firewall_id must be a positive integer"):
+        await client.update_firewall_rules(firewall_id, inbound=[], outbound=[])
+
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    ("inbound", "outbound", "message"),
+    [
+        ({}, [], "inbound must be a list of rule objects"),
+        (["bad-rule"], [], "inbound must be a list of rule objects"),
+        ([], {}, "outbound must be a list of rule objects"),
+        ([], ["bad-rule"], "outbound must be a list of rule objects"),
+    ],
+)
+async def test_update_firewall_rules_rejects_invalid_rule_lists(
+    inbound: Any, outbound: Any, message: str
+) -> None:
+    """Test firewall rule update rejects invalid rule lists."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with pytest.raises(TypeError, match=message):
+        await client.update_firewall_rules(12345, inbound=inbound, outbound=outbound)
+
+    await client.close()
+
+
+async def test_update_firewall_rules_wraps_http_errors() -> None:
+    """Test firewall rule update wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError, match="UpdateFirewallRules"):
+            await client.update_firewall_rules(12345, inbound=[], outbound=[])
+
+    await client.close()
+
+
+async def test_retryable_update_firewall_rules_delegates_to_client() -> None:
+    """Test RetryableClient delegates firewall rule updates to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "update_firewall_rules", new_callable=AsyncMock
+    ) as mock_update:
+        mock_update.return_value = {"inbound": [], "outbound": []}
+        result = await retryable.update_firewall_rules(12345, inbound=[], outbound=[])
+
+    assert result == {"inbound": [], "outbound": []}
+    mock_update.assert_awaited_once_with(12345, [], [])
+    await retryable.close()
+
+
 async def test_list_firewalls() -> None:
     """Test listing firewalls."""
     client = Client("https://api.linode.com/v4", "test-token")

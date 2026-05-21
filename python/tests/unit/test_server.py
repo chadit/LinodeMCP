@@ -489,6 +489,19 @@ async def test_firewall_get_tool_is_exported_and_registered(
     assert "linode_firewall_get" in srv.registered_tool_names
 
 
+async def test_firewall_rules_update_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Firewall rules update tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_firewall_rules_update_tool" in tools_mod.__all__
+    assert "handle_linode_firewall_rules_update" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_firewall_rules_update" in srv.registered_tool_names
+
+
 async def test_volume_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

@@ -173,6 +173,7 @@ from linodemcp.tools import (
     handle_linode_firewall_create,
     handle_linode_firewall_delete,
     handle_linode_firewall_get,
+    handle_linode_firewall_rules_update,
     handle_linode_firewall_update,
     handle_linode_firewalls_list,
     handle_linode_image_create,
@@ -5085,6 +5086,153 @@ async def test_handle_linode_firewall_delete(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "deleted" in result[0].text.lower()
+
+
+async def test_handle_linode_firewall_rules_update(sample_config: Config) -> None:
+    """Test linode_firewall_rules_update tool happy path."""
+    mock_result = {
+        "inbound": [
+            {
+                "action": "ACCEPT",
+                "protocol": "TCP",
+                "ports": "22",
+                "addresses": {"ipv4": ["0.0.0.0/0"], "ipv6": ["::/0"]},
+                "label": "allow-ssh",
+                "description": "",
+            }
+        ],
+        "outbound": [],
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_firewall_rules.return_value = mock_result
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_firewall_rules_update(
+            {
+                "firewall_id": 12345,
+                "inbound": mock_result["inbound"],
+                "outbound": mock_result["outbound"],
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "rules updated" in result[0].text.lower()
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_handle_linode_firewall_rules_update_requires_boolean_confirm(
+    sample_config: Config, confirm: Any
+) -> None:
+    """Firewall rules update rejects missing or non-true confirm."""
+    arguments: dict[str, Any] = {"firewall_id": 12345}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_firewall_rules_update(arguments, sample_config)
+
+    assert len(result) == 1
+    assert "confirm=true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_firewall_rules_update_missing_id(
+    sample_config: Config,
+) -> None:
+    """Firewall rules update rejects missing firewall_id."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_firewall_rules_update(
+            {"confirm": True}, sample_config
+        )
+
+    assert len(result) == 1
+    assert "firewall_id is required" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize("firewall_id", ["12345", "../12345", "12345?x=1", True])
+async def test_handle_linode_firewall_rules_update_invalid_id(
+    sample_config: Config, firewall_id: Any
+) -> None:
+    """Firewall rules update rejects malformed firewall_id values."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_firewall_rules_update(
+            {"firewall_id": firewall_id, "confirm": True}, sample_config
+        )
+
+    assert len(result) == 1
+    assert "firewall_id must be an integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize("firewall_id", [0, -1])
+async def test_handle_linode_firewall_rules_update_non_positive_id(
+    sample_config: Config, firewall_id: int
+) -> None:
+    """Firewall rules update rejects non-positive firewall IDs."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_firewall_rules_update(
+            {"firewall_id": firewall_id, "confirm": True}, sample_config
+        )
+
+    assert len(result) == 1
+    assert "firewall_id" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"firewall_id": 12345, "confirm": True},
+        {"firewall_id": 12345, "confirm": True, "inbound": []},
+        {"firewall_id": 12345, "confirm": True, "outbound": []},
+    ],
+)
+async def test_handle_linode_firewall_rules_update_requires_explicit_rule_lists(
+    sample_config: Config, arguments: dict[str, Any]
+) -> None:
+    """Firewall rules update requires explicit inbound and outbound rule lists."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_firewall_rules_update(arguments, sample_config)
+
+    assert len(result) == 1
+    assert " is required" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("inbound", "not-a-list"),
+        ("outbound", "not-a-list"),
+        ("inbound", ["bad-rule"]),
+        ("outbound", ["bad-rule"]),
+    ],
+)
+async def test_handle_linode_firewall_rules_update_invalid_rule_lists(
+    sample_config: Config, field: str, value: Any
+) -> None:
+    """Firewall rules update rejects malformed rule lists."""
+    arguments: dict[str, Any] = {
+        "firewall_id": 12345,
+        "confirm": True,
+        "inbound": [],
+        "outbound": [],
+        field: value,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_firewall_rules_update(arguments, sample_config)
+
+    assert len(result) == 1
+    assert f"{field} must be a list of rule objects" in result[0].text
+    mock_client_class.assert_not_called()
 
 
 async def test_handle_linode_domain_create(sample_config: Config) -> None:
