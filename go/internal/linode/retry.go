@@ -113,6 +113,21 @@ func (c *Client) GetAccount(ctx context.Context) (*Account, error) {
 	return account, err
 }
 
+// GetAccountAgreements retrieves account agreement acknowledgment status with automatic retry on transient failures.
+func (c *Client) GetAccountAgreements(ctx context.Context) (*AccountAgreements, error) {
+	var agreements *AccountAgreements
+
+	err := c.executeWithRetry(ctx, "GetAccountAgreements", func() error {
+		var err error
+
+		agreements, err = c.httpGetAccountAgreements(ctx)
+
+		return err
+	})
+
+	return agreements, err
+}
+
 // UpdateAccount updates account billing/contact fields without retrying the
 // mutating request. Retrying can replay account state changes after a transient
 // error, so this method delegates exactly once.

@@ -610,6 +610,69 @@ func TestClientAllowObjectStorageBucketAccessDoesNotRetry(t *testing.T) {
 	assert.Equal(t, int32(1), calls, "AllowObjectStorageBucketAccess must not retry and replay a state-changing request")
 }
 
+// TestClientGetAccountAgreementsSuccess verifies GetAccountAgreements sends a GET
+// request to /account/agreements and returns the agreement statuses.
+func TestClientGetAccountAgreementsSuccess(t *testing.T) {
+	t.Parallel()
+
+	agreements := linode.AccountAgreements{
+		BillingAgreement:       true,
+		EUModel:                false,
+		MasterServiceAgreement: true,
+		PrivacyPolicy:          true,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/agreements", r.URL.Path, "request path should be /account/agreements")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(agreements))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.GetAccountAgreements(t.Context())
+
+	require.NoError(t, err, "GetAccountAgreements should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.True(t, result.BillingAgreement)
+	assert.False(t, result.EUModel)
+	assert.True(t, result.MasterServiceAgreement)
+	assert.True(t, result.PrivacyPolicy)
+}
+
+// TestClientGetAccountAgreementsAPIError verifies GetAccountAgreements propagates
+// API errors through the handleResponse error chain.
+func TestClientGetAccountAgreementsAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/agreements", r.URL.Path, "request path should be /account/agreements")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetAccountAgreements(t.Context())
+
+	require.Error(t, err, "GetAccountAgreements should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	require.NotNil(t, apiErr, "APIError should be present")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, "forbidden", apiErr.Message)
+}
+
 // TestClientUpdateAccountSuccess verifies that UpdateAccount sends a PUT
 // request to /account with the exact body and returns the updated Account.
 func TestClientUpdateAccountSuccess(t *testing.T) {

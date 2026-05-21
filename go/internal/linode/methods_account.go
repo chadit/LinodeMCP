@@ -6,9 +6,10 @@ import (
 )
 
 const (
-	endpointProfile       = "/profile"
-	endpointProfileGrants = "/profile/grants"
-	endpointAccount       = "/account"
+	endpointProfile           = "/profile"
+	endpointProfileGrants     = "/profile/grants"
+	endpointAccount           = "/account"
+	endpointAccountAgreements = "/account/agreements"
 )
 
 // GetProfile retrieves the authenticated user's profile from the Linode API.
@@ -73,6 +74,26 @@ func (c *Client) httpGetAccount(ctx context.Context) (*Account, error) {
 	}
 
 	return &account, nil
+}
+
+// httpGetAccountAgreements retrieves account agreement acknowledgment status.
+func (c *Client) httpGetAccountAgreements(ctx context.Context) (*AccountAgreements, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointAccountAgreements, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccountAgreements", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var agreements AccountAgreements
+	if err := c.handleResponse(resp, &agreements); err != nil {
+		return nil, err
+	}
+
+	return &agreements, nil
 }
 
 // httpUpdateAccount updates account billing/contact fields via PUT /v4/account.

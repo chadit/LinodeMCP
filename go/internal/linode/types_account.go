@@ -75,6 +75,14 @@ type GlobalGrants struct {
 	LongviewSubscription bool            `json:"longview_subscription"`
 }
 
+// AccountAgreements represents the acknowledgment status for account agreements.
+type AccountAgreements struct {
+	BillingAgreement       bool `json:"billing_agreement"`
+	EUModel                bool `json:"eu_model"`
+	MasterServiceAgreement bool `json:"master_service_agreement"`
+	PrivacyPolicy          bool `json:"privacy_policy"`
+}
+
 // Account represents a Linode account.
 type Account struct {
 	FirstName         string   `json:"first_name"`
