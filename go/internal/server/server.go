@@ -550,7 +550,7 @@ func (s *Server) addTool(tool *mcp.Tool, capability profiles.Capability, handler
 		s.shutdownMu.Lock()
 		if s.shuttingDown {
 			s.shutdownMu.Unlock()
-			s.writeRefusalAuditEvent(toolName, auditCapability, &req, errServerShuttingDown)
+			s.writeRefusalAuditEvent(ctx, toolName, auditCapability, &req, errServerShuttingDown)
 
 			return nil, errServerShuttingDown
 		}
@@ -566,7 +566,7 @@ func (s *Server) addTool(tool *mcp.Tool, capability profiles.Capability, handler
 		result, err := handler(ctx, req)
 
 		finalizeAuditEvent(&evt, start, err)
-		s.auditSink.Write(&evt)
+		s.auditSink.Write(context.WithoutCancel(ctx), &evt)
 
 		return result, err
 	}
@@ -613,6 +613,7 @@ func (s *Server) newAuditEvent(
 // sources (Phase 4 dry-run gate, validation failures) can call this
 // same helper with their own error value.
 func (s *Server) writeRefusalAuditEvent(
+	ctx context.Context,
 	toolName string,
 	capability audit.Capability,
 	req *mcp.CallToolRequest,
@@ -620,7 +621,7 @@ func (s *Server) writeRefusalAuditEvent(
 ) {
 	evt := s.newAuditEvent(toolName, capability, req)
 	evt.Finalize(audit.StatusRefused, 0, refusalErr.Error(), "")
-	s.auditSink.Write(&evt)
+	s.auditSink.Write(context.WithoutCancel(ctx), &evt)
 }
 
 // finalizeAuditEvent sets status/latency/error based on handler

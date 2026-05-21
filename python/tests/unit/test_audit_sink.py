@@ -14,6 +14,7 @@ from linodemcp.audit import (
     CapturingSink,
     Event,
     Mode,
+    MultiSink,
     NoopSink,
     Sink,
     Status,
@@ -87,3 +88,23 @@ def test_new_capturing_sink_starts_empty() -> None:
 
     assert sink.events() == []
     assert sink.events() is not None
+
+
+def test_multi_sink_fans_out_to_every_child() -> None:
+    """The fan-out delivers each event to all child sinks."""
+    first = CapturingSink()
+    second = CapturingSink()
+    multi = MultiSink(first, second)
+
+    multi.write(_event("fanned_out"))
+
+    assert len(first) == 1
+    assert len(second) == 1
+    assert first.events()[0].tool == "fanned_out"
+    assert second.events()[0].tool == "fanned_out"
+
+
+def test_multi_sink_empty_is_noop() -> None:
+    """A fan-out with no children does not raise."""
+    multi = MultiSink()
+    multi.write(_event("nowhere"))

@@ -36,17 +36,17 @@ func TestRedactReplacesSensitiveTopLevelKeys(t *testing.T) {
 	args := map[string]any{
 		argLinodeID: 12345,
 		argRootPass: "super-secret",
-		"label":     "my-instance",
-		"token":     "abc123",
+		argKeyLabel: "my-instance",
+		argKeyToken: "abc123",
 	}
 
 	redacted, keys := audit.Redact(args)
 
 	assert.Equal(t, 12345, redacted["linode_id"], "non-sensitive value must pass through")
-	assert.Equal(t, "my-instance", redacted["label"])
+	assert.Equal(t, "my-instance", redacted[argKeyLabel])
 	assert.True(t, audit.IsRedacted(redacted[argRootPass]), "root_pass must be redacted")
-	assert.True(t, audit.IsRedacted(redacted["token"]), "token must be redacted")
-	assert.ElementsMatch(t, []string{argRootPass, "token"}, keys,
+	assert.True(t, audit.IsRedacted(redacted[argKeyToken]), "token must be redacted")
+	assert.ElementsMatch(t, []string{argRootPass, argKeyToken}, keys,
 		"redacted-key list must report each scrubbed name")
 }
 
@@ -57,7 +57,7 @@ func TestRedactRecursesIntoNestedMaps(t *testing.T) {
 	t.Parallel()
 
 	args := map[string]any{
-		"label": "test",
+		argKeyLabel: "test",
 		"meta": map[string]any{
 			"api_key": "sk-leaked",
 			"region":  "us-east",

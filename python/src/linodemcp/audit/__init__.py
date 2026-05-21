@@ -45,7 +45,8 @@ from linodemcp.audit.retention import (
     DEFAULT_RETENTION_SWEEP_INTERVAL_SECONDS,
     RetentionSweeper,
 )
-from linodemcp.audit.sink import CapturingSink, NoopSink, Sink
+from linodemcp.audit.sink import CapturingSink, MultiSink, NoopSink, Sink
+from linodemcp.audit.sqlite import SQLiteSink
 
 __all__ = [
     "ACTIVE_LOG_FILE_NAME",
@@ -63,9 +64,11 @@ __all__ = [
     "JSONLSink",
     "JSONLSinkClosedError",
     "Mode",
+    "MultiSink",
     "NoopSink",
     "RecentQuery",
     "RetentionSweeper",
+    "SQLiteSink",
     "Sink",
     "Status",
     "is_redacted",

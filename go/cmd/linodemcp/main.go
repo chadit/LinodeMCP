@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -33,16 +34,91 @@ func main() {
 	os.Exit(exitCode)
 }
 
+// auditLogger is the minimal logging surface the audit setup needs.
+// Narrowed to an interface so the helpers can be tested with a stub
+// and stay decoupled from the concrete *slog.Logger.
+type auditLogger interface {
+	Info(msg string, args ...any)
+	Warn(msg string, args ...any)
+}
+
+// setupAudit opens the JSONL sink, optionally adds the SQLite sink
+// (when audit.sqlite.enabled), attaches the combined sink to the
+// server, and starts the retention sweeper bound to ctx. Returns a
+// cleanup func that closes whatever sinks opened; the cleanup is a
+// no-op when the JSONL sink could not open (audit never blocks
+// startup).
+func setupAudit(ctx context.Context, srv *server.Server, cfg *config.Config, log *slog.Logger) func() {
+	jsonlSink := openAuditSink(log)
+	if jsonlSink == nil {
+		return func() {}
+	}
+
+	closers := []func(){func() {
+		if err := jsonlSink.Close(); err != nil {
+			log.Warn("audit JSONL sink close error", "error", err)
+		}
+	}}
+
+	var sink audit.Sink = jsonlSink
+
+	if cfg.Audit.SQLite.Enabled {
+		if sqliteSink := openSQLiteSink(ctx, cfg, jsonlSink, log); sqliteSink != nil {
+			sink = audit.NewMultiSink(jsonlSink, sqliteSink)
+
+			closers = append(closers, func() {
+				if err := sqliteSink.Close(); err != nil {
+					log.Warn("audit SQLite sink close error", "error", err)
+				}
+			})
+		}
+	}
+
+	srv.SetAuditSink(sink)
+
+	sweeper := audit.NewRetentionSweeper(
+		filepath.Dir(jsonlSink.Path()),
+		*cfg.Audit.RetentionDays,
+		audit.WithSweepLogger(log),
+	)
+
+	go sweeper.Run(ctx)
+
+	return func() {
+		for _, closeSink := range closers {
+			closeSink()
+		}
+	}
+}
+
+// openSQLiteSink resolves the SQLite database path (config value, or
+// audit.db alongside the JSONL log) and opens the sink. Returns nil
+// on failure after logging; the caller keeps the JSONL sink as the
+// durable record.
+func openSQLiteSink(ctx context.Context, cfg *config.Config, jsonlSink *audit.JSONLSink, log auditLogger) *audit.SQLiteSink {
+	dbPath := cfg.Audit.SQLite.Path
+	if dbPath == "" {
+		dbPath = filepath.Join(filepath.Dir(jsonlSink.Path()), "audit.db")
+	}
+
+	sink, err := audit.NewSQLiteSink(ctx, dbPath, cfg.Audit.SQLite.BusyTimeoutMS)
+	if err != nil {
+		log.Warn("audit SQLite sink unavailable; continuing with JSONL only", "path", dbPath, "error", err)
+
+		return nil
+	}
+
+	log.Info("audit SQLite sink open", "path", dbPath)
+
+	return sink
+}
+
 // openAuditSink resolves the audit directory, opens a rolling
 // JSONL sink under it, and returns the open sink ready to attach to
 // the server. Returns nil on any failure after logging the cause;
 // the caller falls back to the server's default NoopSink so audit
 // never blocks startup.
-func openAuditSink(log interface {
-	Info(msg string, args ...any)
-	Warn(msg string, args ...any)
-},
-) *audit.JSONLSink {
+func openAuditSink(log auditLogger) *audit.JSONLSink {
 	auditDir := audit.ResolveDefaultAuditDir()
 
 	sink, err := audit.NewJSONLSink(auditDir)
@@ -211,34 +287,11 @@ func run() int {
 		return 1
 	}
 
-	// Phase 2a: replace the default NoopSink with a rolling JSONL
-	// writer so every tool call (success, error, refusal) lands on
-	// disk. If the sink fails to open, log and continue with the
-	// noop default; audit is a best-effort observation channel, not
-	// a hard prerequisite for the server.
-	if auditSink := openAuditSink(log); auditSink != nil {
-		srv.SetAuditSink(auditSink)
-
-		defer func() {
-			if closeErr := auditSink.Close(); closeErr != nil {
-				log.Warn("audit JSONL sink close error", "error", closeErr)
-			}
-		}()
-
-		// Phase 2b/3a: sweep rotated logs older than the retention
-		// window in the background. Tied to ctx so it stops on
-		// shutdown. The window comes from audit.retention_days config
-		// (0 = never delete); setDefaults guarantees the pointer is
-		// non-nil.
-		auditDir := filepath.Dir(auditSink.Path())
-		sweeper := audit.NewRetentionSweeper(
-			auditDir,
-			*cfg.Audit.RetentionDays,
-			audit.WithSweepLogger(log),
-		)
-
-		go sweeper.Run(ctx)
-	}
+	// Phase 2a/2b/3b: open the JSONL sink (always on), add the SQLite
+	// sink when audit.sqlite.enabled, attach the combined sink, and
+	// start the retention sweeper. setupAudit returns a cleanup that
+	// closes the sinks at shutdown, after the handler drain below.
+	defer setupAudit(ctx, srv, cfg, log)()
 
 	// Phase 5: a config reload that changes active_profile or the active
 	// profile's contents must re-resolve the running tool surface. The

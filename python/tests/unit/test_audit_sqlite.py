@@ -1,0 +1,131 @@
+"""SQLite audit sink tests.
+
+Mirrors ``go/internal/audit/sqlite_test.go``. Covers round-trip
+insert/read, INSERT OR IGNORE idempotency, and NULL storage for
+absent optional fields.
+"""
+
+from __future__ import annotations
+
+import json
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
+
+from linodemcp.audit import Capability, Event, Mode, SQLiteSink, Status
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+_ARG_KEY_LABEL = "label"
+_ARG_KEY_TOKEN = "token"
+
+
+def _event(
+    *,
+    event_id: str,
+    tool: str,
+    capability: Capability = Capability.WRITE,
+    status: Status = Status.SUCCESS,
+    plan_id: str | None = None,
+    error: str | None = None,
+    args: dict[str, object] | None = None,
+    redacted: list[str] | None = None,
+) -> Event:
+    """Build an event with the fields the SQLite tests assert on."""
+    ts = datetime(2026, 5, 20, 12, 0, 0, tzinfo=UTC)
+    return Event(
+        ts=ts,
+        ts_unix_ns=int(ts.timestamp() * 1_000_000_000),
+        event_id=event_id,
+        tool=tool,
+        tool_capability=capability,
+        environment="prod",
+        profile="operator",
+        mode=Mode.NORMAL,
+        plan_id=plan_id,
+        args=args or {},
+        args_redacted=redacted or [],
+        status=status,
+        latency_ms=42,
+        result_summary="",
+        error=error,
+        linodemcp_version="0.1.0",
+        session_id="session-1",
+        credential_generation=1,
+    )
+
+
+def _open_sink(tmp_path: Path) -> SQLiteSink:
+    """Open a SQLite sink at a temp DB path."""
+    return SQLiteSink(str(tmp_path / "audit.db"), 5000)
+
+
+def test_sqlite_sink_inserts_and_reads_back(tmp_path: Path) -> None:
+    """An event written through the sink round-trips with JSON args."""
+    sink = _open_sink(tmp_path)
+    try:
+        evt = _event(
+            event_id="evt_one",
+            tool="linode_instance_create",
+            args={_ARG_KEY_LABEL: "web-1", "region": "us-east"},
+            redacted=[_ARG_KEY_TOKEN],
+        )
+        sink.write(evt)
+
+        row = sink.connection.execute(
+            "SELECT tool, tool_capability, status, latency_ms, "
+            "args_json, args_redacted_json FROM events WHERE event_id = ?",
+            (evt.event_id,),
+        ).fetchone()
+    finally:
+        sink.close()
+
+    assert row is not None
+    tool, capability, status, latency_ms, args_json, redacted_json = row
+    assert tool == "linode_instance_create"
+    assert capability == "write"
+    assert status == "success"
+    assert latency_ms == 42
+    assert json.loads(args_json) == {_ARG_KEY_LABEL: "web-1", "region": "us-east"}
+    assert json.loads(redacted_json) == [_ARG_KEY_TOKEN]
+
+
+def test_sqlite_sink_ignores_duplicate_event_id(tmp_path: Path) -> None:
+    """INSERT OR IGNORE keeps a re-delivered event idempotent."""
+    sink = _open_sink(tmp_path)
+    try:
+        evt = _event(event_id="evt_dup", tool="linode_instance_list")
+        sink.write(evt)
+        sink.write(evt)
+
+        count = sink.connection.execute(
+            "SELECT COUNT(*) FROM events WHERE event_id = ?",
+            (evt.event_id,),
+        ).fetchone()[0]
+    finally:
+        sink.close()
+
+    assert count == 1
+
+
+def test_sqlite_sink_stores_nulls_for_absent_optionals(tmp_path: Path) -> None:
+    """plan_id and error are NULL when the event's fields are None."""
+    sink = _open_sink(tmp_path)
+    try:
+        evt = _event(
+            event_id="evt_nulls",
+            tool="linode_instance_list",
+            plan_id=None,
+            error=None,
+        )
+        sink.write(evt)
+
+        plan_id, error = sink.connection.execute(
+            "SELECT plan_id, error FROM events WHERE event_id = ?",
+            (evt.event_id,),
+        ).fetchone()
+    finally:
+        sink.close()
+
+    assert plan_id is None
+    assert error is None

@@ -12,4 +12,9 @@ const (
 	// (which is the runtime value) so a test reorder doesn't
 	// accidentally tie them together.
 	argRootPass = "root_pass"
+	// argKeyLabel and argKeyToken are arg keys reused across the
+	// redaction and SQLite test fixtures. Extracted to satisfy
+	// goconst once they recur 3+ times across the package.
+	argKeyLabel = "label"
+	argKeyToken = "token"
 )

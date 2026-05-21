@@ -10,7 +10,9 @@ import structlog
 
 from linodemcp.audit import (
     JSONLSink,
+    MultiSink,
     RetentionSweeper,
+    SQLiteSink,
     resolve_default_audit_dir,
 )
 from linodemcp.cli import run_profile_command
@@ -129,60 +131,95 @@ async def _run_scope_validation(
 
 def _start_audit(
     server: Server,
+    cfg: Config,
     log: structlog.stdlib.BoundLogger,
-    retention_days: int,
-) -> tuple[JSONLSink | None, asyncio.Task[None] | None]:
-    """Open the JSONL sink, attach it, and start the retention sweeper.
+) -> tuple[JSONLSink | None, SQLiteSink | None, asyncio.Task[None] | None]:
+    """Open the audit sinks, attach them, and start the retention sweeper.
 
-    Returns ``(sink, sweeper_task)`` so the caller can tear both down
-    on shutdown. On sink-open failure returns ``(None, None)`` after
-    logging; the server keeps its NoopSink default and no sweeper
-    runs. Audit never blocks startup.
+    Opens the JSONL sink (always on) and, when audit.sqlite.enabled,
+    the SQLite sink too; the two are combined behind a MultiSink.
+    Returns ``(jsonl_sink, sqlite_sink, sweeper_task)`` for teardown.
+    On JSONL-open failure returns ``(None, None, None)``; the server
+    keeps its NoopSink default. Audit never blocks startup.
     """
     audit_dir = resolve_default_audit_dir()
     try:
-        sink = JSONLSink(audit_dir)
+        jsonl_sink = JSONLSink(audit_dir)
     except OSError as exc:
         log.warning(
             "audit JSONL sink unavailable; continuing without audit",
             directory=audit_dir,
             error=str(exc),
         )
-        return None, None
+        return None, None, None
 
-    server.set_audit_sink(sink)
-    log.info("audit JSONL sink open", path=sink.path)
+    log.info("audit JSONL sink open", path=jsonl_sink.path)
+
+    sqlite_sink = (
+        _open_sqlite_sink(cfg, jsonl_sink, log) if cfg.audit.sqlite.enabled else None
+    )
+    audit_sink = MultiSink(jsonl_sink, sqlite_sink) if sqlite_sink else jsonl_sink
+    server.set_audit_sink(audit_sink)
 
     # Phase 2b/3a: sweep rotated logs older than the retention window
     # in the background. The window comes from audit.retention_days
     # config (0 = never delete).
     sweeper = RetentionSweeper(
-        str(Path(sink.path).parent),
-        retention_days,
+        str(Path(jsonl_sink.path).parent),
+        cfg.audit.retention_days,
     )
     sweeper_task = asyncio.create_task(sweeper.run())
-    return sink, sweeper_task
+    return jsonl_sink, sqlite_sink, sweeper_task
+
+
+def _open_sqlite_sink(
+    cfg: Config,
+    jsonl_sink: JSONLSink,
+    log: structlog.stdlib.BoundLogger,
+) -> SQLiteSink | None:
+    """Open the SQLite sink at the configured path (or audit.db beside
+    the JSONL log). Returns None on failure after logging; the caller
+    keeps the JSONL sink as the durable record.
+    """
+    db_path = cfg.audit.sqlite.path or str(Path(jsonl_sink.path).parent / "audit.db")
+    try:
+        sink = SQLiteSink(db_path, cfg.audit.sqlite.busy_timeout_ms)
+    except Exception as exc:
+        log.warning(
+            "audit SQLite sink unavailable; continuing with JSONL only",
+            path=db_path,
+            error=str(exc),
+        )
+        return None
+
+    log.info("audit SQLite sink open", path=db_path)
+    return sink
 
 
 async def _stop_audit(
-    sink: JSONLSink | None,
+    jsonl_sink: JSONLSink | None,
+    sqlite_sink: SQLiteSink | None,
     sweeper_task: asyncio.Task[None] | None,
     log: structlog.stdlib.BoundLogger,
 ) -> None:
-    """Stop the sweeper and close the sink on shutdown.
+    """Stop the sweeper and close the sinks on shutdown.
 
     Cancels the sweeper task first so it stops touching the directory,
-    then closes the sink so final events land and the file releases.
+    then closes the SQLite sink (sqlite3 close does not raise) and the
+    JSONL sink so final events land and the file releases.
     """
     if sweeper_task is not None:
         sweeper_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await sweeper_task
 
-    if sink is None:
+    if sqlite_sink is not None:
+        sqlite_sink.close()
+
+    if jsonl_sink is None:
         return
     try:
-        sink.close()
+        jsonl_sink.close()
     except OSError as exc:
         log.warning("audit JSONL sink close error", error=str(exc))
 
@@ -242,16 +279,17 @@ async def async_main() -> int:
     tool_helpers.set_live_config_source(watcher.get)
 
     server: Server | None = None
-    audit_sink: JSONLSink | None = None
+    jsonl_sink: JSONLSink | None = None
+    sqlite_sink: SQLiteSink | None = None
     sweeper_task: asyncio.Task[None] | None = None
     try:
         server = Server(cfg)
 
-        # Phase 2a/2b: attach the rolling JSONL sink so every tool call
-        # lands on disk, and start the background retention sweeper. On
-        # sink failure the server keeps its NoopSink default and no
-        # sweeper runs; audit never blocks startup.
-        audit_sink, sweeper_task = _start_audit(server, log, cfg.audit.retention_days)
+        # Phase 2a/2b/3b: attach the JSONL sink (and SQLite sink when
+        # enabled) so every tool call lands on disk, and start the
+        # background retention sweeper. On JSONL failure the server
+        # keeps its NoopSink default; audit never blocks startup.
+        jsonl_sink, sqlite_sink, sweeper_task = _start_audit(server, cfg, log)
 
         _wire_profile_hot_reload(watcher, server, log)
 
@@ -287,7 +325,7 @@ async def async_main() -> int:
             log.exception("config watcher stop error", error=str(exc))
         tool_helpers.set_live_config_source(None)
 
-        await _stop_audit(audit_sink, sweeper_task, log)
+        await _stop_audit(jsonl_sink, sqlite_sink, sweeper_task, log)
 
         try:
             obs.shutdown()

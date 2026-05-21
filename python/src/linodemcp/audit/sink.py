@@ -39,6 +39,25 @@ class NoopSink:
         return
 
 
+class MultiSink:
+    """Fan an event out to every child sink in order.
+
+    Used to dual-write to JSONL and SQLite when both are enabled. Each
+    child's write is best-effort per its own contract, so a failing
+    child (e.g. a SQLite insert error) does not stop the others; the
+    JSONL sink stays the durable record.
+    """
+
+    def __init__(self, *sinks: Sink) -> None:
+        """Build a fan-out over ``sinks``, written in the order given."""
+        self._sinks = sinks
+
+    def write(self, event: Event) -> None:
+        """Forward the event to every child sink."""
+        for sink in self._sinks:
+            sink.write(event)
+
+
 class CapturingSink:
     """Retain every event for test inspection.
 

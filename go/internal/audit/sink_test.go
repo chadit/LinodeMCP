@@ -20,12 +20,42 @@ func TestNoopSinkSatisfiesInterface(t *testing.T) {
 	var sink audit.Sink = audit.NoopSink{}
 
 	evt := audit.Event{Tool: "test_tool"}
-	sink.Write(&evt)
-	sink.Write(&evt)
+	sink.Write(t.Context(), &evt)
+	sink.Write(t.Context(), &evt)
 
 	// The contract is "no observable effect"; the only check we can
 	// make is that the event we passed in is unchanged.
 	assert.Equal(t, "test_tool", evt.Tool, "noop sink must not mutate the event")
+}
+
+// TestMultiSinkFansOutToEveryChild verifies the fan-out delivers
+// each event to all child sinks in order.
+func TestMultiSinkFansOutToEveryChild(t *testing.T) {
+	t.Parallel()
+
+	first := audit.NewCapturingSink()
+	second := audit.NewCapturingSink()
+	multi := audit.NewMultiSink(first, second)
+
+	evt := audit.Event{Tool: "fanned_out"}
+	multi.Write(t.Context(), &evt)
+
+	require.Equal(t, 1, first.Len(), "first child must receive the event")
+	require.Equal(t, 1, second.Len(), "second child must receive the event")
+	assert.Equal(t, "fanned_out", first.Events()[0].Tool)
+	assert.Equal(t, "fanned_out", second.Events()[0].Tool)
+}
+
+// TestMultiSinkEmptyIsNoop verifies a fan-out with no children does
+// not panic.
+func TestMultiSinkEmptyIsNoop(t *testing.T) {
+	t.Parallel()
+
+	multi := audit.NewMultiSink()
+	evt := audit.Event{Tool: "nowhere"}
+
+	require.NotPanics(t, func() { multi.Write(t.Context(), &evt) },
+		"empty MultiSink must be a safe no-op")
 }
 
 // TestCapturingSinkRetainsWriteOrder confirms the test-only sink
@@ -40,9 +70,9 @@ func TestCapturingSinkRetainsWriteOrder(t *testing.T) {
 	second := audit.Event{Tool: "second"}
 	third := audit.Event{Tool: "third"}
 
-	sink.Write(&first)
-	sink.Write(&second)
-	sink.Write(&third)
+	sink.Write(t.Context(), &first)
+	sink.Write(t.Context(), &second)
+	sink.Write(t.Context(), &third)
 
 	events := sink.Events()
 	assert.Len(t, events, 3)
@@ -61,7 +91,7 @@ func TestCapturingSinkCopiesEvent(t *testing.T) {
 	sink := audit.NewCapturingSink()
 	evt := audit.Event{Tool: "original"}
 
-	sink.Write(&evt)
+	sink.Write(t.Context(), &evt)
 
 	// Mutate the source event AFTER write. A copy-based sink keeps
 	// the original; a share-based sink reflects the mutation.
@@ -81,7 +111,7 @@ func TestCapturingSinkLenReportsCount(t *testing.T) {
 	assert.Equal(t, 0, sink.Len(), "empty sink starts at zero")
 
 	evt := audit.Event{Tool: "one"}
-	sink.Write(&evt)
+	sink.Write(t.Context(), &evt)
 	assert.Equal(t, 1, sink.Len())
 }
 

@@ -40,11 +40,11 @@ func TestJSONLSinkAppendsOneLinePerEvent(t *testing.T) {
 
 	event1 := makeEvent("linode_instance_list", audit.CapabilityRead)
 	event1.Finalize(audit.StatusSuccess, 12*time.Millisecond, "", "5 instances")
-	sink.Write(&event1)
+	sink.Write(t.Context(), &event1)
 
 	event2 := makeEvent("linode_instance_create", audit.CapabilityWrite)
 	event2.Finalize(audit.StatusError, 45*time.Millisecond, "boom", "")
-	sink.Write(&event2)
+	sink.Write(t.Context(), &event2)
 
 	lines := readLines(t, sink.Path())
 	require.Len(t, lines, 2, "expected two JSON lines, one per Write")
@@ -88,11 +88,11 @@ func TestJSONLSinkRotatesOnDayBoundary(t *testing.T) {
 
 	day1Event := makeEvent("linode_instance_list", audit.CapabilityRead)
 	day1Event.Finalize(audit.StatusSuccess, 10*time.Millisecond, "", "day-1-event")
-	sink.Write(&day1Event)
+	sink.Write(t.Context(), &day1Event)
 
 	day2Event := makeEvent("linode_instance_get", audit.CapabilityRead)
 	day2Event.Finalize(audit.StatusSuccess, 11*time.Millisecond, "", "day-2-event")
-	sink.Write(&day2Event)
+	sink.Write(t.Context(), &day2Event)
 
 	rotatedPath := filepath.Join(dir, "audit-2026-05-18.log.gz")
 
@@ -146,7 +146,7 @@ func TestJSONLSinkWriteAfterCloseDropsEvent(t *testing.T) {
 
 	event := makeEvent("linode_instance_list", audit.CapabilityRead)
 	event.Finalize(audit.StatusSuccess, time.Millisecond, "", "")
-	sink.Write(&event)
+	sink.Write(t.Context(), &event)
 
 	handlerMu.Lock()
 	gotErr := handlerErr

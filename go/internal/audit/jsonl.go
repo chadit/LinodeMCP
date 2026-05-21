@@ -2,6 +2,7 @@ package audit
 
 import (
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -130,7 +131,16 @@ func NewJSONLSink(dir string, opts ...JSONLSinkOption) (*JSONLSink, error) {
 // file when the day changes since open. Write errors are passed to
 // the configured error handler; the per-call signature has no error
 // return because Sink contracts must not block the tool handler.
-func (s *JSONLSink) Write(event *Event) {
+//
+// A done context skips the write. In production the middleware passes
+// a cancellation-detached context, so this never fires; the guard
+// just honors the contract for any caller that does pass a live,
+// cancelable context.
+func (s *JSONLSink) Write(ctx context.Context, event *Event) {
+	if ctx.Err() != nil {
+		return
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
