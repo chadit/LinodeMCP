@@ -100,6 +100,27 @@ func (c *Client) httpGetAccountAgreements(ctx context.Context) (*AccountAgreemen
 }
 
 // httpListAccountAvailability retrieves account service availability by region.
+func (c *Client) httpGetAccountAvailability(ctx context.Context, regionID string) (*AccountAvailability, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountAvailability + "/" + url.PathEscape(regionID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccountAvailability", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var availability AccountAvailability
+	if err := c.handleResponse(resp, &availability); err != nil {
+		return nil, err
+	}
+
+	return &availability, nil
+}
+
 func (c *Client) httpListAccountAvailability(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountAvailability], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()

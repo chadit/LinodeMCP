@@ -673,6 +673,117 @@ func TestClientGetAccountAgreementsAPIError(t *testing.T) {
 	assert.Equal(t, "forbidden", apiErr.Message)
 }
 
+// TestClientGetAccountAvailabilitySuccess verifies GetAccountAvailability sends
+// a GET request to /account/availability/{regionId} and decodes the response.
+func TestClientGetAccountAvailabilitySuccess(t *testing.T) {
+	t.Parallel()
+
+	availability := linode.AccountAvailability{
+		Available:   []string{serviceLinodes, serviceNodeBalancers},
+		Region:      regionUSEast,
+		Unavailable: []string{"Kubernetes", "Block Storage"},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/availability/"+regionUSEast, r.URL.Path, "request path should include region")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(availability))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.GetAccountAvailability(t.Context(), regionUSEast)
+
+	require.NoError(t, err, "GetAccountAvailability should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, regionUSEast, result.Region)
+	assert.Equal(t, []string{serviceLinodes, serviceNodeBalancers}, result.Available)
+}
+
+// TestClientGetAccountAvailabilityEscapesRegion verifies the client encodes path separators.
+func TestClientGetAccountAvailabilityEscapesRegion(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/availability/us%2Feast%3Fzone", r.URL.EscapedPath(), "request path should escape region")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountAvailability{Region: "us/east?zone"}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetAccountAvailability(t.Context(), "us/east?zone")
+
+	require.NoError(t, err, "GetAccountAvailability should escape path parameters")
+}
+
+// TestClientGetAccountAvailabilityAPIError verifies GetAccountAvailability propagates API errors.
+func TestClientGetAccountAvailabilityAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/availability/"+regionUSEast, r.URL.Path, "request path should include region")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetAccountAvailability(t.Context(), regionUSEast)
+
+	require.Error(t, err, "GetAccountAvailability should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	require.NotNil(t, apiErr, "APIError should be present")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, "forbidden", apiErr.Message)
+}
+
+// TestClientGetAccountAvailabilityRetriesTransientError verifies the read-only regional lookup retries transient failures.
+func TestClientGetAccountAvailabilityRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			assert.NoError(t, writeErr)
+
+			return
+		}
+
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/availability/"+regionUSEast, r.URL.Path, "request path should include region")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountAvailability{Region: regionUSEast}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	result, err := client.GetAccountAvailability(t.Context(), regionUSEast)
+
+	require.NoError(t, err, "GetAccountAvailability should succeed after retry")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, regionUSEast, result.Region)
+	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+}
+
 // TestClientListAccountAvailabilitySuccess verifies ListAccountAvailability sends
 // a GET request to /account/availability with pagination query parameters.
 func TestClientListAccountAvailabilitySuccess(t *testing.T) {
@@ -680,7 +791,7 @@ func TestClientListAccountAvailabilitySuccess(t *testing.T) {
 
 	availability := linode.PaginatedResponse[linode.AccountAvailability]{
 		Data: []linode.AccountAvailability{{
-			Available:   []string{"Linodes", "NodeBalancers"},
+			Available:   []string{"Linodes", serviceNodeBalancers},
 			Region:      regionUSEast,
 			Unavailable: []string{"Kubernetes", "Block Storage"},
 		}},
@@ -709,7 +820,7 @@ func TestClientListAccountAvailabilitySuccess(t *testing.T) {
 	assert.Equal(t, 2, result.Page)
 	require.Len(t, result.Data, 1)
 	assert.Equal(t, regionUSEast, result.Data[0].Region)
-	assert.Equal(t, []string{"Linodes", "NodeBalancers"}, result.Data[0].Available)
+	assert.Equal(t, []string{"Linodes", serviceNodeBalancers}, result.Data[0].Available)
 }
 
 // TestClientListAccountAvailabilityAPIError verifies ListAccountAvailability propagates API errors.

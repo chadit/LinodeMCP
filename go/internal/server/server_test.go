@@ -156,9 +156,10 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 
 	descriptors := server.ToolDescriptors(baseTestConfig())
 	want := map[string]profiles.Capability{
-		"linode_image_create":         profiles.CapWrite,
-		"linode_domain_record_get":    profiles.CapRead,
-		"linode_account_availability": profiles.CapRead,
+		"linode_image_create":             profiles.CapWrite,
+		"linode_domain_record_get":        profiles.CapRead,
+		"linode_account_availability":     profiles.CapRead,
+		"linode_account_availability_get": profiles.CapRead,
 	}
 
 	for _, descriptor := range descriptors {
@@ -230,7 +231,8 @@ func TestShutdownDrainsInflightHandlers(t *testing.T) {
 	go func() {
 		defer close(dispatchDone)
 
-		_ = srv.HandleMessage(dispatchCtx, []byte(linodeAccountCallMessage))
+		response := srv.HandleMessage(dispatchCtx, []byte(linodeAccountCallMessage))
+		assert.NotNil(t, response, "HandleMessage should return a JSON-RPC response")
 	}()
 
 	waitForHandlerEntry(t, handlerEntered)
@@ -278,7 +280,8 @@ func TestShutdownTimesOutOnStuckHandler(t *testing.T) {
 	go func() {
 		defer close(dispatchDone)
 
-		_ = srv.HandleMessage(dispatchCtx, []byte(linodeAccountCallMessage))
+		response := srv.HandleMessage(dispatchCtx, []byte(linodeAccountCallMessage))
+		assert.NotNil(t, response, "HandleMessage should return a JSON-RPC response")
 	}()
 
 	waitForHandlerEntry(t, handlerEntered)

@@ -128,6 +128,21 @@ func (c *Client) GetAccountAgreements(ctx context.Context) (*AccountAgreements, 
 	return agreements, err
 }
 
+// GetAccountAvailability retrieves account service availability for a region with automatic retry on transient failures.
+func (c *Client) GetAccountAvailability(ctx context.Context, regionID string) (*AccountAvailability, error) {
+	var availability *AccountAvailability
+
+	err := c.executeWithRetry(ctx, "GetAccountAvailability", func() error {
+		var err error
+
+		availability, err = c.httpGetAccountAvailability(ctx, regionID)
+
+		return err
+	})
+
+	return availability, err
+}
+
 // ListAccountAvailability retrieves account service availability with automatic retry on transient failures.
 func (c *Client) ListAccountAvailability(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountAvailability], error) {
 	var availability *PaginatedResponse[AccountAvailability]

@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"strconv"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -58,6 +59,22 @@ func NewLinodeAccountAvailabilityTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeAccountAvailabilityGetTool creates a tool for retrieving account service availability for one region.
+func NewLinodeAccountAvailabilityGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_availability_get",
+		"Gets services available and unavailable to the account in one region.",
+		[]mcp.ToolOption{
+			mcp.WithString("region_id", mcp.Required(),
+				mcp.Description("Region slug to inspect, for example us-east.")),
+		},
+		handleLinodeAccountAvailabilityGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeAccountAgreementsAcknowledgeTool creates a tool for acknowledging account agreements.
 func NewLinodeAccountAgreementsAcknowledgeTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -104,6 +121,63 @@ func NewLinodeAccountUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 	)
 
 	return tool, profiles.CapAdmin, handler
+}
+
+func handleLinodeAccountAvailabilityGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	regionID, validationMessage := accountAvailabilityRegionIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	availability, getFailure := client.GetAccountAvailability(ctx, regionID)
+	if getFailure == nil {
+		return MarshalToolResponse(availability)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_account_availability_get: " + getFailure.Error()), nil
+}
+
+func accountAvailabilityRegionIDFromTool(request *mcp.CallToolRequest) (string, string) {
+	raw, exists := request.GetArguments()["region_id"]
+	if !exists {
+		return "", "region_id is required"
+	}
+
+	regionID, ok := raw.(string)
+	if !ok || strings.TrimSpace(regionID) == "" {
+		return "", "region_id must be a non-empty string"
+	}
+
+	if !isAccountAvailabilityRegionSlug(regionID) {
+		return "", "region_id must be a lowercase region slug containing only letters, numbers, and hyphens"
+	}
+
+	return regionID, ""
+}
+
+func isAccountAvailabilityRegionSlug(regionID string) bool {
+	for _, char := range regionID {
+		if char >= 'a' && char <= 'z' {
+			continue
+		}
+
+		if char >= '0' && char <= '9' {
+			continue
+		}
+
+		if char == '-' {
+			continue
+		}
+
+		return false
+	}
+
+	return true
 }
 
 func handleLinodeAccountAvailabilityRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
