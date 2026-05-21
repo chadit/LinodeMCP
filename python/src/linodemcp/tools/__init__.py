@@ -263,6 +263,7 @@ from linodemcp.tools.linode_lke_write import (
     handle_linode_lke_service_token_delete,
 )
 from linodemcp.tools.linode_monitor_write import (
+    create_linode_monitor_alert_channels_list_tool,
     create_linode_monitor_alert_definition_update_tool,
     create_linode_monitor_alert_definitions_list_tool,
     create_linode_monitor_dashboard_get_tool,
@@ -277,6 +278,7 @@ from linodemcp.tools.linode_monitor_write import (
     create_linode_monitor_service_metrics_read_tool,
     create_linode_monitor_service_token_create_tool,
     create_linode_monitor_services_list_tool,
+    handle_linode_monitor_alert_channels_list,
     handle_linode_monitor_alert_definition_update,
     handle_linode_monitor_alert_definitions_list,
     handle_linode_monitor_dashboard_get,
@@ -704,6 +706,7 @@ __all__ = [
     "create_linode_lke_types_list_tool",
     "create_linode_lke_version_get_tool",
     "create_linode_lke_versions_list_tool",
+    "create_linode_monitor_alert_channels_list_tool",
     "create_linode_monitor_alert_definition_update_tool",
     "create_linode_monitor_alert_definitions_list_tool",
     "create_linode_monitor_dashboard_get_tool",
@@ -957,6 +960,7 @@ __all__ = [
     "handle_linode_lke_types_list",
     "handle_linode_lke_version_get",
     "handle_linode_lke_versions_list",
+    "handle_linode_monitor_alert_channels_list",
     "handle_linode_monitor_alert_definition_update",
     "handle_linode_monitor_alert_definitions_list",
     "handle_linode_monitor_dashboard_get",

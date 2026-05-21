@@ -2267,6 +2267,49 @@ async def test_monitor_service_alert_definition_get_rejects_invalid_path_params(
     mock_client_class.assert_not_called()
 
 
+async def test_monitor_alert_channels_list_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Monitor alert channels list tool is exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_monitor_alert_channels_list_tool" in tools_mod.__all__
+    assert "handle_linode_monitor_alert_channels_list" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_monitor_alert_channels_list_tool()
+    assert tool.name == "linode_monitor_alert_channels_list"
+    assert capability is Capability.Read
+    assert "confirm" not in tool.inputSchema["properties"]
+
+    registry = {entry.name: entry for entry in get_tool_registry()}
+    assert registry["linode_monitor_alert_channels_list"].capability is Capability.Read
+
+    srv = Server(sample_config)
+    assert "linode_monitor_alert_channels_list" in srv.registered_tool_names
+
+
+async def test_monitor_alert_channels_list_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Monitor alert channels list dispatches through the registered tool."""
+    response_data = {"data": [{"id": 10000, "label": "Email Ops"}]}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_monitor_alert_channels.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_monitor_alert_channels_list", {})
+
+    result_json = json.loads(result[0].text)
+    assert result_json["alert_channels"] == response_data["data"]
+    assert result_json["count"] == 1
+    mock_client.list_monitor_alert_channels.assert_awaited_once_with()
+
+
 async def test_monitor_alert_definitions_list_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

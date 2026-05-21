@@ -76,7 +76,7 @@ FEATURE_TOOLS_LIST = (
     "linode_lke_pool_delete,linode_lke_pool_recycle,"
     "linode_lke_node_get,linode_lke_node_delete,linode_lke_node_recycle,"
     "linode_lke_kubeconfig_get,linode_lke_kubeconfig_delete,"
-    "linode_lke_dashboard_get,linode_lke_api_endpoints_list,linode_monitor_dashboard_get,linode_monitor_alert_definitions_list,linode_monitor_dashboards_list,"
+    "linode_lke_dashboard_get,linode_lke_api_endpoints_list,linode_monitor_dashboard_get,linode_monitor_alert_channels_list,linode_monitor_alert_definitions_list,linode_monitor_dashboards_list,"
     "linode_lke_service_token_delete,linode_lke_acl_get,"
     "linode_lke_acl_update,linode_lke_acl_delete,"
     "linode_lke_versions_list,linode_lke_version_get,"
