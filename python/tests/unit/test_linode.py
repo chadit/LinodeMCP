@@ -8535,6 +8535,82 @@ async def test_retryable_get_firewall_device_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_delete_firewall_device() -> None:
+    """Test deleting a firewall device."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.delete_firewall_device(12345, 456)
+
+        mock_request.assert_awaited_once_with(
+            "DELETE", "/networking/firewalls/12345/devices/456"
+        )
+
+    await client.close()
+
+
+async def test_delete_firewall_device_encodes_path_params() -> None:
+    """Test delete_firewall_device URL-encodes both path params."""
+    from urllib.parse import quote
+
+    unsafe_firewall_id: Any = "12345/../?x=1"
+    unsafe_device_id: Any = "456/../../../etc/passwd"
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.delete_firewall_device(unsafe_firewall_id, unsafe_device_id)
+
+        expected = (
+            f"/networking/firewalls/{quote(str(unsafe_firewall_id), safe='')}/"
+            f"devices/{quote(str(unsafe_device_id), safe='')}"
+        )
+        mock_request.assert_awaited_once_with("DELETE", expected)
+
+    await client.close()
+
+
+async def test_delete_firewall_device_wraps_http_errors() -> None:
+    """Test delete_firewall_device wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.delete_firewall_device(12345, 456)
+
+    assert "DeleteFirewallDevice" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_delete_firewall_device_delegates_once_without_retry() -> None:
+    """Test destructive firewall device delete is not replayed by retry logic."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "delete_firewall_device", new_callable=AsyncMock
+    ) as mock_delete:
+        mock_delete.side_effect = NetworkError(
+            "DeleteFirewallDevice", httpx.HTTPError("boom")
+        )
+
+        with pytest.raises(NetworkError):
+            await retryable.delete_firewall_device(12345, 456)
+
+    mock_delete.assert_awaited_once_with(12345, 456)
+    await retryable.close()
+
+
 async def test_create_firewall_device() -> None:
     """Test creating a firewall device."""
     client = Client("https://api.linode.com/v4", "test-token")
