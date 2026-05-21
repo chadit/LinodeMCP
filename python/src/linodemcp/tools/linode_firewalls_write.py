@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeGuard, cast
 
 from mcp.types import TextContent, Tool
 
@@ -10,6 +10,13 @@ from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_to
 if TYPE_CHECKING:
     from linodemcp.config import Config
     from linodemcp.linode import RetryableClient
+
+
+def _is_firewall_rule_list(value: Any) -> TypeGuard[list[dict[str, Any]]]:
+    if not isinstance(value, list):
+        return False
+    rules = cast("list[object]", value)
+    return all(isinstance(rule, dict) for rule in rules)
 
 
 def create_linode_firewall_create_tool() -> tuple[Tool, Capability]:
@@ -208,3 +215,93 @@ async def handle_linode_firewall_delete(
         }
 
     return await execute_tool(cfg, arguments, "delete firewall", _call)
+
+
+def create_linode_firewall_rules_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_firewall_rules_update tool."""
+    return Tool(
+        name="linode_firewall_rules_update",
+        description=(
+            "Replaces the inbound and outbound rules for a Cloud Firewall. "
+            "WARNING: This overwrites all existing rules."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "firewall_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Firewall ID (required)",
+                },
+                "inbound": {
+                    "type": "array",
+                    "description": "List of inbound firewall rules to set (required)",
+                    "items": {"type": "object"},
+                },
+                "outbound": {
+                    "type": "array",
+                    "description": "List of outbound firewall rules to set (required)",
+                    "items": {"type": "object"},
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm.",
+                },
+            },
+            "required": ["firewall_id", "inbound", "outbound", "confirm"],
+        },
+    ), Capability.Write
+
+
+def _firewall_rules_update_validation_error(arguments: dict[str, Any]) -> str | None:
+    firewall_id = arguments.get("firewall_id", 0)
+    error: str | None = None
+
+    if arguments.get("confirm") is not True:
+        error = "This replaces all firewall rules. Set confirm=true to proceed."
+    elif not firewall_id:
+        error = "firewall_id is required"
+    elif not isinstance(firewall_id, int) or isinstance(firewall_id, bool):
+        error = "firewall_id must be an integer"
+    elif firewall_id <= 0:
+        error = "firewall_id must be a positive integer"
+    else:
+        for field in ("inbound", "outbound"):
+            rules_raw: Any = arguments.get(field)
+            if rules_raw is None:
+                error = f"{field} is required"
+                break
+            if not _is_firewall_rule_list(rules_raw):
+                error = f"{field} must be a list of rule objects"
+                break
+
+    return error
+
+
+async def handle_linode_firewall_rules_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_firewall_rules_update tool request."""
+    firewall_id = arguments.get("firewall_id", 0)
+    validation_error = _firewall_rules_update_validation_error(arguments)
+    if validation_error is not None:
+        return error_response(validation_error)
+
+    inbound = cast("list[dict[str, Any]]", arguments.get("inbound"))
+    outbound = cast("list[dict[str, Any]]", arguments.get("outbound"))
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.update_firewall_rules(
+            firewall_id=firewall_id,
+            inbound=inbound,
+            outbound=outbound,
+        )
+        return {
+            "message": f"Firewall {firewall_id} rules updated successfully",
+            "firewall_id": firewall_id,
+            "inbound_count": len(result.get("inbound", [])),
+            "outbound_count": len(result.get("outbound", [])),
+        }
+
+    return await execute_tool(cfg, arguments, "update firewall rules", _call)

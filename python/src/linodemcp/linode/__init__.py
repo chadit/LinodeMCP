@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from dataclasses import field as dc_field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, BinaryIO, TypeVar, cast
+from typing import Any, BinaryIO, TypeGuard, TypeVar, cast
 from urllib.parse import quote, urlencode
 
 import httpx
@@ -156,6 +156,32 @@ def validate_volume_size(size: int) -> None:
     if size > MAX_VOLUME_SIZE_GB:
         msg = "volume size cannot exceed 10240 GB (10 TB)"
         raise ValueError(msg)
+
+
+def _is_firewall_rule_list(value: Any) -> TypeGuard[list[dict[str, Any]]]:
+    if not isinstance(value, list):
+        return False
+    rules = cast("list[object]", value)
+    return all(isinstance(rule, dict) for rule in rules)
+
+
+def _validate_firewall_rules_update_request(
+    firewall_id: Any, inbound: Any, outbound: Any
+) -> None:
+    """Validate a firewall rules update request."""
+    if (
+        not isinstance(firewall_id, int)
+        or isinstance(firewall_id, bool)
+        or firewall_id <= 0
+    ):
+        msg = "firewall_id must be a positive integer"
+        raise ValueError(msg)
+    if not _is_firewall_rule_list(inbound):
+        msg = "inbound must be a list of rule objects"
+        raise TypeError(msg)
+    if not _is_firewall_rule_list(outbound):
+        msg = "outbound must be a list of rule objects"
+        raise TypeError(msg)
 
 
 def validate_label(label: str | None) -> None:
@@ -3809,6 +3835,48 @@ class Client:
             logger.exception("HTTP error deleting firewall: %s", e)
             raise NetworkError("DeleteFirewall", e) from e
 
+    async def update_firewall_rules(
+        self,
+        firewall_id: int,
+        inbound: list[dict[str, Any]],
+        outbound: list[dict[str, Any]],
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Update firewall rules.
+
+        Replaces the inbound and outbound rule sets for a firewall.
+        """
+        _validate_firewall_rules_update_request(firewall_id, inbound, outbound)
+
+        endpoint = f"/networking/firewalls/{firewall_id}/rules"
+        body: dict[str, Any] = {"inbound": inbound, "outbound": outbound}
+
+        logger.info(
+            "Updating firewall rules",
+            extra={"firewall_id": firewall_id},
+        )
+
+        try:
+            response = await self.make_request("PUT", endpoint, body)
+            data = response.json()
+            result = {
+                "inbound": data.get("inbound", []),
+                "outbound": data.get("outbound", []),
+            }
+            logger.info("Firewall rules updated", extra={"firewall_id": firewall_id})
+            return result
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout updating firewall rules: %s", e)
+            raise NetworkError("UpdateFirewallRules", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout updating firewall rules: %s", e)
+            raise NetworkError("UpdateFirewallRules", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error updating firewall rules")
+            raise NetworkError("UpdateFirewallRules", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error updating firewall rules: %s", e)
+            raise NetworkError("UpdateFirewallRules", e) from e
+
     async def create_domain(
         self,
         domain: str,
@@ -7216,6 +7284,21 @@ class RetryableClient:
     async def delete_firewall(self, firewall_id: int) -> None:
         """Delete firewall with retry."""
         await self._execute_with_retry(self.client.delete_firewall, firewall_id)
+
+    async def update_firewall_rules(
+        self,
+        firewall_id: int,
+        inbound: list[dict[str, Any]],
+        outbound: list[dict[str, Any]],
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Update firewall rules with retry."""
+        result: dict[str, list[dict[str, Any]]] = await self._execute_with_retry(
+            self.client.update_firewall_rules,
+            firewall_id,
+            inbound,
+            outbound,
+        )
+        return result
 
     async def create_domain(
         self,
