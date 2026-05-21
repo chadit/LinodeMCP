@@ -554,6 +554,19 @@ async def test_firewall_rule_versions_list_tool_is_exported_and_registered(
     assert "linode_firewall_rule_versions_list" in srv.registered_tool_names
 
 
+async def test_firewall_devices_list_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Verify the firewall devices list tool is exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_firewall_devices_list_tool" in tools_mod.__all__
+    assert "handle_linode_firewall_devices_list" in tools_mod.__all__
+
+    srv = Server(sample_config)
+    assert "linode_firewall_devices_list" in srv.registered_tool_names
+
+
 async def test_firewall_rules_update_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
