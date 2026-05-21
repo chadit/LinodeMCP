@@ -23,6 +23,19 @@ func NewLinodeAccountTool(cfg *config.Config) (mcp.Tool, profiles.Capability, fu
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeAccountAgreementsTool creates a tool for listing account agreement acknowledgment status.
+func NewLinodeAccountAgreementsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newSimpleGetTool(
+		cfg, "linode_account_agreements",
+		"Lists account agreements and whether each has been acknowledged",
+		func(ctx context.Context, client *linode.Client) (any, error) {
+			return client.GetAccountAgreements(ctx)
+		},
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeAccountUpdateTool creates a tool for updating account billing/contact fields.
 func NewLinodeAccountUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(

@@ -807,6 +807,7 @@ func coreToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewVersionTool,
 		tools.NewLinodeProfileTool,
 		tools.NewLinodeAccountTool,
+		tools.NewLinodeAccountAgreementsTool,
 		tools.NewLinodeAccountUpdateTool,
 		tools.NewLinodeAuditRecentTool,
 		tools.NewLinodeAuditSummaryTool,
