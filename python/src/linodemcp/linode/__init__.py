@@ -3739,6 +3739,36 @@ class Client:
             logger.exception("HTTP error updating profile token: %s", e)
             raise NetworkError("UpdateProfileToken", e) from e
 
+    async def get_monitor_service(self, service_type: str) -> dict[str, Any]:
+        """Get details for a supported Linode Metrics service type."""
+        if not service_type:
+            msg = "service_type is required"
+            raise ValueError(msg)
+
+        encoded = quote(service_type, safe="")
+        endpoint = f"/monitor/services/{encoded}"
+        logger.info("Getting monitor service", extra={"service_type": service_type})
+
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            logger.info(
+                "Monitor service retrieved", extra={"service_type": service_type}
+            )
+            return data
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout getting monitor service: %s", e)
+            raise NetworkError("GetMonitorService", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout getting monitor service: %s", e)
+            raise NetworkError("GetMonitorService", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error getting monitor service")
+            raise NetworkError("GetMonitorService", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error getting monitor service: %s", e)
+            raise NetworkError("GetMonitorService", e) from e
+
     async def create_monitor_service_token(
         self, service_type: str, entity_ids: list[int]
     ) -> dict[str, Any]:
@@ -7868,6 +7898,13 @@ class RetryableClient:
         """Update a profile token with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.update_profile_token, token_id, label
+        )
+        return result
+
+    async def get_monitor_service(self, service_type: str) -> dict[str, Any]:
+        """Get monitor service details with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_monitor_service, service_type
         )
         return result
 

@@ -88,6 +88,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
     create_linode_monitor_service_alert_definition_get_tool,
+    create_linode_monitor_service_get_tool,
     create_linode_monitor_service_token_create_tool,
     create_linode_nodebalancer_config_create_tool,
     create_linode_nodebalancer_config_delete_tool,
@@ -251,6 +252,7 @@ from linodemcp.tools import (
     handle_linode_lke_version_get,
     handle_linode_lke_versions_list,
     handle_linode_monitor_service_alert_definition_get,
+    handle_linode_monitor_service_get,
     handle_linode_monitor_service_token_create,
     handle_linode_nodebalancer_config_create,
     handle_linode_nodebalancer_config_delete,
@@ -11742,6 +11744,61 @@ async def test_handle_linode_instance_migrate_error(
     mock_linode_client.migrate_instance.side_effect = Exception("API error")
     result = await handle_linode_instance_migrate(
         {"instance_id": 123, "confirm": True}, sample_config
+    )
+    assert len(result) == 1
+    assert "Failed to" in result[0].text
+    assert "API error" in result[0].text
+
+
+def test_create_linode_monitor_service_get_tool() -> None:
+    """Tool definition advertises required service_type without confirm."""
+    tool, capability = create_linode_monitor_service_get_tool()
+    assert tool.name == "linode_monitor_service_get"
+    assert capability is Capability.Read
+    schema = tool.inputSchema
+    assert "confirm" not in schema["properties"]
+    assert schema["required"] == ["service_type"]
+    assert schema["properties"]["service_type"]["pattern"] == "^[A-Za-z0-9_-]+$"
+
+
+async def test_handle_linode_monitor_service_get(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """Handler returns monitor service data from a successful client call."""
+    mock_linode_client.get_monitor_service.return_value = {
+        "label": "Databases",
+        "service_type": "dbaas",
+    }
+    result = await handle_linode_monitor_service_get(
+        {"service_type": "dbaas"}, sample_config
+    )
+    assert len(result) == 1
+    text = result[0].text
+    assert "Databases" in text
+    assert "dbaas" in text
+    mock_linode_client.get_monitor_service.assert_awaited_once_with("dbaas")
+
+
+@pytest.mark.parametrize("bad_service_type", ["", "bad/type", "bad?type", ".."])
+async def test_handle_linode_monitor_service_get_bad_service_type(
+    bad_service_type: str, sample_config: Config
+) -> None:
+    """Malformed service_type values return a validation error."""
+    result = await handle_linode_monitor_service_get(
+        {"service_type": bad_service_type}, sample_config
+    )
+    assert len(result) == 1
+    assert "service_type" in result[0].text
+    assert "Error" in result[0].text
+
+
+async def test_handle_linode_monitor_service_get_error(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """API errors surface as a 'Failed to' message in the response text."""
+    mock_linode_client.get_monitor_service.side_effect = Exception("API error")
+    result = await handle_linode_monitor_service_get(
+        {"service_type": "dbaas"}, sample_config
     )
     assert len(result) == 1
     assert "Failed to" in result[0].text

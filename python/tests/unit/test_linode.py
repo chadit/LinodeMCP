@@ -6213,6 +6213,57 @@ class TestMakeRequestBody:
 
         await client.close()
 
+    async def test_get_monitor_service_get_shape(self) -> None:
+        """GET monitor service endpoint URL-encodes the service_type."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "label": "Databases",
+            "service_type": "dbaas",
+        }
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = mock_response
+
+            result = await client.get_monitor_service("weird/type with space?and=query")
+
+            url_arg = mock_req.call_args[0][1]
+            assert result == {"label": "Databases", "service_type": "dbaas"}
+            assert mock_req.call_args[0][0] == "GET"
+            assert url_arg.endswith(
+                "/monitor/services/weird%2Ftype%20with%20space%3Fand%3Dquery"
+            )
+            assert "json" not in mock_req.call_args[1]
+
+        await client.close()
+
+    async def test_get_monitor_service_rejects_empty_service_type(self) -> None:
+        """Client raises ValueError before issuing a request for empty service_type."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            with pytest.raises(ValueError, match="service_type"):
+                await client.get_monitor_service("")
+            mock_req.assert_not_called()
+
+        await client.close()
+
+    async def test_get_monitor_service_wraps_http_errors(self) -> None:
+        """Client wraps HTTP errors with the get monitor service operation."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        with patch.object(
+            client, "make_request", new_callable=AsyncMock
+        ) as mock_request:
+            mock_request.side_effect = httpx.ReadTimeout("timeout")
+            with pytest.raises(NetworkError) as exc_info:
+                await client.get_monitor_service("dbaas")
+
+        assert exc_info.value.operation == "GetMonitorService"
+        await client.close()
+
     async def test_create_monitor_service_token_post_shape(self) -> None:
         """POST to monitor token endpoint URL-encodes the service_type."""
         client = Client("https://api.linode.com/v4", "test-token")
