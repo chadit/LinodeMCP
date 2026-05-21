@@ -16,6 +16,33 @@ if TYPE_CHECKING:
 _SERVICE_TYPE_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
+def create_linode_monitor_service_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_monitor_service_get tool."""
+    return Tool(
+        name="linode_monitor_service_get",
+        description="Gets details for a supported Linode Metrics service type.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "service_type": {
+                    "type": "string",
+                    "description": (
+                        "Metrics service type, e.g. 'dbaas' or 'linode' (required)"
+                    ),
+                    "pattern": "^[A-Za-z0-9_-]+$",
+                },
+            },
+            "required": ["service_type"],
+        },
+    ), Capability.Read
+
+
 def create_linode_monitor_service_metrics_read_tool() -> tuple[Tool, Capability]:
     """Create the linode_monitor_service_metrics_read tool."""
     return Tool(
@@ -316,6 +343,28 @@ def _validate_service_type(raw: object) -> str | None:
     if not _SERVICE_TYPE_RE.fullmatch(raw):
         return None
     return raw
+
+
+async def handle_linode_monitor_service_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_monitor_service_get tool request."""
+    service_type = _validate_service_type(arguments.get("service_type"))
+    if service_type is None:
+        return error_response(
+            "service_type is required and must contain only letters, "
+            "numbers, '_' or '-'"
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        data = await client.get_monitor_service(service_type)
+        return {
+            "message": f"Monitor service '{service_type}' retrieved",
+            "service_type": service_type,
+            "service": data,
+        }
+
+    return await execute_tool(cfg, arguments, "get monitor service", _call)
 
 
 async def handle_linode_monitor_service_metrics_read(
