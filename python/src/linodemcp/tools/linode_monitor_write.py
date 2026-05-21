@@ -108,6 +108,25 @@ def create_linode_monitor_dashboards_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def create_linode_monitor_alert_definitions_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_monitor_alert_definitions_list tool."""
+    return Tool(
+        name="linode_monitor_alert_definitions_list",
+        description="Lists Linode Metrics alert definitions.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+            },
+        },
+    ), Capability.Read
+
+
 def create_linode_monitor_service_dashboards_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_monitor_service_dashboards_list tool."""
     return Tool(
@@ -490,6 +509,26 @@ async def handle_linode_monitor_dashboards_list(
         }
 
     return await execute_tool(cfg, arguments, "list monitor dashboards", _call)
+
+
+async def handle_linode_monitor_alert_definitions_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_monitor_alert_definitions_list tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        data = await client.list_monitor_alert_definitions()
+        alert_definitions = data.get("data", [])
+        return {
+            "message": "Monitor alert definitions listed",
+            "count": len(alert_definitions),
+            "alert_definitions": alert_definitions,
+            "page": data.get("page"),
+            "pages": data.get("pages"),
+            "results": data.get("results"),
+        }
+
+    return await execute_tool(cfg, arguments, "list monitor alert definitions", _call)
 
 
 async def handle_linode_monitor_service_dashboards_list(
