@@ -53,6 +53,7 @@ from linodemcp.tools import (
     create_linode_account_update_tool,
     create_linode_firewall_get_tool,
     create_linode_firewall_rules_get_tool,
+    create_linode_firewall_settings_update_tool,
     create_linode_firewall_template_get_tool,
     create_linode_image_create_tool,
     create_linode_instance_backup_create_tool,
@@ -179,6 +180,7 @@ from linodemcp.tools import (
     handle_linode_firewall_get,
     handle_linode_firewall_rules_get,
     handle_linode_firewall_rules_update,
+    handle_linode_firewall_settings_update,
     handle_linode_firewall_template_get,
     handle_linode_firewall_update,
     handle_linode_firewalls_list,
@@ -5293,6 +5295,82 @@ async def test_handle_linode_firewall_rules_update_invalid_rule_lists(
 
     assert len(result) == 1
     assert f"{field} must be a list of rule objects" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_linode_firewall_settings_update_tool_definition() -> None:
+    """Test linode_firewall_settings_update tool definition."""
+    tool, capability = create_linode_firewall_settings_update_tool()
+
+    assert tool.name == "linode_firewall_settings_update"
+    assert capability is Capability.Write
+    assert tool.inputSchema["required"] == ["default_firewall_ids", "confirm"]
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["default_firewall_ids"]["minProperties"] == 1
+
+
+async def test_handle_linode_firewall_settings_update(sample_config: Config) -> None:
+    """Test linode_firewall_settings_update tool happy path."""
+    payload = {"linode": 100, "nodebalancer": 101}
+    mock_result = {"default_firewall_ids": payload}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_firewall_settings.return_value = mock_result
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_firewall_settings_update(
+            {"default_firewall_ids": payload, "confirm": True}, sample_config
+        )
+
+    assert len(result) == 1
+    assert "updated successfully" in result[0].text.lower()
+    mock_client.update_firewall_settings.assert_awaited_once_with(payload)
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_handle_linode_firewall_settings_update_requires_boolean_confirm(
+    sample_config: Config, confirm: Any
+) -> None:
+    """Default firewall update rejects missing or non-true confirm."""
+    arguments: dict[str, Any] = {"default_firewall_ids": {"linode": 100}}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_firewall_settings_update(arguments, sample_config)
+
+    assert len(result) == 1
+    assert "confirm must be true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "default_firewall_ids",
+    [
+        None,
+        {},
+        {"linode": 0},
+        {"linode": -1},
+        {"linode": True},
+        {"linode": "100"},
+        {"unknown": 100},
+    ],
+)
+async def test_handle_linode_firewall_settings_update_invalid_default_ids(
+    sample_config: Config, default_firewall_ids: Any
+) -> None:
+    """Default firewall update rejects malformed default_firewall_ids."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_firewall_settings_update(
+            {"default_firewall_ids": default_firewall_ids, "confirm": True},
+            sample_config,
+        )
+
+    assert len(result) == 1
+    assert "default_firewall_ids must be" in result[0].text
     mock_client_class.assert_not_called()
 
 
