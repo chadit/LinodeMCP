@@ -3755,6 +3755,44 @@ class Client:
             logger.exception("HTTP error reading monitor metrics: %s", e)
             raise NetworkError("ReadMonitorServiceMetrics", e) from e
 
+    async def list_monitor_service_metric_definitions(
+        self, service_type: str
+    ) -> dict[str, Any]:
+        """List metric definitions for a Linode Metrics service type."""
+        if not service_type:
+            msg = "service_type is required"
+            raise ValueError(msg)
+
+        encoded = quote(service_type, safe="")
+        endpoint = f"/monitor/services/{encoded}/metric-definitions"
+        logger.info(
+            "Listing monitor service metric definitions",
+            extra={"service_type": service_type},
+        )
+
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            logger.info(
+                "Monitor service metric definitions listed",
+                extra={"service_type": service_type},
+            )
+            return data
+        except httpx.ConnectTimeout as e:
+            logger.exception(
+                "Connection timeout listing monitor metric definitions: %s", e
+            )
+            raise NetworkError("ListMonitorServiceMetricDefinitions", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout listing monitor metric definitions: %s", e)
+            raise NetworkError("ListMonitorServiceMetricDefinitions", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error listing monitor metric definitions")
+            raise NetworkError("ListMonitorServiceMetricDefinitions", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error listing monitor metric definitions: %s", e)
+            raise NetworkError("ListMonitorServiceMetricDefinitions", e) from e
+
     async def boot_instance(
         self, instance_id: int, config_id: int | None = None
     ) -> None:
@@ -7562,6 +7600,15 @@ class RetryableClient:
         """Read monitor service metrics with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.read_monitor_service_metrics, service_type
+        )
+        return result
+
+    async def list_monitor_service_metric_definitions(
+        self, service_type: str
+    ) -> dict[str, Any]:
+        """List monitor service metric definitions with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.list_monitor_service_metric_definitions, service_type
         )
         return result
 
