@@ -411,6 +411,59 @@ async def test_object_storage_endpoints_list_tool_is_exported_and_registered(
     assert "linode_object_storage_endpoints_list" in srv.registered_tool_names
 
 
+async def test_network_transfer_prices_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Network transfer prices tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_network_transfer_prices_tool" in tools_mod.__all__
+    assert "handle_linode_network_transfer_prices" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_network_transfer_prices" in srv.registered_tool_names
+
+
+async def test_network_transfer_prices_handler_returns_client_response(
+    sample_config: Config,
+) -> None:
+    """Network transfer prices handler returns the client response."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_network_transfer_prices.return_value = {
+            "data": [{"id": "transfer"}]
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_network_transfer_prices", {})
+
+    mock_client.get_network_transfer_prices.assert_awaited_once_with()
+    assert json.loads(result[0].text) == {"data": [{"id": "transfer"}]}
+
+
+async def test_network_transfer_prices_handler_returns_error_response_on_client_failure(
+    sample_config: Config,
+) -> None:
+    """Network transfer prices returns a tool error response on client failure."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_network_transfer_prices.side_effect = NetworkError(
+            "GetNetworkTransferPrices", RuntimeError("timeout")
+        )
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_network_transfer_prices", {})
+
+    assert "failed to retrieve network transfer prices" in result[0].text.lower()
+    assert "GetNetworkTransferPrices" in result[0].text
+
+
 async def test_object_storage_buckets_region_list_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

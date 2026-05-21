@@ -2650,6 +2650,15 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetObjectStorageTransfer", e) from e
 
+    async def get_network_transfer_prices(self) -> dict[str, Any]:
+        """Get network transfer prices."""
+        try:
+            response = await self.make_request("GET", "/network-transfer/prices")
+            prices: dict[str, Any] = response.json()
+            return prices
+        except httpx.HTTPError as e:
+            raise NetworkError("GetNetworkTransferPrices", e) from e
+
     async def cancel_object_storage(self) -> dict[str, Any]:
         """Cancel Object Storage service for the account."""
         try:
@@ -7121,6 +7130,13 @@ class RetryableClient:
         """Get Object Storage transfer usage with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_object_storage_transfer
+        )
+        return result
+
+    async def get_network_transfer_prices(self) -> dict[str, Any]:
+        """Get network transfer prices with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_network_transfer_prices
         )
         return result
 
