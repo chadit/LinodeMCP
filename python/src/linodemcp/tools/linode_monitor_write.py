@@ -116,6 +116,31 @@ def create_linode_monitor_service_dashboards_list_tool() -> tuple[Tool, Capabili
     ), Capability.Read
 
 
+def create_linode_monitor_dashboard_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_monitor_dashboard_get tool."""
+    return Tool(
+        name="linode_monitor_dashboard_get",
+        description="Gets a Linode Metrics dashboard by ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "dashboard_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Dashboard ID to get (required)",
+                },
+            },
+            "required": ["dashboard_id"],
+        },
+    ), Capability.Read
+
+
 def create_linode_monitor_service_metric_definitions_list_tool() -> tuple[
     Tool, Capability
 ]:
@@ -448,6 +473,28 @@ async def handle_linode_monitor_service_dashboards_list(
         }
 
     return await execute_tool(cfg, arguments, "list monitor service dashboards", _call)
+
+
+async def handle_linode_monitor_dashboard_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_monitor_dashboard_get tool request."""
+    raw_dashboard_id = arguments.get("dashboard_id")
+    if type(raw_dashboard_id) is not int:
+        return error_response("dashboard_id must be a valid integer")
+    if raw_dashboard_id <= 0:
+        return error_response("dashboard_id must be a positive integer")
+    dashboard_id = raw_dashboard_id
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        data = await client.get_monitor_dashboard(dashboard_id)
+        return {
+            "message": f"Monitor dashboard {dashboard_id} retrieved",
+            "dashboard_id": dashboard_id,
+            "dashboard": data,
+        }
+
+    return await execute_tool(cfg, arguments, "get monitor dashboard", _call)
 
 
 async def handle_linode_monitor_service_metric_definitions_list(

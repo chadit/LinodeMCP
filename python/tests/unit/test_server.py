@@ -2348,6 +2348,70 @@ async def test_monitor_service_alert_definitions_list_rejects_invalid_service_ty
     mock_client_class.assert_not_called()
 
 
+async def test_monitor_dashboard_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Monitor dashboard get tool is exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_monitor_dashboard_get_tool" in tools_mod.__all__
+    assert "handle_linode_monitor_dashboard_get" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_monitor_dashboard_get_tool()
+    assert tool.name == "linode_monitor_dashboard_get"
+    assert capability is Capability.Read
+    assert "confirm" not in tool.inputSchema["properties"]
+
+    registry = {entry.name: entry for entry in get_tool_registry()}
+    assert registry["linode_monitor_dashboard_get"].capability is Capability.Read
+
+    srv = Server(sample_config)
+    assert "linode_monitor_dashboard_get" in srv.registered_tool_names
+
+
+async def test_monitor_dashboard_get_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Monitor dashboard get dispatches through the registered tool."""
+    response_data = {"id": 12345, "label": "Resource Usage"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_monitor_dashboard.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_monitor_dashboard_get", {"dashboard_id": 12345}
+        )
+
+    result_json = json.loads(result[0].text)
+    assert result_json["dashboard_id"] == 12345
+    assert result_json["dashboard"] == response_data
+    mock_client.get_monitor_dashboard.assert_awaited_once_with(12345)
+
+
+@pytest.mark.parametrize(
+    "dashboard_id", [None, True, "12345", "1/2", "1?x", "..", 12.9, 0, -1]
+)
+async def test_monitor_dashboard_get_rejects_invalid_dashboard_id(
+    sample_config: Config, dashboard_id: Any
+) -> None:
+    """Monitor dashboard get rejects malformed path params."""
+    arguments: dict[str, Any] = {}
+    if dashboard_id is not None:
+        arguments["dashboard_id"] = dashboard_id
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_monitor_dashboard_get", arguments)
+
+    assert "dashboard_id" in result[0].text.lower()
+    mock_client_class.assert_not_called()
+
+
 async def test_monitor_service_metric_definitions_list_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
