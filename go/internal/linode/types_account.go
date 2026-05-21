@@ -90,6 +90,16 @@ type AccountAvailability struct {
 	Unavailable []string `json:"unavailable"`
 }
 
+// AccountBetaProgram represents a beta program that the account is enrolled in.
+type AccountBetaProgram struct {
+	Description *string `json:"description"`
+	Ended       *string `json:"ended"`
+	Enrolled    string  `json:"enrolled"`
+	ID          string  `json:"id"`
+	Label       string  `json:"label"`
+	Started     string  `json:"started"`
+}
+
 // AcknowledgeAccountAgreementsRequest contains the optional agreement flags for
 // POST /account/agreements. Pointer booleans distinguish omitted fields from
 // explicit false values.

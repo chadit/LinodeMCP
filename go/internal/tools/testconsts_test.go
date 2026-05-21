@@ -65,11 +65,14 @@ const (
 	keyNodeBalancerID = "nodebalancer_id"
 
 	// Pagination response keys.
-	keyData     = "data"
-	keyPage     = "page"
-	keyPageSize = "page_size"
-	keyPages    = "pages"
-	keyResults  = "results"
+	keyData            = "data"
+	keyPage            = "page"
+	keyPageSize        = "page_size"
+	keyPages           = "pages"
+	keyResults         = "results"
+	errPageInteger     = "page must be an integer"
+	errPageSizeRange   = "page_size must be"
+	errPageSizeInteger = "page_size must be an integer"
 
 	// Linode region IDs commonly used in fixtures.
 	regionUSEast         = "us-east"

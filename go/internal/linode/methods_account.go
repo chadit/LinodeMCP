@@ -13,6 +13,7 @@ const (
 	endpointAccount             = "/account"
 	endpointAccountAgreements   = "/account/agreements"
 	endpointAccountAvailability = "/account/availability"
+	endpointAccountBetas        = "/account/betas"
 )
 
 // GetProfile retrieves the authenticated user's profile from the Linode API.
@@ -125,20 +126,7 @@ func (c *Client) httpListAccountAvailability(ctx context.Context, page, pageSize
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountAvailability
-	query := url.Values{}
-
-	if page > 0 {
-		query.Set("page", strconv.Itoa(page))
-	}
-
-	if pageSize > 0 {
-		query.Set("page_size", strconv.Itoa(pageSize))
-	}
-
-	if encoded := query.Encode(); encoded != "" {
-		endpoint += "?" + encoded
-	}
+	endpoint := withPaginationQuery(endpointAccountAvailability, page, pageSize)
 
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -153,6 +141,46 @@ func (c *Client) httpListAccountAvailability(ctx context.Context, page, pageSize
 	}
 
 	return &availability, nil
+}
+
+// httpListAccountBetas retrieves enrolled account beta programs.
+func (c *Client) httpListAccountBetas(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountBetaProgram], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointAccountBetas, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListAccountBetas", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var betas PaginatedResponse[AccountBetaProgram]
+	if err := c.handleResponse(resp, &betas); err != nil {
+		return nil, err
+	}
+
+	return &betas, nil
+}
+
+func withPaginationQuery(endpoint string, page, pageSize int) string {
+	query := url.Values{}
+
+	if page > 0 {
+		query.Set("page", strconv.Itoa(page))
+	}
+
+	if pageSize > 0 {
+		query.Set("page_size", strconv.Itoa(pageSize))
+	}
+
+	if encoded := query.Encode(); encoded != "" {
+		return endpoint + "?" + encoded
+	}
+
+	return endpoint
 }
 
 // httpAcknowledgeAccountAgreements acknowledges account agreements via POST /v4/account/agreements.

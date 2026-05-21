@@ -660,6 +660,148 @@ func TestLinodeAccountAvailabilityGetTool(t *testing.T) {
 	})
 }
 
+// End-to-end verification of enrolled account beta programs retrieval.
+func TestLinodeAccountBetasTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountBetasTool(cfg)
+
+		assert.Equal(t, "linode_account_betas", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		description := "This is an open public beta for an example feature."
+		betas := linode.PaginatedResponse[linode.AccountBetaProgram]{
+			Data: []linode.AccountBetaProgram{{
+				Description: &description,
+				Ended:       nil,
+				Enrolled:    "2023-09-11T00:00:00",
+				ID:          "example_open",
+				Label:       "Example Open Beta",
+				Started:     "2023-07-11T00:00:00",
+			}},
+			Page:    2,
+			Pages:   3,
+			Results: 75,
+		}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/account/betas", r.URL.Path, "request path should be /account/betas")
+			assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(betas))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeAccountBetasTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "example_open", "response should contain beta id")
+		assert.Contains(t, textContent.Text, "Example Open Beta", "response should contain beta label")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/account/betas", r.URL.Path, "request path should be /account/betas")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: errForbidden}},
+			}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeAccountBetasTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to retrieve linode_account_betas", "response should identify failed tool")
+		assert.Contains(t, textContent.Text, errForbidden, "response should include API error detail")
+	})
+
+	t.Run("invalid pagination rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name        string
+			args        map[string]any
+			wantMessage string
+		}{
+			{name: "page zero", args: map[string]any{keyPage: 0}, wantMessage: "page must be"},
+			{name: "page string", args: map[string]any{keyPage: "2"}, wantMessage: errPageInteger},
+			{name: "page fractional", args: map[string]any{keyPage: 1.5}, wantMessage: errPageInteger},
+			{name: "page_size too small", args: map[string]any{keyPageSize: 24}, wantMessage: errPageSizeRange},
+			{name: "page_size too large", args: map[string]any{keyPageSize: 501}, wantMessage: errPageSizeRange},
+			{name: "page_size string", args: map[string]any{keyPageSize: "25"}, wantMessage: errPageSizeInteger},
+			{name: "page_size fractional", args: map[string]any{keyPageSize: 25.5}, wantMessage: errPageSizeInteger},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeAccountBetasTool(cfg)
+
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid pagination should be an error result")
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, testCase.wantMessage, "response should describe validation error")
+			})
+		}
+	})
+}
+
 // End-to-end verification of account availability retrieval.
 func TestLinodeAccountAvailabilityTool(t *testing.T) {
 	t.Parallel()
@@ -769,12 +911,12 @@ func TestLinodeAccountAvailabilityTool(t *testing.T) {
 			wantMessage string
 		}{
 			{name: "page zero", args: map[string]any{keyPage: 0}, wantMessage: "page must be"},
-			{name: "page string", args: map[string]any{keyPage: "2"}, wantMessage: "page must be an integer"},
-			{name: "page fractional", args: map[string]any{keyPage: 1.5}, wantMessage: "page must be an integer"},
-			{name: "page_size too small", args: map[string]any{keyPageSize: 24}, wantMessage: "page_size must be"},
-			{name: "page_size too large", args: map[string]any{keyPageSize: 501}, wantMessage: "page_size must be"},
-			{name: "page_size string", args: map[string]any{keyPageSize: "25"}, wantMessage: "page_size must be an integer"},
-			{name: "page_size fractional", args: map[string]any{keyPageSize: 25.5}, wantMessage: "page_size must be an integer"},
+			{name: "page string", args: map[string]any{keyPage: "2"}, wantMessage: errPageInteger},
+			{name: "page fractional", args: map[string]any{keyPage: 1.5}, wantMessage: errPageInteger},
+			{name: "page_size too small", args: map[string]any{keyPageSize: 24}, wantMessage: errPageSizeRange},
+			{name: "page_size too large", args: map[string]any{keyPageSize: 501}, wantMessage: errPageSizeRange},
+			{name: "page_size string", args: map[string]any{keyPageSize: "25"}, wantMessage: errPageSizeInteger},
+			{name: "page_size fractional", args: map[string]any{keyPageSize: 25.5}, wantMessage: errPageSizeInteger},
 		}
 
 		for _, testCase := range cases {

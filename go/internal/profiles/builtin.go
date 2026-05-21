@@ -52,7 +52,7 @@ func Categories(toolName string) []string {
 
 	// Core: a small explicit list of meta/account names.
 	switch toolName {
-	case "hello", "version", "linode_profile", "linode_account":
+	case "hello", "version", "linode_profile", "linode_account", "linode_account_betas":
 		cats = append(cats, "core")
 	}
 
