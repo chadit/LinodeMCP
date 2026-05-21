@@ -182,7 +182,11 @@ def _scope_category(tool_name: str) -> str | None:
     ``linode_instance_backup_*`` routes via the instance/linodes path
     rather than getting shadowed by a broader rule.
     """
-    if tool_name in ("linode_profile", "linode_account"):
+    if tool_name in (
+        "linode_profile",
+        "linode_account",
+        "linode_firewall_settings_get",
+    ):
         return _CAT_ACCOUNT
 
     for prefixes, category in _prefix_table():

@@ -593,6 +593,81 @@ async def test_firewall_settings_update_tool_is_exported_and_registered(
     assert "linode_firewall_settings_update" in srv.registered_tool_names
 
 
+async def test_firewall_settings_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Firewall settings get tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_firewall_settings_get_tool" in tools_mod.__all__
+    assert "handle_linode_firewall_settings_get" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_firewall_settings_get_tool()
+    assert tool.name == "linode_firewall_settings_get"
+    assert capability is Capability.Read
+    assert "confirm" not in tool.inputSchema["properties"]
+
+    srv = Server(sample_config)
+    assert "linode_firewall_settings_get" in srv.registered_tool_names
+
+
+async def test_firewall_settings_get_handler_returns_settings(
+    sample_config: Config,
+) -> None:
+    """Firewall settings get handler returns client results."""
+    from linodemcp.tools import handle_linode_firewall_settings_get
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_firewall_settings.return_value = {
+            "default_firewall_ids": {"linode": 100},
+            "page": 2,
+            "pages": 3,
+            "results": 1,
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_firewall_settings_get(
+            {"page": 2, "page_size": 25}, sample_config
+        )
+
+    assert len(result) == 1
+    payload = json.loads(result[0].text)
+    assert payload["default_firewall_ids"]["linode"] == 100
+    mock_client.get_firewall_settings.assert_awaited_once_with(page=2, page_size=25)
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({"page": "bad"}, "page must be a valid integer"),
+        ({"page": True}, "page must be a valid integer"),
+        ({"page": 0}, "page must be a positive integer"),
+        ({"page": -1}, "page must be a positive integer"),
+        ({"page_size": "bad"}, "page_size must be a valid integer"),
+        ({"page_size": True}, "page_size must be a valid integer"),
+        ({"page_size": 0}, "page_size must be a positive integer"),
+        ({"page_size": -1}, "page_size must be a positive integer"),
+    ],
+)
+async def test_firewall_settings_get_rejects_invalid_pagination(
+    arguments: dict[str, Any],
+    message: str,
+    sample_config: Config,
+) -> None:
+    """Firewall settings get handler validates pagination before client calls."""
+    from linodemcp.tools import handle_linode_firewall_settings_get
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_firewall_settings_get(arguments, sample_config)
+
+    assert len(result) == 1
+    assert message in result[0].text
+    mock_client_class.assert_not_called()
+
+
 async def test_firewall_templates_list_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
