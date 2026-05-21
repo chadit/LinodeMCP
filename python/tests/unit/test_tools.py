@@ -90,6 +90,7 @@ from linodemcp.tools import (
     create_linode_monitor_service_alert_definition_get_tool,
     create_linode_monitor_service_get_tool,
     create_linode_monitor_service_token_create_tool,
+    create_linode_monitor_services_list_tool,
     create_linode_nodebalancer_config_create_tool,
     create_linode_nodebalancer_config_delete_tool,
     create_linode_nodebalancer_config_get_tool,
@@ -254,6 +255,7 @@ from linodemcp.tools import (
     handle_linode_monitor_service_alert_definition_get,
     handle_linode_monitor_service_get,
     handle_linode_monitor_service_token_create,
+    handle_linode_monitor_services_list,
     handle_linode_nodebalancer_config_create,
     handle_linode_nodebalancer_config_delete,
     handle_linode_nodebalancer_config_get,
@@ -4636,7 +4638,7 @@ async def test_handle_linode_stackscript_create_requires_confirm(
     )
 
     assert len(result) == 1
-    assert "Error" in result[0].text
+    assert "Set confirm=true" in result[0].text
     assert "confirm=true" in result[0].text
 
 
@@ -11748,6 +11750,47 @@ async def test_handle_linode_instance_migrate_error(
     assert len(result) == 1
     assert "Failed to" in result[0].text
     assert "API error" in result[0].text
+
+
+def test_create_linode_monitor_services_list_tool() -> None:
+    """Test linode_monitor_services_list tool creation."""
+    tool, capability = create_linode_monitor_services_list_tool()
+    assert tool.name == "linode_monitor_services_list"
+    assert capability is Capability.Read
+    assert tool.inputSchema["type"] == "object"
+    assert "environment" in tool.inputSchema["properties"]
+    assert "confirm" not in tool.inputSchema["properties"]
+
+
+async def test_handle_linode_monitor_services_list(
+    sample_config: Config, mock_linode_client: AsyncMock
+) -> None:
+    """Test linode_monitor_services_list tool handler."""
+    mock_linode_client.list_monitor_services.return_value = {
+        "data": [{"label": "Databases", "service_type": "dbaas"}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+    result = await handle_linode_monitor_services_list({}, sample_config)
+
+    assert len(result) == 1
+    payload = json.loads(result[0].text)
+    assert payload["count"] == 1
+    assert payload["services"][0]["service_type"] == "dbaas"
+    assert payload["results"] == 1
+    mock_linode_client.list_monitor_services.assert_awaited_once_with()
+
+
+async def test_handle_linode_monitor_services_list_error(
+    sample_config: Config, mock_linode_client: AsyncMock
+) -> None:
+    """Test linode_monitor_services_list error handling."""
+    mock_linode_client.list_monitor_services.side_effect = Exception("API error")
+    result = await handle_linode_monitor_services_list({}, sample_config)
+
+    assert len(result) == 1
+    assert "Failed to list monitor services: API error" in result[0].text
 
 
 def test_create_linode_monitor_service_get_tool() -> None:

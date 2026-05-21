@@ -6213,6 +6213,41 @@ class TestMakeRequestBody:
 
         await client.close()
 
+    async def test_list_monitor_services_get_shape(self) -> None:
+        """GET /monitor/services returns the paginated services payload."""
+        client = Client("https://api.linode.com/v4", "test-token")
+        response_data = {
+            "data": [{"label": "Databases", "service_type": "dbaas"}],
+            "page": 1,
+            "pages": 1,
+            "results": 1,
+        }
+        mock_response = MagicMock()
+        mock_response.json.return_value = response_data
+
+        with patch.object(
+            client, "make_request", new_callable=AsyncMock
+        ) as mock_request:
+            mock_request.return_value = mock_response
+            result = await client.list_monitor_services()
+
+        assert result == response_data
+        mock_request.assert_awaited_once_with("GET", "/monitor/services")
+        await client.close()
+
+    async def test_list_monitor_services_wraps_http_errors(self) -> None:
+        """HTTP errors while listing monitor services are wrapped."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        with patch.object(
+            client, "make_request", new_callable=AsyncMock
+        ) as mock_request:
+            mock_request.side_effect = httpx.ReadTimeout("boom")
+            with pytest.raises(NetworkError, match="ListMonitorServices"):
+                await client.list_monitor_services()
+
+        await client.close()
+
     async def test_get_monitor_service_get_shape(self) -> None:
         """GET monitor service endpoint URL-encodes the service_type."""
         client = Client("https://api.linode.com/v4", "test-token")
@@ -10122,6 +10157,27 @@ async def test_retryable_allocate_networking_ip_retries_transient_failure() -> N
 
     assert result["address"] == "198.51.100.10"
     assert mock_allocate.call_count == 2
+    await retryable.close()
+
+
+async def test_retryable_list_monitor_services_delegates_to_client() -> None:
+    """RetryableClient delegates monitor services listing to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+    response_data = {
+        "data": [{"label": "Databases", "service_type": "dbaas"}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch.object(
+        retryable.client, "list_monitor_services", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = response_data
+        result = await retryable.list_monitor_services()
+
+    assert result == response_data
+    mock_list.assert_awaited_once_with()
     await retryable.close()
 
 

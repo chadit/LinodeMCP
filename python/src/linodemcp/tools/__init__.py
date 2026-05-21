@@ -268,6 +268,7 @@ from linodemcp.tools.linode_monitor_write import (
     create_linode_monitor_service_metric_definitions_list_tool,
     create_linode_monitor_service_metrics_read_tool,
     create_linode_monitor_service_token_create_tool,
+    create_linode_monitor_services_list_tool,
     handle_linode_monitor_service_alert_definition_create,
     handle_linode_monitor_service_alert_definition_delete,
     handle_linode_monitor_service_alert_definition_get,
@@ -277,6 +278,7 @@ from linodemcp.tools.linode_monitor_write import (
     handle_linode_monitor_service_metric_definitions_list,
     handle_linode_monitor_service_metrics_read,
     handle_linode_monitor_service_token_create,
+    handle_linode_monitor_services_list,
 )
 from linodemcp.tools.linode_network_transfer import (
     create_linode_network_transfer_prices_tool,
@@ -698,6 +700,7 @@ __all__ = [
     "create_linode_monitor_service_metric_definitions_list_tool",
     "create_linode_monitor_service_metrics_read_tool",
     "create_linode_monitor_service_token_create_tool",
+    "create_linode_monitor_services_list_tool",
     "create_linode_network_transfer_prices_tool",
     "create_linode_networking_ip_allocate_tool",
     "create_linode_networking_ip_get_tool",
@@ -945,6 +948,7 @@ __all__ = [
     "handle_linode_monitor_service_metric_definitions_list",
     "handle_linode_monitor_service_metrics_read",
     "handle_linode_monitor_service_token_create",
+    "handle_linode_monitor_services_list",
     "handle_linode_network_transfer_prices",
     "handle_linode_networking_ip_allocate",
     "handle_linode_networking_ip_get",

@@ -2029,6 +2029,53 @@ def test_linode_nodebalancer_config_update_registered() -> None:
     assert entries["linode_nodebalancer_config_update"].capability == Capability.Write
 
 
+async def test_monitor_services_list_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Monitor services list tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_monitor_services_list_tool" in tools_mod.__all__
+    assert "handle_linode_monitor_services_list" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_monitor_services_list_tool()
+    assert tool.name == "linode_monitor_services_list"
+    assert capability is Capability.Read
+
+    registry = {entry.name: entry for entry in get_tool_registry()}
+    assert registry["linode_monitor_services_list"].capability is Capability.Read
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_monitor_services_list" in srv.registered_tool_names
+
+
+async def test_monitor_services_list_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Monitor services list dispatch should call the retryable client."""
+    srv = Server(_full_access_config(sample_config))
+    response_data = {
+        "data": [{"label": "Databases", "service_type": "dbaas"}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_monitor_services.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await srv.dispatch("linode_monitor_services_list", {})
+
+    payload = json.loads(result[0].text)
+    assert payload["services"][0]["service_type"] == "dbaas"
+    assert payload["count"] == 1
+    mock_client.list_monitor_services.assert_awaited_once_with()
+
+
 async def test_monitor_service_alert_definition_create_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
