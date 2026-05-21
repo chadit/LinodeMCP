@@ -321,11 +321,17 @@ def create_linode_firewall_device_create_tool() -> tuple[Tool, Capability]:
                 **ENV_PARAM_SCHEMA,
                 "firewall_id": {
                     "type": "integer",
-                    "description": "The ID of the firewall to attach the device to (required)",
+                    "description": (
+                        "The ID of the firewall to attach the device to "
+                        "(required)"
+                    ),
                 },
                 "id": {
                     "type": "integer",
-                    "description": "The ID of the entity to attach as a device (required)",
+                    "description": (
+                        "The ID of the entity to attach as a device "
+                        "(required)"
+                    ),
                 },
                 "type": {
                     "type": "string",
@@ -341,7 +347,7 @@ def create_linode_firewall_device_create_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
-async def handle_linode_firewall_device_create(
+async def handle_linode_firewall_device_create(  # noqa: PLR0911
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_firewall_device_create tool request."""
@@ -355,7 +361,10 @@ async def handle_linode_firewall_device_create(
         return [
             TextContent(
                 type="text",
-                text="Error: This operation requires confirmation. Set confirm=true to proceed.",
+                text=(
+                    "Error: This operation requires confirmation. "
+                    "Set confirm=true to proceed."
+                ),
             )
         ]
 
@@ -373,7 +382,7 @@ async def handle_linode_firewall_device_create(
     if device_id <= 0:
         return error_response("id must be a positive integer")
 
-    if not device_type:
+    if "type" not in arguments:
         return error_response("type is required")
     if not isinstance(device_type, str):
         return error_response("type must be a string")
@@ -383,12 +392,9 @@ async def handle_linode_firewall_device_create(
     async def _call(client: RetryableClient) -> dict[str, Any]:
         device = await client.create_firewall_device(
             firewall_id=int(firewall_id),
-            id=int(device_id),
-            type=str(device_type)
+            device_id=int(device_id),
+            device_type=str(device_type),
         )
-        return {
-            "message": f"Firewall device created successfully",
-            "device": device,
-        }
+        return {"message": "Firewall device created successfully", "device": device}
 
     return await execute_tool(cfg, arguments, "create firewall device", _call)

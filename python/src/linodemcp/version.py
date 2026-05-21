@@ -45,6 +45,7 @@ FEATURE_TOOLS_LIST = (
     "linode_instance_boot,linode_instance_reboot,linode_instance_shutdown,"
     "linode_instance_create,linode_instance_update,linode_instance_delete,linode_instance_resize,"
     "linode_firewall_create,linode_firewall_update,linode_firewall_delete,"
+    "linode_firewall_device_create,"
     "linode_domain_create,linode_domain_update,linode_domain_delete,"
     "linode_domain_record_create,linode_domain_record_update,"
     "linode_domain_record_delete,linode_volume_create,linode_volume_attach,"

@@ -14843,7 +14843,10 @@ async def test_handle_linode_firewall_device_create(sample_config: Config) -> No
         mock_handle.return_value = [
             TextContent(
                 type="text",
-                text='{"message": "Firewall device created successfully", "device": {"id": 456}}',
+                text=(
+                    '{"message": "Firewall device created successfully", '
+                    '"device": {"id": 456}}'
+                ),
             )
         ]
 

@@ -8348,7 +8348,7 @@ async def test_create_firewall_device_rejects_invalid_params(
     """Test create_firewall_device rejects invalid parameters."""
     client = Client("https://api.linode.com/v4", "test-token")
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"positive integer|non-empty string"):
         await client.create_firewall_device(firewall_id, device_id, device_type)
 
     await client.close()

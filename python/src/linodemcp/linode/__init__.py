@@ -3883,34 +3883,34 @@ class Client:
             raise NetworkError("DeleteFirewall", e) from e
 
     async def create_firewall_device(
-        self, 
-        firewall_id: int, 
-        id: int, 
-        type: str
+        self,
+        firewall_id: int | str,
+        device_id: int,
+        device_type: str,
     ) -> dict[str, Any]:
         """Create a new device for a firewall."""
         logger.info("Creating firewall device", extra={"firewall_id": firewall_id})
-        
-        # Validate inputs
-        if not isinstance(firewall_id, int) or firewall_id <= 0:
+
+        if isinstance(firewall_id, int) and firewall_id <= 0:
             raise ValueError("firewall_id must be a positive integer")
-        if not isinstance(id, int) or id <= 0:
+        if not str(firewall_id).strip():
+            raise ValueError("firewall_id must be a positive integer")
+        if not isinstance(device_id, int) or device_id <= 0:
             raise ValueError("id must be a positive integer")
-        if not isinstance(type, str) or not type.strip():
+        if not isinstance(device_type, str) or not device_type.strip():
             raise ValueError("type must be a non-empty string")
-            
+
         safe_firewall_id = quote(str(firewall_id), safe="")
         endpoint = f"/networking/firewalls/{safe_firewall_id}/devices"
-        
-        body = {
-            "id": id,
-            "type": type
-        }
+        body = {"id": device_id, "type": device_type}
 
         try:
             response = await self.make_request("POST", endpoint, body)
             result: dict[str, Any] = response.json()
-            logger.info("Firewall device created", extra={"firewall_id": firewall_id, "device_id": result.get("id")})
+            logger.info(
+                "Firewall device created",
+                extra={"firewall_id": firewall_id, "device_id": result.get("id")},
+            )
             return result
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout creating firewall device: %s", e)
@@ -7422,14 +7422,14 @@ class RetryableClient:
         await self._execute_with_retry(self.client.delete_firewall, firewall_id)
 
     async def create_firewall_device(
-        self, 
-        firewall_id: int, 
-        id: int, 
-        type: str
+        self,
+        firewall_id: int | str,
+        device_id: int,
+        device_type: str,
     ) -> dict[str, Any]:
         """Create a new device for a firewall with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
-            self.client.create_firewall_device, firewall_id, id, type
+            self.client.create_firewall_device, firewall_id, device_id, device_type
         )
         return result
 
