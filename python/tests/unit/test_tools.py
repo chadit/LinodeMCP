@@ -50,6 +50,7 @@ from linodemcp.tools import (
     create_linode_account_tags_list_tool,
     create_linode_account_update_tool,
     create_linode_firewall_get_tool,
+    create_linode_firewall_rules_get_tool,
     create_linode_image_create_tool,
     create_linode_instance_backup_create_tool,
     create_linode_instance_backup_get_tool,
@@ -173,6 +174,7 @@ from linodemcp.tools import (
     handle_linode_firewall_create,
     handle_linode_firewall_delete,
     handle_linode_firewall_get,
+    handle_linode_firewall_rules_get,
     handle_linode_firewall_rules_update,
     handle_linode_firewall_update,
     handle_linode_firewalls_list,
@@ -3394,6 +3396,16 @@ def test_create_linode_firewall_get_tool_schema() -> None:
     assert "firewall_id" in tool.inputSchema["required"]
 
 
+def test_create_linode_firewall_rules_get_tool_schema() -> None:
+    """Test linode_firewall_rules_get tool schema."""
+    tool, capability = create_linode_firewall_rules_get_tool()
+
+    assert tool.name == "linode_firewall_rules_get"
+    assert capability is Capability.Read
+    assert "firewall_id" in tool.inputSchema["properties"]
+    assert "firewall_id" in tool.inputSchema["required"]
+
+
 async def test_handle_linode_firewall_get(sample_config: Config) -> None:
     """Test linode_firewall_get tool."""
     mock_firewall = Firewall(
@@ -3428,6 +3440,51 @@ async def test_handle_linode_firewall_get(sample_config: Config) -> None:
 async def test_handle_linode_firewall_get_missing_id(sample_config: Config) -> None:
     """Test linode_firewall_get validation."""
     result = await handle_linode_firewall_get({}, sample_config)
+
+    assert len(result) == 1
+    assert "firewall_id is required" in result[0].text
+
+
+async def test_handle_linode_firewall_rules_get(sample_config: Config) -> None:
+    """Test linode_firewall_rules_get tool."""
+    mock_rules = FirewallRules(
+        inbound=[
+            FirewallRule(
+                action="ACCEPT",
+                protocol="TCP",
+                ports="22",
+                addresses=FirewallAddresses(ipv4=["0.0.0.0/0"], ipv6=["::/0"]),
+                label="allow-ssh",
+                description="",
+            )
+        ],
+        inbound_policy="DROP",
+        outbound=[],
+        outbound_policy="ACCEPT",
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_firewall_rules.return_value = mock_rules
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_firewall_rules_get(
+            {"firewall_id": 12345}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "DROP" in result[0].text
+        assert "ACCEPT" in result[0].text
+        mock_client.get_firewall_rules.assert_awaited_once_with(12345)
+
+
+async def test_handle_linode_firewall_rules_get_missing_id(
+    sample_config: Config,
+) -> None:
+    """Test linode_firewall_rules_get validation."""
+    result = await handle_linode_firewall_rules_get({}, sample_config)
 
     assert len(result) == 1
     assert "firewall_id is required" in result[0].text

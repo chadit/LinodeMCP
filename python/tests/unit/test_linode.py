@@ -13,6 +13,7 @@ from linodemcp.linode import (
     CircuitBreaker,
     CircuitOpenError,
     Client,
+    FirewallRules,
     Grant,
     Grants,
     NetworkError,
@@ -3434,6 +3435,85 @@ async def test_get_firewall() -> None:
         mock_request.assert_awaited_once_with("GET", "/networking/firewalls/12345")
 
     await client.close()
+
+
+async def test_get_firewall_rules() -> None:
+    """Test getting firewall rules."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "inbound": [
+            {
+                "action": "ACCEPT",
+                "protocol": "TCP",
+                "ports": "22",
+                "addresses": {"ipv4": ["0.0.0.0/0"], "ipv6": ["::/0"]},
+                "label": "allow-ssh",
+                "description": "",
+            }
+        ],
+        "inbound_policy": "DROP",
+        "outbound": [],
+        "outbound_policy": "ACCEPT",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        rules = await client.get_firewall_rules(12345)
+
+        assert isinstance(rules, FirewallRules)
+        assert len(rules.inbound) == 1
+        assert rules.inbound[0].action == "ACCEPT"
+        assert rules.inbound_policy == "DROP"
+        assert rules.outbound == []
+        assert rules.outbound_policy == "ACCEPT"
+        mock_request.assert_awaited_once_with(
+            "GET", "/networking/firewalls/12345/rules"
+        )
+
+    await client.close()
+
+
+async def test_get_firewall_rules_wraps_http_errors() -> None:
+    """Test get_firewall_rules wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPStatusError(
+            "Not Found", request=MagicMock(), response=MagicMock(status_code=404)
+        )
+
+        with pytest.raises(NetworkError):
+            await client.get_firewall_rules(12345)
+
+    await client.close()
+
+
+async def test_retryable_get_firewall_rules_delegates_to_client() -> None:
+    """Test RetryableClient delegates firewall rules get to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    mock_rules = FirewallRules(
+        inbound=[],
+        inbound_policy="DROP",
+        outbound=[],
+        outbound_policy="ACCEPT",
+    )
+
+    with patch.object(
+        retryable.client, "get_firewall_rules", new_callable=AsyncMock
+    ) as mock_method:
+        mock_method.return_value = mock_rules
+
+        result = await retryable.get_firewall_rules(12345)
+
+        assert result is mock_rules
+        mock_method.assert_awaited_once_with(12345)
+
+    await retryable.close()
 
 
 async def test_list_object_storage_quotas_sends_exact_route() -> None:

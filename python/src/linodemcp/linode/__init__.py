@@ -1637,6 +1637,16 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetFirewall", e) from e
 
+    async def get_firewall_rules(self, firewall_id: int) -> FirewallRules:
+        """Get firewall rules for a specific firewall."""
+        endpoint = f"/networking/firewalls/{firewall_id}/rules"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data = response.json()
+            return self._parse_firewall_rules(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("GetFirewallRules", e) from e
+
     async def list_vlans(self) -> list[dict[str, Any]]:
         """List VLANs."""
         try:
@@ -5898,6 +5908,20 @@ class Client:
             updated=data.get("updated", ""),
         )
 
+    def _parse_firewall_rules(self, data: dict[str, Any]) -> FirewallRules:
+        """Parse firewall rules data from API response."""
+        inbound_rules = [self._parse_firewall_rule(r) for r in data.get("inbound", [])]
+        outbound_rules = [
+            self._parse_firewall_rule(r) for r in data.get("outbound", [])
+        ]
+
+        return FirewallRules(
+            inbound=inbound_rules,
+            inbound_policy=data.get("inbound_policy", ""),
+            outbound=outbound_rules,
+            outbound_policy=data.get("outbound_policy", ""),
+        )
+
     def _parse_firewall_rule(self, data: dict[str, Any]) -> FirewallRule:
         """Parse firewall rule data from API response."""
         addresses_data = data.get("addresses", {})
@@ -6336,6 +6360,13 @@ class RetryableClient:
         """Get a specific firewall with retry."""
         result: Firewall = await self._execute_with_retry(
             self.client.get_firewall, firewall_id
+        )
+        return result
+
+    async def get_firewall_rules(self, firewall_id: int) -> FirewallRules:
+        """Get firewall rules with retry."""
+        result: FirewallRules = await self._execute_with_retry(
+            self.client.get_firewall_rules, firewall_id
         )
         return result
 

@@ -86,6 +86,73 @@ async def handle_linode_firewall_get(
     return await execute_tool(cfg, arguments, "retrieve firewall", _call)
 
 
+def create_linode_firewall_rules_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_firewall_rules_get tool."""
+    return Tool(
+        name="linode_firewall_rules_get",
+        description="Gets the rules for a Cloud Firewall by ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "firewall_id": {
+                    "type": "integer",
+                    "description": (
+                        "The ID of the firewall to retrieve rules for (required)"
+                    ),
+                },
+            },
+            "required": ["firewall_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_firewall_rules_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_firewall_rules_get tool request."""
+    firewall_id = arguments.get("firewall_id", 0)
+    if not firewall_id:
+        return error_response("firewall_id is required")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        rules = await client.get_firewall_rules(int(firewall_id))
+        return {
+            "inbound": [
+                {
+                    "action": r.action,
+                    "protocol": r.protocol,
+                    "ports": r.ports,
+                    "addresses": {
+                        "ipv4": r.addresses.ipv4,
+                        "ipv6": r.addresses.ipv6,
+                    },
+                    "label": r.label,
+                    "description": r.description,
+                }
+                for r in rules.inbound
+            ],
+            "inbound_policy": rules.inbound_policy,
+            "outbound": [
+                {
+                    "action": r.action,
+                    "protocol": r.protocol,
+                    "ports": r.ports,
+                    "addresses": {
+                        "ipv4": r.addresses.ipv4,
+                        "ipv6": r.addresses.ipv6,
+                    },
+                    "label": r.label,
+                    "description": r.description,
+                }
+                for r in rules.outbound
+            ],
+            "outbound_policy": rules.outbound_policy,
+        }
+
+    return await execute_tool(cfg, arguments, "retrieve firewall rules", _call)
+
+
 async def handle_linode_firewalls_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
