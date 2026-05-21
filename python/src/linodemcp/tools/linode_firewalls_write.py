@@ -322,15 +322,13 @@ def create_linode_firewall_device_create_tool() -> tuple[Tool, Capability]:
                 "firewall_id": {
                     "type": "integer",
                     "description": (
-                        "The ID of the firewall to attach the device to "
-                        "(required)"
+                        "The ID of the firewall to attach the device to (required)"
                     ),
                 },
                 "id": {
                     "type": "integer",
                     "description": (
-                        "The ID of the entity to attach as a device "
-                        "(required)"
+                        "The ID of the entity to attach as a device (required)"
                     ),
                 },
                 "type": {
