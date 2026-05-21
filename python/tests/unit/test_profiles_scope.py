@@ -169,6 +169,11 @@ def test_instance_subtools_route_to_linodes(tool_name: str) -> None:
             Scope.AccountReadOnly,
         ),
         (
+            "linode_monitor_alert_channels_list",
+            Capability.Read,
+            Scope.AccountReadOnly,
+        ),
+        (
             "linode_monitor_alert_definitions_list",
             Capability.Read,
             Scope.AccountReadOnly,

@@ -127,6 +127,25 @@ def create_linode_monitor_alert_definitions_list_tool() -> tuple[Tool, Capabilit
     ), Capability.Read
 
 
+def create_linode_monitor_alert_channels_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_monitor_alert_channels_list tool."""
+    return Tool(
+        name="linode_monitor_alert_channels_list",
+        description="Lists Linode Metrics alert channels.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+            },
+        },
+    ), Capability.Read
+
+
 def create_linode_monitor_service_dashboards_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_monitor_service_dashboards_list tool."""
     return Tool(
@@ -529,6 +548,26 @@ async def handle_linode_monitor_alert_definitions_list(
         }
 
     return await execute_tool(cfg, arguments, "list monitor alert definitions", _call)
+
+
+async def handle_linode_monitor_alert_channels_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_monitor_alert_channels_list tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        data = await client.list_monitor_alert_channels()
+        alert_channels = data.get("data", [])
+        return {
+            "message": "Monitor alert channels listed",
+            "count": len(alert_channels),
+            "alert_channels": alert_channels,
+            "page": data.get("page"),
+            "pages": data.get("pages"),
+            "results": data.get("results"),
+        }
+
+    return await execute_tool(cfg, arguments, "list monitor alert channels", _call)
 
 
 async def handle_linode_monitor_service_dashboards_list(
