@@ -83,6 +83,16 @@ type AccountAgreements struct {
 	PrivacyPolicy          bool `json:"privacy_policy"`
 }
 
+// AcknowledgeAccountAgreementsRequest contains the optional agreement flags for
+// POST /account/agreements. Pointer booleans distinguish omitted fields from
+// explicit false values.
+type AcknowledgeAccountAgreementsRequest struct {
+	BillingAgreement       *bool `json:"billing_agreement,omitempty"`
+	EUModel                *bool `json:"eu_model,omitempty"`
+	MasterServiceAgreement *bool `json:"master_service_agreement,omitempty"`
+	PrivacyPolicy          *bool `json:"privacy_policy,omitempty"`
+}
+
 // Account represents a Linode account.
 type Account struct {
 	FirstName         string   `json:"first_name"`

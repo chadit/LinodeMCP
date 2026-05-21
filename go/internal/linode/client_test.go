@@ -673,6 +673,73 @@ func TestClientGetAccountAgreementsAPIError(t *testing.T) {
 	assert.Equal(t, "forbidden", apiErr.Message)
 }
 
+// TestClientAcknowledgeAccountAgreementsSuccess verifies that
+// AcknowledgeAccountAgreements sends a POST request to /account/agreements with
+// the exact body and returns the agreement statuses.
+func TestClientAcknowledgeAccountAgreementsSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/account/agreements", r.URL.Path, "request path should be /account/agreements")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		var body map[string]any
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		assert.Equal(t, true, body["billing_agreement"])
+		assert.Equal(t, true, body["eu_model"])
+		assert.Equal(t, true, body["master_service_agreement"])
+		assert.NotContains(t, body, "privacy_policy", "omitted fields should not be sent")
+
+		w.Header().Set("Content-Type", "application/json")
+		_, writeErr := w.Write([]byte(`{}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
+
+	billingAgreement := true
+	euModel := true
+	masterServiceAgreement := true
+	err := client.AcknowledgeAccountAgreements(t.Context(), &linode.AcknowledgeAccountAgreementsRequest{
+		BillingAgreement:       &billingAgreement,
+		EUModel:                &euModel,
+		MasterServiceAgreement: &masterServiceAgreement,
+	})
+
+	require.NoError(t, err, "AcknowledgeAccountAgreements should succeed on 200 response")
+}
+
+// TestClientAcknowledgeAccountAgreementsDoesNotRetry verifies the mutating
+// agreement acknowledgement is not replayed after a transient HTTP error.
+func TestClientAcknowledgeAccountAgreementsDoesNotRetry(t *testing.T) {
+	t.Parallel()
+
+	var calls int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/account/agreements", r.URL.Path, "request path should be /account/agreements")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
+		assert.NoError(t, err)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
+
+	privacyPolicy := true
+	err := client.AcknowledgeAccountAgreements(t.Context(), &linode.AcknowledgeAccountAgreementsRequest{PrivacyPolicy: &privacyPolicy})
+
+	require.Error(t, err, "AcknowledgeAccountAgreements should fail on 500 response")
+	assert.Equal(t, int32(1), calls, "AcknowledgeAccountAgreements must not retry and replay a mutating request")
+}
+
 // TestClientUpdateAccountSuccess verifies that UpdateAccount sends a PUT
 // request to /account with the exact body and returns the updated Account.
 func TestClientUpdateAccountSuccess(t *testing.T) {

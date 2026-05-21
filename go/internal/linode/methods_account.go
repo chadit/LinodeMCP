@@ -96,6 +96,21 @@ func (c *Client) httpGetAccountAgreements(ctx context.Context) (*AccountAgreemen
 	return &agreements, nil
 }
 
+// httpAcknowledgeAccountAgreements acknowledges account agreements via POST /v4/account/agreements.
+func (c *Client) httpAcknowledgeAccountAgreements(ctx context.Context, req *AcknowledgeAccountAgreementsRequest) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountAgreements, req)
+	if err != nil {
+		return &NetworkError{Operation: "AcknowledgeAccountAgreements", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	return c.handleResponse(resp, nil)
+}
+
 // httpUpdateAccount updates account billing/contact fields via PUT /v4/account.
 func (c *Client) httpUpdateAccount(ctx context.Context, req *UpdateAccountRequest) (*Account, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

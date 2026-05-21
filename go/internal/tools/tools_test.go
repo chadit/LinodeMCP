@@ -479,7 +479,7 @@ func TestLinodeAccountAgreementsTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, "billing_agreement", "response should contain billing agreement")
-		assert.Contains(t, textContent.Text, "privacy_policy", "response should contain privacy policy")
+		assert.Contains(t, textContent.Text, keyPrivacyPolicy, "response should contain privacy policy")
 	})
 
 	t.Run("api error", func(t *testing.T) {
@@ -517,6 +517,183 @@ func TestLinodeAccountAgreementsTool(t *testing.T) {
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, "Failed", "response should describe the API failure")
 		assert.Contains(t, textContent.Text, "forbidden", "response should include the API reason")
+	})
+}
+
+// End-to-end verification of account agreement acknowledgement.
+func TestLinodeAccountAgreementsAcknowledgeTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountAgreementsAcknowledgeTool(cfg)
+
+		assert.Equal(t, "linode_account_agreements_acknowledge", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapAdmin, capability, "agreement acknowledgement should be CapAdmin")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, keyConfirm, "schema should include confirm")
+		assert.Contains(t, props, "billing_agreement", "schema should include agreement fields")
+	})
+
+	t.Run("confirm required before client call", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name  string
+			value any
+			set   bool
+		}{
+			{name: caseMissingConfirm, set: false},
+			{name: caseRequiresConfirm, value: false, set: true},
+			{name: "string", value: boolStringTrue, set: true},
+			{name: "numeric", value: 1, set: true},
+		}
+
+		for _, tt := range cases {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					atomic.AddInt32(&calls, 1)
+
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeAccountAgreementsAcknowledgeTool(cfg)
+
+				args := map[string]any{keyPrivacyPolicy: true}
+				if tt.set {
+					args[keyConfirm] = tt.value
+				}
+
+				req := createRequestWithArgs(t, args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should not return transport error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "result should be a tool error")
+				assertErrorContains(t, result, errConfirmEqualsTrue)
+				assert.Equal(t, int32(0), calls, "confirm failure must happen before client call")
+			})
+		}
+	})
+
+	t.Run("empty acknowledgement rejected before client call", func(t *testing.T) {
+		t.Parallel()
+
+		var calls int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			atomic.AddInt32(&calls, 1)
+
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountAgreementsAcknowledgeTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return transport error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "at least one account agreement field is required")
+		assert.Equal(t, int32(0), calls, "empty acknowledgement must fail before client call")
+	})
+
+	t.Run("false agreement rejected before client call", func(t *testing.T) {
+		t.Parallel()
+
+		var calls int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			atomic.AddInt32(&calls, 1)
+
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountAgreementsAcknowledgeTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyPrivacyPolicy: false, keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return transport error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "privacy_policy must be true when provided")
+		assert.Equal(t, int32(0), calls, "false agreement must fail before client call")
+	})
+
+	t.Run("malformed field rejected before client call", func(t *testing.T) {
+		t.Parallel()
+
+		var calls int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			atomic.AddInt32(&calls, 1)
+
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountAgreementsAcknowledgeTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyPrivacyPolicy: boolStringTrue, keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return transport error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "privacy_policy must be a boolean")
+		assert.Equal(t, int32(0), calls, "malformed field must fail before client call")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/account/agreements", r.URL.Path, "request path should be /account/agreements")
+
+			var body map[string]any
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			assert.Equal(t, true, body["billing_agreement"])
+			assert.Equal(t, true, body[keyPrivacyPolicy])
+			assert.NotContains(t, body, "eu_model", "omitted fields should not be sent")
+
+			w.Header().Set("Content-Type", "application/json")
+			_, writeErr := w.Write([]byte(`{}`))
+			assert.NoError(t, writeErr)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountAgreementsAcknowledgeTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{"billing_agreement": true, keyPrivacyPolicy: true, keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Account agreements acknowledged successfully", "response should contain success message")
 	})
 }
 

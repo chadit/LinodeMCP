@@ -128,6 +128,13 @@ func (c *Client) GetAccountAgreements(ctx context.Context) (*AccountAgreements, 
 	return agreements, err
 }
 
+// AcknowledgeAccountAgreements acknowledges account agreements without retrying
+// the mutating request. Retrying can replay agreement acknowledgement after a
+// transient error, so this method delegates exactly once.
+func (c *Client) AcknowledgeAccountAgreements(ctx context.Context, req *AcknowledgeAccountAgreementsRequest) error {
+	return c.httpAcknowledgeAccountAgreements(ctx, req)
+}
+
 // UpdateAccount updates account billing/contact fields without retrying the
 // mutating request. Retrying can replay account state changes after a transient
 // error, so this method delegates exactly once.
