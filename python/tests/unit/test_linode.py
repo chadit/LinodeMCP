@@ -6241,6 +6241,41 @@ class TestMakeRequestBody:
 
         await client.close()
 
+    async def test_read_monitor_service_metrics_post_shape(self) -> None:
+        """POST to monitor metrics endpoint URL-encodes the service_type."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"data": [{"label": "cpu", "value": 1.0}]}
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = mock_response
+
+            result = await client.read_monitor_service_metrics("weird/type with space")
+
+            url_arg = mock_req.call_args[0][1]
+            assert url_arg.endswith(
+                "/monitor/services/weird%2Ftype%20with%20space/metrics"
+            )
+            assert mock_req.call_args[1]["json"] == {}
+            assert result["data"] == [{"label": "cpu", "value": 1.0}]
+
+        await client.close()
+
+    async def test_read_monitor_service_metrics_rejects_empty_service_type(
+        self,
+    ) -> None:
+        """Client raises ValueError before issuing a request for empty service_type."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            with pytest.raises(ValueError, match="service_type"):
+                await client.read_monitor_service_metrics("")
+            mock_req.assert_not_called()
+
+        await client.close()
+
     async def test_get_has_no_json_body(self) -> None:
         """GET without body should not pass json= to the underlying client."""
         client = Client("https://api.linode.com/v4", "test-token")
