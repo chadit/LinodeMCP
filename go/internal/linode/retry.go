@@ -173,6 +173,13 @@ func (c *Client) ListAccountBetas(ctx context.Context, page, pageSize int) (*Pag
 	return betas, err
 }
 
+// EnrollAccountBeta enrolls the account in a beta program without retrying the
+// mutating request. Retrying can replay enrollment after a transient error, so
+// this method delegates exactly once.
+func (c *Client) EnrollAccountBeta(ctx context.Context, req *EnrollAccountBetaRequest) error {
+	return c.httpEnrollAccountBeta(ctx, req)
+}
+
 // AcknowledgeAccountAgreements acknowledges account agreements without retrying
 // the mutating request. Retrying can replay agreement acknowledgement after a
 // transient error, so this method delegates exactly once.

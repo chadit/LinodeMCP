@@ -15,6 +15,9 @@ const (
 	keyLabel  = "label"
 	keySSHKey = "ssh_key"
 
+	// Account beta fixture values.
+	betaExampleOpen = "example_open"
+
 	// Common region IDs used in API response fixtures.
 	regionUSEast         = "us-east"
 	serviceLinodes       = "Linodes"

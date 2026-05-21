@@ -61,6 +61,24 @@ func NewLinodeAccountBetasTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeAccountBetaEnrollTool creates a tool for enrolling in an account beta program.
+func NewLinodeAccountBetaEnrollTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_beta_enroll",
+		"Enrolls the account in a beta program.",
+		[]mcp.ToolOption{
+			mcp.WithString("id", mcp.Required(),
+				mcp.Description("Unique identifier for the beta program.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm beta program enrollment.")),
+		},
+		handleLinodeAccountBetaEnrollRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
 // NewLinodeAccountAvailabilityTool creates a tool for listing account service availability by region.
 func NewLinodeAccountAvailabilityTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -174,6 +192,79 @@ func accountBetasPaginationFromTool(request *mcp.CallToolRequest) (int, int, str
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeAccountBetaEnrollRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This enrolls the account in a beta program. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	req, validationMessage := enrollAccountBetaRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	enrollErr := client.EnrollAccountBeta(ctx, req)
+	if enrollErr == nil {
+		response := struct {
+			Message string `json:"message"`
+			ID      string `json:"id"`
+		}{
+			Message: "Account beta enrollment requested successfully",
+			ID:      req.ID,
+		}
+
+		return MarshalToolResponse(response)
+	}
+
+	return mcp.NewToolResultError("Failed to enroll linode_account_beta_enroll: " + enrollErr.Error()), nil
+}
+
+func enrollAccountBetaRequestFromTool(request *mcp.CallToolRequest) (*linode.EnrollAccountBetaRequest, string) {
+	raw, exists := request.GetArguments()["id"]
+	if !exists {
+		return nil, "id is required"
+	}
+
+	id, ok := raw.(string)
+	if !ok || strings.TrimSpace(id) == "" {
+		return nil, "id must be a non-empty string"
+	}
+
+	if id != strings.TrimSpace(id) || !isAccountBetaID(id) {
+		return nil, "id must contain only letters, numbers, underscores, and hyphens"
+	}
+
+	return &linode.EnrollAccountBetaRequest{ID: id}, ""
+}
+
+func isAccountBetaID(id string) bool {
+	for _, char := range id {
+		if char >= 'a' && char <= 'z' {
+			continue
+		}
+
+		if char >= 'A' && char <= 'Z' {
+			continue
+		}
+
+		if char >= '0' && char <= '9' {
+			continue
+		}
+
+		if char == '_' || char == '-' {
+			continue
+		}
+
+		return false
+	}
+
+	return true
 }
 
 func handleLinodeAccountAvailabilityGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

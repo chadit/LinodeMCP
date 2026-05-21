@@ -685,7 +685,7 @@ func TestLinodeAccountBetasTool(t *testing.T) {
 				Description: &description,
 				Ended:       nil,
 				Enrolled:    "2023-09-11T00:00:00",
-				ID:          "example_open",
+				ID:          betaExampleOpen,
 				Label:       "Example Open Beta",
 				Started:     "2023-07-11T00:00:00",
 			}},
@@ -724,7 +724,7 @@ func TestLinodeAccountBetasTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "example_open", "response should contain beta id")
+		assert.Contains(t, textContent.Text, betaExampleOpen, "response should contain beta id")
 		assert.Contains(t, textContent.Text, "Example Open Beta", "response should contain beta label")
 	})
 
@@ -799,6 +799,182 @@ func TestLinodeAccountBetasTool(t *testing.T) {
 				assert.Contains(t, textContent.Text, testCase.wantMessage, "response should describe validation error")
 			})
 		}
+	})
+}
+
+// End-to-end verification of account beta enrollment.
+func TestLinodeAccountBetaEnrollTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountBetaEnrollTool(cfg)
+
+		assert.Equal(t, "linode_account_beta_enroll", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapAdmin, capability, "beta enrollment should be CapAdmin")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, keyBetaID, "schema should include beta id")
+		assert.Contains(t, props, keyConfirm, "schema should include confirm")
+	})
+
+	t.Run("confirm required before client call", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name  string
+			value any
+			set   bool
+		}{
+			{name: caseMissingConfirm, set: false},
+			{name: caseRequiresConfirm, value: false, set: true},
+			{name: caseString, value: boolStringTrue, set: true},
+			{name: caseNumeric, value: 1, set: true},
+		}
+
+		for _, tt := range cases {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					atomic.AddInt32(&calls, 1)
+
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeAccountBetaEnrollTool(cfg)
+
+				args := map[string]any{keyBetaID: betaExampleOpen}
+				if tt.set {
+					args[keyConfirm] = tt.value
+				}
+
+				req := createRequestWithArgs(t, args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should not return transport error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "result should be a tool error")
+				assertErrorContains(t, result, errConfirmEqualsTrue)
+				assert.Equal(t, int32(0), calls, "confirm failure must happen before client call")
+			})
+		}
+	})
+
+	t.Run("invalid id rejected before client call", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name        string
+			args        map[string]any
+			wantMessage string
+		}{
+			{name: caseMissingConfirm, args: map[string]any{keyConfirm: true}, wantMessage: errBetaIDRequired},
+			{name: "empty", args: map[string]any{keyBetaID: "", keyConfirm: true}, wantMessage: errBetaIDNonEmpty},
+			{name: "blank", args: map[string]any{keyBetaID: "   ", keyConfirm: true}, wantMessage: errBetaIDNonEmpty},
+			{name: caseNumeric, args: map[string]any{keyBetaID: 123, keyConfirm: true}, wantMessage: errBetaIDNonEmpty},
+			{name: "slash", args: map[string]any{keyBetaID: "example/open", keyConfirm: true}, wantMessage: errBetaIDChars},
+			{name: "query", args: map[string]any{keyBetaID: "example?open=1", keyConfirm: true}, wantMessage: errBetaIDChars},
+			{name: "dot traversal", args: map[string]any{keyBetaID: pathTraversalValue, keyConfirm: true}, wantMessage: errBetaIDChars},
+			{name: "whitespace padded", args: map[string]any{keyBetaID: " example_open ", keyConfirm: true}, wantMessage: errBetaIDChars},
+			{name: "control", args: map[string]any{keyBetaID: "example\nopen", keyConfirm: true}, wantMessage: errBetaIDChars},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					atomic.AddInt32(&calls, 1)
+
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeAccountBetaEnrollTool(cfg)
+
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should not return transport error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid id should be a tool error")
+				assertErrorContains(t, result, testCase.wantMessage)
+				assert.Equal(t, int32(0), calls, "id validation must fail before client call")
+			})
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/account/betas", r.URL.Path, "request path should be /account/betas")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+
+			var body map[string]any
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			assert.Equal(t, betaExampleOpen, body[keyBetaID])
+
+			w.Header().Set("Content-Type", "application/json")
+			_, writeErr := w.Write([]byte(`{}`))
+			assert.NoError(t, writeErr)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountBetaEnrollTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyBetaID: betaExampleOpen, keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Account beta enrollment requested successfully", "response should contain success message")
+		assert.Contains(t, textContent.Text, betaExampleOpen, "response should contain beta id")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/account/betas", r.URL.Path, "request path should be /account/betas")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: errForbidden}},
+			}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountBetaEnrollTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyBetaID: betaExampleOpen, keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		assertErrorContains(t, result, "Failed to enroll linode_account_beta_enroll")
+		assertErrorContains(t, result, errForbidden)
 	})
 }
 
@@ -970,8 +1146,8 @@ func TestLinodeAccountAgreementsAcknowledgeTool(t *testing.T) {
 		}{
 			{name: caseMissingConfirm, set: false},
 			{name: caseRequiresConfirm, value: false, set: true},
-			{name: "string", value: boolStringTrue, set: true},
-			{name: "numeric", value: 1, set: true},
+			{name: caseString, value: boolStringTrue, set: true},
+			{name: caseNumeric, value: 1, set: true},
 		}
 
 		for _, tt := range cases {
@@ -1655,8 +1831,8 @@ func TestLinodeAccountUpdateTool(t *testing.T) {
 		}{
 			{name: "missing", set: false},
 			{name: "confirm false", value: false, set: true},
-			{name: "string", value: boolStringTrue, set: true},
-			{name: "numeric", value: 1, set: true},
+			{name: caseString, value: boolStringTrue, set: true},
+			{name: caseNumeric, value: 1, set: true},
 		}
 
 		for _, tt := range cases {
