@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
+from linodemcp.config import Config, EnvironmentConfig, LinodeConfig
 from linodemcp.linode import (
     Account,
     APIError,
@@ -35,6 +36,11 @@ from linodemcp.linode import (
     validate_root_password,
     validate_ssh_key,
     validate_volume_size,
+)
+from linodemcp.profiles import Capability
+from linodemcp.tools.linode_monitor_write import (
+    create_linode_monitor_service_dashboards_list_tool,
+    handle_linode_monitor_service_dashboards_list,
 )
 
 
@@ -6241,6 +6247,57 @@ class TestMakeRequestBody:
 
         await client.close()
 
+    async def test_list_monitor_service_dashboards_get_shape(self) -> None:
+        """GET dashboards endpoint URL-encodes the service_type."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "data": [
+                {
+                    "id": 1,
+                    "label": "Resource Usage",
+                    "service_type": "dbaas",
+                    "type": "standard",
+                    "widgets": [],
+                }
+            ],
+            "page": 1,
+            "pages": 1,
+            "results": 1,
+        }
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = mock_response
+
+            result = await client.list_monitor_service_dashboards(
+                "weird/type with space?and=query"
+            )
+
+            url_arg = mock_req.call_args[0][1]
+            assert mock_req.call_args[0][0] == "GET"
+            assert url_arg.endswith(
+                "/monitor/services/weird%2Ftype%20with%20space%3Fand%3Dquery/dashboards"
+            )
+            assert "json" not in mock_req.call_args[1]
+            assert result["data"][0]["label"] == "Resource Usage"
+
+        await client.close()
+
+    async def test_list_monitor_service_dashboards_rejects_empty_service_type(
+        self,
+    ) -> None:
+        """Client raises ValueError before issuing a request for empty service_type."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            with pytest.raises(ValueError, match="service_type"):
+                await client.list_monitor_service_dashboards("")
+            mock_req.assert_not_called()
+
+        await client.close()
+
     async def test_read_monitor_service_metrics_post_shape(self) -> None:
         """POST to monitor metrics endpoint URL-encodes the service_type."""
         client = Client("https://api.linode.com/v4", "test-token")
@@ -9621,3 +9678,68 @@ async def test_retryable_allocate_networking_ip_retries_transient_failure() -> N
     assert result["address"] == "198.51.100.10"
     assert mock_allocate.call_count == 2
     await retryable.close()
+
+
+async def test_monitor_dashboards_tool_schema_and_handler_success() -> None:
+    """Monitor dashboards tool is read-only and returns handler output."""
+    tool, capability = create_linode_monitor_service_dashboards_list_tool()
+    assert tool.name == "linode_monitor_service_dashboards_list"
+    assert capability == Capability.Read
+    assert "confirm" not in tool.inputSchema["properties"]
+    assert tool.inputSchema["required"] == ["service_type"]
+
+    cfg = Config(
+        environments={
+            "default": EnvironmentConfig(
+                label="Default",
+                linode=LinodeConfig(
+                    api_url="https://api.linode.com/v4",
+                    token="test-token",
+                ),
+            )
+        }
+    )
+
+    response_payload = {
+        "data": [{"id": 1, "label": "Resource Usage"}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+    with patch.object(
+        RetryableClient,
+        "list_monitor_service_dashboards",
+        new_callable=AsyncMock,
+    ) as mock_list:
+        mock_list.return_value = response_payload
+
+        result = await handle_linode_monitor_service_dashboards_list(
+            {"service_type": "dbaas"}, cfg
+        )
+
+    mock_list.assert_awaited_once_with("dbaas")
+    assert "Monitor service dashboards listed for 'dbaas'" in result[0].text
+    assert "Resource Usage" in result[0].text
+
+
+@pytest.mark.parametrize("bad_service_type", ["", "bad/type", "bad?type", ".."])
+async def test_monitor_dashboards_handler_rejects_malformed_service_type(
+    bad_service_type: str,
+) -> None:
+    """Handler rejects unsafe service type values before client construction."""
+    cfg = Config()
+
+    with patch.object(
+        RetryableClient,
+        "list_monitor_service_dashboards",
+        new_callable=AsyncMock,
+    ) as mock_list:
+        result = await handle_linode_monitor_service_dashboards_list(
+            {"service_type": bad_service_type}, cfg
+        )
+
+    mock_list.assert_not_called()
+    assert result[0].text == (
+        "Error: service_type is required and must contain only letters, "
+        "numbers, '_' or '-'"
+    )
