@@ -3739,6 +3739,27 @@ class Client:
             logger.exception("HTTP error updating profile token: %s", e)
             raise NetworkError("UpdateProfileToken", e) from e
 
+    async def list_monitor_services(self) -> dict[str, Any]:
+        """List supported Linode Metrics service types."""
+        logger.info("Listing monitor services")
+
+        try:
+            response = await self.make_request("GET", "/monitor/services")
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout listing monitor services: %s", e)
+            raise NetworkError("ListMonitorServices", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout listing monitor services: %s", e)
+            raise NetworkError("ListMonitorServices", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error listing monitor services")
+            raise NetworkError("ListMonitorServices", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error listing monitor services: %s", e)
+            raise NetworkError("ListMonitorServices", e) from e
+
     async def get_monitor_service(self, service_type: str) -> dict[str, Any]:
         """Get details for a supported Linode Metrics service type."""
         if not service_type:
@@ -7898,6 +7919,13 @@ class RetryableClient:
         """Update a profile token with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.update_profile_token, token_id, label
+        )
+        return result
+
+    async def list_monitor_services(self) -> dict[str, Any]:
+        """List monitor services with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.list_monitor_services
         )
         return result
 

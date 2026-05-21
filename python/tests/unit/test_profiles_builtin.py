@@ -86,6 +86,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         # Monitor.
         ToolDescriptor("linode_monitor_service_dashboards_list", Capability.Read),
         ToolDescriptor("linode_monitor_service_get", Capability.Read),
+        ToolDescriptor("linode_monitor_services_list", Capability.Read),
         ToolDescriptor(
             "linode_monitor_service_alert_definitions_list", Capability.Read
         ),

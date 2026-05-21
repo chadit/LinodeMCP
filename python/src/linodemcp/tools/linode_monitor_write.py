@@ -16,6 +16,25 @@ if TYPE_CHECKING:
 _SERVICE_TYPE_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
+def create_linode_monitor_services_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_monitor_services_list tool."""
+    return Tool(
+        name="linode_monitor_services_list",
+        description="Lists supported Linode Metrics service types.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+            },
+        },
+    ), Capability.Read
+
+
 def create_linode_monitor_service_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_monitor_service_get tool."""
     return Tool(
@@ -343,6 +362,26 @@ def _validate_service_type(raw: object) -> str | None:
     if not _SERVICE_TYPE_RE.fullmatch(raw):
         return None
     return raw
+
+
+async def handle_linode_monitor_services_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_monitor_services_list tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        data = await client.list_monitor_services()
+        services = data.get("data", [])
+        return {
+            "message": "Monitor services listed",
+            "count": len(services),
+            "services": services,
+            "page": data.get("page"),
+            "pages": data.get("pages"),
+            "results": data.get("results"),
+        }
+
+    return await execute_tool(cfg, arguments, "list monitor services", _call)
 
 
 async def handle_linode_monitor_service_get(
