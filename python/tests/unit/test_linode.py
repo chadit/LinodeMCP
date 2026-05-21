@@ -39,7 +39,9 @@ from linodemcp.linode import (
 )
 from linodemcp.profiles import Capability
 from linodemcp.tools.linode_monitor_write import (
+    create_linode_monitor_service_alert_definition_delete_tool,
     create_linode_monitor_service_dashboards_list_tool,
+    handle_linode_monitor_service_alert_definition_delete,
     handle_linode_monitor_service_dashboards_list,
 )
 
@@ -6247,6 +6249,50 @@ class TestMakeRequestBody:
 
         await client.close()
 
+    async def test_delete_monitor_service_alert_definition_delete_shape(self) -> None:
+        """DELETE alert definition endpoint URL-encodes path params."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = mock_response
+
+            await client.delete_monitor_service_alert_definition(
+                "weird/type with space?and=query", 12345
+            )
+
+            url_arg = mock_req.call_args[0][1]
+            assert mock_req.call_args[0][0] == "DELETE"
+            assert url_arg.endswith(
+                "/monitor/services/"
+                "weird%2Ftype%20with%20space%3Fand%3Dquery"
+                "/alert-definitions/12345"
+            )
+            assert "json" not in mock_req.call_args[1]
+
+        await client.close()
+
+    async def test_delete_monitor_service_alert_definition_rejects_invalid_inputs(
+        self,
+    ) -> None:
+        """Client rejects invalid delete inputs before issuing a request."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            with pytest.raises(ValueError, match="service_type"):
+                await client.delete_monitor_service_alert_definition("", 12345)
+            with pytest.raises(TypeError, match="alert_id"):
+                await client.delete_monitor_service_alert_definition("dbaas", True)
+            with pytest.raises(ValueError, match="positive"):
+                await client.delete_monitor_service_alert_definition("dbaas", 0)
+            with pytest.raises(ValueError, match="positive"):
+                await client.delete_monitor_service_alert_definition("dbaas", -1)
+            mock_req.assert_not_called()
+
+        await client.close()
+
     async def test_list_monitor_service_dashboards_get_shape(self) -> None:
         """GET dashboards endpoint URL-encodes the service_type."""
         client = Client("https://api.linode.com/v4", "test-token")
@@ -9678,6 +9724,170 @@ async def test_retryable_allocate_networking_ip_retries_transient_failure() -> N
     assert result["address"] == "198.51.100.10"
     assert mock_allocate.call_count == 2
     await retryable.close()
+
+
+async def test_retryable_delete_monitor_service_alert_definition_does_not_retry() -> (
+    None
+):
+    """Destructive monitor alert definition delete is not replayed on failure."""
+    retryable = RetryableClient(
+        "https://api.linode.com/v4",
+        "test-token",
+        RetryConfig(max_retries=2, base_delay=0.01),
+    )
+
+    with patch.object(
+        retryable.client,
+        "delete_monitor_service_alert_definition",
+        new_callable=AsyncMock,
+    ) as mock_delete:
+        mock_delete.side_effect = NetworkError(
+            "DeleteMonitorServiceAlertDefinition",
+            httpx.TimeoutException("timeout"),
+        )
+        with pytest.raises(NetworkError):
+            await retryable.delete_monitor_service_alert_definition("dbaas", 12345)
+
+    mock_delete.assert_awaited_once_with("dbaas", 12345)
+    await retryable.close()
+
+
+async def test_monitor_alert_definition_delete_tool_schema_and_handler_success() -> (
+    None
+):
+    """Monitor alert definition delete tool requires confirm and returns output."""
+    tool, capability = create_linode_monitor_service_alert_definition_delete_tool()
+    assert tool.name == "linode_monitor_service_alert_definition_delete"
+    assert capability == Capability.Destroy
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["service_type"]["pattern"] == (
+        "^[A-Za-z0-9_-]+$"
+    )
+    assert tool.inputSchema["required"] == [
+        "service_type",
+        "alert_id",
+        "confirm",
+    ]
+
+    cfg = Config(
+        environments={
+            "default": EnvironmentConfig(
+                label="Default",
+                linode=LinodeConfig(
+                    api_url="https://api.linode.com/v4",
+                    token="test-token",
+                ),
+            )
+        }
+    )
+
+    with patch.object(
+        RetryableClient,
+        "delete_monitor_service_alert_definition",
+        new_callable=AsyncMock,
+    ) as mock_delete:
+        result = await handle_linode_monitor_service_alert_definition_delete(
+            {"service_type": "dbaas", "alert_id": 12345, "confirm": True}, cfg
+        )
+
+    mock_delete.assert_awaited_once_with("dbaas", 12345)
+    assert "Monitor service alert definition 12345 deleted for 'dbaas'" in (
+        result[0].text
+    )
+
+
+@pytest.mark.parametrize("bad_confirm", [None, False, "true", 1])
+async def test_monitor_alert_definition_delete_requires_boolean_confirm(
+    bad_confirm: object,
+) -> None:
+    """Handler rejects missing/non-true confirm before client call."""
+    cfg = Config()
+    args: dict[str, object] = {"service_type": "dbaas", "alert_id": 12345}
+    if bad_confirm is not None:
+        args["confirm"] = bad_confirm
+
+    with patch.object(
+        RetryableClient,
+        "delete_monitor_service_alert_definition",
+        new_callable=AsyncMock,
+    ) as mock_delete:
+        result = await handle_linode_monitor_service_alert_definition_delete(
+            cast("dict[str, Any]", args), cfg
+        )
+
+    mock_delete.assert_not_called()
+    assert result[0].text == (
+        "Error: This deletes a Linode Metrics alert definition. "
+        "Set confirm=true to proceed."
+    )
+
+
+@pytest.mark.parametrize("bad_service_type", ["", "bad/type", "bad?type", ".."])
+async def test_monitor_alert_definition_delete_rejects_malformed_service_type(
+    bad_service_type: str,
+) -> None:
+    """Handler rejects unsafe service type values before client construction."""
+    cfg = Config()
+
+    with patch.object(
+        RetryableClient,
+        "delete_monitor_service_alert_definition",
+        new_callable=AsyncMock,
+    ) as mock_delete:
+        result = await handle_linode_monitor_service_alert_definition_delete(
+            {"service_type": bad_service_type, "alert_id": 12345, "confirm": True},
+            cfg,
+        )
+
+    mock_delete.assert_not_called()
+    assert result[0].text == (
+        "Error: service_type is required and must contain only letters, "
+        "numbers, '_' or '-'"
+    )
+
+
+@pytest.mark.parametrize("bad_alert_id", [None, True, "12345", "not-an-int", 12.9])
+async def test_monitor_alert_definition_delete_rejects_invalid_alert_id(
+    bad_alert_id: object,
+) -> None:
+    """Handler rejects invalid alert IDs before client construction."""
+    cfg = Config()
+    args: dict[str, object] = {"service_type": "dbaas", "confirm": True}
+    if bad_alert_id is not None:
+        args["alert_id"] = bad_alert_id
+
+    with patch.object(
+        RetryableClient,
+        "delete_monitor_service_alert_definition",
+        new_callable=AsyncMock,
+    ) as mock_delete:
+        result = await handle_linode_monitor_service_alert_definition_delete(
+            cast("dict[str, Any]", args), cfg
+        )
+
+    mock_delete.assert_not_called()
+    assert result[0].text == "Error: alert_id must be a valid integer"
+
+
+@pytest.mark.parametrize("bad_alert_id", [0, -1])
+async def test_monitor_alert_definition_delete_rejects_non_positive_alert_id(
+    bad_alert_id: int,
+) -> None:
+    """Handler rejects non-positive alert IDs before client construction."""
+    cfg = Config()
+
+    with patch.object(
+        RetryableClient,
+        "delete_monitor_service_alert_definition",
+        new_callable=AsyncMock,
+    ) as mock_delete:
+        result = await handle_linode_monitor_service_alert_definition_delete(
+            {"service_type": "dbaas", "alert_id": bad_alert_id, "confirm": True},
+            cfg,
+        )
+
+    mock_delete.assert_not_called()
+    assert result[0].text == "Error: alert_id must be a positive integer"
 
 
 async def test_monitor_dashboards_tool_schema_and_handler_success() -> None:

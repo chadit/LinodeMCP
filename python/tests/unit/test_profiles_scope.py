@@ -168,6 +168,11 @@ def test_instance_subtools_route_to_linodes(tool_name: str) -> None:
             Capability.Write,
             Scope.AccountReadWrite,
         ),
+        (
+            "linode_monitor_service_alert_definition_delete",
+            Capability.Destroy,
+            Scope.AccountReadWrite,
+        ),
     ],
 )
 def test_ssh_and_monitor_are_account_scoped(
