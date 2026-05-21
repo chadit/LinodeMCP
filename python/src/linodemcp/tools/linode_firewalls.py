@@ -202,3 +202,66 @@ async def handle_linode_firewalls_list(
         return response
 
     return await execute_tool(cfg, arguments, "retrieve firewalls", _call)
+
+
+def create_linode_firewall_rule_version_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_firewall_rule_version_get tool."""
+    return Tool(
+        name="linode_firewall_rule_version_get",
+        description=(
+            "Gets a specific version of a Cloud Firewall rule by ID and version."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "firewall_id": {
+                    "type": "integer",
+                    "description": ("The ID of the firewall (required)"),
+                },
+                "version": {
+                    "type": "string",
+                    "description": (
+                        "The version identifier of the firewall rule (required)"
+                    ),
+                },
+            },
+            "required": ["firewall_id", "version"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_firewall_rule_version_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_firewall_rule_version_get tool request."""
+    firewall_id = arguments.get("firewall_id")
+    version = arguments.get("version", "")
+    if not firewall_id:
+        return error_response("firewall_id is required")
+    if not version:
+        return error_response("version is required")
+    if isinstance(firewall_id, bool):
+        return error_response("firewall_id must be a valid integer")
+    try:
+        fw_id = int(firewall_id)
+        if fw_id <= 0:
+            return error_response("firewall_id must be a positive integer")
+    except (ValueError, TypeError):
+        return error_response("firewall_id must be a valid integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        rule = await client.get_firewall_rule_version(fw_id, str(version))
+        return {
+            "action": rule.action,
+            "protocol": rule.protocol,
+            "ports": rule.ports,
+            "addresses": {
+                "ipv4": rule.addresses.ipv4,
+                "ipv6": rule.addresses.ipv6,
+            },
+            "label": rule.label,
+            "description": rule.description,
+        }
+
+    return await execute_tool(cfg, arguments, "retrieve firewall rule version", _call)
