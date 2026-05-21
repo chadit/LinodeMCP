@@ -802,3 +802,96 @@ async def handle_linode_monitor_service_alert_definition_delete(
     return await execute_tool(
         cfg, arguments, "delete monitor service alert definition", _call
     )
+
+
+def create_linode_monitor_alert_definition_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_monitor_alert_definition_update tool."""
+    return Tool(
+        name="linode_monitor_alert_definition_update",
+        description="Updates a Linode Metrics alert definition for a service type.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "service_type": {
+                    "type": "string",
+                    "description": "Monitor service type.",
+                },
+                "alert_id": {
+                    "type": "integer",
+                    "description": "Alert definition ID.",
+                },
+                "channel_ids": {"type": "array", "items": {"type": "integer"}},
+                "description": {"type": "string"},
+                "entity_ids": {"type": "array", "items": {"type": "integer"}},
+                "label": {"type": "string"},
+                "rule_criteria": {"type": "object"},
+                "severity": {"type": "integer", "enum": [0, 1, 2, 3]},
+                "status": {"type": "string", "enum": ["enabled", "disabled"]},
+                "trigger_conditions": {"type": "object"},
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this mutating operation.",
+                },
+            },
+            "required": ["service_type", "alert_id", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_monitor_alert_definition_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_monitor_alert_definition_update tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates a Linode Metrics alert definition. "
+            "Set confirm=true to proceed."
+        )
+    service_type = _validate_service_type(arguments.get("service_type"))
+    if service_type is None:
+        return error_response(
+            "service_type is required and must contain only letters, "
+            "numbers, '_' or '-'"
+        )
+    raw_alert_id = arguments.get("alert_id")
+    if type(raw_alert_id) is not int:
+        return error_response("alert_id must be a valid integer")
+    if raw_alert_id <= 0:
+        return error_response("alert_id must be a positive integer")
+    alert_id = raw_alert_id
+    payload_keys = (
+        "channel_ids",
+        "description",
+        "entity_ids",
+        "label",
+        "rule_criteria",
+        "severity",
+        "status",
+        "trigger_conditions",
+    )
+    fields = {
+        key: arguments[key]
+        for key in payload_keys
+        if key in arguments and arguments[key] is not None
+    }
+    if not fields:
+        return error_response("at least one update field is required")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        data = await client.update_monitor_alert_definition(
+            service_type, alert_id, **fields
+        )
+        return {
+            "message": f"Monitor alert definition {alert_id} updated",
+            "service_type": service_type,
+            "alert_id": alert_id,
+            "alert_definition": data,
+        }
+
+    return await execute_tool(cfg, arguments, "update monitor alert definition", _call)
