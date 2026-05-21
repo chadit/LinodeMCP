@@ -14697,7 +14697,9 @@ async def test_handle_linode_firewall_rule_version_get(
         description="Allow SSH traffic",
     )
 
-    async def mock_execute_tool(cfg, arguments, description, call_fn):
+    async def mock_execute_tool(
+        cfg: Any, arguments: Any, description: Any, call_fn: Any
+    ) -> Any:
         mock_client = MagicMock()
         mock_client.get_firewall_rule_version = AsyncMock(return_value=mock_rule)
         rule_data = await call_fn(mock_client)
