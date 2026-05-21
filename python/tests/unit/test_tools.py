@@ -87,6 +87,7 @@ from linodemcp.tools import (
     create_linode_lke_cluster_delete_tool,
     create_linode_lke_cluster_get_tool,
     create_linode_lke_clusters_list_tool,
+    create_linode_managed_stats_tool,
     create_linode_monitor_service_alert_definition_get_tool,
     create_linode_monitor_service_get_tool,
     create_linode_monitor_service_token_create_tool,
@@ -252,6 +253,7 @@ from linodemcp.tools import (
     handle_linode_lke_types_list,
     handle_linode_lke_version_get,
     handle_linode_lke_versions_list,
+    handle_linode_managed_stats,
     handle_linode_monitor_service_alert_definition_get,
     handle_linode_monitor_service_get,
     handle_linode_monitor_service_token_create,
@@ -899,6 +901,33 @@ async def test_handle_linode_account_update_requires_field(
 
     assert len(result) == 1
     assert "At least one account field" in result[0].text
+
+
+async def test_create_linode_managed_stats_tool() -> None:
+    """Test linode_managed_stats tool schema."""
+    tool, capability = create_linode_managed_stats_tool()
+
+    assert tool.name == "linode_managed_stats"
+    assert capability is Capability.Read
+    assert tool.inputSchema["type"] == "object"
+    assert "required" not in tool.inputSchema
+
+
+async def test_handle_linode_managed_stats(sample_config: Config) -> None:
+    """Test linode_managed_stats tool."""
+    response_data: dict[str, Any] = {"data": {"cpu": [{"x": 1, "y": 2.0}]}}
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_managed_stats.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_managed_stats({}, sample_config)
+
+        assert len(result) == 1
+        assert json.loads(result[0].text) == response_data
+        mock_client.get_managed_stats.assert_awaited_once_with()
 
 
 async def test_create_linode_account_tags_list_tool() -> None:

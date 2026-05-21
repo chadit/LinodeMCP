@@ -489,6 +489,29 @@ async def handle_linode_account_support_ticket_create(
     return await execute_tool(cfg, arguments, "open Linode support ticket", _call)
 
 
+def create_linode_managed_stats_tool() -> tuple[Tool, Capability]:
+    """Create the linode_managed_stats tool."""
+    return Tool(
+        name="linode_managed_stats",
+        description="Lists Managed statistics from the last 24 hours.",
+        inputSchema={
+            "type": "object",
+            "properties": ENV_PARAM_SCHEMA,
+        },
+    ), Capability.Read
+
+
+async def handle_linode_managed_stats(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_managed_stats tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_managed_stats()
+
+    return await execute_tool(cfg, arguments, "list Linode Managed statistics", _call)
+
+
 def create_linode_account_support_tickets_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_support_tickets_list tool."""
     return Tool(

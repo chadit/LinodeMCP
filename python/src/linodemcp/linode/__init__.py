@@ -2052,6 +2052,15 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("CreateSupportTicket", e) from e
 
+    async def get_managed_stats(self) -> dict[str, Any]:
+        """List Managed statistics from the last 24 hours."""
+        try:
+            response = await self.make_request("GET", "/managed/stats")
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetManagedStats", e) from e
+
     async def list_support_tickets(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -7347,6 +7356,13 @@ class RetryableClient:
                 volume_id=volume_id,
                 vpc_id=vpc_id,
             )
+        )
+        return result
+
+    async def get_managed_stats(self) -> dict[str, Any]:
+        """List Managed statistics with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_managed_stats
         )
         return result
 
