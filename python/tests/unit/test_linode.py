@@ -8468,6 +8468,117 @@ async def test_retryable_list_firewall_devices_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_get_firewall_template() -> None:
+    """Test getting a firewall template by slug."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "slug": "allow-http",
+        "label": "Allow HTTP",
+        "description": "Allow HTTP traffic on port 80",
+        "rules": {
+            "inbound": [],
+            "outbound": [],
+            "inbound_policy": "DROP",
+            "outbound_policy": "ACCEPT",
+        },
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        template = await client.get_firewall_template("allow-http")
+
+        assert template.slug == "allow-http"
+        assert template.label == "Allow HTTP"
+        assert template.description == "Allow HTTP traffic on port 80"
+        mock_request.assert_awaited_once_with(
+            "GET", "/networking/firewalls/templates/allow-http"
+        )
+
+    await client.close()
+
+
+async def test_get_firewall_template_encodes_slug() -> None:
+    """Test that the slug is URL-encoded in the request path."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "slug": "my template/special?chars",
+        "label": "Special",
+        "description": "Test",
+        "rules": {
+            "inbound": [],
+            "outbound": [],
+            "inbound_policy": "DROP",
+            "outbound_policy": "ACCEPT",
+        },
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.get_firewall_template("my template/special?chars")
+
+        call_args = mock_request.await_args
+        assert call_args is not None
+        # The slug should be URL-encoded
+        assert "%2F" in call_args[0][1] or "my%20template" in call_args[0][1]
+
+    await client.close()
+
+
+async def test_get_firewall_template_with_pagination() -> None:
+    """Test that page/page_size are passed as query params."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "slug": "allow-http",
+        "label": "Allow HTTP",
+        "description": "Allow HTTP traffic",
+        "rules": {
+            "inbound": [],
+            "outbound": [],
+            "inbound_policy": "DROP",
+            "outbound_policy": "ACCEPT",
+        },
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.get_firewall_template("allow-http", page=1, page_size=10)
+
+        call_args = mock_request.await_args
+        assert call_args is not None
+        endpoint = call_args[0][1]
+        assert "page=1" in endpoint
+        assert "page_size=10" in endpoint
+
+    await client.close()
+
+
+async def test_get_firewall_template_wraps_http_errors() -> None:
+    """Test that HTTP errors are wrapped as NetworkError."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPStatusError(
+            "Not Found", request=MagicMock(), response=MagicMock(status_code=404)
+        )
+
+        with pytest.raises(NetworkError, match="GetFirewallTemplate"):
+            await client.get_firewall_template("nonexistent")
+
+    await client.close()
+
+
 async def test_get_nodebalancer_config() -> None:
     """Test getting a NodeBalancer config."""
     client = Client("https://api.linode.com/v4", "test-token")

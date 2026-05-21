@@ -447,3 +447,99 @@ async def handle_linode_firewall_rule_version_get(
         }
 
     return await execute_tool(cfg, arguments, "retrieve firewall rule version", _call)
+
+
+def create_linode_firewall_template_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_firewall_template_get tool."""
+    return Tool(
+        name="linode_firewall_template_get",
+        description="Gets a Cloud Firewall Template by slug.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "slug": {
+                    "type": "string",
+                    "description": (
+                        "The slug of the firewall template to retrieve (required)"
+                    ),
+                },
+                "page": {
+                    "type": "integer",
+                    "description": "Page number for pagination",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "description": "Page size for pagination",
+                },
+            },
+            "required": ["slug"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_firewall_template_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_firewall_template_get tool request."""
+    slug = arguments.get("slug", "")
+    if not isinstance(slug, str) or not slug:
+        return error_response("slug is required and must be a string")
+
+    # Reject path traversal characters in slug
+    if any(c in slug for c in ("/", "?", "..")):
+        return error_response(
+            "slug must not contain path separators or traversal characters"
+        )
+
+    # Validate pagination parameters
+    page = arguments.get("page")
+    page_size = arguments.get("page_size")
+
+    if page is not None and (not isinstance(page, int) or page < 1):
+        return error_response("page must be a positive integer")
+
+    if page_size is not None and (not isinstance(page_size, int) or page_size < 1):
+        return error_response("page_size must be a positive integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        template = await client.get_firewall_template(slug, page, page_size)
+        return {
+            "slug": template.slug,
+            "label": template.label,
+            "description": template.description,
+            "rules": {
+                "inbound": [
+                    {
+                        "action": r.action,
+                        "protocol": r.protocol,
+                        "ports": r.ports,
+                        "addresses": {
+                            "ipv4": r.addresses.ipv4,
+                            "ipv6": r.addresses.ipv6,
+                        },
+                        "label": r.label,
+                        "description": r.description,
+                    }
+                    for r in template.rules.inbound
+                ],
+                "inbound_policy": template.rules.inbound_policy,
+                "outbound": [
+                    {
+                        "action": r.action,
+                        "protocol": r.protocol,
+                        "ports": r.ports,
+                        "addresses": {
+                            "ipv4": r.addresses.ipv4,
+                            "ipv6": r.addresses.ipv6,
+                        },
+                        "label": r.label,
+                        "description": r.description,
+                    }
+                    for r in template.rules.outbound
+                ],
+                "outbound_policy": template.rules.outbound_policy,
+            },
+        }
+
+    return await execute_tool(cfg, arguments, "retrieve firewall template", _call)

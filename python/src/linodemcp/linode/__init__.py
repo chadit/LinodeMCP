@@ -922,6 +922,16 @@ class Firewall:
 
 
 @dataclass
+class FirewallTemplate:
+    """Linode Cloud Firewall Template."""
+
+    slug: str
+    label: str
+    description: str
+    rules: FirewallRules
+
+
+@dataclass
 class Transfer:
     """Transfer usage data."""
 
@@ -1636,6 +1646,26 @@ class Client:
             return self._parse_firewall(data)
         except httpx.HTTPError as e:
             raise NetworkError("GetFirewall", e) from e
+
+    async def get_firewall_template(
+        self, slug: str, page: int | None = None, page_size: int | None = None
+    ) -> FirewallTemplate:
+        """Get a firewall template by slug."""
+        safe_slug = quote(slug, safe="")
+        endpoint = f"/networking/firewalls/templates/{safe_slug}"
+        params: dict[str, Any] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint = f"{endpoint}?{urlencode(params)}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data = response.json()
+            return self._parse_firewall_template(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("GetFirewallTemplate", e) from e
 
     async def get_firewall_rules(self, firewall_id: int) -> FirewallRules:
         """Get firewall rules for a specific firewall."""
@@ -6042,6 +6072,26 @@ class Client:
             description=data.get("description", ""),
         )
 
+    def _parse_firewall_template(self, data: dict[str, Any]) -> FirewallTemplate:
+        """Parse a FirewallTemplate from API response data."""
+        rules_data = data.get("rules", {})
+        rules = FirewallRules(
+            inbound=[
+                self._parse_firewall_rule(r) for r in rules_data.get("inbound", [])
+            ],
+            outbound=[
+                self._parse_firewall_rule(r) for r in rules_data.get("outbound", [])
+            ],
+            inbound_policy=rules_data.get("inbound_policy", "DROP"),
+            outbound_policy=rules_data.get("outbound_policy", "ACCEPT"),
+        )
+        return FirewallTemplate(
+            slug=data["slug"],
+            label=data.get("label", ""),
+            description=data.get("description", ""),
+            rules=rules,
+        )
+
     def _parse_nodebalancer(self, data: dict[str, Any]) -> NodeBalancer:
         """Parse NodeBalancer data from API response."""
         transfer_data = data.get("transfer", {})
@@ -6463,6 +6513,15 @@ class RetryableClient:
         """Get a specific firewall with retry."""
         result: Firewall = await self._execute_with_retry(
             self.client.get_firewall, firewall_id
+        )
+        return result
+
+    async def get_firewall_template(
+        self, slug: str, page: int | None = None, page_size: int | None = None
+    ) -> FirewallTemplate:
+        """Get a firewall template with retry."""
+        result: FirewallTemplate = await self._execute_with_retry(
+            self.client.get_firewall_template, slug, page, page_size
         )
         return result
 

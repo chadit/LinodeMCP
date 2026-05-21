@@ -75,6 +75,7 @@ from linodemcp.tools.linode_firewalls import (
     create_linode_firewall_rule_version_get_tool,
     create_linode_firewall_rule_versions_list_tool,
     create_linode_firewall_rules_get_tool,
+    create_linode_firewall_template_get_tool,
     create_linode_firewalls_list_tool,
     handle_linode_firewall_device_get,
     handle_linode_firewall_devices_list,
@@ -82,6 +83,7 @@ from linodemcp.tools.linode_firewalls import (
     handle_linode_firewall_rule_version_get,
     handle_linode_firewall_rule_versions_list,
     handle_linode_firewall_rules_get,
+    handle_linode_firewall_template_get,
     handle_linode_firewalls_list,
 )
 from linodemcp.tools.linode_firewalls_write import (
@@ -583,6 +585,7 @@ __all__ = [
     "create_linode_firewall_rule_versions_list_tool",
     "create_linode_firewall_rules_get_tool",
     "create_linode_firewall_rules_update_tool",
+    "create_linode_firewall_template_get_tool",
     "create_linode_firewall_update_tool",
     "create_linode_firewalls_list_tool",
     "create_linode_image_create_tool",
@@ -816,6 +819,7 @@ __all__ = [
     "handle_linode_firewall_rule_versions_list",
     "handle_linode_firewall_rules_get",
     "handle_linode_firewall_rules_update",
+    "handle_linode_firewall_template_get",
     "handle_linode_firewall_update",
     "handle_linode_firewalls_list",
     "handle_linode_image_create",
