@@ -594,6 +594,19 @@ async def test_firewall_device_create_tool_is_exported_and_registered(
     assert "linode_firewall_device_create" in srv.registered_tool_names
 
 
+async def test_firewall_device_delete_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Verify the firewall device delete tool is exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_firewall_device_delete_tool" in tools_mod.__all__
+    assert "handle_linode_firewall_device_delete" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_firewall_device_delete" in srv.registered_tool_names
+
+
 async def test_firewall_rule_versions_list_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
@@ -2695,3 +2708,122 @@ async def test_networking_ip_allocate_rejects_non_bool_public(
 
     assert "public" in result[0].text.lower()
     mock_client_class.assert_not_called()
+
+
+async def test_firewall_device_delete_tool_schema_requires_confirm() -> None:
+    """Firewall device delete schema requires explicit confirmation."""
+    from linodemcp.tools.linode_firewalls_write import (
+        create_linode_firewall_device_delete_tool,
+    )
+
+    tool, capability = create_linode_firewall_device_delete_tool()
+
+    assert tool.name == "linode_firewall_device_delete"
+    assert capability is Capability.Destroy
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["required"] == [
+        "firewall_id",
+        "device_id",
+        "confirm",
+    ]
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_firewall_device_delete_rejects_missing_or_non_bool_confirm(
+    sample_config: Config, confirm: object
+) -> None:
+    """Confirm guard rejects missing, false, string, and numeric values."""
+    from linodemcp.tools.linode_firewalls_write import (
+        handle_linode_firewall_device_delete,
+    )
+
+    arguments: dict[str, Any] = {"firewall_id": 12345, "device_id": 456}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch(
+        "linodemcp.tools.linode_firewalls_write.execute_tool", new_callable=AsyncMock
+    ) as mock_execute:
+        result = await handle_linode_firewall_device_delete(arguments, sample_config)
+
+    mock_execute.assert_not_awaited()
+    assert "Error:" in result[0].text
+    assert "confirm=true" in result[0].text
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("firewall_id", 0, "firewall_id must be a positive integer"),
+        ("device_id", -1, "device_id must be a positive integer"),
+        ("firewall_id", True, "firewall_id must be a valid integer"),
+        ("firewall_id", "123/../?x=1", "firewall_id must be a valid integer"),
+        ("device_id", "456/../?x=1", "device_id must be a valid integer"),
+        ("device_id", "..", "device_id must be a valid integer"),
+    ],
+)
+async def test_firewall_device_delete_rejects_invalid_path_params_before_client_call(
+    sample_config: Config, field: str, value: object, message: str
+) -> None:
+    """Invalid firewall device delete path params fail before client calls."""
+    from linodemcp.tools.linode_firewalls_write import (
+        handle_linode_firewall_device_delete,
+    )
+
+    arguments: dict[str, Any] = {
+        "firewall_id": 12345,
+        "device_id": 456,
+        "confirm": True,
+    }
+    arguments[field] = value
+
+    with patch(
+        "linodemcp.tools.linode_firewalls_write.execute_tool", new_callable=AsyncMock
+    ) as mock_execute:
+        result = await handle_linode_firewall_device_delete(arguments, sample_config)
+
+    mock_execute.assert_not_awaited()
+    assert message in result[0].text
+
+
+async def test_firewall_device_delete_handler_success(sample_config: Config) -> None:
+    """Handler calls the client and reports deleted IDs."""
+    from linodemcp.tools.linode_firewalls_write import (
+        handle_linode_firewall_device_delete,
+    )
+
+    captured_call: Any = None
+
+    async def fake_execute_tool(
+        _cfg: Config,
+        _arguments: dict[str, Any],
+        _action: str,
+        call: Any,
+    ) -> list[Any]:
+        nonlocal captured_call
+        client = AsyncMock()
+        captured_call = client.delete_firewall_device
+        payload = await call(client)
+        return [payload]
+
+    with patch(
+        "linodemcp.tools.linode_firewalls_write.execute_tool",
+        side_effect=fake_execute_tool,
+    ):
+        result = cast(
+            "list[Any]",
+            await handle_linode_firewall_device_delete(
+                {"firewall_id": 12345, "device_id": 456, "confirm": True},
+                sample_config,
+            ),
+        )
+
+    assert result == [
+        {
+            "message": "Firewall device deleted successfully",
+            "firewall_id": 12345,
+            "device_id": 456,
+        }
+    ]
+    assert captured_call is not None
+    captured_call.assert_awaited_once_with(12345, 456)

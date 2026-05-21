@@ -31,6 +31,19 @@ def _is_default_firewall_ids(value: Any) -> TypeGuard[dict[str, int]]:
     )
 
 
+def _positive_int_argument(
+    arguments: dict[str, Any], name: str
+) -> tuple[int | None, str | None]:
+    value = arguments.get(name)
+    if value is None or value == "":
+        return None, f"{name} is required"
+    if not isinstance(value, int) or isinstance(value, bool):
+        return None, f"{name} must be a valid integer"
+    if value <= 0:
+        return None, f"{name} must be a positive integer"
+    return value, None
+
+
 def create_linode_firewall_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_firewall_create tool."""
     return Tool(
@@ -227,6 +240,67 @@ async def handle_linode_firewall_delete(
         }
 
     return await execute_tool(cfg, arguments, "delete firewall", _call)
+
+
+def create_linode_firewall_device_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_firewall_device_delete tool."""
+    return Tool(
+        name="linode_firewall_device_delete",
+        description=(
+            "Deletes a device assignment from a Cloud Firewall. "
+            "WARNING: This operation requires confirmation."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "firewall_id": {
+                    "type": "integer",
+                    "description": "The ID of the firewall (required)",
+                },
+                "device_id": {
+                    "type": "integer",
+                    "description": "The ID of the firewall device (required)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm deletion.",
+                },
+            },
+            "required": ["firewall_id", "device_id", "confirm"],
+        },
+    ), Capability.Destroy
+
+
+async def handle_linode_firewall_device_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_firewall_device_delete tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This deletes a Cloud Firewall device assignment. "
+            "Set confirm=true to proceed."
+        )
+
+    firewall_id, error = _positive_int_argument(arguments, "firewall_id")
+    if error is not None:
+        return error_response(error)
+    device_id, error = _positive_int_argument(arguments, "device_id")
+    if error is not None:
+        return error_response(error)
+
+    firewall_id_value = cast("int", firewall_id)
+    device_id_value = cast("int", device_id)
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_firewall_device(firewall_id_value, device_id_value)
+        return {
+            "message": "Firewall device deleted successfully",
+            "firewall_id": firewall_id_value,
+            "device_id": device_id_value,
+        }
+
+    return await execute_tool(cfg, arguments, "delete firewall device", _call)
 
 
 def create_linode_firewall_rules_update_tool() -> tuple[Tool, Capability]:

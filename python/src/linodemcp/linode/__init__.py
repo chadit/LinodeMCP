@@ -1777,6 +1777,18 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetFirewallDevice", e) from e
 
+    async def delete_firewall_device(
+        self, firewall_id: int | str, device_id: int | str
+    ) -> None:
+        """Delete a device from a Cloud Firewall."""
+        safe_firewall_id = quote(str(firewall_id), safe="")
+        safe_device_id = quote(str(device_id), safe="")
+        endpoint = f"/networking/firewalls/{safe_firewall_id}/devices/{safe_device_id}"
+        try:
+            await self.make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteFirewallDevice", e) from e
+
     async def list_firewall_devices(
         self,
         firewall_id: int | str,
@@ -7691,6 +7703,12 @@ class RetryableClient:
             outbound,
         )
         return result
+
+    async def delete_firewall_device(
+        self, firewall_id: int | str, device_id: int | str
+    ) -> None:
+        """Delete a firewall device without replay retry."""
+        await self.client.delete_firewall_device(firewall_id, device_id)
 
     async def update_firewall_settings(
         self, default_firewall_ids: dict[str, int]
