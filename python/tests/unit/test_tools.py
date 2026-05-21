@@ -14977,3 +14977,83 @@ async def test_handle_linode_firewall_device_create_invalid_args(
     result = await handle_linode_firewall_device_create(arguments, sample_config)
     assert len(result) == 1
     assert "type must be a non-empty string" in result[0].text
+
+
+async def test_handle_linode_firewall_devices_list(sample_config: Config) -> None:
+    """Test firewall devices list handler."""
+    from linodemcp.tools.linode_firewalls import handle_linode_firewall_devices_list
+
+    mock_devices = {"data": [{"id": 123}], "page": 1, "pages": 1, "results": 1}
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_firewall_devices.return_value = mock_devices
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_firewall_devices_list(
+            {"firewall_id": 12345}, sample_config
+        )
+
+    assert len(result) == 1
+    result_data = json.loads(result[0].text)
+    assert result_data["results"] == 1
+    mock_client.list_firewall_devices.assert_awaited_once_with(
+        12345, page=None, page_size=None
+    )
+
+
+async def test_handle_linode_firewall_devices_list_with_pagination(
+    sample_config: Config,
+) -> None:
+    """Test firewall devices list handler pagination."""
+    from linodemcp.tools.linode_firewalls import handle_linode_firewall_devices_list
+
+    mock_devices = {"data": [], "page": 2, "pages": 5, "results": 0}
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_firewall_devices.return_value = mock_devices
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_firewall_devices_list(
+            {"firewall_id": 12345, "page": 2, "page_size": 25}, sample_config
+        )
+
+    result_data = json.loads(result[0].text)
+    assert result_data["page"] == 2
+    mock_client.list_firewall_devices.assert_awaited_once_with(
+        12345, page=2, page_size=25
+    )
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected"),
+    [
+        ({}, "firewall_id is required"),
+        ({"firewall_id": False}, "firewall_id must be a valid integer"),
+        ({"firewall_id": "abc"}, "firewall_id must be a valid integer"),
+        ({"firewall_id": 0}, "firewall_id must be a positive integer"),
+        ({"firewall_id": -1}, "firewall_id must be a positive integer"),
+        ({"firewall_id": 1, "page": False}, "page must be a valid integer"),
+        ({"firewall_id": 1, "page": "abc"}, "page must be a valid integer"),
+        ({"firewall_id": 1, "page": 0}, "page must be a positive integer"),
+        (
+            {"firewall_id": 1, "page_size": "abc"},
+            "page_size must be a valid integer",
+        ),
+        ({"firewall_id": 1, "page_size": 0}, "page_size must be a positive integer"),
+    ],
+)
+async def test_handle_linode_firewall_devices_list_invalid_args(
+    sample_config: Config,
+    arguments: dict[str, Any],
+    expected: str,
+) -> None:
+    """Test firewall devices list handler argument validation."""
+    from linodemcp.tools.linode_firewalls import handle_linode_firewall_devices_list
+
+    result = await handle_linode_firewall_devices_list(arguments, sample_config)
+    assert len(result) == 1
+    assert expected in result[0].text

@@ -309,6 +309,33 @@ def create_linode_firewall_device_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def create_linode_firewall_devices_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_firewall_devices_list tool."""
+    return Tool(
+        name="linode_firewall_devices_list",
+        description="Lists devices attached to a Cloud Firewall by ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "firewall_id": {
+                    "type": "integer",
+                    "description": ("The ID of the firewall (required)"),
+                },
+                "page": {
+                    "type": "integer",
+                    "description": "Page number for pagination",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "description": "Number of items per page",
+                },
+            },
+            "required": ["firewall_id"],
+        },
+    ), Capability.Read
+
+
 async def handle_linode_firewall_device_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -337,6 +364,53 @@ async def handle_linode_firewall_device_get(
         return await client.get_firewall_device(fw_id, dev_id)
 
     return await execute_tool(cfg, arguments, "retrieve firewall device", _call)
+
+
+def _parse_positive_integer_arg(
+    arguments: dict[str, Any],
+    name: str,
+    *,
+    required: bool,
+) -> tuple[int | None, list[TextContent] | None]:
+    """Parse an optional or required positive integer tool argument."""
+    value = arguments.get(name)
+    if value is None or value == "":
+        if required:
+            return None, error_response(f"{name} is required")
+        return None, None
+    if isinstance(value, bool):
+        return None, error_response(f"{name} must be a valid integer")
+    try:
+        parsed = int(value)
+    except (ValueError, TypeError):
+        return None, error_response(f"{name} must be a valid integer")
+    if parsed <= 0:
+        return None, error_response(f"{name} must be a positive integer")
+    return parsed, None
+
+
+async def handle_linode_firewall_devices_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_firewall_devices_list tool request."""
+    fw_id, error = _parse_positive_integer_arg(arguments, "firewall_id", required=True)
+    if error is not None:
+        return error
+    if fw_id is None:
+        return error_response("firewall_id is required")
+    page, error = _parse_positive_integer_arg(arguments, "page", required=False)
+    if error is not None:
+        return error
+    page_size, error = _parse_positive_integer_arg(
+        arguments, "page_size", required=False
+    )
+    if error is not None:
+        return error
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.list_firewall_devices(fw_id, page=page, page_size=page_size)
+
+    return await execute_tool(cfg, arguments, "list firewall devices", _call)
 
 
 async def handle_linode_firewall_rule_version_get(

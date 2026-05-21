@@ -8383,6 +8383,91 @@ async def test_retryable_create_firewall_device_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_list_firewall_devices() -> None:
+    """Test listing firewall devices."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": [{"id": 123, "entity": {"id": 456, "type": "linode"}}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+        result = await client.list_firewall_devices(12345)
+
+    assert result["results"] == 1
+    assert result["data"][0]["id"] == 123
+    mock_request.assert_called_once_with("GET", "/networking/firewalls/12345/devices")
+    await client.close()
+
+
+async def test_list_firewall_devices_encodes_firewall_id() -> None:
+    """Firewall device list path parameters are URL-encoded."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"data": [], "page": 1, "pages": 1, "results": 0}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+        await client.list_firewall_devices(cast("Any", "../12345"))
+
+    mock_request.assert_called_once_with(
+        "GET", "/networking/firewalls/..%2F12345/devices"
+    )
+    await client.close()
+
+
+async def test_list_firewall_devices_with_pagination() -> None:
+    """Test listing firewall devices with pagination parameters."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"data": [], "page": 2, "pages": 5, "results": 0}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+        result = await client.list_firewall_devices(12345, page=2, page_size=25)
+
+    assert result["page"] == 2
+    mock_request.assert_called_once_with(
+        "GET", "/networking/firewalls/12345/devices?page=2&page_size=25"
+    )
+    await client.close()
+
+
+async def test_list_firewall_devices_wraps_http_errors() -> None:
+    """Test list_firewall_devices wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+        with pytest.raises(NetworkError) as excinfo:
+            await client.list_firewall_devices(12345)
+
+    assert "ListFirewallDevices" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_list_firewall_devices_delegates_to_client() -> None:
+    """Test RetryableClient delegates firewall device list to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "list_firewall_devices", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = {"data": []}
+        result = await retryable.list_firewall_devices(12345, page=2, page_size=25)
+
+    assert result == {"data": []}
+    mock_list.assert_awaited_once_with(12345, page=2, page_size=25)
+    await retryable.close()
+
+
 async def test_get_nodebalancer_config() -> None:
     """Test getting a NodeBalancer config."""
     client = Client("https://api.linode.com/v4", "test-token")

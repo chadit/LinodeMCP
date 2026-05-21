@@ -1674,6 +1674,29 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetFirewallDevice", e) from e
 
+    async def list_firewall_devices(
+        self,
+        firewall_id: int | str,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
+        """List devices attached to a Cloud Firewall."""
+        safe_firewall_id = quote(str(firewall_id), safe="")
+        endpoint = f"/networking/firewalls/{safe_firewall_id}/devices"
+        params: dict[str, Any] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint = f"{endpoint}?{urlencode(params)}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("ListFirewallDevices", e) from e
+
     async def list_firewall_rule_versions(self, firewall_id: int) -> list[Firewall]:
         """List firewall rule versions (history)."""
         endpoint = f"/networking/firewalls/{firewall_id}/history"
@@ -6465,6 +6488,20 @@ class RetryableClient:
         """Get a firewall device with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_firewall_device, firewall_id, device_id
+        )
+        return result
+
+    async def list_firewall_devices(
+        self,
+        firewall_id: int | str,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
+        """List firewall devices with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_firewall_devices(
+                firewall_id, page=page, page_size=page_size
+            )
         )
         return result
 
