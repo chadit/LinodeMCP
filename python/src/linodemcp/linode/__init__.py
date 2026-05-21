@@ -3811,6 +3811,57 @@ class Client:
             logger.exception("HTTP error getting monitor service: %s", e)
             raise NetworkError("GetMonitorService", e) from e
 
+    async def update_monitor_alert_definition(
+        self,
+        service_type: str,
+        alert_id: int,
+        **fields: Any,
+    ) -> dict[str, Any]:
+        """Update a monitor service alert definition."""
+        if not service_type:
+            msg = "service_type is required"
+            raise ValueError(msg)
+        if type(alert_id) is not int:
+            msg = "alert_id must be a valid integer"
+            raise TypeError(msg)
+        if alert_id <= 0:
+            msg = "alert_id must be a positive integer"
+            raise ValueError(msg)
+        encoded_service_type = quote(service_type, safe="")
+        encoded_alert_id = quote(str(alert_id), safe="")
+        endpoint = (
+            f"/monitor/services/{encoded_service_type}"
+            f"/alert-definitions/{encoded_alert_id}"
+        )
+        body = {key: value for key, value in fields.items() if value is not None}
+        if not body:
+            msg = "at least one update field is required"
+            raise ValueError(msg)
+        logger.info(
+            "Updating monitor alert definition",
+            extra={"service_type": service_type, "alert_id": alert_id},
+        )
+        try:
+            response = await self.make_request("PUT", endpoint, body)
+            data: dict[str, Any] = response.json()
+            logger.info(
+                "Monitor alert definition updated",
+                extra={"service_type": service_type, "alert_id": alert_id},
+            )
+            return data
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout updating monitor alert: %s", e)
+            raise NetworkError("UpdateMonitorAlertDefinition", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout updating monitor alert: %s", e)
+            raise NetworkError("UpdateMonitorAlertDefinition", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error updating monitor alert")
+            raise NetworkError("UpdateMonitorAlertDefinition", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error updating monitor alert: %s", e)
+            raise NetworkError("UpdateMonitorAlertDefinition", e) from e
+
     async def create_monitor_service_token(
         self, service_type: str, entity_ids: list[int]
     ) -> dict[str, Any]:
@@ -8005,6 +8056,17 @@ class RetryableClient:
             self.client.create_monitor_service_token, service_type, entity_ids
         )
         return result
+
+    async def update_monitor_alert_definition(
+        self,
+        service_type: str,
+        alert_id: int,
+        **fields: Any,
+    ) -> dict[str, Any]:
+        """Update a monitor alert definition without retrying the PUT."""
+        return await self.client.update_monitor_alert_definition(
+            service_type, alert_id, **fields
+        )
 
     async def list_monitor_service_dashboards(
         self, service_type: str

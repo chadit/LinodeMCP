@@ -96,6 +96,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
             "linode_monitor_service_metric_definitions_list", Capability.Read
         ),
         ToolDescriptor("linode_monitor_service_metrics_read", Capability.Read),
+        ToolDescriptor("linode_monitor_alert_definition_update", Capability.Write),
         ToolDescriptor("linode_monitor_service_token_create", Capability.Write),
         ToolDescriptor(
             "linode_monitor_service_alert_definition_delete", Capability.Destroy

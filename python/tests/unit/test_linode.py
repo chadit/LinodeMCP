@@ -6992,6 +6992,75 @@ class TestMakeRequestBody:
 
         await client.close()
 
+    async def test_update_monitor_alert_definition_put_shape(self) -> None:
+        """PUT to monitor alert endpoint URL-encodes both path parameters."""
+        client = Client("https://api.linode.com/v4", "test-token")
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"id": 42, "label": "cpu high"}
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = mock_response
+            result = await client.update_monitor_alert_definition(
+                "weird/type with space",
+                42,
+                label="cpu high",
+                status="enabled",
+                description=None,
+            )
+            assert mock_req.call_args[0][0] == "PUT"
+            assert mock_req.call_args[0][1].endswith(
+                "/monitor/services/weird%2Ftype%20with%20space/alert-definitions/42"
+            )
+            assert mock_req.call_args[1]["json"] == {
+                "label": "cpu high",
+                "status": "enabled",
+            }
+            assert result == {"id": 42, "label": "cpu high"}
+        await client.close()
+
+    async def test_update_monitor_alert_definition_rejects_invalid_inputs(self) -> None:
+        """Client validates required path params before issuing a request."""
+        client = Client("https://api.linode.com/v4", "test-token")
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+            with pytest.raises(ValueError, match="service_type"):
+                await client.update_monitor_alert_definition("", 42, label="cpu high")
+            with pytest.raises(TypeError, match="alert_id"):
+                await client.update_monitor_alert_definition(
+                    "linode", True, label="cpu high"
+                )
+            with pytest.raises(ValueError, match="positive"):
+                await client.update_monitor_alert_definition(
+                    "linode", 0, label="cpu high"
+                )
+            with pytest.raises(ValueError, match="positive"):
+                await client.update_monitor_alert_definition(
+                    "linode", -1, label="cpu high"
+                )
+            with pytest.raises(ValueError, match="update field"):
+                await client.update_monitor_alert_definition("linode", 42)
+            with pytest.raises(ValueError, match="update field"):
+                await client.update_monitor_alert_definition(
+                    "linode", 42, label=None, status=None
+                )
+            mock_req.assert_not_called()
+        await client.close()
+
+    async def test_update_monitor_alert_definition_wraps_http_errors(self) -> None:
+        """Client wraps HTTP errors with the update monitor alert operation."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        with patch.object(
+            client, "make_request", new_callable=AsyncMock
+        ) as mock_request:
+            mock_request.side_effect = httpx.HTTPError("boom")
+            with pytest.raises(NetworkError) as excinfo:
+                await client.update_monitor_alert_definition(
+                    "linode", 42, label="cpu high"
+                )
+
+        assert "UpdateMonitorAlertDefinition" in str(excinfo.value)
+        await client.close()
+
     async def test_get_has_no_json_body(self) -> None:
         """GET without body should not pass json= to the underlying client."""
         client = Client("https://api.linode.com/v4", "test-token")

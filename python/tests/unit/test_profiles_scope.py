@@ -184,6 +184,11 @@ def test_instance_subtools_route_to_linodes(tool_name: str) -> None:
             Scope.AccountReadOnly,
         ),
         (
+            "linode_monitor_alert_definition_update",
+            Capability.Write,
+            Scope.AccountReadWrite,
+        ),
+        (
             "linode_monitor_service_token_create",
             Capability.Write,
             Scope.AccountReadWrite,
