@@ -21,6 +21,7 @@ from linodemcp.linode import (
     FirewallAddresses,
     FirewallRule,
     FirewallRules,
+    FirewallTemplate,
     Image,
     Instance,
     InstanceType,
@@ -52,6 +53,7 @@ from linodemcp.tools import (
     create_linode_account_update_tool,
     create_linode_firewall_get_tool,
     create_linode_firewall_rules_get_tool,
+    create_linode_firewall_template_get_tool,
     create_linode_image_create_tool,
     create_linode_instance_backup_create_tool,
     create_linode_instance_backup_get_tool,
@@ -177,6 +179,7 @@ from linodemcp.tools import (
     handle_linode_firewall_get,
     handle_linode_firewall_rules_get,
     handle_linode_firewall_rules_update,
+    handle_linode_firewall_template_get,
     handle_linode_firewall_update,
     handle_linode_firewalls_list,
     handle_linode_image_create,
@@ -14764,6 +14767,133 @@ async def test_handle_linode_firewall_rule_version_get_missing_args(
     )
     assert len(result) == 1
     assert "valid integer" in result[0].text
+
+
+def test_create_linode_firewall_template_get_tool_schema() -> None:
+    """Test linode_firewall_template_get tool schema."""
+    tool, capability = create_linode_firewall_template_get_tool()
+
+    assert tool.name == "linode_firewall_template_get"
+    assert capability is Capability.Read
+    assert "slug" in tool.inputSchema["properties"]
+    assert "slug" in tool.inputSchema["required"]
+    assert "page" in tool.inputSchema["properties"]
+    assert "page_size" in tool.inputSchema["properties"]
+
+
+async def test_handle_linode_firewall_template_get(sample_config: Config) -> None:
+    """Test linode_firewall_template_get tool."""
+
+    mock_template = FirewallTemplate(
+        slug="allow-http",
+        label="Allow HTTP",
+        description="Allow HTTP traffic on port 80",
+        rules=FirewallRules(
+            inbound=[],
+            outbound=[],
+            inbound_policy="DROP",
+            outbound_policy="ACCEPT",
+        ),
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_firewall_template.return_value = mock_template
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_firewall_template_get(
+            {"slug": "allow-http"}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "allow-http" in result[0].text
+        mock_client.get_firewall_template.assert_awaited_once_with(
+            "allow-http", None, None
+        )
+
+
+async def test_handle_linode_firewall_template_get_missing_slug(
+    sample_config: Config,
+) -> None:
+    """Test linode_firewall_template_get validation."""
+    result = await handle_linode_firewall_template_get({}, sample_config)
+
+    assert len(result) == 1
+    assert "slug is required" in result[0].text
+
+
+async def test_handle_linode_firewall_template_get_rejects_path_traversal(
+    sample_config: Config,
+) -> None:
+    """Test that path traversal characters in slug are rejected."""
+    # Test with /
+    result = await handle_linode_firewall_template_get(
+        {"slug": "allow/http"}, sample_config
+    )
+    assert len(result) == 1
+    assert "path separators" in result[0].text
+
+    # Test with ?
+    result = await handle_linode_firewall_template_get(
+        {"slug": "allow?http"}, sample_config
+    )
+    assert len(result) == 1
+    assert "path separators" in result[0].text
+
+    # Test with ..
+    result = await handle_linode_firewall_template_get(
+        {"slug": "allow/../http"}, sample_config
+    )
+    assert len(result) == 1
+    assert "path separators" in result[0].text
+
+
+
+async def test_handle_linode_firewall_template_get_rejects_non_string_slug(
+    sample_config: Config,
+) -> None:
+    """Test that non-string slug values are rejected."""
+    # Test with int
+    result = await handle_linode_firewall_template_get(
+        {"slug": 123}, sample_config
+    )
+    assert len(result) == 1
+    assert "must be a string" in result[0].text
+
+    # Test with bool
+    result = await handle_linode_firewall_template_get(
+        {"slug": True}, sample_config
+    )
+    assert len(result) == 1
+    assert "must be a string" in result[0].text
+
+
+async def test_handle_linode_firewall_template_get_rejects_invalid_pagination(
+    sample_config: Config,
+) -> None:
+    """Test that invalid pagination parameters are rejected."""
+    # Test with negative page
+    result = await handle_linode_firewall_template_get(
+        {"slug": "allow-http", "page": -1}, sample_config
+    )
+    assert len(result) == 1
+    assert "page must be a positive integer" in result[0].text
+
+    # Test with zero page_size
+    result = await handle_linode_firewall_template_get(
+        {"slug": "allow-http", "page_size": 0}, sample_config
+    )
+    assert len(result) == 1
+    assert "page_size must be a positive integer" in result[0].text
+
+    # Test with non-int page
+    result = await handle_linode_firewall_template_get(
+        {"slug": "allow-http", "page": "abc"}, sample_config
+    )
+    assert len(result) == 1
+    assert "page must be a positive integer" in result[0].text
 
 
 async def test_handle_linode_firewall_device_get(
