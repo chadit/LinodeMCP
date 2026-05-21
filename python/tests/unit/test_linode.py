@@ -3365,6 +3365,95 @@ async def test_retryable_update_firewall_rules_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_get_firewall_settings() -> None:
+    """Test listing default firewall settings."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    payload = {
+        "default_firewall_ids": {
+            "linode": 100,
+            "nodebalancer": 101,
+            "public_interface": 200,
+            "vpc_interface": 201,
+        },
+        "page": 2,
+        "pages": 4,
+        "results": 1,
+    }
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = payload
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.get_firewall_settings(page=2, page_size=25)
+
+    assert result == payload
+    mock_request.assert_awaited_once_with(
+        "GET", "/networking/firewalls/settings?page=2&page_size=25"
+    )
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"page": 0}, "page must be a positive integer"),
+        ({"page": -1}, "page must be a positive integer"),
+        ({"page": True}, "page must be a positive integer"),
+        ({"page": "bad"}, "page must be a positive integer"),
+        ({"page_size": 0}, "page_size must be a positive integer"),
+        ({"page_size": -1}, "page_size must be a positive integer"),
+        ({"page_size": True}, "page_size must be a positive integer"),
+        ({"page_size": "bad"}, "page_size must be a positive integer"),
+    ],
+)
+async def test_get_firewall_settings_rejects_invalid_pagination(
+    kwargs: dict[str, Any], message: str
+) -> None:
+    """Test default firewall settings list validates pagination."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match=message),
+    ):
+        await client.get_firewall_settings(**kwargs)
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_get_firewall_settings_wraps_http_errors() -> None:
+    """Test default firewall settings list wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError, match="GetFirewallSettings"):
+            await client.get_firewall_settings()
+
+    await client.close()
+
+
+async def test_retryable_get_firewall_settings_uses_retry() -> None:
+    """Test RetryableClient wraps default firewall settings list in retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable, "_execute_with_retry", new_callable=AsyncMock
+    ) as mock_retry:
+        mock_retry.return_value = {"default_firewall_ids": {"linode": 100}}
+
+        result = await retryable.get_firewall_settings(page=2, page_size=25)
+
+    assert result == {"default_firewall_ids": {"linode": 100}}
+    mock_retry.assert_awaited_once_with(retryable.client.get_firewall_settings, 2, 25)
+    await retryable.close()
+
+
 async def test_update_firewall_settings() -> None:
     """Test updating default firewalls."""
     client = Client("https://api.linode.com/v4", "test-token")

@@ -1647,6 +1647,28 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetFirewall", e) from e
 
+    async def get_firewall_settings(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List default firewall settings."""
+        endpoint = "/networking/firewalls/settings"
+        for name, value in (("page", page), ("page_size", page_size)):
+            if value is not None and (type(value) is not int or value <= 0):
+                msg = f"{name} must be a positive integer"
+                raise ValueError(msg)
+        params: dict[str, Any] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint = f"{endpoint}?{urlencode(params)}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            return cast("dict[str, Any]", response.json())
+        except httpx.HTTPError as e:
+            raise NetworkError("GetFirewallSettings", e) from e
+
     async def update_firewall_settings(
         self, default_firewall_ids: dict[str, int]
     ) -> dict[str, Any]:
@@ -6564,6 +6586,15 @@ class RetryableClient:
         """Get a specific firewall with retry."""
         result: Firewall = await self._execute_with_retry(
             self.client.get_firewall, firewall_id
+        )
+        return result
+
+    async def get_firewall_settings(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List default firewall settings with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_firewall_settings, page, page_size
         )
         return result
 
