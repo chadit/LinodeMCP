@@ -259,9 +259,11 @@ from linodemcp.tools.linode_lke_write import (
     handle_linode_lke_service_token_delete,
 )
 from linodemcp.tools.linode_monitor_write import (
+    create_linode_monitor_service_dashboards_list_tool,
     create_linode_monitor_service_metric_definitions_list_tool,
     create_linode_monitor_service_metrics_read_tool,
     create_linode_monitor_service_token_create_tool,
+    handle_linode_monitor_service_dashboards_list,
     handle_linode_monitor_service_metric_definitions_list,
     handle_linode_monitor_service_metrics_read,
     handle_linode_monitor_service_token_create,
@@ -677,6 +679,7 @@ __all__ = [
     "create_linode_lke_types_list_tool",
     "create_linode_lke_version_get_tool",
     "create_linode_lke_versions_list_tool",
+    "create_linode_monitor_service_dashboards_list_tool",
     "create_linode_monitor_service_metric_definitions_list_tool",
     "create_linode_monitor_service_metrics_read_tool",
     "create_linode_monitor_service_token_create_tool",
@@ -918,6 +921,7 @@ __all__ = [
     "handle_linode_lke_types_list",
     "handle_linode_lke_version_get",
     "handle_linode_lke_versions_list",
+    "handle_linode_monitor_service_dashboards_list",
     "handle_linode_monitor_service_metric_definitions_list",
     "handle_linode_monitor_service_metrics_read",
     "handle_linode_monitor_service_token_create",
