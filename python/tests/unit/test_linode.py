@@ -13,6 +13,7 @@ from linodemcp.linode import (
     CircuitBreaker,
     CircuitOpenError,
     Client,
+    Firewall,
     FirewallAddresses,
     FirewallRule,
     FirewallRules,
@@ -4043,6 +4044,110 @@ async def test_upload_bucket_ssl() -> None:
         )
 
     await client.close()
+
+
+async def test_list_firewall_rule_versions() -> None:
+    """Test listing firewall rule versions."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "data": [
+            {
+                "id": 12345,
+                "label": "my-firewall",
+                "status": "enabled",
+                "version": 1,
+                "created": "2025-01-01T00:00:00",
+                "updated": "2025-01-01T00:00:00",
+                "tags": [],
+                "rules": {
+                    "inbound": [],
+                    "outbound": [],
+                    "inbound_policy": "ACCEPT",
+                    "outbound_policy": "ACCEPT",
+                },
+            },
+            {
+                "id": 12345,
+                "label": "my-firewall",
+                "status": "enabled",
+                "version": 2,
+                "created": "2025-01-01T00:00:00",
+                "updated": "2025-01-02T00:00:00",
+                "tags": [],
+                "rules": {
+                    "inbound": [],
+                    "outbound": [],
+                    "inbound_policy": "ACCEPT",
+                    "outbound_policy": "ACCEPT",
+                },
+            },
+        ]
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        versions = await client.list_firewall_rule_versions(12345)
+
+        assert len(versions) == 2
+        assert versions[0].id == 12345
+        assert versions[1].id == 12345
+        mock_request.assert_awaited_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "GET"
+        assert call_args[0][1] == "/networking/firewalls/12345/history"
+
+    await client.close()
+
+
+async def test_list_firewall_rule_versions_wraps_http_errors() -> None:
+    """Test list_firewall_rule_versions wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPStatusError(
+            "Not Found", request=MagicMock(), response=MagicMock(status_code=404)
+        )
+
+        with pytest.raises(NetworkError):
+            await client.list_firewall_rule_versions(12345)
+
+    await client.close()
+
+
+async def test_retryable_list_firewall_rule_versions_delegates_to_client() -> None:
+    """Test RetryableClient delegates firewall rule versions list to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    mock_fw = Firewall(
+        id=12345,
+        label="my-firewall",
+        status="enabled",
+        created="2025-01-01T00:00:00",
+        updated="2025-01-01T00:00:00",
+        tags=[],
+        rules=FirewallRules(
+            inbound=[],
+            outbound=[],
+            inbound_policy="ACCEPT",
+            outbound_policy="ACCEPT",
+        ),
+    )
+
+    with patch.object(
+        retryable.client, "list_firewall_rule_versions", new_callable=AsyncMock
+    ) as mock_method:
+        mock_method.return_value = [mock_fw]
+
+        result = await retryable.list_firewall_rule_versions(12345)
+
+        assert result == [mock_fw]
+        mock_method.assert_awaited_once_with(12345)
+
+    await retryable.close()
 
 
 async def test_list_vlans() -> None:

@@ -204,6 +204,61 @@ async def handle_linode_firewalls_list(
     return await execute_tool(cfg, arguments, "retrieve firewalls", _call)
 
 
+def create_linode_firewall_rule_versions_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_firewall_rule_versions_list tool."""
+    return Tool(
+        name="linode_firewall_rule_versions_list",
+        description=("Lists all rule versions (history) for a Cloud Firewall by ID."),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "firewall_id": {
+                    "type": "integer",
+                    "description": ("The ID of the firewall (required)"),
+                },
+            },
+            "required": ["firewall_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_firewall_rule_versions_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_firewall_rule_versions_list tool request."""
+    firewall_id = arguments.get("firewall_id")
+    if not firewall_id:
+        return error_response("firewall_id is required")
+    if isinstance(firewall_id, bool):
+        return error_response("firewall_id must be a valid integer")
+    try:
+        fw_id = int(firewall_id)
+        if fw_id <= 0:
+            return error_response("firewall_id must be a positive integer")
+    except (ValueError, TypeError):
+        return error_response("firewall_id must be a valid integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        versions = await client.list_firewall_rule_versions(fw_id)
+        return {
+            "count": len(versions),
+            "versions": [
+                {
+                    "id": v.id,
+                    "label": v.label,
+                    "status": v.status,
+                    "created": v.created,
+                    "updated": v.updated,
+                    "tags": v.tags,
+                }
+                for v in versions
+            ],
+        }
+
+    return await execute_tool(cfg, arguments, "list firewall rule versions", _call)
+
+
 def create_linode_firewall_rule_version_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_firewall_rule_version_get tool."""
     return Tool(
