@@ -51,6 +51,14 @@ def set_audit_sqlite_path(path: str) -> None:
     _audit_sqlite_path = path
 
 
+def audit_sqlite_path() -> str:
+    """Return the installed SQLite path, or empty string for the JSONL
+    fallback. Sibling audit query tools (summary, health, export) share
+    this single bridge rather than each holding their own.
+    """
+    return _audit_sqlite_path
+
+
 def create_linode_audit_summary_tool() -> tuple[Tool, Capability]:
     """Build the ``linode_audit_summary`` MCP tool definition."""
     return (

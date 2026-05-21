@@ -17,6 +17,11 @@ from linodemcp.audit.event import (
     new_event,
     new_event_id,
 )
+from linodemcp.audit.health import (
+    HealthReport,
+    SQLiteHealth,
+    collect_health,
+)
 from linodemcp.audit.jsonl import (
     ACTIVE_LOG_FILE_NAME,
     JSONLSink,
@@ -69,6 +74,7 @@ __all__ = [
     "Capability",
     "CapturingSink",
     "Event",
+    "HealthReport",
     "JSONLSink",
     "JSONLSinkClosedError",
     "Mode",
@@ -76,12 +82,14 @@ __all__ = [
     "NoopSink",
     "RecentQuery",
     "RetentionSweeper",
+    "SQLiteHealth",
     "SQLiteSink",
     "Sink",
     "Status",
     "SummaryQuery",
     "SummaryRow",
     "UnknownGroupByColumnError",
+    "collect_health",
     "is_redacted",
     "load_window",
     "new_event",

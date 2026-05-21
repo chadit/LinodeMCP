@@ -34,6 +34,10 @@ from linodemcp.tools.linode_account import (
     handle_linode_account_tags_list,
     handle_linode_account_update,
 )
+from linodemcp.tools.linode_audit_health import (
+    create_linode_audit_health_tool,
+    handle_linode_audit_health,
+)
 from linodemcp.tools.linode_audit_recent import (
     create_linode_audit_recent_tool,
     handle_linode_audit_recent,
@@ -601,6 +605,7 @@ __all__ = [
     "create_linode_account_tags_list_tool",
     "create_linode_account_tool",
     "create_linode_account_update_tool",
+    "create_linode_audit_health_tool",
     "create_linode_audit_recent_tool",
     "create_linode_audit_summary_tool",
     "create_linode_domain_create_tool",
@@ -853,6 +858,7 @@ __all__ = [
     "handle_linode_account_tag_objects_list",
     "handle_linode_account_tags_list",
     "handle_linode_account_update",
+    "handle_linode_audit_health",
     "handle_linode_audit_recent",
     "handle_linode_audit_summary",
     "handle_linode_domain_create",
