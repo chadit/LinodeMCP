@@ -12,10 +12,12 @@ one to satisfy database/sql's ExecContext.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import sqlite3
 import threading
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -136,7 +138,57 @@ class SQLiteSink:
         with self._lock:
             self._conn.close()
 
+    def sweep_retention(self, now: datetime, retention_days: int) -> int:
+        """Delete events older than ``now - retention_days`` and return the
+        row count removed. A ``retention_days`` of 0 or less disables
+        deletion (keep forever) and returns 0 without touching the table.
+        """
+        if retention_days <= 0:
+            return 0
+
+        cutoff = now.astimezone(UTC) - timedelta(days=retention_days)
+        cutoff_ns = int(cutoff.timestamp() * 1_000_000_000)
+
+        with self._lock:
+            cursor = self._conn.execute(
+                "DELETE FROM events WHERE ts_unix_ns < ?", (cutoff_ns,)
+            )
+            self._conn.commit()
+            return cursor.rowcount
+
+    async def run_retention(self, retention_days: int, interval_seconds: float) -> None:
+        """Sweep once immediately, then every interval until cancelled.
+
+        Intended to run as an asyncio task. Cancellation breaks the loop
+        cleanly; sweep failures log and do not stop the loop.
+        """
+        _LOG.info(
+            "audit sqlite retention started",
+            extra={
+                "retention_days": retention_days,
+                "interval_seconds": interval_seconds,
+            },
+        )
+
+        try:
+            while True:
+                self._run_retention_once(retention_days)
+                await asyncio.sleep(interval_seconds)
+        except asyncio.CancelledError:
+            return
+
+    def _run_retention_once(self, retention_days: int) -> None:
+        """Run a single sweep, logging the row count or a failure."""
+        try:
+            removed = self.sweep_retention(datetime.now(UTC), retention_days)
+        except sqlite3.Error as exc:
+            _LOG.warning("audit sqlite retention sweep failed: %s", exc)
+            return
+
+        if removed > 0:
+            _LOG.info("audit sqlite retention removed %d expired rows", removed)
+
     @property
     def connection(self) -> sqlite3.Connection:
-        """Expose the connection for the Phase 3c sweeper and 3d/3e tools."""
+        """Expose the connection for the Phase 3d/3e query tools."""
         return self._conn

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
 	// Pure-Go SQLite driver. Registers itself under the name "sqlite"
 	// (NOT "sqlite3" like the CGO mattn driver), which is why sql.Open
@@ -142,11 +143,70 @@ func (s *SQLiteSink) Close() error {
 	return nil
 }
 
-// DB exposes the underlying handle for the Phase 3c retention sweeper
-// and the Phase 3d/3e query tools, which run their own statements
-// against the same database.
+// SweepRetention deletes events older than retentionDays before now
+// and returns the number of rows removed. A retentionDays of 0 or
+// less disables deletion (keep forever) and returns (0, nil) without
+// touching the table. The cutoff is exact (now minus N days), unlike
+// the JSONL sweeper's whole-day file boundaries.
+func (s *SQLiteSink) SweepRetention(ctx context.Context, now time.Time, retentionDays int) (int64, error) {
+	if retentionDays <= 0 {
+		return 0, nil
+	}
+
+	cutoff := now.UTC().AddDate(0, 0, -retentionDays).UnixNano()
+
+	result, err := s.db.ExecContext(ctx, `DELETE FROM events WHERE ts_unix_ns < ?`, cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("audit: sqlite retention delete: %w", err)
+	}
+
+	removed, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("audit: sqlite rows affected: %w", err)
+	}
+
+	return removed, nil
+}
+
+// RunRetention sweeps once immediately, then on every interval tick
+// until ctx is canceled. Intended to run in its own goroutine. Sweep
+// failures are logged and do not stop the loop.
+func (s *SQLiteSink) RunRetention(ctx context.Context, retentionDays int, interval time.Duration, log *slog.Logger) {
+	log.Info("audit sqlite retention started", "retention_days", retentionDays, "interval", interval.String())
+	s.runRetentionOnce(ctx, retentionDays, log)
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			s.runRetentionOnce(ctx, retentionDays, log)
+		}
+	}
+}
+
+// DB exposes the underlying handle for the Phase 3d/3e query tools,
+// which run their own statements against the same database.
 func (s *SQLiteSink) DB() *sql.DB {
 	return s.db
+}
+
+// runRetentionOnce performs a single sweep, logging the row count or a
+// failure. Placed after the exported methods per funcorder.
+func (s *SQLiteSink) runRetentionOnce(ctx context.Context, retentionDays int, log *slog.Logger) {
+	removed, err := s.SweepRetention(ctx, time.Now(), retentionDays)
+	if err != nil {
+		log.Warn("audit sqlite retention sweep failed", "error", err.Error())
+
+		return
+	}
+
+	if removed > 0 {
+		log.Info("audit sqlite retention removed expired rows", "rows", removed)
+	}
 }
 
 // nullableString maps a nil *string to a SQL NULL and a non-nil

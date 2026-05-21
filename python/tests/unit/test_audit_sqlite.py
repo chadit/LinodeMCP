@@ -8,7 +8,7 @@ absent optional fields.
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from linodemcp.audit import Capability, Event, Mode, SQLiteSink, Status
@@ -30,9 +30,10 @@ def _event(
     error: str | None = None,
     args: dict[str, object] | None = None,
     redacted: list[str] | None = None,
+    ts: datetime | None = None,
 ) -> Event:
     """Build an event with the fields the SQLite tests assert on."""
-    ts = datetime(2026, 5, 20, 12, 0, 0, tzinfo=UTC)
+    ts = ts or datetime(2026, 5, 20, 12, 0, 0, tzinfo=UTC)
     return Event(
         ts=ts,
         ts_unix_ns=int(ts.timestamp() * 1_000_000_000),
@@ -129,3 +130,40 @@ def test_sqlite_sink_stores_nulls_for_absent_optionals(tmp_path: Path) -> None:
 
     assert plan_id is None
     assert error is None
+
+
+def _count_rows(sink: SQLiteSink) -> int:
+    """Return the total number of audit rows."""
+    return int(sink.connection.execute("SELECT COUNT(*) FROM events").fetchone()[0])
+
+
+def test_sqlite_sweep_retention_removes_expired_keeps_recent(tmp_path: Path) -> None:
+    """Rows older than now - retention_days are deleted; recent kept."""
+    now = datetime(2026, 5, 20, 12, 0, 0, tzinfo=UTC)
+    sink = _open_sink(tmp_path)
+    try:
+        sink.write(_event(event_id="old_1", tool="t", ts=now - timedelta(days=30)))
+        sink.write(_event(event_id="old_2", tool="t", ts=now - timedelta(days=15)))
+        sink.write(_event(event_id="recent", tool="t", ts=now - timedelta(days=1)))
+
+        removed = sink.sweep_retention(now, 14)
+
+        assert removed == 2
+        assert _count_rows(sink) == 1
+    finally:
+        sink.close()
+
+
+def test_sqlite_sweep_retention_disabled_when_zero(tmp_path: Path) -> None:
+    """retention_days <= 0 is a no-op even with ancient rows."""
+    now = datetime(2026, 5, 20, 12, 0, 0, tzinfo=UTC)
+    sink = _open_sink(tmp_path)
+    try:
+        sink.write(_event(event_id="ancient", tool="t", ts=now - timedelta(days=2000)))
+
+        removed = sink.sweep_retention(now, 0)
+
+        assert removed == 0
+        assert _count_rows(sink) == 1
+    finally:
+        sink.close()

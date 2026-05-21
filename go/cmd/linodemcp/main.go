@@ -71,6 +71,10 @@ func setupAudit(ctx context.Context, srv *server.Server, cfg *config.Config, log
 					log.Warn("audit SQLite sink close error", "error", err)
 				}
 			})
+
+			// Phase 3c: hourly retention sweep over the SQLite rows,
+			// tied to ctx so it stops on shutdown.
+			go sqliteSink.RunRetention(ctx, *cfg.Audit.RetentionDays, audit.DefaultRetentionSweepInterval, log)
 		}
 	}
 
