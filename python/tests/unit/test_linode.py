@@ -3870,6 +3870,57 @@ async def test_retryable_list_object_storage_endpoints_delegates_to_client() -> 
         )
 
 
+async def test_get_network_transfer_prices_sends_exact_route() -> None:
+    """Network transfer prices use the documented GET route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response_data = {
+        "data": [
+            {
+                "id": "network_transfer",
+                "label": "Network Transfer",
+                "price": {"hourly": 0.005, "monthly": None},
+            }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        prices = await client.get_network_transfer_prices()
+
+        assert prices == response_data
+        mock_request.assert_awaited_once_with("GET", "/network-transfer/prices")
+
+    await client.close()
+
+
+async def test_retryable_get_network_transfer_prices_delegates_to_client() -> None:
+    """Retryable client delegates network transfer price lookup through retry."""
+    base_client = AsyncMock()
+    base_client.get_network_transfer_prices.return_value = {"data": []}
+    retryable = RetryableClient.__new__(RetryableClient)
+    retryable.client = base_client
+
+    with patch.object(
+        RetryableClient, "_execute_with_retry", new_callable=AsyncMock
+    ) as execute_with_retry:
+        execute_with_retry.return_value = {"data": []}
+
+        result = await retryable.get_network_transfer_prices()
+
+        assert result == {"data": []}
+        execute_with_retry.assert_awaited_once_with(
+            base_client.get_network_transfer_prices
+        )
+
+
 async def test_retryable_list_object_storage_quotas_delegates_to_client() -> None:
     """Retryable client delegates quota list to the low-level client."""
     base_client = AsyncMock()
