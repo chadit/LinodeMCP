@@ -62,17 +62,19 @@ const (
 	keyNodeBalancerID = "nodebalancer_id"
 
 	// Pagination response keys.
-	keyData    = "data"
-	keyPage    = "page"
-	keyPages   = "pages"
-	keyResults = "results"
+	keyData     = "data"
+	keyPage     = "page"
+	keyPageSize = "page_size"
+	keyPages    = "pages"
+	keyResults  = "results"
 
 	// Linode region IDs commonly used in fixtures.
-	regionUSEast  = "us-east"
-	regionUSEast1 = "us-east-1"
-	regionUSWest  = "us-west"
-	regionEUWest  = "eu-west"
-	countryUS     = "us"
+	regionUSEast   = "us-east"
+	regionUSEast1  = "us-east-1"
+	serviceLinodes = "Linodes"
+	regionUSWest   = "us-west"
+	regionEUWest   = "eu-west"
+	countryUS      = "us"
 
 	// Linode instance type IDs commonly used in fixtures.
 	typeG6Nanode1   = "g6-nanode-1"

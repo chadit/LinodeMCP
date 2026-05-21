@@ -128,6 +128,21 @@ func (c *Client) GetAccountAgreements(ctx context.Context) (*AccountAgreements, 
 	return agreements, err
 }
 
+// ListAccountAvailability retrieves account service availability with automatic retry on transient failures.
+func (c *Client) ListAccountAvailability(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountAvailability], error) {
+	var availability *PaginatedResponse[AccountAvailability]
+
+	err := c.executeWithRetry(ctx, "ListAccountAvailability", func() error {
+		var err error
+
+		availability, err = c.httpListAccountAvailability(ctx, page, pageSize)
+
+		return err
+	})
+
+	return availability, err
+}
+
 // AcknowledgeAccountAgreements acknowledges account agreements without retrying
 // the mutating request. Retrying can replay agreement acknowledgement after a
 // transient error, so this method delegates exactly once.

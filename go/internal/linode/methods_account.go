@@ -3,13 +3,16 @@ package linode
 import (
 	"context"
 	"net/http"
+	"net/url"
+	"strconv"
 )
 
 const (
-	endpointProfile           = "/profile"
-	endpointProfileGrants     = "/profile/grants"
-	endpointAccount           = "/account"
-	endpointAccountAgreements = "/account/agreements"
+	endpointProfile             = "/profile"
+	endpointProfileGrants       = "/profile/grants"
+	endpointAccount             = "/account"
+	endpointAccountAgreements   = "/account/agreements"
+	endpointAccountAvailability = "/account/availability"
 )
 
 // GetProfile retrieves the authenticated user's profile from the Linode API.
@@ -94,6 +97,41 @@ func (c *Client) httpGetAccountAgreements(ctx context.Context) (*AccountAgreemen
 	}
 
 	return &agreements, nil
+}
+
+// httpListAccountAvailability retrieves account service availability by region.
+func (c *Client) httpListAccountAvailability(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountAvailability], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountAvailability
+	query := url.Values{}
+
+	if page > 0 {
+		query.Set("page", strconv.Itoa(page))
+	}
+
+	if pageSize > 0 {
+		query.Set("page_size", strconv.Itoa(pageSize))
+	}
+
+	if encoded := query.Encode(); encoded != "" {
+		endpoint += "?" + encoded
+	}
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListAccountAvailability", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var availability PaginatedResponse[AccountAvailability]
+	if err := c.handleResponse(resp, &availability); err != nil {
+		return nil, err
+	}
+
+	return &availability, nil
 }
 
 // httpAcknowledgeAccountAgreements acknowledges account agreements via POST /v4/account/agreements.

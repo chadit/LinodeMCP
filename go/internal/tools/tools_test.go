@@ -520,6 +520,144 @@ func TestLinodeAccountAgreementsTool(t *testing.T) {
 	})
 }
 
+// End-to-end verification of account availability retrieval.
+func TestLinodeAccountAvailabilityTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountAvailabilityTool(cfg)
+
+		assert.Equal(t, "linode_account_availability", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		availability := linode.PaginatedResponse[linode.AccountAvailability]{
+			Data: []linode.AccountAvailability{{
+				Available:   []string{serviceLinodes, "NodeBalancers"},
+				Region:      regionUSEast,
+				Unavailable: []string{"Kubernetes", "Block Storage"},
+			}},
+			Page:    2,
+			Pages:   3,
+			Results: 75,
+		}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/account/availability", r.URL.Path, "request path should be /account/availability")
+			assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(availability))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeAccountAvailabilityTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, regionUSEast, "response should contain region")
+		assert.Contains(t, textContent.Text, serviceLinodes, "response should contain available service")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/account/availability", r.URL.Path, "request path should be /account/availability")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				"errors": []map[string]string{{"reason": "forbidden"}},
+			}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeAccountAvailabilityTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to retrieve linode_account_availability", "response should identify failed tool")
+		assert.Contains(t, textContent.Text, "forbidden", "response should include API error detail")
+	})
+
+	t.Run("invalid pagination rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name        string
+			args        map[string]any
+			wantMessage string
+		}{
+			{name: "page zero", args: map[string]any{keyPage: 0}, wantMessage: "page must be"},
+			{name: "page string", args: map[string]any{keyPage: "2"}, wantMessage: "page must be an integer"},
+			{name: "page fractional", args: map[string]any{keyPage: 1.5}, wantMessage: "page must be an integer"},
+			{name: "page_size too small", args: map[string]any{keyPageSize: 24}, wantMessage: "page_size must be"},
+			{name: "page_size too large", args: map[string]any{keyPageSize: 501}, wantMessage: "page_size must be"},
+			{name: "page_size string", args: map[string]any{keyPageSize: "25"}, wantMessage: "page_size must be an integer"},
+			{name: "page_size fractional", args: map[string]any{keyPageSize: 25.5}, wantMessage: "page_size must be an integer"},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeAccountAvailabilityTool(cfg)
+
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid pagination should be an error result")
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, testCase.wantMessage, "response should describe validation error")
+			})
+		}
+	})
+}
+
 // End-to-end verification of account agreement acknowledgement.
 func TestLinodeAccountAgreementsAcknowledgeTool(t *testing.T) {
 	t.Parallel()

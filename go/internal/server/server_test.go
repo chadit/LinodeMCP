@@ -156,8 +156,9 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 
 	descriptors := server.ToolDescriptors(baseTestConfig())
 	want := map[string]profiles.Capability{
-		"linode_image_create":      profiles.CapWrite,
-		"linode_domain_record_get": profiles.CapRead,
+		"linode_image_create":         profiles.CapWrite,
+		"linode_domain_record_get":    profiles.CapRead,
+		"linode_account_availability": profiles.CapRead,
 	}
 
 	for _, descriptor := range descriptors {

@@ -2,12 +2,18 @@ package tools
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
+)
+
+const (
+	accountAvailabilityPageSizeMin = 25
+	accountAvailabilityPageSizeMax = 500
 )
 
 // NewLinodeAccountTool creates a tool for retrieving Linode account information.
@@ -31,6 +37,22 @@ func NewLinodeAccountAgreementsTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 		func(ctx context.Context, client *linode.Client) (any, error) {
 			return client.GetAccountAgreements(ctx)
 		},
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeAccountAvailabilityTool creates a tool for listing account service availability by region.
+func NewLinodeAccountAvailabilityTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_availability",
+		"Lists services available and unavailable to the account in each region.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		},
+		handleLinodeAccountAvailabilityRequest,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -82,6 +104,74 @@ func NewLinodeAccountUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 	)
 
 	return tool, profiles.CapAdmin, handler
+}
+
+func handleLinodeAccountAvailabilityRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	page, pageSize, validationMessage := accountAvailabilityPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	availability, listFailure := client.ListAccountAvailability(ctx, page, pageSize)
+	if listFailure == nil {
+		return MarshalToolResponse(availability)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_account_availability: " + listFailure.Error()), nil
+}
+
+func accountAvailabilityPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
+	args := request.GetArguments()
+
+	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountAvailabilityPageSizeMin, accountAvailabilityPageSizeMax)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	return page, pageSize, ""
+}
+
+func optionalPaginationInt(args map[string]any, name string, minValue, maxValue int) (int, string) {
+	raw, exists := args[name]
+	if !exists {
+		return 0, ""
+	}
+
+	var value int
+
+	switch typed := raw.(type) {
+	case int:
+		value = typed
+	case int64:
+		value = int(typed)
+	case float64:
+		value = int(typed)
+		if typed != float64(value) {
+			return 0, name + " must be an integer"
+		}
+	default:
+		return 0, name + " must be an integer"
+	}
+
+	if value < minValue || (maxValue > 0 && value > maxValue) {
+		if maxValue > 0 {
+			return 0, name + " must be an integer from " + strconv.Itoa(minValue) + " through " + strconv.Itoa(maxValue)
+		}
+
+		return 0, name + " must be an integer greater than or equal to 1"
+	}
+
+	return value, ""
 }
 
 func handleLinodeAccountAgreementsAcknowledgeRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
