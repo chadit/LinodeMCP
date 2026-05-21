@@ -158,6 +158,21 @@ func (c *Client) ListAccountAvailability(ctx context.Context, page, pageSize int
 	return availability, err
 }
 
+// ListAccountBetas retrieves enrolled account beta programs with automatic retry on transient failures.
+func (c *Client) ListAccountBetas(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountBetaProgram], error) {
+	var betas *PaginatedResponse[AccountBetaProgram]
+
+	err := c.executeWithRetry(ctx, "ListAccountBetas", func() error {
+		var err error
+
+		betas, err = c.httpListAccountBetas(ctx, page, pageSize)
+
+		return err
+	})
+
+	return betas, err
+}
+
 // AcknowledgeAccountAgreements acknowledges account agreements without retrying
 // the mutating request. Retrying can replay agreement acknowledgement after a
 // transient error, so this method delegates exactly once.

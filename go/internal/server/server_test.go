@@ -159,6 +159,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_image_create":             profiles.CapWrite,
 		"linode_domain_record_get":        profiles.CapRead,
 		"linode_account_availability":     profiles.CapRead,
+		"linode_account_betas":            profiles.CapRead,
 		"linode_account_availability_get": profiles.CapRead,
 	}
 
