@@ -305,3 +305,94 @@ async def handle_linode_firewall_rules_update(
         }
 
     return await execute_tool(cfg, arguments, "update firewall rules", _call)
+
+
+def create_linode_firewall_device_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_firewall_device_create tool."""
+    return Tool(
+        name="linode_firewall_device_create",
+        description=(
+            "Creates a new device for a Cloud Firewall. "
+            "WARNING: This operation requires confirmation."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "firewall_id": {
+                    "type": "integer",
+                    "description": (
+                        "The ID of the firewall to attach the device to (required)"
+                    ),
+                },
+                "id": {
+                    "type": "integer",
+                    "description": (
+                        "The ID of the entity to attach as a device (required)"
+                    ),
+                },
+                "type": {
+                    "type": "string",
+                    "description": "The type of entity to attach (required)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm this operation.",
+                },
+            },
+            "required": ["firewall_id", "id", "type", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_firewall_device_create(  # noqa: PLR0911
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_firewall_device_create tool request."""
+    firewall_id = arguments.get("firewall_id", 0)
+    device_id = arguments.get("id", 0)
+    device_type = arguments.get("type", "")
+    confirm = arguments.get("confirm", False)
+
+    # Validation
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text=(
+                    "Error: This operation requires confirmation. "
+                    "Set confirm=true to proceed."
+                ),
+            )
+        ]
+
+    if not firewall_id:
+        return error_response("firewall_id is required")
+    if not isinstance(firewall_id, int) or isinstance(firewall_id, bool):
+        return error_response("firewall_id must be a valid integer")
+    if firewall_id <= 0:
+        return error_response("firewall_id must be a positive integer")
+
+    if not device_id:
+        return error_response("id is required")
+    if not isinstance(device_id, int) or isinstance(device_id, bool):
+        return error_response("id must be a valid integer")
+    if device_id <= 0:
+        return error_response("id must be a positive integer")
+
+    if "type" not in arguments:
+        return error_response("type is required")
+    if not isinstance(device_type, str):
+        return error_response("type must be a string")
+    if not device_type.strip():
+        return error_response("type must be a non-empty string")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        device = await client.create_firewall_device(
+            firewall_id=int(firewall_id),
+            device_id=int(device_id),
+            device_type=str(device_type),
+        )
+        return {"message": "Firewall device created successfully", "device": device}
+
+    return await execute_tool(cfg, arguments, "create firewall device", _call)

@@ -8282,6 +8282,107 @@ async def test_retryable_get_firewall_device_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_create_firewall_device() -> None:
+    """Test creating a firewall device."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "id": 456,
+        "entity": {"id": 123, "type": "linode", "label": "linode-123"},
+        "created": "2018-01-01T01:01:01",
+        "updated": "2018-01-01T01:01:01",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.create_firewall_device(12345, 123, "linode")
+
+        assert result["id"] == 456
+        assert result["entity"]["id"] == 123
+        mock_request.assert_called_once_with(
+            "POST", "/networking/firewalls/12345/devices", {"id": 123, "type": "linode"}
+        )
+
+    await client.close()
+
+
+async def test_create_firewall_device_encodes_firewall_id() -> None:
+    """Test firewall_id path param is URL-encoded."""
+    from urllib.parse import quote
+
+    unsafe_firewall_id: Any = "12345/../etc/passwd"
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"id": 456}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.create_firewall_device(unsafe_firewall_id, 123, "linode")
+
+        call_args = mock_request.call_args
+        assert quote(str(unsafe_firewall_id), safe="") in call_args[0][1]
+
+    await client.close()
+
+
+@pytest.mark.parametrize(
+    ("firewall_id", "device_id", "device_type"),
+    [
+        (0, 123, "linode"),
+        (-1, 123, "linode"),
+        (12345, 0, "linode"),
+        (12345, -1, "linode"),
+        (12345, 123, ""),
+        (12345, 123, " "),
+    ],
+)
+async def test_create_firewall_device_rejects_invalid_params(
+    firewall_id: int, device_id: int, device_type: str
+) -> None:
+    """Test create_firewall_device rejects invalid parameters."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with pytest.raises(ValueError, match=r"positive integer|non-empty string"):
+        await client.create_firewall_device(firewall_id, device_id, device_type)
+
+    await client.close()
+
+
+async def test_create_firewall_device_wraps_http_errors() -> None:
+    """Test create_firewall_device wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.create_firewall_device(12345, 123, "linode")
+
+    assert "CreateFirewallDevice" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_create_firewall_device_delegates_to_client() -> None:
+    """Test RetryableClient delegates firewall device creation to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "create_firewall_device", new_callable=AsyncMock
+    ) as mock_create:
+        mock_create.return_value = {"id": 456}
+        result = await retryable.create_firewall_device(12345, 123, "linode")
+
+    assert result == {"id": 456}
+    mock_create.assert_awaited_once_with(12345, 123, "linode")
+    await retryable.close()
+
+
 async def test_get_nodebalancer_config() -> None:
     """Test getting a NodeBalancer config."""
     client = Client("https://api.linode.com/v4", "test-token")

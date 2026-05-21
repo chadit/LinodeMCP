@@ -14832,3 +14832,148 @@ async def test_handle_linode_firewall_device_get_missing_args(
     )
     assert len(result) == 1
     assert "valid integer" in result[0].text
+
+
+async def test_handle_linode_firewall_device_create(sample_config: Config) -> None:
+    """Test successful firewall device creation."""
+    with patch(
+        "linodemcp.tools.linode_firewalls_write.handle_linode_firewall_device_create",
+        new_callable=AsyncMock,
+    ) as mock_handle:
+        mock_handle.return_value = [
+            TextContent(
+                type="text",
+                text=(
+                    '{"message": "Firewall device created successfully", '
+                    '"device": {"id": 456}}'
+                ),
+            )
+        ]
+
+        # Import here to avoid circular imports
+        from linodemcp.tools.linode_firewalls_write import (
+            handle_linode_firewall_device_create,
+        )
+
+        arguments = {
+            "firewall_id": 12345,
+            "id": 123,
+            "type": "linode",
+            "confirm": True,
+        }
+        result = await handle_linode_firewall_device_create(arguments, sample_config)
+
+        assert len(result) == 1
+        assert "Firewall device created successfully" in result[0].text
+        mock_handle.assert_awaited_once_with(arguments, sample_config)
+
+
+async def test_handle_linode_firewall_device_create_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Test that firewall device creation requires confirm=True."""
+    # Import here to avoid circular imports
+    from linodemcp.tools.linode_firewalls_write import (
+        handle_linode_firewall_device_create,
+    )
+
+    # Test with confirm=False
+    arguments = {
+        "firewall_id": 12345,
+        "id": 123,
+        "type": "linode",
+        "confirm": False,
+    }
+    result = await handle_linode_firewall_device_create(arguments, sample_config)
+    assert len(result) == 1
+    assert "confirmation" in result[0].text
+    assert "confirm=true" in result[0].text
+
+    # Test with missing confirm
+    arguments = {"firewall_id": 12345, "id": 123, "type": "linode"}
+    result = await handle_linode_firewall_device_create(arguments, sample_config)
+    assert len(result) == 1
+    assert "confirmation" in result[0].text
+    assert "confirm=true" in result[0].text
+
+
+async def test_handle_linode_firewall_device_create_missing_required_args(
+    sample_config: Config,
+) -> None:
+    """Test that firewall device creation requires all required arguments."""
+    # Import here to avoid circular imports
+    from linodemcp.tools.linode_firewalls_write import (
+        handle_linode_firewall_device_create,
+    )
+
+    # Test missing firewall_id
+    arguments = {"id": 123, "type": "linode", "confirm": True}
+    result = await handle_linode_firewall_device_create(arguments, sample_config)
+    assert len(result) == 1
+    assert "firewall_id is required" in result[0].text
+
+    # Test missing id
+    arguments = {"firewall_id": 12345, "type": "linode", "confirm": True}
+    result = await handle_linode_firewall_device_create(arguments, sample_config)
+    assert len(result) == 1
+    assert "id is required" in result[0].text
+
+    # Test missing type
+    arguments = {"firewall_id": 12345, "id": 123, "confirm": True}
+    result = await handle_linode_firewall_device_create(arguments, sample_config)
+    assert len(result) == 1
+    assert "type is required" in result[0].text
+
+
+async def test_handle_linode_firewall_device_create_invalid_args(
+    sample_config: Config,
+) -> None:
+    """Test that firewall device creation validates argument types."""
+    # Import here to avoid circular imports
+    from linodemcp.tools.linode_firewalls_write import (
+        handle_linode_firewall_device_create,
+    )
+
+    # Test invalid firewall_id
+    arguments = {
+        "firewall_id": "invalid",
+        "id": 123,
+        "type": "linode",
+        "confirm": True,
+    }
+    result = await handle_linode_firewall_device_create(arguments, sample_config)
+    assert len(result) == 1
+    assert "firewall_id must be a valid integer" in result[0].text
+
+    # Test invalid id
+    arguments = {
+        "firewall_id": 12345,
+        "id": "invalid",
+        "type": "linode",
+        "confirm": True,
+    }
+    result = await handle_linode_firewall_device_create(arguments, sample_config)
+    assert len(result) == 1
+    assert "id must be a valid integer" in result[0].text
+
+    # Test invalid type
+    arguments = {
+        "firewall_id": 12345,
+        "id": 123,
+        "type": 123,
+        "confirm": True,
+    }
+    result = await handle_linode_firewall_device_create(arguments, sample_config)
+    assert len(result) == 1
+    assert "type must be a string" in result[0].text
+
+    # Test empty type
+    arguments = {
+        "firewall_id": 12345,
+        "id": 123,
+        "type": "",
+        "confirm": True,
+    }
+    result = await handle_linode_firewall_device_create(arguments, sample_config)
+    assert len(result) == 1
+    assert "type must be a non-empty string" in result[0].text
