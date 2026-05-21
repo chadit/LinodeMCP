@@ -165,6 +165,21 @@ func (c *Client) httpListAccountBetas(ctx context.Context, page, pageSize int) (
 	return &betas, nil
 }
 
+// httpEnrollAccountBeta enrolls the account in a beta program via POST /v4/account/betas.
+func (c *Client) httpEnrollAccountBeta(ctx context.Context, req *EnrollAccountBetaRequest) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountBetas, req)
+	if err != nil {
+		return &NetworkError{Operation: "EnrollAccountBeta", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	return c.handleResponse(resp, nil)
+}
+
 func withPaginationQuery(endpoint string, page, pageSize int) string {
 	query := url.Values{}
 

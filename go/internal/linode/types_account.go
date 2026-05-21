@@ -100,6 +100,11 @@ type AccountBetaProgram struct {
 	Started     string  `json:"started"`
 }
 
+// EnrollAccountBetaRequest contains the beta program identifier for POST /account/betas.
+type EnrollAccountBetaRequest struct {
+	ID string `json:"id"`
+}
+
 // AcknowledgeAccountAgreementsRequest contains the optional agreement flags for
 // POST /account/agreements. Pointer booleans distinguish omitted fields from
 // explicit false values.

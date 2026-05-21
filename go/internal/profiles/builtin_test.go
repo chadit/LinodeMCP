@@ -94,8 +94,9 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_sshkey_update", Capability: profiles.CapWrite},
 		{Name: "linode_sshkey_delete", Capability: profiles.CapDestroy},
 
-		// A tool with CapAdmin (not yet used by any built-in)
+		// Account admin tools must stay out of built-in profiles.
 		{Name: "linode_account_update", Capability: profiles.CapAdmin},
+		{Name: "linode_account_beta_enroll", Capability: profiles.CapAdmin},
 	}
 }
 
@@ -218,6 +219,13 @@ func TestCapAdminExcludedFromEveryBuiltin(t *testing.T) {
 			profile.AllowedTools,
 			"linode_account_update",
 			"profile %q must never include CapAdmin tools",
+			name,
+		)
+		assert.NotContainsf(
+			t,
+			profile.AllowedTools,
+			"linode_account_beta_enroll",
+			"profile %q must never include beta enrollment admin tool",
 			name,
 		)
 	}

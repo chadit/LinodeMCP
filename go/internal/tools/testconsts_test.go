@@ -50,6 +50,7 @@ const (
 	keyRegionID       = "region_id"
 	keyErrors         = "errors"
 	keyReason         = "reason"
+	keyBetaID         = "id"
 
 	// Tool-specific resource ID keys.
 	keyLinodeID       = "linode_id"
@@ -135,6 +136,7 @@ const (
 	subnetMaskFixture   = "255.255.255.0"
 	notANumber          = "not-a-number"
 	boolStringTrue      = "true"
+	betaExampleOpen     = "example_open"
 	emailUpdatedExample = "updated@example.com"
 	nameUpdatedTest     = "Updated"
 	aclPublicRead       = "public-read"
@@ -183,10 +185,15 @@ const (
 	errConfirmEqualsTrue  = "confirm=true"
 	errForbidden          = "forbidden"
 	errRegionIDSlug       = "lowercase region slug"
+	errBetaIDRequired     = "id is required"
+	errBetaIDNonEmpty     = "id must be a non-empty string"
+	errBetaIDChars        = "id must contain only letters"
 
 	// Validation case names used in table-driven test rows.
 	caseRequiresConfirm   = "requires confirm"
 	caseMissingConfirm    = "missing confirm"
+	caseString            = "string"
+	caseNumeric           = "numeric"
 	caseMissingLabel      = "missing label"
 	caseMissingAddress    = "missing address"
 	caseMissingRegion     = "missing region"
