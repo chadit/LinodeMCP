@@ -1660,6 +1660,20 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetFirewallRuleVersion", e) from e
 
+    async def get_firewall_device(
+        self, firewall_id: int, device_id: int
+    ) -> dict[str, Any]:
+        """Get a specific firewall device."""
+        safe_firewall_id = quote(str(firewall_id), safe="")
+        safe_device_id = quote(str(device_id), safe="")
+        endpoint = f"/networking/firewalls/{safe_firewall_id}/devices/{safe_device_id}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("GetFirewallDevice", e) from e
+
     async def list_firewall_rule_versions(self, firewall_id: int) -> list[Firewall]:
         """List firewall rule versions (history)."""
         endpoint = f"/networking/firewalls/{firewall_id}/history"
@@ -6399,6 +6413,15 @@ class RetryableClient:
         """Get firewall rule version with retry."""
         result: FirewallRule = await self._execute_with_retry(
             self.client.get_firewall_rule_version, firewall_id, version
+        )
+        return result
+
+    async def get_firewall_device(
+        self, firewall_id: int, device_id: int
+    ) -> dict[str, Any]:
+        """Get a firewall device with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_firewall_device, firewall_id, device_id
         )
         return result
 
