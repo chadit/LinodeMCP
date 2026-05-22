@@ -17,8 +17,10 @@ import (
 )
 
 const (
-	updateAccountEmail = "account-updated@example.com"
-	statusPending      = "pending"
+	updateAccountEmail         = "account-updated@example.com"
+	statusPending              = "pending"
+	accountEntityTransferToken = "transfer-token-example"
+	accountEntityTransferDate  = "2021-02-11T16:37:03"
 )
 
 // TestClientGetProfileSuccess verifies that GetProfile returns a fully
@@ -1083,13 +1085,13 @@ func TestClientListAccountEntityTransfersSuccess(t *testing.T) {
 
 	transfers := linode.PaginatedResponse[linode.AccountEntityTransfer]{
 		Data: []linode.AccountEntityTransfer{{
-			Created:  "2021-02-11T16:37:03",
+			Created:  accountEntityTransferDate,
 			Entities: linode.AccountEntityTransferEntities{Linodes: []int{111, 222}},
 			Expiry:   "2021-02-12T16:37:03",
 			IsSender: true,
 			Status:   statusPending,
-			Token:    "transfer-token-example",
-			Updated:  "2021-02-11T16:37:03",
+			Token:    accountEntityTransferToken,
+			Updated:  accountEntityTransferDate,
 		}},
 		Page:    2,
 		Pages:   4,
@@ -1115,7 +1117,7 @@ func TestClientListAccountEntityTransfersSuccess(t *testing.T) {
 	require.NotNil(t, result, "result should not be nil")
 	assert.Equal(t, 2, result.Page)
 	require.Len(t, result.Data, 1)
-	assert.Equal(t, "transfer-token-example", result.Data[0].Token)
+	assert.Equal(t, accountEntityTransferToken, result.Data[0].Token)
 	assert.Equal(t, "pending", result.Data[0].Status)
 	assert.Equal(t, []int{111, 222}, result.Data[0].Entities.Linodes)
 }
@@ -1168,7 +1170,7 @@ func TestClientListAccountEntityTransfersRetriesTransientError(t *testing.T) {
 		assert.Equal(t, "/account/entity-transfers", r.URL.Path, "request path should be /account/entity-transfers")
 		w.Header().Set("Content-Type", "application/json")
 		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountEntityTransfer]{
-			Data: []linode.AccountEntityTransfer{{Token: "transfer-token-example", Status: "pending"}},
+			Data: []linode.AccountEntityTransfer{{Token: accountEntityTransferToken, Status: "pending"}},
 		}))
 	}))
 	defer srv.Close()
@@ -1180,7 +1182,123 @@ func TestClientListAccountEntityTransfersRetriesTransientError(t *testing.T) {
 	require.NoError(t, err, "ListAccountEntityTransfers should succeed after retry")
 	require.NotNil(t, result, "result should not be nil")
 	require.Len(t, result.Data, 1)
-	assert.Equal(t, "transfer-token-example", result.Data[0].Token)
+	assert.Equal(t, accountEntityTransferToken, result.Data[0].Token)
+	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+}
+
+// TestClientGetAccountEntityTransferSuccess verifies GetAccountEntityTransfer sends a GET
+// request to /account/entity-transfers/{token} and decodes the response.
+func TestClientGetAccountEntityTransferSuccess(t *testing.T) {
+	t.Parallel()
+
+	want := linode.AccountEntityTransfer{
+		Created:  accountEntityTransferDate,
+		Entities: linode.AccountEntityTransferEntities{Linodes: []int{111, 222}},
+		Expiry:   "2021-02-12T16:37:03",
+		IsSender: true,
+		Status:   statusPending,
+		Token:    accountEntityTransferToken,
+		Updated:  accountEntityTransferDate,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/entity-transfers/transfer-token-example", r.URL.Path, "request path should include transfer token")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(want))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	got, err := client.GetAccountEntityTransfer(t.Context(), accountEntityTransferToken)
+
+	require.NoError(t, err, "GetAccountEntityTransfer should succeed on 200 response")
+	require.NotNil(t, got, "result should not be nil")
+	assert.Equal(t, accountEntityTransferToken, got.Token)
+	assert.Equal(t, statusPending, got.Status)
+	assert.Equal(t, []int{111, 222}, got.Entities.Linodes)
+}
+
+// TestClientGetAccountEntityTransferEscapesToken verifies the client encodes path separators.
+func TestClientGetAccountEntityTransferEscapesToken(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/account/entity-transfers/transfer%2Ftoken%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
+		assert.Empty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountEntityTransfer{Token: "transfer/token?query"}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetAccountEntityTransfer(t.Context(), "transfer/token?query")
+
+	require.NoError(t, err, "GetAccountEntityTransfer should escape path parameters")
+}
+
+// TestClientGetAccountEntityTransferAPIError verifies GetAccountEntityTransfer propagates API errors.
+func TestClientGetAccountEntityTransferAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/entity-transfers/transfer-token-example", r.URL.Path, "request path should include transfer token")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetAccountEntityTransfer(t.Context(), accountEntityTransferToken)
+
+	require.Error(t, err, "GetAccountEntityTransfer should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	require.NotNil(t, apiErr, "APIError should be present")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, "forbidden", apiErr.Message)
+}
+
+// TestClientGetAccountEntityTransferRetriesTransientError verifies the read-only lookup retries transient failures.
+func TestClientGetAccountEntityTransferRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			assert.NoError(t, writeErr)
+
+			return
+		}
+
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/entity-transfers/transfer-token-example", r.URL.Path, "request path should include transfer token")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountEntityTransfer{Token: accountEntityTransferToken, Status: statusPending}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	result, err := client.GetAccountEntityTransfer(t.Context(), accountEntityTransferToken)
+
+	require.NoError(t, err, "GetAccountEntityTransfer should succeed after retry")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, accountEntityTransferToken, result.Token)
 	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 

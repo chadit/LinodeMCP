@@ -97,6 +97,22 @@ func NewLinodeAccountEntityTransfersTool(cfg *config.Config) (mcp.Tool, profiles
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeAccountEntityTransferGetTool creates a tool for retrieving one account entity transfer.
+func NewLinodeAccountEntityTransferGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_entity_transfer_get",
+		"Gets one account entity transfer request by token.",
+		[]mcp.ToolOption{
+			mcp.WithString("token", mcp.Required(),
+				mcp.Description("Entity transfer token.")),
+		},
+		handleLinodeAccountEntityTransferGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeAccountEntityTransferCreateTool creates a tool for creating an account entity transfer.
 func NewLinodeAccountEntityTransferCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -409,6 +425,43 @@ func handleLinodeAccountEntityTransfersRequest(ctx context.Context, request *mcp
 	}
 
 	return mcp.NewToolResultError("Failed to retrieve linode_account_entity_transfers: " + listFailure.Error()), nil
+}
+
+func handleLinodeAccountEntityTransferGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	token, validationMessage := accountEntityTransferTokenFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	transfer, getFailure := client.GetAccountEntityTransfer(ctx, token)
+	if getFailure == nil {
+		return MarshalToolResponse(transfer)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_account_entity_transfer_get: " + getFailure.Error()), nil
+}
+
+func accountEntityTransferTokenFromTool(request *mcp.CallToolRequest) (string, string) {
+	raw, exists := request.GetArguments()["token"]
+	if !exists {
+		return "", "token is required"
+	}
+
+	token, ok := raw.(string)
+	if !ok || strings.TrimSpace(token) == "" {
+		return "", "token must be a non-empty string"
+	}
+
+	if token != strings.TrimSpace(token) || strings.Contains(token, "/") || strings.Contains(token, "?") || strings.Contains(token, "..") {
+		return "", "token must not contain path separators, query separators, or traversal segments"
+	}
+
+	return token, ""
 }
 
 func accountEntityTransfersPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
