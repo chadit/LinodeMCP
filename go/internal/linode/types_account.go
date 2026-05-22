@@ -155,6 +155,11 @@ type AccountEntityTransferEntities struct {
 	Linodes []int `json:"linodes"`
 }
 
+// CreateAccountEntityTransferRequest contains the entities to transfer for POST /account/entity-transfers.
+type CreateAccountEntityTransferRequest struct {
+	Entities AccountEntityTransferEntities `json:"entities"`
+}
+
 // EnrollAccountBetaRequest contains the beta program identifier for POST /account/betas.
 type EnrollAccountBetaRequest struct {
 	ID string `json:"id"`

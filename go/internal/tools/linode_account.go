@@ -97,6 +97,24 @@ func NewLinodeAccountEntityTransfersTool(cfg *config.Config) (mcp.Tool, profiles
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeAccountEntityTransferCreateTool creates a tool for creating an account entity transfer.
+func NewLinodeAccountEntityTransferCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_entity_transfer_create",
+		"Creates an account entity transfer for the provided Linode IDs.",
+		[]mcp.ToolOption{
+			mcp.WithArray("linode_ids", mcp.Required(),
+				mcp.Description("Linode IDs to include in the entity transfer.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm entity transfer creation.")),
+		},
+		handleLinodeAccountEntityTransferCreateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
 // NewLinodeAccountChildAccountGetTool creates a tool for retrieving one child-level account.
 func NewLinodeAccountChildAccountGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -407,6 +425,99 @@ func accountEntityTransfersPaginationFromTool(request *mcp.CallToolRequest) (int
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeAccountEntityTransferCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This creates an account entity transfer. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	req, validationMessage := accountEntityTransferCreateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	transfer, createFailure := client.CreateAccountEntityTransfer(ctx, req)
+	if createFailure == nil {
+		return MarshalToolResponse(transfer)
+	}
+
+	return mcp.NewToolResultError("Failed to create linode_account_entity_transfer_create: " + createFailure.Error()), nil
+}
+
+func accountEntityTransferCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateAccountEntityTransferRequest, string) {
+	raw, exists := request.GetArguments()["linode_ids"]
+	if !exists {
+		return nil, "linode_ids is required"
+	}
+
+	ids, validationMessage := intSliceFromToolArg(raw, "linode_ids")
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	return &linode.CreateAccountEntityTransferRequest{
+		Entities: linode.AccountEntityTransferEntities{Linodes: ids},
+	}, ""
+}
+
+func intSliceFromToolArg(raw any, name string) ([]int, string) {
+	switch values := raw.(type) {
+	case []int:
+		if len(values) == 0 {
+			return nil, name + " must include at least one ID"
+		}
+
+		ids := make([]int, 0, len(values))
+		for _, value := range values {
+			if value <= 0 {
+				return nil, name + " must be an array of positive integers"
+			}
+
+			ids = append(ids, value)
+		}
+
+		return ids, ""
+	case []any:
+		return intSliceFromAnySlice(values, name)
+	default:
+		return nil, name + " must be an array of positive integers"
+	}
+}
+
+func intSliceFromAnySlice(values []any, name string) ([]int, string) {
+	if len(values) == 0 {
+		return nil, name + " must include at least one ID"
+	}
+
+	maxInt := int(^uint(0) >> 1)
+	ids := make([]int, 0, len(values))
+
+	for _, value := range values {
+		switch number := value.(type) {
+		case float64:
+			if number <= 0 || number > float64(maxInt) || number != float64(int(number)) {
+				return nil, name + " must be an array of positive integers"
+			}
+
+			ids = append(ids, int(number))
+		case int:
+			if number <= 0 {
+				return nil, name + " must be an array of positive integers"
+			}
+
+			ids = append(ids, number)
+		default:
+			return nil, name + " must be an array of positive integers"
+		}
+	}
+
+	return ids, ""
 }
 
 func accountChildAccountEUUIDFromTool(request *mcp.CallToolRequest) (string, string) {
