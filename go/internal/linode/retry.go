@@ -203,6 +203,13 @@ func (c *Client) GetAccountChildAccount(ctx context.Context, euuid string) (*Chi
 	return childAccount, err
 }
 
+// CreateAccountChildAccountToken creates a proxy user token without retrying the
+// mutating request. Retrying can create multiple short-lived tokens after a
+// transient error, so this method delegates exactly once.
+func (c *Client) CreateAccountChildAccountToken(ctx context.Context, euuid string) (*ProxyUserToken, error) {
+	return c.httpCreateAccountChildAccountToken(ctx, euuid)
+}
+
 // GetAccountBeta retrieves one enrolled account beta program with automatic retry on transient failures.
 func (c *Client) GetAccountBeta(ctx context.Context, betaID string) (*AccountBetaProgram, error) {
 	var beta *AccountBetaProgram

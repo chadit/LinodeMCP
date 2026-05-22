@@ -95,6 +95,24 @@ func NewLinodeAccountChildAccountGetTool(cfg *config.Config) (mcp.Tool, profiles
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeAccountChildAccountTokenTool creates a tool for creating a child account proxy user token.
+func NewLinodeAccountChildAccountTokenTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_child_account_token",
+		"Creates a short-lived proxy user token for one child-level account.",
+		[]mcp.ToolOption{
+			mcp.WithString("euuid", mcp.Required(),
+				mcp.Description("External unique identifier for the child account.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm proxy user token creation.")),
+		},
+		handleLinodeAccountChildAccountTokenRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
 // NewLinodeAccountBetaGetTool creates a tool for retrieving one enrolled account beta program.
 func NewLinodeAccountBetaGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -313,6 +331,29 @@ func handleLinodeAccountChildAccountGetRequest(ctx context.Context, request *mcp
 	}
 
 	return mcp.NewToolResultError("Failed to retrieve linode_account_child_account_get: " + getFailure.Error()), nil
+}
+
+func handleLinodeAccountChildAccountTokenRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This creates a proxy user token for a child account. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	euuid, validationMessage := accountChildAccountEUUIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	token, createFailure := client.CreateAccountChildAccountToken(ctx, euuid)
+	if createFailure == nil {
+		return MarshalToolResponse(token)
+	}
+
+	return mcp.NewToolResultError("Failed to create linode_account_child_account_token: " + createFailure.Error()), nil
 }
 
 func accountChildAccountEUUIDFromTool(request *mcp.CallToolRequest) (string, string) {

@@ -924,8 +924,8 @@ func TestLinodeAccountChildAccountGetTool(t *testing.T) {
 			wantMessage string
 		}{
 			{name: "missing euuid", args: map[string]any{}, wantMessage: "euuid is required"},
-			{name: "empty euuid", args: map[string]any{keyEUUID: ""}, wantMessage: "euuid must be a non-empty string"},
-			{name: "numeric euuid", args: map[string]any{keyEUUID: 123}, wantMessage: "euuid must be a non-empty string"},
+			{name: "empty euuid", args: map[string]any{keyEUUID: ""}, wantMessage: errEUUIDNonEmpty},
+			{name: "numeric euuid", args: map[string]any{keyEUUID: 123}, wantMessage: errEUUIDNonEmpty},
 			{name: "euuid with slash", args: map[string]any{keyEUUID: "child/account"}, wantMessage: errEUUIDNoSeparators},
 			{name: "euuid with query separator", args: map[string]any{keyEUUID: "child?account"}, wantMessage: errEUUIDNoSeparators},
 			{name: "euuid with traversal", args: map[string]any{keyEUUID: ".."}, wantMessage: errEUUIDNoSeparators},
@@ -1233,6 +1233,171 @@ func TestLinodeAccountBetaGetTool(t *testing.T) {
 				assertErrorContains(t, result, testCase.wantMessage)
 			})
 		}
+	})
+}
+
+// End-to-end verification of child account proxy user token creation.
+func TestLinodeAccountChildAccountTokenTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountChildAccountTokenTool(cfg)
+
+		assert.Equal(t, "linode_account_child_account_token", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapAdmin, capability, "token creation should be CapAdmin")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, keyEUUID, "schema should include euuid")
+		assert.Contains(t, props, keyConfirm, "schema should include confirm")
+	})
+
+	t.Run("confirm required before client call", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name  string
+			value any
+			set   bool
+		}{
+			{name: caseMissingConfirm, set: false},
+			{name: caseRequiresConfirm, value: false, set: true},
+			{name: caseString, value: boolStringTrue, set: true},
+			{name: caseNumeric, value: 1, set: true},
+		}
+
+		for _, tt := range cases {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					atomic.AddInt32(&calls, 1)
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeAccountChildAccountTokenTool(cfg)
+
+				args := map[string]any{keyEUUID: childAccountEUUID}
+				if tt.set {
+					args[keyConfirm] = tt.value
+				}
+
+				req := createRequestWithArgs(t, args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should not return transport error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "result should be a tool error")
+				assertErrorContains(t, result, errConfirmEqualsTrue)
+				assert.Equal(t, int32(0), calls, "confirm failure must happen before client call")
+			})
+		}
+	})
+
+	t.Run("invalid euuid rejected before client call", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name        string
+			args        map[string]any
+			wantMessage string
+		}{
+			{name: "missing euuid", args: map[string]any{keyConfirm: true}, wantMessage: "euuid is required"},
+			{name: "empty euuid", args: map[string]any{keyEUUID: "", keyConfirm: true}, wantMessage: errEUUIDNonEmpty},
+			{name: "numeric euuid", args: map[string]any{keyEUUID: 123, keyConfirm: true}, wantMessage: errEUUIDNonEmpty},
+			{name: "euuid with slash", args: map[string]any{keyEUUID: "child/account", keyConfirm: true}, wantMessage: errEUUIDNoSeparators},
+			{name: "euuid with query separator", args: map[string]any{keyEUUID: "child?account", keyConfirm: true}, wantMessage: errEUUIDNoSeparators},
+			{name: "euuid with traversal", args: map[string]any{keyEUUID: "..", keyConfirm: true}, wantMessage: errEUUIDNoSeparators},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					atomic.AddInt32(&calls, 1)
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeAccountChildAccountTokenTool(cfg)
+
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should not return transport error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid euuid should be a tool error")
+				assertErrorContains(t, result, testCase.wantMessage)
+				assert.Equal(t, int32(0), calls, "euuid validation must fail before client call")
+			})
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56/token", r.URL.Path, "request path should include child account euuid and token suffix")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			assert.Equal(t, http.NoBody, r.Body, "token creation should not send a request body")
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(linode.ProxyUserToken{ID: 918, Label: "proxy-token", Scopes: "*", Token: "abcdefghijklmnop", Expiry: "2024-05-01T00:16:01"}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountChildAccountTokenTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyEUUID: childAccountEUUID, keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+		assertErrorContains(t, result, "abcdefghijklmnop")
+		assertErrorContains(t, result, "proxy-token")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56/token", r.URL.Path, "request path should include child account euuid and token suffix")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: errForbidden}},
+			}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountChildAccountTokenTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyEUUID: childAccountEUUID, keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		assertErrorContains(t, result, "Failed to create linode_account_child_account_token")
+		assertErrorContains(t, result, errForbidden)
 	})
 }
 

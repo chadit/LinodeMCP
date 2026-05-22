@@ -156,16 +156,17 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 
 	descriptors := server.ToolDescriptors(baseTestConfig())
 	want := map[string]profiles.Capability{
-		"linode_image_create":              profiles.CapWrite,
-		"linode_domain_record_get":         profiles.CapRead,
-		"linode_account_availability":      profiles.CapRead,
-		"linode_account_betas":             profiles.CapRead,
-		"linode_account_child_accounts":    profiles.CapRead,
-		"linode_account_child_account_get": profiles.CapRead,
-		"linode_account_beta_get":          profiles.CapRead,
-		"linode_account_beta_enroll":       profiles.CapAdmin,
-		"linode_account_cancel":            profiles.CapAdmin,
-		"linode_account_availability_get":  profiles.CapRead,
+		"linode_image_create":                profiles.CapWrite,
+		"linode_domain_record_get":           profiles.CapRead,
+		"linode_account_availability":        profiles.CapRead,
+		"linode_account_betas":               profiles.CapRead,
+		"linode_account_child_accounts":      profiles.CapRead,
+		"linode_account_child_account_get":   profiles.CapRead,
+		"linode_account_child_account_token": profiles.CapAdmin,
+		"linode_account_beta_get":            profiles.CapRead,
+		"linode_account_beta_enroll":         profiles.CapAdmin,
+		"linode_account_cancel":              profiles.CapAdmin,
+		"linode_account_availability_get":    profiles.CapRead,
 	}
 
 	for _, descriptor := range descriptors {
