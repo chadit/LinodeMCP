@@ -125,6 +125,16 @@ type AccountEventEntity struct {
 	URL   string `json:"url"`
 }
 
+// AccountLogin represents one user login returned by GET /account/logins.
+type AccountLogin struct {
+	Datetime   string `json:"datetime"`
+	ID         int    `json:"id"`
+	IP         string `json:"ip"`
+	Restricted bool   `json:"restricted"`
+	Status     string `json:"status"`
+	Username   string `json:"username"`
+}
+
 // AccountInvoice represents one account invoice.
 type AccountInvoice struct {
 	ID    int     `json:"id"`
