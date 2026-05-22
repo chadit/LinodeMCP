@@ -189,6 +189,7 @@ const (
 	errBetaIDRequired     = "id is required"
 	errBetaIDNonEmpty     = "id must be a non-empty string"
 	errBetaIDChars        = "id must contain only letters"
+	keyComments           = "comments"
 
 	// Validation case names used in table-driven test rows.
 	caseRequiresConfirm   = "requires confirm"

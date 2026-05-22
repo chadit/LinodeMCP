@@ -162,6 +162,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_account_betas":            profiles.CapRead,
 		"linode_account_beta_get":         profiles.CapRead,
 		"linode_account_beta_enroll":      profiles.CapAdmin,
+		"linode_account_cancel":           profiles.CapAdmin,
 		"linode_account_availability_get": profiles.CapRead,
 	}
 
