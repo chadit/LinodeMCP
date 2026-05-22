@@ -8,14 +8,15 @@ import (
 )
 
 const (
-	endpointProfile              = "/profile"
-	endpointProfileGrants        = "/profile/grants"
-	endpointAccount              = "/account"
-	endpointAccountCancel        = "/account/cancel"
-	endpointAccountAgreements    = "/account/agreements"
-	endpointAccountAvailability  = "/account/availability"
-	endpointAccountBetas         = "/account/betas"
-	endpointAccountChildAccounts = "/account/child-accounts"
+	endpointProfile                = "/profile"
+	endpointProfileGrants          = "/profile/grants"
+	endpointAccount                = "/account"
+	endpointAccountCancel          = "/account/cancel"
+	endpointAccountAgreements      = "/account/agreements"
+	endpointAccountAvailability    = "/account/availability"
+	endpointAccountBetas           = "/account/betas"
+	endpointAccountChildAccounts   = "/account/child-accounts"
+	endpointAccountEntityTransfers = "/account/entity-transfers"
 )
 
 // GetProfile retrieves the authenticated user's profile from the Linode API.
@@ -187,6 +188,28 @@ func (c *Client) httpListAccountChildAccounts(ctx context.Context, page, pageSiz
 	}
 
 	return &childAccounts, nil
+}
+
+// httpListAccountEntityTransfers retrieves account entity transfers.
+func (c *Client) httpListAccountEntityTransfers(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountEntityTransfer], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointAccountEntityTransfers, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListAccountEntityTransfers", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var transfers PaginatedResponse[AccountEntityTransfer]
+	if err := c.handleResponse(resp, &transfers); err != nil {
+		return nil, err
+	}
+
+	return &transfers, nil
 }
 
 // httpGetAccountChildAccount retrieves one child-level account by EUUID.
