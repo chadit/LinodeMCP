@@ -542,6 +542,13 @@ func (c *Client) CreateAccountEntityTransfer(ctx context.Context, req *CreateAcc
 	return c.httpCreateAccountEntityTransfer(ctx, req)
 }
 
+// CreateAccountServiceTransfer creates an account service transfer without retrying
+// the mutating request. Retrying can replay transfer creation after a transient
+// error, so this method delegates exactly once.
+func (c *Client) CreateAccountServiceTransfer(ctx context.Context, req *CreateAccountServiceTransferRequest) (*AccountEntityTransfer, error) {
+	return c.httpCreateAccountServiceTransfer(ctx, req)
+}
+
 // AcceptAccountEntityTransfer accepts an account entity transfer without retrying
 // the mutating request. Retrying can replay transfer acceptance after a transient
 // error, so this method delegates exactly once.

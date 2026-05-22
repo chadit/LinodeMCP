@@ -744,6 +744,26 @@ func (c *Client) httpCreateAccountEntityTransfer(ctx context.Context, req *Creat
 	return &transfer, nil
 }
 
+// httpCreateAccountServiceTransfer creates an account service transfer.
+func (c *Client) httpCreateAccountServiceTransfer(ctx context.Context, req *CreateAccountServiceTransferRequest) (*AccountEntityTransfer, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountServiceTransfers, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateAccountServiceTransfer", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var transfer AccountEntityTransfer
+	if err := c.handleResponse(resp, &transfer); err != nil {
+		return nil, err
+	}
+
+	return &transfer, nil
+}
+
 // httpAcceptAccountEntityTransfer accepts one account entity transfer by token.
 func (c *Client) httpAcceptAccountEntityTransfer(ctx context.Context, token string) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
