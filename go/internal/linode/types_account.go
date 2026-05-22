@@ -186,6 +186,12 @@ type AccountPayment struct {
 	USD  float64 `json:"usd"`
 }
 
+// CreateAccountPaymentRequest contains the request body for POST /account/payments.
+type CreateAccountPaymentRequest struct {
+	PaymentMethodID int     `json:"payment_method_id,omitempty"`
+	USD             float64 `json:"usd,omitempty"`
+}
+
 // AccountInvoiceItem represents one line item on an account invoice.
 type AccountInvoiceItem struct {
 	Amount    float64 `json:"amount"`
