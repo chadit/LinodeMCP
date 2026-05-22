@@ -16,7 +16,8 @@ const (
 	keySSHKey = "ssh_key"
 
 	// Account beta fixture values.
-	betaExampleOpen = "example_open"
+	betaExampleOpen      = "example_open"
+	labelExampleOpenBeta = "Example Open Beta"
 
 	// Common region IDs used in API response fixtures.
 	regionUSEast         = "us-east"

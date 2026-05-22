@@ -863,7 +863,7 @@ func TestClientListAccountBetasSuccess(t *testing.T) {
 			Ended:       nil,
 			Enrolled:    "2023-09-11T00:00:00",
 			ID:          betaExampleOpen,
-			Label:       "Example Open Beta",
+			Label:       labelExampleOpenBeta,
 			Started:     "2023-07-11T00:00:00",
 		}},
 		Page:    2,
@@ -891,7 +891,7 @@ func TestClientListAccountBetasSuccess(t *testing.T) {
 	assert.Equal(t, 2, result.Page)
 	require.Len(t, result.Data, 1)
 	assert.Equal(t, betaExampleOpen, result.Data[0].ID)
-	assert.Equal(t, "Example Open Beta", result.Data[0].Label)
+	assert.Equal(t, labelExampleOpenBeta, result.Data[0].Label)
 	require.NotNil(t, result.Data[0].Description)
 	assert.Equal(t, description, *result.Data[0].Description)
 	assert.Nil(t, result.Data[0].Ended)
@@ -945,7 +945,7 @@ func TestClientListAccountBetasRetriesTransientError(t *testing.T) {
 		assert.Equal(t, "/account/betas", r.URL.Path, "request path should be /account/betas")
 		w.Header().Set("Content-Type", "application/json")
 		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountBetaProgram]{
-			Data: []linode.AccountBetaProgram{{ID: betaExampleOpen, Label: "Example Open Beta"}},
+			Data: []linode.AccountBetaProgram{{ID: betaExampleOpen, Label: labelExampleOpenBeta}},
 		}))
 	}))
 	defer srv.Close()
@@ -958,6 +958,122 @@ func TestClientListAccountBetasRetriesTransientError(t *testing.T) {
 	require.NotNil(t, result, "result should not be nil")
 	require.Len(t, result.Data, 1)
 	assert.Equal(t, betaExampleOpen, result.Data[0].ID)
+	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+}
+
+// TestClientGetAccountBetaSuccess verifies GetAccountBeta sends a GET
+// request to /account/betas/{betaId} and decodes the response.
+func TestClientGetAccountBetaSuccess(t *testing.T) {
+	t.Parallel()
+
+	description := "This is an open public beta for an example feature."
+	beta := linode.AccountBetaProgram{
+		Description: &description,
+		Ended:       nil,
+		Enrolled:    "2023-09-11T00:00:00",
+		ID:          betaExampleOpen,
+		Label:       labelExampleOpenBeta,
+		Started:     "2023-07-11T00:00:00",
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/betas/"+betaExampleOpen, r.URL.Path, "request path should include beta id")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(beta))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.GetAccountBeta(t.Context(), betaExampleOpen)
+
+	require.NoError(t, err, "GetAccountBeta should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, betaExampleOpen, result.ID)
+	assert.Equal(t, labelExampleOpenBeta, result.Label)
+	require.NotNil(t, result.Description)
+	assert.Equal(t, description, *result.Description)
+}
+
+// TestClientGetAccountBetaEscapesID verifies the client encodes path separators.
+func TestClientGetAccountBetaEscapesID(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/account/betas/example%2Fopen%3Fquery", r.URL.EscapedPath(), "request path should escape beta id")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountBetaProgram{ID: "example/open?query"}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetAccountBeta(t.Context(), "example/open?query")
+
+	require.NoError(t, err, "GetAccountBeta should escape path parameters")
+}
+
+// TestClientGetAccountBetaAPIError verifies GetAccountBeta propagates API errors.
+func TestClientGetAccountBetaAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/betas/"+betaExampleOpen, r.URL.Path, "request path should include beta id")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetAccountBeta(t.Context(), betaExampleOpen)
+
+	require.Error(t, err, "GetAccountBeta should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	require.NotNil(t, apiErr, "APIError should be present")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, "forbidden", apiErr.Message)
+}
+
+// TestClientGetAccountBetaRetriesTransientError verifies the read-only lookup retries transient failures.
+func TestClientGetAccountBetaRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			assert.NoError(t, writeErr)
+
+			return
+		}
+
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/betas/"+betaExampleOpen, r.URL.Path, "request path should include beta id")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountBetaProgram{ID: betaExampleOpen, Label: labelExampleOpenBeta}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	result, err := client.GetAccountBeta(t.Context(), betaExampleOpen)
+
+	require.NoError(t, err, "GetAccountBeta should succeed after retry")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, betaExampleOpen, result.ID)
 	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
