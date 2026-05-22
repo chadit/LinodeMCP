@@ -143,6 +143,21 @@ func (c *Client) ListAccountMaintenance(ctx context.Context, page, pageSize int)
 	return maintenance, err
 }
 
+// ListAccountNotifications retrieves account notifications with automatic retry on transient failures.
+func (c *Client) ListAccountNotifications(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountNotification], error) {
+	var notifications *PaginatedResponse[AccountNotification]
+
+	err := c.executeWithRetry(ctx, "ListAccountNotifications", func() error {
+		var err error
+
+		notifications, err = c.httpListAccountNotifications(ctx, page, pageSize)
+
+		return err
+	})
+
+	return notifications, err
+}
+
 // GetAccountAvailability retrieves account service availability for a region with automatic retry on transient failures.
 func (c *Client) GetAccountAvailability(ctx context.Context, regionID string) (*AccountAvailability, error) {
 	var availability *AccountAvailability
