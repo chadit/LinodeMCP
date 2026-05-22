@@ -311,6 +311,28 @@ func (c *Client) httpDeleteAccountEntityTransfer(ctx context.Context, token stri
 	return c.handleResponse(resp, nil)
 }
 
+// httpGetAccountEvent retrieves one account event by ID.
+func (c *Client) httpGetAccountEvent(ctx context.Context, eventID int) (*AccountEvent, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountEvents + "/" + url.PathEscape(strconv.Itoa(eventID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccountEvent", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var event AccountEvent
+	if err := c.handleResponse(resp, &event); err != nil {
+		return nil, err
+	}
+
+	return &event, nil
+}
+
 // httpGetAccountChildAccount retrieves one child-level account by EUUID.
 func (c *Client) httpGetAccountChildAccount(ctx context.Context, euuid string) (*ChildAccount, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

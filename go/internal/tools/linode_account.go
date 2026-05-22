@@ -21,6 +21,7 @@ const (
 	accountEventsPageSizeMax          = 500
 	accountChildAccountsPageSizeMin   = 25
 	accountChildAccountsPageSizeMax   = 500
+	accountEventIDParam               = "event_id"
 	accountEntityTransfersPageSizeMin = 25
 	accountEntityTransfersPageSizeMax = 500
 )
@@ -126,6 +127,22 @@ func NewLinodeAccountEntityTransferGetTool(cfg *config.Config) (mcp.Tool, profil
 				mcp.Description("Entity transfer token.")),
 		},
 		handleLinodeAccountEntityTransferGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeAccountEventGetTool creates a tool for retrieving one account event.
+func NewLinodeAccountEventGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_event_get",
+		"Gets one account event by ID.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(accountEventIDParam, mcp.Required(),
+				mcp.Description("Numeric account event ID.")),
+		},
+		handleLinodeAccountEventGetRequest,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -533,6 +550,49 @@ func handleLinodeAccountEntityTransferGetRequest(ctx context.Context, request *m
 	}
 
 	return mcp.NewToolResultError("Failed to retrieve linode_account_entity_transfer_get: " + getFailure.Error()), nil
+}
+
+func handleLinodeAccountEventGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	eventID, validationMessage := accountEventIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	event, getFailure := client.GetAccountEvent(ctx, eventID)
+	if getFailure == nil {
+		return MarshalToolResponse(event)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_account_event_get: " + getFailure.Error()), nil
+}
+
+func accountEventIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	raw, exists := request.GetArguments()[accountEventIDParam]
+	if !exists {
+		return 0, accountEventIDParam + " is required"
+	}
+
+	switch value := raw.(type) {
+	case float64:
+		if value <= 0 || value != float64(int(value)) {
+			return 0, accountEventIDParam + " must be a positive integer"
+		}
+
+		return int(value), ""
+	case int:
+		if value <= 0 {
+			return 0, accountEventIDParam + " must be a positive integer"
+		}
+
+		return value, ""
+	default:
+		return 0, accountEventIDParam + " must be a positive integer"
+	}
 }
 
 func accountEntityTransferTokenFromTool(request *mcp.CallToolRequest) (string, string) {

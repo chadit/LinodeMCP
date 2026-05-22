@@ -233,6 +233,21 @@ func (c *Client) GetAccountEntityTransfer(ctx context.Context, token string) (*A
 	return transfer, err
 }
 
+// GetAccountEvent retrieves one account event with automatic retry on transient failures.
+func (c *Client) GetAccountEvent(ctx context.Context, eventID int) (*AccountEvent, error) {
+	var event *AccountEvent
+
+	err := c.executeWithRetry(ctx, "GetAccountEvent", func() error {
+		var err error
+
+		event, err = c.httpGetAccountEvent(ctx, eventID)
+
+		return err
+	})
+
+	return event, err
+}
+
 // CreateAccountEntityTransfer creates an account entity transfer without retrying
 // the mutating request. Retrying can replay transfer creation after a transient
 // error, so this method delegates exactly once.
