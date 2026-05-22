@@ -139,6 +139,22 @@ type ProxyUserToken struct {
 	Token   string `json:"token"`
 }
 
+// AccountEntityTransfer represents an account entity transfer request.
+type AccountEntityTransfer struct {
+	Created  string                        `json:"created"`
+	Entities AccountEntityTransferEntities `json:"entities"`
+	Expiry   string                        `json:"expiry"`
+	IsSender bool                          `json:"is_sender"`
+	Status   string                        `json:"status"`
+	Token    string                        `json:"token"`
+	Updated  string                        `json:"updated"`
+}
+
+// AccountEntityTransferEntities groups transferred entities by type.
+type AccountEntityTransferEntities struct {
+	Linodes []int `json:"linodes"`
+}
+
 // EnrollAccountBetaRequest contains the beta program identifier for POST /account/betas.
 type EnrollAccountBetaRequest struct {
 	ID string `json:"id"`
