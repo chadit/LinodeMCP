@@ -4679,6 +4679,185 @@ func TestLinodeAccountEventSeenTool(t *testing.T) {
 	})
 }
 
+// End-to-end verification of account service transfer creation.
+func TestLinodeAccountServiceTransferCreateTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountServiceTransferCreateTool(cfg)
+
+		assert.Equal(t, "linode_account_service_transfer_create", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapAdmin, capability, "service transfer creation should be CapAdmin")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, keyLinodeIDs, "schema should include linode_ids")
+		assert.Contains(t, props, keyConfirm, "schema should include confirm")
+	})
+
+	t.Run("confirm required before client call", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name  string
+			value any
+			set   bool
+		}{
+			{name: caseMissingConfirm, set: false},
+			{name: caseRequiresConfirm, value: false, set: true},
+			{name: caseString, value: boolStringTrue, set: true},
+			{name: caseNumeric, value: 1, set: true},
+		}
+
+		for _, tt := range cases {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					atomic.AddInt32(&calls, 1)
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeAccountServiceTransferCreateTool(cfg)
+
+				args := map[string]any{keyLinodeIDs: []any{float64(123)}}
+				if tt.set {
+					args[keyConfirm] = tt.value
+				}
+
+				req := createRequestWithArgs(t, args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should not return transport error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "result should be a tool error")
+				assertErrorContains(t, result, errConfirmEqualsTrue)
+				assert.Equal(t, int32(0), calls, "confirm failure must happen before client call")
+			})
+		}
+	})
+
+	t.Run("invalid linode ids rejected before client call", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name        string
+			args        map[string]any
+			wantMessage string
+		}{
+			{name: "missing linode_ids", args: map[string]any{keyConfirm: true}, wantMessage: "linode_ids is required"},
+			{name: "empty linode_ids", args: map[string]any{keyLinodeIDs: []any{}, keyConfirm: true}, wantMessage: "linode_ids must include at least one ID"},
+			{name: "string linode_ids", args: map[string]any{keyLinodeIDs: "123", keyConfirm: true}, wantMessage: errLinodeIDsPositiveArray},
+			{name: "string element", args: map[string]any{keyLinodeIDs: []any{"123"}, keyConfirm: true}, wantMessage: errLinodeIDsPositiveArray},
+			{name: "zero element", args: map[string]any{keyLinodeIDs: []any{float64(0)}, keyConfirm: true}, wantMessage: errLinodeIDsPositiveArray},
+			{name: "negative element", args: map[string]any{keyLinodeIDs: []any{float64(-1)}, keyConfirm: true}, wantMessage: errLinodeIDsPositiveArray},
+			{name: "fractional element", args: map[string]any{keyLinodeIDs: []any{1.5}, keyConfirm: true}, wantMessage: errLinodeIDsPositiveArray},
+			{name: "overflow element", args: map[string]any{keyLinodeIDs: []any{float64(1 << 63)}, keyConfirm: true}, wantMessage: errLinodeIDsPositiveArray},
+		}
+
+		for _, tt := range cases {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					atomic.AddInt32(&calls, 1)
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeAccountServiceTransferCreateTool(cfg)
+
+				req := createRequestWithArgs(t, tt.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should not return transport error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "result should be a tool error")
+				assertErrorContains(t, result, tt.wantMessage)
+				assert.Equal(t, int32(0), calls, "validation failure must happen before client call")
+			})
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/account/service-transfers", r.URL.Path, "request path should be /account/service-transfers")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+
+			var got linode.CreateAccountServiceTransferRequest
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&got))
+			assert.Equal(t, []int{123, 456}, got.Entities.Linodes)
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountEntityTransfer{
+				Entities: linode.AccountEntityTransferEntities{Linodes: []int{123, 456}},
+				Status:   statusPending,
+				Token:    "service-transfer-token",
+			}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountServiceTransferCreateTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyLinodeIDs: []any{float64(123), float64(456)}, keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return transport error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "result should not be an error")
+		require.NotEmpty(t, result.Content, "response should include content")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "service-transfer-token", "response should include transfer token")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/account/service-transfers", r.URL.Path, "request path should be /account/service-transfers")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+			assert.NoError(t, writeErr)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountServiceTransferCreateTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyLinodeIDs: []any{float64(123)}, keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return transport error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "result should be a tool error")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to create linode_account_service_transfer_create", "response should identify failed tool")
+		assert.Contains(t, textContent.Text, errForbidden, "response should include API error detail")
+	})
+}
+
 // End-to-end verification of account entity transfer retrieval.
 func TestLinodeAccountEntityTransferGetTool(t *testing.T) {
 	t.Parallel()

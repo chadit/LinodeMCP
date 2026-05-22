@@ -4006,6 +4006,94 @@ func TestClientCreateAccountEntityTransferSuccess(t *testing.T) {
 	assert.Equal(t, []int{123, 456}, got.Entities.Linodes)
 }
 
+// TestClientCreateAccountServiceTransferSuccess verifies CreateAccountServiceTransfer
+// sends a POST request to /account/service-transfers and decodes the response.
+func TestClientCreateAccountServiceTransferSuccess(t *testing.T) {
+	t.Parallel()
+
+	want := linode.AccountEntityTransfer{
+		Entities: linode.AccountEntityTransferEntities{Linodes: []int{123, 456}},
+		Status:   statusPending,
+		Token:    "service-transfer-token",
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/account/service-transfers", r.URL.Path, "request path should be /account/service-transfers")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		var got linode.CreateAccountServiceTransferRequest
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got))
+		assert.Equal(t, []int{123, 456}, got.Entities.Linodes)
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(want))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	req := &linode.CreateAccountServiceTransferRequest{Entities: linode.AccountEntityTransferEntities{Linodes: []int{123, 456}}}
+
+	got, err := client.CreateAccountServiceTransfer(t.Context(), req)
+
+	require.NoError(t, err, "CreateAccountServiceTransfer should succeed on 200 response")
+	require.NotNil(t, got, "result should not be nil")
+	assert.Equal(t, statusPending, got.Status)
+	assert.Equal(t, "service-transfer-token", got.Token)
+	assert.Equal(t, []int{123, 456}, got.Entities.Linodes)
+}
+
+func TestClientCreateAccountServiceTransferAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/account/service-transfers", r.URL.Path, "request path should be /account/service-transfers")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	req := &linode.CreateAccountServiceTransferRequest{Entities: linode.AccountEntityTransferEntities{Linodes: []int{123}}}
+
+	got, err := client.CreateAccountServiceTransfer(t.Context(), req)
+
+	require.Error(t, err, "CreateAccountServiceTransfer should return API error")
+	assert.Nil(t, got, "result should be nil on API error")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	require.NotNil(t, apiErr, "APIError should be present")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+func TestClientCreateAccountServiceTransferDoesNotRetryTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+	req := &linode.CreateAccountServiceTransferRequest{Entities: linode.AccountEntityTransferEntities{Linodes: []int{123}}}
+
+	_, err := client.CreateAccountServiceTransfer(t.Context(), req)
+
+	require.Error(t, err, "CreateAccountServiceTransfer should return the transient error")
+	assert.Equal(t, int32(1), requestCount.Load(), "mutating service transfer creation must not be retried")
+}
+
 // TestClientCreateAccountEntityTransferAPIError verifies API errors propagate.
 func TestClientCreateAccountEntityTransferAPIError(t *testing.T) {
 	t.Parallel()
