@@ -333,6 +333,23 @@ func (c *Client) httpGetAccountEvent(ctx context.Context, eventID int) (*Account
 	return &event, nil
 }
 
+// httpMarkAccountEventSeen marks one account event as seen by ID.
+func (c *Client) httpMarkAccountEventSeen(ctx context.Context, eventID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountEvents + "/" + url.PathEscape(strconv.Itoa(eventID)) + "/seen"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "MarkAccountEventSeen", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	return c.handleResponse(resp, nil)
+}
+
 // httpGetAccountChildAccount retrieves one child-level account by EUUID.
 func (c *Client) httpGetAccountChildAccount(ctx context.Context, euuid string) (*ChildAccount, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
