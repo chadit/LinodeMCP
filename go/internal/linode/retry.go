@@ -173,6 +173,21 @@ func (c *Client) ListAccountBetas(ctx context.Context, page, pageSize int) (*Pag
 	return betas, err
 }
 
+// GetAccountBeta retrieves one enrolled account beta program with automatic retry on transient failures.
+func (c *Client) GetAccountBeta(ctx context.Context, betaID string) (*AccountBetaProgram, error) {
+	var beta *AccountBetaProgram
+
+	err := c.executeWithRetry(ctx, "GetAccountBeta", func() error {
+		var err error
+
+		beta, err = c.httpGetAccountBeta(ctx, betaID)
+
+		return err
+	})
+
+	return beta, err
+}
+
 // EnrollAccountBeta enrolls the account in a beta program without retrying the
 // mutating request. Retrying can replay enrollment after a transient error, so
 // this method delegates exactly once.

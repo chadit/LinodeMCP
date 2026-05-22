@@ -626,11 +626,11 @@ func TestLinodeAccountAvailabilityGetTool(t *testing.T) {
 			wantMessage string
 		}{
 			{name: caseMissingRegion, args: map[string]any{}, wantMessage: "region_id is required"},
-			{name: "empty", args: map[string]any{keyRegionID: ""}, wantMessage: "region_id must be a non-empty string"},
+			{name: caseEmpty, args: map[string]any{keyRegionID: ""}, wantMessage: "region_id must be a non-empty string"},
 			{name: "number", args: map[string]any{keyRegionID: 123}, wantMessage: "region_id must be a non-empty string"},
-			{name: "slash", args: map[string]any{keyRegionID: "us/east"}, wantMessage: errRegionIDSlug},
-			{name: "query", args: map[string]any{keyRegionID: "us-east?x=1"}, wantMessage: errRegionIDSlug},
-			{name: "dot traversal", args: map[string]any{keyRegionID: pathTraversalValue}, wantMessage: errRegionIDSlug},
+			{name: caseSlash, args: map[string]any{keyRegionID: "us/east"}, wantMessage: errRegionIDSlug},
+			{name: caseQuery, args: map[string]any{keyRegionID: "us-east?x=1"}, wantMessage: errRegionIDSlug},
+			{name: caseDotTraversal, args: map[string]any{keyRegionID: pathTraversalValue}, wantMessage: errRegionIDSlug},
 			{name: "whitespace", args: map[string]any{keyRegionID: "us east"}, wantMessage: errRegionIDSlug},
 			{name: "fragment", args: map[string]any{keyRegionID: "us-east#frag"}, wantMessage: errRegionIDSlug},
 			{name: "ampersand", args: map[string]any{keyRegionID: "us-east&x"}, wantMessage: errRegionIDSlug},
@@ -686,7 +686,7 @@ func TestLinodeAccountBetasTool(t *testing.T) {
 				Ended:       nil,
 				Enrolled:    "2023-09-11T00:00:00",
 				ID:          betaExampleOpen,
-				Label:       "Example Open Beta",
+				Label:       labelExampleOpenBeta,
 				Started:     "2023-07-11T00:00:00",
 			}},
 			Page:    2,
@@ -725,7 +725,7 @@ func TestLinodeAccountBetasTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, betaExampleOpen, "response should contain beta id")
-		assert.Contains(t, textContent.Text, "Example Open Beta", "response should contain beta label")
+		assert.Contains(t, textContent.Text, labelExampleOpenBeta, "response should contain beta label")
 	})
 
 	t.Run("api error", func(t *testing.T) {
@@ -797,6 +797,144 @@ func TestLinodeAccountBetasTool(t *testing.T) {
 				textContent, ok := result.Content[0].(mcp.TextContent)
 				require.True(t, ok, "content should be TextContent")
 				assert.Contains(t, textContent.Text, testCase.wantMessage, "response should describe validation error")
+			})
+		}
+	})
+}
+
+// End-to-end verification of enrolled account beta program retrieval.
+func TestLinodeAccountBetaGetTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountBetaGetTool(cfg)
+
+		assert.Equal(t, "linode_account_beta_get", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, keyBetaID, "schema should include beta id")
+		assert.NotContains(t, props, keyConfirm, "read-only get tool must not require confirm")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		description := "This is an open public beta for an example feature."
+		beta := linode.AccountBetaProgram{
+			Description: &description,
+			Ended:       nil,
+			Enrolled:    "2023-09-11T00:00:00",
+			ID:          betaExampleOpen,
+			Label:       labelExampleOpenBeta,
+			Started:     "2023-07-11T00:00:00",
+		}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/account/betas/"+betaExampleOpen, r.URL.Path, "request path should include beta id")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(beta))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeAccountBetaGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyBetaID: betaExampleOpen})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, betaExampleOpen, "response should contain beta id")
+		assert.Contains(t, textContent.Text, labelExampleOpenBeta, "response should contain beta label")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/account/betas/"+betaExampleOpen, r.URL.Path, "request path should include beta id")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: errForbidden}},
+			}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeAccountBetaGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyBetaID: betaExampleOpen})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		assertErrorContains(t, result, "Failed to retrieve linode_account_beta_get")
+		assertErrorContains(t, result, errForbidden)
+	})
+
+	t.Run("invalid id rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name        string
+			args        map[string]any
+			wantMessage string
+		}{
+			{name: caseMissingConfirm, args: map[string]any{}, wantMessage: errBetaIDRequired},
+			{name: caseEmpty, args: map[string]any{keyBetaID: ""}, wantMessage: errBetaIDNonEmpty},
+			{name: "blank", args: map[string]any{keyBetaID: "   "}, wantMessage: errBetaIDNonEmpty},
+			{name: caseNumeric, args: map[string]any{keyBetaID: 123}, wantMessage: errBetaIDNonEmpty},
+			{name: caseSlash, args: map[string]any{keyBetaID: "example/open"}, wantMessage: errBetaIDChars},
+			{name: caseQuery, args: map[string]any{keyBetaID: "example?open=1"}, wantMessage: errBetaIDChars},
+			{name: caseDotTraversal, args: map[string]any{keyBetaID: pathTraversalValue}, wantMessage: errBetaIDChars},
+			{name: "whitespace padded", args: map[string]any{keyBetaID: " example_open "}, wantMessage: errBetaIDChars},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeAccountBetaGetTool(cfg)
+
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err)
+				require.NotNil(t, result)
+				assert.True(t, result.IsError, "validation failure should be an error result")
+				assertErrorContains(t, result, testCase.wantMessage)
 			})
 		}
 	})
@@ -878,12 +1016,12 @@ func TestLinodeAccountBetaEnrollTool(t *testing.T) {
 			wantMessage string
 		}{
 			{name: caseMissingConfirm, args: map[string]any{keyConfirm: true}, wantMessage: errBetaIDRequired},
-			{name: "empty", args: map[string]any{keyBetaID: "", keyConfirm: true}, wantMessage: errBetaIDNonEmpty},
+			{name: caseEmpty, args: map[string]any{keyBetaID: "", keyConfirm: true}, wantMessage: errBetaIDNonEmpty},
 			{name: "blank", args: map[string]any{keyBetaID: "   ", keyConfirm: true}, wantMessage: errBetaIDNonEmpty},
 			{name: caseNumeric, args: map[string]any{keyBetaID: 123, keyConfirm: true}, wantMessage: errBetaIDNonEmpty},
-			{name: "slash", args: map[string]any{keyBetaID: "example/open", keyConfirm: true}, wantMessage: errBetaIDChars},
-			{name: "query", args: map[string]any{keyBetaID: "example?open=1", keyConfirm: true}, wantMessage: errBetaIDChars},
-			{name: "dot traversal", args: map[string]any{keyBetaID: pathTraversalValue, keyConfirm: true}, wantMessage: errBetaIDChars},
+			{name: caseSlash, args: map[string]any{keyBetaID: "example/open", keyConfirm: true}, wantMessage: errBetaIDChars},
+			{name: caseQuery, args: map[string]any{keyBetaID: "example?open=1", keyConfirm: true}, wantMessage: errBetaIDChars},
+			{name: caseDotTraversal, args: map[string]any{keyBetaID: pathTraversalValue, keyConfirm: true}, wantMessage: errBetaIDChars},
 			{name: "whitespace padded", args: map[string]any{keyBetaID: " example_open ", keyConfirm: true}, wantMessage: errBetaIDChars},
 			{name: "control", args: map[string]any{keyBetaID: "example\nopen", keyConfirm: true}, wantMessage: errBetaIDChars},
 		}

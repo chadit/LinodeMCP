@@ -165,6 +165,28 @@ func (c *Client) httpListAccountBetas(ctx context.Context, page, pageSize int) (
 	return &betas, nil
 }
 
+// httpGetAccountBeta retrieves one enrolled account beta program.
+func (c *Client) httpGetAccountBeta(ctx context.Context, betaID string) (*AccountBetaProgram, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountBetas + "/" + url.PathEscape(betaID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccountBeta", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var beta AccountBetaProgram
+	if err := c.handleResponse(resp, &beta); err != nil {
+		return nil, err
+	}
+
+	return &beta, nil
+}
+
 // httpEnrollAccountBeta enrolls the account in a beta program via POST /v4/account/betas.
 func (c *Client) httpEnrollAccountBeta(ctx context.Context, req *EnrollAccountBetaRequest) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
