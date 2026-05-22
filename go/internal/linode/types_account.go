@@ -125,6 +125,14 @@ type AccountEventEntity struct {
 	URL   string `json:"url"`
 }
 
+// AccountInvoice represents one account invoice.
+type AccountInvoice struct {
+	ID    int     `json:"id"`
+	Date  string  `json:"date"`
+	Label string  `json:"label"`
+	Total float64 `json:"total"`
+}
+
 // ChildAccount represents a child-level account available to a parent account.
 type ChildAccount struct {
 	ActiveSince       string                 `json:"active_since"`

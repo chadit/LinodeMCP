@@ -188,6 +188,21 @@ func (c *Client) ListAccountEvents(ctx context.Context, page, pageSize int) (*Pa
 	return events, err
 }
 
+// ListAccountInvoices retrieves account invoices with automatic retry on transient failures.
+func (c *Client) ListAccountInvoices(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountInvoice], error) {
+	var invoices *PaginatedResponse[AccountInvoice]
+
+	err := c.executeWithRetry(ctx, "ListAccountInvoices", func() error {
+		var err error
+
+		invoices, err = c.httpListAccountInvoices(ctx, page, pageSize)
+
+		return err
+	})
+
+	return invoices, err
+}
+
 // ListAccountChildAccounts retrieves child-level accounts with automatic retry on transient failures.
 func (c *Client) ListAccountChildAccounts(ctx context.Context, page, pageSize int) (*PaginatedResponse[ChildAccount], error) {
 	var childAccounts *PaginatedResponse[ChildAccount]

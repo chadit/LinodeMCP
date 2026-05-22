@@ -19,6 +19,8 @@ const (
 	accountBetasPageSizeMax           = 500
 	accountEventsPageSizeMin          = 25
 	accountEventsPageSizeMax          = 500
+	accountInvoicesPageSizeMin        = 25
+	accountInvoicesPageSizeMax        = 500
 	accountChildAccountsPageSizeMin   = 25
 	accountChildAccountsPageSizeMax   = 500
 	accountEventIDParam               = "event_id"
@@ -79,6 +81,22 @@ func NewLinodeAccountEventsTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
 		},
 		handleLinodeAccountEventsRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeAccountInvoicesTool creates a tool for listing account invoices.
+func NewLinodeAccountInvoicesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_invoices",
+		"Lists invoices for the authenticated account.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		},
+		handleLinodeAccountInvoicesRequest,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -448,6 +466,41 @@ func accountEventsPaginationFromTool(request *mcp.CallToolRequest) (int, int, st
 	}
 
 	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountEventsPageSizeMin, accountEventsPageSizeMax)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	return page, pageSize, ""
+}
+
+func handleLinodeAccountInvoicesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	page, pageSize, validationMessage := accountInvoicesPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	invoices, listFailure := client.ListAccountInvoices(ctx, page, pageSize)
+	if listFailure == nil {
+		return MarshalToolResponse(invoices)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_account_invoices: " + listFailure.Error()), nil
+}
+
+func accountInvoicesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
+	args := request.GetArguments()
+
+	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountInvoicesPageSizeMin, accountInvoicesPageSizeMax)
 	if validationMessage != "" {
 		return 0, 0, validationMessage
 	}
