@@ -3040,7 +3040,7 @@ func TestLinodeAccountPaymentMethodsTool(t *testing.T) {
 		t.Parallel()
 
 		methods := linode.PaginatedResponse[linode.AccountPaymentMethod]{
-			Data:    []linode.AccountPaymentMethod{{ID: 123, Type: "credit_card", IsDefault: true, Data: map[string]any{"last_four": "1111"}}},
+			Data:    []linode.AccountPaymentMethod{{ID: 123, Type: paymentMethodCreditCard, IsDefault: true, Data: map[string]any{"last_four": paymentMethodLastFour}}},
 			Page:    2,
 			Pages:   3,
 			Results: 75,
@@ -3076,7 +3076,7 @@ func TestLinodeAccountPaymentMethodsTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "credit_card", "response should contain payment method type")
+		assert.Contains(t, textContent.Text, paymentMethodCreditCard, "response should contain payment method type")
 		assert.Contains(t, textContent.Text, "1111", "response should contain payment method details")
 	})
 
@@ -3147,6 +3147,166 @@ func TestLinodeAccountPaymentMethodsTool(t *testing.T) {
 				textContent, ok := result.Content[0].(mcp.TextContent)
 				require.True(t, ok, "content should be TextContent")
 				assert.Contains(t, textContent.Text, testCase.wantMessage, "response should describe validation error")
+			})
+		}
+	})
+}
+
+func TestLinodeAccountPaymentMethodCreateTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountPaymentMethodCreateTool(cfg)
+
+		assert.Equal(t, "linode_account_payment_method_create", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapAdmin, capability, "tool should require admin capability")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, "type", "schema should include type")
+		assert.Contains(t, props, keyData, "schema should include data")
+		assert.Contains(t, props, keyIsDefault, "schema should include is_default")
+		assert.Contains(t, props, keyConfirm, "mutating create tool must require confirm")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/account/payment-methods", r.URL.Path, "request path should be /account/payment-methods")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+
+			var body map[string]any
+
+			decodeErr := json.NewDecoder(r.Body).Decode(&body)
+			assert.NoError(t, decodeErr)
+
+			if decodeErr != nil {
+				return
+			}
+
+			assert.Equal(t, paymentMethodCreditCard, body[keyType])
+			assert.Equal(t, true, body[keyIsDefault])
+			assert.Equal(t, map[string]any{keyToken: paymentMethodToken}, body[keyData])
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountPaymentMethod{ID: 321, Type: paymentMethodCreditCard, IsDefault: true, Data: map[string]any{"last_four": paymentMethodLastFour}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountPaymentMethodCreateTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyType: paymentMethodCreditCard, keyData: map[string]any{keyToken: paymentMethodToken}, keyIsDefault: true, keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, paymentMethodCreatedMessage)
+		assert.Contains(t, textContent.Text, paymentMethodLastFour)
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/account/payment-methods", r.URL.Path, "request path should be /account/payment-methods")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountPaymentMethodCreateTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyType: paymentMethodCreditCard, keyData: map[string]any{keyToken: paymentMethodToken}, keyIsDefault: true, keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to create linode_account_payment_method_create", "response should identify failed tool")
+		assert.Contains(t, textContent.Text, errForbidden, "response should include API error detail")
+	})
+
+	t.Run("confirm rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name    string
+			confirm any
+		}{
+			{name: caseMissing},
+			{name: casePaymentMethodConfirmFalse, confirm: false},
+			{name: caseString, confirm: boolStringTrue},
+			{name: caseNumeric, confirm: 1},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeAccountPaymentMethodCreateTool(cfg)
+
+				args := map[string]any{keyType: paymentMethodCreditCard, keyData: map[string]any{keyToken: paymentMethodToken}, keyIsDefault: true}
+				if testCase.name != "missing" {
+					args[keyConfirm] = testCase.confirm
+				}
+
+				req := createRequestWithArgs(t, args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid confirm should be an error result")
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, errConfirmEqualsTrue, "response should require confirmation")
+			})
+		}
+	})
+
+	t.Run("required argument validation rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name string
+			args map[string]any
+			want string
+		}{
+			{name: "missing type", args: map[string]any{keyData: map[string]any{keyToken: paymentMethodToken}, keyIsDefault: true, keyConfirm: true}, want: "type is required"},
+			{name: "missing data", args: map[string]any{keyType: paymentMethodCreditCard, keyIsDefault: true, keyConfirm: true}, want: "data is required"},
+			{name: "missing is_default", args: map[string]any{keyType: paymentMethodCreditCard, keyData: map[string]any{keyToken: paymentMethodToken}, keyConfirm: true}, want: "is_default must be a boolean"},
+			{name: "string is_default", args: map[string]any{keyType: paymentMethodCreditCard, keyData: map[string]any{keyToken: paymentMethodToken}, keyIsDefault: boolStringTrue, keyConfirm: true}, want: "is_default must be a boolean"},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeAccountPaymentMethodCreateTool(cfg)
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid input should be an error result")
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, testCase.want, "response should describe validation error")
 			})
 		}
 	})

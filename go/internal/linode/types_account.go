@@ -210,6 +210,13 @@ type AccountPaymentMethod struct {
 	Data      map[string]any `json:"data"`
 }
 
+// CreateAccountPaymentMethodRequest contains the required fields for POST /account/payment-methods.
+type CreateAccountPaymentMethodRequest struct {
+	Type      string         `json:"type"`
+	Data      map[string]any `json:"data"`
+	IsDefault bool           `json:"is_default"`
+}
+
 // CreatedOAuthClient represents the response from creating an OAuth client.
 type CreatedOAuthClient struct {
 	ID          string `json:"id"`
