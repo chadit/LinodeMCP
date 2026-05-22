@@ -1066,6 +1066,93 @@ func TestClientListAccountAvailabilityAPIError(t *testing.T) {
 	assert.Equal(t, "forbidden", apiErr.Message)
 }
 
+// TestClientListAccountOAuthClientsSuccess verifies ListAccountOAuthClients sends a GET
+// request to /account/oauth-clients with pagination query parameters.
+func TestClientListAccountOAuthClientsSuccess(t *testing.T) {
+	t.Parallel()
+
+	clients := linode.PaginatedResponse[linode.OAuthClient]{
+		Data: []linode.OAuthClient{{ID: "2737bf16b39ab5d7b4a1", Label: "example-client", RedirectURI: "https://example.com/oauth/callback", Status: "active", ThumbnailURL: "https://example.com/icon.png"}},
+		Page: 2, Pages: 3, Results: 75,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/oauth-clients", r.URL.Path, "request path should be /account/oauth-clients")
+		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(clients), "encoding oauth clients response should not fail")
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.ListAccountOAuthClients(t.Context(), 2, 25)
+
+	require.NoError(t, err, "ListAccountOAuthClients should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, 2, result.Page)
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, "example-client", result.Data[0].Label)
+	assert.Equal(t, "https://example.com/oauth/callback", result.Data[0].RedirectURI)
+}
+
+// TestClientListAccountOAuthClientsAPIError verifies ListAccountOAuthClients propagates API errors.
+func TestClientListAccountOAuthClientsAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/account/oauth-clients", r.URL.Path, "request path should be /account/oauth-clients")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "forbidden"}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.ListAccountOAuthClients(t.Context(), 0, 0)
+
+	require.Error(t, err, "ListAccountOAuthClients should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, "forbidden", apiErr.Message)
+}
+
+// TestClientListAccountOAuthClientsRetriesTransientError verifies the read-only list retries transient failures.
+func TestClientListAccountOAuthClientsRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/account/oauth-clients", r.URL.Path, "request path should be /account/oauth-clients")
+
+		if attempts.Add(1) == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "temporary upstream failure"}}}))
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.OAuthClient]{Data: []linode.OAuthClient{{ID: "2737bf16b39ab5d7b4a1", Label: "example-client"}}, Page: 1, Pages: 1, Results: 1}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	result, err := client.ListAccountOAuthClients(t.Context(), 0, 0)
+
+	require.NoError(t, err, "ListAccountOAuthClients should succeed after retry")
+	require.NotNil(t, result, "result should not be nil")
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, int32(2), attempts.Load(), "read-only list should retry one transient failure")
+}
+
 // TestClientListAccountBetasSuccess verifies ListAccountBetas sends a GET
 // request to /account/betas with pagination query parameters.
 func TestClientListAccountBetasSuccess(t *testing.T) {

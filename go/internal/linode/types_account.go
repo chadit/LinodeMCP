@@ -192,6 +192,15 @@ type AccountInvoiceItem struct {
 	UnitPrice float64 `json:"unit_price"`
 }
 
+// OAuthClient represents an OAuth client registered on the account.
+type OAuthClient struct {
+	ID           string `json:"id"`
+	Label        string `json:"label"`
+	RedirectURI  string `json:"redirect_uri"`
+	Status       string `json:"status"`
+	ThumbnailURL string `json:"thumbnail_url"`
+}
+
 // ChildAccount represents a child-level account available to a parent account.
 type ChildAccount struct {
 	ActiveSince       string                 `json:"active_since"`

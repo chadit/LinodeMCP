@@ -17,6 +17,8 @@ const (
 	accountAvailabilityPageSizeMax    = 500
 	accountBetasPageSizeMin           = 25
 	accountBetasPageSizeMax           = 500
+	accountOAuthClientsPageSizeMin    = 25
+	accountOAuthClientsPageSizeMax    = 500
 	accountMaintenancePageSizeMin     = 25
 	accountMaintenancePageSizeMax     = 500
 	accountNotificationsPageSizeMin   = 25
@@ -206,6 +208,22 @@ func NewLinodeAccountInvoiceItemsTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
 		},
 		handleLinodeAccountInvoiceItemsRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeAccountOAuthClientsTool creates a tool for listing OAuth clients registered on the account.
+func NewLinodeAccountOAuthClientsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_oauth_clients",
+		"Lists OAuth clients registered on the account.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		},
+		handleLinodeAccountOAuthClientsRequest,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -575,6 +593,41 @@ func accountBetasPaginationFromTool(request *mcp.CallToolRequest) (int, int, str
 	}
 
 	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountBetasPageSizeMin, accountBetasPageSizeMax)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	return page, pageSize, ""
+}
+
+func handleLinodeAccountOAuthClientsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	page, pageSize, validationMessage := accountOAuthClientsPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	clients, listFailure := client.ListAccountOAuthClients(ctx, page, pageSize)
+	if listFailure == nil {
+		return MarshalToolResponse(clients)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_account_oauth_clients: " + listFailure.Error()), nil
+}
+
+func accountOAuthClientsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
+	args := request.GetArguments()
+
+	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountOAuthClientsPageSizeMin, accountOAuthClientsPageSizeMax)
 	if validationMessage != "" {
 		return 0, 0, validationMessage
 	}
