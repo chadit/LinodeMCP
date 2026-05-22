@@ -16,6 +16,7 @@ const (
 	toolInstanceCreate    = "linode_instance_create"
 	toolVolumesList       = "linode_volume_list"
 	toolBucketAccessAllow = "linode_object_storage_bucket_access_allow"
+	toolAccountPaymentGet = "linode_account_payment_get"
 )
 
 // toolNames extracts the registered tool name for each entry on the server.
@@ -50,6 +51,8 @@ func TestNewDefaultProfileFiltersToReadAndMeta(t *testing.T) {
 	names := toolNames(srv)
 	assert.Contains(t, names, toolInstancesList,
 		"default profile must expose read tools like %s", toolInstancesList)
+	assert.Contains(t, names, toolAccountPaymentGet,
+		"default profile must expose read tools like %s", toolAccountPaymentGet)
 	assert.NotContains(t, names, toolInstanceCreate,
 		"default profile must not expose write tools like %s", toolInstanceCreate)
 	assert.NotContains(t, names, toolBucketAccessAllow,

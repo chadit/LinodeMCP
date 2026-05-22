@@ -31,6 +31,7 @@ const (
 	accountLoginsPageSizeMin          = 25
 	accountLoginsPageSizeMax          = 500
 	maxAccountLoginIDFromJSON         = 9007199254740991
+	maxAccountPaymentIDFromJSON       = 9007199254740991
 	accountInvoicesPageSizeMin        = 25
 	accountInvoicesPageSizeMax        = 500
 	accountPaymentsPageSizeMin        = 25
@@ -38,6 +39,7 @@ const (
 	accountInvoiceItemsPageSizeMin    = 25
 	accountInvoiceItemsPageSizeMax    = 500
 	errAccountInvoiceIDPositive       = "invoice_id must be a positive integer"
+	errAccountPaymentIDPositive       = "payment_id must be a positive integer"
 	errAccountLoginIDPositive         = "login_id must be a positive integer"
 	errLabelRequired                  = "label is required"
 	errRedirectURIRequired            = "redirect_uri is required"
@@ -201,6 +203,22 @@ func NewLinodeAccountPaymentsTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
 		},
 		handleLinodeAccountPaymentsRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeAccountPaymentGetTool creates a tool for retrieving one account payment.
+func NewLinodeAccountPaymentGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_payment_get",
+		"Gets one payment made on the authenticated account by ID.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("payment_id", mcp.Required(),
+				mcp.Description("Payment ID to retrieve.")),
+		},
+		handleLinodeAccountPaymentGetRequest,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -1568,6 +1586,49 @@ func accountPaymentsPaginationFromTool(request *mcp.CallToolRequest) (int, int, 
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeAccountPaymentGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	paymentID, validationMessage := accountPaymentIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	payment, getFailure := client.GetAccountPayment(ctx, paymentID)
+	if getFailure == nil {
+		return MarshalToolResponse(payment)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_account_payment_get: " + getFailure.Error()), nil
+}
+
+func accountPaymentIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	raw, exists := request.GetArguments()["payment_id"]
+	if !exists {
+		return 0, "payment_id is required"
+	}
+
+	switch value := raw.(type) {
+	case int:
+		if value <= 0 {
+			return 0, errAccountPaymentIDPositive
+		}
+
+		return value, ""
+	case float64:
+		if value <= 0 || value > maxAccountPaymentIDFromJSON || value != float64(int64(value)) {
+			return 0, errAccountPaymentIDPositive
+		}
+
+		return int(value), ""
+	default:
+		return 0, errAccountPaymentIDPositive
+	}
 }
 
 func handleLinodeAccountPaymentCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

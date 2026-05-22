@@ -59,6 +59,7 @@ const (
 	keyLastFour        = "last_four"
 	keyEventID         = "event_id"
 	keyPaymentMethodID = "payment_method_id"
+	keyPaymentID       = "payment_id"
 
 	// Tool-specific resource ID keys.
 	keyLinodeID       = "linode_id"
@@ -217,6 +218,7 @@ const (
 	errPaymentMethodIDNonEmpty     = "payment_method_id must be a non-empty string"
 	errPaymentMethodIDNoSeparators = "payment_method_id must not contain path separators"
 	errPaymentMethodIDPositive     = "payment_method_id must be a positive integer"
+	errPaymentIDPositive           = "payment_id must be a positive integer"
 	errRegionIDSlug                = "lowercase region slug"
 	errBetaIDRequired              = "id is required"
 	errBetaIDNonEmpty              = "id must be a non-empty string"

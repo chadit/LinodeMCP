@@ -3842,6 +3842,132 @@ func TestLinodeAccountPaymentsTool(t *testing.T) {
 	})
 }
 
+func TestLinodeAccountPaymentGetTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountPaymentGetTool(cfg)
+
+		assert.Equal(t, "linode_account_payment_get", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, keyPaymentID, "schema should include payment_id")
+		assert.NotContains(t, props, keyConfirm, "read-only get tool must not require confirm")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		payment := linode.AccountPayment{ID: 654, Date: "2024-02-01T00:00:00", USD: 20.25}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/account/payments/654", r.URL.Path, "request path should include payment ID")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(payment))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeAccountPaymentGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyPaymentID: 654})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "654", "response should contain payment ID")
+		assert.Contains(t, textContent.Text, "20.25", "response should contain payment amount")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/account/payments/654", r.URL.Path, "request path should include payment ID")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeAccountPaymentGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyPaymentID: 654})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		assertErrorContains(t, result, "Failed to retrieve linode_account_payment_get")
+		assertErrorContains(t, result, errForbidden)
+	})
+
+	t.Run("invalid payment_id rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name string
+			args map[string]any
+			want string
+		}{
+			{name: "missing payment_id", args: map[string]any{}, want: "payment_id is required"},
+			{name: "payment_id zero", args: map[string]any{keyPaymentID: 0}, want: errPaymentIDPositive},
+			{name: "payment_id fractional", args: map[string]any{keyPaymentID: 1.5}, want: errPaymentIDPositive},
+			{name: "payment_id oversized", args: map[string]any{keyPaymentID: 9007199254740992.0}, want: errPaymentIDPositive},
+			{name: "payment_id string slash", args: map[string]any{keyPaymentID: "1/2"}, want: errPaymentIDPositive},
+			{name: "payment_id string query", args: map[string]any{keyPaymentID: "1?x=2"}, want: errPaymentIDPositive},
+			{name: caseDotTraversal, args: map[string]any{keyPaymentID: pathTraversalValue}, want: errPaymentIDPositive},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeAccountPaymentGetTool(cfg)
+
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid payment_id should be an error result")
+				assertErrorContains(t, result, testCase.want)
+			})
+		}
+	})
+}
+
 func TestLinodeAccountInvoicesTool(t *testing.T) {
 	t.Parallel()
 
