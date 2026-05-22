@@ -288,6 +288,23 @@ func NewLinodeAccountPaymentMethodCreateTool(cfg *config.Config) (mcp.Tool, prof
 	return tool, profiles.CapAdmin, handler
 }
 
+// NewLinodeAccountPaymentMethodDeleteTool creates a tool for deleting one payment method.
+func NewLinodeAccountPaymentMethodDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_payment_method_delete",
+		"Deletes a payment method from the authenticated account.",
+		[]mcp.ToolOption{
+			mcp.WithString("payment_method_id", mcp.Required(),
+				mcp.Description("Payment method ID.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm payment method deletion.")),
+		},
+		handleLinodeAccountPaymentMethodDeleteRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
 // NewLinodeAccountOAuthClientGetTool creates a tool for retrieving one OAuth client.
 func NewLinodeAccountOAuthClientGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -929,6 +946,39 @@ func createAccountPaymentMethod(ctx context.Context, client *linode.Client, req 
 	}
 
 	return method, ""
+}
+
+func handleLinodeAccountPaymentMethodDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This deletes a payment method. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	paymentMethodID, validationMessage := accountPaymentMethodIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	deleteFailureMessage := deleteAccountPaymentMethod(ctx, client, paymentMethodID)
+	if deleteFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to delete linode_account_payment_method_delete: " + deleteFailureMessage), nil
+	}
+
+	return MarshalToolResponse(struct {
+		Message string `json:"message"`
+	}{Message: "Payment method deleted successfully"})
+}
+
+func deleteAccountPaymentMethod(ctx context.Context, client *linode.Client, paymentMethodID string) string {
+	if err := client.DeleteAccountPaymentMethod(ctx, paymentMethodID); err != nil {
+		return err.Error()
+	}
+
+	return ""
 }
 
 func handleLinodeAccountOAuthClientGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

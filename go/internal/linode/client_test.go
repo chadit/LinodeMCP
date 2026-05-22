@@ -2387,6 +2387,86 @@ func TestClientGetAccountPaymentMethodRetriesTransientError(t *testing.T) {
 	assert.Equal(t, int32(2), requestCount.Load(), "read-only GET should retry once")
 }
 
+func TestClientDeleteAccountPaymentMethodSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, "/account/payment-methods/123", r.URL.Path, "request path should include payment method id")
+		assert.Empty(t, r.URL.RawQuery, "delete request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	err := client.DeleteAccountPaymentMethod(t.Context(), "123")
+
+	require.NoError(t, err, "DeleteAccountPaymentMethod should succeed on 200 response")
+}
+
+func TestClientDeleteAccountPaymentMethodEscapesID(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/account/payment-methods/123%2F456%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	err := client.DeleteAccountPaymentMethod(t.Context(), "123/456?query")
+
+	require.NoError(t, err, "DeleteAccountPaymentMethod should escape path parameters")
+}
+
+func TestClientDeleteAccountPaymentMethodAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, "/account/payment-methods/123", r.URL.Path, "request path should include payment method id")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	err := client.DeleteAccountPaymentMethod(t.Context(), "123")
+
+	require.Error(t, err, "DeleteAccountPaymentMethod should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Contains(t, apiErr.Message, errForbidden)
+}
+
+func TestClientDeleteAccountPaymentMethodDoesNotRetryTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	err := client.DeleteAccountPaymentMethod(t.Context(), "123")
+
+	require.Error(t, err, "DeleteAccountPaymentMethod should surface transient failures")
+	assert.Equal(t, int32(1), requestCount.Load(), "destructive DELETE should not be retried")
+}
+
 func TestClientCreateAccountPaymentMethodSuccess(t *testing.T) {
 	t.Parallel()
 

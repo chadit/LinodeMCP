@@ -421,6 +421,7 @@ func TestCategoriesIncludesAccountPaymentMethodsInCore(t *testing.T) {
 	assert.Contains(t, profiles.Categories("linode_account_payment_methods"), "core")
 	assert.Contains(t, profiles.Categories("linode_account_payment_method_get"), "core")
 	assert.Contains(t, profiles.Categories("linode_account_payment_method_create"), "core")
+	assert.Contains(t, profiles.Categories("linode_account_payment_method_delete"), "core")
 }
 
 func TestCategoriesIncludesAccountOAuthClientsInCore(t *testing.T) {
