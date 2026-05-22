@@ -3040,7 +3040,7 @@ func TestLinodeAccountPaymentMethodsTool(t *testing.T) {
 		t.Parallel()
 
 		methods := linode.PaginatedResponse[linode.AccountPaymentMethod]{
-			Data:    []linode.AccountPaymentMethod{{ID: 123, Type: paymentMethodCreditCard, IsDefault: true, Data: map[string]any{"last_four": paymentMethodLastFour}}},
+			Data:    []linode.AccountPaymentMethod{{ID: 123, Type: paymentMethodCreditCard, IsDefault: true, Data: map[string]any{keyLastFour: paymentMethodLastFour}}},
 			Page:    2,
 			Pages:   3,
 			Results: 75,
@@ -3152,6 +3152,113 @@ func TestLinodeAccountPaymentMethodsTool(t *testing.T) {
 	})
 }
 
+func TestLinodeAccountPaymentMethodGetTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountPaymentMethodGetTool(cfg)
+
+		assert.Equal(t, "linode_account_payment_method_get", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+		assert.Contains(t, tool.InputSchema.Properties, keyPaymentMethodID, "schema should include payment_method_id")
+		assert.NotContains(t, tool.InputSchema.Properties, keyConfirm, "read-only get tool must not require confirm")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/account/payment-methods/123", r.URL.Path, "request path should include payment method id")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountPaymentMethod{ID: 123, Type: paymentMethodCreditCard, IsDefault: true, Data: map[string]any{keyLastFour: paymentMethodLastFour}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountPaymentMethodGetTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyPaymentMethodID: paymentMethodID})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, paymentMethodCreditCard, "response should contain payment method type")
+		assert.Contains(t, textContent.Text, paymentMethodLastFour, "response should contain payment method details")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/account/payment-methods/123", r.URL.Path, "request path should include payment method id")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountPaymentMethodGetTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyPaymentMethodID: paymentMethodID})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		assertErrorContains(t, result, "Failed to retrieve linode_account_payment_method_get")
+		assertErrorContains(t, result, errForbidden)
+	})
+
+	t.Run("invalid payment_method_id rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name string
+			args map[string]any
+			want string
+		}{
+			{name: caseMissing, args: map[string]any{}, want: errPaymentMethodIDRequired},
+			{name: caseEmpty, args: map[string]any{keyPaymentMethodID: ""}, want: errPaymentMethodIDNonEmpty},
+			{name: caseNumeric, args: map[string]any{keyPaymentMethodID: 123}, want: errPaymentMethodIDNonEmpty},
+			{name: caseSlash, args: map[string]any{keyPaymentMethodID: paymentMethodIDSlash}, want: errPaymentMethodIDNoSeparators},
+			{name: caseQuery, args: map[string]any{keyPaymentMethodID: paymentMethodIDQuery}, want: errPaymentMethodIDNoSeparators},
+			{name: caseDotTraversal, args: map[string]any{keyPaymentMethodID: pathTraversalValue}, want: errPaymentMethodIDNoSeparators},
+			{name: "alpha", args: map[string]any{keyPaymentMethodID: idAbc123}, want: errPaymentMethodIDPositive},
+			{name: "zero", args: map[string]any{keyPaymentMethodID: "0"}, want: errPaymentMethodIDPositive},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeAccountPaymentMethodGetTool(cfg)
+				req := createRequestWithArgs(t, testCase.args)
+
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid payment_method_id should be an error result")
+				assertErrorContains(t, result, testCase.want)
+			})
+		}
+	})
+}
+
 func TestLinodeAccountPaymentMethodCreateTool(t *testing.T) {
 	t.Parallel()
 
@@ -3194,7 +3301,7 @@ func TestLinodeAccountPaymentMethodCreateTool(t *testing.T) {
 			assert.Equal(t, map[string]any{keyToken: paymentMethodToken}, body[keyData])
 
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountPaymentMethod{ID: 321, Type: paymentMethodCreditCard, IsDefault: true, Data: map[string]any{"last_four": paymentMethodLastFour}}))
+			assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountPaymentMethod{ID: 321, Type: paymentMethodCreditCard, IsDefault: true, Data: map[string]any{keyLastFour: paymentMethodLastFour}}))
 		}))
 		defer srv.Close()
 

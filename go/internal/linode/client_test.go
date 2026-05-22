@@ -2199,7 +2199,7 @@ func TestClientListAccountPaymentMethodsSuccess(t *testing.T) {
 			ID:        123,
 			Type:      paymentMethodCreditCard,
 			IsDefault: true,
-			Data:      map[string]any{"last_four": "1111"},
+			Data:      map[string]any{keyLastFour: "1111"},
 		}},
 		Page:    2,
 		Pages:   4,
@@ -2294,11 +2294,104 @@ func TestClientListAccountPaymentMethodsRetriesTransientError(t *testing.T) {
 	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
+func TestClientGetAccountPaymentMethodSuccess(t *testing.T) {
+	t.Parallel()
+
+	want := linode.AccountPaymentMethod{ID: 123, Type: paymentMethodCreditCard, IsDefault: true, Data: map[string]any{keyLastFour: "1111"}}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/payment-methods/123", r.URL.Path, "request path should include payment method id")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(want))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	got, err := client.GetAccountPaymentMethod(t.Context(), "123")
+
+	require.NoError(t, err, "GetAccountPaymentMethod should succeed on 200 response")
+	require.NotNil(t, got, "result should not be nil")
+	assert.Equal(t, want, *got)
+}
+
+func TestClientGetAccountPaymentMethodEscapesID(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/account/payment-methods/123%2F456%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountPaymentMethod{ID: 123, Type: paymentMethodCreditCard}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetAccountPaymentMethod(t.Context(), "123/456?query")
+
+	require.NoError(t, err, "GetAccountPaymentMethod should escape path parameters")
+}
+
+func TestClientGetAccountPaymentMethodAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/payment-methods/123", r.URL.Path, "request path should include payment method id")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetAccountPaymentMethod(t.Context(), "123")
+
+	require.Error(t, err, "GetAccountPaymentMethod should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Contains(t, apiErr.Message, errForbidden)
+}
+
+func TestClientGetAccountPaymentMethodRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempt := requestCount.Add(1)
+		if attempt == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountPaymentMethod{ID: 123, Type: paymentMethodCreditCard}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	got, err := client.GetAccountPaymentMethod(t.Context(), "123")
+
+	require.NoError(t, err, "GetAccountPaymentMethod should succeed after retry")
+	require.NotNil(t, got, "result should not be nil")
+	assert.Equal(t, 123, got.ID)
+	assert.Equal(t, int32(2), requestCount.Load(), "read-only GET should retry once")
+}
+
 func TestClientCreateAccountPaymentMethodSuccess(t *testing.T) {
 	t.Parallel()
 
 	request := &linode.CreateAccountPaymentMethodRequest{Type: paymentMethodCreditCard, Data: map[string]any{keyToken: paymentMethodToken}, IsDefault: true}
-	created := linode.AccountPaymentMethod{ID: 321, Type: paymentMethodCreditCard, IsDefault: true, Data: map[string]any{"last_four": "1111"}}
+	created := linode.AccountPaymentMethod{ID: 321, Type: paymentMethodCreditCard, IsDefault: true, Data: map[string]any{keyLastFour: "1111"}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")

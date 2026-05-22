@@ -254,6 +254,22 @@ func NewLinodeAccountPaymentMethodsTool(cfg *config.Config) (mcp.Tool, profiles.
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeAccountPaymentMethodGetTool creates a tool for retrieving one payment method.
+func NewLinodeAccountPaymentMethodGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_payment_method_get",
+		"Gets one payment method for the authenticated account.",
+		[]mcp.ToolOption{
+			mcp.WithString("payment_method_id", mcp.Required(),
+				mcp.Description("Payment method ID.")),
+		},
+		handleLinodeAccountPaymentMethodGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeAccountPaymentMethodCreateTool creates a tool for adding a payment method to the account.
 func NewLinodeAccountPaymentMethodCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -812,6 +828,48 @@ func accountPaymentMethodsPaginationFromTool(request *mcp.CallToolRequest) (int,
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeAccountPaymentMethodGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	paymentMethodID, validationMessage := accountPaymentMethodIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	method, getFailure := client.GetAccountPaymentMethod(ctx, paymentMethodID)
+	if getFailure == nil {
+		return MarshalToolResponse(method)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_account_payment_method_get: " + getFailure.Error()), nil
+}
+
+func accountPaymentMethodIDFromTool(request *mcp.CallToolRequest) (string, string) {
+	raw, exists := request.GetArguments()["payment_method_id"]
+	if !exists {
+		return "", "payment_method_id is required"
+	}
+
+	paymentMethodID, ok := raw.(string)
+	if !ok || strings.TrimSpace(paymentMethodID) == "" {
+		return "", "payment_method_id must be a non-empty string"
+	}
+
+	if paymentMethodID != strings.TrimSpace(paymentMethodID) || strings.Contains(paymentMethodID, "/") || strings.Contains(paymentMethodID, "?") || strings.Contains(paymentMethodID, "..") {
+		return "", "payment_method_id must not contain path separators, query separators, or traversal segments"
+	}
+
+	id, err := strconv.Atoi(paymentMethodID)
+	if err != nil || id <= 0 {
+		return "", "payment_method_id must be a positive integer"
+	}
+
+	return paymentMethodID, ""
 }
 
 func handleLinodeAccountPaymentMethodCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
