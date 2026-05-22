@@ -283,6 +283,22 @@ func NewLinodeAccountOAuthClientUpdateTool(cfg *config.Config) (mcp.Tool, profil
 	return tool, profiles.CapAdmin, handler
 }
 
+// NewLinodeAccountOAuthClientDeleteTool creates a tool for deleting one OAuth client.
+func NewLinodeAccountOAuthClientDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_oauth_client_delete",
+		"Deletes one account OAuth client by ID.",
+		[]mcp.ToolOption{
+			mcp.WithString("client_id", mcp.Required(), mcp.Description("OAuth client ID.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm OAuth client deletion.")),
+		},
+		handleLinodeAccountOAuthClientDeleteRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
 // NewLinodeAccountChildAccountsTool creates a tool for listing child-level accounts.
 func NewLinodeAccountChildAccountsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -807,6 +823,44 @@ func updateOAuthClient(ctx context.Context, client *linode.Client, clientID stri
 	}
 
 	return oauthClient, ""
+}
+
+func handleLinodeAccountOAuthClientDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This deletes an OAuth client. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	clientID, validationMessage := accountOAuthClientIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	deleteFailureMessage := deleteOAuthClient(ctx, client, clientID)
+	if deleteFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to delete linode_account_oauth_client_delete: " + deleteFailureMessage), nil
+	}
+
+	return MarshalToolResponse(struct {
+		Message  string `json:"message"`
+		ClientID string `json:"client_id"`
+	}{
+		Message:  "OAuth client deleted successfully",
+		ClientID: clientID,
+	})
+}
+
+func deleteOAuthClient(ctx context.Context, client *linode.Client, clientID string) string {
+	deleteFailure := client.DeleteAccountOAuthClient(ctx, clientID)
+	if deleteFailure != nil {
+		return deleteFailure.Error()
+	}
+
+	return ""
 }
 
 func oauthClientCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateOAuthClientRequest, string) {

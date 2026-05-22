@@ -284,6 +284,23 @@ func (c *Client) httpUpdateOAuthClient(ctx context.Context, clientID string, req
 	return &client, nil
 }
 
+// httpDeleteAccountOAuthClient deletes one OAuth client by ID.
+func (c *Client) httpDeleteAccountOAuthClient(ctx context.Context, clientID string) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountOAuthClients + "/" + url.PathEscape(clientID)
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteAccountOAuthClient", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	return c.handleResponse(resp, nil)
+}
+
 // httpListAccountEvents retrieves account events.
 func (c *Client) httpListAccountEvents(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountEvent], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

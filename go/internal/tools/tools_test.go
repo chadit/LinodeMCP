@@ -39,6 +39,12 @@ const (
 	keyStatus                        = "status"
 	keyClientID                      = "client_id"
 	oauthClientID                    = "client-123"
+	invalidClientIDSlash             = "client/123"
+	invalidClientIDQuery             = "client?123"
+	caseClientIDSlash                = "client_id with slash"
+	caseClientIDQuerySeparator       = "client_id with query separator"
+	errClientIDRequired              = "client_id is required"
+	errClientIDNonEmpty              = "client_id must be a non-empty string"
 	errClientIDNoSeparators          = "client_id must not contain path separators"
 	oauthClientLabel                 = "my app"
 	oauthClientRedirectURI           = "https://example.com/callback"
@@ -2049,11 +2055,11 @@ func TestLinodeAccountOAuthClientGetTool(t *testing.T) {
 			args map[string]any
 			want string
 		}{
-			{name: caseMissing, args: map[string]any{}, want: "client_id is required"},
-			{name: "empty client_id", args: map[string]any{keyClientID: ""}, want: "client_id must be a non-empty string"},
-			{name: "numeric client_id", args: map[string]any{keyClientID: 123}, want: "client_id must be a non-empty string"},
-			{name: "client_id with slash", args: map[string]any{keyClientID: "client/123"}, want: errClientIDNoSeparators},
-			{name: "client_id with query separator", args: map[string]any{keyClientID: "client?123"}, want: errClientIDNoSeparators},
+			{name: caseMissing, args: map[string]any{}, want: errClientIDRequired},
+			{name: "empty client_id", args: map[string]any{keyClientID: ""}, want: errClientIDNonEmpty},
+			{name: "numeric client_id", args: map[string]any{keyClientID: 123}, want: errClientIDNonEmpty},
+			{name: caseClientIDSlash, args: map[string]any{keyClientID: invalidClientIDSlash}, want: errClientIDNoSeparators},
+			{name: caseClientIDQuerySeparator, args: map[string]any{keyClientID: invalidClientIDQuery}, want: errClientIDNoSeparators},
 			{name: caseDotTraversal, args: map[string]any{keyClientID: pathTraversalValue}, want: errClientIDNoSeparators},
 		}
 
@@ -2143,9 +2149,9 @@ func TestLinodeAccountOAuthClientUpdateTool(t *testing.T) {
 			args map[string]any
 			want string
 		}{
-			{name: caseMissing, args: map[string]any{keyConfirm: true, keyLabel: oauthClientLabel}, want: "client_id is required"},
-			{name: "client_id with slash", args: map[string]any{keyClientID: "client/123", keyLabel: oauthClientLabel, keyConfirm: true}, want: errClientIDNoSeparators},
-			{name: "client_id with query separator", args: map[string]any{keyClientID: "client?123", keyLabel: oauthClientLabel, keyConfirm: true}, want: errClientIDNoSeparators},
+			{name: caseMissing, args: map[string]any{keyConfirm: true, keyLabel: oauthClientLabel}, want: errClientIDRequired},
+			{name: caseClientIDSlash, args: map[string]any{keyClientID: invalidClientIDSlash, keyLabel: oauthClientLabel, keyConfirm: true}, want: errClientIDNoSeparators},
+			{name: caseClientIDQuerySeparator, args: map[string]any{keyClientID: invalidClientIDQuery, keyLabel: oauthClientLabel, keyConfirm: true}, want: errClientIDNoSeparators},
 			{name: caseDotTraversal, args: map[string]any{keyClientID: pathTraversalValue, keyLabel: oauthClientLabel, keyConfirm: true}, want: errClientIDNoSeparators},
 			{name: "no update fields", args: map[string]any{keyClientID: oauthClientID, keyConfirm: true}, want: "at least one of label, redirect_uri, or public is required"},
 			{name: "blank label", args: map[string]any{keyClientID: oauthClientID, keyLabel: blankString, keyConfirm: true}, want: errLabelRequired},
@@ -2238,6 +2244,152 @@ func TestLinodeAccountOAuthClientUpdateTool(t *testing.T) {
 		require.NotNil(t, result, "result should not be nil")
 		assert.True(t, result.IsError, "API failure should be an error result")
 		assertErrorContains(t, result, "Failed to update linode_account_oauth_client_update")
+		assertErrorContains(t, result, errForbidden)
+	})
+}
+
+// End-to-end verification of account OAuth client deletion.
+func TestLinodeAccountOAuthClientDeleteTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountOAuthClientDeleteTool(cfg)
+
+		assert.Equal(t, "linode_account_oauth_client_delete", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapAdmin, capability, "OAuth client deletion should be CapAdmin")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, keyClientID, "schema should include client_id")
+		assert.Contains(t, props, keyConfirm, "schema should include confirm")
+	})
+
+	t.Run("confirm required before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name    string
+			confirm any
+			include bool
+		}{
+			{name: caseMissing},
+			{name: caseFalse, confirm: false, include: true},
+			{name: caseString, confirm: boolStringTrue, include: true},
+			{name: caseNumeric, confirm: 1, include: true},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeAccountOAuthClientDeleteTool(cfg)
+
+				args := map[string]any{keyClientID: oauthClientID}
+				if testCase.include {
+					args[keyConfirm] = testCase.confirm
+				}
+
+				req := createRequestWithArgs(t, args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid confirm should be an error result")
+				assertErrorContains(t, result, "confirm=true")
+			})
+		}
+	})
+
+	t.Run("invalid client_id rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name string
+			args map[string]any
+			want string
+		}{
+			{name: caseMissing, args: map[string]any{keyConfirm: true}, want: errClientIDRequired},
+			{name: "empty client_id", args: map[string]any{keyClientID: "", keyConfirm: true}, want: errClientIDNonEmpty},
+			{name: "numeric client_id", args: map[string]any{keyClientID: 123, keyConfirm: true}, want: errClientIDNonEmpty},
+			{name: caseClientIDSlash, args: map[string]any{keyClientID: invalidClientIDSlash, keyConfirm: true}, want: errClientIDNoSeparators},
+			{name: caseClientIDQuerySeparator, args: map[string]any{keyClientID: invalidClientIDQuery, keyConfirm: true}, want: errClientIDNoSeparators},
+			{name: caseDotTraversal, args: map[string]any{keyClientID: pathTraversalValue, keyConfirm: true}, want: errClientIDNoSeparators},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeAccountOAuthClientDeleteTool(cfg)
+				req := createRequestWithArgs(t, testCase.args)
+
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid client_id should be an error result")
+				assertErrorContains(t, result, testCase.want)
+			})
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			assert.Equal(t, "/account/oauth-clients/client-123", r.URL.Path, "request path should include client id")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			assert.Equal(t, http.NoBody, r.Body, "DELETE request should not send a body")
+			w.Header().Set("Content-Type", "application/json")
+			_, writeErr := w.Write([]byte(`{}`))
+			assert.NoError(t, writeErr)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountOAuthClientDeleteTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID, keyConfirm: true})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "OAuth client deleted successfully", "response should include success message")
+		assert.Contains(t, textContent.Text, oauthClientID, "response should include client id")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			assert.Equal(t, "/account/oauth-clients/client-123", r.URL.Path, "request path should include client id")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountOAuthClientDeleteTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID, keyConfirm: true})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		assertErrorContains(t, result, "Failed to delete linode_account_oauth_client_delete")
 		assertErrorContains(t, result, errForbidden)
 	})
 }

@@ -247,6 +247,13 @@ func (c *Client) UpdateOAuthClient(ctx context.Context, clientID string, req *Up
 	return c.httpUpdateOAuthClient(ctx, clientID, req)
 }
 
+// DeleteAccountOAuthClient deletes an account OAuth client without retrying the
+// destructive request. Retrying can replay client deletion after a transient
+// error, so this method delegates exactly once.
+func (c *Client) DeleteAccountOAuthClient(ctx context.Context, clientID string) error {
+	return c.httpDeleteAccountOAuthClient(ctx, clientID)
+}
+
 // ListAccountEvents retrieves account events with automatic retry on transient failures.
 func (c *Client) ListAccountEvents(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountEvent], error) {
 	var events *PaginatedResponse[AccountEvent]
