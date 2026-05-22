@@ -254,6 +254,23 @@ func (c *Client) httpCreateAccountEntityTransfer(ctx context.Context, req *Creat
 	return &transfer, nil
 }
 
+// httpDeleteAccountEntityTransfer cancels one account entity transfer by token.
+func (c *Client) httpDeleteAccountEntityTransfer(ctx context.Context, token string) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountEntityTransfers + "/" + url.PathEscape(token)
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteAccountEntityTransfer", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	return c.handleResponse(resp, nil)
+}
+
 // httpGetAccountChildAccount retrieves one child-level account by EUUID.
 func (c *Client) httpGetAccountChildAccount(ctx context.Context, euuid string) (*ChildAccount, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
