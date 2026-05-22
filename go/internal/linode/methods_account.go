@@ -1,6 +1,7 @@
 package linode
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"net/url" // path parameter escaping
@@ -282,6 +283,23 @@ func (c *Client) httpUpdateOAuthClient(ctx context.Context, clientID string, req
 	}
 
 	return &client, nil
+}
+
+// httpUpdateOAuthClientThumbnail updates one OAuth client's thumbnail by ID.
+func (c *Client) httpUpdateOAuthClientThumbnail(ctx context.Context, clientID string, thumbnailPNG []byte) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountOAuthClients + "/" + url.PathEscape(clientID) + "/thumbnail"
+
+	resp, err := c.makeRequestWithContentType(ctx, http.MethodPut, endpoint, bytes.NewReader(thumbnailPNG), contentTypePNG)
+	if err != nil {
+		return &NetworkError{Operation: "UpdateOAuthClientThumbnail", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	return c.handleResponse(resp, nil)
 }
 
 // httpDeleteAccountOAuthClient deletes one OAuth client by ID.
