@@ -240,6 +240,28 @@ func (c *Client) httpListAccountOAuthClients(ctx context.Context, page, pageSize
 	return &clients, nil
 }
 
+// httpGetAccountOAuthClient retrieves one OAuth client by ID.
+func (c *Client) httpGetAccountOAuthClient(ctx context.Context, clientID string) (*OAuthClient, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountOAuthClients + "/" + url.PathEscape(clientID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccountOAuthClient", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var client OAuthClient
+	if err := c.handleResponse(resp, &client); err != nil {
+		return nil, err
+	}
+
+	return &client, nil
+}
+
 // httpListAccountEvents retrieves account events.
 func (c *Client) httpListAccountEvents(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountEvent], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

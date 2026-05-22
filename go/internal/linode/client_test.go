@@ -30,6 +30,11 @@ const (
 	keyErrors                    = "errors"
 	keyReason                    = "reason"
 	errForbidden                 = "forbidden"
+	oauthClientID                = "client-123"
+	oauthClientStatus            = "active"
+	keyRedirectURI               = "redirect_uri"
+	keyThumbnailURL              = "thumbnail_url"
+	oauthClientThumbnailURL      = "https://example.com/icon.png"
 	oauthClientLabel             = "my app"
 	oauthClientRedirectURI       = "https://example.com/callback"
 )
@@ -1075,7 +1080,7 @@ func TestClientListAccountOAuthClientsSuccess(t *testing.T) {
 	t.Parallel()
 
 	clients := linode.PaginatedResponse[linode.OAuthClient]{
-		Data: []linode.OAuthClient{{ID: "2737bf16b39ab5d7b4a1", Label: "example-client", RedirectURI: "https://example.com/oauth/callback", Status: "active", ThumbnailURL: "https://example.com/icon.png"}},
+		Data: []linode.OAuthClient{{ID: "2737bf16b39ab5d7b4a1", Label: "example-client", RedirectURI: "https://example.com/oauth/callback", Status: oauthClientStatus, ThumbnailURL: oauthClientThumbnailURL}},
 		Page: 2, Pages: 3, Results: 75,
 	}
 
@@ -1266,11 +1271,106 @@ func TestClientListAccountBetasRetriesTransientError(t *testing.T) {
 	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
-// TestClientCreateOAuthClientSuccess verifies CreateOAuthClient sends the exact POST request.
+// TestClientGetAccountOAuthClientSuccess verifies GetAccountOAuthClient sends the exact GET request.
+func TestClientGetAccountOAuthClientSuccess(t *testing.T) {
+	t.Parallel()
+
+	want := linode.OAuthClient{ID: oauthClientID, Label: oauthClientLabel, RedirectURI: oauthClientRedirectURI, Status: oauthClientStatus, ThumbnailURL: oauthClientThumbnailURL}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/oauth-clients/"+oauthClientID, r.URL.Path, "request path should include client id")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyID: oauthClientID, keyLabel: oauthClientLabel, keyRedirectURI: oauthClientRedirectURI, keyStatus: oauthClientStatus, keyThumbnailURL: oauthClientThumbnailURL, "secret": "server-secret",
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	got, err := client.GetAccountOAuthClient(t.Context(), oauthClientID)
+
+	require.NoError(t, err, "GetAccountOAuthClient should succeed on 200 response")
+	require.NotNil(t, got, "result should not be nil")
+	assert.Equal(t, want, *got)
+}
+
+func TestClientGetAccountOAuthClientEscapesClientID(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/account/oauth-clients/client%2F123%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.OAuthClient{ID: "client/123?query"}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetAccountOAuthClient(t.Context(), "client/123?query")
+
+	require.NoError(t, err, "GetAccountOAuthClient should escape path parameters")
+}
+
+func TestClientGetAccountOAuthClientAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/oauth-clients/"+oauthClientID, r.URL.Path, "request path should include client id")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetAccountOAuthClient(t.Context(), oauthClientID)
+
+	require.Error(t, err, "GetAccountOAuthClient should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Contains(t, apiErr.Message, errForbidden)
+}
+
+func TestClientGetAccountOAuthClientRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempt := requestCount.Add(1)
+		if attempt == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.OAuthClient{ID: oauthClientID, Label: oauthClientLabel}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	got, err := client.GetAccountOAuthClient(t.Context(), oauthClientID)
+
+	require.NoError(t, err, "GetAccountOAuthClient should succeed after retry")
+	require.NotNil(t, got, "result should not be nil")
+	assert.Equal(t, oauthClientID, got.ID)
+	assert.Equal(t, int32(2), requestCount.Load(), "read-only GET should retry once")
+}
+
 func TestClientCreateOAuthClientSuccess(t *testing.T) {
 	t.Parallel()
 
-	want := linode.CreatedOAuthClient{ID: "client-123", Label: oauthClientLabel, RedirectURI: oauthClientRedirectURI, Secret: "secret-once"}
+	want := linode.CreatedOAuthClient{ID: oauthClientID, Label: oauthClientLabel, RedirectURI: oauthClientRedirectURI, Secret: "secret-once"}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
