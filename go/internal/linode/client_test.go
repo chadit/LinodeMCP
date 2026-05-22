@@ -776,6 +776,118 @@ func TestClientGetAccountAgreementsAPIError(t *testing.T) {
 	assert.Equal(t, "forbidden", apiErr.Message)
 }
 
+// TestClientListAccountNotificationsSuccess verifies ListAccountNotifications sends
+// a GET request to /account/notifications with pagination query parameters.
+func TestClientListAccountNotificationsSuccess(t *testing.T) {
+	t.Parallel()
+
+	when := "2026-05-22T08:00:00"
+	notifications := linode.PaginatedResponse[linode.AccountNotification]{
+		Data: []linode.AccountNotification{{
+			Label:    "Scheduled maintenance",
+			Message:  "Maintenance is scheduled for a Linode.",
+			Severity: "major",
+			Type:     "maintenance",
+			When:     &when,
+			Entity: &linode.AccountNotificationEntity{
+				ID:    float64(123),
+				Label: "example-linode",
+				Type:  accountMaintenanceEntityType,
+				URL:   "/v4/linode/instances/123",
+			},
+		}},
+		Page:    2,
+		Pages:   3,
+		Results: 75,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/notifications", r.URL.Path, "request path should be /account/notifications")
+		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(notifications))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.ListAccountNotifications(t.Context(), 2, 25)
+
+	require.NoError(t, err, "ListAccountNotifications should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, 2, result.Page)
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, "Scheduled maintenance", result.Data[0].Label)
+	assert.Equal(t, "major", result.Data[0].Severity)
+	require.NotNil(t, result.Data[0].Entity)
+	assert.Equal(t, "example-linode", result.Data[0].Entity.Label)
+}
+
+// TestClientListAccountNotificationsAPIError verifies ListAccountNotifications propagates API errors.
+func TestClientListAccountNotificationsAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/notifications", r.URL.Path, "request path should be /account/notifications")
+		assert.Empty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.ListAccountNotifications(t.Context(), 0, 0)
+
+	require.Error(t, err, "ListAccountNotifications should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	require.NotNil(t, apiErr, "APIError should be present")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, "forbidden", apiErr.Message)
+}
+
+// TestClientListAccountNotificationsRetriesTransientError verifies the read-only notifications lookup retries transient failures.
+func TestClientListAccountNotificationsRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			assert.NoError(t, writeErr)
+
+			return
+		}
+
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/notifications", r.URL.Path, "request path should be /account/notifications")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountNotification]{
+			Data: []linode.AccountNotification{{Label: "Scheduled maintenance"}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	result, err := client.ListAccountNotifications(t.Context(), 0, 0)
+
+	require.NoError(t, err, "ListAccountNotifications should succeed after retry")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+}
+
 // TestClientGetAccountAvailabilitySuccess verifies GetAccountAvailability sends
 // a GET request to /account/availability/{regionId} and decodes the response.
 func TestClientGetAccountAvailabilitySuccess(t *testing.T) {

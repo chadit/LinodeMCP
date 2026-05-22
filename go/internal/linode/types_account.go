@@ -100,6 +100,25 @@ type AccountMaintenanceEntity struct {
 	URL   string `json:"url"`
 }
 
+// AccountNotification represents one account notification returned by GET /account/notifications.
+type AccountNotification struct {
+	Entity   *AccountNotificationEntity `json:"entity"`
+	Label    string                     `json:"label"`
+	Message  string                     `json:"message"`
+	Severity string                     `json:"severity"`
+	Type     string                     `json:"type"`
+	Until    *string                    `json:"until"`
+	When     *string                    `json:"when"`
+}
+
+// AccountNotificationEntity identifies the entity attached to an account notification.
+type AccountNotificationEntity struct {
+	ID    any    `json:"id"`
+	Label string `json:"label"`
+	Type  string `json:"type"`
+	URL   string `json:"url"`
+}
+
 // AccountAvailability represents the account service availability for a region.
 type AccountAvailability struct {
 	Available   []string `json:"available"`
