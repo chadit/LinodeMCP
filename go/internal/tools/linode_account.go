@@ -305,6 +305,23 @@ func NewLinodeAccountPaymentMethodDeleteTool(cfg *config.Config) (mcp.Tool, prof
 	return tool, profiles.CapAdmin, handler
 }
 
+// NewLinodeAccountPaymentMethodMakeDefaultTool creates a tool for setting the account default payment method.
+func NewLinodeAccountPaymentMethodMakeDefaultTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_payment_method_make_default",
+		"Sets a payment method as the authenticated account default.",
+		[]mcp.ToolOption{
+			mcp.WithString("payment_method_id", mcp.Required(),
+				mcp.Description("Payment method ID.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm changing the default payment method.")),
+		},
+		handleLinodeAccountPaymentMethodMakeDefaultRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
 // NewLinodeAccountOAuthClientGetTool creates a tool for retrieving one OAuth client.
 func NewLinodeAccountOAuthClientGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -975,6 +992,39 @@ func handleLinodeAccountPaymentMethodDeleteRequest(ctx context.Context, request 
 
 func deleteAccountPaymentMethod(ctx context.Context, client *linode.Client, paymentMethodID string) string {
 	if err := client.DeleteAccountPaymentMethod(ctx, paymentMethodID); err != nil {
+		return err.Error()
+	}
+
+	return ""
+}
+
+func handleLinodeAccountPaymentMethodMakeDefaultRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This changes the default payment method. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	paymentMethodID, validationMessage := accountPaymentMethodIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	makeDefaultFailureMessage := makeAccountPaymentMethodDefault(ctx, client, paymentMethodID)
+	if makeDefaultFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to set linode_account_payment_method_make_default: " + makeDefaultFailureMessage), nil
+	}
+
+	return MarshalToolResponse(struct {
+		Message string `json:"message"`
+	}{Message: "Payment method set as default successfully"})
+}
+
+func makeAccountPaymentMethodDefault(ctx context.Context, client *linode.Client, paymentMethodID string) string {
+	if err := client.MakeAccountPaymentMethodDefault(ctx, paymentMethodID); err != nil {
 		return err.Error()
 	}
 

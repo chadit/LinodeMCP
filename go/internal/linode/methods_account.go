@@ -323,6 +323,22 @@ func (c *Client) httpDeleteAccountPaymentMethod(ctx context.Context, paymentMeth
 	return c.handleResponse(resp, nil)
 }
 
+func (c *Client) httpMakeAccountPaymentMethodDefault(ctx context.Context, paymentMethodID string) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountPaymentMethods + "/" + url.PathEscape(paymentMethodID) + "/make-default"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "MakeAccountPaymentMethodDefault", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	return c.handleResponse(resp, nil)
+}
+
 // httpGetAccountOAuthClient retrieves one OAuth client by ID.
 func (c *Client) httpGetAccountOAuthClient(ctx context.Context, clientID string) (*OAuthClient, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

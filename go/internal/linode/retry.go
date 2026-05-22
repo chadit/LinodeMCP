@@ -262,6 +262,13 @@ func (c *Client) DeleteAccountPaymentMethod(ctx context.Context, paymentMethodID
 	return c.httpDeleteAccountPaymentMethod(ctx, paymentMethodID)
 }
 
+// MakeAccountPaymentMethodDefault changes the default payment method without
+// retrying the mutating request. Retrying can replay the state change after a
+// transient error, so this method delegates exactly once.
+func (c *Client) MakeAccountPaymentMethodDefault(ctx context.Context, paymentMethodID string) error {
+	return c.httpMakeAccountPaymentMethodDefault(ctx, paymentMethodID)
+}
+
 // GetAccountOAuthClient retrieves one OAuth client with automatic retry on transient failures.
 func (c *Client) GetAccountOAuthClient(ctx context.Context, clientID string) (*OAuthClient, error) {
 	var client *OAuthClient

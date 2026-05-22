@@ -133,6 +133,7 @@ const (
 	objectStorageKey                = "TESTKEY00000000EXAMPLE"
 	httpMethodGET                   = "GET"
 	idAbc123                        = "abc-123"
+	caseZero                        = "zero"
 	stageAlpha                      = "alpha"
 	stageBeta                       = "beta"
 	stageGamma                      = "gamma"
