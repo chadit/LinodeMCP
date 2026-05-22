@@ -19,6 +19,10 @@ const (
 	betaExampleOpen      = "example_open"
 	labelExampleOpenBeta = "Example Open Beta"
 
+	// Child account fixture values.
+	childAccountEUUID = "A1BC2DEF-34GH-567I-J890KLMN12O34P56"
+	companyAcme       = "Acme"
+
 	// Common region IDs used in API response fixtures.
 	regionUSEast         = "us-east"
 	serviceLinodes       = "Linodes"

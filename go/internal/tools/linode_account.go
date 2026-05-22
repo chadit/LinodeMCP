@@ -79,6 +79,22 @@ func NewLinodeAccountChildAccountsTool(cfg *config.Config) (mcp.Tool, profiles.C
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeAccountChildAccountGetTool creates a tool for retrieving one child-level account.
+func NewLinodeAccountChildAccountGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_child_account_get",
+		"Gets one child-level account the authenticated account can access.",
+		[]mcp.ToolOption{
+			mcp.WithString("euuid", mcp.Required(),
+				mcp.Description("External unique identifier for the child account.")),
+		},
+		handleLinodeAccountChildAccountGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeAccountBetaGetTool creates a tool for retrieving one enrolled account beta program.
 func NewLinodeAccountBetaGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -278,6 +294,43 @@ func accountChildAccountsPaginationFromTool(request *mcp.CallToolRequest) (int, 
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeAccountChildAccountGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	euuid, validationMessage := accountChildAccountEUUIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	childAccount, getFailure := client.GetAccountChildAccount(ctx, euuid)
+	if getFailure == nil {
+		return MarshalToolResponse(childAccount)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_account_child_account_get: " + getFailure.Error()), nil
+}
+
+func accountChildAccountEUUIDFromTool(request *mcp.CallToolRequest) (string, string) {
+	raw, exists := request.GetArguments()["euuid"]
+	if !exists {
+		return "", "euuid is required"
+	}
+
+	euuid, ok := raw.(string)
+	if !ok || strings.TrimSpace(euuid) == "" {
+		return "", "euuid must be a non-empty string"
+	}
+
+	if euuid != strings.TrimSpace(euuid) || strings.Contains(euuid, "/") || strings.Contains(euuid, "?") || strings.Contains(euuid, "..") {
+		return "", "euuid must not contain path separators, query separators, or traversal segments"
+	}
+
+	return euuid, ""
 }
 
 func handleLinodeAccountBetaGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

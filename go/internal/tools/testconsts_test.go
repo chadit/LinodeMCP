@@ -51,6 +51,7 @@ const (
 	keyErrors         = "errors"
 	keyReason         = "reason"
 	keyBetaID         = "id"
+	keyEUUID          = "euuid"
 
 	// Tool-specific resource ID keys.
 	keyLinodeID       = "linode_id"
@@ -138,12 +139,15 @@ const (
 	boolStringTrue       = "true"
 	betaExampleOpen      = "example_open"
 	labelExampleOpenBeta = "Example Open Beta"
+	childAccountEUUID    = "A1BC2DEF-34GH-567I-J890KLMN12O34P56"
+	companyAcme          = "Acme"
 	emailUpdatedExample  = "updated@example.com"
 	nameUpdatedTest      = "Updated"
 	aclPublicRead        = "public-read"
 	aclPrivate           = "private"
 	errRegionInvalid     = "region must contain only lowercase letters, numbers, and hyphens"
 	pathTraversalValue   = ".."
+	errEUUIDNoSeparators = "euuid must not contain path separators"
 	objectPhotoJPG       = "photo.jpg"
 	filesystemExt4       = "ext4"
 

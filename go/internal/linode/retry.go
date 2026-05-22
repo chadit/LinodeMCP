@@ -188,6 +188,21 @@ func (c *Client) ListAccountChildAccounts(ctx context.Context, page, pageSize in
 	return childAccounts, err
 }
 
+// GetAccountChildAccount retrieves one child-level account with automatic retry on transient failures.
+func (c *Client) GetAccountChildAccount(ctx context.Context, euuid string) (*ChildAccount, error) {
+	var childAccount *ChildAccount
+
+	err := c.executeWithRetry(ctx, "GetAccountChildAccount", func() error {
+		var err error
+
+		childAccount, err = c.httpGetAccountChildAccount(ctx, euuid)
+
+		return err
+	})
+
+	return childAccount, err
+}
+
 // GetAccountBeta retrieves one enrolled account beta program with automatic retry on transient failures.
 func (c *Client) GetAccountBeta(ctx context.Context, betaID string) (*AccountBetaProgram, error) {
 	var beta *AccountBetaProgram
