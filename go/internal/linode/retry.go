@@ -233,6 +233,21 @@ func (c *Client) ListAccountPaymentMethods(ctx context.Context, page, pageSize i
 	return methods, err
 }
 
+// GetAccountPaymentMethod retrieves one account payment method with automatic retry on transient failures.
+func (c *Client) GetAccountPaymentMethod(ctx context.Context, paymentMethodID string) (*AccountPaymentMethod, error) {
+	var method *AccountPaymentMethod
+
+	err := c.executeWithRetry(ctx, "GetAccountPaymentMethod", func() error {
+		var err error
+
+		method, err = c.httpGetAccountPaymentMethod(ctx, paymentMethodID)
+
+		return err
+	})
+
+	return method, err
+}
+
 // CreateAccountPaymentMethod adds a payment method without retrying the
 // mutating request. Retrying can replay payment-method creation after a
 // transient error, so this method delegates exactly once.

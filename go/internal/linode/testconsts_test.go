@@ -18,6 +18,7 @@ const (
 	keyType      = "type"
 	keyToken     = "token"
 	keyIsDefault = "is_default"
+	keyLastFour  = "last_four"
 
 	// Account beta fixture values.
 	betaExampleOpen      = "example_open"
