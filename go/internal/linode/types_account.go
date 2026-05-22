@@ -133,6 +133,19 @@ type AccountInvoice struct {
 	Total float64 `json:"total"`
 }
 
+// AccountInvoiceItem represents one line item on an account invoice.
+type AccountInvoiceItem struct {
+	Amount    float64 `json:"amount"`
+	From      string  `json:"from"`
+	Label     string  `json:"label"`
+	Quantity  int     `json:"quantity"`
+	Tax       float64 `json:"tax"`
+	To        string  `json:"to"`
+	Total     float64 `json:"total"`
+	Type      string  `json:"type"`
+	UnitPrice float64 `json:"unit_price"`
+}
+
 // ChildAccount represents a child-level account available to a parent account.
 type ChildAccount struct {
 	ActiveSince       string                 `json:"active_since"`
