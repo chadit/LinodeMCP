@@ -45,7 +45,7 @@ func TestSQLiteSinkInsertsAndReadsBack(t *testing.T) {
 		Environment:    "prod",
 		Profile:        "operator",
 		Mode:           audit.ModeNormal,
-		Args:           map[string]any{argKeyLabel: "web-1", "region": "us-east"},
+		Args:           map[string]any{argKeyLabel: "web-1", keyRegion: valUSEast},
 		ArgsRedacted:   []string{argKeyToken},
 		Status:         audit.StatusSuccess,
 		LatencyMS:      42,

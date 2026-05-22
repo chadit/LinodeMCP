@@ -60,6 +60,14 @@ func ReadRecent(dir string, query *RecentQuery) ([]Event, error) {
 		limit = MaxRecentLimit
 	}
 
+	return scanMatching(dir, query, limit)
+}
+
+// scanMatching walks the audit directory newest-first, returning up to
+// limit events matching the query. Shared by ReadRecent (which clamps
+// limit to MaxRecentLimit) and the export loader (which allows the
+// larger max_records cap). A missing directory is an empty result.
+func scanMatching(dir string, query *RecentQuery, limit int) ([]Event, error) {
 	root, err := openReadRoot(dir)
 	if err != nil {
 		if errors.Is(err, errAuditDirMissing) {

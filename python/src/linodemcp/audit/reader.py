@@ -64,6 +64,15 @@ def read_recent(directory: str, query: RecentQuery) -> list[Event]:
         limit = DEFAULT_RECENT_LIMIT
     limit = min(limit, MAX_RECENT_LIMIT)
 
+    return scan_matching(directory, query, limit)
+
+
+def scan_matching(directory: str, query: RecentQuery, limit: int) -> list[Event]:
+    """Walk the audit directory newest-first, returning up to ``limit``
+    events matching the query. Shared by :func:`read_recent` (which
+    clamps to MAX_RECENT_LIMIT) and the export loader (which allows the
+    larger max_records cap). A missing directory returns an empty list.
+    """
     base = Path(directory)
     if not base.is_dir():
         return []
@@ -77,7 +86,7 @@ def read_recent(directory: str, query: RecentQuery) -> list[Event]:
         # backwards so the accumulator stays newest-first across the
         # date-descending file order.
         for event in reversed(events):
-            if not _matches(query, event):
+            if not event_matches(query, event):
                 continue
 
             results.append(event)
@@ -114,8 +123,11 @@ def scan_events(
     return events
 
 
-def _matches(query: RecentQuery, event: Event) -> bool:
-    """Report whether an event satisfies every set filter."""
+def event_matches(query: RecentQuery, event: Event) -> bool:
+    """Report whether an event satisfies every set filter. Public so the
+    export loader can apply the same predicate to SQLite-reconstructed
+    events.
+    """
     if not query.include_meta and event.tool_capability == "meta":
         return False
 

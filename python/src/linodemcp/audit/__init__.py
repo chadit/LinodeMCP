@@ -17,6 +17,16 @@ from linodemcp.audit.event import (
     new_event,
     new_event_id,
 )
+from linodemcp.audit.export import (
+    DEFAULT_EXPORT_MAX_RECORDS,
+    EXPORT_FORMAT_CSV,
+    EXPORT_FORMAT_JSON,
+    EXPORT_FORMAT_NDJSON,
+    MAX_EXPORT_RECORDS,
+    UnknownExportFormatError,
+    encode_events,
+    export_events,
+)
 from linodemcp.audit.health import (
     HealthReport,
     SQLiteHealth,
@@ -64,9 +74,14 @@ from linodemcp.audit.summary import (
 __all__ = [
     "ACTIVE_LOG_FILE_NAME",
     "DEFAULT_AUDIT_RETENTION_DAYS",
+    "DEFAULT_EXPORT_MAX_RECORDS",
     "DEFAULT_RECENT_LIMIT",
     "DEFAULT_RETENTION_SWEEP_INTERVAL_SECONDS",
     "EVENT_ID_PREFIX",
+    "EXPORT_FORMAT_CSV",
+    "EXPORT_FORMAT_JSON",
+    "EXPORT_FORMAT_NDJSON",
+    "MAX_EXPORT_RECORDS",
     "MAX_RECENT_LIMIT",
     "REDACTED_VALUE",
     "SYSTEM_AUDIT_DIR",
@@ -88,8 +103,11 @@ __all__ = [
     "Status",
     "SummaryQuery",
     "SummaryRow",
+    "UnknownExportFormatError",
     "UnknownGroupByColumnError",
     "collect_health",
+    "encode_events",
+    "export_events",
     "is_redacted",
     "load_window",
     "new_event",

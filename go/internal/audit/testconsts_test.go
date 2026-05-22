@@ -21,4 +21,9 @@ const (
 	// across the summary tests. Extracted to satisfy goconst.
 	colTool   = "tool"
 	colStatus = "status"
+	// keyRegion and valUSEast are a region arg key/value pair reused
+	// across the export, redaction, and SQLite fixtures. Extracted to
+	// satisfy goconst.
+	keyRegion = "region"
+	valUSEast = "us-east"
 )

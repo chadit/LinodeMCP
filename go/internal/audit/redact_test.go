@@ -60,7 +60,7 @@ func TestRedactRecursesIntoNestedMaps(t *testing.T) {
 		argKeyLabel: "test",
 		"meta": map[string]any{
 			"api_key": "sk-leaked",
-			"region":  "us-east",
+			keyRegion: valUSEast,
 		},
 	}
 
@@ -70,7 +70,7 @@ func TestRedactRecursesIntoNestedMaps(t *testing.T) {
 	require.True(t, ok, "nested object must remain a map")
 	assert.True(t, audit.IsRedacted(nested["api_key"]),
 		"nested api_key must be redacted")
-	assert.Equal(t, "us-east", nested["region"],
+	assert.Equal(t, valUSEast, nested[keyRegion],
 		"nested non-sensitive value passes through")
 	assert.Contains(t, keys, "api_key", "nested key reported in keys list")
 }

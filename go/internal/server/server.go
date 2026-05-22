@@ -821,6 +821,7 @@ func coreToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeAuditRecentTool,
 		tools.NewLinodeAuditSummaryTool,
 		tools.NewLinodeAuditHealthTool,
+		tools.NewLinodeAuditExportTool,
 	})
 }
 

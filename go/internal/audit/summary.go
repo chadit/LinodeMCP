@@ -27,14 +27,21 @@ type SummaryRow struct {
 	Count  int               `json:"count"`
 }
 
+// Column names shared between the summary group-by allowlist and the
+// export CSV header, extracted so neither file repeats the literals.
+const (
+	columnTool   = "tool"
+	columnStatus = "status"
+)
+
 // summaryColumnAccessor returns the field extractor for a groupable
 // column name, plus whether the name is allowed. A switch (rather than
 // a package-level map) keeps the allowlist free of global state.
 func summaryColumnAccessor(name string) (func(*Event) string, bool) {
 	switch name {
-	case "tool":
+	case columnTool:
 		return func(e *Event) string { return e.Tool }, true
-	case "status":
+	case columnStatus:
 		return func(e *Event) string { return string(e.Status) }, true
 	case "capability":
 		return func(e *Event) string { return string(e.ToolCapability) }, true
