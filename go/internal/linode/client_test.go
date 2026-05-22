@@ -1926,6 +1926,109 @@ func TestClientGetAccountInvoiceAPIError(t *testing.T) {
 	assert.Equal(t, "forbidden", apiErr.Message)
 }
 
+// TestClientListAccountInvoiceItemsSuccess verifies ListAccountInvoiceItems sends a GET
+// request to /account/invoices/{invoiceId}/items with pagination query parameters.
+func TestClientListAccountInvoiceItemsSuccess(t *testing.T) {
+	t.Parallel()
+
+	items := linode.PaginatedResponse[linode.AccountInvoiceItem]{
+		Data: []linode.AccountInvoiceItem{{
+			Label:     "Nanode 1GB",
+			Quantity:  1,
+			Total:     5.00,
+			Type:      "linode",
+			UnitPrice: 5.00,
+		}},
+		Page:    2,
+		Pages:   3,
+		Results: 60,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/invoices/12345/items", r.URL.Path, "request path should include invoice id and items")
+		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(items))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.ListAccountInvoiceItems(t.Context(), accountInvoiceID, 2, 25)
+
+	require.NoError(t, err, "ListAccountInvoiceItems should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, 2, result.Page)
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, "Nanode 1GB", result.Data[0].Label)
+	assert.InDelta(t, 5.00, result.Data[0].Total, 0.001)
+}
+
+// TestClientListAccountInvoiceItemsAPIError verifies ListAccountInvoiceItems propagates API errors.
+func TestClientListAccountInvoiceItemsAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/invoices/12345/items", r.URL.Path, "request path should include invoice id and items")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.ListAccountInvoiceItems(t.Context(), accountInvoiceID, 0, 0)
+
+	require.Error(t, err, "ListAccountInvoiceItems should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	require.NotNil(t, apiErr, "APIError should be present")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, "forbidden", apiErr.Message)
+}
+
+// TestClientListAccountInvoiceItemsRetriesTransientError verifies the read-only list retries transient failures.
+func TestClientListAccountInvoiceItemsRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := requestCount.Add(1)
+
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/invoices/12345/items", r.URL.Path, "request path should include invoice id and items")
+
+		if count == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountInvoiceItem]{
+			Data: []linode.AccountInvoiceItem{{Label: "Nanode 1GB", Total: 5.00}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	result, err := client.ListAccountInvoiceItems(t.Context(), accountInvoiceID, 0, 0)
+
+	require.NoError(t, err, "ListAccountInvoiceItems should succeed after retry")
+	require.NotNil(t, result, "result should not be nil")
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+}
+
 // TestClientGetAccountInvoiceRetriesTransientError verifies the read-only lookup retries transient failures.
 func TestClientGetAccountInvoiceRetriesTransientError(t *testing.T) {
 	t.Parallel()

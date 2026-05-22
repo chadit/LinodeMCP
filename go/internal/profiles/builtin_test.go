@@ -411,4 +411,5 @@ func TestCategoriesIncludesAccountInvoicesInCore(t *testing.T) {
 	t.Parallel()
 
 	assert.Contains(t, profiles.Categories("linode_account_invoices"), "core")
+	assert.Contains(t, profiles.Categories("linode_account_invoice_items"), "core")
 }

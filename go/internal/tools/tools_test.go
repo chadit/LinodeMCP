@@ -27,6 +27,8 @@ const (
 	paginationCasePageSizeString     = "page_size string"
 	paginationCasePageSizeFractional = "page_size fractional"
 	paginationMessagePageMustBe      = "page must be"
+	invoiceItemLabel                 = "Nanode 1GB"
+	messageInvoiceIDPositive         = "invoice_id must be a positive integer"
 )
 
 // End-to-end verification of the hello tool.
@@ -1326,6 +1328,130 @@ func TestLinodeAccountChildAccountsTool(t *testing.T) {
 }
 
 // End-to-end verification of account invoice listing.
+func TestLinodeAccountInvoiceItemsTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountInvoiceItemsTool(cfg)
+
+		assert.Equal(t, "linode_account_invoice_items", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, "invoice_id", "schema should include invoice_id")
+		assert.Contains(t, props, keyPage, "schema should include page")
+		assert.Contains(t, props, keyPageSize, "schema should include page_size")
+		assert.NotContains(t, props, keyConfirm, "read-only list tool must not require confirm")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		items := linode.PaginatedResponse[linode.AccountInvoiceItem]{
+			Data:    []linode.AccountInvoiceItem{{Label: invoiceItemLabel, Quantity: 1, Total: 5.00, Type: "linode", UnitPrice: 5.00}},
+			Page:    2,
+			Pages:   3,
+			Results: 75,
+		}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/account/invoices/12345/items", r.URL.Path, "request path should include invoice id and items")
+			assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(items))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountInvoiceItemsTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyInvoiceID: accountInvoiceID, keyPage: 2, keyPageSize: 25})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, invoiceItemLabel, "response should contain item label")
+		assert.Contains(t, textContent.Text, "5", "response should contain item total")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/account/invoices/12345/items", r.URL.Path, "request path should include invoice id and items")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountInvoiceItemsTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyInvoiceID: accountInvoiceID})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to retrieve linode_account_invoice_items", "response should identify failed tool")
+		assert.Contains(t, textContent.Text, errForbidden, "response should include API error detail")
+	})
+
+	t.Run("invalid inputs reject before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name        string
+			args        map[string]any
+			wantMessage string
+		}{
+			{name: "missing invoice id", args: map[string]any{}, wantMessage: "invoice_id is required"},
+			{name: "invoice id string", args: map[string]any{keyInvoiceID: "12345"}, wantMessage: messageInvoiceIDPositive},
+			{name: "invoice id fraction", args: map[string]any{keyInvoiceID: 12345.5}, wantMessage: messageInvoiceIDPositive},
+			{name: "invoice id separator", args: map[string]any{keyInvoiceID: "12345/items"}, wantMessage: messageInvoiceIDPositive},
+			{name: "invoice id query delimiter", args: map[string]any{keyInvoiceID: "12345?items"}, wantMessage: messageInvoiceIDPositive},
+			{name: "invoice id traversal", args: map[string]any{keyInvoiceID: ".."}, wantMessage: messageInvoiceIDPositive},
+			{name: paginationCasePageZero, args: map[string]any{keyInvoiceID: accountInvoiceID, keyPage: 0}, wantMessage: paginationMessagePageMustBe},
+			{name: paginationCasePageSizeTooLarge, args: map[string]any{keyInvoiceID: accountInvoiceID, keyPageSize: 501}, wantMessage: errPageSizeRange},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeAccountInvoiceItemsTool(cfg)
+
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid input should be an error result")
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, testCase.wantMessage, "response should describe validation error")
+			})
+		}
+	})
+}
+
 func TestLinodeAccountInvoicesTool(t *testing.T) {
 	t.Parallel()
 
@@ -3450,7 +3576,7 @@ func TestLinodeTypesListTool(t *testing.T) {
 		t.Parallel()
 
 		types := []linode.InstanceType{
-			{ID: typeG6Nanode1, Label: "Nanode 1GB", Class: "nanode", Disk: 25600, Memory: 1024, VCPUs: 1},
+			{ID: typeG6Nanode1, Label: invoiceItemLabel, Class: "nanode", Disk: 25600, Memory: 1024, VCPUs: 1},
 			{ID: typeG6Standard2, Label: typeLinode4GB, Class: classStandard, Disk: 81920, Memory: 4096, VCPUs: 2},
 		}
 
@@ -3493,7 +3619,7 @@ func TestLinodeTypesListTool(t *testing.T) {
 		t.Parallel()
 
 		types := []linode.InstanceType{
-			{ID: typeG6Nanode1, Label: "Nanode 1GB", Class: "nanode"},
+			{ID: typeG6Nanode1, Label: invoiceItemLabel, Class: "nanode"},
 			{ID: typeG6Standard2, Label: typeLinode4GB, Class: classStandard},
 			{ID: "g6-standard-4", Label: "Linode 8GB", Class: classStandard},
 		}
