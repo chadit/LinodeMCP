@@ -498,6 +498,21 @@ func (c *Client) ListAccountServiceTransfers(ctx context.Context, page, pageSize
 	return transfers, err
 }
 
+// GetAccountServiceTransfer retrieves one account service transfer with automatic retry on transient failures.
+func (c *Client) GetAccountServiceTransfer(ctx context.Context, token string) (*AccountEntityTransfer, error) {
+	var transfer *AccountEntityTransfer
+
+	err := c.executeWithRetry(ctx, "GetAccountServiceTransfer", func() error {
+		var err error
+
+		transfer, err = c.httpGetAccountServiceTransfer(ctx, token)
+
+		return err
+	})
+
+	return transfer, err
+}
+
 // GetAccountEntityTransfer retrieves one account entity transfer with automatic retry on transient failures.
 func (c *Client) GetAccountEntityTransfer(ctx context.Context, token string) (*AccountEntityTransfer, error) {
 	var transfer *AccountEntityTransfer
