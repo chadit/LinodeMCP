@@ -13,6 +13,7 @@ const (
 	// Common JSON field names used in test fixtures.
 	keyID     = "id"
 	keyLabel  = "label"
+	keyStatus = "status"
 	keySSHKey = "ssh_key"
 
 	// Account beta fixture values.

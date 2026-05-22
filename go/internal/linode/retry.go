@@ -218,6 +218,21 @@ func (c *Client) ListAccountOAuthClients(ctx context.Context, page, pageSize int
 	return clients, err
 }
 
+// GetAccountOAuthClient retrieves one OAuth client with automatic retry on transient failures.
+func (c *Client) GetAccountOAuthClient(ctx context.Context, clientID string) (*OAuthClient, error) {
+	var client *OAuthClient
+
+	err := c.executeWithRetry(ctx, "GetAccountOAuthClient", func() error {
+		var err error
+
+		client, err = c.httpGetAccountOAuthClient(ctx, clientID)
+
+		return err
+	})
+
+	return client, err
+}
+
 // CreateOAuthClient creates an account OAuth client without retrying the
 // mutating request. Retrying can replay client creation after a transient
 // error, so this method delegates exactly once.

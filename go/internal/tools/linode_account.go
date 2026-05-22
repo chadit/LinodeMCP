@@ -231,6 +231,22 @@ func NewLinodeAccountOAuthClientsTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeAccountOAuthClientGetTool creates a tool for retrieving one OAuth client.
+func NewLinodeAccountOAuthClientGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_oauth_client_get",
+		"Gets one OAuth client registered on the account. OAuth client secrets are not returned by this tool.",
+		[]mcp.ToolOption{
+			mcp.WithString("client_id", mcp.Required(),
+				mcp.Description("OAuth client ID.")),
+		},
+		handleLinodeAccountOAuthClientGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeAccountOAuthClientCreateTool creates a tool for creating an OAuth client.
 func NewLinodeAccountOAuthClientCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -652,6 +668,43 @@ func accountOAuthClientsPaginationFromTool(request *mcp.CallToolRequest) (int, i
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeAccountOAuthClientGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	clientID, validationMessage := accountOAuthClientIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	oauthClient, getFailure := client.GetAccountOAuthClient(ctx, clientID)
+	if getFailure == nil {
+		return MarshalToolResponse(oauthClient)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_account_oauth_client_get: " + getFailure.Error()), nil
+}
+
+func accountOAuthClientIDFromTool(request *mcp.CallToolRequest) (string, string) {
+	raw, exists := request.GetArguments()["client_id"]
+	if !exists {
+		return "", "client_id is required"
+	}
+
+	clientID, ok := raw.(string)
+	if !ok || strings.TrimSpace(clientID) == "" {
+		return "", "client_id must be a non-empty string"
+	}
+
+	if clientID != strings.TrimSpace(clientID) || strings.Contains(clientID, "/") || strings.Contains(clientID, "?") || strings.Contains(clientID, "..") {
+		return "", "client_id must not contain path separators, query separators, or traversal segments"
+	}
+
+	return clientID, ""
 }
 
 func handleLinodeAccountOAuthClientCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
