@@ -264,6 +264,25 @@ func NewLinodeAccountOAuthClientCreateTool(cfg *config.Config) (mcp.Tool, profil
 	return tool, profiles.CapAdmin, handler
 }
 
+// NewLinodeAccountOAuthClientUpdateTool creates a tool for updating one OAuth client.
+func NewLinodeAccountOAuthClientUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_oauth_client_update",
+		"Updates label, redirect URI, or public setting for one account OAuth client.",
+		[]mcp.ToolOption{
+			mcp.WithString("client_id", mcp.Required(), mcp.Description("OAuth client ID.")),
+			mcp.WithString("label", mcp.Description("New label for the OAuth client.")),
+			mcp.WithString("redirect_uri", mcp.Description("New redirect URI for the OAuth client.")),
+			mcp.WithBoolean("public", mcp.Description("Whether this OAuth client is public.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm OAuth client update.")),
+		},
+		handleLinodeAccountOAuthClientUpdateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
 // NewLinodeAccountChildAccountsTool creates a tool for listing child-level accounts.
 func NewLinodeAccountChildAccountsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -747,6 +766,49 @@ func createOAuthClient(ctx context.Context, client *linode.Client, req *linode.C
 	return oauthClient, ""
 }
 
+func handleLinodeAccountOAuthClientUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This updates an OAuth client. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	clientID, validationMessage := accountOAuthClientIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	req, validationMessage := oauthClientUpdateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	oauthClient, updateFailureMessage := updateOAuthClient(ctx, client, clientID, req)
+	if updateFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to update linode_account_oauth_client_update: " + updateFailureMessage), nil
+	}
+
+	return MarshalToolResponse(struct {
+		Message string              `json:"message"`
+		Client  *linode.OAuthClient `json:"client"`
+	}{
+		Message: "OAuth client updated successfully",
+		Client:  oauthClient,
+	})
+}
+
+func updateOAuthClient(ctx context.Context, client *linode.Client, clientID string, req *linode.UpdateOAuthClientRequest) (*linode.OAuthClient, string) {
+	oauthClient, err := client.UpdateOAuthClient(ctx, clientID, req)
+	if err != nil {
+		return nil, err.Error()
+	}
+
+	return oauthClient, ""
+}
+
 func oauthClientCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateOAuthClientRequest, string) {
 	args := request.GetArguments()
 
@@ -761,6 +823,49 @@ func oauthClientCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.Cre
 	}
 
 	return &linode.CreateOAuthClientRequest{Label: label, RedirectURI: redirectURI}, ""
+}
+
+func oauthClientUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateOAuthClientRequest, string) {
+	args := request.GetArguments()
+	req := &linode.UpdateOAuthClientRequest{}
+
+	var hasUpdate bool
+
+	if raw, exists := args["label"]; exists {
+		label, ok := raw.(string)
+		if !ok || strings.TrimSpace(label) == "" {
+			return nil, errLabelRequired
+		}
+
+		req.Label = &label
+		hasUpdate = true
+	}
+
+	if raw, exists := args["redirect_uri"]; exists {
+		redirectURI, ok := raw.(string)
+		if !ok || strings.TrimSpace(redirectURI) == "" {
+			return nil, errRedirectURIRequired
+		}
+
+		req.RedirectURI = &redirectURI
+		hasUpdate = true
+	}
+
+	if raw, exists := args["public"]; exists {
+		public, ok := raw.(bool)
+		if !ok {
+			return nil, "public must be a boolean"
+		}
+
+		req.Public = &public
+		hasUpdate = true
+	}
+
+	if !hasUpdate {
+		return nil, "at least one of label, redirect_uri, or public is required"
+	}
+
+	return req, ""
 }
 
 func handleLinodeAccountEventsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

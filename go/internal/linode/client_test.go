@@ -1367,6 +1367,114 @@ func TestClientGetAccountOAuthClientRetriesTransientError(t *testing.T) {
 	assert.Equal(t, int32(2), requestCount.Load(), "read-only GET should retry once")
 }
 
+func TestClientUpdateOAuthClientSuccess(t *testing.T) {
+	t.Parallel()
+
+	public := true
+	want := linode.OAuthClient{ID: oauthClientID, Label: "updated app", Public: public, RedirectURI: "https://example.com/new-callback", Status: oauthClientStatus, ThumbnailURL: oauthClientThumbnailURL}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, "/account/oauth-clients/"+oauthClientID, r.URL.Path, "request path should include client id")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		var got linode.UpdateOAuthClientRequest
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got))
+
+		if assert.NotNil(t, got.Label) {
+			assert.Equal(t, want.Label, *got.Label)
+		}
+
+		if assert.NotNil(t, got.RedirectURI) {
+			assert.Equal(t, want.RedirectURI, *got.RedirectURI)
+		}
+
+		if assert.NotNil(t, got.Public) {
+			assert.Equal(t, public, *got.Public)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(want))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	req := &linode.UpdateOAuthClientRequest{Label: &want.Label, Public: &public, RedirectURI: &want.RedirectURI}
+
+	got, err := client.UpdateOAuthClient(t.Context(), oauthClientID, req)
+
+	require.NoError(t, err, "UpdateOAuthClient should succeed on 200 response")
+	require.NotNil(t, got, "result should not be nil")
+	assert.Equal(t, want, *got)
+}
+
+func TestClientUpdateOAuthClientEscapesClientID(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/account/oauth-clients/client%2F123%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.OAuthClient{ID: "client/123?query"}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	label := oauthClientLabel
+	req := &linode.UpdateOAuthClientRequest{Label: &label}
+
+	_, err := client.UpdateOAuthClient(t.Context(), "client/123?query", req)
+
+	require.NoError(t, err, "UpdateOAuthClient should escape path parameters")
+}
+
+func TestClientUpdateOAuthClientAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, "/account/oauth-clients/"+oauthClientID, r.URL.Path, "request path should include client id")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	label := oauthClientLabel
+	req := &linode.UpdateOAuthClientRequest{Label: &label}
+
+	_, err := client.UpdateOAuthClient(t.Context(), oauthClientID, req)
+
+	require.Error(t, err, "UpdateOAuthClient should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+}
+
+func TestClientUpdateOAuthClientDoesNotRetryTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+	label := oauthClientLabel
+	req := &linode.UpdateOAuthClientRequest{Label: &label}
+
+	_, err := client.UpdateOAuthClient(t.Context(), oauthClientID, req)
+
+	require.Error(t, err, "UpdateOAuthClient should return the transient error")
+	assert.Equal(t, int32(1), requestCount.Load(), "mutating OAuth client update must not be retried")
+}
+
 func TestClientCreateOAuthClientSuccess(t *testing.T) {
 	t.Parallel()
 
