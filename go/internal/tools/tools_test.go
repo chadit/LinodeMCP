@@ -1353,11 +1353,11 @@ func TestLinodeAccountEntityTransferGetTool(t *testing.T) {
 			wantMessage string
 		}{
 			{name: caseMissing, args: map[string]any{}, wantMessage: errTokenRequired},
-			{name: "empty", args: map[string]any{keyToken: ""}, wantMessage: errTokenNonEmpty},
-			{name: "not string", args: map[string]any{keyToken: 123}, wantMessage: errTokenNonEmpty},
-			{name: "path separator", args: map[string]any{keyToken: "transfer/token"}, wantMessage: errTokenNoSeparators},
-			{name: "query separator", args: map[string]any{keyToken: "transfer?token"}, wantMessage: errTokenNoSeparators},
-			{name: "traversal", args: map[string]any{keyToken: pathTraversalValue}, wantMessage: errTokenNoSeparators},
+			{name: caseEmpty, args: map[string]any{keyToken: ""}, wantMessage: errTokenNonEmpty},
+			{name: caseString, args: map[string]any{keyToken: 123}, wantMessage: errTokenNonEmpty},
+			{name: caseSlash, args: map[string]any{keyToken: accountEntityTransferTokenSlash}, wantMessage: errTokenNoSeparators},
+			{name: caseQuery, args: map[string]any{keyToken: accountEntityTransferTokenQuery}, wantMessage: errTokenNoSeparators},
+			{name: caseDotTraversal, args: map[string]any{keyToken: pathTraversalValue}, wantMessage: errTokenNoSeparators},
 		}
 
 		for _, testCase := range cases {
@@ -1382,6 +1382,168 @@ func TestLinodeAccountEntityTransferGetTool(t *testing.T) {
 }
 
 // End-to-end verification of account entity transfer cancellation.
+func TestLinodeAccountEntityTransferAcceptTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountEntityTransferAcceptTool(cfg)
+
+		assert.Equal(t, "linode_account_entity_transfer_accept", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapAdmin, capability, "transfer acceptance should be CapAdmin")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, keyToken, "schema should include token")
+		assert.Contains(t, props, keyConfirm, "schema should include confirm")
+	})
+
+	t.Run("confirm required before client call", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name  string
+			value any
+			set   bool
+		}{
+			{name: caseMissingConfirm, set: false},
+			{name: caseRequiresConfirm, value: false, set: true},
+			{name: caseString, value: boolStringTrue, set: true},
+			{name: caseNumeric, value: 1, set: true},
+		}
+
+		for _, tt := range cases {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					atomic.AddInt32(&calls, 1)
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeAccountEntityTransferAcceptTool(cfg)
+
+				args := map[string]any{keyToken: accountEntityTransferToken}
+				if tt.set {
+					args[keyConfirm] = tt.value
+				}
+
+				req := createRequestWithArgs(t, args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should not return transport error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "result should be a tool error")
+				assertErrorContains(t, result, errConfirmEqualsTrue)
+				assert.Equal(t, int32(0), calls, "confirm failure must happen before client call")
+			})
+		}
+	})
+
+	t.Run("invalid token rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name        string
+			args        map[string]any
+			wantMessage string
+		}{
+			{name: caseMissing, args: map[string]any{keyConfirm: true}, wantMessage: errTokenRequired},
+			{name: caseEmpty, args: map[string]any{keyToken: "", keyConfirm: true}, wantMessage: errTokenNonEmpty},
+			{name: caseString, args: map[string]any{keyToken: 123, keyConfirm: true}, wantMessage: errTokenNonEmpty},
+			{name: caseSlash, args: map[string]any{keyToken: accountEntityTransferTokenSlash, keyConfirm: true}, wantMessage: errTokenNoSeparators},
+			{name: caseQuery, args: map[string]any{keyToken: accountEntityTransferTokenQuery, keyConfirm: true}, wantMessage: errTokenNoSeparators},
+			{name: caseDotTraversal, args: map[string]any{keyToken: pathTraversalValue, keyConfirm: true}, wantMessage: errTokenNoSeparators},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					atomic.AddInt32(&calls, 1)
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeAccountEntityTransferAcceptTool(cfg)
+
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid token should be an error result")
+				assertErrorContains(t, result, testCase.wantMessage)
+				assert.Equal(t, int32(0), calls, "validation failure must happen before client call")
+			})
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/account/entity-transfers/transfer-token-example/accept", r.URL.Path, "request path should include transfer token accept action")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			w.Header().Set("Content-Type", "application/json")
+			_, writeErr := w.Write([]byte(`{}`))
+			assert.NoError(t, writeErr)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountEntityTransferAcceptTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyToken: accountEntityTransferToken, keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return transport error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "result should not be an error")
+		assertErrorContains(t, result, accountEntityTransferToken)
+		assertErrorContains(t, result, "accepted successfully")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/account/entity-transfers/transfer-token-example/accept", r.URL.Path, "request path should include transfer token accept action")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+			assert.NoError(t, writeErr)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountEntityTransferAcceptTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyToken: accountEntityTransferToken, keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return transport error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "Failed to accept linode_account_entity_transfer_accept")
+		assertErrorContains(t, result, errForbidden)
+	})
+}
+
 func TestLinodeAccountEntityTransferDeleteTool(t *testing.T) {
 	t.Parallel()
 
@@ -1456,11 +1618,11 @@ func TestLinodeAccountEntityTransferDeleteTool(t *testing.T) {
 			wantMessage string
 		}{
 			{name: caseMissing, args: map[string]any{keyConfirm: true}, wantMessage: errTokenRequired},
-			{name: "empty", args: map[string]any{keyToken: "", keyConfirm: true}, wantMessage: errTokenNonEmpty},
-			{name: "not string", args: map[string]any{keyToken: 123, keyConfirm: true}, wantMessage: errTokenNonEmpty},
-			{name: "path separator", args: map[string]any{keyToken: "transfer/token", keyConfirm: true}, wantMessage: errTokenNoSeparators},
-			{name: "query separator", args: map[string]any{keyToken: "transfer?token", keyConfirm: true}, wantMessage: errTokenNoSeparators},
-			{name: "traversal", args: map[string]any{keyToken: pathTraversalValue, keyConfirm: true}, wantMessage: errTokenNoSeparators},
+			{name: caseEmpty, args: map[string]any{keyToken: "", keyConfirm: true}, wantMessage: errTokenNonEmpty},
+			{name: caseString, args: map[string]any{keyToken: 123, keyConfirm: true}, wantMessage: errTokenNonEmpty},
+			{name: caseSlash, args: map[string]any{keyToken: accountEntityTransferTokenSlash, keyConfirm: true}, wantMessage: errTokenNoSeparators},
+			{name: caseQuery, args: map[string]any{keyToken: accountEntityTransferTokenQuery, keyConfirm: true}, wantMessage: errTokenNoSeparators},
+			{name: caseDotTraversal, args: map[string]any{keyToken: pathTraversalValue, keyConfirm: true}, wantMessage: errTokenNoSeparators},
 		}
 
 		for _, testCase := range cases {
