@@ -83,6 +83,23 @@ type AccountAgreements struct {
 	PrivacyPolicy          bool `json:"privacy_policy"`
 }
 
+// AccountMaintenance represents one account maintenance record.
+type AccountMaintenance struct {
+	Entity AccountMaintenanceEntity `json:"entity"`
+	Reason string                   `json:"reason"`
+	Status string                   `json:"status"`
+	Type   string                   `json:"type"`
+	When   string                   `json:"when"`
+}
+
+// AccountMaintenanceEntity identifies the entity attached to a maintenance record.
+type AccountMaintenanceEntity struct {
+	ID    int    `json:"id"`
+	Label string `json:"label"`
+	Type  string `json:"type"`
+	URL   string `json:"url"`
+}
+
 // AccountAvailability represents the account service availability for a region.
 type AccountAvailability struct {
 	Available   []string `json:"available"`
