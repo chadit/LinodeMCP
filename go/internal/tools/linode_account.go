@@ -17,6 +17,8 @@ const (
 	accountAvailabilityPageSizeMax    = 500
 	accountBetasPageSizeMin           = 25
 	accountBetasPageSizeMax           = 500
+	accountMaintenancePageSizeMin     = 25
+	accountMaintenancePageSizeMax     = 500
 	accountEventsPageSizeMin          = 25
 	accountEventsPageSizeMax          = 500
 	accountLoginsPageSizeMin          = 25
@@ -56,6 +58,22 @@ func NewLinodeAccountAgreementsTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 		func(ctx context.Context, client *linode.Client) (any, error) {
 			return client.GetAccountAgreements(ctx)
 		},
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeAccountMaintenanceTool creates a tool for listing account maintenance records.
+func NewLinodeAccountMaintenanceTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_maintenance",
+		"Lists maintenance records visible to the authenticated account.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		},
+		handleLinodeAccountMaintenanceRequest,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -1264,6 +1282,41 @@ func isAccountBetaID(id string) bool {
 	}
 
 	return true
+}
+
+func handleLinodeAccountMaintenanceRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	page, pageSize, validationMessage := accountMaintenancePaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	maintenance, listFailure := client.ListAccountMaintenance(ctx, page, pageSize)
+	if listFailure == nil {
+		return MarshalToolResponse(maintenance)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_account_maintenance: " + listFailure.Error()), nil
+}
+
+func accountMaintenancePaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
+	args := request.GetArguments()
+
+	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountMaintenancePageSizeMin, accountMaintenancePageSizeMax)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	return page, pageSize, ""
 }
 
 func handleLinodeAccountAvailabilityGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

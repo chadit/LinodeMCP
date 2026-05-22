@@ -13,6 +13,7 @@ const (
 	endpointAccount                = "/account"
 	endpointAccountCancel          = "/account/cancel"
 	endpointAccountAgreements      = "/account/agreements"
+	endpointAccountMaintenance     = "/account/maintenance"
 	endpointAccountAvailability    = "/account/availability"
 	endpointAccountBetas           = "/account/betas"
 	endpointAccountEvents          = "/account/events"
@@ -104,6 +105,28 @@ func (c *Client) httpGetAccountAgreements(ctx context.Context) (*AccountAgreemen
 	}
 
 	return &agreements, nil
+}
+
+// httpListAccountMaintenance retrieves account maintenance records.
+func (c *Client) httpListAccountMaintenance(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountMaintenance], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointAccountMaintenance, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListAccountMaintenance", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var maintenance PaginatedResponse[AccountMaintenance]
+	if err := c.handleResponse(resp, &maintenance); err != nil {
+		return nil, err
+	}
+
+	return &maintenance, nil
 }
 
 // httpListAccountAvailability retrieves account service availability by region.

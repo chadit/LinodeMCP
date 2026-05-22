@@ -17,12 +17,18 @@ import (
 )
 
 const (
-	updateAccountEmail         = "account-updated@example.com"
-	statusPending              = "pending"
-	statusSuccessful           = "successful"
-	accountEntityTransferToken = "transfer-token-example"
-	accountEntityTransferDate  = "2021-02-11T16:37:03"
-	accountLoginUsername       = "account-login-user"
+	updateAccountEmail           = "account-updated@example.com"
+	statusPending                = "pending"
+	statusSuccessful             = "successful"
+	accountEntityTransferToken   = "transfer-token-example"
+	accountEntityTransferDate    = "2021-02-11T16:37:03"
+	accountLoginUsername         = "account-login-user"
+	accountMaintenancePath       = "/account/maintenance"
+	accountMaintenanceLabel      = "web-1"
+	accountMaintenanceEntityType = "linode"
+	accountMaintenanceURL        = "/v4/linode/instances/123"
+	keyErrors                    = "errors"
+	keyReason                    = "reason"
 )
 
 // TestClientGetProfileSuccess verifies that GetProfile returns a fully
@@ -195,6 +201,96 @@ func TestClientGetProfileUnauthorized(t *testing.T) {
 
 	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
 	assert.Equal(t, 401, apiErr.StatusCode, "status code should be 401 unauthorized")
+}
+
+func TestClientListAccountMaintenanceSuccess(t *testing.T) {
+	t.Parallel()
+
+	maintenance := linode.PaginatedResponse[linode.AccountMaintenance]{
+		Data: []linode.AccountMaintenance{{
+			Entity: linode.AccountMaintenanceEntity{ID: 123, Label: accountMaintenanceLabel, Type: accountMaintenanceEntityType, URL: accountMaintenanceURL},
+			Reason: "A scheduled migration is required.",
+			Status: statusPending,
+			Type:   "reboot",
+			When:   "2026-06-01T00:00:00",
+		}},
+		Page:    1,
+		Pages:   1,
+		Results: 1,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, accountMaintenancePath, r.URL.Path, "request path should be /account/maintenance")
+		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		assert.Equal(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(maintenance))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+	result, err := client.ListAccountMaintenance(t.Context(), 2, 25)
+
+	require.NoError(t, err, "ListAccountMaintenance should succeed on 200 response")
+	require.NotNil(t, result)
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, accountMaintenanceLabel, result.Data[0].Entity.Label)
+	assert.Equal(t, "reboot", result.Data[0].Type)
+}
+
+func TestClientListAccountMaintenanceRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, accountMaintenancePath, r.URL.Path, "request path should be /account/maintenance")
+
+		if calls.Add(1) == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "temporary"}}}))
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountMaintenance]{
+			Data:    []linode.AccountMaintenance{{Status: statusPending}},
+			Page:    1,
+			Pages:   1,
+			Results: 1,
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(1), linode.WithBaseDelay(time.Millisecond), linode.WithJitter(false))
+	result, err := client.ListAccountMaintenance(t.Context(), 0, 0)
+
+	require.NoError(t, err, "read-only maintenance list should retry transient failures")
+	require.NotNil(t, result)
+	assert.Equal(t, int32(2), calls.Load(), "client should retry once")
+}
+
+func TestClientListAccountMaintenanceAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, accountMaintenancePath, r.URL.Path, "request path should be /account/maintenance")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "Forbidden"}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+	_, err := client.ListAccountMaintenance(t.Context(), 0, 0)
+
+	require.Error(t, err, "ListAccountMaintenance should fail on API errors")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
 // TestClientListInstancesSuccess verifies that ListInstances returns the
