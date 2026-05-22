@@ -22,6 +22,7 @@ const (
 	// Child account fixture values.
 	childAccountEUUID = "A1BC2DEF-34GH-567I-J890KLMN12O34P56"
 	companyAcme       = "Acme"
+	accountInvoiceID  = 12345
 
 	// Common region IDs used in API response fixtures.
 	regionUSEast         = "us-east"

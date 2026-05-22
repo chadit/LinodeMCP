@@ -21,6 +21,7 @@ const (
 	accountEventsPageSizeMax          = 500
 	accountInvoicesPageSizeMin        = 25
 	accountInvoicesPageSizeMax        = 500
+	errAccountInvoiceIDPositive       = "invoice_id must be a positive integer"
 	accountChildAccountsPageSizeMin   = 25
 	accountChildAccountsPageSizeMax   = 500
 	accountEventIDParam               = "event_id"
@@ -97,6 +98,22 @@ func NewLinodeAccountInvoicesTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
 		},
 		handleLinodeAccountInvoicesRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeAccountInvoiceGetTool creates a tool for retrieving one account invoice.
+func NewLinodeAccountInvoiceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_invoice_get",
+		"Gets one account invoice by ID.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("invoice_id", mcp.Required(),
+				mcp.Description("Invoice ID to retrieve.")),
+		},
+		handleLinodeAccountInvoiceGetRequest,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -506,6 +523,49 @@ func accountInvoicesPaginationFromTool(request *mcp.CallToolRequest) (int, int, 
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeAccountInvoiceGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	invoiceID, validationMessage := accountInvoiceIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	invoice, getFailure := client.GetAccountInvoice(ctx, invoiceID)
+	if getFailure == nil {
+		return MarshalToolResponse(invoice)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_account_invoice_get: " + getFailure.Error()), nil
+}
+
+func accountInvoiceIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	raw, exists := request.GetArguments()["invoice_id"]
+	if !exists {
+		return 0, "invoice_id is required"
+	}
+
+	switch value := raw.(type) {
+	case int:
+		if value <= 0 {
+			return 0, errAccountInvoiceIDPositive
+		}
+
+		return value, ""
+	case float64:
+		if value <= 0 || value != float64(int(value)) {
+			return 0, errAccountInvoiceIDPositive
+		}
+
+		return int(value), ""
+	default:
+		return 0, errAccountInvoiceIDPositive
+	}
 }
 
 func handleLinodeAccountChildAccountsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

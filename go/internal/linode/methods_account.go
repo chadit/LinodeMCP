@@ -214,6 +214,28 @@ func (c *Client) httpListAccountInvoices(ctx context.Context, page, pageSize int
 	return &invoices, nil
 }
 
+// httpGetAccountInvoice retrieves one account invoice by ID.
+func (c *Client) httpGetAccountInvoice(ctx context.Context, invoiceID int) (*AccountInvoice, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountInvoices + "/" + strconv.Itoa(invoiceID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccountInvoice", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var invoice AccountInvoice
+	if err := c.handleResponse(resp, &invoice); err != nil {
+		return nil, err
+	}
+
+	return &invoice, nil
+}
+
 // httpListAccountChildAccounts retrieves child-level accounts.
 func (c *Client) httpListAccountChildAccounts(ctx context.Context, page, pageSize int) (*PaginatedResponse[ChildAccount], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
