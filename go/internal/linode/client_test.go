@@ -961,6 +961,118 @@ func TestClientListAccountBetasRetriesTransientError(t *testing.T) {
 	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
+// TestClientListAccountChildAccountsSuccess verifies ListAccountChildAccounts sends a GET
+// request to /account/child-accounts with pagination query parameters.
+func TestClientListAccountChildAccountsSuccess(t *testing.T) {
+	t.Parallel()
+
+	childAccounts := linode.PaginatedResponse[linode.ChildAccount]{
+		Data: []linode.ChildAccount{{
+			EUUID:         "A1BC2DEF-34GH-567I-J890KLMN12O34P56",
+			Company:       "Acme",
+			Email:         "jkowalski@example.com",
+			FirstName:     "John",
+			LastName:      "Smith",
+			BillingSource: "external",
+			CreditCard: linode.ChildAccountCreditCard{
+				Expiry:   "11/2024",
+				LastFour: "0111",
+			},
+		}},
+		Page:    2,
+		Pages:   3,
+		Results: 75,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/child-accounts", r.URL.Path, "request path should be /account/child-accounts")
+		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(childAccounts))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.ListAccountChildAccounts(t.Context(), 2, 25)
+
+	require.NoError(t, err, "ListAccountChildAccounts should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, 2, result.Page)
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, "A1BC2DEF-34GH-567I-J890KLMN12O34P56", result.Data[0].EUUID)
+	assert.Equal(t, "Acme", result.Data[0].Company)
+	assert.Equal(t, "11/2024", result.Data[0].CreditCard.Expiry)
+	assert.Equal(t, "0111", result.Data[0].CreditCard.LastFour)
+}
+
+// TestClientListAccountChildAccountsAPIError verifies ListAccountChildAccounts propagates API errors.
+func TestClientListAccountChildAccountsAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/child-accounts", r.URL.Path, "request path should be /account/child-accounts")
+		assert.Empty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.ListAccountChildAccounts(t.Context(), 0, 0)
+
+	require.Error(t, err, "ListAccountChildAccounts should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	require.NotNil(t, apiErr, "APIError should be present")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, "forbidden", apiErr.Message)
+}
+
+// TestClientListAccountChildAccountsRetriesTransientError verifies the read-only list retries transient failures.
+func TestClientListAccountChildAccountsRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			assert.NoError(t, writeErr)
+
+			return
+		}
+
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/child-accounts", r.URL.Path, "request path should be /account/child-accounts")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ChildAccount]{
+			Data: []linode.ChildAccount{{EUUID: "A1BC2DEF-34GH-567I-J890KLMN12O34P56", Company: "Acme"}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	result, err := client.ListAccountChildAccounts(t.Context(), 0, 0)
+
+	require.NoError(t, err, "ListAccountChildAccounts should succeed after retry")
+	require.NotNil(t, result, "result should not be nil")
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, "A1BC2DEF-34GH-567I-J890KLMN12O34P56", result.Data[0].EUUID)
+	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+}
+
 // TestClientGetAccountBetaSuccess verifies GetAccountBeta sends a GET
 // request to /account/betas/{betaId} and decodes the response.
 func TestClientGetAccountBetaSuccess(t *testing.T) {

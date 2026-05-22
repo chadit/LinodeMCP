@@ -13,10 +13,12 @@ import (
 )
 
 const (
-	accountAvailabilityPageSizeMin = 25
-	accountAvailabilityPageSizeMax = 500
-	accountBetasPageSizeMin        = 25
-	accountBetasPageSizeMax        = 500
+	accountAvailabilityPageSizeMin  = 25
+	accountAvailabilityPageSizeMax  = 500
+	accountBetasPageSizeMin         = 25
+	accountBetasPageSizeMax         = 500
+	accountChildAccountsPageSizeMin = 25
+	accountChildAccountsPageSizeMax = 500
 )
 
 // NewLinodeAccountTool creates a tool for retrieving Linode account information.
@@ -56,6 +58,22 @@ func NewLinodeAccountBetasTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
 		},
 		handleLinodeAccountBetasRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeAccountChildAccountsTool creates a tool for listing child-level accounts.
+func NewLinodeAccountChildAccountsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_child_accounts",
+		"Lists child-level accounts the authenticated account can access.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		},
+		handleLinodeAccountChildAccountsRequest,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -220,6 +238,41 @@ func accountBetasPaginationFromTool(request *mcp.CallToolRequest) (int, int, str
 	}
 
 	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountBetasPageSizeMin, accountBetasPageSizeMax)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	return page, pageSize, ""
+}
+
+func handleLinodeAccountChildAccountsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	page, pageSize, validationMessage := accountChildAccountsPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	childAccounts, listFailure := client.ListAccountChildAccounts(ctx, page, pageSize)
+	if listFailure == nil {
+		return MarshalToolResponse(childAccounts)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_account_child_accounts: " + listFailure.Error()), nil
+}
+
+func accountChildAccountsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
+	args := request.GetArguments()
+
+	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountChildAccountsPageSizeMin, accountChildAccountsPageSizeMax)
 	if validationMessage != "" {
 		return 0, 0, validationMessage
 	}
