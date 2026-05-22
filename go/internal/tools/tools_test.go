@@ -813,6 +813,117 @@ func TestLinodeAccountBetasTool(t *testing.T) {
 	})
 }
 
+// End-to-end verification of account invoice lookup.
+func TestLinodeAccountInvoiceGetTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountInvoiceGetTool(cfg)
+
+		assert.Equal(t, "linode_account_invoice_get", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		invoice := linode.AccountInvoice{ID: accountInvoiceID, Date: "2024-01-31T00:00:00", Label: "Invoice #12345", Total: 11.00}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/account/invoices/12345", r.URL.Path, "request path should include invoice id")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(invoice))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountInvoiceGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyInvoiceID: accountInvoiceID})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "12345", "response should contain invoice id")
+		assert.Contains(t, textContent.Text, "Invoice #12345", "response should contain invoice label")
+		assert.Contains(t, textContent.Text, "11", "response should contain invoice total")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/account/invoices/12345", r.URL.Path, "request path should include invoice id")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountInvoiceGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyInvoiceID: accountInvoiceID})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to retrieve linode_account_invoice_get", "response should identify failed tool")
+		assert.Contains(t, textContent.Text, errForbidden, "response should include API error detail")
+	})
+
+	t.Run("invalid invoice id rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name string
+			args map[string]any
+		}{
+			{name: "missing invoice id", args: map[string]any{}},
+			{name: "string invoice id", args: map[string]any{keyInvoiceID: "12345"}},
+			{name: "zero invoice id", args: map[string]any{keyInvoiceID: 0}},
+			{name: "negative invoice id", args: map[string]any{keyInvoiceID: -1}},
+			{name: "fractional invoice id", args: map[string]any{keyInvoiceID: 1.5}},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeAccountInvoiceGetTool(cfg)
+
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid invoice id should be an error result")
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, "invoice_id", "response should describe validation error")
+			})
+		}
+	})
+}
+
 // End-to-end verification of child account lookup.
 func TestLinodeAccountChildAccountGetTool(t *testing.T) {
 	t.Parallel()

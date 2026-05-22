@@ -52,6 +52,7 @@ const (
 	keyReason         = "reason"
 	keyBetaID         = "id"
 	keyEUUID          = "euuid"
+	keyInvoiceID      = "invoice_id"
 	keyLinodeIDs      = "linode_ids"
 	keyToken          = "token"
 	keyEventID        = "event_id"
@@ -145,6 +146,7 @@ const (
 	labelExampleOpenBeta            = "Example Open Beta"
 	childAccountEUUID               = "A1BC2DEF-34GH-567I-J890KLMN12O34P56"
 	companyAcme                     = "Acme"
+	accountInvoiceID                = 12345
 	accountEntityTransferToken      = "transfer-token-example"
 	accountEntityTransferTokenSlash = "transfer/token"
 	accountEntityTransferTokenQuery = "transfer?token"

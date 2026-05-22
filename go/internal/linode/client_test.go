@@ -1865,6 +1865,100 @@ func TestClientDeleteAccountEntityTransferDoesNotRetryTransientError(t *testing.
 	assert.Equal(t, int32(1), requestCount.Load(), "mutating transfer cancellation must not be retried")
 }
 
+// TestClientGetAccountInvoiceSuccess verifies GetAccountInvoice sends a GET
+// request to /account/invoices/{invoiceId} and decodes the response.
+func TestClientGetAccountInvoiceSuccess(t *testing.T) {
+	t.Parallel()
+
+	invoice := linode.AccountInvoice{
+		ID:    accountInvoiceID,
+		Date:  "2024-01-31T00:00:00",
+		Label: "Invoice #12345",
+		Total: 11.00,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/invoices/12345", r.URL.Path, "request path should include invoice id")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(invoice))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.GetAccountInvoice(t.Context(), accountInvoiceID)
+
+	require.NoError(t, err, "GetAccountInvoice should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, accountInvoiceID, result.ID)
+	assert.Equal(t, "Invoice #12345", result.Label)
+	assert.InDelta(t, 11.00, result.Total, 0.001)
+}
+
+// TestClientGetAccountInvoiceAPIError verifies GetAccountInvoice propagates API errors.
+func TestClientGetAccountInvoiceAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/invoices/12345", r.URL.Path, "request path should include invoice id")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetAccountInvoice(t.Context(), accountInvoiceID)
+
+	require.Error(t, err, "GetAccountInvoice should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	require.NotNil(t, apiErr, "APIError should be present")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, "forbidden", apiErr.Message)
+}
+
+// TestClientGetAccountInvoiceRetriesTransientError verifies the read-only lookup retries transient failures.
+func TestClientGetAccountInvoiceRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			assert.NoError(t, writeErr)
+
+			return
+		}
+
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/invoices/12345", r.URL.Path, "request path should include invoice id")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountInvoice{ID: accountInvoiceID, Label: "Invoice #12345"}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	result, err := client.GetAccountInvoice(t.Context(), accountInvoiceID)
+
+	require.NoError(t, err, "GetAccountInvoice should succeed after retry")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, accountInvoiceID, result.ID)
+	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+}
+
 // TestClientGetAccountChildAccountSuccess verifies GetAccountChildAccount sends a GET
 // request to /account/child-accounts/{euuId} and decodes the response.
 func TestClientGetAccountChildAccountSuccess(t *testing.T) {
