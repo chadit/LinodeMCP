@@ -22,6 +22,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "version", Capability: profiles.CapMeta},
 		{Name: toolProfile, Capability: profiles.CapRead},
 		{Name: toolAccount, Capability: profiles.CapRead},
+		{Name: "linode_account_oauth_clients", Capability: profiles.CapRead},
 
 		// Compute reads
 		{Name: toolInstancesList, Capability: profiles.CapRead},
@@ -412,4 +413,10 @@ func TestCategoriesIncludesAccountInvoicesInCore(t *testing.T) {
 
 	assert.Contains(t, profiles.Categories("linode_account_invoices"), "core")
 	assert.Contains(t, profiles.Categories("linode_account_invoice_items"), "core")
+}
+
+func TestCategoriesIncludesAccountOAuthClientsInCore(t *testing.T) {
+	t.Parallel()
+
+	assert.Contains(t, profiles.Categories("linode_account_oauth_clients"), "core")
 }

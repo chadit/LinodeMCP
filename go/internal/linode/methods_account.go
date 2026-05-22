@@ -17,6 +17,7 @@ const (
 	endpointAccountNotifications   = "/account/notifications"
 	endpointAccountAvailability    = "/account/availability"
 	endpointAccountBetas           = "/account/betas"
+	endpointAccountOAuthClients    = "/account/oauth-clients"
 	endpointAccountEvents          = "/account/events"
 	endpointAccountLogins          = "/account/logins"
 	endpointAccountInvoices        = "/account/invoices"
@@ -215,6 +216,28 @@ func (c *Client) httpListAccountBetas(ctx context.Context, page, pageSize int) (
 	}
 
 	return &betas, nil
+}
+
+// httpListAccountOAuthClients retrieves OAuth clients for the account.
+func (c *Client) httpListAccountOAuthClients(ctx context.Context, page, pageSize int) (*PaginatedResponse[OAuthClient], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointAccountOAuthClients, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListAccountOAuthClients", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var clients PaginatedResponse[OAuthClient]
+	if err := c.handleResponse(resp, &clients); err != nil {
+		return nil, err
+	}
+
+	return &clients, nil
 }
 
 // httpListAccountEvents retrieves account events.

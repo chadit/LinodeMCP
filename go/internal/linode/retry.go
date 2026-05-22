@@ -203,6 +203,21 @@ func (c *Client) ListAccountBetas(ctx context.Context, page, pageSize int) (*Pag
 	return betas, err
 }
 
+// ListAccountOAuthClients retrieves OAuth clients with automatic retry on transient failures.
+func (c *Client) ListAccountOAuthClients(ctx context.Context, page, pageSize int) (*PaginatedResponse[OAuthClient], error) {
+	var clients *PaginatedResponse[OAuthClient]
+
+	err := c.executeWithRetry(ctx, "ListAccountOAuthClients", func() error {
+		var err error
+
+		clients, err = c.httpListAccountOAuthClients(ctx, page, pageSize)
+
+		return err
+	})
+
+	return clients, err
+}
+
 // ListAccountEvents retrieves account events with automatic retry on transient failures.
 func (c *Client) ListAccountEvents(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountEvent], error) {
 	var events *PaginatedResponse[AccountEvent]
