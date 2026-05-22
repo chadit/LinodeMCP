@@ -24,6 +24,7 @@ const (
 	endpointAccountLogins          = "/account/logins"
 	endpointAccountInvoices        = "/account/invoices"
 	endpointAccountPayments        = "/account/payments"
+	endpointAccountPromoCodes      = "/account/promo-codes"
 	endpointAccountChildAccounts   = "/account/child-accounts"
 	endpointAccountEntityTransfers = "/account/entity-transfers"
 )
@@ -888,6 +889,21 @@ func (c *Client) httpEnrollAccountBeta(ctx context.Context, req *EnrollAccountBe
 	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountBetas, req)
 	if err != nil {
 		return &NetworkError{Operation: "EnrollAccountBeta", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	return c.handleResponse(resp, nil)
+}
+
+// httpAddAccountPromoCredit applies a promo credit to the account via POST /v4/account/promo-codes.
+func (c *Client) httpAddAccountPromoCredit(ctx context.Context, req *AddAccountPromoCreditRequest) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountPromoCodes, req)
+	if err != nil {
+		return &NetworkError{Operation: "AddAccountPromoCredit", Err: err}
 	}
 
 	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern

@@ -416,6 +416,13 @@ func (c *Client) CreateAccountPayment(ctx context.Context, req *CreateAccountPay
 	return c.httpCreateAccountPayment(ctx, req)
 }
 
+// AddAccountPromoCredit applies a promo credit without retrying the mutating
+// request. Retrying can replay promo-credit application after a transient
+// error, so this method delegates exactly once.
+func (c *Client) AddAccountPromoCredit(ctx context.Context, req *AddAccountPromoCreditRequest) error {
+	return c.httpAddAccountPromoCredit(ctx, req)
+}
+
 // GetAccountInvoice retrieves one account invoice with automatic retry on transient failures.
 func (c *Client) GetAccountInvoice(ctx context.Context, invoiceID int) (*AccountInvoice, error) {
 	var invoice *AccountInvoice
