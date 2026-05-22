@@ -241,6 +241,22 @@ func NewLinodeAccountPaymentCreateTool(cfg *config.Config) (mcp.Tool, profiles.C
 	return tool, profiles.CapAdmin, handler
 }
 
+// NewLinodeAccountPromoCreditTool creates a tool for applying a promo credit to the account.
+func NewLinodeAccountPromoCreditTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_promo_credit",
+		"Applies a promo credit to the authenticated account.",
+		[]mcp.ToolOption{
+			mcp.WithString("promo_code", mcp.Required(), mcp.Description("Promo code to apply to the account.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm applying a promo credit.")),
+		},
+		handleLinodeAccountPromoCreditRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
 // NewLinodeAccountInvoiceGetTool creates a tool for retrieving one account invoice.
 func NewLinodeAccountInvoiceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -1655,6 +1671,57 @@ func handleLinodeAccountPaymentCreateRequest(ctx context.Context, request *mcp.C
 	}
 
 	return mcp.NewToolResultError("Failed to create linode_account_payment_create: " + createFailure.Error()), nil
+}
+
+func handleLinodeAccountPromoCreditRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This applies a promo credit to the account. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	req, validationMessage := accountPromoCreditRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if addFailureMessage := addAccountPromoCredit(ctx, client, req); addFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to apply linode_account_promo_credit: " + addFailureMessage), nil
+	}
+
+	return MarshalToolResponse(struct {
+		Message   string `json:"message"`
+		PromoCode string `json:"promo_code"`
+	}{Message: "Account promo credit applied successfully", PromoCode: req.PromoCode})
+}
+
+func addAccountPromoCredit(ctx context.Context, client *linode.Client, req *linode.AddAccountPromoCreditRequest) string {
+	if err := client.AddAccountPromoCredit(ctx, req); err != nil {
+		return err.Error()
+	}
+
+	return ""
+}
+
+func accountPromoCreditRequestFromTool(request *mcp.CallToolRequest) (*linode.AddAccountPromoCreditRequest, string) {
+	raw, exists := request.GetArguments()["promo_code"]
+	if !exists {
+		return nil, "promo_code is required"
+	}
+
+	promoCode, ok := raw.(string)
+	if !ok || strings.TrimSpace(promoCode) == "" {
+		return nil, "promo_code must be a non-empty string"
+	}
+
+	if promoCode != strings.TrimSpace(promoCode) {
+		return nil, "promo_code must not include leading or trailing whitespace"
+	}
+
+	return &linode.AddAccountPromoCreditRequest{PromoCode: promoCode}, ""
 }
 
 func accountPaymentCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateAccountPaymentRequest, string) {

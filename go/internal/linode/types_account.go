@@ -192,6 +192,11 @@ type CreateAccountPaymentRequest struct {
 	USD             float64 `json:"usd,omitempty"`
 }
 
+// AddAccountPromoCreditRequest contains the request body for POST /account/promo-codes.
+type AddAccountPromoCreditRequest struct {
+	PromoCode string `json:"promo_code"`
+}
+
 // AccountInvoiceItem represents one line item on an account invoice.
 type AccountInvoiceItem struct {
 	Amount    float64 `json:"amount"`
