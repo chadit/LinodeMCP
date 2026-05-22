@@ -147,6 +147,7 @@ const (
 	aclPrivate           = "private"
 	errRegionInvalid     = "region must contain only lowercase letters, numbers, and hyphens"
 	pathTraversalValue   = ".."
+	errEUUIDNonEmpty     = "euuid must be a non-empty string"
 	errEUUIDNoSeparators = "euuid must not contain path separators"
 	objectPhotoJPG       = "photo.jpg"
 	filesystemExt4       = "ext4"

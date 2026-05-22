@@ -1192,6 +1192,113 @@ func TestClientGetAccountChildAccountRetriesTransientError(t *testing.T) {
 	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
+// TestClientCreateAccountChildAccountTokenSuccess verifies CreateAccountChildAccountToken
+// sends a POST request to /account/child-accounts/{euuId}/token and decodes the response.
+func TestClientCreateAccountChildAccountTokenSuccess(t *testing.T) {
+	t.Parallel()
+
+	proxyToken := linode.ProxyUserToken{
+		ID:      918,
+		Label:   "parent1_1234_2024-05-01T00:01:01",
+		Scopes:  "*",
+		Token:   "abcdefghijklmnop",
+		Created: "2024-05-01T00:01:01",
+		Expiry:  "2024-05-01T00:16:01",
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56/token", r.URL.Path, "request path should include child account euuid and token suffix")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		assert.Equal(t, http.NoBody, r.Body, "token creation should not send a request body")
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(proxyToken))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.CreateAccountChildAccountToken(t.Context(), childAccountEUUID)
+
+	require.NoError(t, err, "CreateAccountChildAccountToken should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, 918, result.ID)
+	assert.Equal(t, "parent1_1234_2024-05-01T00:01:01", result.Label)
+	assert.Equal(t, "*", result.Scopes)
+	assert.Equal(t, "abcdefghijklmnop", result.Token)
+	assert.Equal(t, "2024-05-01T00:16:01", result.Expiry)
+}
+
+// TestClientCreateAccountChildAccountTokenEscapesEUUID verifies the client encodes path separators.
+func TestClientCreateAccountChildAccountTokenEscapesEUUID(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/account/child-accounts/child%2Faccount%3Fquery/token", r.URL.EscapedPath(), "path parameter should be escaped")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.ProxyUserToken{Token: "proxy-token"}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.CreateAccountChildAccountToken(t.Context(), "child/account?query")
+
+	require.NoError(t, err, "CreateAccountChildAccountToken should escape path parameters")
+}
+
+// TestClientCreateAccountChildAccountTokenAPIError verifies API errors propagate.
+func TestClientCreateAccountChildAccountTokenAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56/token", r.URL.Path, "request path should include child account euuid and token suffix")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.CreateAccountChildAccountToken(t.Context(), childAccountEUUID)
+
+	require.Error(t, err, "CreateAccountChildAccountToken should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	require.NotNil(t, apiErr, "APIError should be present")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, "forbidden", apiErr.Message)
+}
+
+// TestClientCreateAccountChildAccountTokenDoesNotRetryTransientError verifies
+// token creation is not replayed after a transient failure.
+func TestClientCreateAccountChildAccountTokenDoesNotRetryTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	_, err := client.CreateAccountChildAccountToken(t.Context(), childAccountEUUID)
+
+	require.Error(t, err, "CreateAccountChildAccountToken should return the transient error")
+	assert.Equal(t, int32(1), requestCount.Load(), "mutating token creation must not be retried")
+}
+
 // TestClientGetAccountBetaSuccess verifies GetAccountBeta sends a GET
 // request to /account/betas/{betaId} and decodes the response.
 func TestClientGetAccountBetaSuccess(t *testing.T) {

@@ -129,6 +129,16 @@ type ChildAccountCreditCard struct {
 	LastFour string `json:"last_four"`
 }
 
+// ProxyUserToken contains a short-lived proxy user token for a child account.
+type ProxyUserToken struct {
+	Created string `json:"created"`
+	Expiry  string `json:"expiry"`
+	ID      int    `json:"id"`
+	Label   string `json:"label"`
+	Scopes  string `json:"scopes"`
+	Token   string `json:"token"`
+}
+
 // EnrollAccountBetaRequest contains the beta program identifier for POST /account/betas.
 type EnrollAccountBetaRequest struct {
 	ID string `json:"id"`

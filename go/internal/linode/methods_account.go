@@ -211,6 +211,28 @@ func (c *Client) httpGetAccountChildAccount(ctx context.Context, euuid string) (
 	return &childAccount, nil
 }
 
+// httpCreateAccountChildAccountToken creates a proxy user token for one child-level account.
+func (c *Client) httpCreateAccountChildAccountToken(ctx context.Context, euuid string) (*ProxyUserToken, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountChildAccounts + "/" + url.PathEscape(euuid) + "/token"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateAccountChildAccountToken", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var token ProxyUserToken
+	if err := c.handleResponse(resp, &token); err != nil {
+		return nil, err
+	}
+
+	return &token, nil
+}
+
 // httpGetAccountBeta retrieves one enrolled account beta program.
 func (c *Client) httpGetAccountBeta(ctx context.Context, betaID string) (*AccountBetaProgram, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
