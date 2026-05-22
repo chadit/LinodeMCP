@@ -173,6 +173,21 @@ func (c *Client) ListAccountBetas(ctx context.Context, page, pageSize int) (*Pag
 	return betas, err
 }
 
+// ListAccountEvents retrieves account events with automatic retry on transient failures.
+func (c *Client) ListAccountEvents(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountEvent], error) {
+	var events *PaginatedResponse[AccountEvent]
+
+	err := c.executeWithRetry(ctx, "ListAccountEvents", func() error {
+		var err error
+
+		events, err = c.httpListAccountEvents(ctx, page, pageSize)
+
+		return err
+	})
+
+	return events, err
+}
+
 // ListAccountChildAccounts retrieves child-level accounts with automatic retry on transient failures.
 func (c *Client) ListAccountChildAccounts(ctx context.Context, page, pageSize int) (*PaginatedResponse[ChildAccount], error) {
 	var childAccounts *PaginatedResponse[ChildAccount]

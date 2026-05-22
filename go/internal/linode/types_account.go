@@ -100,6 +100,31 @@ type AccountBetaProgram struct {
 	Started     string  `json:"started"`
 }
 
+// AccountEvent represents an account event returned by GET /account/events.
+type AccountEvent struct {
+	Action          string              `json:"action"`
+	Created         string              `json:"created"`
+	Duration        *float64            `json:"duration"`
+	Entity          *AccountEventEntity `json:"entity"`
+	ID              int                 `json:"id"`
+	Message         string              `json:"message"`
+	PercentComplete *int                `json:"percent_complete"`
+	Rate            *string             `json:"rate"`
+	SecondaryEntity *AccountEventEntity `json:"secondary_entity"`
+	Seen            bool                `json:"seen"`
+	Status          string              `json:"status"`
+	TimeRemaining   *string             `json:"time_remaining"`
+	Username        string              `json:"username"`
+}
+
+// AccountEventEntity identifies the primary or secondary entity attached to an account event.
+type AccountEventEntity struct {
+	ID    any    `json:"id"`
+	Label string `json:"label"`
+	Type  string `json:"type"`
+	URL   string `json:"url"`
+}
+
 // ChildAccount represents a child-level account available to a parent account.
 type ChildAccount struct {
 	ActiveSince       string                 `json:"active_since"`

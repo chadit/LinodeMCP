@@ -966,6 +966,132 @@ func TestClientListAccountBetasRetriesTransientError(t *testing.T) {
 	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
+// TestClientListAccountEventsSuccess verifies ListAccountEvents sends a GET
+// request to /account/events with pagination query parameters.
+func TestClientListAccountEventsSuccess(t *testing.T) {
+	t.Parallel()
+
+	duration := 300.56
+	events := linode.PaginatedResponse[linode.AccountEvent]{
+		Data: []linode.AccountEvent{{
+			Action:   "ticket_create",
+			Created:  "2018-01-01T00:01:01",
+			Duration: &duration,
+			Entity: &linode.AccountEventEntity{
+				ID:    float64(11111),
+				Label: "Problem booting my Linode",
+				Type:  "ticket",
+				URL:   "/v4/support/tickets/11111",
+			},
+			ID:      123,
+			Message: "None",
+			SecondaryEntity: &linode.AccountEventEntity{
+				ID:    "linode/debian9",
+				Label: "linode1234",
+				Type:  "linode",
+				URL:   "/v4/linode/instances/1234",
+			},
+			Seen:     true,
+			Status:   "failed",
+			Username: "adevi",
+		}},
+		Page:    2,
+		Pages:   3,
+		Results: 75,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/events", r.URL.Path, "request path should be /account/events")
+		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(events))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.ListAccountEvents(t.Context(), 2, 25)
+
+	require.NoError(t, err, "ListAccountEvents should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, 2, result.Page)
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, 123, result.Data[0].ID)
+	assert.Equal(t, "ticket_create", result.Data[0].Action)
+	assert.Equal(t, "failed", result.Data[0].Status)
+	require.NotNil(t, result.Data[0].Entity)
+	assert.Equal(t, "ticket", result.Data[0].Entity.Type)
+	require.NotNil(t, result.Data[0].Duration)
+	assert.InDelta(t, duration, *result.Data[0].Duration, 0.001)
+}
+
+// TestClientListAccountEventsAPIError verifies ListAccountEvents propagates API errors.
+func TestClientListAccountEventsAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/events", r.URL.Path, "request path should be /account/events")
+		assert.Empty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.ListAccountEvents(t.Context(), 0, 0)
+
+	require.Error(t, err, "ListAccountEvents should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	require.NotNil(t, apiErr, "APIError should be present")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, "forbidden", apiErr.Message)
+}
+
+// TestClientListAccountEventsRetriesTransientError verifies the read-only list retries transient failures.
+func TestClientListAccountEventsRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			assert.NoError(t, writeErr)
+
+			return
+		}
+
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/events", r.URL.Path, "request path should be /account/events")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountEvent]{
+			Data: []linode.AccountEvent{{ID: 123, Action: "ticket_create"}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	result, err := client.ListAccountEvents(t.Context(), 0, 0)
+
+	require.NoError(t, err, "ListAccountEvents should succeed after retry")
+	require.NotNil(t, result, "result should not be nil")
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, 123, result.Data[0].ID)
+	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+}
+
 // TestClientListAccountChildAccountsSuccess verifies ListAccountChildAccounts sends a GET
 // request to /account/child-accounts with pagination query parameters.
 func TestClientListAccountChildAccountsSuccess(t *testing.T) {

@@ -15,6 +15,7 @@ const (
 	endpointAccountAgreements      = "/account/agreements"
 	endpointAccountAvailability    = "/account/availability"
 	endpointAccountBetas           = "/account/betas"
+	endpointAccountEvents          = "/account/events"
 	endpointAccountChildAccounts   = "/account/child-accounts"
 	endpointAccountEntityTransfers = "/account/entity-transfers"
 )
@@ -166,6 +167,28 @@ func (c *Client) httpListAccountBetas(ctx context.Context, page, pageSize int) (
 	}
 
 	return &betas, nil
+}
+
+// httpListAccountEvents retrieves account events.
+func (c *Client) httpListAccountEvents(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountEvent], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointAccountEvents, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListAccountEvents", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var events PaginatedResponse[AccountEvent]
+	if err := c.handleResponse(resp, &events); err != nil {
+		return nil, err
+	}
+
+	return &events, nil
 }
 
 // httpListAccountChildAccounts retrieves child-level accounts.
