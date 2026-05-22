@@ -210,6 +210,11 @@ type CreatedOAuthClient struct {
 	Secret      string `json:"secret"`
 }
 
+// OAuthClientSecret represents the response from resetting an OAuth client secret.
+type OAuthClientSecret struct {
+	Secret string `json:"secret"`
+}
+
 // CreateOAuthClientRequest contains the required fields for POST /account/oauth-clients.
 type CreateOAuthClientRequest struct {
 	Label       string `json:"label"`

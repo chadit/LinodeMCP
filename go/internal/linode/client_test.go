@@ -1591,6 +1591,92 @@ func TestClientDeleteAccountOAuthClientDoesNotRetryTransientError(t *testing.T) 
 	assert.Equal(t, int32(1), requestCount.Load(), "destructive OAuth client delete must not be retried")
 }
 
+func TestClientResetOAuthClientSecretSuccess(t *testing.T) {
+	t.Parallel()
+
+	want := linode.OAuthClientSecret{Secret: "new-secret-once"}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/account/oauth-clients/"+oauthClientID+"/reset-secret", r.URL.Path, "request path should reset client secret")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		assert.Equal(t, http.NoBody, r.Body, "reset secret request should not send a body")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(want))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	got, err := client.ResetOAuthClientSecret(t.Context(), oauthClientID)
+
+	require.NoError(t, err, "ResetOAuthClientSecret should succeed on 200 response")
+	require.NotNil(t, got, "result should not be nil")
+	assert.Equal(t, want, *got)
+}
+
+func TestClientResetOAuthClientSecretEscapesClientID(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/account/oauth-clients/client%2F123%3Fquery/reset-secret", r.URL.EscapedPath(), "path parameter should be escaped")
+		assert.Empty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.OAuthClientSecret{Secret: "new-secret"}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.ResetOAuthClientSecret(t.Context(), "client/123?query")
+
+	require.NoError(t, err, "ResetOAuthClientSecret should escape path parameters")
+}
+
+func TestClientResetOAuthClientSecretAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/account/oauth-clients/"+oauthClientID+"/reset-secret", r.URL.Path, "request path should reset client secret")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.ResetOAuthClientSecret(t.Context(), oauthClientID)
+
+	require.Error(t, err, "ResetOAuthClientSecret should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+}
+
+func TestClientResetOAuthClientSecretDoesNotRetryTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	_, err := client.ResetOAuthClientSecret(t.Context(), oauthClientID)
+
+	require.Error(t, err, "ResetOAuthClientSecret should return the transient error")
+	assert.Equal(t, int32(1), requestCount.Load(), "credential rotation must not be retried")
+}
+
 // TestClientCreateOAuthClientAPIError verifies API errors propagate.
 func TestClientCreateOAuthClientAPIError(t *testing.T) {
 	t.Parallel()

@@ -254,6 +254,13 @@ func (c *Client) DeleteAccountOAuthClient(ctx context.Context, clientID string) 
 	return c.httpDeleteAccountOAuthClient(ctx, clientID)
 }
 
+// ResetOAuthClientSecret resets an account OAuth client secret without retrying
+// the credential rotation. Retrying can rotate the secret more than once after
+// a transient error, so this method delegates exactly once.
+func (c *Client) ResetOAuthClientSecret(ctx context.Context, clientID string) (*OAuthClientSecret, error) {
+	return c.httpResetOAuthClientSecret(ctx, clientID)
+}
+
 // ListAccountEvents retrieves account events with automatic retry on transient failures.
 func (c *Client) ListAccountEvents(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountEvent], error) {
 	var events *PaginatedResponse[AccountEvent]

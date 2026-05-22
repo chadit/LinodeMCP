@@ -299,6 +299,22 @@ func NewLinodeAccountOAuthClientDeleteTool(cfg *config.Config) (mcp.Tool, profil
 	return tool, profiles.CapAdmin, handler
 }
 
+// NewLinodeAccountOAuthClientResetSecretTool creates a tool for resetting one OAuth client secret.
+func NewLinodeAccountOAuthClientResetSecretTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_oauth_client_reset_secret",
+		"Resets one account OAuth client secret by ID. WARNING: The new secret is only shown once in the response and cannot be retrieved later.",
+		[]mcp.ToolOption{
+			mcp.WithString("client_id", mcp.Required(), mcp.Description("OAuth client ID.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm OAuth client secret reset. The new secret is only shown once.")),
+		},
+		handleLinodeAccountOAuthClientResetSecretRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
 // NewLinodeAccountChildAccountsTool creates a tool for listing child-level accounts.
 func NewLinodeAccountChildAccountsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -861,6 +877,48 @@ func deleteOAuthClient(ctx context.Context, client *linode.Client, clientID stri
 	}
 
 	return ""
+}
+
+func handleLinodeAccountOAuthClientResetSecretRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This resets an OAuth client secret. The new secret is only shown once. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	clientID, validationMessage := accountOAuthClientIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	secret, resetFailureMessage := resetOAuthClientSecret(ctx, client, clientID)
+	if resetFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to reset linode_account_oauth_client_reset_secret: " + resetFailureMessage), nil
+	}
+
+	return MarshalToolResponse(struct {
+		Message  string                    `json:"message"`
+		Warning  string                    `json:"warning"`
+		ClientID string                    `json:"client_id"`
+		Secret   *linode.OAuthClientSecret `json:"secret"`
+	}{
+		Message:  "OAuth client secret reset successfully",
+		Warning:  "IMPORTANT: The new secret below is shown ONLY ONCE. Save it now - it cannot be retrieved later.",
+		ClientID: clientID,
+		Secret:   secret,
+	})
+}
+
+func resetOAuthClientSecret(ctx context.Context, client *linode.Client, clientID string) (*linode.OAuthClientSecret, string) {
+	secret, err := client.ResetOAuthClientSecret(ctx, clientID)
+	if err != nil {
+		return nil, err.Error()
+	}
+
+	return secret, ""
 }
 
 func oauthClientCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateOAuthClientRequest, string) {
