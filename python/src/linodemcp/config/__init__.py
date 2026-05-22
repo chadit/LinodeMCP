@@ -4,8 +4,10 @@ import contextlib
 import json
 import logging
 import os
+import re
 import tempfile
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -181,6 +183,52 @@ class AuditSQLiteConfig:
     busy_timeout_ms: int = DEFAULT_AUDIT_SQLITE_BUSY_TIMEOUT_MS
 
 
+# Report output modes. Summary aggregates into per-bucket counts (like
+# linode_audit_summary); list returns the matching events (like
+# linode_audit_recent), capped by the report's limit.
+REPORT_OUTPUT_SUMMARY = "summary"
+REPORT_OUTPUT_LIST = "list"
+
+
+@dataclass
+class ReportFilter:
+    """Typed report filter grammar. Each field maps to an event field.
+
+    ``tool`` and ``environment`` are globs; ``capability`` and
+    ``status`` accept either a scalar or the ``*_in`` list form (not
+    both). ``since_offset`` is a duration relative to now (e.g. "24h");
+    ``since`` and ``until`` are absolute RFC 3339 timestamps. Compiled to
+    a predicate by the Phase 4b tool.
+    """
+
+    tool: str = ""
+    capability: str = ""
+    capability_in: list[str] = field(default_factory=list[str])
+    status: str = ""
+    status_in: list[str] = field(default_factory=list[str])
+    environment: str = ""
+    profile: str = ""
+    since_offset: str = ""
+    since: str = ""
+    until: str = ""
+
+
+@dataclass
+class ReportConfig:
+    """One named custom audit report under AuditConfig.reports.
+
+    The linode_audit_report tool (Phase 4b) resolves and runs it at call
+    time, so editing the report file takes effect on the next call. An
+    empty ``output`` defaults to "summary".
+    """
+
+    description: str = ""
+    filter: ReportFilter = field(default_factory=ReportFilter)
+    group_by: list[str] = field(default_factory=list[str])
+    output: str = REPORT_OUTPUT_SUMMARY
+    limit: int = 0
+
+
 @dataclass
 class AuditConfig:
     """Audit-log settings.
@@ -194,6 +242,7 @@ class AuditConfig:
 
     retention_days: int = DEFAULT_AUDIT_RETENTION_DAYS
     sqlite: AuditSQLiteConfig = field(default_factory=AuditSQLiteConfig)
+    reports: dict[str, ReportConfig] = field(default_factory=dict[str, ReportConfig])
 
 
 @dataclass
@@ -480,6 +529,44 @@ def validate_config(cfg: Config) -> None:
         msg = "audit.retention_days cannot be negative"
         raise ConfigInvalidError(msg)
 
+    _validate_reports(cfg.audit.reports)
+
+
+def _validate_reports(reports: dict[str, ReportConfig]) -> None:
+    """Validate each custom report's structural grammar: a known output
+    mode, a parseable since_offset, parseable since/until timestamps, and
+    capability/status using either the scalar or list form but not both.
+    """
+    for name, report in reports.items():
+        if report.output not in (REPORT_OUTPUT_SUMMARY, REPORT_OUTPUT_LIST):
+            msg = f"report {name!r} output must be 'summary' or 'list'"
+            raise ConfigInvalidError(msg)
+
+        flt = report.filter
+        if flt.capability and flt.capability_in:
+            msg = f"report {name!r} sets both capability and capability_in"
+            raise ConfigInvalidError(msg)
+
+        if flt.status and flt.status_in:
+            msg = f"report {name!r} sets both status and status_in"
+            raise ConfigInvalidError(msg)
+
+        if flt.since_offset:
+            try:
+                parse_duration_seconds(flt.since_offset)
+            except ValueError as exc:
+                msg = f"report {name!r} since_offset is not a valid duration"
+                raise ConfigInvalidError(msg) from exc
+
+        for label, value in (("since", flt.since), ("until", flt.until)):
+            if not value:
+                continue
+            try:
+                datetime.fromisoformat(value)
+            except ValueError as exc:
+                msg = f"report {name!r} {label} is not a valid RFC 3339 timestamp"
+                raise ConfigInvalidError(msg) from exc
+
 
 def _parse_string_tuple(raw: Any) -> tuple[str, ...]:
     """Coerce a YAML/JSON list-of-strings into a tuple, dropping non-strings.
@@ -648,7 +735,101 @@ def _parse_audit(raw: Any) -> AuditConfig:
                 sqlite_data.get("busy_timeout_ms", DEFAULT_AUDIT_SQLITE_BUSY_TIMEOUT_MS)
             ),
         ),
+        reports=_parse_reports(audit_data.get("reports")),
     )
+
+
+def _parse_reports(raw: Any) -> dict[str, ReportConfig]:
+    """Build the named-report map from the raw ``audit.reports`` block.
+
+    An empty or absent ``output`` defaults to summary; the rest of the
+    grammar is validated later by validate_config.
+    """
+    if not isinstance(raw, dict):
+        return {}
+
+    reports: dict[str, ReportConfig] = {}
+    for name, value in cast("dict[str, Any]", raw).items():
+        report_data = cast("dict[str, Any]", value) if isinstance(value, dict) else {}
+        reports[str(name)] = ReportConfig(
+            description=str(report_data.get("description", "")),
+            filter=_parse_report_filter(report_data.get("filter")),
+            group_by=_parse_string_list(report_data.get("group_by")),
+            output=str(report_data.get("output") or REPORT_OUTPUT_SUMMARY),
+            limit=int(report_data.get("limit", 0)),
+        )
+
+    return reports
+
+
+def _parse_report_filter(raw: Any) -> ReportFilter:
+    """Build a ReportFilter from the raw ``filter`` block."""
+    data = cast("dict[str, Any]", raw) if isinstance(raw, dict) else {}
+    return ReportFilter(
+        tool=str(data.get("tool", "")),
+        capability=str(data.get("capability", "")),
+        capability_in=_parse_string_list(data.get("capability_in")),
+        status=str(data.get("status", "")),
+        status_in=_parse_string_list(data.get("status_in")),
+        environment=str(data.get("environment", "")),
+        profile=str(data.get("profile", "")),
+        since_offset=str(data.get("since_offset", "")),
+        since=str(data.get("since", "")),
+        until=str(data.get("until", "")),
+    )
+
+
+def _parse_string_list(raw: Any) -> list[str]:
+    """Coerce a YAML/JSON list into a list of strings, dropping non-strings."""
+    if not isinstance(raw, list):
+        return []
+
+    raw_list = cast("list[object]", raw)
+    return [item for item in raw_list if isinstance(item, str)]
+
+
+_DURATION_TOKEN = re.compile(r"(\d+(?:\.\d+)?)(ns|us|µs|ms|s|m|h)")
+_DURATION_UNIT_SECONDS = {
+    "ns": 1e-9,
+    "us": 1e-6,
+    "µs": 1e-6,
+    "ms": 1e-3,
+    "s": 1.0,
+    "m": 60.0,
+    "h": 3600.0,
+}
+
+
+def parse_duration_seconds(value: str) -> float:
+    """Parse a Go-style duration ("24h", "2h45m", "300ms") into seconds.
+
+    Mirrors Go's time.ParseDuration for the units the report grammar
+    uses. Raises ValueError on an empty or malformed value.
+    """
+    text = value.strip()
+    if not text:
+        msg = "empty duration"
+        raise ValueError(msg)
+
+    sign = 1.0
+    if text[0] in "+-":
+        sign = -1.0 if text[0] == "-" else 1.0
+        text = text[1:]
+
+    total = 0.0
+    pos = 0
+    for match in _DURATION_TOKEN.finditer(text):
+        if match.start() != pos:
+            break
+
+        total += float(match.group(1)) * _DURATION_UNIT_SECONDS[match.group(2)]
+        pos = match.end()
+
+    if pos != len(text) or pos == 0:
+        msg = f"invalid duration: {value!r}"
+        raise ValueError(msg)
+
+    return sign * total
 
 
 def load_from_file(path: Path) -> Config:

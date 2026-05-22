@@ -124,8 +124,49 @@ type Config struct {
 // DefaultAuditRetentionDays). After setDefaults runs it is always
 // non-nil, so consumers can dereference safely.
 type AuditConfig struct {
-	RetentionDays *int              `json:"retention_days" yaml:"retention_days"`
-	SQLite        AuditSQLiteConfig `json:"sqlite"         yaml:"sqlite"`
+	RetentionDays *int                    `json:"retention_days" yaml:"retention_days"`
+	SQLite        AuditSQLiteConfig       `json:"sqlite"         yaml:"sqlite"`
+	Reports       map[string]ReportConfig `json:"reports"        yaml:"reports"`
+}
+
+// Report output modes. ReportOutputSummary aggregates into per-bucket
+// counts (like linode_audit_summary); ReportOutputList returns the
+// matching events (like linode_audit_recent), capped by Limit.
+const (
+	ReportOutputSummary = "summary"
+	ReportOutputList    = "list"
+)
+
+// ReportConfig is the YAML/JSON shape for one named custom audit report
+// under AuditConfig.Reports. The linode_audit_report tool (Phase 4b)
+// resolves and runs it at call time, so editing the report file takes
+// effect on the next call. An empty Output defaults to "summary".
+type ReportConfig struct {
+	Description string       `json:"description" yaml:"description"`
+	Filter      ReportFilter `json:"filter"      yaml:"filter"`
+	GroupBy     []string     `json:"group_by"    yaml:"group_by"`
+	Output      string       `json:"output"      yaml:"output"`
+	Limit       int          `json:"limit"       yaml:"limit"`
+}
+
+// ReportFilter types the small report filter grammar. Each field maps
+// to an event field. Tool and Environment are globs; Capability and
+// Status accept either a scalar or the *In list form (not both).
+// SinceOffset is a duration relative to now (e.g. "24h"); Since and
+// Until are absolute RFC 3339 timestamps. Compiled to a predicate by
+// the Phase 4b tool; the grammar is intentionally small (no eval, no
+// expression language).
+type ReportFilter struct {
+	Tool         string   `json:"tool"          yaml:"tool"`
+	Capability   string   `json:"capability"    yaml:"capability"`
+	CapabilityIn []string `json:"capability_in" yaml:"capability_in"`
+	Status       string   `json:"status"        yaml:"status"`
+	StatusIn     []string `json:"status_in"     yaml:"status_in"`
+	Environment  string   `json:"environment"   yaml:"environment"`
+	Profile      string   `json:"profile"       yaml:"profile"`
+	SinceOffset  string   `json:"since_offset"  yaml:"since_offset"`
+	Since        string   `json:"since"         yaml:"since"`
+	Until        string   `json:"until"         yaml:"until"`
 }
 
 // AuditSQLiteConfig holds the optional SQLite audit sink settings.
@@ -239,7 +280,7 @@ func Load(path string) (*Config, error) {
 	applyEnvironmentOverrides(&cfg)
 
 	if err := validateConfig(&cfg); err != nil {
-		return nil, fmt.Errorf("%w: %s", ErrConfigInvalid, err.Error())
+		return nil, fmt.Errorf("%w: %w", ErrConfigInvalid, err)
 	}
 
 	return &cfg, nil
@@ -311,6 +352,17 @@ func setAuditDefaults(cfg *Config) {
 
 	if cfg.Audit.SQLite.BusyTimeoutMS == 0 {
 		cfg.Audit.SQLite.BusyTimeoutMS = DefaultAuditSQLiteBusyTimeoutMS
+	}
+
+	// Map values are not addressable, so reassign the whole struct after
+	// filling the output default. Range over keys to avoid copying each
+	// ReportConfig on every iteration.
+	for name := range cfg.Audit.Reports {
+		if cfg.Audit.Reports[name].Output == "" {
+			report := cfg.Audit.Reports[name]
+			report.Output = ReportOutputSummary
+			cfg.Audit.Reports[name] = report
+		}
 	}
 }
 
@@ -573,6 +625,61 @@ func validateConfig(cfg *Config) error {
 
 	if cfg.Audit.RetentionDays != nil && *cfg.Audit.RetentionDays < 0 {
 		return ErrNegativeRetentionDays
+	}
+
+	return validateAuditReports(cfg.Audit.Reports)
+}
+
+// validateAuditReports checks each custom report's structural grammar:
+// a known output mode, a parseable since_offset duration, parseable
+// since/until timestamps, and that capability/status use either the
+// scalar or the list form but not both. Value semantics (is this a real
+// capability name) are checked when the report runs.
+func validateAuditReports(reports map[string]ReportConfig) error {
+	for name := range reports {
+		report := reports[name]
+
+		if report.Output != ReportOutputSummary && report.Output != ReportOutputList {
+			return fmt.Errorf("%w: report %q has output %q", ErrInvalidReportOutput, name, report.Output)
+		}
+
+		if err := validateReportFilter(name, &report.Filter); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// validateReportFilter checks one report's filter for a parseable
+// duration/timestamps and the scalar-xor-list rule on capability and
+// status.
+func validateReportFilter(name string, filter *ReportFilter) error {
+	if filter.Capability != "" && len(filter.CapabilityIn) > 0 {
+		return fmt.Errorf("%w: report %q sets both capability and capability_in", ErrReportScalarAndList, name)
+	}
+
+	if filter.Status != "" && len(filter.StatusIn) > 0 {
+		return fmt.Errorf("%w: report %q sets both status and status_in", ErrReportScalarAndList, name)
+	}
+
+	if filter.SinceOffset != "" {
+		if _, err := time.ParseDuration(filter.SinceOffset); err != nil {
+			return fmt.Errorf("%w: report %q since_offset %q: %w", ErrInvalidReportDuration, name, filter.SinceOffset, err)
+		}
+	}
+
+	for _, bound := range []struct{ label, value string }{
+		{"since", filter.Since},
+		{"until", filter.Until},
+	} {
+		if bound.value == "" {
+			continue
+		}
+
+		if _, err := time.Parse(time.RFC3339, bound.value); err != nil {
+			return fmt.Errorf("%w: report %q %s %q: %w", ErrInvalidReportTimestamp, name, bound.label, bound.value, err)
+		}
 	}
 
 	return nil
