@@ -3,6 +3,7 @@ package linode_test
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -31,6 +32,7 @@ const (
 	keyReason                    = "reason"
 	errForbidden                 = "forbidden"
 	oauthClientID                = "client-123"
+	oauthClientIDWithSeparators  = "client/123?query"
 	oauthClientStatus            = "active"
 	keyRedirectURI               = "redirect_uri"
 	keyThumbnailURL              = "thumbnail_url"
@@ -1304,13 +1306,13 @@ func TestClientGetAccountOAuthClientEscapesClientID(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/account/oauth-clients/client%2F123%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.OAuthClient{ID: "client/123?query"}))
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.OAuthClient{ID: oauthClientIDWithSeparators}))
 	}))
 	defer srv.Close()
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	_, err := client.GetAccountOAuthClient(t.Context(), "client/123?query")
+	_, err := client.GetAccountOAuthClient(t.Context(), oauthClientIDWithSeparators)
 
 	require.NoError(t, err, "GetAccountOAuthClient should escape path parameters")
 }
@@ -1416,7 +1418,7 @@ func TestClientUpdateOAuthClientEscapesClientID(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/account/oauth-clients/client%2F123%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.OAuthClient{ID: "client/123?query"}))
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.OAuthClient{ID: oauthClientIDWithSeparators}))
 	}))
 	defer srv.Close()
 
@@ -1424,7 +1426,7 @@ func TestClientUpdateOAuthClientEscapesClientID(t *testing.T) {
 	label := oauthClientLabel
 	req := &linode.UpdateOAuthClientRequest{Label: &label}
 
-	_, err := client.UpdateOAuthClient(t.Context(), "client/123?query", req)
+	_, err := client.UpdateOAuthClient(t.Context(), oauthClientIDWithSeparators, req)
 
 	require.NoError(t, err, "UpdateOAuthClient should escape path parameters")
 }
@@ -1507,6 +1509,94 @@ func TestClientCreateOAuthClientSuccess(t *testing.T) {
 	assert.Equal(t, want, *got)
 }
 
+func TestClientUpdateOAuthClientThumbnailSuccess(t *testing.T) {
+	t.Parallel()
+
+	thumbnailPNG := []byte("png-bytes")
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, "/account/oauth-clients/"+oauthClientID+"/thumbnail", r.URL.Path, "request path should update client thumbnail")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		assert.Equal(t, "image/png", r.Header.Get("Content-Type"))
+
+		got, err := io.ReadAll(r.Body)
+		assert.NoError(t, err, "reading thumbnail body should not fail")
+		assert.Equal(t, thumbnailPNG, got, "thumbnail update should send the PNG bytes")
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	err := client.UpdateOAuthClientThumbnail(t.Context(), oauthClientID, thumbnailPNG)
+
+	require.NoError(t, err, "UpdateOAuthClientThumbnail should succeed on 200 response")
+}
+
+func TestClientUpdateOAuthClientThumbnailEscapesClientID(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/account/oauth-clients/client%2F123%3Fquery/thumbnail", r.URL.EscapedPath(), "path parameter should be escaped")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.OAuthClient{ID: oauthClientIDWithSeparators}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	err := client.UpdateOAuthClientThumbnail(t.Context(), oauthClientIDWithSeparators, []byte("png-bytes"))
+
+	require.NoError(t, err, "UpdateOAuthClientThumbnail should escape path parameters")
+}
+
+func TestClientUpdateOAuthClientThumbnailAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, "/account/oauth-clients/"+oauthClientID+"/thumbnail", r.URL.Path, "request path should update client thumbnail")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	err := client.UpdateOAuthClientThumbnail(t.Context(), oauthClientID, []byte("png-bytes"))
+
+	require.Error(t, err, "UpdateOAuthClientThumbnail should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+}
+
+func TestClientUpdateOAuthClientThumbnailDoesNotRetryTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
+		assert.Equal(t, "/account/oauth-clients/"+oauthClientID+"/thumbnail", r.URL.Path, "request path should update client thumbnail")
+		http.Error(w, "temporary failure", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	err := client.UpdateOAuthClientThumbnail(t.Context(), oauthClientID, []byte("png-bytes"))
+
+	require.Error(t, err, "UpdateOAuthClientThumbnail should return the transient error")
+	assert.Equal(t, int32(1), requestCount.Load(), "mutating OAuth client thumbnail update must not be retried")
+}
+
 func TestClientDeleteAccountOAuthClientSuccess(t *testing.T) {
 	t.Parallel()
 
@@ -1544,7 +1634,7 @@ func TestClientDeleteAccountOAuthClientEscapesClientID(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	err := client.DeleteAccountOAuthClient(t.Context(), "client/123?query")
+	err := client.DeleteAccountOAuthClient(t.Context(), oauthClientIDWithSeparators)
 
 	require.NoError(t, err, "DeleteAccountOAuthClient should escape path parameters")
 }
@@ -1630,7 +1720,7 @@ func TestClientResetOAuthClientSecretEscapesClientID(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	_, err := client.ResetOAuthClientSecret(t.Context(), "client/123?query")
+	_, err := client.ResetOAuthClientSecret(t.Context(), oauthClientIDWithSeparators)
 
 	require.NoError(t, err, "ResetOAuthClientSecret should escape path parameters")
 }

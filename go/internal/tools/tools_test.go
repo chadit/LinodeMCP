@@ -1,7 +1,9 @@
 package tools_test
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -54,6 +56,8 @@ const (
 	errRedirectURIRequired           = "redirect_uri is required"
 	blankString                      = "   "
 	keyPublic                        = "public"
+	keyThumbnailPNGBase64            = "thumbnail_png_base64"
+	oauthClientThumbnailPNG          = "png-bytes"
 )
 
 // End-to-end verification of the hello tool.
@@ -2246,6 +2250,194 @@ func TestLinodeAccountOAuthClientUpdateTool(t *testing.T) {
 		require.NotNil(t, result, "result should not be nil")
 		assert.True(t, result.IsError, "API failure should be an error result")
 		assertErrorContains(t, result, "Failed to update linode_account_oauth_client_update")
+		assertErrorContains(t, result, errForbidden)
+	})
+}
+
+// End-to-end verification of account OAuth client thumbnail update.
+func TestLinodeAccountOAuthClientThumbnailUpdateTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountOAuthClientThumbnailUpdateTool(cfg)
+
+		assert.Equal(t, "linode_account_oauth_client_thumbnail_update", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapAdmin, capability, "OAuth client thumbnail update should be CapAdmin")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, keyClientID, "schema should include client_id")
+		assert.Contains(t, props, keyThumbnailPNGBase64, "schema should include thumbnail_png_base64")
+		assert.Contains(t, props, keyConfirm, "schema should include confirm")
+	})
+
+	t.Run("confirm required before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name    string
+			confirm any
+			include bool
+		}{
+			{name: caseMissing},
+			{name: caseFalse, confirm: false, include: true},
+			{name: caseString, confirm: boolStringTrue, include: true},
+			{name: caseNumeric, confirm: 1, include: true},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeAccountOAuthClientThumbnailUpdateTool(cfg)
+
+				args := map[string]any{keyClientID: oauthClientID, keyThumbnailPNGBase64: base64.StdEncoding.EncodeToString([]byte(oauthClientThumbnailPNG))}
+				if testCase.include {
+					args[keyConfirm] = testCase.confirm
+				}
+
+				req := createRequestWithArgs(t, args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid confirm should be an error result")
+				assertErrorContains(t, result, "confirm=true")
+			})
+		}
+	})
+
+	t.Run("invalid client_id rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name string
+			args map[string]any
+			want string
+		}{
+			{name: caseMissing, args: map[string]any{keyThumbnailPNGBase64: base64.StdEncoding.EncodeToString([]byte(oauthClientThumbnailPNG)), keyConfirm: true}, want: errClientIDRequired},
+			{name: caseClientIDEmpty, args: map[string]any{keyClientID: "", keyThumbnailPNGBase64: base64.StdEncoding.EncodeToString([]byte(oauthClientThumbnailPNG)), keyConfirm: true}, want: errClientIDNonEmpty},
+			{name: caseClientIDNumeric, args: map[string]any{keyClientID: 123, keyThumbnailPNGBase64: base64.StdEncoding.EncodeToString([]byte(oauthClientThumbnailPNG)), keyConfirm: true}, want: errClientIDNonEmpty},
+			{name: caseClientIDSlash, args: map[string]any{keyClientID: invalidClientIDSlash, keyThumbnailPNGBase64: base64.StdEncoding.EncodeToString([]byte(oauthClientThumbnailPNG)), keyConfirm: true}, want: errClientIDNoSeparators},
+			{name: caseClientIDQuerySeparator, args: map[string]any{keyClientID: invalidClientIDQuery, keyThumbnailPNGBase64: base64.StdEncoding.EncodeToString([]byte(oauthClientThumbnailPNG)), keyConfirm: true}, want: errClientIDNoSeparators},
+			{name: caseDotTraversal, args: map[string]any{keyClientID: pathTraversalValue, keyThumbnailPNGBase64: base64.StdEncoding.EncodeToString([]byte(oauthClientThumbnailPNG)), keyConfirm: true}, want: errClientIDNoSeparators},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeAccountOAuthClientThumbnailUpdateTool(cfg)
+				req := createRequestWithArgs(t, testCase.args)
+
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid client_id should be an error result")
+				assertErrorContains(t, result, testCase.want)
+			})
+		}
+	})
+
+	t.Run("invalid thumbnail rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name  string
+			value any
+			want  string
+		}{
+			{name: caseMissing, want: "thumbnail_png_base64 is required"},
+			{name: caseString, value: blankString, want: "thumbnail_png_base64 must be a non-empty string"},
+			{name: caseNumeric, value: 123, want: "thumbnail_png_base64 must be a non-empty string"},
+			{name: "malformed base64", value: "not base64", want: "thumbnail_png_base64 must be valid standard base64"},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeAccountOAuthClientThumbnailUpdateTool(cfg)
+				args := map[string]any{keyClientID: oauthClientID, keyConfirm: true}
+
+				if testCase.value != nil {
+					args[keyThumbnailPNGBase64] = testCase.value
+				}
+
+				req := createRequestWithArgs(t, args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid thumbnail should be an error result")
+				assertErrorContains(t, result, testCase.want)
+			})
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+			assert.Equal(t, "/account/oauth-clients/client-123/thumbnail", r.URL.Path, "request path should update client thumbnail")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			assert.Equal(t, "image/png", r.Header.Get("Content-Type"))
+
+			got, err := io.ReadAll(r.Body)
+			assert.NoError(t, err, "reading thumbnail body should not fail")
+			assert.Equal(t, []byte(oauthClientThumbnailPNG), got, "thumbnail update should send decoded PNG bytes")
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountOAuthClientThumbnailUpdateTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID, keyThumbnailPNGBase64: base64.StdEncoding.EncodeToString([]byte(oauthClientThumbnailPNG)), keyConfirm: true})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "OAuth client thumbnail updated successfully", "response should include success message")
+		assert.Contains(t, textContent.Text, oauthClientID, "response should include client id")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+			assert.Equal(t, "/account/oauth-clients/client-123/thumbnail", r.URL.Path, "request path should update client thumbnail")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountOAuthClientThumbnailUpdateTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID, keyThumbnailPNGBase64: base64.StdEncoding.EncodeToString([]byte(oauthClientThumbnailPNG)), keyConfirm: true})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		assertErrorContains(t, result, "Failed to update linode_account_oauth_client_thumbnail_update")
 		assertErrorContains(t, result, errForbidden)
 	})
 }

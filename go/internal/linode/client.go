@@ -30,6 +30,7 @@ const (
 	httpServerErrorMax = 600
 	authHeaderPrefix   = "Bearer "
 	contentTypeJSON    = "application/json"
+	contentTypePNG     = "image/png"
 
 	// requestTimeout is the per-request context timeout for API calls.
 	requestTimeout = 30 * time.Second
@@ -132,10 +133,6 @@ func NewClient(apiURL, token string, cfg *config.Config, opts ...Option) *Client
 // Each invocation is gated by the per-client rate limiter so the bucket is
 // drained per network attempt (initial + retries), not per logical operation.
 func (c *Client) makeRequest(ctx context.Context, method, endpoint string, payload any) (*http.Response, error) {
-	if err := c.limiter.Wait(ctx); err != nil {
-		return nil, err
-	}
-
 	var body io.Reader
 
 	if payload != nil {
@@ -145,6 +142,14 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, paylo
 		}
 
 		body = bytes.NewReader(jsonData)
+	}
+
+	return c.makeRequestWithContentType(ctx, method, endpoint, body, contentTypeJSON)
+}
+
+func (c *Client) makeRequestWithContentType(ctx context.Context, method, endpoint string, body io.Reader, contentType string) (*http.Response, error) {
+	if err := c.limiter.Wait(ctx); err != nil {
+		return nil, err
 	}
 
 	rawURL := c.baseURL + endpoint
@@ -160,7 +165,7 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, paylo
 	}
 
 	req.Header.Set("Authorization", authHeaderPrefix+c.token)
-	req.Header.Set("Content-Type", contentTypeJSON)
+	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("User-Agent", "LinodeMCP/"+appinfo.Version)
 
 	resp, err := c.httpClient.Do(req)

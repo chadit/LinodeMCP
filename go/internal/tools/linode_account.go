@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/base64"
 	"strconv"
 	"strings"
 
@@ -36,6 +37,8 @@ const (
 	errAccountLoginIDPositive         = "login_id must be a positive integer"
 	errLabelRequired                  = "label is required"
 	errRedirectURIRequired            = "redirect_uri is required"
+	oauthClientThumbnailPNGParam      = "thumbnail_png_base64"
+	errThumbnailPNGRequired           = "thumbnail_png_base64 is required"
 	accountChildAccountsPageSizeMin   = 25
 	accountChildAccountsPageSizeMax   = 500
 	accountEventIDParam               = "event_id"
@@ -278,6 +281,23 @@ func NewLinodeAccountOAuthClientUpdateTool(cfg *config.Config) (mcp.Tool, profil
 			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm OAuth client update.")),
 		},
 		handleLinodeAccountOAuthClientUpdateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
+// NewLinodeAccountOAuthClientThumbnailUpdateTool creates a tool for updating one OAuth client's thumbnail.
+func NewLinodeAccountOAuthClientThumbnailUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_oauth_client_thumbnail_update",
+		"Updates one account OAuth client's thumbnail by ID.",
+		[]mcp.ToolOption{
+			mcp.WithString("client_id", mcp.Required(), mcp.Description("OAuth client ID.")),
+			mcp.WithString(oauthClientThumbnailPNGParam, mcp.Required(), mcp.Description("Base64-encoded PNG image for the OAuth client thumbnail.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm OAuth client thumbnail update.")),
+		},
+		handleLinodeAccountOAuthClientThumbnailUpdateRequest,
 	)
 
 	return tool, profiles.CapAdmin, handler
@@ -839,6 +859,68 @@ func updateOAuthClient(ctx context.Context, client *linode.Client, clientID stri
 	}
 
 	return oauthClient, ""
+}
+
+func handleLinodeAccountOAuthClientThumbnailUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This updates an OAuth client thumbnail. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	clientID, validationMessage := accountOAuthClientIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	thumbnailPNG, validationMessage := oauthClientThumbnailPNGFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	updateFailureMessage := updateOAuthClientThumbnail(ctx, client, clientID, thumbnailPNG)
+	if updateFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to update linode_account_oauth_client_thumbnail_update: " + updateFailureMessage), nil
+	}
+
+	return MarshalToolResponse(struct {
+		Message  string `json:"message"`
+		ClientID string `json:"client_id"`
+	}{
+		Message:  "OAuth client thumbnail updated successfully",
+		ClientID: clientID,
+	})
+}
+
+func oauthClientThumbnailPNGFromTool(request *mcp.CallToolRequest) ([]byte, string) {
+	raw, exists := request.GetArguments()[oauthClientThumbnailPNGParam]
+	if !exists {
+		return nil, errThumbnailPNGRequired
+	}
+
+	encoded, ok := raw.(string)
+	if !ok || strings.TrimSpace(encoded) == "" {
+		return nil, "thumbnail_png_base64 must be a non-empty string"
+	}
+
+	thumbnailPNG, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, "thumbnail_png_base64 must be valid standard base64"
+	}
+
+	return thumbnailPNG, ""
+}
+
+func updateOAuthClientThumbnail(ctx context.Context, client *linode.Client, clientID string, thumbnailPNG []byte) string {
+	err := client.UpdateOAuthClientThumbnail(ctx, clientID, thumbnailPNG)
+	if err != nil {
+		return err.Error()
+	}
+
+	return ""
 }
 
 func handleLinodeAccountOAuthClientDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

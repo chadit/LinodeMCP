@@ -247,6 +247,13 @@ func (c *Client) UpdateOAuthClient(ctx context.Context, clientID string, req *Up
 	return c.httpUpdateOAuthClient(ctx, clientID, req)
 }
 
+// UpdateOAuthClientThumbnail updates an account OAuth client's thumbnail without
+// retrying the mutating request. Retrying can replay updates after a transient
+// error, so this method delegates exactly once.
+func (c *Client) UpdateOAuthClientThumbnail(ctx context.Context, clientID string, thumbnailPNG []byte) error {
+	return c.httpUpdateOAuthClientThumbnail(ctx, clientID, thumbnailPNG)
+}
+
 // DeleteAccountOAuthClient deletes an account OAuth client without retrying the
 // destructive request. Retrying can replay client deletion after a transient
 // error, so this method delegates exactly once.
