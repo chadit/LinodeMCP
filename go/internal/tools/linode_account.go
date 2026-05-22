@@ -131,6 +131,24 @@ func NewLinodeAccountEntityTransferCreateTool(cfg *config.Config) (mcp.Tool, pro
 	return tool, profiles.CapAdmin, handler
 }
 
+// NewLinodeAccountEntityTransferAcceptTool creates a tool for accepting one account entity transfer.
+func NewLinodeAccountEntityTransferAcceptTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_entity_transfer_accept",
+		"Accepts one account entity transfer request by token.",
+		[]mcp.ToolOption{
+			mcp.WithString("token", mcp.Required(),
+				mcp.Description("Entity transfer token to accept.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm entity transfer acceptance.")),
+		},
+		handleLinodeAccountEntityTransferAcceptRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
 // NewLinodeAccountEntityTransferDeleteTool creates a tool for canceling one account entity transfer.
 func NewLinodeAccountEntityTransferDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -521,6 +539,37 @@ func handleLinodeAccountEntityTransferCreateRequest(ctx context.Context, request
 	return mcp.NewToolResultError("Failed to create linode_account_entity_transfer_create: " + createFailure.Error()), nil
 }
 
+func handleLinodeAccountEntityTransferAcceptRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This accepts an account entity transfer. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	token, validationMessage := accountEntityTransferTokenFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, prepErr := prepareClient(request, cfg)
+	if prepErr != nil {
+		return mcp.NewToolResultError(prepErr.Error()), nil
+	}
+
+	acceptFailureMessage := acceptAccountEntityTransfer(ctx, client, token)
+	if acceptFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to accept linode_account_entity_transfer_accept: " + acceptFailureMessage), nil
+	}
+
+	response := struct {
+		Message string `json:"message"`
+		Token   string `json:"token"`
+	}{
+		Message: "Account entity transfer accepted successfully",
+		Token:   token,
+	}
+
+	return MarshalToolResponse(response)
+}
+
 func handleLinodeAccountEntityTransferDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	if result := RequireConfirm(request, "This cancels an account entity transfer. Set confirm=true to proceed."); result != nil {
 		return result, nil
@@ -550,6 +599,15 @@ func handleLinodeAccountEntityTransferDeleteRequest(ctx context.Context, request
 	}
 
 	return MarshalToolResponse(response)
+}
+
+func acceptAccountEntityTransfer(ctx context.Context, client *linode.Client, token string) string {
+	acceptFailure := client.AcceptAccountEntityTransfer(ctx, token)
+	if acceptFailure != nil {
+		return acceptFailure.Error()
+	}
+
+	return ""
 }
 
 func deleteAccountEntityTransfer(ctx context.Context, client *linode.Client, token string) string {
