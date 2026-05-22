@@ -574,6 +574,26 @@ func (c *Client) httpCreateAccountChildAccountToken(ctx context.Context, euuid s
 	return &token, nil
 }
 
+// httpCreateOAuthClient creates an account OAuth client.
+func (c *Client) httpCreateOAuthClient(ctx context.Context, req *CreateOAuthClientRequest) (*CreatedOAuthClient, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountOAuthClients, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateOAuthClient", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var client CreatedOAuthClient
+	if err := c.handleResponse(resp, &client); err != nil {
+		return nil, err
+	}
+
+	return &client, nil
+}
+
 // httpGetAccountBeta retrieves one enrolled account beta program.
 func (c *Client) httpGetAccountBeta(ctx context.Context, betaID string) (*AccountBetaProgram, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

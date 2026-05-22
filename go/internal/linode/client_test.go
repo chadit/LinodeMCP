@@ -29,6 +29,9 @@ const (
 	accountMaintenanceURL        = "/v4/linode/instances/123"
 	keyErrors                    = "errors"
 	keyReason                    = "reason"
+	errForbidden                 = "forbidden"
+	oauthClientLabel             = "my app"
+	oauthClientRedirectURI       = "https://example.com/callback"
 )
 
 // TestClientGetProfileSuccess verifies that GetProfile returns a fully
@@ -773,7 +776,7 @@ func TestClientGetAccountAgreementsAPIError(t *testing.T) {
 	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
 	require.NotNil(t, apiErr, "APIError should be present")
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, "forbidden", apiErr.Message)
+	assert.Equal(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListAccountNotificationsSuccess verifies ListAccountNotifications sends
@@ -851,7 +854,7 @@ func TestClientListAccountNotificationsAPIError(t *testing.T) {
 	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
 	require.NotNil(t, apiErr, "APIError should be present")
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, "forbidden", apiErr.Message)
+	assert.Equal(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListAccountNotificationsRetriesTransientError verifies the read-only notifications lookup retries transient failures.
@@ -963,7 +966,7 @@ func TestClientGetAccountAvailabilityAPIError(t *testing.T) {
 	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
 	require.NotNil(t, apiErr, "APIError should be present")
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, "forbidden", apiErr.Message)
+	assert.Equal(t, errForbidden, apiErr.Message)
 }
 
 // TestClientGetAccountAvailabilityRetriesTransientError verifies the read-only regional lookup retries transient failures.
@@ -1063,7 +1066,7 @@ func TestClientListAccountAvailabilityAPIError(t *testing.T) {
 	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
 	require.NotNil(t, apiErr, "APIError should be present")
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, "forbidden", apiErr.Message)
+	assert.Equal(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListAccountOAuthClientsSuccess verifies ListAccountOAuthClients sends a GET
@@ -1106,7 +1109,7 @@ func TestClientListAccountOAuthClientsAPIError(t *testing.T) {
 		assert.Equal(t, "/account/oauth-clients", r.URL.Path, "request path should be /account/oauth-clients")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "forbidden"}}}))
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 	}))
 	defer srv.Close()
 
@@ -1119,7 +1122,7 @@ func TestClientListAccountOAuthClientsAPIError(t *testing.T) {
 	var apiErr *linode.APIError
 	require.ErrorAs(t, err, &apiErr)
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, "forbidden", apiErr.Message)
+	assert.Equal(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListAccountOAuthClientsRetriesTransientError verifies the read-only list retries transient failures.
@@ -1224,7 +1227,7 @@ func TestClientListAccountBetasAPIError(t *testing.T) {
 	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
 	require.NotNil(t, apiErr, "APIError should be present")
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, "forbidden", apiErr.Message)
+	assert.Equal(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListAccountBetasRetriesTransientError verifies the read-only list retries transient failures.
@@ -1261,6 +1264,83 @@ func TestClientListAccountBetasRetriesTransientError(t *testing.T) {
 	require.Len(t, result.Data, 1)
 	assert.Equal(t, betaExampleOpen, result.Data[0].ID)
 	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+}
+
+// TestClientCreateOAuthClientSuccess verifies CreateOAuthClient sends the exact POST request.
+func TestClientCreateOAuthClientSuccess(t *testing.T) {
+	t.Parallel()
+
+	want := linode.CreatedOAuthClient{ID: "client-123", Label: oauthClientLabel, RedirectURI: oauthClientRedirectURI, Secret: "secret-once"}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/account/oauth-clients", r.URL.Path, "request path should match")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		var got linode.CreateOAuthClientRequest
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got))
+		assert.Equal(t, oauthClientLabel, got.Label)
+		assert.Equal(t, oauthClientRedirectURI, got.RedirectURI)
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(want))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	req := &linode.CreateOAuthClientRequest{Label: oauthClientLabel, RedirectURI: oauthClientRedirectURI}
+
+	got, err := client.CreateOAuthClient(t.Context(), req)
+
+	require.NoError(t, err, "CreateOAuthClient should succeed on 200 response")
+	require.NotNil(t, got, "result should not be nil")
+	assert.Equal(t, want, *got)
+}
+
+// TestClientCreateOAuthClientAPIError verifies API errors propagate.
+func TestClientCreateOAuthClientAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	req := &linode.CreateOAuthClientRequest{Label: oauthClientLabel, RedirectURI: oauthClientRedirectURI}
+
+	_, err := client.CreateOAuthClient(t.Context(), req)
+
+	require.Error(t, err, "CreateOAuthClient should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+}
+
+// TestClientCreateOAuthClientDoesNotRetryTransientError verifies creation is not replayed.
+func TestClientCreateOAuthClientDoesNotRetryTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+	req := &linode.CreateOAuthClientRequest{Label: oauthClientLabel, RedirectURI: oauthClientRedirectURI}
+
+	_, err := client.CreateOAuthClient(t.Context(), req)
+
+	require.Error(t, err, "CreateOAuthClient should return the transient error")
+	assert.Equal(t, int32(1), requestCount.Load(), "mutating OAuth client creation must not be retried")
 }
 
 // TestClientListAccountEventsSuccess verifies ListAccountEvents sends a GET
@@ -1350,7 +1430,7 @@ func TestClientListAccountEventsAPIError(t *testing.T) {
 	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
 	require.NotNil(t, apiErr, "APIError should be present")
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, "forbidden", apiErr.Message)
+	assert.Equal(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListAccountEventsRetriesTransientError verifies the read-only list retries transient failures.
@@ -1462,7 +1542,7 @@ func TestClientListAccountChildAccountsAPIError(t *testing.T) {
 	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
 	require.NotNil(t, apiErr, "APIError should be present")
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, "forbidden", apiErr.Message)
+	assert.Equal(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListAccountChildAccountsRetriesTransientError verifies the read-only list retries transient failures.
@@ -1707,7 +1787,7 @@ func TestClientListAccountInvoicesAPIError(t *testing.T) {
 	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
 	require.NotNil(t, apiErr, "APIError should be present")
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, "forbidden", apiErr.Message)
+	assert.Equal(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListAccountInvoicesRetriesTransientError verifies the read-only list retries transient failures.
@@ -1815,7 +1895,7 @@ func TestClientListAccountEntityTransfersAPIError(t *testing.T) {
 	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
 	require.NotNil(t, apiErr, "APIError should be present")
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, "forbidden", apiErr.Message)
+	assert.Equal(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListAccountEntityTransfersRetriesTransientError verifies the read-only list retries transient failures.
@@ -1934,7 +2014,7 @@ func TestClientGetAccountEntityTransferAPIError(t *testing.T) {
 	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
 	require.NotNil(t, apiErr, "APIError should be present")
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, "forbidden", apiErr.Message)
+	assert.Equal(t, errForbidden, apiErr.Message)
 }
 
 // TestClientGetAccountEntityTransferRetriesTransientError verifies the read-only lookup retries transient failures.
@@ -2040,7 +2120,7 @@ func TestClientAcceptAccountEntityTransferAPIError(t *testing.T) {
 	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
 	require.NotNil(t, apiErr, "APIError should be present")
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, "forbidden", apiErr.Message)
+	assert.Equal(t, errForbidden, apiErr.Message)
 }
 
 // TestClientAcceptAccountEntityTransferDoesNotRetryTransientError verifies
@@ -2136,7 +2216,7 @@ func TestClientDeleteAccountEntityTransferAPIError(t *testing.T) {
 	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
 	require.NotNil(t, apiErr, "APIError should be present")
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, "forbidden", apiErr.Message)
+	assert.Equal(t, errForbidden, apiErr.Message)
 }
 
 // TestClientDeleteAccountEntityTransferDoesNotRetryTransientError verifies
@@ -2220,7 +2300,7 @@ func TestClientGetAccountInvoiceAPIError(t *testing.T) {
 	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
 	require.NotNil(t, apiErr, "APIError should be present")
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, "forbidden", apiErr.Message)
+	assert.Equal(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListAccountLoginsSuccess verifies ListAccountLogins sends a GET
@@ -2291,7 +2371,7 @@ func TestClientListAccountLoginsAPIError(t *testing.T) {
 	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
 	require.NotNil(t, apiErr, "APIError should be present")
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, "forbidden", apiErr.Message)
+	assert.Equal(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListAccountLoginsRetriesTransientError verifies the read-only list retries transient failures.
@@ -2390,7 +2470,7 @@ func TestClientGetAccountLoginAPIError(t *testing.T) {
 	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
 	require.NotNil(t, apiErr, "APIError should be present")
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, "forbidden", apiErr.Message)
+	assert.Equal(t, errForbidden, apiErr.Message)
 }
 
 // TestClientGetAccountLoginRetriesTransientError verifies the read-only get retries transient failures.
@@ -2491,7 +2571,7 @@ func TestClientListAccountInvoiceItemsAPIError(t *testing.T) {
 	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
 	require.NotNil(t, apiErr, "APIError should be present")
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, "forbidden", apiErr.Message)
+	assert.Equal(t, errForbidden, apiErr.Message)
 }
 
 // TestClientListAccountInvoiceItemsRetriesTransientError verifies the read-only list retries transient failures.
@@ -2645,7 +2725,7 @@ func TestClientGetAccountChildAccountAPIError(t *testing.T) {
 	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
 	require.NotNil(t, apiErr, "APIError should be present")
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, "forbidden", apiErr.Message)
+	assert.Equal(t, errForbidden, apiErr.Message)
 }
 
 // TestClientGetAccountChildAccountRetriesTransientError verifies the read-only lookup retries transient failures.
@@ -2744,7 +2824,7 @@ func TestClientCreateAccountEntityTransferAPIError(t *testing.T) {
 	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
 	require.NotNil(t, apiErr, "APIError should be present")
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, "forbidden", apiErr.Message)
+	assert.Equal(t, errForbidden, apiErr.Message)
 }
 
 // TestClientCreateAccountEntityTransferDoesNotRetryTransientError verifies
@@ -2852,7 +2932,7 @@ func TestClientCreateAccountChildAccountTokenAPIError(t *testing.T) {
 	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
 	require.NotNil(t, apiErr, "APIError should be present")
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, "forbidden", apiErr.Message)
+	assert.Equal(t, errForbidden, apiErr.Message)
 }
 
 // TestClientCreateAccountChildAccountTokenDoesNotRetryTransientError verifies
@@ -2958,7 +3038,7 @@ func TestClientGetAccountBetaAPIError(t *testing.T) {
 	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
 	require.NotNil(t, apiErr, "APIError should be present")
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, "forbidden", apiErr.Message)
+	assert.Equal(t, errForbidden, apiErr.Message)
 }
 
 // TestClientGetAccountBetaRetriesTransientError verifies the read-only lookup retries transient failures.
@@ -3047,7 +3127,7 @@ func TestClientEnrollAccountBetaAPIError(t *testing.T) {
 	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
 	require.NotNil(t, apiErr, "APIError should be present")
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
-	assert.Equal(t, "forbidden", apiErr.Message)
+	assert.Equal(t, errForbidden, apiErr.Message)
 }
 
 // TestClientEnrollAccountBetaDoesNotRetry verifies the mutating beta enrollment
