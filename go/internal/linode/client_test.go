@@ -1279,6 +1279,71 @@ func TestClientGetAccountEventRetriesTransientError(t *testing.T) {
 	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
+// TestClientMarkAccountEventSeenSuccess verifies MarkAccountEventSeen sends a POST
+// request to /account/events/{event_id}/seen with no body.
+func TestClientMarkAccountEventSeenSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/account/events/123/seen", r.URL.Path, "request path should mark event seen")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		assert.Equal(t, http.NoBody, r.Body, "request should not send a body")
+
+		w.Header().Set("Content-Type", "application/json")
+		_, writeErr := w.Write([]byte(`{}`))
+		assert.NoError(t, writeErr, "writing success response should not fail")
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	err := client.MarkAccountEventSeen(t.Context(), 123)
+
+	require.NoError(t, err, "MarkAccountEventSeen should succeed on 200 response")
+}
+
+// TestClientMarkAccountEventSeenAPIError verifies MarkAccountEventSeen propagates API errors.
+func TestClientMarkAccountEventSeenAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/account/events/123/seen", r.URL.Path, "request path should mark event seen")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr, "writing error response should not fail")
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	err := client.MarkAccountEventSeen(t.Context(), 123)
+
+	require.Error(t, err, "MarkAccountEventSeen should fail on 403 response")
+}
+
+// TestClientMarkAccountEventSeenDoesNotRetryTransientError verifies marking an
+// event as seen is not replayed after a transient failure.
+func TestClientMarkAccountEventSeenDoesNotRetryTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+		assert.NoError(t, writeErr, "writing transient error should not fail")
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+	err := client.MarkAccountEventSeen(t.Context(), 123)
+
+	require.Error(t, err, "MarkAccountEventSeen should return the transient error")
+	assert.Equal(t, int32(1), requestCount.Load(), "mutating event seen request must not be retried")
+}
+
 // TestClientListAccountEntityTransfersSuccess verifies ListAccountEntityTransfers sends a GET
 // request to /account/entity-transfers with pagination query parameters.
 func TestClientListAccountEntityTransfersSuccess(t *testing.T) {

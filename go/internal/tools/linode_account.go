@@ -148,6 +148,24 @@ func NewLinodeAccountEventGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeAccountEventSeenTool creates a tool for marking one account event as seen.
+func NewLinodeAccountEventSeenTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_event_seen",
+		"Marks one account event as seen by ID.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(accountEventIDParam, mcp.Required(),
+				mcp.Description("Numeric account event ID to mark as seen.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm marking the account event as seen.")),
+		},
+		handleLinodeAccountEventSeenRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
 // NewLinodeAccountEntityTransferCreateTool creates a tool for creating an account entity transfer.
 func NewLinodeAccountEntityTransferCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -569,6 +587,46 @@ func handleLinodeAccountEventGetRequest(ctx context.Context, request *mcp.CallTo
 	}
 
 	return mcp.NewToolResultError("Failed to retrieve linode_account_event_get: " + getFailure.Error()), nil
+}
+
+func handleLinodeAccountEventSeenRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This marks an account event as seen. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	eventID, validationMessage := accountEventIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, prepErr := prepareClient(request, cfg)
+	if prepErr != nil {
+		return mcp.NewToolResultError(prepErr.Error()), nil
+	}
+
+	seenFailureMessage := markAccountEventSeen(ctx, client, eventID)
+	if seenFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to mark linode_account_event_seen: " + seenFailureMessage), nil
+	}
+
+	response := struct {
+		Message string `json:"message"`
+		EventID int    `json:"event_id"`
+	}{
+		Message: "Account event marked as seen successfully",
+		EventID: eventID,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func markAccountEventSeen(ctx context.Context, client *linode.Client, eventID int) string {
+	seenFailure := client.MarkAccountEventSeen(ctx, eventID)
+	if seenFailure != nil {
+		return seenFailure.Error()
+	}
+
+	return ""
 }
 
 func accountEventIDFromTool(request *mcp.CallToolRequest) (int, string) {

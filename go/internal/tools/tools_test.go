@@ -1488,6 +1488,163 @@ func TestLinodeAccountEventGetTool(t *testing.T) {
 	})
 }
 
+// End-to-end verification of marking an account event as seen.
+func TestLinodeAccountEventSeenTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountEventSeenTool(cfg)
+
+		assert.Equal(t, "linode_account_event_seen", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapAdmin, capability, "event seen marking should be CapAdmin")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, keyEventID, "schema should include event_id")
+		assert.Contains(t, props, keyConfirm, "schema should include confirm")
+	})
+
+	t.Run("confirm required before client call", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name  string
+			value any
+			set   bool
+		}{
+			{name: caseMissingConfirm, set: false},
+			{name: caseRequiresConfirm, value: false, set: true},
+			{name: caseString, value: boolStringTrue, set: true},
+			{name: caseNumeric, value: 1, set: true},
+		}
+
+		for _, tt := range cases {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls atomic.Int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					calls.Add(1)
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeAccountEventSeenTool(cfg)
+
+				args := map[string]any{keyEventID: float64(accountEventID)}
+				if tt.set {
+					args[keyConfirm] = tt.value
+				}
+
+				req := createRequestWithArgs(t, args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "confirm validation should return a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "missing/false/non-boolean confirm should be an error")
+				assert.Equal(t, int32(0), calls.Load(), "client should not be called before confirm=true")
+				assertErrorContains(t, result, "confirm=true")
+			})
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/account/events/123/seen", r.URL.Path, "request path should mark event seen")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			assert.Equal(t, http.NoBody, r.Body, "request should not include a body")
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountEventSeenTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyEventID: float64(accountEventID), keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "marked as seen", "response should confirm the state change")
+		assert.Contains(t, textContent.Text, "123", "response should include event ID")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountEventSeenTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyEventID: float64(accountEventID), keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "tool errors are returned as error results, not Go errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "should return an error result")
+		assertErrorContains(t, result, "Failed to mark linode_account_event_seen")
+		assertErrorContains(t, result, errForbidden)
+	})
+
+	t.Run("validation", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name string
+			args map[string]any
+			want string
+		}{
+			{name: caseMissing, args: map[string]any{keyConfirm: true}, want: errEventIDRequired},
+			{name: caseString, args: map[string]any{keyEventID: "123", keyConfirm: true}, want: errEventIDPositive},
+			{name: "zero", args: map[string]any{keyEventID: float64(0), keyConfirm: true}, want: errEventIDPositive},
+			{name: "negative", args: map[string]any{keyEventID: float64(-1), keyConfirm: true}, want: errEventIDPositive},
+			{name: "fractional", args: map[string]any{keyEventID: 123.5, keyConfirm: true}, want: errEventIDPositive},
+			{name: "overflow", args: map[string]any{keyEventID: 1e100, keyConfirm: true}, want: errEventIDPositive},
+			{name: caseSlash, args: map[string]any{keyEventID: "12/3", keyConfirm: true}, want: errEventIDPositive},
+			{name: caseQuery, args: map[string]any{keyEventID: "12?3", keyConfirm: true}, want: errEventIDPositive},
+			{name: caseDotTraversal, args: map[string]any{keyEventID: pathTraversalValue, keyConfirm: true}, want: errEventIDPositive},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeAccountEventSeenTool(cfg)
+
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "tool validation errors are returned as error results")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "validation should return error result")
+				assertErrorContains(t, result, testCase.want)
+			})
+		}
+	})
+}
+
 // End-to-end verification of account entity transfer retrieval.
 func TestLinodeAccountEntityTransferGetTool(t *testing.T) {
 	t.Parallel()

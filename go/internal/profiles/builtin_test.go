@@ -236,6 +236,13 @@ func TestCapAdminExcludedFromEveryBuiltin(t *testing.T) {
 			"profile %q must never include account cancellation admin tool",
 			name,
 		)
+		assert.NotContainsf(
+			t,
+			profile.AllowedTools,
+			"linode_account_event_seen",
+			"profile %q must never include event seen admin tool",
+			name,
+		)
 	}
 }
 

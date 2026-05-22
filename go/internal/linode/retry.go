@@ -248,6 +248,13 @@ func (c *Client) GetAccountEvent(ctx context.Context, eventID int) (*AccountEven
 	return event, err
 }
 
+// MarkAccountEventSeen marks one account event as seen without retrying the
+// mutating request. Retrying can replay the state change after a transient
+// error, so this method delegates exactly once.
+func (c *Client) MarkAccountEventSeen(ctx context.Context, eventID int) error {
+	return c.httpMarkAccountEventSeen(ctx, eventID)
+}
+
 // CreateAccountEntityTransfer creates an account entity transfer without retrying
 // the mutating request. Retrying can replay transfer creation after a transient
 // error, so this method delegates exactly once.
