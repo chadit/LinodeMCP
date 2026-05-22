@@ -218,6 +218,21 @@ func (c *Client) ListAccountOAuthClients(ctx context.Context, page, pageSize int
 	return clients, err
 }
 
+// ListAccountPaymentMethods retrieves account payment methods with automatic retry on transient failures.
+func (c *Client) ListAccountPaymentMethods(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountPaymentMethod], error) {
+	var methods *PaginatedResponse[AccountPaymentMethod]
+
+	err := c.executeWithRetry(ctx, "ListAccountPaymentMethods", func() error {
+		var err error
+
+		methods, err = c.httpListAccountPaymentMethods(ctx, page, pageSize)
+
+		return err
+	})
+
+	return methods, err
+}
+
 // GetAccountOAuthClient retrieves one OAuth client with automatic retry on transient failures.
 func (c *Client) GetAccountOAuthClient(ctx context.Context, clientID string) (*OAuthClient, error) {
 	var client *OAuthClient
