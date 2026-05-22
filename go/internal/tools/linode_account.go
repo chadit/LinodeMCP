@@ -206,6 +206,23 @@ func NewLinodeAccountPaymentsTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeAccountPaymentCreateTool creates a tool for making an account payment.
+func NewLinodeAccountPaymentCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_payment_create",
+		"Makes a payment on the authenticated account.",
+		[]mcp.ToolOption{
+			mcp.WithString("payment_method_id", mcp.Description("Payment method ID to charge (optional).")),
+			mcp.WithNumber("usd", mcp.Required(), mcp.Description("Payment amount in USD.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm making an account payment.")),
+		},
+		handleLinodeAccountPaymentCreateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
 // NewLinodeAccountInvoiceGetTool creates a tool for retrieving one account invoice.
 func NewLinodeAccountInvoiceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -1551,6 +1568,69 @@ func accountPaymentsPaginationFromTool(request *mcp.CallToolRequest) (int, int, 
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeAccountPaymentCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This makes an account payment. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	req, validationMessage := accountPaymentCreateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	payment, createFailure := client.CreateAccountPayment(ctx, req)
+	if createFailure == nil {
+		return MarshalToolResponse(struct {
+			Message string                 `json:"message"`
+			Payment *linode.AccountPayment `json:"payment"`
+		}{Message: "Account payment created successfully", Payment: payment})
+	}
+
+	return mcp.NewToolResultError("Failed to create linode_account_payment_create: " + createFailure.Error()), nil
+}
+
+func accountPaymentCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateAccountPaymentRequest, string) {
+	args := request.GetArguments()
+	req := &linode.CreateAccountPaymentRequest{}
+
+	if raw, exists := args["payment_method_id"]; exists {
+		paymentMethodID, ok := raw.(string)
+		if !ok || strings.TrimSpace(paymentMethodID) == "" {
+			return nil, "payment_method_id must be a non-empty string"
+		}
+
+		if paymentMethodID != strings.TrimSpace(paymentMethodID) || strings.Contains(paymentMethodID, "/") || strings.Contains(paymentMethodID, "?") || strings.Contains(paymentMethodID, "..") {
+			return nil, "payment_method_id must not contain path separators, query separators, or traversal segments"
+		}
+
+		id, err := strconv.Atoi(paymentMethodID)
+		if err != nil || id <= 0 {
+			return nil, "payment_method_id must be a positive integer"
+		}
+
+		req.PaymentMethodID = id
+	}
+
+	rawUSD, exists := args["usd"]
+	if !exists {
+		return nil, "usd is required"
+	}
+
+	usd, ok := rawUSD.(float64)
+	if !ok || usd <= 0 {
+		return nil, "usd must be a positive number"
+	}
+
+	req.USD = usd
+
+	return req, ""
 }
 
 func handleLinodeAccountInvoiceGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

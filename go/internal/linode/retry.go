@@ -394,6 +394,13 @@ func (c *Client) ListAccountPayments(ctx context.Context, page, pageSize int) (*
 	return payments, err
 }
 
+// CreateAccountPayment makes an account payment without retrying the mutating
+// request. Retrying can replay a payment after a transient error, so this
+// method delegates exactly once.
+func (c *Client) CreateAccountPayment(ctx context.Context, req *CreateAccountPaymentRequest) (*AccountPayment, error) {
+	return c.httpCreateAccountPayment(ctx, req)
+}
+
 // GetAccountInvoice retrieves one account invoice with automatic retry on transient failures.
 func (c *Client) GetAccountInvoice(ctx context.Context, invoiceID int) (*AccountInvoice, error) {
 	var invoice *AccountInvoice
