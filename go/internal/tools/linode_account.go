@@ -20,6 +20,8 @@ const (
 	accountBetasPageSizeMax           = 500
 	accountOAuthClientsPageSizeMin    = 25
 	accountOAuthClientsPageSizeMax    = 500
+	accountPaymentMethodsPageSizeMin  = 25
+	accountPaymentMethodsPageSizeMax  = 500
 	accountMaintenancePageSizeMin     = 25
 	accountMaintenancePageSizeMax     = 500
 	accountNotificationsPageSizeMin   = 25
@@ -229,6 +231,22 @@ func NewLinodeAccountOAuthClientsTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
 		},
 		handleLinodeAccountOAuthClientsRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeAccountPaymentMethodsTool creates a tool for listing payment methods for the account.
+func NewLinodeAccountPaymentMethodsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_payment_methods",
+		"Lists payment methods for the authenticated account.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		},
+		handleLinodeAccountPaymentMethodsRequest,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -734,6 +752,41 @@ func accountOAuthClientsPaginationFromTool(request *mcp.CallToolRequest) (int, i
 	}
 
 	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountOAuthClientsPageSizeMin, accountOAuthClientsPageSizeMax)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	return page, pageSize, ""
+}
+
+func handleLinodeAccountPaymentMethodsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	page, pageSize, validationMessage := accountPaymentMethodsPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	methods, listFailure := client.ListAccountPaymentMethods(ctx, page, pageSize)
+	if listFailure == nil {
+		return MarshalToolResponse(methods)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_account_payment_methods: " + listFailure.Error()), nil
+}
+
+func accountPaymentMethodsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
+	args := request.GetArguments()
+
+	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountPaymentMethodsPageSizeMin, accountPaymentMethodsPageSizeMax)
 	if validationMessage != "" {
 		return 0, 0, validationMessage
 	}

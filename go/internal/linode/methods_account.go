@@ -19,6 +19,7 @@ const (
 	endpointAccountAvailability    = "/account/availability"
 	endpointAccountBetas           = "/account/betas"
 	endpointAccountOAuthClients    = "/account/oauth-clients"
+	endpointAccountPaymentMethods  = "/account/payment-methods"
 	endpointAccountEvents          = "/account/events"
 	endpointAccountLogins          = "/account/logins"
 	endpointAccountInvoices        = "/account/invoices"
@@ -239,6 +240,28 @@ func (c *Client) httpListAccountOAuthClients(ctx context.Context, page, pageSize
 	}
 
 	return &clients, nil
+}
+
+// httpListAccountPaymentMethods retrieves payment methods for the account.
+func (c *Client) httpListAccountPaymentMethods(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountPaymentMethod], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointAccountPaymentMethods, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListAccountPaymentMethods", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var methods PaginatedResponse[AccountPaymentMethod]
+	if err := c.handleResponse(resp, &methods); err != nil {
+		return nil, err
+	}
+
+	return &methods, nil
 }
 
 // httpGetAccountOAuthClient retrieves one OAuth client by ID.

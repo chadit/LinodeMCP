@@ -2189,6 +2189,111 @@ func TestClientMarkAccountEventSeenDoesNotRetryTransientError(t *testing.T) {
 	assert.Equal(t, int32(1), requestCount.Load(), "mutating event seen request must not be retried")
 }
 
+// TestClientListAccountPaymentMethodsSuccess verifies ListAccountPaymentMethods sends a GET
+// request to /account/payment-methods with pagination query parameters.
+func TestClientListAccountPaymentMethodsSuccess(t *testing.T) {
+	t.Parallel()
+
+	methods := linode.PaginatedResponse[linode.AccountPaymentMethod]{
+		Data: []linode.AccountPaymentMethod{{
+			ID:        123,
+			Type:      "credit_card",
+			IsDefault: true,
+			Data:      map[string]any{"last_four": "1111"},
+		}},
+		Page:    2,
+		Pages:   4,
+		Results: 80,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/payment-methods", r.URL.Path, "request path should be /account/payment-methods")
+		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(methods))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.ListAccountPaymentMethods(t.Context(), 2, 25)
+
+	require.NoError(t, err, "ListAccountPaymentMethods should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, 2, result.Page)
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, 123, result.Data[0].ID)
+	assert.Equal(t, "credit_card", result.Data[0].Type)
+	assert.True(t, result.Data[0].IsDefault)
+}
+
+// TestClientListAccountPaymentMethodsAPIError verifies ListAccountPaymentMethods propagates API errors.
+func TestClientListAccountPaymentMethodsAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/payment-methods", r.URL.Path, "request path should be /account/payment-methods")
+		assert.Empty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.ListAccountPaymentMethods(t.Context(), 0, 0)
+
+	require.Error(t, err, "ListAccountPaymentMethods should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	require.NotNil(t, apiErr, "APIError should be present")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+// TestClientListAccountPaymentMethodsRetriesTransientError verifies the read-only list retries transient failures.
+func TestClientListAccountPaymentMethodsRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			assert.NoError(t, writeErr)
+
+			return
+		}
+
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/payment-methods", r.URL.Path, "request path should be /account/payment-methods")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountPaymentMethod]{
+			Data: []linode.AccountPaymentMethod{{ID: 123, Type: "credit_card", IsDefault: true}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	result, err := client.ListAccountPaymentMethods(t.Context(), 0, 0)
+
+	require.NoError(t, err, "ListAccountPaymentMethods should succeed after retry")
+	require.NotNil(t, result, "result should not be nil")
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, 123, result.Data[0].ID)
+	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+}
+
 // TestClientListAccountInvoicesSuccess verifies ListAccountInvoices sends a GET
 // request to /account/invoices with pagination query parameters.
 func TestClientListAccountInvoicesSuccess(t *testing.T) {

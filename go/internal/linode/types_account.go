@@ -202,6 +202,14 @@ type OAuthClient struct {
 	ThumbnailURL string `json:"thumbnail_url"`
 }
 
+// AccountPaymentMethod represents a payment method available on the account.
+type AccountPaymentMethod struct {
+	ID        int            `json:"id"`
+	Type      string         `json:"type"`
+	IsDefault bool           `json:"is_default"`
+	Data      map[string]any `json:"data"`
+}
+
 // CreatedOAuthClient represents the response from creating an OAuth client.
 type CreatedOAuthClient struct {
 	ID          string `json:"id"`
