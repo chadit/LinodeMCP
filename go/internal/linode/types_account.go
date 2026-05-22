@@ -196,6 +196,7 @@ type AccountInvoiceItem struct {
 type OAuthClient struct {
 	ID           string `json:"id"`
 	Label        string `json:"label"`
+	Public       bool   `json:"public"`
 	RedirectURI  string `json:"redirect_uri"`
 	Status       string `json:"status"`
 	ThumbnailURL string `json:"thumbnail_url"`
@@ -213,6 +214,13 @@ type CreatedOAuthClient struct {
 type CreateOAuthClientRequest struct {
 	Label       string `json:"label"`
 	RedirectURI string `json:"redirect_uri"`
+}
+
+// UpdateOAuthClientRequest contains fields for PUT /account/oauth-clients/{clientId}.
+type UpdateOAuthClientRequest struct {
+	Label       *string `json:"label,omitempty"`
+	Public      *bool   `json:"public,omitempty"`
+	RedirectURI *string `json:"redirect_uri,omitempty"`
 }
 
 // ChildAccount represents a child-level account available to a parent account.

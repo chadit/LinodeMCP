@@ -45,6 +45,7 @@ const (
 	caseFalse                        = "false"
 	errRedirectURIRequired           = "redirect_uri is required"
 	blankString                      = "   "
+	keyPublic                        = "public"
 )
 
 // End-to-end verification of the hello tool.
@@ -2072,6 +2073,172 @@ func TestLinodeAccountOAuthClientGetTool(t *testing.T) {
 				assertErrorContains(t, result, testCase.want)
 			})
 		}
+	})
+}
+
+// End-to-end verification of account OAuth client update.
+func TestLinodeAccountOAuthClientUpdateTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountOAuthClientUpdateTool(cfg)
+
+		assert.Equal(t, "linode_account_oauth_client_update", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapAdmin, capability, "OAuth client update should be CapAdmin")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, keyClientID, "schema should include client_id")
+		assert.Contains(t, props, keyLabel, "schema should include label")
+		assert.Contains(t, props, keyRedirectURI, "schema should include redirect_uri")
+		assert.Contains(t, props, keyPublic, "schema should include public")
+		assert.Contains(t, props, keyConfirm, "schema should include confirm")
+	})
+
+	t.Run("confirm required before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name    string
+			confirm any
+			include bool
+		}{
+			{name: caseMissing},
+			{name: caseFalse, confirm: false, include: true},
+			{name: caseString, confirm: boolStringTrue, include: true},
+			{name: caseNumeric, confirm: 1, include: true},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeAccountOAuthClientUpdateTool(cfg)
+
+				args := map[string]any{keyClientID: oauthClientID, keyLabel: oauthClientLabel}
+				if testCase.include {
+					args[keyConfirm] = testCase.confirm
+				}
+
+				req := createRequestWithArgs(t, args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid confirm should be an error result")
+				assertErrorContains(t, result, "confirm=true")
+			})
+		}
+	})
+
+	t.Run("invalid args reject before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name string
+			args map[string]any
+			want string
+		}{
+			{name: caseMissing, args: map[string]any{keyConfirm: true, keyLabel: oauthClientLabel}, want: "client_id is required"},
+			{name: "client_id with slash", args: map[string]any{keyClientID: "client/123", keyLabel: oauthClientLabel, keyConfirm: true}, want: errClientIDNoSeparators},
+			{name: "client_id with query separator", args: map[string]any{keyClientID: "client?123", keyLabel: oauthClientLabel, keyConfirm: true}, want: errClientIDNoSeparators},
+			{name: caseDotTraversal, args: map[string]any{keyClientID: pathTraversalValue, keyLabel: oauthClientLabel, keyConfirm: true}, want: errClientIDNoSeparators},
+			{name: "no update fields", args: map[string]any{keyClientID: oauthClientID, keyConfirm: true}, want: "at least one of label, redirect_uri, or public is required"},
+			{name: "blank label", args: map[string]any{keyClientID: oauthClientID, keyLabel: blankString, keyConfirm: true}, want: errLabelRequired},
+			{name: "blank redirect_uri", args: map[string]any{keyClientID: oauthClientID, keyRedirectURI: blankString, keyConfirm: true}, want: errRedirectURIRequired},
+			{name: "string public", args: map[string]any{keyClientID: oauthClientID, keyPublic: boolStringTrue, keyConfirm: true}, want: "public must be a boolean"},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeAccountOAuthClientUpdateTool(cfg)
+				req := createRequestWithArgs(t, testCase.args)
+
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid args should be an error result")
+				assertErrorContains(t, result, testCase.want)
+			})
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+			assert.Equal(t, "/account/oauth-clients/client-123", r.URL.Path, "request path should include client id")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+			var got linode.UpdateOAuthClientRequest
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&got))
+
+			if assert.NotNil(t, got.Label) {
+				assert.Equal(t, oauthClientLabel, *got.Label)
+			}
+
+			if assert.NotNil(t, got.RedirectURI) {
+				assert.Equal(t, oauthClientRedirectURI, *got.RedirectURI)
+			}
+
+			if assert.NotNil(t, got.Public) {
+				assert.True(t, *got.Public)
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(linode.OAuthClient{ID: oauthClientID, Label: oauthClientLabel, Public: true, RedirectURI: oauthClientRedirectURI, Status: statusActive}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountOAuthClientUpdateTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID, keyLabel: oauthClientLabel, keyRedirectURI: oauthClientRedirectURI, keyPublic: true, keyConfirm: true})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "OAuth client updated successfully", "response should include success message")
+		assert.Contains(t, textContent.Text, oauthClientID, "response should include client id")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+			assert.Equal(t, "/account/oauth-clients/client-123", r.URL.Path, "request path should include client id")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountOAuthClientUpdateTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID, keyLabel: oauthClientLabel, keyConfirm: true})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		assertErrorContains(t, result, "Failed to update linode_account_oauth_client_update")
+		assertErrorContains(t, result, errForbidden)
 	})
 }
 
