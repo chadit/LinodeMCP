@@ -1507,6 +1507,90 @@ func TestClientCreateOAuthClientSuccess(t *testing.T) {
 	assert.Equal(t, want, *got)
 }
 
+func TestClientDeleteAccountOAuthClientSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, "/account/oauth-clients/"+oauthClientID, r.URL.Path, "request path should include client id")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		assert.Equal(t, http.NoBody, r.Body, "DELETE request should not send a body")
+		w.Header().Set("Content-Type", "application/json")
+		_, writeErr := w.Write([]byte(`{}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	err := client.DeleteAccountOAuthClient(t.Context(), oauthClientID)
+
+	require.NoError(t, err, "DeleteAccountOAuthClient should succeed on 200 response")
+}
+
+func TestClientDeleteAccountOAuthClientEscapesClientID(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, "/account/oauth-clients/client%2F123%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
+		assert.Empty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
+		w.Header().Set("Content-Type", "application/json")
+		_, writeErr := w.Write([]byte(`{}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	err := client.DeleteAccountOAuthClient(t.Context(), "client/123?query")
+
+	require.NoError(t, err, "DeleteAccountOAuthClient should escape path parameters")
+}
+
+func TestClientDeleteAccountOAuthClientAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, "/account/oauth-clients/"+oauthClientID, r.URL.Path, "request path should include client id")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	err := client.DeleteAccountOAuthClient(t.Context(), oauthClientID)
+
+	require.Error(t, err, "DeleteAccountOAuthClient should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+}
+
+func TestClientDeleteAccountOAuthClientDoesNotRetryTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	err := client.DeleteAccountOAuthClient(t.Context(), oauthClientID)
+
+	require.Error(t, err, "DeleteAccountOAuthClient should return the transient error")
+	assert.Equal(t, int32(1), requestCount.Load(), "destructive OAuth client delete must not be retried")
+}
+
 // TestClientCreateOAuthClientAPIError verifies API errors propagate.
 func TestClientCreateOAuthClientAPIError(t *testing.T) {
 	t.Parallel()
