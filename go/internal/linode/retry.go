@@ -379,6 +379,21 @@ func (c *Client) ListAccountInvoices(ctx context.Context, page, pageSize int) (*
 	return invoices, err
 }
 
+// ListAccountPayments retrieves account payments with automatic retry on transient failures.
+func (c *Client) ListAccountPayments(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountPayment], error) {
+	var payments *PaginatedResponse[AccountPayment]
+
+	err := c.executeWithRetry(ctx, "ListAccountPayments", func() error {
+		var err error
+
+		payments, err = c.httpListAccountPayments(ctx, page, pageSize)
+
+		return err
+	})
+
+	return payments, err
+}
+
 // GetAccountInvoice retrieves one account invoice with automatic retry on transient failures.
 func (c *Client) GetAccountInvoice(ctx context.Context, invoiceID int) (*AccountInvoice, error) {
 	var invoice *AccountInvoice

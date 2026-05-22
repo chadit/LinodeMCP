@@ -175,6 +175,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_account_events":                        profiles.CapRead,
 		"linode_account_logins":                        profiles.CapRead,
 		"linode_account_invoices":                      profiles.CapRead,
+		"linode_account_payments":                      profiles.CapRead,
 		"linode_account_invoice_get":                   profiles.CapRead,
 		"linode_account_invoice_items":                 profiles.CapRead,
 		"linode_account_child_accounts":                profiles.CapRead,

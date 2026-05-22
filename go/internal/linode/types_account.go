@@ -179,6 +179,13 @@ type AccountInvoice struct {
 	Total float64 `json:"total"`
 }
 
+// AccountPayment represents one account payment.
+type AccountPayment struct {
+	ID   int     `json:"id"`
+	Date string  `json:"date"`
+	USD  float64 `json:"usd"`
+}
+
 // AccountInvoiceItem represents one line item on an account invoice.
 type AccountInvoiceItem struct {
 	Amount    float64 `json:"amount"`

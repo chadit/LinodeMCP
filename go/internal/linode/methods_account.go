@@ -23,6 +23,7 @@ const (
 	endpointAccountEvents          = "/account/events"
 	endpointAccountLogins          = "/account/logins"
 	endpointAccountInvoices        = "/account/invoices"
+	endpointAccountPayments        = "/account/payments"
 	endpointAccountChildAccounts   = "/account/child-accounts"
 	endpointAccountEntityTransfers = "/account/entity-transfers"
 )
@@ -524,6 +525,28 @@ func (c *Client) httpListAccountInvoices(ctx context.Context, page, pageSize int
 	}
 
 	return &invoices, nil
+}
+
+// httpListAccountPayments retrieves account payments.
+func (c *Client) httpListAccountPayments(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountPayment], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointAccountPayments, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListAccountPayments", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var payments PaginatedResponse[AccountPayment]
+	if err := c.handleResponse(resp, &payments); err != nil {
+		return nil, err
+	}
+
+	return &payments, nil
 }
 
 // httpGetAccountInvoice retrieves one account invoice by ID.
