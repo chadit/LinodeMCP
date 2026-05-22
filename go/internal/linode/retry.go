@@ -233,6 +233,13 @@ func (c *Client) ListAccountPaymentMethods(ctx context.Context, page, pageSize i
 	return methods, err
 }
 
+// CreateAccountPaymentMethod adds a payment method without retrying the
+// mutating request. Retrying can replay payment-method creation after a
+// transient error, so this method delegates exactly once.
+func (c *Client) CreateAccountPaymentMethod(ctx context.Context, req *CreateAccountPaymentMethodRequest) (*AccountPaymentMethod, error) {
+	return c.httpCreateAccountPaymentMethod(ctx, req)
+}
+
 // GetAccountOAuthClient retrieves one OAuth client with automatic retry on transient failures.
 func (c *Client) GetAccountOAuthClient(ctx context.Context, clientID string) (*OAuthClient, error) {
 	var client *OAuthClient

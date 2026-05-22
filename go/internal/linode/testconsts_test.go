@@ -11,10 +11,13 @@ const (
 	keyResults = "results"
 
 	// Common JSON field names used in test fixtures.
-	keyID     = "id"
-	keyLabel  = "label"
-	keyStatus = "status"
-	keySSHKey = "ssh_key"
+	keyID        = "id"
+	keyLabel     = "label"
+	keyStatus    = "status"
+	keySSHKey    = "ssh_key"
+	keyType      = "type"
+	keyToken     = "token"
+	keyIsDefault = "is_default"
 
 	// Account beta fixture values.
 	betaExampleOpen      = "example_open"
@@ -31,5 +34,7 @@ const (
 	serviceNodeBalancers = "NodeBalancers"
 
 	// fwLabelNew is the firewall label reused across the retry-wrapper tests.
-	fwLabelNew = "new-fw"
+	fwLabelNew              = "new-fw"
+	paymentMethodCreditCard = "credit_card"
+	paymentMethodToken      = "tok_123"
 )

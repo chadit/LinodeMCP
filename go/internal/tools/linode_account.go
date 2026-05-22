@@ -39,6 +39,8 @@ const (
 	errAccountLoginIDPositive         = "login_id must be a positive integer"
 	errLabelRequired                  = "label is required"
 	errRedirectURIRequired            = "redirect_uri is required"
+	errPaymentMethodDataRequired      = "data is required"
+	errPaymentMethodTypeRequired      = "type is required"
 	oauthClientThumbnailPNGParam      = "thumbnail_png_base64"
 	errThumbnailPNGRequired           = "thumbnail_png_base64 is required"
 	accountChildAccountsPageSizeMin   = 25
@@ -250,6 +252,24 @@ func NewLinodeAccountPaymentMethodsTool(cfg *config.Config) (mcp.Tool, profiles.
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeAccountPaymentMethodCreateTool creates a tool for adding a payment method to the account.
+func NewLinodeAccountPaymentMethodCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_payment_method_create",
+		"Adds a payment method to the authenticated account.",
+		[]mcp.ToolOption{
+			mcp.WithString("type", mcp.Required(), mcp.Description("Payment method type.")),
+			mcp.WithObject("data", mcp.Required(), mcp.Description("Payment method provider data.")),
+			mcp.WithBoolean("is_default", mcp.Required(), mcp.Description("Whether the payment method should become the account default.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm payment method creation.")),
+		},
+		handleLinodeAccountPaymentMethodCreateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountOAuthClientGetTool creates a tool for retrieving one OAuth client.
@@ -792,6 +812,65 @@ func accountPaymentMethodsPaginationFromTool(request *mcp.CallToolRequest) (int,
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeAccountPaymentMethodCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This creates a payment method. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	req, validationMessage := paymentMethodCreateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	method, createFailureMessage := createAccountPaymentMethod(ctx, client, req)
+	if createFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to create linode_account_payment_method_create: " + createFailureMessage), nil
+	}
+
+	return MarshalToolResponse(struct {
+		Message string                       `json:"message"`
+		Method  *linode.AccountPaymentMethod `json:"method"`
+	}{
+		Message: "Payment method created successfully",
+		Method:  method,
+	})
+}
+
+func paymentMethodCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateAccountPaymentMethodRequest, string) {
+	args := request.GetArguments()
+
+	paymentType, typeOK := args["type"].(string)
+	if !typeOK || strings.TrimSpace(paymentType) == "" {
+		return nil, errPaymentMethodTypeRequired
+	}
+
+	data, dataOK := args["data"].(map[string]any)
+	if !dataOK || len(data) == 0 {
+		return nil, errPaymentMethodDataRequired
+	}
+
+	isDefault, isDefaultOK := args["is_default"].(bool)
+	if !isDefaultOK {
+		return nil, "is_default must be a boolean"
+	}
+
+	return &linode.CreateAccountPaymentMethodRequest{Type: paymentType, Data: data, IsDefault: isDefault}, ""
+}
+
+func createAccountPaymentMethod(ctx context.Context, client *linode.Client, req *linode.CreateAccountPaymentMethodRequest) (*linode.AccountPaymentMethod, string) {
+	method, err := client.CreateAccountPaymentMethod(ctx, req)
+	if err != nil {
+		return nil, err.Error()
+	}
+
+	return method, ""
 }
 
 func handleLinodeAccountOAuthClientGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

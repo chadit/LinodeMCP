@@ -264,6 +264,26 @@ func (c *Client) httpListAccountPaymentMethods(ctx context.Context, page, pageSi
 	return &methods, nil
 }
 
+// httpCreateAccountPaymentMethod adds a payment method to the account.
+func (c *Client) httpCreateAccountPaymentMethod(ctx context.Context, req *CreateAccountPaymentMethodRequest) (*AccountPaymentMethod, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountPaymentMethods, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateAccountPaymentMethod", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var method AccountPaymentMethod
+	if err := c.handleResponse(resp, &method); err != nil {
+		return nil, err
+	}
+
+	return &method, nil
+}
+
 // httpGetAccountOAuthClient retrieves one OAuth client by ID.
 func (c *Client) httpGetAccountOAuthClient(ctx context.Context, clientID string) (*OAuthClient, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
