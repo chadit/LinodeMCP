@@ -3258,6 +3258,102 @@ func TestClientGetAccountServiceTransferRetriesTransientError(t *testing.T) {
 	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
+// TestClientDeleteAccountServiceTransferSuccess verifies DeleteAccountServiceTransfer sends a DELETE
+// request to /account/service-transfers/{token} with no body.
+func TestClientDeleteAccountServiceTransferSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, "/account/service-transfers/service-token-example", r.URL.Path, "request path should include transfer token")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		assert.Equal(t, http.NoBody, r.Body, "DELETE request should not send a body")
+
+		w.Header().Set("Content-Type", "application/json")
+		_, writeErr := w.Write([]byte(`{}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	err := client.DeleteAccountServiceTransfer(t.Context(), accountServiceTransferToken)
+
+	require.NoError(t, err, "DeleteAccountServiceTransfer should succeed on 200 response")
+}
+
+// TestClientDeleteAccountServiceTransferEscapesToken verifies the client encodes path separators.
+func TestClientDeleteAccountServiceTransferEscapesToken(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, "/account/service-transfers/service%2Ftoken%3Fquery", r.URL.EscapedPath(), "path parameter should be escaped")
+		assert.Empty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
+		w.Header().Set("Content-Type", "application/json")
+		_, writeErr := w.Write([]byte(`{}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	err := client.DeleteAccountServiceTransfer(t.Context(), "service/token?query")
+
+	require.NoError(t, err, "DeleteAccountServiceTransfer should escape path parameters")
+}
+
+// TestClientDeleteAccountServiceTransferAPIError verifies DeleteAccountServiceTransfer propagates API errors.
+func TestClientDeleteAccountServiceTransferAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, "/account/service-transfers/service-token-example", r.URL.Path, "request path should include transfer token")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	err := client.DeleteAccountServiceTransfer(t.Context(), accountServiceTransferToken)
+
+	require.Error(t, err, "DeleteAccountServiceTransfer should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	require.NotNil(t, apiErr, "APIError should be present")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+// TestClientDeleteAccountServiceTransferDoesNotRetryTransientError verifies
+// service transfer cancellation is not replayed after a transient failure.
+func TestClientDeleteAccountServiceTransferDoesNotRetryTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	err := client.DeleteAccountServiceTransfer(t.Context(), accountServiceTransferToken)
+
+	require.Error(t, err, "DeleteAccountServiceTransfer should return the transient error")
+	assert.Equal(t, int32(1), requestCount.Load(), "mutating transfer cancellation must not be retried")
+}
+
 // TestClientGetAccountEntityTransferSuccess verifies GetAccountEntityTransfer sends a GET
 // request to /account/entity-transfers/{token} and decodes the response.
 func TestClientGetAccountEntityTransferSuccess(t *testing.T) {
