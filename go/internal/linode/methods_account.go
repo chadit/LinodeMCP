@@ -11,6 +11,7 @@ const (
 	endpointProfile             = "/profile"
 	endpointProfileGrants       = "/profile/grants"
 	endpointAccount             = "/account"
+	endpointAccountCancel       = "/account/cancel"
 	endpointAccountAgreements   = "/account/agreements"
 	endpointAccountAvailability = "/account/availability"
 	endpointAccountBetas        = "/account/betas"
@@ -233,6 +234,26 @@ func (c *Client) httpAcknowledgeAccountAgreements(ctx context.Context, req *Ackn
 	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
 
 	return c.handleResponse(resp, nil)
+}
+
+// httpCancelAccount cancels the account via POST /v4/account/cancel.
+func (c *Client) httpCancelAccount(ctx context.Context, req *CancelAccountRequest) (*CancelAccountResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountCancel, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CancelAccount", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var cancelResponse CancelAccountResponse
+	if err := c.handleResponse(resp, &cancelResponse); err != nil {
+		return nil, err
+	}
+
+	return &cancelResponse, nil
 }
 
 // httpUpdateAccount updates account billing/contact fields via PUT /v4/account.

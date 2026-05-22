@@ -147,6 +147,23 @@ func NewLinodeAccountAgreementsAcknowledgeTool(cfg *config.Config) (mcp.Tool, pr
 	return tool, profiles.CapAdmin, handler
 }
 
+// NewLinodeAccountCancelTool creates a tool for canceling the account.
+func NewLinodeAccountCancelTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_cancel",
+		"Cancels the active account and returns the exit survey link.",
+		[]mcp.ToolOption{
+			mcp.WithString("comments", mcp.Description("Reason for canceling the account or other feedback (optional).")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm account cancellation.")),
+		},
+		handleLinodeAccountCancelRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
 // NewLinodeAccountUpdateTool creates a tool for updating account billing/contact fields.
 func NewLinodeAccountUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -509,6 +526,56 @@ func acknowledgeAccountAgreementsRequestFromTool(request *mcp.CallToolRequest) (
 	if setCount == 0 {
 		return nil, "at least one account agreement field is required"
 	}
+
+	return &req, ""
+}
+
+func handleLinodeAccountCancelRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This cancels the active account. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	req, validationMessage := cancelAccountRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	cancelResponse, cancelErr := client.CancelAccount(ctx, req)
+	if cancelErr == nil {
+		response := struct {
+			Message    string                        `json:"message"`
+			CancelInfo *linode.CancelAccountResponse `json:"cancel_info"`
+		}{
+			Message:    "Account canceled successfully",
+			CancelInfo: cancelResponse,
+		}
+
+		return MarshalToolResponse(response)
+	}
+
+	return mcp.NewToolResultError("Failed to cancel account: " + cancelErr.Error()), nil
+}
+
+func cancelAccountRequestFromTool(request *mcp.CallToolRequest) (*linode.CancelAccountRequest, string) {
+	args := request.GetArguments()
+	req := linode.CancelAccountRequest{}
+
+	raw, exists := args["comments"]
+	if !exists {
+		return &req, ""
+	}
+
+	comments, ok := raw.(string)
+	if !ok {
+		return nil, "comments must be a string"
+	}
+
+	req.Comments = &comments
 
 	return &req, ""
 }

@@ -115,6 +115,16 @@ type AcknowledgeAccountAgreementsRequest struct {
 	PrivacyPolicy          *bool `json:"privacy_policy,omitempty"`
 }
 
+// CancelAccountRequest contains optional feedback for POST /account/cancel.
+type CancelAccountRequest struct {
+	Comments *string `json:"comments,omitempty"`
+}
+
+// CancelAccountResponse contains the account cancellation response.
+type CancelAccountResponse struct {
+	SurveyLink string `json:"survey_link"`
+}
+
 // Account represents a Linode account.
 type Account struct {
 	FirstName         string   `json:"first_name"`

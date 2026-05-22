@@ -1226,6 +1226,92 @@ func TestClientAcknowledgeAccountAgreementsDoesNotRetry(t *testing.T) {
 	assert.Equal(t, int32(1), calls, "AcknowledgeAccountAgreements must not retry and replay a mutating request")
 }
 
+// TestClientCancelAccountSuccess verifies CancelAccount sends a POST request to
+// /account/cancel with the exact body and returns the survey link.
+func TestClientCancelAccountSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/account/cancel", r.URL.Path, "request path should be /account/cancel")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		var body map[string]any
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		assert.Equal(t, "moving providers", body["comments"])
+
+		w.Header().Set("Content-Type", "application/json")
+		_, writeErr := w.Write([]byte(`{"survey_link":"https://example.test/survey"}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
+
+	comments := "moving providers"
+	response, err := client.CancelAccount(t.Context(), &linode.CancelAccountRequest{Comments: &comments})
+
+	require.NoError(t, err, "CancelAccount should succeed on 200 response")
+	require.NotNil(t, response, "response should not be nil")
+	assert.Equal(t, "https://example.test/survey", response.SurveyLink)
+}
+
+// TestClientCancelAccountWithoutComments verifies comments are optional.
+func TestClientCancelAccountWithoutComments(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/account/cancel", r.URL.Path, "request path should be /account/cancel")
+
+		var body map[string]any
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		assert.Empty(t, body, "omitted comments should send an empty JSON object")
+
+		w.Header().Set("Content-Type", "application/json")
+		_, writeErr := w.Write([]byte(`{"survey_link":"https://example.test/survey"}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
+
+	response, err := client.CancelAccount(t.Context(), &linode.CancelAccountRequest{})
+
+	require.NoError(t, err, "CancelAccount should succeed without comments")
+	require.NotNil(t, response, "response should not be nil")
+	assert.Equal(t, "https://example.test/survey", response.SurveyLink)
+}
+
+// TestClientCancelAccountDoesNotRetry verifies account cancellation is not
+// replayed after a transient HTTP error.
+func TestClientCancelAccountDoesNotRetry(t *testing.T) {
+	t.Parallel()
+
+	var calls int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/account/cancel", r.URL.Path, "request path should be /account/cancel")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
+		assert.NoError(t, err)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
+
+	errComments := "temporary"
+	_, err := client.CancelAccount(t.Context(), &linode.CancelAccountRequest{Comments: &errComments})
+
+	require.Error(t, err, "CancelAccount should fail on 500 response")
+	assert.Equal(t, int32(1), calls, "CancelAccount must not retry and replay a destructive request")
+}
+
 // TestClientUpdateAccountSuccess verifies that UpdateAccount sends a PUT
 // request to /account with the exact body and returns the updated Account.
 func TestClientUpdateAccountSuccess(t *testing.T) {

@@ -202,6 +202,13 @@ func (c *Client) AcknowledgeAccountAgreements(ctx context.Context, req *Acknowle
 	return c.httpAcknowledgeAccountAgreements(ctx, req)
 }
 
+// CancelAccount cancels the account without retrying the destructive request.
+// Retrying can replay account cancellation after a transient error, so this
+// method delegates exactly once.
+func (c *Client) CancelAccount(ctx context.Context, req *CancelAccountRequest) (*CancelAccountResponse, error) {
+	return c.httpCancelAccount(ctx, req)
+}
+
 // UpdateAccount updates account billing/contact fields without retrying the
 // mutating request. Retrying can replay account state changes after a transient
 // error, so this method delegates exactly once.
