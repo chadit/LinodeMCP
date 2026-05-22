@@ -524,6 +524,22 @@ func NewLinodeAccountEntityTransfersTool(cfg *config.Config) (mcp.Tool, profiles
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeAccountServiceTransfersTool creates a tool for listing account service transfers.
+func NewLinodeAccountServiceTransfersTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_service_transfers",
+		"Lists account service transfer requests.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		},
+		handleLinodeAccountServiceTransfersRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeAccountEntityTransferGetTool creates a tool for retrieving one account entity transfer.
 func NewLinodeAccountEntityTransferGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -1940,6 +1956,25 @@ func handleLinodeAccountEntityTransfersRequest(ctx context.Context, request *mcp
 	return mcp.NewToolResultError("Failed to retrieve linode_account_entity_transfers: " + listFailure.Error()), nil
 }
 
+func handleLinodeAccountServiceTransfersRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	page, pageSize, validationMessage := accountServiceTransfersPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	transfers, listFailure := client.ListAccountServiceTransfers(ctx, page, pageSize)
+	if listFailure == nil {
+		return MarshalToolResponse(transfers)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_account_service_transfers: " + listFailure.Error()), nil
+}
+
 func handleLinodeAccountEntityTransferGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	token, validationMessage := accountEntityTransferTokenFromTool(request)
 	if validationMessage != "" {
@@ -2061,6 +2096,22 @@ func accountEntityTransferTokenFromTool(request *mcp.CallToolRequest) (string, s
 }
 
 func accountEntityTransfersPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
+	args := request.GetArguments()
+
+	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountEntityTransfersPageSizeMin, accountEntityTransfersPageSizeMax)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	return page, pageSize, ""
+}
+
+func accountServiceTransfersPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
 	args := request.GetArguments()
 
 	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)

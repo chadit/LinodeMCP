@@ -9,24 +9,25 @@ import (
 )
 
 const (
-	endpointProfile                = "/profile"
-	endpointProfileGrants          = "/profile/grants"
-	endpointAccount                = "/account"
-	endpointAccountCancel          = "/account/cancel"
-	endpointAccountAgreements      = "/account/agreements"
-	endpointAccountMaintenance     = "/account/maintenance"
-	endpointAccountNotifications   = "/account/notifications"
-	endpointAccountAvailability    = "/account/availability"
-	endpointAccountBetas           = "/account/betas"
-	endpointAccountOAuthClients    = "/account/oauth-clients"
-	endpointAccountPaymentMethods  = "/account/payment-methods"
-	endpointAccountEvents          = "/account/events"
-	endpointAccountLogins          = "/account/logins"
-	endpointAccountInvoices        = "/account/invoices"
-	endpointAccountPayments        = "/account/payments"
-	endpointAccountPromoCodes      = "/account/promo-codes"
-	endpointAccountChildAccounts   = "/account/child-accounts"
-	endpointAccountEntityTransfers = "/account/entity-transfers"
+	endpointProfile                 = "/profile"
+	endpointProfileGrants           = "/profile/grants"
+	endpointAccount                 = "/account"
+	endpointAccountCancel           = "/account/cancel"
+	endpointAccountAgreements       = "/account/agreements"
+	endpointAccountMaintenance      = "/account/maintenance"
+	endpointAccountNotifications    = "/account/notifications"
+	endpointAccountAvailability     = "/account/availability"
+	endpointAccountBetas            = "/account/betas"
+	endpointAccountOAuthClients     = "/account/oauth-clients"
+	endpointAccountPaymentMethods   = "/account/payment-methods"
+	endpointAccountEvents           = "/account/events"
+	endpointAccountLogins           = "/account/logins"
+	endpointAccountInvoices         = "/account/invoices"
+	endpointAccountPayments         = "/account/payments"
+	endpointAccountPromoCodes       = "/account/promo-codes"
+	endpointAccountChildAccounts    = "/account/child-accounts"
+	endpointAccountEntityTransfers  = "/account/entity-transfers"
+	endpointAccountServiceTransfers = "/account/service-transfers"
 )
 
 // GetProfile retrieves the authenticated user's profile from the Linode API.
@@ -668,6 +669,27 @@ func (c *Client) httpListAccountEntityTransfers(ctx context.Context, page, pageS
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, &NetworkError{Operation: "ListAccountEntityTransfers", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var transfers PaginatedResponse[AccountEntityTransfer]
+	if err := c.handleResponse(resp, &transfers); err != nil {
+		return nil, err
+	}
+
+	return &transfers, nil
+}
+
+func (c *Client) httpListAccountServiceTransfers(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountEntityTransfer], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointAccountServiceTransfers, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListAccountServiceTransfers", Err: err}
 	}
 
 	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
