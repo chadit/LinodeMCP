@@ -189,6 +189,28 @@ func (c *Client) httpListAccountChildAccounts(ctx context.Context, page, pageSiz
 	return &childAccounts, nil
 }
 
+// httpGetAccountChildAccount retrieves one child-level account by EUUID.
+func (c *Client) httpGetAccountChildAccount(ctx context.Context, euuid string) (*ChildAccount, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountChildAccounts + "/" + url.PathEscape(euuid)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccountChildAccount", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var childAccount ChildAccount
+	if err := c.handleResponse(resp, &childAccount); err != nil {
+		return nil, err
+	}
+
+	return &childAccount, nil
+}
+
 // httpGetAccountBeta retrieves one enrolled account beta program.
 func (c *Client) httpGetAccountBeta(ctx context.Context, betaID string) (*AccountBetaProgram, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

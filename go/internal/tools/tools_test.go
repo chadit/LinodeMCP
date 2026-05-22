@@ -813,6 +813,145 @@ func TestLinodeAccountBetasTool(t *testing.T) {
 	})
 }
 
+// End-to-end verification of child account lookup.
+func TestLinodeAccountChildAccountGetTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountChildAccountGetTool(cfg)
+
+		assert.Equal(t, "linode_account_child_account_get", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		childAccount := linode.ChildAccount{
+			EUUID:         childAccountEUUID,
+			Company:       companyAcme,
+			Email:         "jkowalski@example.com",
+			FirstName:     "John",
+			LastName:      "Smith",
+			BillingSource: "external",
+			CreditCard: linode.ChildAccountCreditCard{
+				Expiry:   "11/2024",
+				LastFour: "0111",
+			},
+		}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56", r.URL.Path, "request path should include child account euuid")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(childAccount))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeAccountChildAccountGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyEUUID: childAccountEUUID})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, childAccountEUUID, "response should contain child account euuid")
+		assert.Contains(t, textContent.Text, companyAcme, "response should contain child account company")
+		assert.Contains(t, textContent.Text, "0111", "response should contain child account credit card last four")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56", r.URL.Path, "request path should include child account euuid")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: errForbidden}},
+			}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeAccountChildAccountGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyEUUID: childAccountEUUID})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to retrieve linode_account_child_account_get", "response should identify failed tool")
+		assert.Contains(t, textContent.Text, errForbidden, "response should include API error detail")
+	})
+
+	t.Run("invalid euuid rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name        string
+			args        map[string]any
+			wantMessage string
+		}{
+			{name: "missing euuid", args: map[string]any{}, wantMessage: "euuid is required"},
+			{name: "empty euuid", args: map[string]any{keyEUUID: ""}, wantMessage: "euuid must be a non-empty string"},
+			{name: "numeric euuid", args: map[string]any{keyEUUID: 123}, wantMessage: "euuid must be a non-empty string"},
+			{name: "euuid with slash", args: map[string]any{keyEUUID: "child/account"}, wantMessage: errEUUIDNoSeparators},
+			{name: "euuid with query separator", args: map[string]any{keyEUUID: "child?account"}, wantMessage: errEUUIDNoSeparators},
+			{name: "euuid with traversal", args: map[string]any{keyEUUID: ".."}, wantMessage: errEUUIDNoSeparators},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeAccountChildAccountGetTool(cfg)
+
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid euuid should be an error result")
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, testCase.wantMessage, "response should describe validation error")
+			})
+		}
+	})
+}
+
 // End-to-end verification of child account listing.
 func TestLinodeAccountChildAccountsTool(t *testing.T) {
 	t.Parallel()
@@ -834,8 +973,8 @@ func TestLinodeAccountChildAccountsTool(t *testing.T) {
 
 		childAccounts := linode.PaginatedResponse[linode.ChildAccount]{
 			Data: []linode.ChildAccount{{
-				EUUID:         "A1BC2DEF-34GH-567I-J890KLMN12O34P56",
-				Company:       "Acme",
+				EUUID:         childAccountEUUID,
+				Company:       companyAcme,
 				Email:         "jkowalski@example.com",
 				FirstName:     "John",
 				LastName:      "Smith",
@@ -880,8 +1019,8 @@ func TestLinodeAccountChildAccountsTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "A1BC2DEF-34GH-567I-J890KLMN12O34P56", "response should contain child account euuid")
-		assert.Contains(t, textContent.Text, "Acme", "response should contain child account company")
+		assert.Contains(t, textContent.Text, childAccountEUUID, "response should contain child account euuid")
+		assert.Contains(t, textContent.Text, companyAcme, "response should contain child account company")
 		assert.Contains(t, textContent.Text, "0111", "response should contain child account credit card last four")
 	})
 
