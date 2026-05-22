@@ -131,6 +131,24 @@ func NewLinodeAccountEntityTransferCreateTool(cfg *config.Config) (mcp.Tool, pro
 	return tool, profiles.CapAdmin, handler
 }
 
+// NewLinodeAccountEntityTransferDeleteTool creates a tool for canceling one account entity transfer.
+func NewLinodeAccountEntityTransferDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_entity_transfer_delete",
+		"Cancels one account entity transfer request by token.",
+		[]mcp.ToolOption{
+			mcp.WithString("token", mcp.Required(),
+				mcp.Description("Entity transfer token to cancel.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm entity transfer cancellation.")),
+		},
+		handleLinodeAccountEntityTransferDeleteRequest,
+	)
+
+	return tool, profiles.CapDestroy, handler
+}
+
 // NewLinodeAccountChildAccountGetTool creates a tool for retrieving one child-level account.
 func NewLinodeAccountChildAccountGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -501,6 +519,46 @@ func handleLinodeAccountEntityTransferCreateRequest(ctx context.Context, request
 	}
 
 	return mcp.NewToolResultError("Failed to create linode_account_entity_transfer_create: " + createFailure.Error()), nil
+}
+
+func handleLinodeAccountEntityTransferDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This cancels an account entity transfer. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	token, validationMessage := accountEntityTransferTokenFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, prepErr := prepareClient(request, cfg)
+	if prepErr != nil {
+		return mcp.NewToolResultError(prepErr.Error()), nil
+	}
+
+	deleteFailureMessage := deleteAccountEntityTransfer(ctx, client, token)
+	if deleteFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to delete linode_account_entity_transfer_delete: " + deleteFailureMessage), nil
+	}
+
+	response := struct {
+		Message string `json:"message"`
+		Token   string `json:"token"`
+	}{
+		Message: "Account entity transfer canceled successfully",
+		Token:   token,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func deleteAccountEntityTransfer(ctx context.Context, client *linode.Client, token string) string {
+	deleteFailure := client.DeleteAccountEntityTransfer(ctx, token)
+	if deleteFailure != nil {
+		return deleteFailure.Error()
+	}
+
+	return ""
 }
 
 func accountEntityTransferCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateAccountEntityTransferRequest, string) {
