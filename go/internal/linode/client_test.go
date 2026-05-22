@@ -1204,6 +1204,81 @@ func TestClientListAccountChildAccountsRetriesTransientError(t *testing.T) {
 	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
+// TestClientGetAccountEventSuccess verifies GetAccountEvent sends a GET
+// request to /account/events/{event_id} and decodes the response.
+func TestClientGetAccountEventSuccess(t *testing.T) {
+	t.Parallel()
+
+	want := linode.AccountEvent{ID: 123, Action: "linode_create", Status: "successful", Username: "test-user"}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/account/events/123", r.URL.Path, "request path should include event ID")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(want), "encoding event response should not fail")
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	got, err := client.GetAccountEvent(t.Context(), 123)
+
+	require.NoError(t, err, "GetAccountEvent should succeed on 200 response")
+	require.NotNil(t, got, "result should not be nil")
+	assert.Equal(t, 123, got.ID)
+	assert.Equal(t, "linode_create", got.Action)
+	assert.Equal(t, "successful", got.Status)
+}
+
+// TestClientGetAccountEventAPIError verifies GetAccountEvent propagates API errors.
+func TestClientGetAccountEventAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/account/events/123", r.URL.Path, "request path should include event ID")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr, "writing error response should not fail")
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	_, err := client.GetAccountEvent(t.Context(), 123)
+
+	require.Error(t, err, "GetAccountEvent should fail on 403 response")
+}
+
+// TestClientGetAccountEventRetriesTransientError verifies the read-only event lookup retries transient failures.
+func TestClientGetAccountEventRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		current := requestCount.Add(1)
+		if current == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			assert.NoError(t, writeErr, "writing transient error should not fail")
+
+			return
+		}
+
+		assert.Equal(t, "/account/events/123", r.URL.Path, "request path should include event ID")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountEvent{ID: 123, Action: "linode_create"}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+	result, err := client.GetAccountEvent(t.Context(), 123)
+
+	require.NoError(t, err, "GetAccountEvent should succeed after retry")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, 123, result.ID)
+	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+}
+
 // TestClientListAccountEntityTransfersSuccess verifies ListAccountEntityTransfers sends a GET
 // request to /account/entity-transfers with pagination query parameters.
 func TestClientListAccountEntityTransfersSuccess(t *testing.T) {

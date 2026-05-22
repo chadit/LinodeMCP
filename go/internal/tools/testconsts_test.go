@@ -54,6 +54,7 @@ const (
 	keyEUUID          = "euuid"
 	keyLinodeIDs      = "linode_ids"
 	keyToken          = "token"
+	keyEventID        = "event_id"
 
 	// Tool-specific resource ID keys.
 	keyLinodeID       = "linode_id"
@@ -147,6 +148,8 @@ const (
 	accountEntityTransferToken      = "transfer-token-example"
 	accountEntityTransferTokenSlash = "transfer/token"
 	accountEntityTransferTokenQuery = "transfer?token"
+	accountEventID                  = 123
+	accountEventAction              = "linode_create"
 	emailUpdatedExample             = "updated@example.com"
 	nameUpdatedTest                 = "Updated"
 	aclPublicRead                   = "public-read"
@@ -204,6 +207,8 @@ const (
 	errTokenRequired          = "token is required"
 	errTokenNonEmpty          = "token must be a non-empty string"
 	errTokenNoSeparators      = "token must not contain path separators"
+	errEventIDRequired        = "event_id is required"
+	errEventIDPositive        = "event_id must be a positive integer"
 	keyComments               = "comments"
 
 	// Validation case names used in table-driven test rows.

@@ -1359,6 +1359,135 @@ func TestLinodeAccountEntityTransfersTool(t *testing.T) {
 	})
 }
 
+func TestLinodeAccountEventGetTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountEventGetTool(cfg)
+
+		assert.Equal(t, "linode_account_event_get", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, keyEventID, "schema should include event_id")
+		assert.NotContains(t, props, keyConfirm, "read-only get tool must not require confirm")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/account/events/123", r.URL.Path, "request path should include event ID")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountEvent{
+				ID:     accountEventID,
+				Action: accountEventAction,
+				Status: statusSuccessful,
+			}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeAccountEventGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyEventID: float64(accountEventID)})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, accountEventAction, "response should include event action")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeAccountEventGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyEventID: float64(accountEventID)})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "tool errors are returned as error results, not Go errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "should return an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to retrieve linode_account_event_get", "response should identify failed tool")
+		assert.Contains(t, textContent.Text, errForbidden, "response should include API error detail")
+	})
+
+	t.Run("validation", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name string
+			args map[string]any
+			want string
+		}{
+			{name: caseMissing, args: map[string]any{}, want: errEventIDRequired},
+			{name: caseString, args: map[string]any{keyEventID: "123"}, want: errEventIDPositive},
+			{name: "zero", args: map[string]any{keyEventID: float64(0)}, want: errEventIDPositive},
+			{name: "negative", args: map[string]any{keyEventID: float64(-1)}, want: errEventIDPositive},
+			{name: "fractional", args: map[string]any{keyEventID: 123.5}, want: errEventIDPositive},
+			{name: "overflow", args: map[string]any{keyEventID: 1e100}, want: errEventIDPositive},
+			{name: caseSlash, args: map[string]any{keyEventID: "12/3"}, want: errEventIDPositive},
+			{name: caseQuery, args: map[string]any{keyEventID: "12?3"}, want: errEventIDPositive},
+			{name: caseDotTraversal, args: map[string]any{keyEventID: pathTraversalValue}, want: errEventIDPositive},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeAccountEventGetTool(cfg)
+
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "tool validation errors are returned as error results")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "validation should return error result")
+
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, testCase.want, "validation message should explain the error")
+			})
+		}
+	})
+}
+
 // End-to-end verification of account entity transfer retrieval.
 func TestLinodeAccountEntityTransferGetTool(t *testing.T) {
 	t.Parallel()
