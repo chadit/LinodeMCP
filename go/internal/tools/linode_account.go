@@ -540,6 +540,22 @@ func NewLinodeAccountServiceTransfersTool(cfg *config.Config) (mcp.Tool, profile
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeAccountServiceTransferGetTool creates a tool for retrieving one account service transfer.
+func NewLinodeAccountServiceTransferGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_service_transfer_get",
+		"Gets one account service transfer request by token.",
+		[]mcp.ToolOption{
+			mcp.WithString("token", mcp.Required(),
+				mcp.Description("Service transfer token.")),
+		},
+		handleLinodeAccountServiceTransferGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeAccountServiceTransferCreateTool creates a tool for creating an account service transfer.
 func NewLinodeAccountServiceTransferCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -1993,8 +2009,27 @@ func handleLinodeAccountServiceTransfersRequest(ctx context.Context, request *mc
 	return mcp.NewToolResultError("Failed to retrieve linode_account_service_transfers: " + listFailure.Error()), nil
 }
 
+func handleLinodeAccountServiceTransferGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	token, validationMessage := accountTransferTokenFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	transfer, getFailure := client.GetAccountServiceTransfer(ctx, token)
+	if getFailure == nil {
+		return MarshalToolResponse(transfer)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_account_service_transfer_get: " + getFailure.Error()), nil
+}
+
 func handleLinodeAccountEntityTransferGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	token, validationMessage := accountEntityTransferTokenFromTool(request)
+	token, validationMessage := accountTransferTokenFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}
@@ -2095,7 +2130,7 @@ func accountEventIDFromTool(request *mcp.CallToolRequest) (int, string) {
 	}
 }
 
-func accountEntityTransferTokenFromTool(request *mcp.CallToolRequest) (string, string) {
+func accountTransferTokenFromTool(request *mcp.CallToolRequest) (string, string) {
 	raw, exists := request.GetArguments()["token"]
 	if !exists {
 		return "", "token is required"
@@ -2196,7 +2231,7 @@ func handleLinodeAccountEntityTransferAcceptRequest(ctx context.Context, request
 		return result, nil
 	}
 
-	token, validationMessage := accountEntityTransferTokenFromTool(request)
+	token, validationMessage := accountTransferTokenFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}
@@ -2227,7 +2262,7 @@ func handleLinodeAccountEntityTransferDeleteRequest(ctx context.Context, request
 		return result, nil
 	}
 
-	token, validationMessage := accountEntityTransferTokenFromTool(request)
+	token, validationMessage := accountTransferTokenFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}

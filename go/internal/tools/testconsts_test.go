@@ -224,6 +224,7 @@ const (
 	errBetaIDNonEmpty              = "id must be a non-empty string"
 	errBetaIDChars                 = "id must contain only letters"
 	errLinodeIDsPositiveArray      = "linode_ids must be an array of positive integers"
+	accountServiceTransferToken    = "service-token-example"
 	errTokenRequired               = "token is required"
 	errTokenNonEmpty               = "token must be a non-empty string"
 	errTokenNoSeparators           = "token must not contain path separators"

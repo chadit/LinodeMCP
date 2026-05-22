@@ -702,6 +702,28 @@ func (c *Client) httpListAccountServiceTransfers(ctx context.Context, page, page
 	return &transfers, nil
 }
 
+// httpGetAccountServiceTransfer retrieves one account service transfer by token.
+func (c *Client) httpGetAccountServiceTransfer(ctx context.Context, token string) (*AccountEntityTransfer, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountServiceTransfers + "/" + url.PathEscape(token)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccountServiceTransfer", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var transfer AccountEntityTransfer
+	if err := c.handleResponse(resp, &transfer); err != nil {
+		return nil, err
+	}
+
+	return &transfer, nil
+}
+
 // httpGetAccountEntityTransfer retrieves one account entity transfer by token.
 func (c *Client) httpGetAccountEntityTransfer(ctx context.Context, token string) (*AccountEntityTransfer, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
