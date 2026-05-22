@@ -2467,6 +2467,87 @@ func TestClientDeleteAccountPaymentMethodDoesNotRetryTransientError(t *testing.T
 	assert.Equal(t, int32(1), requestCount.Load(), "destructive DELETE should not be retried")
 }
 
+func TestClientMakeAccountPaymentMethodDefaultSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/account/payment-methods/123/make-default", r.URL.Path, "request path should include payment method id and make-default action")
+		assert.Empty(t, r.URL.RawQuery, "make-default request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		assert.Equal(t, http.NoBody, r.Body, "make-default request should not send a body")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	err := client.MakeAccountPaymentMethodDefault(t.Context(), "123")
+
+	require.NoError(t, err, "MakeAccountPaymentMethodDefault should succeed on 200 response")
+}
+
+func TestClientMakeAccountPaymentMethodDefaultEscapesID(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/account/payment-methods/123%2F456%3Fquery/make-default", r.URL.EscapedPath(), "path parameter should be escaped")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	err := client.MakeAccountPaymentMethodDefault(t.Context(), "123/456?query")
+
+	require.NoError(t, err, "MakeAccountPaymentMethodDefault should escape path parameters")
+}
+
+func TestClientMakeAccountPaymentMethodDefaultAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/account/payment-methods/123/make-default", r.URL.Path, "request path should include payment method id and make-default action")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	err := client.MakeAccountPaymentMethodDefault(t.Context(), "123")
+
+	require.Error(t, err, "MakeAccountPaymentMethodDefault should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Contains(t, apiErr.Message, errForbidden)
+}
+
+func TestClientMakeAccountPaymentMethodDefaultDoesNotRetryTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	err := client.MakeAccountPaymentMethodDefault(t.Context(), "123")
+
+	require.Error(t, err, "MakeAccountPaymentMethodDefault should surface transient failures")
+	assert.Equal(t, int32(1), requestCount.Load(), "mutating make-default POST should not be retried")
+}
+
 func TestClientCreateAccountPaymentMethodSuccess(t *testing.T) {
 	t.Parallel()
 
