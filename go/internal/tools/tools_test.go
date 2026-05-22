@@ -29,6 +29,11 @@ const (
 	paginationMessagePageMustBe      = "page must be"
 	invoiceItemLabel                 = "Nanode 1GB"
 	messageInvoiceIDPositive         = "invoice_id must be a positive integer"
+	keyLoginID                       = "login_id"
+	accountLoginUsername             = "account-login-user"
+	loginIDCaseZero                  = "login_id zero"
+	loginIDCaseNegative              = "login_id negative"
+	loginIDCaseFractional            = "login_id fractional"
 )
 
 // End-to-end verification of the hello tool.
@@ -1206,7 +1211,7 @@ func TestLinodeAccountLoginsTool(t *testing.T) {
 		t.Parallel()
 
 		logins := linode.PaginatedResponse[linode.AccountLogin]{
-			Data:    []linode.AccountLogin{{ID: 123, Username: "account-login-user", IP: "203.0.113.10", Status: "successful"}},
+			Data:    []linode.AccountLogin{{ID: 123, Username: accountLoginUsername, IP: "203.0.113.10", Status: "successful"}},
 			Page:    2,
 			Pages:   3,
 			Results: 75,
@@ -1235,7 +1240,7 @@ func TestLinodeAccountLoginsTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "account-login-user", "response should contain username")
+		assert.Contains(t, textContent.Text, accountLoginUsername, "response should contain username")
 		assert.Contains(t, textContent.Text, "203.0.113.10", "response should contain login IP")
 	})
 
@@ -1297,6 +1302,128 @@ func TestLinodeAccountLoginsTool(t *testing.T) {
 				textContent, ok := result.Content[0].(mcp.TextContent)
 				require.True(t, ok, "content should be TextContent")
 				assert.Contains(t, textContent.Text, testCase.wantMessage, "response should describe validation error")
+			})
+		}
+	})
+}
+
+// End-to-end verification of account login retrieval.
+func TestLinodeAccountLoginGetTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountLoginGetTool(cfg)
+
+		assert.Equal(t, "linode_account_login_get", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, keyLoginID, "schema should include login_id")
+		assert.NotContains(t, props, keyConfirm, "read-only get tool must not require confirm")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		login := linode.AccountLogin{ID: 123, Username: accountLoginUsername, IP: "203.0.113.10", Status: "successful"}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/account/logins/123", r.URL.Path, "request path should include account login ID")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(login))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountLoginGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyLoginID: 123})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, accountLoginUsername, "response should contain username")
+		assert.Contains(t, textContent.Text, "203.0.113.10", "response should contain login IP")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/account/logins/123", r.URL.Path, "request path should include account login ID")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountLoginGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyLoginID: 123})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to retrieve linode_account_login_get", "response should identify failed tool")
+		assert.Contains(t, textContent.Text, errForbidden, "response should include API error detail")
+	})
+
+	t.Run("invalid login_id rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name string
+			args map[string]any
+		}{
+			{name: "missing", args: map[string]any{}},
+			{name: loginIDCaseZero, args: map[string]any{keyLoginID: 0}},
+			{name: loginIDCaseNegative, args: map[string]any{keyLoginID: -1}},
+			{name: loginIDCaseFractional, args: map[string]any{keyLoginID: 12.5}},
+			{name: "huge numeric", args: map[string]any{keyLoginID: 1e100}},
+			{name: "above safe integer", args: map[string]any{keyLoginID: 9007199254740992.0}},
+			{name: "path separator string", args: map[string]any{keyLoginID: "12/34"}},
+			{name: "query separator string", args: map[string]any{keyLoginID: "12?debug=true"}},
+			{name: "traversal string", args: map[string]any{keyLoginID: ".."}},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				var called atomic.Bool
+
+				srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+					called.Store(true)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeAccountLoginGetTool(cfg)
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid login_id should be an error result")
+				assert.False(t, called.Load(), "invalid login_id should be rejected before client call")
 			})
 		}
 	})
@@ -1952,9 +2079,9 @@ func TestLinodeAccountEventGetTool(t *testing.T) {
 		}{
 			{name: caseMissing, args: map[string]any{}, want: errEventIDRequired},
 			{name: caseString, args: map[string]any{keyEventID: "123"}, want: errEventIDPositive},
-			{name: "zero", args: map[string]any{keyEventID: float64(0)}, want: errEventIDPositive},
-			{name: "negative", args: map[string]any{keyEventID: float64(-1)}, want: errEventIDPositive},
-			{name: "fractional", args: map[string]any{keyEventID: 123.5}, want: errEventIDPositive},
+			{name: loginIDCaseZero, args: map[string]any{keyEventID: float64(0)}, want: errEventIDPositive},
+			{name: loginIDCaseNegative, args: map[string]any{keyEventID: float64(-1)}, want: errEventIDPositive},
+			{name: loginIDCaseFractional, args: map[string]any{keyEventID: 123.5}, want: errEventIDPositive},
 			{name: "overflow", args: map[string]any{keyEventID: 1e100}, want: errEventIDPositive},
 			{name: caseSlash, args: map[string]any{keyEventID: "12/3"}, want: errEventIDPositive},
 			{name: caseQuery, args: map[string]any{keyEventID: "12?3"}, want: errEventIDPositive},
@@ -2112,9 +2239,9 @@ func TestLinodeAccountEventSeenTool(t *testing.T) {
 		}{
 			{name: caseMissing, args: map[string]any{keyConfirm: true}, want: errEventIDRequired},
 			{name: caseString, args: map[string]any{keyEventID: "123", keyConfirm: true}, want: errEventIDPositive},
-			{name: "zero", args: map[string]any{keyEventID: float64(0), keyConfirm: true}, want: errEventIDPositive},
-			{name: "negative", args: map[string]any{keyEventID: float64(-1), keyConfirm: true}, want: errEventIDPositive},
-			{name: "fractional", args: map[string]any{keyEventID: 123.5, keyConfirm: true}, want: errEventIDPositive},
+			{name: loginIDCaseZero, args: map[string]any{keyEventID: float64(0), keyConfirm: true}, want: errEventIDPositive},
+			{name: loginIDCaseNegative, args: map[string]any{keyEventID: float64(-1), keyConfirm: true}, want: errEventIDPositive},
+			{name: loginIDCaseFractional, args: map[string]any{keyEventID: 123.5, keyConfirm: true}, want: errEventIDPositive},
 			{name: "overflow", args: map[string]any{keyEventID: 1e100, keyConfirm: true}, want: errEventIDPositive},
 			{name: caseSlash, args: map[string]any{keyEventID: "12/3", keyConfirm: true}, want: errEventIDPositive},
 			{name: caseQuery, args: map[string]any{keyEventID: "12?3", keyConfirm: true}, want: errEventIDPositive},

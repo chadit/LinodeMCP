@@ -3,7 +3,7 @@ package linode
 import (
 	"context"
 	"net/http"
-	"net/url"
+	"net/url" // path parameter escaping
 	"strconv"
 )
 
@@ -213,6 +213,28 @@ func (c *Client) httpListAccountLogins(ctx context.Context, page, pageSize int) 
 	}
 
 	return &logins, nil
+}
+
+// httpGetAccountLogin retrieves one account login by ID.
+func (c *Client) httpGetAccountLogin(ctx context.Context, loginID int) (*AccountLogin, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountLogins + "/" + url.PathEscape(strconv.Itoa(loginID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccountLogin", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var login AccountLogin
+	if err := c.handleResponse(resp, &login); err != nil {
+		return nil, err
+	}
+
+	return &login, nil
 }
 
 func (c *Client) httpListAccountInvoices(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountInvoice], error) {

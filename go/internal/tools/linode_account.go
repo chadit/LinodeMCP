@@ -21,11 +21,13 @@ const (
 	accountEventsPageSizeMax          = 500
 	accountLoginsPageSizeMin          = 25
 	accountLoginsPageSizeMax          = 500
+	maxAccountLoginIDFromJSON         = 9007199254740991
 	accountInvoicesPageSizeMin        = 25
 	accountInvoicesPageSizeMax        = 500
 	accountInvoiceItemsPageSizeMin    = 25
 	accountInvoiceItemsPageSizeMax    = 500
 	errAccountInvoiceIDPositive       = "invoice_id must be a positive integer"
+	errAccountLoginIDPositive         = "login_id must be a positive integer"
 	accountChildAccountsPageSizeMin   = 25
 	accountChildAccountsPageSizeMax   = 500
 	accountEventIDParam               = "event_id"
@@ -102,6 +104,22 @@ func NewLinodeAccountLoginsTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
 		},
 		handleLinodeAccountLoginsRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeAccountLoginGetTool creates a tool for retrieving one account login.
+func NewLinodeAccountLoginGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_login_get",
+		"Gets one account login by ID.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("login_id", mcp.Required(),
+				mcp.Description("Account login ID to retrieve.")),
+		},
+		handleLinodeAccountLoginGetRequest,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -561,6 +579,49 @@ func accountLoginsPaginationFromTool(request *mcp.CallToolRequest) (int, int, st
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeAccountLoginGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	loginID, validationMessage := accountLoginIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	login, getFailure := client.GetAccountLogin(ctx, loginID)
+	if getFailure == nil {
+		return MarshalToolResponse(login)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_account_login_get: " + getFailure.Error()), nil
+}
+
+func accountLoginIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	raw, exists := request.GetArguments()["login_id"]
+	if !exists {
+		return 0, "login_id is required"
+	}
+
+	switch value := raw.(type) {
+	case int:
+		if value <= 0 {
+			return 0, errAccountLoginIDPositive
+		}
+
+		return value, ""
+	case float64:
+		if value <= 0 || value > maxAccountLoginIDFromJSON || value != float64(int64(value)) {
+			return 0, errAccountLoginIDPositive
+		}
+
+		return int(value), ""
+	default:
+		return 0, errAccountLoginIDPositive
+	}
 }
 
 func handleLinodeAccountInvoicesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
