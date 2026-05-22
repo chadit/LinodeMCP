@@ -201,6 +201,20 @@ type OAuthClient struct {
 	ThumbnailURL string `json:"thumbnail_url"`
 }
 
+// CreatedOAuthClient represents the response from creating an OAuth client.
+type CreatedOAuthClient struct {
+	ID          string `json:"id"`
+	Label       string `json:"label"`
+	RedirectURI string `json:"redirect_uri"`
+	Secret      string `json:"secret"`
+}
+
+// CreateOAuthClientRequest contains the required fields for POST /account/oauth-clients.
+type CreateOAuthClientRequest struct {
+	Label       string `json:"label"`
+	RedirectURI string `json:"redirect_uri"`
+}
+
 // ChildAccount represents a child-level account available to a parent account.
 type ChildAccount struct {
 	ActiveSince       string                 `json:"active_since"`

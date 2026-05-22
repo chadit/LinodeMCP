@@ -34,6 +34,12 @@ const (
 	loginIDCaseZero                  = "login_id zero"
 	loginIDCaseNegative              = "login_id negative"
 	loginIDCaseFractional            = "login_id fractional"
+	keyRedirectURI                   = "redirect_uri"
+	oauthClientLabel                 = "my app"
+	oauthClientRedirectURI           = "https://example.com/callback"
+	caseFalse                        = "false"
+	errRedirectURIRequired           = "redirect_uri is required"
+	blankString                      = "   "
 )
 
 // End-to-end verification of the hello tool.
@@ -1215,8 +1221,8 @@ func TestLinodeAccountOAuthClientsTool(t *testing.T) {
 		clients := map[string]any{
 			keyData: []map[string]any{{
 				"id":           "2737bf16b39ab5d7b4a1",
-				"label":        "example-client",
-				"redirect_uri": "https://example.com/oauth/callback",
+				keyLabel:       "example-client",
+				keyRedirectURI: "https://example.com/oauth/callback",
 				"secret":       "super-secret-client-secret",
 				"status":       statusActive,
 			}},
@@ -1774,7 +1780,7 @@ func TestLinodeAccountLoginGetTool(t *testing.T) {
 			name string
 			args map[string]any
 		}{
-			{name: "missing", args: map[string]any{}},
+			{name: caseMissing, args: map[string]any{}},
 			{name: loginIDCaseZero, args: map[string]any{keyLoginID: 0}},
 			{name: loginIDCaseNegative, args: map[string]any{keyLoginID: -1}},
 			{name: loginIDCaseFractional, args: map[string]any{keyLoginID: 12.5}},
@@ -1953,6 +1959,162 @@ func TestLinodeAccountChildAccountsTool(t *testing.T) {
 				assert.Contains(t, textContent.Text, testCase.wantMessage, "response should describe validation error")
 			})
 		}
+	})
+}
+
+// End-to-end verification of account OAuth client creation.
+func TestLinodeAccountOAuthClientCreateTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountOAuthClientCreateTool(cfg)
+
+		assert.Equal(t, "linode_account_oauth_client_create", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapAdmin, capability, "OAuth client creation should be CapAdmin")
+		assert.Contains(t, tool.Description, "WARNING", "tool should warn about the one-time secret")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, "label", "schema should include label")
+		assert.Contains(t, props, "redirect_uri", "schema should include redirect_uri")
+		assert.Contains(t, props, keyConfirm, "schema should include confirm")
+	})
+
+	t.Run("confirm required before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name    string
+			confirm any
+			include bool
+		}{
+			{name: caseMissing},
+			{name: caseFalse, confirm: false, include: true},
+			{name: "string", confirm: boolStringTrue, include: true},
+			{name: "number", confirm: 1, include: true},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeAccountOAuthClientCreateTool(cfg)
+
+				args := map[string]any{keyLabel: oauthClientLabel, keyRedirectURI: oauthClientRedirectURI}
+				if testCase.include {
+					args[keyConfirm] = testCase.confirm
+				}
+
+				req := createRequestWithArgs(t, args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid confirm should be an error result")
+				assertErrorContains(t, result, "confirm=true")
+			})
+		}
+	})
+
+	t.Run("missing required args reject before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name string
+			args map[string]any
+			want string
+		}{
+			{name: "missing label", args: map[string]any{keyRedirectURI: oauthClientRedirectURI, keyConfirm: true}, want: errLabelRequired},
+			{name: "non-string label", args: map[string]any{keyLabel: 123, keyRedirectURI: oauthClientRedirectURI, keyConfirm: true}, want: errLabelRequired},
+			{name: "blank label", args: map[string]any{keyLabel: blankString, keyRedirectURI: oauthClientRedirectURI, keyConfirm: true}, want: errLabelRequired},
+			{name: "missing redirect_uri", args: map[string]any{keyLabel: oauthClientLabel, keyConfirm: true}, want: errRedirectURIRequired},
+			{name: "non-string redirect_uri", args: map[string]any{keyLabel: oauthClientLabel, keyRedirectURI: 123, keyConfirm: true}, want: errRedirectURIRequired},
+			{name: "blank redirect_uri", args: map[string]any{keyLabel: oauthClientLabel, keyRedirectURI: blankString, keyConfirm: true}, want: errRedirectURIRequired},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeAccountOAuthClientCreateTool(cfg)
+				req := createRequestWithArgs(t, testCase.args)
+
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "missing arg should be an error result")
+				assertErrorContains(t, result, testCase.want)
+			})
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/account/oauth-clients", r.URL.Path, "request path should match")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+			var got linode.CreateOAuthClientRequest
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&got))
+			assert.Equal(t, oauthClientLabel, got.Label)
+			assert.Equal(t, oauthClientRedirectURI, got.RedirectURI)
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(linode.CreatedOAuthClient{
+				ID: "client-123", Label: oauthClientLabel, RedirectURI: oauthClientRedirectURI, Secret: "secret-once",
+			}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountOAuthClientCreateTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyLabel: oauthClientLabel, keyRedirectURI: oauthClientRedirectURI, keyConfirm: true})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "OAuth client created successfully", "response should include success message")
+		assert.Contains(t, textContent.Text, "IMPORTANT", "response should warn about one-time secret")
+		assert.Contains(t, textContent.Text, "secret-once", "response should contain the one-time secret")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/account/oauth-clients", r.URL.Path, "request path should match")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountOAuthClientCreateTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyLabel: oauthClientLabel, keyRedirectURI: oauthClientRedirectURI, keyConfirm: true})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		assertErrorContains(t, result, "Failed to create linode_account_oauth_client_create")
+		assertErrorContains(t, result, errForbidden)
 	})
 }
 

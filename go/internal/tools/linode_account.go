@@ -34,6 +34,8 @@ const (
 	accountInvoiceItemsPageSizeMax    = 500
 	errAccountInvoiceIDPositive       = "invoice_id must be a positive integer"
 	errAccountLoginIDPositive         = "login_id must be a positive integer"
+	errLabelRequired                  = "label is required"
+	errRedirectURIRequired            = "redirect_uri is required"
 	accountChildAccountsPageSizeMin   = 25
 	accountChildAccountsPageSizeMax   = 500
 	accountEventIDParam               = "event_id"
@@ -227,6 +229,23 @@ func NewLinodeAccountOAuthClientsTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeAccountOAuthClientCreateTool creates a tool for creating an OAuth client.
+func NewLinodeAccountOAuthClientCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_oauth_client_create",
+		"Creates an account OAuth client. WARNING: The secret is only shown once in the response and cannot be retrieved later.",
+		[]mcp.ToolOption{
+			mcp.WithString("label", mcp.Required(), mcp.Description("Label for the OAuth client.")),
+			mcp.WithString("redirect_uri", mcp.Required(), mcp.Description("Redirect URI for the OAuth client.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm OAuth client creation. The secret is only shown once.")),
+		},
+		handleLinodeAccountOAuthClientCreateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountChildAccountsTool creates a tool for listing child-level accounts.
@@ -633,6 +652,62 @@ func accountOAuthClientsPaginationFromTool(request *mcp.CallToolRequest) (int, i
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeAccountOAuthClientCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This creates an OAuth client. The secret is only shown once. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	req, validationMessage := oauthClientCreateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	oauthClient, createFailureMessage := createOAuthClient(ctx, client, req)
+	if createFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to create linode_account_oauth_client_create: " + createFailureMessage), nil
+	}
+
+	return MarshalToolResponse(struct {
+		Message string                     `json:"message"`
+		Warning string                     `json:"warning"`
+		Client  *linode.CreatedOAuthClient `json:"client"`
+	}{
+		Message: "OAuth client created successfully",
+		Warning: "IMPORTANT: The secret below is shown ONLY ONCE. Save it now - it cannot be retrieved later.",
+		Client:  oauthClient,
+	})
+}
+
+func createOAuthClient(ctx context.Context, client *linode.Client, req *linode.CreateOAuthClientRequest) (*linode.CreatedOAuthClient, string) {
+	oauthClient, err := client.CreateOAuthClient(ctx, req)
+	if err != nil {
+		return nil, err.Error()
+	}
+
+	return oauthClient, ""
+}
+
+func oauthClientCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateOAuthClientRequest, string) {
+	args := request.GetArguments()
+
+	label, labelOK := args["label"].(string)
+	if !labelOK || strings.TrimSpace(label) == "" {
+		return nil, errLabelRequired
+	}
+
+	redirectURI, redirectURIOK := args["redirect_uri"].(string)
+	if !redirectURIOK || strings.TrimSpace(redirectURI) == "" {
+		return nil, errRedirectURIRequired
+	}
+
+	return &linode.CreateOAuthClientRequest{Label: label, RedirectURI: redirectURI}, ""
 }
 
 func handleLinodeAccountEventsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
