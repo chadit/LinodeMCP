@@ -301,6 +301,28 @@ func (c *Client) httpDeleteAccountOAuthClient(ctx context.Context, clientID stri
 	return c.handleResponse(resp, nil)
 }
 
+// httpResetOAuthClientSecret resets one OAuth client secret by ID.
+func (c *Client) httpResetOAuthClientSecret(ctx context.Context, clientID string) (*OAuthClientSecret, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountOAuthClients + "/" + url.PathEscape(clientID) + "/reset-secret"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ResetOAuthClientSecret", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var secret OAuthClientSecret
+	if err := c.handleResponse(resp, &secret); err != nil {
+		return nil, err
+	}
+
+	return &secret, nil
+}
+
 // httpListAccountEvents retrieves account events.
 func (c *Client) httpListAccountEvents(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountEvent], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

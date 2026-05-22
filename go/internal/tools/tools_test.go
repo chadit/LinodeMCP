@@ -43,6 +43,8 @@ const (
 	invalidClientIDQuery             = "client?123"
 	caseClientIDSlash                = "client_id with slash"
 	caseClientIDQuerySeparator       = "client_id with query separator"
+	caseClientIDEmpty                = "empty client_id"
+	caseClientIDNumeric              = "numeric client_id"
 	errClientIDRequired              = "client_id is required"
 	errClientIDNonEmpty              = "client_id must be a non-empty string"
 	errClientIDNoSeparators          = "client_id must not contain path separators"
@@ -2056,8 +2058,8 @@ func TestLinodeAccountOAuthClientGetTool(t *testing.T) {
 			want string
 		}{
 			{name: caseMissing, args: map[string]any{}, want: errClientIDRequired},
-			{name: "empty client_id", args: map[string]any{keyClientID: ""}, want: errClientIDNonEmpty},
-			{name: "numeric client_id", args: map[string]any{keyClientID: 123}, want: errClientIDNonEmpty},
+			{name: caseClientIDEmpty, args: map[string]any{keyClientID: ""}, want: errClientIDNonEmpty},
+			{name: caseClientIDNumeric, args: map[string]any{keyClientID: 123}, want: errClientIDNonEmpty},
 			{name: caseClientIDSlash, args: map[string]any{keyClientID: invalidClientIDSlash}, want: errClientIDNoSeparators},
 			{name: caseClientIDQuerySeparator, args: map[string]any{keyClientID: invalidClientIDQuery}, want: errClientIDNoSeparators},
 			{name: caseDotTraversal, args: map[string]any{keyClientID: pathTraversalValue}, want: errClientIDNoSeparators},
@@ -2313,8 +2315,8 @@ func TestLinodeAccountOAuthClientDeleteTool(t *testing.T) {
 			want string
 		}{
 			{name: caseMissing, args: map[string]any{keyConfirm: true}, want: errClientIDRequired},
-			{name: "empty client_id", args: map[string]any{keyClientID: "", keyConfirm: true}, want: errClientIDNonEmpty},
-			{name: "numeric client_id", args: map[string]any{keyClientID: 123, keyConfirm: true}, want: errClientIDNonEmpty},
+			{name: caseClientIDEmpty, args: map[string]any{keyClientID: "", keyConfirm: true}, want: errClientIDNonEmpty},
+			{name: caseClientIDNumeric, args: map[string]any{keyClientID: 123, keyConfirm: true}, want: errClientIDNonEmpty},
 			{name: caseClientIDSlash, args: map[string]any{keyClientID: invalidClientIDSlash, keyConfirm: true}, want: errClientIDNoSeparators},
 			{name: caseClientIDQuerySeparator, args: map[string]any{keyClientID: invalidClientIDQuery, keyConfirm: true}, want: errClientIDNoSeparators},
 			{name: caseDotTraversal, args: map[string]any{keyClientID: pathTraversalValue, keyConfirm: true}, want: errClientIDNoSeparators},
@@ -2390,6 +2392,153 @@ func TestLinodeAccountOAuthClientDeleteTool(t *testing.T) {
 		require.NotNil(t, result, "result should not be nil")
 		assert.True(t, result.IsError, "API failure should be an error result")
 		assertErrorContains(t, result, "Failed to delete linode_account_oauth_client_delete")
+		assertErrorContains(t, result, errForbidden)
+	})
+}
+
+// End-to-end verification of account OAuth client secret reset.
+func TestLinodeAccountOAuthClientResetSecretTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountOAuthClientResetSecretTool(cfg)
+
+		assert.Equal(t, "linode_account_oauth_client_reset_secret", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapAdmin, capability, "OAuth client secret reset should be CapAdmin")
+		assert.Contains(t, tool.Description, "WARNING", "tool should warn about the one-time secret")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, keyClientID, "schema should include client_id")
+		assert.Contains(t, props, keyConfirm, "schema should include confirm")
+	})
+
+	t.Run("confirm required before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name    string
+			confirm any
+			include bool
+		}{
+			{name: caseMissing},
+			{name: caseFalse, confirm: false, include: true},
+			{name: caseString, confirm: boolStringTrue, include: true},
+			{name: caseNumeric, confirm: 1, include: true},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeAccountOAuthClientResetSecretTool(cfg)
+
+				args := map[string]any{keyClientID: oauthClientID}
+				if testCase.include {
+					args[keyConfirm] = testCase.confirm
+				}
+
+				req := createRequestWithArgs(t, args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid confirm should be an error result")
+				assertErrorContains(t, result, "confirm=true")
+			})
+		}
+	})
+
+	t.Run("invalid client_id rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name string
+			args map[string]any
+			want string
+		}{
+			{name: caseMissing, args: map[string]any{keyConfirm: true}, want: errClientIDRequired},
+			{name: caseClientIDEmpty, args: map[string]any{keyClientID: "", keyConfirm: true}, want: errClientIDNonEmpty},
+			{name: caseClientIDNumeric, args: map[string]any{keyClientID: 123, keyConfirm: true}, want: errClientIDNonEmpty},
+			{name: caseClientIDSlash, args: map[string]any{keyClientID: invalidClientIDSlash, keyConfirm: true}, want: errClientIDNoSeparators},
+			{name: caseClientIDQuerySeparator, args: map[string]any{keyClientID: invalidClientIDQuery, keyConfirm: true}, want: errClientIDNoSeparators},
+			{name: caseDotTraversal, args: map[string]any{keyClientID: pathTraversalValue, keyConfirm: true}, want: errClientIDNoSeparators},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeAccountOAuthClientResetSecretTool(cfg)
+				req := createRequestWithArgs(t, testCase.args)
+
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid client_id should be an error result")
+				assertErrorContains(t, result, testCase.want)
+			})
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/account/oauth-clients/client-123/reset-secret", r.URL.Path, "request path should reset client secret")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			assert.Equal(t, http.NoBody, r.Body, "reset request should not send a body")
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(linode.OAuthClientSecret{Secret: "new-secret-once"}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountOAuthClientResetSecretTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID, keyConfirm: true})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "OAuth client secret reset successfully", "response should include success message")
+		assert.Contains(t, textContent.Text, "IMPORTANT", "response should warn about one-time secret")
+		assert.Contains(t, textContent.Text, "new-secret-once", "response should contain the one-time secret")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/account/oauth-clients/client-123/reset-secret", r.URL.Path, "request path should reset client secret")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountOAuthClientResetSecretTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID, keyConfirm: true})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		assertErrorContains(t, result, "Failed to reset linode_account_oauth_client_reset_secret")
 		assertErrorContains(t, result, errForbidden)
 	})
 }
