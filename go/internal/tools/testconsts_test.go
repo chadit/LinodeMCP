@@ -208,6 +208,7 @@ const (
 	paymentMethodToken             = "tok_123"
 	paymentMethodLastFour          = "1111"
 	paymentMethodCreatedMessage    = "Payment method created successfully"
+	paymentMethodDeletedMessage    = "Payment method deleted successfully"
 	paymentMethodID                = "123"
 	paymentMethodIDSlash           = "123/456"
 	paymentMethodIDQuery           = "123?456"

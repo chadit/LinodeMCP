@@ -815,6 +815,7 @@ func coreToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeAccountPaymentMethodsTool,
 		tools.NewLinodeAccountPaymentMethodGetTool,
 		tools.NewLinodeAccountPaymentMethodCreateTool,
+		tools.NewLinodeAccountPaymentMethodDeleteTool,
 		tools.NewLinodeAccountOAuthClientGetTool,
 		tools.NewLinodeAccountOAuthClientCreateTool,
 		tools.NewLinodeAccountOAuthClientUpdateTool,

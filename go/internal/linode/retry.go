@@ -255,6 +255,13 @@ func (c *Client) CreateAccountPaymentMethod(ctx context.Context, req *CreateAcco
 	return c.httpCreateAccountPaymentMethod(ctx, req)
 }
 
+// DeleteAccountPaymentMethod deletes a payment method without retrying the
+// mutating request. Retrying can replay deletion after a transient error,
+// so this method delegates exactly once.
+func (c *Client) DeleteAccountPaymentMethod(ctx context.Context, paymentMethodID string) error {
+	return c.httpDeleteAccountPaymentMethod(ctx, paymentMethodID)
+}
+
 // GetAccountOAuthClient retrieves one OAuth client with automatic retry on transient failures.
 func (c *Client) GetAccountOAuthClient(ctx context.Context, clientID string) (*OAuthClient, error) {
 	var client *OAuthClient
