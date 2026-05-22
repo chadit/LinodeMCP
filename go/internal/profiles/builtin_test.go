@@ -406,3 +406,9 @@ func TestJSONRoundtrip(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, data, second, "BuiltinCatalogJSON must be deterministic across calls")
 }
+
+func TestCategoriesIncludesAccountInvoicesInCore(t *testing.T) {
+	t.Parallel()
+
+	assert.Contains(t, profiles.Categories("linode_account_invoices"), "core")
+}

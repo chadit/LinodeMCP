@@ -810,6 +810,7 @@ func coreToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeAccountAgreementsTool,
 		tools.NewLinodeAccountBetasTool,
 		tools.NewLinodeAccountEventsTool,
+		tools.NewLinodeAccountInvoicesTool,
 		tools.NewLinodeAccountChildAccountsTool,
 		tools.NewLinodeAccountEntityTransfersTool,
 		tools.NewLinodeAccountEntityTransferGetTool,

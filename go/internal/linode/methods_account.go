@@ -16,6 +16,7 @@ const (
 	endpointAccountAvailability    = "/account/availability"
 	endpointAccountBetas           = "/account/betas"
 	endpointAccountEvents          = "/account/events"
+	endpointAccountInvoices        = "/account/invoices"
 	endpointAccountChildAccounts   = "/account/child-accounts"
 	endpointAccountEntityTransfers = "/account/entity-transfers"
 )
@@ -189,6 +190,28 @@ func (c *Client) httpListAccountEvents(ctx context.Context, page, pageSize int) 
 	}
 
 	return &events, nil
+}
+
+// httpListAccountInvoices retrieves account invoices.
+func (c *Client) httpListAccountInvoices(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountInvoice], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointAccountInvoices, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListAccountInvoices", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var invoices PaginatedResponse[AccountInvoice]
+	if err := c.handleResponse(resp, &invoices); err != nil {
+		return nil, err
+	}
+
+	return &invoices, nil
 }
 
 // httpListAccountChildAccounts retrieves child-level accounts.
