@@ -809,6 +809,7 @@ func coreToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeAccountTool,
 		tools.NewLinodeAccountAgreementsTool,
 		tools.NewLinodeAccountBetasTool,
+		tools.NewLinodeAccountChildAccountsTool,
 		tools.NewLinodeAccountBetaGetTool,
 		tools.NewLinodeAccountBetaEnrollTool,
 		tools.NewLinodeAccountAvailabilityTool,

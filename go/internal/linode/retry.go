@@ -173,6 +173,21 @@ func (c *Client) ListAccountBetas(ctx context.Context, page, pageSize int) (*Pag
 	return betas, err
 }
 
+// ListAccountChildAccounts retrieves child-level accounts with automatic retry on transient failures.
+func (c *Client) ListAccountChildAccounts(ctx context.Context, page, pageSize int) (*PaginatedResponse[ChildAccount], error) {
+	var childAccounts *PaginatedResponse[ChildAccount]
+
+	err := c.executeWithRetry(ctx, "ListAccountChildAccounts", func() error {
+		var err error
+
+		childAccounts, err = c.httpListAccountChildAccounts(ctx, page, pageSize)
+
+		return err
+	})
+
+	return childAccounts, err
+}
+
 // GetAccountBeta retrieves one enrolled account beta program with automatic retry on transient failures.
 func (c *Client) GetAccountBeta(ctx context.Context, betaID string) (*AccountBetaProgram, error) {
 	var beta *AccountBetaProgram

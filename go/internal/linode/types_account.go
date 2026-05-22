@@ -100,6 +100,35 @@ type AccountBetaProgram struct {
 	Started     string  `json:"started"`
 }
 
+// ChildAccount represents a child-level account available to a parent account.
+type ChildAccount struct {
+	ActiveSince       string                 `json:"active_since"`
+	Address1          string                 `json:"address_1"`
+	Address2          string                 `json:"address_2"`
+	Balance           float64                `json:"balance"`
+	BalanceUninvoiced float64                `json:"balance_uninvoiced"`
+	BillingSource     string                 `json:"billing_source"`
+	Capabilities      []string               `json:"capabilities"`
+	City              string                 `json:"city"`
+	Company           string                 `json:"company"`
+	Country           string                 `json:"country"`
+	CreditCard        ChildAccountCreditCard `json:"credit_card"`
+	Email             string                 `json:"email"`
+	EUUID             string                 `json:"euuid"`
+	FirstName         string                 `json:"first_name"`
+	LastName          string                 `json:"last_name"`
+	Phone             string                 `json:"phone"`
+	State             string                 `json:"state"`
+	TaxID             string                 `json:"tax_id"`
+	Zip               string                 `json:"zip"`
+}
+
+// ChildAccountCreditCard contains masked credit card details for a child account.
+type ChildAccountCreditCard struct {
+	Expiry   string `json:"expiry"`
+	LastFour string `json:"last_four"`
+}
+
 // EnrollAccountBetaRequest contains the beta program identifier for POST /account/betas.
 type EnrollAccountBetaRequest struct {
 	ID string `json:"id"`

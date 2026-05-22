@@ -8,13 +8,14 @@ import (
 )
 
 const (
-	endpointProfile             = "/profile"
-	endpointProfileGrants       = "/profile/grants"
-	endpointAccount             = "/account"
-	endpointAccountCancel       = "/account/cancel"
-	endpointAccountAgreements   = "/account/agreements"
-	endpointAccountAvailability = "/account/availability"
-	endpointAccountBetas        = "/account/betas"
+	endpointProfile              = "/profile"
+	endpointProfileGrants        = "/profile/grants"
+	endpointAccount              = "/account"
+	endpointAccountCancel        = "/account/cancel"
+	endpointAccountAgreements    = "/account/agreements"
+	endpointAccountAvailability  = "/account/availability"
+	endpointAccountBetas         = "/account/betas"
+	endpointAccountChildAccounts = "/account/child-accounts"
 )
 
 // GetProfile retrieves the authenticated user's profile from the Linode API.
@@ -164,6 +165,28 @@ func (c *Client) httpListAccountBetas(ctx context.Context, page, pageSize int) (
 	}
 
 	return &betas, nil
+}
+
+// httpListAccountChildAccounts retrieves child-level accounts.
+func (c *Client) httpListAccountChildAccounts(ctx context.Context, page, pageSize int) (*PaginatedResponse[ChildAccount], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointAccountChildAccounts, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListAccountChildAccounts", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var childAccounts PaginatedResponse[ChildAccount]
+	if err := c.handleResponse(resp, &childAccounts); err != nil {
+		return nil, err
+	}
+
+	return &childAccounts, nil
 }
 
 // httpGetAccountBeta retrieves one enrolled account beta program.
