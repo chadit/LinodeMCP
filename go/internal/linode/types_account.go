@@ -75,6 +75,17 @@ type GlobalGrants struct {
 	LongviewSubscription bool            `json:"longview_subscription"`
 }
 
+// AccountSettings represents account-wide settings returned by GET /account/settings.
+type AccountSettings struct {
+	BackupsEnabled          bool    `json:"backups_enabled"`
+	Managed                 bool    `json:"managed"`
+	NetworkHelper           bool    `json:"network_helper"`
+	LongviewSubscription    *string `json:"longview_subscription"`
+	ObjectStorage           *string `json:"object_storage"`
+	InterfacesForNewLinodes string  `json:"interfaces_for_new_linodes"`
+	MaintenancePolicy       string  `json:"maintenance_policy"`
+}
+
 // AccountAgreements represents the acknowledgment status for account agreements.
 type AccountAgreements struct {
 	BillingAgreement       bool `json:"billing_agreement"`

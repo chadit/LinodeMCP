@@ -12,6 +12,7 @@ const (
 	endpointProfile                 = "/profile"
 	endpointProfileGrants           = "/profile/grants"
 	endpointAccount                 = "/account"
+	endpointAccountSettings         = "/account/settings"
 	endpointAccountCancel           = "/account/cancel"
 	endpointAccountAgreements       = "/account/agreements"
 	endpointAccountMaintenance      = "/account/maintenance"
@@ -92,6 +93,26 @@ func (c *Client) httpGetAccount(ctx context.Context) (*Account, error) {
 	}
 
 	return &account, nil
+}
+
+// httpGetAccountSettings retrieves account-wide settings from the Linode API.
+func (c *Client) httpGetAccountSettings(ctx context.Context) (*AccountSettings, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointAccountSettings, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccountSettings", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var settings AccountSettings
+	if err := c.handleResponse(resp, &settings); err != nil {
+		return nil, err
+	}
+
+	return &settings, nil
 }
 
 // httpGetAccountAgreements retrieves account agreement acknowledgment status.
