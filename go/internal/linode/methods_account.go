@@ -22,6 +22,7 @@ const (
 	endpointAccountMaintenance           = "/account/maintenance"
 	endpointAccountNotifications         = "/account/notifications"
 	endpointAccountAvailability          = "/account/availability"
+	endpointBetas                        = "/betas"
 	endpointAccountBetas                 = "/account/betas"
 	endpointAccountOAuthClients          = "/account/oauth-clients"
 	endpointAccountPaymentMethods        = "/account/payment-methods"
@@ -284,6 +285,28 @@ func (c *Client) httpListAccountAvailability(ctx context.Context, page, pageSize
 	}
 
 	return &availability, nil
+}
+
+// httpListBetas retrieves available beta programs.
+func (c *Client) httpListBetas(ctx context.Context, page, pageSize int) (*PaginatedResponse[BetaProgram], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointBetas, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListBetas", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var betas PaginatedResponse[BetaProgram]
+	if err := c.handleResponse(resp, &betas); err != nil {
+		return nil, err
+	}
+
+	return &betas, nil
 }
 
 // httpListAccountBetas retrieves enrolled account beta programs.

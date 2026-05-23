@@ -1344,6 +1344,115 @@ func TestClientListAccountOAuthClientsRetriesTransientError(t *testing.T) {
 	assert.Equal(t, int32(2), attempts.Load(), "read-only list should retry one transient failure")
 }
 
+// TestClientListBetasSuccess verifies ListBetas sends a GET request to /betas with pagination query parameters.
+func TestClientListBetasSuccess(t *testing.T) {
+	t.Parallel()
+
+	description := "This beta lets users try an example feature."
+	betas := linode.PaginatedResponse[linode.BetaProgram]{
+		Data: []linode.BetaProgram{{
+			BetaClass:      "open",
+			Description:    &description,
+			Ended:          nil,
+			GreenlightOnly: false,
+			ID:             "example_open",
+			Label:          "Example Open Beta",
+			MoreInfo:       "https://example.com/beta",
+			Started:        accountUserPasswordCreated,
+		}},
+		Page:    2,
+		Pages:   4,
+		Results: 90,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/betas", r.URL.Path, "request path should be /betas")
+		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(betas))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	result, err := client.ListBetas(t.Context(), 2, 25)
+
+	require.NoError(t, err, "ListBetas should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, 2, result.Page)
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, "example_open", result.Data[0].ID)
+	assert.Equal(t, "open", result.Data[0].BetaClass)
+	assert.False(t, result.Data[0].GreenlightOnly)
+	assert.Equal(t, "https://example.com/beta", result.Data[0].MoreInfo)
+	assert.Nil(t, result.Data[0].Ended)
+}
+
+// TestClientListBetasAPIError verifies ListBetas propagates API errors.
+func TestClientListBetasAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/betas", r.URL.Path, "request path should be /betas")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errForbidden}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.ListBetas(t.Context(), 0, 0)
+
+	require.Error(t, err, "ListBetas should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+// TestClientListBetasRetriesTransientError verifies the read-only list retries transient failures.
+func TestClientListBetasRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	betas := linode.PaginatedResponse[linode.BetaProgram]{
+		Data: []linode.BetaProgram{{ID: "example_open", Label: "Example Open Beta"}},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/betas", r.URL.Path, "request path should be /betas")
+
+		if requestCount.Add(1) == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(betas))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	result, err := client.ListBetas(t.Context(), 0, 0)
+
+	require.NoError(t, err, "ListBetas should succeed after retry")
+	require.NotNil(t, result, "result should not be nil")
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, "example_open", result.Data[0].ID)
+	assert.Equal(t, int32(2), requestCount.Load(), "read-only list should retry one transient failure")
+}
+
 // TestClientListAccountBetasSuccess verifies ListAccountBetas sends a GET
 // request to /account/betas with pagination query parameters.
 func TestClientListAccountBetasSuccess(t *testing.T) {
