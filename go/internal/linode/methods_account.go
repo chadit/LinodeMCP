@@ -651,6 +651,23 @@ func (c *Client) httpUpdateAccountUser(ctx context.Context, username string, req
 	return &user, nil
 }
 
+// httpDeleteAccountUser deletes one account user by username.
+func (c *Client) httpDeleteAccountUser(ctx context.Context, username string) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountUsers + "/" + url.PathEscape(username)
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteAccountUser", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	return c.handleResponse(resp, nil)
+}
+
 // httpCreateAccountUser creates a user on the account.
 func (c *Client) httpCreateAccountUser(ctx context.Context, request *CreateAccountUserRequest) (*AccountUser, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

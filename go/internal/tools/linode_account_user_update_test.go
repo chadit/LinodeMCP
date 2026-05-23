@@ -219,10 +219,10 @@ func accountUserUpdateInvalidCases() []struct {
 	}{
 		{name: caseMissingUsername, args: map[string]any{keyEmail: accountUserUpdateEmail, keyConfirm: true}, wantMessage: errUsernameRequired},
 		{name: caseEmptyUsername, args: map[string]any{keyUsername: "", keyEmail: accountUserUpdateEmail, keyConfirm: true}, wantMessage: errUsernameNonEmpty},
-		{name: "slash username", args: map[string]any{keyUsername: "user/name", keyEmail: accountUserUpdateEmail, keyConfirm: true}, wantMessage: errUsernamePathParamInvalid},
-		{name: "query username", args: map[string]any{keyUsername: "user?name", keyEmail: accountUserUpdateEmail, keyConfirm: true}, wantMessage: errUsernamePathParamInvalid},
+		{name: caseSlashUsername, args: map[string]any{keyUsername: valueSlashUsername, keyEmail: accountUserUpdateEmail, keyConfirm: true}, wantMessage: errUsernamePathParamInvalid},
+		{name: caseQueryUsername, args: map[string]any{keyUsername: valueQueryUsername, keyEmail: accountUserUpdateEmail, keyConfirm: true}, wantMessage: errUsernamePathParamInvalid},
 		{name: "fragment username", args: map[string]any{keyUsername: "user#name", keyEmail: accountUserUpdateEmail, keyConfirm: true}, wantMessage: errUsernamePathParamInvalid},
-		{name: "dotdot username", args: map[string]any{keyUsername: "user..name", keyEmail: accountUserUpdateEmail, keyConfirm: true}, wantMessage: errUsernamePathParamInvalid},
+		{name: caseDotdotUsername, args: map[string]any{keyUsername: valueDotdotUsername, keyEmail: accountUserUpdateEmail, keyConfirm: true}, wantMessage: errUsernamePathParamInvalid},
 		{name: "no update fields", args: map[string]any{keyUsername: accountUserUsername, keyConfirm: true}, wantMessage: errAccountUserUpdateFieldRequired},
 		{name: "empty email", args: map[string]any{keyUsername: accountUserUsername, keyEmail: "", keyConfirm: true}, wantMessage: errEmailNonEmpty},
 		{name: "numeric email", args: map[string]any{keyUsername: accountUserUsername, keyEmail: 123, keyConfirm: true}, wantMessage: errEmailNonEmpty},
