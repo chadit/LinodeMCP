@@ -1776,6 +1776,102 @@ func TestClientUpdateOAuthClientThumbnailDoesNotRetryTransientError(t *testing.T
 	assert.Equal(t, int32(1), requestCount.Load(), "mutating OAuth client thumbnail update must not be retried")
 }
 
+func TestClientGetOAuthClientThumbnailSuccess(t *testing.T) {
+	t.Parallel()
+
+	thumbnailPNG := []byte("png-bytes")
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/oauth-clients/"+oauthClientID+"/thumbnail", r.URL.Path, "request path should get client thumbnail")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		w.Header().Set("Content-Type", "image/png")
+		_, writeErr := w.Write(thumbnailPNG)
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	got, err := client.GetOAuthClientThumbnail(t.Context(), oauthClientID)
+
+	require.NoError(t, err, "GetOAuthClientThumbnail should succeed on 200 response")
+	assert.Equal(t, thumbnailPNG, got, "GetOAuthClientThumbnail should return the PNG bytes")
+}
+
+func TestClientGetOAuthClientThumbnailEscapesClientID(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/account/oauth-clients/client%2F123%3Fquery/thumbnail", r.URL.EscapedPath(), "path parameter should be escaped")
+		w.Header().Set("Content-Type", "image/png")
+		_, writeErr := w.Write([]byte("png-bytes"))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetOAuthClientThumbnail(t.Context(), oauthClientIDWithSeparators)
+
+	require.NoError(t, err, "GetOAuthClientThumbnail should escape path parameters")
+}
+
+func TestClientGetOAuthClientThumbnailAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/oauth-clients/"+oauthClientID+"/thumbnail", r.URL.Path, "request path should get client thumbnail")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "Not Found"}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetOAuthClientThumbnail(t.Context(), oauthClientID)
+
+	require.Error(t, err, "GetOAuthClientThumbnail should fail on 404 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
+	assert.Equal(t, http.StatusNotFound, apiErr.StatusCode)
+}
+
+func TestClientGetOAuthClientThumbnailRetriesOnTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	thumbnailPNG := []byte("png-bytes")
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
+			http.Error(w, "temporary failure", http.StatusInternalServerError)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "image/png")
+		_, writeErr := w.Write(thumbnailPNG)
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	got, err := client.GetOAuthClientThumbnail(t.Context(), oauthClientID)
+
+	require.NoError(t, err, "GetOAuthClientThumbnail should succeed after retry")
+	assert.Equal(t, thumbnailPNG, got, "GetOAuthClientThumbnail should return the PNG bytes")
+	assert.Equal(t, int32(2), requestCount.Load(), "read-only GetOAuthClientThumbnail should be retried on transient error")
+}
+
 func TestClientDeleteAccountOAuthClientSuccess(t *testing.T) {
 	t.Parallel()
 

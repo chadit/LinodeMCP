@@ -349,6 +349,21 @@ func (c *Client) UpdateOAuthClientThumbnail(ctx context.Context, clientID string
 	return c.httpUpdateOAuthClientThumbnail(ctx, clientID, thumbnailPNG)
 }
 
+// GetOAuthClientThumbnail retrieves an OAuth client's thumbnail with automatic retry on transient failures.
+func (c *Client) GetOAuthClientThumbnail(ctx context.Context, clientID string) ([]byte, error) {
+	var thumbnailPNG []byte
+
+	err := c.executeWithRetry(ctx, "GetOAuthClientThumbnail", func() error {
+		var err error
+
+		thumbnailPNG, err = c.httpGetOAuthClientThumbnail(ctx, clientID)
+
+		return err
+	})
+
+	return thumbnailPNG, err
+}
+
 // DeleteAccountOAuthClient deletes an account OAuth client without retrying the
 // destructive request. Retrying can replay client deletion after a transient
 // error, so this method delegates exactly once.

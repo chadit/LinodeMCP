@@ -2773,6 +2773,117 @@ func TestLinodeAccountOAuthClientThumbnailUpdateTool(t *testing.T) {
 	})
 }
 
+// End-to-end verification of account OAuth client thumbnail retrieval.
+func TestLinodeAccountOAuthClientThumbnailGetTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountOAuthClientThumbnailGetTool(cfg)
+
+		assert.Equal(t, "linode_account_oauth_client_thumbnail_get", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapRead, capability, "OAuth client thumbnail get should be CapRead")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, keyClientID, "schema should include client_id")
+		assert.NotContains(t, props, keyConfirm, "read-only tool should not require confirm")
+	})
+
+	t.Run("invalid client_id rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name string
+			args map[string]any
+			want string
+		}{
+			{name: caseMissing, args: map[string]any{}, want: errClientIDRequired},
+			{name: caseClientIDEmpty, args: map[string]any{keyClientID: ""}, want: errClientIDNonEmpty},
+			{name: caseClientIDNumeric, args: map[string]any{keyClientID: 123}, want: errClientIDNonEmpty},
+			{name: caseClientIDSlash, args: map[string]any{keyClientID: invalidClientIDSlash}, want: errClientIDNoSeparators},
+			{name: caseClientIDQuerySeparator, args: map[string]any{keyClientID: invalidClientIDQuery}, want: errClientIDNoSeparators},
+			{name: caseDotTraversal, args: map[string]any{keyClientID: pathTraversalValue}, want: errClientIDNoSeparators},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeAccountOAuthClientThumbnailGetTool(cfg)
+				req := createRequestWithArgs(t, testCase.args)
+
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid client_id should be an error result")
+				assertErrorContains(t, result, testCase.want)
+			})
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		thumbnailPNG := []byte("png-bytes")
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/account/oauth-clients/client-123/thumbnail", r.URL.Path, "request path should get client thumbnail")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+
+			w.Header().Set("Content-Type", "image/png")
+			_, writeErr := w.Write(thumbnailPNG)
+			assert.NoError(t, writeErr)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountOAuthClientThumbnailGetTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, oauthClientID, "response should include client id")
+		assert.Contains(t, textContent.Text, base64.StdEncoding.EncodeToString(thumbnailPNG), "response should include base64-encoded thumbnail")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/account/oauth-clients/client-123/thumbnail", r.URL.Path, "request path should get client thumbnail")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "Not Found"}}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountOAuthClientThumbnailGetTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		assertErrorContains(t, result, "Failed to get OAuth client thumbnail")
+	})
+}
+
 // End-to-end verification of account OAuth client deletion.
 func TestLinodeAccountOAuthClientDeleteTool(t *testing.T) {
 	t.Parallel()
