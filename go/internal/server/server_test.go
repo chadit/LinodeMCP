@@ -178,6 +178,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_account_events":                        profiles.CapRead,
 		"linode_account_users":                         profiles.CapRead,
 		"linode_account_user_get":                      profiles.CapRead,
+		"linode_account_user_grants":                   profiles.CapRead,
 		"linode_account_user_create":                   profiles.CapAdmin,
 		"linode_account_logins":                        profiles.CapRead,
 		"linode_account_invoices":                      profiles.CapRead,

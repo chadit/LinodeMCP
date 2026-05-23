@@ -17,28 +17,25 @@ import (
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-const (
-	accountUserGetToolName      = "linode_account_user_get"
-	errUsernamePathParamInvalid = "username must not contain '/', '?', '#', or '..'"
-)
+const accountUserGrantsToolName = "linode_account_user_grants"
 
-func TestLinodeAccountUserGetTool(t *testing.T) {
+func TestLinodeAccountUserGrantsTool(t *testing.T) {
 	t.Parallel()
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
 
 		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeAccountUserGetTool(cfg)
+		tool, capability, handler := tools.NewLinodeAccountUserGrantsTool(cfg)
 
-		assert.Equal(t, accountUserGetToolName, tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapRead, capability, "user lookup should be CapRead")
+		assert.Equal(t, accountUserGrantsToolName, tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapRead, capability, "user grants lookup should be CapRead")
 		assert.NotEmpty(t, tool.Description, "tool should have a description")
 		require.NotNil(t, handler, "handler should not be nil")
 
 		props := tool.InputSchema.Properties
 		assert.Contains(t, props, keyUsername, "schema should include username")
-		assert.NotContains(t, props, keyConfirm, "read-only get tool must not require confirm")
+		assert.NotContains(t, props, keyConfirm, "read-only grants tool must not require confirm")
 		assert.Contains(t, tool.InputSchema.Required, keyUsername, "username must be marked required")
 	})
 
@@ -72,7 +69,7 @@ func TestLinodeAccountUserGetTool(t *testing.T) {
 				defer srv.Close()
 
 				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-				_, _, handler := tools.NewLinodeAccountUserGetTool(cfg)
+				_, _, handler := tools.NewLinodeAccountUserGrantsTool(cfg)
 
 				req := createRequestWithArgs(t, testCase.args)
 				result, err := handler(t.Context(), req)
@@ -91,17 +88,20 @@ func TestLinodeAccountUserGetTool(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/account/users/"+accountLoginUsername, r.URL.Path, "request path should include username")
+			assert.Equal(t, "/account/users/"+accountLoginUsername+"/grants", r.URL.Path, "request path should include username grants")
 			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
 			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
 
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountUser{Username: accountLoginUsername, Email: "user@example.com", UserType: "default"}))
+			assert.NoError(t, json.NewEncoder(w).Encode(linode.Grants{
+				Global: linode.GlobalGrants{AccountAccess: linode.GrantPermission("read_only")},
+				Linode: []linode.Grant{{ID: 123, Permissions: linode.GrantPermission("read_write")}},
+			}))
 		}))
 		defer srv.Close()
 
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeAccountUserGetTool(cfg)
+		_, _, handler := tools.NewLinodeAccountUserGrantsTool(cfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyUsername: accountLoginUsername})
 		result, err := handler(t.Context(), req)
@@ -112,8 +112,8 @@ func TestLinodeAccountUserGetTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, accountLoginUsername, "response should include username")
-		assert.Contains(t, textContent.Text, "user@example.com", "response should include email")
+		assert.Contains(t, textContent.Text, "account_access", "response should include global grant")
+		assert.Contains(t, textContent.Text, "read_write", "response should include resource grant")
 	})
 
 	t.Run("api error", func(t *testing.T) {
@@ -121,7 +121,7 @@ func TestLinodeAccountUserGetTool(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/account/users/"+accountLoginUsername, r.URL.Path, "request path should include username")
+			assert.Equal(t, "/account/users/"+accountLoginUsername+"/grants", r.URL.Path, "request path should include username grants")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
@@ -131,7 +131,7 @@ func TestLinodeAccountUserGetTool(t *testing.T) {
 		defer srv.Close()
 
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeAccountUserGetTool(cfg)
+		_, _, handler := tools.NewLinodeAccountUserGrantsTool(cfg)
 
 		req := createRequestWithArgs(t, map[string]any{keyUsername: accountLoginUsername})
 		result, err := handler(t.Context(), req)
@@ -139,7 +139,7 @@ func TestLinodeAccountUserGetTool(t *testing.T) {
 		require.NoError(t, err, "handler should return API failures as tool errors")
 		require.NotNil(t, result, "result should not be nil")
 		assert.True(t, result.IsError, "API failure should be an error result")
-		assertErrorContains(t, result, "Failed to retrieve linode_account_user_get")
+		assertErrorContains(t, result, "Failed to retrieve linode_account_user_grants")
 		assertErrorContains(t, result, errForbidden)
 	})
 }

@@ -423,6 +423,21 @@ func (c *Client) GetAccountUser(ctx context.Context, username string) (*AccountU
 	return user, err
 }
 
+// GetAccountUserGrants retrieves one account user's grants with automatic retry on transient failures.
+func (c *Client) GetAccountUserGrants(ctx context.Context, username string) (*Grants, error) {
+	var grants *Grants
+
+	err := c.executeWithRetry(ctx, "GetAccountUserGrants", func() error {
+		var err error
+
+		grants, err = c.httpGetAccountUserGrants(ctx, username)
+
+		return err
+	})
+
+	return grants, err
+}
+
 // UpdateAccountUser updates an account user without retrying the mutating request.
 // Retrying can replay user updates after a transient error, so this method
 // delegates exactly once.

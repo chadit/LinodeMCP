@@ -831,6 +831,7 @@ func coreToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeAccountEventsTool,
 		tools.NewLinodeAccountUsersTool,
 		tools.NewLinodeAccountUserGetTool,
+		tools.NewLinodeAccountUserGrantsTool,
 		tools.NewLinodeAccountUserUpdateTool,
 		tools.NewLinodeAccountUserDeleteTool,
 		tools.NewLinodeAccountUserCreateTool,

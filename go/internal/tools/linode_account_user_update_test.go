@@ -25,6 +25,8 @@ const (
 	accountUserUpdateSSHKey              = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITest"
 	caseMissingUsername                  = "missing username"
 	caseEmptyUsername                    = "empty username"
+	caseBlankUsername                    = "blank username"
+	caseNumericUsername                  = "numeric username"
 	keyAccountUserRestricted             = "restricted"
 	keyAccountUserSSHKeys                = "ssh_keys"
 	keyAccountUserNewUsername            = "new_username"

@@ -246,6 +246,21 @@ func NewLinodeAccountUserGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeAccountUserGrantsTool creates a tool for retrieving one account user's grants.
+func NewLinodeAccountUserGrantsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_user_grants",
+		"Gets grants for one account user by username.",
+		[]mcp.ToolOption{
+			mcp.WithString(accountUserUsernameParam, mcp.Required(), mcp.Description("Account username whose grants should be retrieved.")),
+		},
+		handleLinodeAccountUserGrantsRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeAccountUserUpdateTool creates a tool for updating one account user.
 func NewLinodeAccountUserUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -1792,6 +1807,25 @@ func handleLinodeAccountUserGetRequest(ctx context.Context, request *mcp.CallToo
 	}
 
 	return mcp.NewToolResultError("Failed to retrieve linode_account_user_get: " + getFailure.Error()), nil
+}
+
+func handleLinodeAccountUserGrantsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	username, validationMessage := accountUserUsernamePathParamFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	grants, getFailure := client.GetAccountUserGrants(ctx, username)
+	if getFailure == nil {
+		return MarshalToolResponse(grants)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_account_user_grants: " + getFailure.Error()), nil
 }
 
 func accountUserUsernamePathParamFromTool(request *mcp.CallToolRequest) (string, string) {

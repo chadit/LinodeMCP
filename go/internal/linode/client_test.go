@@ -4318,6 +4318,116 @@ func TestClientGetAccountUserRetriesTransientError(t *testing.T) {
 	assert.Equal(t, int32(2), requestCount.Load(), "request should be retried once")
 }
 
+// TestClientGetAccountUserGrantsSuccess verifies GetAccountUserGrants sends a GET
+// request to /account/users/{username}/grants and returns the grants response.
+func TestClientGetAccountUserGrantsSuccess(t *testing.T) {
+	t.Parallel()
+
+	grants := linode.Grants{
+		Global: linode.GlobalGrants{AccountAccess: linode.GrantPermission("read_only")},
+		Linode: []linode.Grant{{ID: 123, Permissions: linode.GrantPermission("read_write")}},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/users/"+accountLoginUsername+"/grants", r.URL.Path, "request path should include username grants")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(grants))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.GetAccountUserGrants(t.Context(), accountLoginUsername)
+
+	require.NoError(t, err, "GetAccountUserGrants should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, linode.GrantPermission("read_only"), result.Global.AccountAccess)
+	require.Len(t, result.Linode, 1)
+	assert.Equal(t, 123, result.Linode[0].ID)
+}
+
+// TestClientGetAccountUserGrantsEscapesUsername verifies the client encodes path separators.
+func TestClientGetAccountUserGrantsEscapesUsername(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/account/users/user%2Fname%3Fquery/grants", r.URL.EscapedPath())
+		assert.Empty(t, r.URL.RawQuery, "escaped username must not create a query string")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.Grants{}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetAccountUserGrants(t.Context(), "user/name?query")
+
+	require.NoError(t, err, "GetAccountUserGrants should escape path parameters")
+}
+
+// TestClientGetAccountUserGrantsAPIError verifies GetAccountUserGrants propagates API errors.
+func TestClientGetAccountUserGrantsAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/users/"+accountLoginUsername+"/grants", r.URL.Path, "request path should include username grants")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetAccountUserGrants(t.Context(), accountLoginUsername)
+
+	require.Error(t, err, "GetAccountUserGrants should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	require.NotNil(t, apiErr, "APIError should be present")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+// TestClientGetAccountUserGrantsRetriesTransientError verifies the read-only grants lookup retries transient failures.
+func TestClientGetAccountUserGrantsRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			assert.NoError(t, writeErr)
+
+			return
+		}
+
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/users/"+accountLoginUsername+"/grants", r.URL.Path, "request path should include username grants")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.Grants{Global: linode.GlobalGrants{AccountAccess: linode.GrantPermission("read_only")}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	result, err := client.GetAccountUserGrants(t.Context(), accountLoginUsername)
+
+	require.NoError(t, err, "GetAccountUserGrants should succeed after retry")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, linode.GrantPermission("read_only"), result.Global.AccountAccess)
+	assert.Equal(t, int32(2), requestCount.Load(), "request should be retried once")
+}
+
 // TestClientListAccountLoginsSuccess verifies ListAccountLogins sends a GET
 // request to /account/logins with pagination query parameters.
 func TestClientListAccountLoginsSuccess(t *testing.T) {
