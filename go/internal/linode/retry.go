@@ -909,6 +909,21 @@ func (c *Client) GetDatabaseInstance(ctx context.Context, instanceID int) (*Data
 	return instance, err
 }
 
+// GetDatabaseInstanceCredentials retrieves MySQL Managed Database credentials with automatic retry on transient failures.
+func (c *Client) GetDatabaseInstanceCredentials(ctx context.Context, instanceID int) (*DatabaseCredentials, error) {
+	var credentials *DatabaseCredentials
+
+	err := c.executeWithRetry(ctx, "GetDatabaseInstanceCredentials", func() error {
+		var err error
+
+		credentials, err = c.httpGetDatabaseInstanceCredentials(ctx, instanceID)
+
+		return err
+	})
+
+	return credentials, err
+}
+
 // GetDatabaseEngine retrieves a Managed Database engine with automatic retry on transient failures.
 func (c *Client) GetDatabaseEngine(ctx context.Context, engineID string) (*DatabaseEngine, error) {
 	var engine *DatabaseEngine

@@ -79,6 +79,28 @@ func (c *Client) httpGetDatabaseInstance(ctx context.Context, instanceID int) (*
 	return &instance, nil
 }
 
+// GetDatabaseInstanceCredentials retrieves MySQL Managed Database credentials.
+func (c *Client) httpGetDatabaseInstanceCredentials(ctx context.Context, instanceID int) (*DatabaseCredentials, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointDatabaseInstances + "/" + url.PathEscape(strconv.Itoa(instanceID)) + "/credentials"
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetDatabaseInstanceCredentials", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var credentials DatabaseCredentials
+	if err := c.handleResponse(resp, &credentials); err != nil {
+		return nil, err
+	}
+
+	return &credentials, nil
+}
+
 // CreateDatabaseInstance creates or restores a MySQL Managed Database instance.
 func (c *Client) httpCreateDatabaseInstance(ctx context.Context, req *CreateDatabaseInstanceRequest) (*DatabaseInstance, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

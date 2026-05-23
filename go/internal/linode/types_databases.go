@@ -25,6 +25,12 @@ type DatabaseInstance struct {
 	Updated         string   `json:"updated"`
 }
 
+// DatabaseCredentials contains MySQL Managed Database credentials.
+type DatabaseCredentials struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
 // CreateDatabaseInstanceRequest creates or restores a MySQL Managed Database instance.
 type CreateDatabaseInstanceRequest struct {
 	Label          string         `json:"label"`
