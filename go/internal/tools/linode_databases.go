@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -149,6 +150,23 @@ func NewLinodeDatabaseInstanceUpdateTool(cfg *config.Config) (mcp.Tool, profiles
 	}
 
 	return tool, profiles.CapWrite, handler
+}
+
+// NewLinodeDatabaseInstanceDeleteTool creates a tool for deleting one MySQL Managed Database instance.
+func NewLinodeDatabaseInstanceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_database_instance_delete",
+		mcp.WithDescription("Deletes a MySQL Managed Database instance. WARNING: This is irreversible."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The MySQL Managed Database instance ID to delete.")),
+		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm database deletion. This action is irreversible.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleDatabaseInstanceDeleteRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapDestroy, handler
 }
 
 // NewLinodeDatabaseEngineGetTool creates a tool for getting one Managed Database engine.
@@ -326,6 +344,40 @@ func handleDatabaseInstanceUpdateRequest(ctx context.Context, request *mcp.CallT
 	}
 
 	return MarshalToolResponse(response)
+}
+
+func handleDatabaseInstanceDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This deletes a Managed Database instance. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	instanceID, validationMessage := databaseInstanceIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := client.DeleteDatabaseInstance(ctx, instanceID); err != nil {
+		return mcp.NewToolResultError(formatDatabaseInstanceDeleteError(instanceID, err)), nil
+	}
+
+	response := struct {
+		Message    string `json:"message"`
+		InstanceID int    `json:"instance_id"`
+	}{
+		Message:    "Managed Database instance " + strconv.Itoa(instanceID) + " deleted",
+		InstanceID: instanceID,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func formatDatabaseInstanceDeleteError(instanceID int, err error) string {
+	return "Failed to delete Managed Database instance " + strconv.Itoa(instanceID) + ": " + err.Error()
 }
 
 func databaseEnginesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {

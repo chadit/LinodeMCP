@@ -386,7 +386,7 @@ func TestClientCreateDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 		assert.Equal(t, databaseInstancesPath, r.URL.Path, "request path should be /databases/mysql/instances")
 		w.WriteHeader(http.StatusInternalServerError)
 		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-			keyErrors: []map[string]string{{keyReason: "temporary failure"}},
+			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 		}))
 	}))
 	defer srv.Close()
@@ -452,7 +452,7 @@ func TestClientUpdateDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 		assert.Equal(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
 		w.WriteHeader(http.StatusInternalServerError)
 		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-			keyErrors: []map[string]string{{keyReason: "temporary failure"}},
+			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 		}))
 	}))
 	defer srv.Close()
@@ -462,6 +462,49 @@ func TestClientUpdateDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Equal(t, int32(1), attempts.Load(), "side-effecting update PUT must not be retried")
+}
+
+func TestClientDeleteDatabaseInstanceSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		assert.Equal(t, http.NoBody, r.Body, "delete request should not send a body")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	err := client.DeleteDatabaseInstance(t.Context(), databaseInstanceID)
+
+	require.NoError(t, err, "DeleteDatabaseInstance should succeed on 200 response")
+}
+
+func TestClientDeleteDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
+	err := client.DeleteDatabaseInstance(t.Context(), databaseInstanceID)
+
+	require.Error(t, err)
+	assert.Equal(t, int32(1), attempts.Load(), "destructive database DELETE must not be retried")
 }
 
 func TestClientGetDatabaseEngineSuccess(t *testing.T) {
