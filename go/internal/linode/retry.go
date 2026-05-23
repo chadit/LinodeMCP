@@ -113,6 +113,21 @@ func (c *Client) GetAccount(ctx context.Context) (*Account, error) {
 	return account, err
 }
 
+// GetAccountSettings retrieves account-wide settings with automatic retry on transient failures.
+func (c *Client) GetAccountSettings(ctx context.Context) (*AccountSettings, error) {
+	var settings *AccountSettings
+
+	err := c.executeWithRetry(ctx, "GetAccountSettings", func() error {
+		var err error
+
+		settings, err = c.httpGetAccountSettings(ctx)
+
+		return err
+	})
+
+	return settings, err
+}
+
 // GetAccountAgreements retrieves account agreement acknowledgment status with automatic retry on transient failures.
 func (c *Client) GetAccountAgreements(ctx context.Context) (*AccountAgreements, error) {
 	var agreements *AccountAgreements

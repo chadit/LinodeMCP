@@ -67,6 +67,19 @@ func NewLinodeAccountTool(cfg *config.Config) (mcp.Tool, profiles.Capability, fu
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeAccountSettingsTool creates a tool for retrieving account-wide settings.
+func NewLinodeAccountSettingsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newSimpleGetTool(
+		cfg, "linode_account_settings",
+		"Retrieves account-wide settings such as backups, network helper, Longview, object storage, interfaces, and maintenance policy",
+		func(ctx context.Context, client *linode.Client) (any, error) {
+			return client.GetAccountSettings(ctx)
+		},
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeAccountAgreementsTool creates a tool for listing account agreement acknowledgment status.
 func NewLinodeAccountAgreementsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newSimpleGetTool(

@@ -725,6 +725,79 @@ func TestClientAllowObjectStorageBucketAccessDoesNotRetry(t *testing.T) {
 	assert.Equal(t, int32(1), calls, "AllowObjectStorageBucketAccess must not retry and replay a state-changing request")
 }
 
+// TestClientGetAccountSettingsSuccess verifies GetAccountSettings sends a GET
+// request to /account/settings and returns the account settings response.
+func TestClientGetAccountSettingsSuccess(t *testing.T) {
+	t.Parallel()
+
+	longviewSubscription := "longview-3"
+	objectStorage := "active"
+	settings := linode.AccountSettings{
+		BackupsEnabled:          true,
+		Managed:                 false,
+		NetworkHelper:           true,
+		LongviewSubscription:    &longviewSubscription,
+		ObjectStorage:           &objectStorage,
+		InterfacesForNewLinodes: "linode_default_but_legacy_config_allowed",
+		MaintenancePolicy:       "linode/migrate",
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/settings", r.URL.Path, "request path should be /account/settings")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(settings))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.GetAccountSettings(t.Context())
+
+	require.NoError(t, err, "GetAccountSettings should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.True(t, result.BackupsEnabled)
+	assert.False(t, result.Managed)
+	assert.True(t, result.NetworkHelper)
+	require.NotNil(t, result.LongviewSubscription)
+	assert.Equal(t, longviewSubscription, *result.LongviewSubscription)
+	require.NotNil(t, result.ObjectStorage)
+	assert.Equal(t, objectStorage, *result.ObjectStorage)
+	assert.Equal(t, "linode_default_but_legacy_config_allowed", result.InterfacesForNewLinodes)
+	assert.Equal(t, "linode/migrate", result.MaintenancePolicy)
+}
+
+// TestClientGetAccountSettingsAPIError verifies GetAccountSettings propagates
+// API errors through the handleResponse error chain.
+func TestClientGetAccountSettingsAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/settings", r.URL.Path, "request path should be /account/settings")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetAccountSettings(t.Context())
+
+	require.Error(t, err, "GetAccountSettings should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	require.NotNil(t, apiErr, "APIError should be present")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
 // TestClientGetAccountAgreementsSuccess verifies GetAccountAgreements sends a GET
 // request to /account/agreements and returns the agreement statuses.
 func TestClientGetAccountAgreementsSuccess(t *testing.T) {
