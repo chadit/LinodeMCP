@@ -38,6 +38,21 @@ func NewLinodeDatabaseEngineListTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeDatabaseMySQLConfigGetTool creates a tool for listing MySQL Managed Database advanced parameters.
+func NewLinodeDatabaseMySQLConfigGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_database_mysql_config_get",
+		mcp.WithDescription("Lists MySQL Managed Database advanced parameters."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleDatabaseMySQLConfigGetRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeDatabaseInstanceListTool creates a tool for listing Managed Database instances.
 func NewLinodeDatabaseInstanceListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
@@ -92,6 +107,20 @@ func handleDatabaseEngineGetRequest(ctx context.Context, request *mcp.CallToolRe
 	}
 
 	return MarshalToolResponse(engine)
+}
+
+func handleDatabaseMySQLConfigGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	mysqlConfig, err := client.GetDatabaseMySQLConfig(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve MySQL Managed Database advanced parameters: %v", err)), nil
+	}
+
+	return MarshalToolResponse(mysqlConfig)
 }
 
 func handleDatabaseEnginesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

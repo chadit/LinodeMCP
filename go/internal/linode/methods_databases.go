@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	endpointDatabaseEngines   = "/databases/engines"
-	endpointDatabaseInstances = "/databases/instances"
+	endpointDatabaseEngines     = "/databases/engines"
+	endpointDatabaseInstances   = "/databases/instances"
+	endpointDatabaseMySQLConfig = "/databases/mysql/config"
 )
 
 // ListDatabaseEngines retrieves available Managed Database engines.
@@ -53,6 +54,26 @@ func (c *Client) httpListDatabaseInstances(ctx context.Context, page, pageSize i
 	}
 
 	return response.Data, nil
+}
+
+// GetDatabaseMySQLConfig retrieves MySQL Managed Database advanced parameters.
+func (c *Client) httpGetDatabaseMySQLConfig(ctx context.Context) (map[string]any, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointDatabaseMySQLConfig, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetDatabaseMySQLConfig", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var config map[string]any
+	if err := c.handleResponse(resp, &config); err != nil {
+		return nil, err
+	}
+
+	return config, nil
 }
 
 // GetDatabaseEngine retrieves a Managed Database engine by ID.
