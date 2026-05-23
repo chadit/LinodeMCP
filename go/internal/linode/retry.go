@@ -247,6 +247,21 @@ func (c *Client) ListBetas(ctx context.Context, page, pageSize int) (*PaginatedR
 	return betas, err
 }
 
+// GetBeta retrieves one available beta program with automatic retry on transient failures.
+func (c *Client) GetBeta(ctx context.Context, betaID string) (*BetaProgram, error) {
+	var beta *BetaProgram
+
+	err := c.executeWithRetry(ctx, "GetBeta", func() error {
+		var err error
+
+		beta, err = c.httpGetBeta(ctx, betaID)
+
+		return err
+	})
+
+	return beta, err
+}
+
 // ListAccountBetas retrieves enrolled account beta programs with automatic retry on transient failures.
 func (c *Client) ListAccountBetas(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountBetaProgram], error) {
 	var betas *PaginatedResponse[AccountBetaProgram]

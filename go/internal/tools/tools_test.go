@@ -53,8 +53,13 @@ const (
 	oauthClientLabel                 = "my app"
 	oauthClientRedirectURI           = "https://example.com/callback"
 	caseFalse                        = "false"
+	caseBlank                        = "blank"
+	caseWhitespacePadded             = "whitespace padded"
 	errRedirectURIRequired           = "redirect_uri is required"
 	blankString                      = "   "
+	invalidBetaIDSlash               = "example/open"
+	invalidBetaIDQuery               = "example?open=1"
+	invalidBetaIDPadded              = " example_open "
 	keyPublic                        = "public"
 	keyThumbnailPNGBase64            = "thumbnail_png_base64"
 	oauthClientThumbnailPNG          = "png-bytes"
@@ -1315,6 +1320,156 @@ func TestLinodeBetasTool(t *testing.T) {
 				textContent, ok := result.Content[0].(mcp.TextContent)
 				require.True(t, ok, "content should be TextContent")
 				assert.Contains(t, textContent.Text, testCase.wantMessage, "response should describe validation error")
+			})
+		}
+	})
+}
+
+// End-to-end verification of available beta program retrieval.
+func TestLinodeBetaGetTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeBetaGetTool(cfg)
+
+		assert.Equal(t, "linode_beta_get", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, keyBetaID, "schema should include beta id")
+		assert.NotContains(t, props, keyConfirm, "read-only get tool must not require confirm")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		description := "This beta lets users try an example feature."
+		beta := linode.BetaProgram{
+			BetaClass:      "open",
+			Description:    &description,
+			Ended:          nil,
+			GreenlightOnly: false,
+			ID:             betaExampleOpen,
+			Label:          labelExampleOpenBeta,
+			MoreInfo:       "https://example.com/beta",
+			Started:        "2024-01-02T03:04:05",
+		}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/betas/"+betaExampleOpen, r.URL.Path, "request path should include beta id")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(beta))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeBetaGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyBetaID: betaExampleOpen})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, betaExampleOpen, "response should contain beta id")
+		assert.Contains(t, textContent.Text, labelExampleOpenBeta, "response should contain beta label")
+		assert.Contains(t, textContent.Text, "greenlight_only", "response should contain beta availability flag")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/betas/"+betaExampleOpen, r.URL.Path, "request path should include beta id")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: errForbidden}},
+			}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeBetaGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyBetaID: betaExampleOpen})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		assertErrorContains(t, result, "Failed to retrieve linode_beta_get")
+		assertErrorContains(t, result, errForbidden)
+	})
+
+	t.Run("invalid id rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name        string
+			args        map[string]any
+			wantMessage string
+		}{
+			{name: caseMissing, args: map[string]any{}, wantMessage: errBetaIDRequired},
+			{name: caseEmpty, args: map[string]any{keyBetaID: ""}, wantMessage: errBetaIDNonEmpty},
+			{name: caseBlank, args: map[string]any{keyBetaID: blankString}, wantMessage: errBetaIDNonEmpty},
+			{name: caseNumeric, args: map[string]any{keyBetaID: 123}, wantMessage: errBetaIDNonEmpty},
+			{name: caseSlash, args: map[string]any{keyBetaID: invalidBetaIDSlash}, wantMessage: errBetaIDChars},
+			{name: caseQuery, args: map[string]any{keyBetaID: invalidBetaIDQuery}, wantMessage: errBetaIDChars},
+			{name: caseDotTraversal, args: map[string]any{keyBetaID: pathTraversalValue}, wantMessage: errBetaIDChars},
+			{name: caseWhitespacePadded, args: map[string]any{keyBetaID: invalidBetaIDPadded}, wantMessage: errBetaIDChars},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					atomic.AddInt32(&calls, 1)
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeBetaGetTool(cfg)
+
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "validation failure should be an error result")
+				assertErrorContains(t, result, testCase.wantMessage)
+				assert.Equal(t, int32(0), calls, "validation failure must happen before client call")
 			})
 		}
 	})
@@ -6478,12 +6633,12 @@ func TestLinodeAccountBetaGetTool(t *testing.T) {
 		}{
 			{name: caseMissingConfirm, args: map[string]any{}, wantMessage: errBetaIDRequired},
 			{name: caseEmpty, args: map[string]any{keyBetaID: ""}, wantMessage: errBetaIDNonEmpty},
-			{name: "blank", args: map[string]any{keyBetaID: "   "}, wantMessage: errBetaIDNonEmpty},
+			{name: caseBlank, args: map[string]any{keyBetaID: blankString}, wantMessage: errBetaIDNonEmpty},
 			{name: caseNumeric, args: map[string]any{keyBetaID: 123}, wantMessage: errBetaIDNonEmpty},
-			{name: caseSlash, args: map[string]any{keyBetaID: "example/open"}, wantMessage: errBetaIDChars},
-			{name: caseQuery, args: map[string]any{keyBetaID: "example?open=1"}, wantMessage: errBetaIDChars},
+			{name: caseSlash, args: map[string]any{keyBetaID: invalidBetaIDSlash}, wantMessage: errBetaIDChars},
+			{name: caseQuery, args: map[string]any{keyBetaID: invalidBetaIDQuery}, wantMessage: errBetaIDChars},
 			{name: caseDotTraversal, args: map[string]any{keyBetaID: pathTraversalValue}, wantMessage: errBetaIDChars},
-			{name: "whitespace padded", args: map[string]any{keyBetaID: " example_open "}, wantMessage: errBetaIDChars},
+			{name: caseWhitespacePadded, args: map[string]any{keyBetaID: invalidBetaIDPadded}, wantMessage: errBetaIDChars},
 		}
 
 		for _, testCase := range cases {
@@ -6924,12 +7079,12 @@ func TestLinodeAccountBetaEnrollTool(t *testing.T) {
 		}{
 			{name: caseMissingConfirm, args: map[string]any{keyConfirm: true}, wantMessage: errBetaIDRequired},
 			{name: caseEmpty, args: map[string]any{keyBetaID: "", keyConfirm: true}, wantMessage: errBetaIDNonEmpty},
-			{name: "blank", args: map[string]any{keyBetaID: "   ", keyConfirm: true}, wantMessage: errBetaIDNonEmpty},
+			{name: caseBlank, args: map[string]any{keyBetaID: blankString, keyConfirm: true}, wantMessage: errBetaIDNonEmpty},
 			{name: caseNumeric, args: map[string]any{keyBetaID: 123, keyConfirm: true}, wantMessage: errBetaIDNonEmpty},
-			{name: caseSlash, args: map[string]any{keyBetaID: "example/open", keyConfirm: true}, wantMessage: errBetaIDChars},
-			{name: caseQuery, args: map[string]any{keyBetaID: "example?open=1", keyConfirm: true}, wantMessage: errBetaIDChars},
+			{name: caseSlash, args: map[string]any{keyBetaID: invalidBetaIDSlash, keyConfirm: true}, wantMessage: errBetaIDChars},
+			{name: caseQuery, args: map[string]any{keyBetaID: invalidBetaIDQuery, keyConfirm: true}, wantMessage: errBetaIDChars},
 			{name: caseDotTraversal, args: map[string]any{keyBetaID: pathTraversalValue, keyConfirm: true}, wantMessage: errBetaIDChars},
-			{name: "whitespace padded", args: map[string]any{keyBetaID: " example_open ", keyConfirm: true}, wantMessage: errBetaIDChars},
+			{name: caseWhitespacePadded, args: map[string]any{keyBetaID: invalidBetaIDPadded, keyConfirm: true}, wantMessage: errBetaIDChars},
 			{name: "control", args: map[string]any{keyBetaID: "example\nopen", keyConfirm: true}, wantMessage: errBetaIDChars},
 		}
 

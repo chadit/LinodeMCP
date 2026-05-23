@@ -996,6 +996,22 @@ func NewLinodeBetasTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeBetaGetTool creates a tool for retrieving one available beta program.
+func NewLinodeBetaGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_beta_get",
+		"Gets one available beta program.",
+		[]mcp.ToolOption{
+			mcp.WithString("id", mcp.Required(),
+				mcp.Description("Unique identifier for the beta program.")),
+		},
+		handleLinodeBetaGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeAccountBetaGetTool creates a tool for retrieving one enrolled account beta program.
 func NewLinodeAccountBetaGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -3226,6 +3242,25 @@ func accountChildAccountEUUIDFromTool(request *mcp.CallToolRequest) (string, str
 	}
 
 	return euuid, ""
+}
+
+func handleLinodeBetaGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	betaID, validationMessage := accountBetaIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	beta, getFailure := client.GetBeta(ctx, betaID)
+	if getFailure == nil {
+		return MarshalToolResponse(beta)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_beta_get: " + getFailure.Error()), nil
 }
 
 func handleLinodeAccountBetaGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
