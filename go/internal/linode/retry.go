@@ -939,6 +939,11 @@ func (c *Client) GetDatabaseEngine(ctx context.Context, engineID string) (*Datab
 	return engine, err
 }
 
+// ResetDatabaseInstanceCredentials resets MySQL Managed Database credentials without retrying the POST.
+func (c *Client) ResetDatabaseInstanceCredentials(ctx context.Context, instanceID int) (*DatabaseCredentials, error) {
+	return c.httpResetDatabaseInstanceCredentials(ctx, instanceID)
+}
+
 // CreateDatabaseInstance creates or restores a MySQL Managed Database instance without retrying the POST.
 func (c *Client) CreateDatabaseInstance(ctx context.Context, req *CreateDatabaseInstanceRequest) (*DatabaseInstance, error) {
 	return c.httpCreateDatabaseInstance(ctx, req)
