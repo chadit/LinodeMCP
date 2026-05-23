@@ -19,7 +19,7 @@ import (
 
 const (
 	accountUserGetToolName      = "linode_account_user_get"
-	errUsernamePathParamInvalid = "username must not contain '/', '?', or '..'"
+	errUsernamePathParamInvalid = "username must not contain '/', '?', '#', or '..'"
 )
 
 func TestLinodeAccountUserGetTool(t *testing.T) {

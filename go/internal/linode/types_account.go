@@ -206,6 +206,15 @@ type CreateAccountUserRequest struct {
 	Email    string `json:"email"`
 }
 
+// UpdateAccountUserRequest contains editable fields for PUT /account/users/{username}.
+// Pointer fields distinguish omitted values from explicit updates.
+type UpdateAccountUserRequest struct {
+	Email      *string   `json:"email,omitempty"`
+	Restricted *bool     `json:"restricted,omitempty"`
+	SSHKeys    *[]string `json:"ssh_keys,omitempty"`
+	Username   *string   `json:"username,omitempty"`
+}
+
 // AccountUser represents one user returned by account user endpoints.
 type AccountUser struct {
 	Email               string                `json:"email"`

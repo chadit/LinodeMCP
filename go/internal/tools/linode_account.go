@@ -31,7 +31,8 @@ const (
 	accountUsersPageSizeMin           = 25
 	accountUsersPageSizeMax           = 500
 	accountUserUsernameParam          = "username"
-	errAccountUserUsernamePathParam   = "username must not contain '/', '?', or '..'"
+	errAccountUserUsernamePathParam   = "username must not contain '/', '?', '#', or '..'"
+	errAccountUserUpdateSSHKeys       = "ssh_keys must be an array of non-empty strings"
 	accountUserEmailParam             = "email"
 	accountLoginsPageSizeMin          = 25
 	accountLoginsPageSizeMax          = 500
@@ -243,6 +244,26 @@ func NewLinodeAccountUserGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeAccountUserUpdateTool creates a tool for updating one account user.
+func NewLinodeAccountUserUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_user_update",
+		"Updates one account user by username.",
+		[]mcp.ToolOption{
+			mcp.WithString(accountUserUsernameParam, mcp.Required(), mcp.Description("Account username to update.")),
+			mcp.WithString(accountUserEmailParam, mcp.Description("New email address for the account user.")),
+			mcp.WithBoolean("restricted", mcp.Description("Whether the account user is restricted.")),
+			mcp.WithArray("ssh_keys", mcp.Description("SSH public keys for the account user.")),
+			mcp.WithString("new_username", mcp.Description("New username for the account user.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm account user update.")),
+		},
+		handleLinodeAccountUserUpdateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountUserCreateTool creates a tool for creating account users.
@@ -1763,11 +1784,129 @@ func accountUserUsernamePathParamFromTool(request *mcp.CallToolRequest) (string,
 		return "", validationMessage
 	}
 
-	if strings.ContainsAny(username, "/?") || strings.Contains(username, "..") {
+	if strings.ContainsAny(username, "/?#") || strings.Contains(username, "..") {
 		return "", errAccountUserUsernamePathParam
 	}
 
 	return username, ""
+}
+
+func handleLinodeAccountUserUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This updates an account user. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	username, validationMessage := accountUserUsernamePathParamFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	updateRequest, validationMessage := accountUserUpdateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	user, updateFailure := client.UpdateAccountUser(ctx, username, updateRequest)
+	if updateFailure == nil {
+		return MarshalToolResponse(user)
+	}
+
+	return mcp.NewToolResultError("Failed to update linode_account_user_update: " + updateFailure.Error()), nil
+}
+
+func accountUserUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateAccountUserRequest, string) {
+	args := request.GetArguments()
+	req := &linode.UpdateAccountUserRequest{}
+
+	var hasUpdate bool
+
+	if raw, exists := args[accountUserEmailParam]; exists {
+		email, validationMessage := nonEmptyToolString(raw, "email")
+		if validationMessage != "" {
+			return nil, validationMessage
+		}
+
+		req.Email = &email
+		hasUpdate = true
+	}
+
+	if raw, exists := args["restricted"]; exists {
+		restricted, validationMessage := boolToolArg(raw, "restricted")
+		if validationMessage != "" {
+			return nil, validationMessage
+		}
+
+		req.Restricted = &restricted
+		hasUpdate = true
+	}
+
+	if raw, exists := args["ssh_keys"]; exists {
+		sshKeys, validationMessage := accountUserSSHKeysFromTool(raw)
+		if validationMessage != "" {
+			return nil, validationMessage
+		}
+
+		req.SSHKeys = sshKeys
+		hasUpdate = true
+	}
+
+	if raw, exists := args["new_username"]; exists {
+		newUsername, validationMessage := nonEmptyToolString(raw, "new_username")
+		if validationMessage != "" {
+			return nil, validationMessage
+		}
+
+		req.Username = &newUsername
+		hasUpdate = true
+	}
+
+	if !hasUpdate {
+		return nil, "at least one account user field is required"
+	}
+
+	return req, ""
+}
+
+func nonEmptyToolString(raw any, field string) (string, string) {
+	value, ok := raw.(string)
+	if !ok || strings.TrimSpace(value) == "" {
+		return "", field + " must be a non-empty string"
+	}
+
+	return value, ""
+}
+
+func boolToolArg(raw any, field string) (bool, string) {
+	value, ok := raw.(bool)
+	if !ok {
+		return false, field + " must be a boolean"
+	}
+
+	return value, ""
+}
+
+func accountUserSSHKeysFromTool(raw any) (*[]string, string) {
+	rawKeys, ok := raw.([]any)
+	if !ok {
+		return nil, errAccountUserUpdateSSHKeys
+	}
+
+	sshKeys := make([]string, 0, len(rawKeys))
+	for _, rawKey := range rawKeys {
+		sshKey, ok := rawKey.(string)
+		if !ok || strings.TrimSpace(sshKey) == "" {
+			return nil, errAccountUserUpdateSSHKeys
+		}
+
+		sshKeys = append(sshKeys, sshKey)
+	}
+
+	return &sshKeys, ""
 }
 
 func handleLinodeAccountUserCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

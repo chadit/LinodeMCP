@@ -50,6 +50,21 @@ func TestRedactReplacesSensitiveTopLevelKeys(t *testing.T) {
 		"redacted-key list must report each scrubbed name")
 }
 
+func TestRedactAccountUserUpdateSensitiveFields(t *testing.T) {
+	t.Parallel()
+
+	args := map[string]any{
+		"password_created": "2024-01-02T03:04:05",
+		"ssh_keys":         []any{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITest"},
+	}
+
+	redacted, keys := audit.Redact(args)
+
+	assert.True(t, audit.IsRedacted(redacted["password_created"]), "password_created must be redacted")
+	assert.True(t, audit.IsRedacted(redacted["ssh_keys"]), "ssh_keys must be redacted")
+	assert.ElementsMatch(t, []string{"password_created", "ssh_keys"}, keys)
+}
+
 // TestRedactRecursesIntoNestedMaps verifies the spec's "match by
 // name, not by depth" rule. A sensitive field name nested inside an
 // object literal still gets redacted.
