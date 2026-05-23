@@ -543,6 +543,21 @@ func NewLinodeAccountOAuthClientThumbnailUpdateTool(cfg *config.Config) (mcp.Too
 	return tool, profiles.CapAdmin, handler
 }
 
+// NewLinodeAccountOAuthClientThumbnailGetTool creates a tool for retrieving one OAuth client's thumbnail.
+func NewLinodeAccountOAuthClientThumbnailGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_oauth_client_thumbnail_get",
+		"Gets one account OAuth client's thumbnail by ID. Returns base64-encoded PNG image data.",
+		[]mcp.ToolOption{
+			mcp.WithString("client_id", mcp.Required(), mcp.Description("OAuth client ID.")),
+		},
+		handleLinodeAccountOAuthClientThumbnailGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeAccountOAuthClientDeleteTool creates a tool for deleting one OAuth client.
 func NewLinodeAccountOAuthClientDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -1449,6 +1464,34 @@ func updateOAuthClientThumbnail(ctx context.Context, client *linode.Client, clie
 	}
 
 	return ""
+}
+
+func handleLinodeAccountOAuthClientThumbnailGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	clientID, validationMessage := accountOAuthClientIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	thumbnailPNG, err := client.GetOAuthClientThumbnail(ctx, clientID)
+	if err != nil {
+		//nolint:nilerr // MCP tool errors are returned in the result, not as Go errors
+		return mcp.NewToolResultError("Failed to get OAuth client thumbnail: " + err.Error()), nil
+	}
+
+	encoded := base64.StdEncoding.EncodeToString(thumbnailPNG)
+
+	return MarshalToolResponse(struct {
+		ClientID           string `json:"client_id"`
+		ThumbnailPNGBase64 string `json:"thumbnail_png_base64"`
+	}{
+		ClientID:           clientID,
+		ThumbnailPNGBase64: encoded,
+	})
 }
 
 func handleLinodeAccountOAuthClientDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

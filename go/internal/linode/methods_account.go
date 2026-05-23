@@ -3,6 +3,8 @@ package linode
 import (
 	"bytes"
 	"context"
+	"errors"
+	"io"
 	"net/http"
 	"net/url" // path parameter escaping
 	"strconv"
@@ -484,6 +486,42 @@ func (c *Client) httpUpdateOAuthClientThumbnail(ctx context.Context, clientID st
 	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
 
 	return c.handleResponse(resp, nil)
+}
+
+// httpGetOAuthClientThumbnail retrieves one OAuth client's thumbnail by ID as raw PNG bytes.
+func (c *Client) httpGetOAuthClientThumbnail(ctx context.Context, clientID string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountOAuthClients + "/" + url.PathEscape(clientID) + "/thumbnail"
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetOAuthClientThumbnail", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	// Read the body first since handleResponse would consume it
+	thumbnailPNG, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetOAuthClientThumbnail", Err: err}
+	}
+
+	// Check for error status codes after reading the body
+	if resp.StatusCode >= http.StatusBadRequest {
+		apiErr := c.handleErrorResponse(resp.StatusCode, thumbnailPNG, resp)
+
+		// Stamp the request method onto the API error so the retry layer can
+		// decide whether a 5xx is safe to replay.
+		if typedErr, ok := errors.AsType[*APIError](apiErr); ok && resp.Request != nil {
+			typedErr.Method = resp.Request.Method
+		}
+
+		return nil, apiErr
+	}
+
+	return thumbnailPNG, nil
 }
 
 // httpDeleteAccountOAuthClient deletes one OAuth client by ID.
