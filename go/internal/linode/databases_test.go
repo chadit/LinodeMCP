@@ -25,6 +25,7 @@ const (
 	databaseInstancePath                 = "/databases/mysql/instances/123"
 	databaseInstanceCredentialsPath      = "/databases/mysql/instances/123/credentials"
 	databaseInstanceCredentialsResetPath = "/databases/mysql/instances/123/credentials/reset"
+	databaseInstancePatchPath            = "/databases/mysql/instances/123/patch"
 	databaseInstanceLabel                = "primary-db"
 	databaseInstanceType                 = "g6-dedicated-2"
 	databaseCredentialsPassword          = "secret"
@@ -652,6 +653,49 @@ func TestClientDeleteDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Equal(t, int32(1), attempts.Load(), "destructive database DELETE must not be retried")
+}
+
+func TestClientPatchDatabaseInstanceSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, databaseInstancePatchPath, r.URL.Path, "request path should include instance id and patch suffix")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		assert.Equal(t, http.NoBody, r.Body, "patch request should not send a body")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	err := client.PatchDatabaseInstance(t.Context(), databaseInstanceID)
+
+	require.NoError(t, err, "PatchDatabaseInstance should succeed on 200 response")
+}
+
+func TestClientPatchDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, databaseInstancePatchPath, r.URL.Path, "request path should include instance id and patch suffix")
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
+	err := client.PatchDatabaseInstance(t.Context(), databaseInstanceID)
+
+	require.Error(t, err)
+	assert.Equal(t, int32(1), attempts.Load(), "side-effecting patch POST must not be retried")
 }
 
 func TestClientGetDatabaseEngineSuccess(t *testing.T) {

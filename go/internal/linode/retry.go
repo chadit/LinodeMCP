@@ -959,6 +959,11 @@ func (c *Client) DeleteDatabaseInstance(ctx context.Context, instanceID int) err
 	return c.httpDeleteDatabaseInstance(ctx, instanceID)
 }
 
+// PatchDatabaseInstance applies security patches and updates to one MySQL Managed Database instance without retrying the POST.
+func (c *Client) PatchDatabaseInstance(ctx context.Context, instanceID int) error {
+	return c.httpPatchDatabaseInstance(ctx, instanceID)
+}
+
 // ListVolumes retrieves all volumes with automatic retry on transient failures.
 func (c *Client) ListVolumes(ctx context.Context) ([]Volume, error) {
 	var volumes []Volume

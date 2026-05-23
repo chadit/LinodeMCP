@@ -981,6 +981,7 @@ func databaseToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeDatabaseInstanceCreateTool,
 		tools.NewLinodeDatabaseInstanceUpdateTool,
 		tools.NewLinodeDatabaseInstanceDeleteTool,
+		tools.NewLinodeDatabaseInstancePatchTool,
 	})
 }
 
