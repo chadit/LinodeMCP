@@ -75,6 +75,22 @@ type GlobalGrants struct {
 	LongviewSubscription bool            `json:"longview_subscription"`
 }
 
+// AccountTransfer represents account network transfer usage returned by GET /account/transfer.
+type AccountTransfer struct {
+	Billable        int                     `json:"billable"`
+	Quota           int                     `json:"quota"`
+	Used            int                     `json:"used"`
+	RegionTransfers []AccountRegionTransfer `json:"region_transfers"`
+}
+
+// AccountRegionTransfer represents network transfer usage for a region.
+type AccountRegionTransfer struct {
+	ID       string `json:"id"`
+	Billable int    `json:"billable"`
+	Quota    int    `json:"quota"`
+	Used     int    `json:"used"`
+}
+
 // AccountSettings represents account-wide settings returned by GET /account/settings.
 type AccountSettings struct {
 	BackupsEnabled          bool    `json:"backups_enabled"`

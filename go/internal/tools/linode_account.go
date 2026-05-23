@@ -67,6 +67,19 @@ func NewLinodeAccountTool(cfg *config.Config) (mcp.Tool, profiles.Capability, fu
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeAccountTransferTool creates a tool for retrieving account network transfer usage.
+func NewLinodeAccountTransferTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newSimpleGetTool(
+		cfg, "linode_account_transfer",
+		"Retrieves the authenticated account's network transfer usage and quota by region.",
+		func(ctx context.Context, client *linode.Client) (any, error) {
+			return client.GetAccountTransfer(ctx)
+		},
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeAccountSettingsTool creates a tool for retrieving account-wide settings.
 func NewLinodeAccountSettingsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newSimpleGetTool(
