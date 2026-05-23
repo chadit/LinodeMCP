@@ -23,6 +23,7 @@ const (
 	databaseMySQLConfigPath   = "/databases/mysql/config"
 	databaseInstanceID        = 123
 	databaseInstanceLabel     = "primary-db"
+	databaseInstanceType      = "g6-dedicated-2"
 	databaseConfigTypeInteger = "integer"
 )
 
@@ -173,7 +174,7 @@ func TestClientGetDatabaseMySQLConfigRetriesTransientRead(t *testing.T) {
 func TestClientListDatabaseInstancesSuccess(t *testing.T) {
 	t.Parallel()
 
-	instances := []linode.DatabaseInstance{{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: "g6-dedicated-2", Engine: databaseEngineMySQL, Version: databaseEngineVersion, Status: oauthClientStatus}}
+	instances := []linode.DatabaseInstance{{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineMySQL, Version: databaseEngineVersion, Status: oauthClientStatus}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
@@ -254,6 +255,70 @@ func TestClientListDatabaseInstancesRetriesTransientRead(t *testing.T) {
 	require.NoError(t, err, "read-only ListDatabaseInstances should retry transient failures")
 	require.Len(t, got, 1)
 	assert.Equal(t, int32(2), attempts.Load(), "transient read should be retried once")
+}
+
+func TestClientCreateDatabaseInstanceSuccess(t *testing.T) {
+	t.Parallel()
+
+	privateNetwork := true
+	sslConnection := true
+	expectedReq := linode.CreateDatabaseInstanceRequest{
+		Label:          databaseInstanceLabel,
+		Type:           databaseInstanceType,
+		Engine:         databaseEngineID,
+		Region:         regionUSEast,
+		AllowList:      []string{"203.0.113.0/24"},
+		ClusterSize:    3,
+		EngineConfig:   map[string]any{"max_connections": float64(100)},
+		PrivateNetwork: &privateNetwork,
+		SSLConnection:  &sslConnection,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, databaseInstancesPath, r.URL.Path, "request path should be /databases/mysql/instances")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+
+		var gotReq linode.CreateDatabaseInstanceRequest
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&gotReq))
+		assert.Equal(t, expectedReq, gotReq)
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineMySQL, Version: databaseEngineVersion, Status: oauthClientStatus}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.CreateDatabaseInstance(t.Context(), &expectedReq)
+
+	require.NoError(t, err, "CreateDatabaseInstance should succeed on 200 response")
+	require.NotNil(t, got)
+	assert.Equal(t, databaseInstanceID, got.ID)
+	assert.Equal(t, databaseInstanceLabel, got.Label)
+}
+
+func TestClientCreateDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, databaseInstancesPath, r.URL.Path, "request path should be /databases/mysql/instances")
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: "temporary failure"}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
+	_, err := client.CreateDatabaseInstance(t.Context(), &linode.CreateDatabaseInstanceRequest{Label: databaseInstanceLabel, Type: databaseInstanceType, Engine: databaseEngineID, Region: regionUSEast})
+
+	require.Error(t, err)
+	assert.Equal(t, int32(1), attempts.Load(), "non-idempotent create POST must not be retried")
 }
 
 func TestClientGetDatabaseEngineSuccess(t *testing.T) {
