@@ -38,3 +38,14 @@ type CreateDatabaseInstanceRequest struct {
 	PrivateNetwork *bool          `json:"private_network,omitempty"`
 	SSLConnection  *bool          `json:"ssl_connection,omitempty"`
 }
+
+// UpdateDatabaseInstanceRequest updates a MySQL Managed Database instance.
+type UpdateDatabaseInstanceRequest struct {
+	AllowList      *[]string      `json:"allow_list,omitempty"`
+	EngineConfig   map[string]any `json:"engine_config,omitempty"`
+	Label          *string        `json:"label,omitempty"`
+	PrivateNetwork map[string]any `json:"private_network,omitempty"`
+	Type           *string        `json:"type,omitempty"`
+	Updates        map[string]any `json:"updates,omitempty"`
+	Version        *string        `json:"version,omitempty"`
+}
