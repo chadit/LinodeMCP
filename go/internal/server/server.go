@@ -972,6 +972,7 @@ func objectStorageToolEntries(cfg *config.Config) []toolEntry {
 func databaseToolEntries(cfg *config.Config) []toolEntry {
 	return entriesFromFactories(cfg, []toolFactory{
 		tools.NewLinodeDatabaseEngineListTool,
+		tools.NewLinodeDatabaseEngineGetTool,
 	})
 }
 
