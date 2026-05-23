@@ -5101,6 +5101,102 @@ func TestClientUpdateAccountDoesNotRetry(t *testing.T) {
 	assert.Equal(t, int32(1), calls, "UpdateAccount must not retry and replay a mutating request")
 }
 
+// TestClientEnableAccountManagedSuccess verifies that EnableAccountManaged sends a POST
+// request to /account/settings/managed-enable with no query parameters or body.
+func TestClientEnableAccountManagedSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/account/settings/managed-enable", r.URL.Path, "request path should be /account/settings/managed-enable")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		body, err := io.ReadAll(r.Body)
+		assert.NoError(t, err)
+		assert.Empty(t, body, "request should not include a body")
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
+
+	err := client.EnableAccountManaged(t.Context())
+
+	require.NoError(t, err, "EnableAccountManaged should succeed on 200 response")
+}
+
+// TestClientEnableAccountManagedNetworkError verifies that EnableAccountManaged returns a
+// NetworkError when the HTTP request fails to reach the server.
+func TestClientEnableAccountManagedNetworkError(t *testing.T) {
+	t.Parallel()
+
+	client := linode.NewClient("http://127.0.0.1:1", "my-token", nil, linode.WithMaxRetries(3))
+
+	err := client.EnableAccountManaged(t.Context())
+
+	require.Error(t, err, "EnableAccountManaged should fail when the server is unreachable")
+
+	var netErr *linode.NetworkError
+
+	assert.ErrorAs(t, err, &netErr, "error should be a NetworkError")
+}
+
+// TestClientEnableAccountManagedAPIError verifies that EnableAccountManaged propagates
+// API errors through the handleResponse error chain.
+func TestClientEnableAccountManagedAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/account/settings/managed-enable", r.URL.Path, "request path should be /account/settings/managed-enable")
+		w.WriteHeader(http.StatusBadRequest)
+		_, err := w.Write([]byte(`{"errors":[{"reason":"managed could not be enabled"}]}`))
+		assert.NoError(t, err)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
+
+	err := client.EnableAccountManaged(t.Context())
+
+	require.Error(t, err, "EnableAccountManaged should fail on 400 response")
+
+	var apiErr *linode.APIError
+
+	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
+	assert.Equal(t, http.StatusBadRequest, apiErr.StatusCode)
+}
+
+// TestClientEnableAccountManagedDoesNotRetry verifies the mutating managed enable
+// request is not replayed after a transient HTTP error.
+func TestClientEnableAccountManagedDoesNotRetry(t *testing.T) {
+	t.Parallel()
+
+	var calls int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/account/settings/managed-enable", r.URL.Path, "request path should be /account/settings/managed-enable")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
+		assert.NoError(t, err)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
+
+	err := client.EnableAccountManaged(t.Context())
+
+	require.Error(t, err, "EnableAccountManaged should fail on 500 response")
+	assert.Equal(t, int32(1), calls, "EnableAccountManaged must not retry and replay a mutating request")
+}
+
 // TestClientUpdateAccountSettingsSuccess verifies that UpdateAccountSettings sends a PUT
 // request to /account/settings with the exact body and returns the updated settings.
 func TestClientUpdateAccountSettingsSuccess(t *testing.T) {
