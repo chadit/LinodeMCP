@@ -200,6 +200,25 @@ type AccountEventEntity struct {
 	URL   string `json:"url"`
 }
 
+// AccountUser represents one user returned by GET /account/users.
+type AccountUser struct {
+	Email               string                `json:"email"`
+	LastLogin           *AccountUserLastLogin `json:"last_login"`
+	PasswordCreated     *string               `json:"password_created"`
+	Restricted          bool                  `json:"restricted"`
+	SSHKeys             []string              `json:"ssh_keys"`
+	TFAEnabled          bool                  `json:"tfa_enabled"`
+	UserType            string                `json:"user_type"`
+	Username            string                `json:"username"`
+	VerifiedPhoneNumber *string               `json:"verified_phone_number"`
+}
+
+// AccountUserLastLogin contains the most recent login attempt for an account user.
+type AccountUserLastLogin struct {
+	LoginDatetime string `json:"login_datetime"`
+	Status        string `json:"status"`
+}
+
 // AccountLogin represents one user login returned by GET /account/logins.
 type AccountLogin struct {
 	Datetime   string `json:"datetime"`
