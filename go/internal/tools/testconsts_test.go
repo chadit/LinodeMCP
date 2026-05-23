@@ -269,6 +269,7 @@ const (
 	caseMissingType               = "missing type"
 	caseMissingFirewallID         = "missing firewall_id"
 	caseMissingLinodeID           = "missing linode id"
+	caseMissingInstanceID         = "missing instance id"
 	caseMissingVPCID              = "missing vpc id"
 	caseMissingSubnetID           = "missing subnet id"
 	caseMissingDomainID           = "missing domain id"

@@ -894,6 +894,21 @@ func (c *Client) ListDatabaseInstances(ctx context.Context, page, pageSize int) 
 	return instances, err
 }
 
+// GetDatabaseInstance retrieves one MySQL Managed Database instance with automatic retry on transient failures.
+func (c *Client) GetDatabaseInstance(ctx context.Context, instanceID int) (*DatabaseInstance, error) {
+	var instance *DatabaseInstance
+
+	err := c.executeWithRetry(ctx, "GetDatabaseInstance", func() error {
+		var err error
+
+		instance, err = c.httpGetDatabaseInstance(ctx, instanceID)
+
+		return err
+	})
+
+	return instance, err
+}
+
 // GetDatabaseEngine retrieves a Managed Database engine with automatic retry on transient failures.
 func (c *Client) GetDatabaseEngine(ctx context.Context, engineID string) (*DatabaseEngine, error) {
 	var engine *DatabaseEngine
