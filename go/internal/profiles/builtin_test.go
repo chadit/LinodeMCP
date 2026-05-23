@@ -97,6 +97,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 
 		// Account admin tools must stay out of built-in profiles.
 		{Name: "linode_account_update", Capability: profiles.CapAdmin},
+		{Name: "linode_account_settings_update", Capability: profiles.CapAdmin},
 		{Name: "linode_account_beta_enroll", Capability: profiles.CapAdmin},
 		{Name: "linode_account_cancel", Capability: profiles.CapAdmin},
 	}
@@ -221,6 +222,13 @@ func TestCapAdminExcludedFromEveryBuiltin(t *testing.T) {
 			profile.AllowedTools,
 			"linode_account_update",
 			"profile %q must never include CapAdmin tools",
+			name,
+		)
+		assert.NotContainsf(
+			t,
+			profile.AllowedTools,
+			"linode_account_settings_update",
+			"profile %q must never include account settings admin tool",
 			name,
 		)
 		assert.NotContainsf(

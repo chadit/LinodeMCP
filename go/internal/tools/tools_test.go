@@ -492,7 +492,7 @@ func TestLinodeAccountSettingsTool(t *testing.T) {
 			LongviewSubscription:    &longviewSubscription,
 			ObjectStorage:           &objectStorage,
 			InterfacesForNewLinodes: "linode_default_but_legacy_config_allowed",
-			MaintenancePolicy:       "linode/migrate",
+			MaintenancePolicy:       maintenancePolicyMigrate,
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -528,7 +528,7 @@ func TestLinodeAccountSettingsTool(t *testing.T) {
 		assert.Contains(t, textContent.Text, "backups_enabled", "response should contain backups setting")
 		assert.Contains(t, textContent.Text, "network_helper", "response should contain network helper setting")
 		assert.Contains(t, textContent.Text, "longview-3", "response should contain Longview subscription")
-		assert.Contains(t, textContent.Text, "linode/migrate", "response should contain maintenance policy")
+		assert.Contains(t, textContent.Text, maintenancePolicyMigrate, "response should contain maintenance policy")
 	})
 
 	t.Run("api error", func(t *testing.T) {
@@ -7543,7 +7543,7 @@ func TestLinodeAccountUpdateTool(t *testing.T) {
 			set   bool
 		}{
 			{name: caseMissing, set: false},
-			{name: "confirm false", value: false, set: true},
+			{name: caseConfirmFalse, value: false, set: true},
 			{name: caseString, value: boolStringTrue, set: true},
 			{name: caseNumeric, value: 1, set: true},
 		}
@@ -7651,7 +7651,6 @@ func TestLinodeAccountUpdateTool(t *testing.T) {
 		assertErrorContains(t, result, "email must be a string")
 		assert.Equal(t, int32(0), calls, "malformed field must fail before client call")
 	})
-
 	t.Run("api error produces tool error", func(t *testing.T) {
 		t.Parallel()
 
@@ -7997,5 +7996,212 @@ func TestLinodeDomainRecordGetTool(t *testing.T) {
 		assert.Contains(t, textContent.Text, `"id": 456`, "response should contain record ID")
 		assert.Contains(t, textContent.Text, hostWWW, "response should contain record name")
 		assert.Contains(t, textContent.Text, ip203_0_113_1, "response should contain target")
+	})
+}
+
+// End-to-end verification of account settings update.
+func TestLinodeAccountSettingsUpdateTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountSettingsUpdateTool(cfg)
+
+		assert.Equal(t, "linode_account_settings_update", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Equal(t, profiles.CapAdmin, capability, "account settings updates should be CapAdmin")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, keyConfirm, "schema should include confirm")
+		assert.Contains(t, props, "backups_enabled", "schema should include editable settings fields")
+	})
+
+	t.Run("confirm required before client call", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name  string
+			value any
+			set   bool
+		}{
+			{name: caseMissing, set: false},
+			{name: caseConfirmFalse, value: false, set: true},
+			{name: caseString, value: boolStringTrue, set: true},
+			{name: caseNumeric, value: 1, set: true},
+		}
+
+		for _, tt := range cases {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					atomic.AddInt32(&calls, 1)
+
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeAccountSettingsUpdateTool(cfg)
+
+				args := map[string]any{"network_helper": false}
+				if tt.set {
+					args[keyConfirm] = tt.value
+				}
+
+				req := createRequestWithArgs(t, args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should not return transport error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "result should be a tool error")
+				assertErrorContains(t, result, errConfirmEqualsTrue)
+				assert.Equal(t, int32(0), calls, "confirm failure must happen before client call")
+			})
+		}
+	})
+
+	t.Run("empty update rejected before client call", func(t *testing.T) {
+		t.Parallel()
+
+		var calls int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			atomic.AddInt32(&calls, 1)
+
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountSettingsUpdateTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return transport error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "at least one account settings field is required")
+		assert.Equal(t, int32(0), calls, "empty update must fail before client call")
+	})
+
+	t.Run("malformed field rejected before client call", func(t *testing.T) {
+		t.Parallel()
+
+		var calls int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			atomic.AddInt32(&calls, 1)
+
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountSettingsUpdateTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{"backups_enabled": "true", keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return transport error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "backups_enabled must be a boolean")
+		assert.Equal(t, int32(0), calls, "malformed field must fail before client call")
+	})
+
+	t.Run("malformed string field rejected before client call", func(t *testing.T) {
+		t.Parallel()
+
+		var calls int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			atomic.AddInt32(&calls, 1)
+
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountSettingsUpdateTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyMaintenancePolicy: 123, keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return transport error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "maintenance_policy must be a string")
+		assert.Equal(t, int32(0), calls, "malformed field must fail before client call")
+	})
+
+	t.Run("api error produces tool error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+			assert.Equal(t, "/account/settings", r.URL.Path, "request path should be /account/settings")
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{"field": keyMaintenancePolicy, keyReason: "invalid maintenance policy"}},
+			}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountSettingsUpdateTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyMaintenancePolicy: "invalid", keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return transport error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "Failed to update account settings")
+		assertErrorContains(t, result, "invalid maintenance policy")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		settings := linode.AccountSettings{BackupsEnabled: true, NetworkHelper: false, MaintenancePolicy: maintenancePolicyMigrate}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+			assert.Equal(t, "/account/settings", r.URL.Path, "request path should be /account/settings")
+
+			var body map[string]any
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			assert.Equal(t, true, body["backups_enabled"])
+			assert.Equal(t, false, body["network_helper"])
+			assert.Equal(t, maintenancePolicyMigrate, body[keyMaintenancePolicy])
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(settings))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountSettingsUpdateTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{"backups_enabled": true, "network_helper": false, keyMaintenancePolicy: maintenancePolicyMigrate, keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Account settings updated successfully", "response should contain success message")
+		assert.Contains(t, textContent.Text, maintenancePolicyMigrate, "response should contain updated settings")
 	})
 }

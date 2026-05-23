@@ -739,7 +739,7 @@ func TestClientGetAccountSettingsSuccess(t *testing.T) {
 		LongviewSubscription:    &longviewSubscription,
 		ObjectStorage:           &objectStorage,
 		InterfacesForNewLinodes: "linode_default_but_legacy_config_allowed",
-		MaintenancePolicy:       "linode/migrate",
+		MaintenancePolicy:       maintenancePolicyMigrate,
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -767,7 +767,7 @@ func TestClientGetAccountSettingsSuccess(t *testing.T) {
 	require.NotNil(t, result.ObjectStorage)
 	assert.Equal(t, objectStorage, *result.ObjectStorage)
 	assert.Equal(t, "linode_default_but_legacy_config_allowed", result.InterfacesForNewLinodes)
-	assert.Equal(t, "linode/migrate", result.MaintenancePolicy)
+	assert.Equal(t, maintenancePolicyMigrate, result.MaintenancePolicy)
 }
 
 // TestClientGetAccountSettingsAPIError verifies GetAccountSettings propagates
@@ -5099,4 +5099,111 @@ func TestClientUpdateAccountDoesNotRetry(t *testing.T) {
 
 	require.Error(t, err, "UpdateAccount should fail on 500 response")
 	assert.Equal(t, int32(1), calls, "UpdateAccount must not retry and replay a mutating request")
+}
+
+// TestClientUpdateAccountSettingsSuccess verifies that UpdateAccountSettings sends a PUT
+// request to /account/settings with the exact body and returns the updated settings.
+func TestClientUpdateAccountSettingsSuccess(t *testing.T) {
+	t.Parallel()
+
+	longview := "longview-3"
+	objectStorage := "active"
+	settings := linode.AccountSettings{
+		BackupsEnabled:          true,
+		Managed:                 true,
+		NetworkHelper:           false,
+		LongviewSubscription:    &longview,
+		ObjectStorage:           &objectStorage,
+		InterfacesForNewLinodes: "legacy_config_default_but_linode_allowed",
+		MaintenancePolicy:       maintenancePolicyMigrate,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, "/account/settings", r.URL.Path, "request path should be /account/settings")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		var body map[string]any
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		assert.Equal(t, true, body["backups_enabled"])
+		assert.Equal(t, false, body["network_helper"])
+		assert.Equal(t, maintenancePolicyMigrate, body["maintenance_policy"])
+		assert.NotContains(t, body, "object_storage", "omitted fields should not be sent")
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(settings))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
+
+	backupsEnabled := true
+
+	var networkHelper bool
+
+	maintenancePolicy := maintenancePolicyMigrate
+	result, err := client.UpdateAccountSettings(t.Context(), &linode.UpdateAccountSettingsRequest{
+		BackupsEnabled:    &backupsEnabled,
+		NetworkHelper:     &networkHelper,
+		MaintenancePolicy: &maintenancePolicy,
+	})
+
+	require.NoError(t, err, "UpdateAccountSettings should succeed on 200 response")
+	assert.True(t, result.BackupsEnabled)
+	assert.False(t, result.NetworkHelper)
+	assert.Equal(t, maintenancePolicyMigrate, result.MaintenancePolicy)
+}
+
+// TestClientUpdateAccountSettingsAPIError verifies that UpdateAccountSettings propagates
+// API errors through the handleResponse error chain.
+func TestClientUpdateAccountSettingsAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, "/account/settings", r.URL.Path, "request path should be /account/settings")
+		w.WriteHeader(http.StatusBadRequest)
+		_, err := w.Write([]byte(`{"errors":[{"field":"maintenance_policy","reason":"invalid maintenance policy"}]}`))
+		assert.NoError(t, err)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
+
+	_, err := client.UpdateAccountSettings(t.Context(), &linode.UpdateAccountSettingsRequest{})
+
+	require.Error(t, err, "UpdateAccountSettings should fail on 400 response")
+
+	var apiErr *linode.APIError
+
+	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
+	assert.Equal(t, http.StatusBadRequest, apiErr.StatusCode)
+}
+
+// TestClientUpdateAccountSettingsDoesNotRetry verifies the mutating account settings
+// update is not replayed after a transient HTTP error.
+func TestClientUpdateAccountSettingsDoesNotRetry(t *testing.T) {
+	t.Parallel()
+
+	var calls int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, "/account/settings", r.URL.Path, "request path should be /account/settings")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
+		assert.NoError(t, err)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
+
+	_, err := client.UpdateAccountSettings(t.Context(), &linode.UpdateAccountSettingsRequest{})
+
+	require.Error(t, err, "UpdateAccountSettings should fail on 500 response")
+	assert.Equal(t, int32(1), calls, "UpdateAccountSettings must not retry and replay a mutating request")
 }

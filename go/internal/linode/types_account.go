@@ -86,6 +86,18 @@ type AccountSettings struct {
 	MaintenancePolicy       string  `json:"maintenance_policy"`
 }
 
+// UpdateAccountSettingsRequest contains editable fields for PUT /v4/account/settings.
+// All fields are pointers so omitted fields are not sent in the request body.
+type UpdateAccountSettingsRequest struct {
+	BackupsEnabled          *bool   `json:"backups_enabled,omitempty"`
+	Managed                 *bool   `json:"managed,omitempty"`
+	NetworkHelper           *bool   `json:"network_helper,omitempty"`
+	LongviewSubscription    *string `json:"longview_subscription,omitempty"`
+	ObjectStorage           *string `json:"object_storage,omitempty"`
+	InterfacesForNewLinodes *string `json:"interfaces_for_new_linodes,omitempty"`
+	MaintenancePolicy       *string `json:"maintenance_policy,omitempty"`
+}
+
 // AccountAgreements represents the acknowledgment status for account agreements.
 type AccountAgreements struct {
 	BillingAgreement       bool `json:"billing_agreement"`
