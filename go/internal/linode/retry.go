@@ -135,6 +135,13 @@ func (c *Client) UpdateAccountSettings(ctx context.Context, req *UpdateAccountSe
 	return c.httpUpdateAccountSettings(ctx, req)
 }
 
+// EnableAccountManaged enables Linode Managed for the account without retrying
+// the mutating request. Retrying can replay side effects after a transient
+// error, so this method delegates exactly once.
+func (c *Client) EnableAccountManaged(ctx context.Context) error {
+	return c.httpEnableAccountManaged(ctx)
+}
+
 // GetAccountAgreements retrieves account agreement acknowledgment status with automatic retry on transient failures.
 func (c *Client) GetAccountAgreements(ctx context.Context) (*AccountAgreements, error) {
 	var agreements *AccountAgreements

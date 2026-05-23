@@ -7999,6 +7999,129 @@ func TestLinodeDomainRecordGetTool(t *testing.T) {
 	})
 }
 
+// TestLinodeAccountSettingsManagedEnableTool provides end-to-end verification of enabling Linode Managed.
+func TestLinodeAccountSettingsManagedEnableTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeAccountSettingsManagedEnableTool(cfg)
+
+		assert.Equal(t, "linode_account_settings_managed_enable", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Equal(t, profiles.CapAdmin, capability, "managed enable should be CapAdmin")
+		require.NotNil(t, handler, "handler should not be nil")
+		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "schema should include confirm")
+	})
+
+	t.Run("confirm required before client call", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name  string
+			value any
+			set   bool
+		}{
+			{name: caseMissing, set: false},
+			{name: caseConfirmFalse, value: false, set: true},
+			{name: caseString, value: boolStringTrue, set: true},
+			{name: caseNumeric, value: 1, set: true},
+		}
+
+		for _, tt := range cases {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					atomic.AddInt32(&calls, 1)
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeAccountSettingsManagedEnableTool(cfg)
+
+				args := map[string]any{}
+				if tt.set {
+					args[keyConfirm] = tt.value
+				}
+
+				req := createRequestWithArgs(t, args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should not return transport error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "result should be a tool error")
+				assertErrorContains(t, result, errConfirmEqualsTrue)
+				assert.Equal(t, int32(0), calls, "confirm failure must happen before client call")
+			})
+		}
+	})
+
+	t.Run("api error produces tool error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/account/settings/managed-enable", r.URL.Path, "request path should be /account/settings/managed-enable")
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: "managed could not be enabled"}},
+			}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountSettingsManagedEnableTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return transport error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "Failed to enable Linode Managed")
+		assertErrorContains(t, result, "managed could not be enabled")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/account/settings/managed-enable", r.URL.Path, "request path should be /account/settings/managed-enable")
+
+			body, err := io.ReadAll(r.Body)
+			assert.NoError(t, err)
+			assert.Empty(t, body, "request should not include a body")
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeAccountSettingsManagedEnableTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Linode Managed enabled successfully", "response should contain success message")
+	})
+}
+
 // End-to-end verification of account settings update.
 func TestLinodeAccountSettingsUpdateTool(t *testing.T) {
 	t.Parallel()

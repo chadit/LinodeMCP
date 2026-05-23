@@ -103,6 +103,22 @@ func NewLinodeAccountSettingsUpdateTool(cfg *config.Config) (mcp.Tool, profiles.
 	return tool, profiles.CapAdmin, handler
 }
 
+// NewLinodeAccountSettingsManagedEnableTool creates a tool for enabling Linode Managed.
+func NewLinodeAccountSettingsManagedEnableTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_settings_managed_enable",
+		"Enables Linode Managed for the account.",
+		[]mcp.ToolOption{
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm enabling Linode Managed.")),
+		},
+		handleLinodeAccountSettingsManagedEnableRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
 // NewLinodeAccountAgreementsTool creates a tool for listing account agreement acknowledgment status.
 func NewLinodeAccountAgreementsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newSimpleGetTool(
@@ -3031,6 +3047,33 @@ func updateAccountRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateA
 	}
 
 	return &req, ""
+}
+
+func enableAccountManagedErrorMessage(ctx context.Context, client *linode.Client) string {
+	if err := client.EnableAccountManaged(ctx); err != nil {
+		return "Failed to enable Linode Managed: " + err.Error()
+	}
+
+	return ""
+}
+
+func handleLinodeAccountSettingsManagedEnableRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This enables Linode Managed for the account. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if errorMessage := enableAccountManagedErrorMessage(ctx, client); errorMessage != "" {
+		return mcp.NewToolResultError(errorMessage), nil
+	}
+
+	return MarshalToolResponse(struct {
+		Message string `json:"message"`
+	}{Message: "Linode Managed enabled successfully"})
 }
 
 func handleLinodeAccountSettingsUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

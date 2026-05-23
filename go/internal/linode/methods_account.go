@@ -9,26 +9,27 @@ import (
 )
 
 const (
-	endpointProfile                 = "/profile"
-	endpointProfileGrants           = "/profile/grants"
-	endpointAccount                 = "/account"
-	endpointAccountSettings         = "/account/settings"
-	endpointAccountCancel           = "/account/cancel"
-	endpointAccountAgreements       = "/account/agreements"
-	endpointAccountMaintenance      = "/account/maintenance"
-	endpointAccountNotifications    = "/account/notifications"
-	endpointAccountAvailability     = "/account/availability"
-	endpointAccountBetas            = "/account/betas"
-	endpointAccountOAuthClients     = "/account/oauth-clients"
-	endpointAccountPaymentMethods   = "/account/payment-methods"
-	endpointAccountEvents           = "/account/events"
-	endpointAccountLogins           = "/account/logins"
-	endpointAccountInvoices         = "/account/invoices"
-	endpointAccountPayments         = "/account/payments"
-	endpointAccountPromoCodes       = "/account/promo-codes"
-	endpointAccountChildAccounts    = "/account/child-accounts"
-	endpointAccountEntityTransfers  = "/account/entity-transfers"
-	endpointAccountServiceTransfers = "/account/service-transfers"
+	endpointProfile                      = "/profile"
+	endpointProfileGrants                = "/profile/grants"
+	endpointAccount                      = "/account"
+	endpointAccountSettings              = "/account/settings"
+	endpointAccountSettingsManagedEnable = "/account/settings/managed-enable"
+	endpointAccountCancel                = "/account/cancel"
+	endpointAccountAgreements            = "/account/agreements"
+	endpointAccountMaintenance           = "/account/maintenance"
+	endpointAccountNotifications         = "/account/notifications"
+	endpointAccountAvailability          = "/account/availability"
+	endpointAccountBetas                 = "/account/betas"
+	endpointAccountOAuthClients          = "/account/oauth-clients"
+	endpointAccountPaymentMethods        = "/account/payment-methods"
+	endpointAccountEvents                = "/account/events"
+	endpointAccountLogins                = "/account/logins"
+	endpointAccountInvoices              = "/account/invoices"
+	endpointAccountPayments              = "/account/payments"
+	endpointAccountPromoCodes            = "/account/promo-codes"
+	endpointAccountChildAccounts         = "/account/child-accounts"
+	endpointAccountEntityTransfers       = "/account/entity-transfers"
+	endpointAccountServiceTransfers      = "/account/service-transfers"
 )
 
 // GetProfile retrieves the authenticated user's profile from the Linode API.
@@ -133,6 +134,25 @@ func (c *Client) httpUpdateAccountSettings(ctx context.Context, req *UpdateAccou
 	}
 
 	return &settings, nil
+}
+
+// httpEnableAccountManaged enables Linode Managed for the account via POST /v4/account/settings/managed-enable.
+func (c *Client) httpEnableAccountManaged(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountSettingsManagedEnable, nil)
+	if err != nil {
+		return &NetworkError{Operation: "EnableAccountManaged", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	if err := c.handleResponse(resp, nil); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // httpGetAccountAgreements retrieves account agreement acknowledgment status.
