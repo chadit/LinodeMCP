@@ -34,6 +34,9 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_type_list", Capability: profiles.CapRead},
 		{Name: "linode_image_list", Capability: profiles.CapRead},
 		{Name: "linode_stackscript_list", Capability: profiles.CapRead},
+
+		// Databases reads
+		{Name: "linode_database_engine_list", Capability: profiles.CapRead},
 		// Compute writes / destroys
 		{Name: "linode_instance_create", Capability: profiles.CapWrite},
 		{Name: "linode_stackscript_create", Capability: profiles.CapWrite},
@@ -463,4 +466,10 @@ func TestCategoriesIncludesAccountUsersInCore(t *testing.T) {
 	assert.Contains(t, profiles.Categories("linode_account_user_update"), "core")
 	assert.Contains(t, profiles.Categories("linode_account_user_delete"), "core")
 	assert.Contains(t, profiles.Categories("linode_account_user_create"), "core")
+}
+
+func TestCategoriesDatabasesTools(t *testing.T) {
+	t.Parallel()
+
+	assert.Contains(t, profiles.Categories("linode_database_engine_list"), "databases")
 }

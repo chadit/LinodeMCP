@@ -849,6 +849,21 @@ func (c *Client) ListTypes(ctx context.Context) ([]InstanceType, error) {
 	return types, err
 }
 
+// ListDatabaseEngines retrieves Managed Database engines with automatic retry on transient failures.
+func (c *Client) ListDatabaseEngines(ctx context.Context, page, pageSize int) ([]DatabaseEngine, error) {
+	var engines []DatabaseEngine
+
+	err := c.executeWithRetry(ctx, "ListDatabaseEngines", func() error {
+		var err error
+
+		engines, err = c.httpListDatabaseEngines(ctx, page, pageSize)
+
+		return err
+	})
+
+	return engines, err
+}
+
 // ListVolumes retrieves all volumes with automatic retry on transient failures.
 func (c *Client) ListVolumes(ctx context.Context) ([]Volume, error) {
 	var volumes []Volume

@@ -207,6 +207,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_account_beta_enroll":                   profiles.CapAdmin,
 		"linode_account_cancel":                        profiles.CapAdmin,
 		"linode_account_availability_get":              profiles.CapRead,
+		"linode_database_engine_list":                  profiles.CapRead,
 	}
 
 	for _, descriptor := range descriptors {
