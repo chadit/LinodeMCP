@@ -8,7 +8,7 @@ import (
 
 const (
 	endpointDatabaseEngines     = "/databases/engines"
-	endpointDatabaseInstances   = "/databases/instances"
+	endpointDatabaseInstances   = "/databases/mysql/instances"
 	endpointDatabaseMySQLConfig = "/databases/mysql/config"
 )
 
