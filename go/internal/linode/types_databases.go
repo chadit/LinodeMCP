@@ -31,6 +31,11 @@ type DatabaseCredentials struct {
 	Password string `json:"password"`
 }
 
+// DatabaseSSL contains the SSL CA certificate for a MySQL Managed Database.
+type DatabaseSSL struct {
+	CACertificate string `json:"ca_certificate"`
+}
+
 // CreateDatabaseInstanceRequest creates or restores a MySQL Managed Database instance.
 type CreateDatabaseInstanceRequest struct {
 	Label          string         `json:"label"`

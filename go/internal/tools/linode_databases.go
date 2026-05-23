@@ -102,6 +102,22 @@ func NewLinodeDatabaseInstanceGetTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeDatabaseInstanceSSLGetTool creates a tool for getting a MySQL Managed Database SSL CA certificate.
+func NewLinodeDatabaseInstanceSSLGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_database_instance_ssl_get",
+		mcp.WithDescription("Retrieves the SSL CA certificate for a MySQL Managed Database instance by ID."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The MySQL Managed Database instance ID whose SSL CA certificate to retrieve.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleDatabaseInstanceSSLGetRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeDatabaseInstanceCredentialsGetTool creates a tool for getting MySQL Managed Database credentials.
 func NewLinodeDatabaseInstanceCredentialsGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
@@ -306,6 +322,25 @@ func handleDatabaseInstanceGetRequest(ctx context.Context, request *mcp.CallTool
 	}
 
 	return MarshalToolResponse(instance)
+}
+
+func handleDatabaseInstanceSSLGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	instanceID, validationMessage := databaseInstanceIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	ssl, err := client.GetDatabaseInstanceSSL(ctx, instanceID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve MySQL Managed Database SSL certificate: %v", err)), nil
+	}
+
+	return MarshalToolResponse(ssl)
 }
 
 func handleDatabaseInstanceCredentialsGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

@@ -909,6 +909,21 @@ func (c *Client) GetDatabaseInstance(ctx context.Context, instanceID int) (*Data
 	return instance, err
 }
 
+// GetDatabaseInstanceSSL retrieves the SSL CA certificate for a MySQL Managed Database instance with automatic retry on transient failures.
+func (c *Client) GetDatabaseInstanceSSL(ctx context.Context, instanceID int) (*DatabaseSSL, error) {
+	var ssl *DatabaseSSL
+
+	err := c.executeWithRetry(ctx, "GetDatabaseInstanceSSL", func() error {
+		var err error
+
+		ssl, err = c.httpGetDatabaseInstanceSSL(ctx, instanceID)
+
+		return err
+	})
+
+	return ssl, err
+}
+
 // GetDatabaseInstanceCredentials retrieves MySQL Managed Database credentials with automatic retry on transient failures.
 func (c *Client) GetDatabaseInstanceCredentials(ctx context.Context, instanceID int) (*DatabaseCredentials, error) {
 	var credentials *DatabaseCredentials
