@@ -20,6 +20,9 @@ const (
 	keyIsDefault = "is_default"
 	keyLastFour  = "last_four"
 
+	// Account settings fixture values.
+	maintenancePolicyMigrate = "linode/migrate"
+
 	// Account beta fixture values.
 	betaExampleOpen      = "example_open"
 	labelExampleOpenBeta = "Example Open Beta"

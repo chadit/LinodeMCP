@@ -1054,7 +1054,7 @@ func TestLinodeObjectStorageBucketAccessAllowTool(t *testing.T) {
 				contains: errConfirmEqualsTrue,
 			},
 			{
-				name:     "confirm false",
+				name:     caseConfirmFalse,
 				args:     map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest, keyACL: aclPublicRead, keyConfirm: false},
 				contains: errConfirmEqualsTrue,
 			},

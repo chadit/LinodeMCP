@@ -80,6 +80,29 @@ func NewLinodeAccountSettingsTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeAccountSettingsUpdateTool creates a tool for updating account-wide settings.
+func NewLinodeAccountSettingsUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_settings_update",
+		"Updates account-wide settings such as backups, network helper, Longview, object storage, interfaces, and maintenance policy.",
+		[]mcp.ToolOption{
+			mcp.WithBoolean("backups_enabled", mcp.Description("Whether backups are enabled by default for new Linodes (optional).")),
+			mcp.WithString("interfaces_for_new_linodes", mcp.Description("Default interface generation mode for new Linodes (optional).")),
+			mcp.WithString("longview_subscription", mcp.Description("Longview subscription tier, or an empty string to disable it (optional).")),
+			mcp.WithString("maintenance_policy", mcp.Description("Default maintenance policy for the account (optional).")),
+			mcp.WithBoolean("managed", mcp.Description("Whether managed services are enabled for the account (optional).")),
+			mcp.WithBoolean("network_helper", mcp.Description("Whether Network Helper is enabled by default (optional).")),
+			mcp.WithString("object_storage", mcp.Description("Object Storage subscription status or tier (optional).")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm account settings update.")),
+		},
+		handleLinodeAccountSettingsUpdateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
 // NewLinodeAccountAgreementsTool creates a tool for listing account agreement acknowledgment status.
 func NewLinodeAccountAgreementsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newSimpleGetTool(
@@ -3005,6 +3028,111 @@ func updateAccountRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateA
 
 	if setCount == 0 {
 		return nil, "at least one account field is required"
+	}
+
+	return &req, ""
+}
+
+func handleLinodeAccountSettingsUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This updates account-wide settings. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	req, validationMessage := updateAccountSettingsRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	updatedSettings, updateErr := client.UpdateAccountSettings(ctx, req)
+	if updateErr == nil {
+		response := struct {
+			Message  string                  `json:"message"`
+			Settings *linode.AccountSettings `json:"settings"`
+		}{
+			Message:  "Account settings updated successfully",
+			Settings: updatedSettings,
+		}
+
+		return MarshalToolResponse(response)
+	}
+
+	return mcp.NewToolResultError("Failed to update account settings: " + updateErr.Error()), nil
+}
+
+func updateAccountSettingsRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateAccountSettingsRequest, string) {
+	args := request.GetArguments()
+	req := linode.UpdateAccountSettingsRequest{}
+
+	var setCount int
+
+	setBool := func(name string, target **bool) string {
+		raw, exists := args[name]
+		if !exists {
+			return ""
+		}
+
+		value, ok := raw.(bool)
+		if !ok {
+			return name + " must be a boolean"
+		}
+
+		*target = &value
+		setCount++
+
+		return ""
+	}
+
+	setString := func(name string, target **string) string {
+		raw, exists := args[name]
+		if !exists {
+			return ""
+		}
+
+		value, ok := raw.(string)
+		if !ok {
+			return name + " must be a string"
+		}
+
+		*target = &value
+		setCount++
+
+		return ""
+	}
+
+	for _, field := range []struct {
+		name   string
+		target **bool
+	}{
+		{name: "backups_enabled", target: &req.BackupsEnabled},
+		{name: "managed", target: &req.Managed},
+		{name: "network_helper", target: &req.NetworkHelper},
+	} {
+		if message := setBool(field.name, field.target); message != "" {
+			return nil, message
+		}
+	}
+
+	for _, field := range []struct {
+		name   string
+		target **string
+	}{
+		{name: "interfaces_for_new_linodes", target: &req.InterfacesForNewLinodes},
+		{name: "longview_subscription", target: &req.LongviewSubscription},
+		{name: "maintenance_policy", target: &req.MaintenancePolicy},
+		{name: "object_storage", target: &req.ObjectStorage},
+	} {
+		if message := setString(field.name, field.target); message != "" {
+			return nil, message
+		}
+	}
+
+	if setCount == 0 {
+		return nil, "at least one account settings field is required"
 	}
 
 	return &req, ""

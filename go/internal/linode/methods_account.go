@@ -115,6 +115,26 @@ func (c *Client) httpGetAccountSettings(ctx context.Context) (*AccountSettings, 
 	return &settings, nil
 }
 
+// httpUpdateAccountSettings updates account-wide settings via PUT /v4/account/settings.
+func (c *Client) httpUpdateAccountSettings(ctx context.Context, req *UpdateAccountSettingsRequest) (*AccountSettings, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpointAccountSettings, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateAccountSettings", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var settings AccountSettings
+	if err := c.handleResponse(resp, &settings); err != nil {
+		return nil, err
+	}
+
+	return &settings, nil
+}
+
 // httpGetAccountAgreements retrieves account agreement acknowledgment status.
 func (c *Client) httpGetAccountAgreements(ctx context.Context) (*AccountAgreements, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

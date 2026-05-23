@@ -128,6 +128,13 @@ func (c *Client) GetAccountSettings(ctx context.Context) (*AccountSettings, erro
 	return settings, err
 }
 
+// UpdateAccountSettings updates account-wide settings without retrying the
+// mutating request. Retrying can replay account state changes after a transient
+// error, so this method delegates exactly once.
+func (c *Client) UpdateAccountSettings(ctx context.Context, req *UpdateAccountSettingsRequest) (*AccountSettings, error) {
+	return c.httpUpdateAccountSettings(ctx, req)
+}
+
 // GetAccountAgreements retrieves account agreement acknowledgment status with automatic retry on transient failures.
 func (c *Client) GetAccountAgreements(ctx context.Context) (*AccountAgreements, error) {
 	var agreements *AccountAgreements
