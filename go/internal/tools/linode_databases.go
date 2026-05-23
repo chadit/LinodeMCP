@@ -16,6 +16,9 @@ const (
 
 	databaseEnginesPageSizeMin = 25
 	databaseEnginesPageSizeMax = 500
+
+	databaseInstancesPageSizeMin = 25
+	databaseInstancesPageSizeMax = 500
 )
 
 // NewLinodeDatabaseEngineListTool creates a tool for listing Managed Database engines.
@@ -30,6 +33,23 @@ func NewLinodeDatabaseEngineListTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return handleDatabaseEnginesListRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeDatabaseInstanceListTool creates a tool for listing Managed Database instances.
+func NewLinodeDatabaseInstanceListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_database_instance_list",
+		mcp.WithDescription("Lists Managed Database instances with optional pagination."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+		mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleDatabaseInstancesListRequest(ctx, &request, cfg)
 	}
 
 	return tool, profiles.CapRead, handler
@@ -93,6 +113,25 @@ func handleDatabaseEnginesListRequest(ctx context.Context, request *mcp.CallTool
 	return FormatListResponse(engines, nil, "database_engines")
 }
 
+func handleDatabaseInstancesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	page, pageSize, validationMessage := databaseInstancesPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	instances, err := client.ListDatabaseInstances(ctx, page, pageSize)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Managed Database instances: %v", err)), nil
+	}
+
+	return FormatListResponse(instances, nil, "database_instances")
+}
+
 func databaseEnginesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
 	args := request.GetArguments()
 
@@ -102,6 +141,22 @@ func databaseEnginesPaginationFromTool(request *mcp.CallToolRequest) (int, int, 
 	}
 
 	pageSize, validationMessage := optionalPaginationInt(args, "page_size", databaseEnginesPageSizeMin, databaseEnginesPageSizeMax)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	return page, pageSize, ""
+}
+
+func databaseInstancesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
+	args := request.GetArguments()
+
+	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	pageSize, validationMessage := optionalPaginationInt(args, "page_size", databaseInstancesPageSizeMin, databaseInstancesPageSizeMax)
 	if validationMessage != "" {
 		return 0, 0, validationMessage
 	}

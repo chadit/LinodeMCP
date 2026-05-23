@@ -10,6 +10,8 @@ const (
 	keyPages   = "pages"
 	keyResults = "results"
 
+	errTemporaryFailure = "temporary failure"
+
 	// Common JSON field names used in test fixtures.
 	keyID        = "id"
 	keyLabel     = "label"

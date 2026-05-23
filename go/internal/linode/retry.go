@@ -864,6 +864,21 @@ func (c *Client) ListDatabaseEngines(ctx context.Context, page, pageSize int) ([
 	return engines, err
 }
 
+// ListDatabaseInstances retrieves Managed Database instances with automatic retry on transient failures.
+func (c *Client) ListDatabaseInstances(ctx context.Context, page, pageSize int) ([]DatabaseInstance, error) {
+	var instances []DatabaseInstance
+
+	err := c.executeWithRetry(ctx, "ListDatabaseInstances", func() error {
+		var err error
+
+		instances, err = c.httpListDatabaseInstances(ctx, page, pageSize)
+
+		return err
+	})
+
+	return instances, err
+}
+
 // GetDatabaseEngine retrieves a Managed Database engine with automatic retry on transient failures.
 func (c *Client) GetDatabaseEngine(ctx context.Context, engineID string) (*DatabaseEngine, error) {
 	var engine *DatabaseEngine
