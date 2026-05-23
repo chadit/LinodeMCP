@@ -14,20 +14,21 @@ import (
 )
 
 const (
-	databaseEnginesPath             = "/databases/engines"
-	databaseEngineMySQL             = "mysql"
-	databaseEngineID                = "mysql/8.0.26"
-	databaseEngineEscapedPath       = "/databases/engines/mysql%2F8.0.26"
-	databaseEngineVersion           = "8.0.26"
-	databaseInstancesPath           = "/databases/mysql/instances"
-	databaseMySQLConfigPath         = "/databases/mysql/config"
-	databaseInstanceID              = 123
-	databaseInstancePath            = "/databases/mysql/instances/123"
-	databaseInstanceCredentialsPath = "/databases/mysql/instances/123/credentials"
-	databaseInstanceLabel           = "primary-db"
-	databaseInstanceType            = "g6-dedicated-2"
-	databaseCredentialsPassword     = "secret"
-	databaseConfigTypeInteger       = "integer"
+	databaseEnginesPath                  = "/databases/engines"
+	databaseEngineMySQL                  = "mysql"
+	databaseEngineID                     = "mysql/8.0.26"
+	databaseEngineEscapedPath            = "/databases/engines/mysql%2F8.0.26"
+	databaseEngineVersion                = "8.0.26"
+	databaseInstancesPath                = "/databases/mysql/instances"
+	databaseMySQLConfigPath              = "/databases/mysql/config"
+	databaseInstanceID                   = 123
+	databaseInstancePath                 = "/databases/mysql/instances/123"
+	databaseInstanceCredentialsPath      = "/databases/mysql/instances/123/credentials"
+	databaseInstanceCredentialsResetPath = "/databases/mysql/instances/123/credentials/reset"
+	databaseInstanceLabel                = "primary-db"
+	databaseInstanceType                 = "g6-dedicated-2"
+	databaseCredentialsPassword          = "secret"
+	databaseConfigTypeInteger            = "integer"
 )
 
 func TestClientListDatabaseEnginesSuccess(t *testing.T) {
@@ -409,6 +410,75 @@ func TestClientGetDatabaseInstanceCredentialsRetriesTransientRead(t *testing.T) 
 	require.NoError(t, err, "read-only GetDatabaseInstanceCredentials should retry transient failures")
 	require.NotNil(t, got)
 	assert.Equal(t, int32(2), attempts.Load(), "transient read should be retried once")
+}
+
+func TestClientResetDatabaseInstanceCredentialsSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, databaseInstanceCredentialsResetPath, r.URL.Path, "request path should include credentials reset path")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		assert.Equal(t, http.NoBody, r.Body, "request body should be empty")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseCredentials{Username: accountMaintenanceEntityType, Password: databaseCredentialsPassword}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.ResetDatabaseInstanceCredentials(t.Context(), databaseInstanceID)
+
+	require.NoError(t, err, "ResetDatabaseInstanceCredentials should succeed on 200 response")
+	require.NotNil(t, got)
+	assert.Equal(t, "linode", got.Username)
+	assert.Equal(t, "secret", got.Password)
+}
+
+func TestClientResetDatabaseInstanceCredentialsAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, databaseInstanceCredentialsResetPath, r.URL.Path, "request path should include credentials reset path")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errForbidden}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	_, err := client.ResetDatabaseInstanceCredentials(t.Context(), databaseInstanceID)
+
+	require.Error(t, err)
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+}
+
+func TestClientResetDatabaseInstanceCredentialsDoesNotRetryTransientPost(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, databaseInstanceCredentialsResetPath, r.URL.Path, "request path should include credentials reset path")
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
+	_, err := client.ResetDatabaseInstanceCredentials(t.Context(), databaseInstanceID)
+
+	require.Error(t, err)
+	assert.Equal(t, int32(1), attempts.Load(), "credential reset POST must not be retried")
 }
 
 func TestClientCreateDatabaseInstanceSuccess(t *testing.T) {
