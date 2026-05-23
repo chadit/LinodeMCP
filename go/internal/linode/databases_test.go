@@ -20,8 +20,10 @@ const (
 	databaseEngineEscapedPath = "/databases/engines/mysql%2F8.0.26"
 	databaseEngineVersion     = "8.0.26"
 	databaseInstancesPath     = "/databases/instances"
+	databaseMySQLConfigPath   = "/databases/mysql/config"
 	databaseInstanceID        = 123
 	databaseInstanceLabel     = "primary-db"
+	databaseConfigTypeInteger = "integer"
 )
 
 func TestClientListDatabaseEnginesSuccess(t *testing.T) {
@@ -74,6 +76,98 @@ func TestClientListDatabaseEnginesAPIError(t *testing.T) {
 	var apiErr *linode.APIError
 	require.ErrorAs(t, err, &apiErr)
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+}
+
+func TestClientGetDatabaseMySQLConfigSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, databaseMySQLConfigPath, r.URL.Path, "request path should be /databases/mysql/config")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			"binlog_retention_period": map[string]any{
+				"description": "The minimum amount of time in seconds to keep binlog entries before deletion.",
+				"example":     600,
+				keyType:       databaseConfigTypeInteger,
+			},
+			"mysql": map[string]any{
+				"connect_timeout": map[string]any{
+					"description": "The number of seconds that the mysqld server waits for a connect packet.",
+					"example":     10,
+					keyType:       databaseConfigTypeInteger,
+				},
+			},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.GetDatabaseMySQLConfig(t.Context())
+
+	require.NoError(t, err, "GetDatabaseMySQLConfig should succeed on 200 response")
+	assert.Contains(t, got, "binlog_retention_period")
+	assert.Contains(t, got, "mysql")
+}
+
+func TestClientGetDatabaseMySQLConfigAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, databaseMySQLConfigPath, r.URL.Path, "request path should be /databases/mysql/config")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errForbidden}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	_, err := client.GetDatabaseMySQLConfig(t.Context())
+
+	require.Error(t, err)
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+}
+
+func TestClientGetDatabaseMySQLConfigRetriesTransientRead(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+
+		assert.Equal(t, databaseMySQLConfigPath, r.URL.Path, "request path should be /databases/mysql/config")
+
+		if attempts.Load() == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
+			}))
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			"mysql": map[string]any{
+				"connect_timeout": map[string]any{keyType: databaseConfigTypeInteger},
+			},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
+	got, err := client.GetDatabaseMySQLConfig(t.Context())
+
+	require.NoError(t, err, "read-only GetDatabaseMySQLConfig should retry transient failures")
+	assert.Contains(t, got, "mysql")
+	assert.Equal(t, int32(2), attempts.Load(), "transient read should be retried once")
 }
 
 func TestClientListDatabaseInstancesSuccess(t *testing.T) {

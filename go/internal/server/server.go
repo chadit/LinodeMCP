@@ -973,6 +973,7 @@ func databaseToolEntries(cfg *config.Config) []toolEntry {
 	return entriesFromFactories(cfg, []toolFactory{
 		tools.NewLinodeDatabaseEngineListTool,
 		tools.NewLinodeDatabaseEngineGetTool,
+		tools.NewLinodeDatabaseMySQLConfigGetTool,
 		tools.NewLinodeDatabaseInstanceListTool,
 	})
 }

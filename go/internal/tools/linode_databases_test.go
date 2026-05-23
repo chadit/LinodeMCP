@@ -29,6 +29,7 @@ const (
 	databaseEngineName               = "mysql"
 	databaseVersion                  = "8.0.26"
 	databaseInstancesPath            = "/databases/instances"
+	databaseMySQLConfigPath          = "/databases/mysql/config"
 	databaseInstanceID               = 123
 	databaseInstanceLabel            = "primary-db"
 )
@@ -164,6 +165,104 @@ func TestLinodeDatabaseEngineListTool(t *testing.T) {
 				assert.Contains(t, textContent.Text, testCase.wantMessage)
 			})
 		}
+	})
+}
+
+func TestLinodeDatabaseMySQLConfigGetTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeDatabaseMySQLConfigGetTool(cfg)
+
+		assert.Equal(t, "linode_database_mysql_config_get", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read capability")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.NotContains(t, props, keyConfirm, "read-only get tool must not require confirm")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, databaseMySQLConfigPath, r.URL.Path, "request path should be /databases/mysql/config")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				"mysql": map[string]any{
+					"connect_timeout": map[string]any{
+						"description":      "The number of seconds that the mysqld server waits for a connect packet.",
+						"example":          10,
+						"requires_restart": false,
+						"type":             "integer",
+					},
+				},
+			}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeDatabaseMySQLConfigGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "connect_timeout")
+		assert.Contains(t, textContent.Text, "requires_restart")
+	})
+
+	t.Run("client error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, databaseMySQLConfigPath, r.URL.Path, "request path should be /databases/mysql/config")
+			w.WriteHeader(http.StatusInternalServerError)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: temporaryFailure}},
+			}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeDatabaseMySQLConfigGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "client errors should be returned as tool result errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failures should return an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to retrieve MySQL Managed Database advanced parameters")
+	})
+
+	t.Run("client configuration error", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		_, _, handler := tools.NewLinodeDatabaseMySQLConfigGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "configuration errors should be returned as tool result errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "missing client config should return an error result")
 	})
 }
 
