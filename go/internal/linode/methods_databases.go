@@ -56,6 +56,26 @@ func (c *Client) httpListDatabaseInstances(ctx context.Context, page, pageSize i
 	return response.Data, nil
 }
 
+// CreateDatabaseInstance creates or restores a MySQL Managed Database instance.
+func (c *Client) httpCreateDatabaseInstance(ctx context.Context, req *CreateDatabaseInstanceRequest) (*DatabaseInstance, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointDatabaseInstances, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateDatabaseInstance", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var instance DatabaseInstance
+	if err := c.handleResponse(resp, &instance); err != nil {
+		return nil, err
+	}
+
+	return &instance, nil
+}
+
 // GetDatabaseMySQLConfig retrieves MySQL Managed Database advanced parameters.
 func (c *Client) httpGetDatabaseMySQLConfig(ctx context.Context) (map[string]any, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

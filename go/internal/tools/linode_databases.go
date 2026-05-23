@@ -2,17 +2,29 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/internal/config"
+	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
 const (
-	paramDatabaseEngineID = "engine_id"
+	paramDatabaseEngineID       = "engine_id"
+	paramDatabaseAllowList      = "allow_list"
+	paramDatabaseClusterSize    = "cluster_size"
+	paramDatabaseEngine         = "engine"
+	paramDatabaseEngineConfig   = "engine_config"
+	paramDatabaseFork           = "fork"
+	paramDatabaseLabel          = "label"
+	paramDatabasePrivateNetwork = "private_network"
+	paramDatabaseRegion         = "region"
+	paramDatabaseSSLConnection  = "ssl_connection"
+	paramDatabaseType           = "type"
 
 	databaseEnginesPageSizeMin = 25
 	databaseEnginesPageSizeMax = 500
@@ -68,6 +80,32 @@ func NewLinodeDatabaseInstanceListTool(cfg *config.Config) (mcp.Tool, profiles.C
 	}
 
 	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeDatabaseInstanceCreateTool creates a tool for creating or restoring a MySQL Managed Database instance.
+func NewLinodeDatabaseInstanceCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_database_instance_create",
+		mcp.WithDescription("Creates or restores a MySQL Managed Database instance. This creates a billable resource."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithString(paramDatabaseLabel, mcp.Required(), mcp.Description("Label for the database instance.")),
+		mcp.WithString(paramDatabaseType, mcp.Required(), mcp.Description("Linode type for the database instance.")),
+		mcp.WithString(paramDatabaseEngine, mcp.Required(), mcp.Description("Database engine ID, for example mysql/8.0.26.")),
+		mcp.WithString(paramDatabaseRegion, mcp.Required(), mcp.Description("Region for the database instance.")),
+		mcp.WithString(paramDatabaseAllowList, mcp.Description("JSON array of CIDR strings allowed to connect (optional).")),
+		mcp.WithNumber(paramDatabaseClusterSize, mcp.Description("Number of nodes in the cluster (optional).")),
+		mcp.WithString(paramDatabaseEngineConfig, mcp.Description("JSON object of MySQL engine configuration values (optional).")),
+		mcp.WithString(paramDatabaseFork, mcp.Description("JSON object describing source database fork/restore settings (optional).")),
+		mcp.WithBoolean(paramDatabasePrivateNetwork, mcp.Description("Whether to use private networking (optional).")),
+		mcp.WithBoolean(paramDatabaseSSLConnection, mcp.Description("Whether to require SSL connections (optional).")),
+		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm database creation. This creates a billable resource.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleDatabaseInstanceCreateRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeDatabaseEngineGetTool creates a tool for getting one Managed Database engine.
@@ -161,6 +199,37 @@ func handleDatabaseInstancesListRequest(ctx context.Context, request *mcp.CallTo
 	return FormatListResponse(instances, nil, "database_instances")
 }
 
+func handleDatabaseInstanceCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This creates a billable Managed Database instance. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	req, validationMessage := databaseInstanceCreateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	instance, err := client.CreateDatabaseInstance(ctx, &req)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to create Managed Database instance: %v", err)), nil
+	}
+
+	response := struct {
+		Message  string                   `json:"message"`
+		Instance *linode.DatabaseInstance `json:"database_instance"`
+	}{
+		Message:  fmt.Sprintf("Managed Database instance '%s' (ID: %d) created", instance.Label, instance.ID),
+		Instance: instance,
+	}
+
+	return MarshalToolResponse(response)
+}
+
 func databaseEnginesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
 	args := request.GetArguments()
 
@@ -209,4 +278,126 @@ func databaseEngineIDFromTool(request *mcp.CallToolRequest) (string, string) {
 	}
 
 	return engineID, ""
+}
+
+func databaseInstanceCreateRequestFromTool(request *mcp.CallToolRequest) (linode.CreateDatabaseInstanceRequest, string) {
+	args := request.GetArguments()
+
+	label, validationMessage := requiredStringArg(args, paramDatabaseLabel)
+	if validationMessage != "" {
+		return linode.CreateDatabaseInstanceRequest{}, validationMessage
+	}
+
+	databaseType, validationMessage := requiredStringArg(args, paramDatabaseType)
+	if validationMessage != "" {
+		return linode.CreateDatabaseInstanceRequest{}, validationMessage
+	}
+
+	engine, validationMessage := requiredStringArg(args, paramDatabaseEngine)
+	if validationMessage != "" {
+		return linode.CreateDatabaseInstanceRequest{}, validationMessage
+	}
+
+	region, validationMessage := requiredStringArg(args, paramDatabaseRegion)
+	if validationMessage != "" {
+		return linode.CreateDatabaseInstanceRequest{}, validationMessage
+	}
+
+	req := linode.CreateDatabaseInstanceRequest{Label: label, Type: databaseType, Engine: engine, Region: region}
+
+	if allowListJSON := request.GetString(paramDatabaseAllowList, ""); allowListJSON != "" {
+		var allowList []string
+		if err := json.Unmarshal([]byte(allowListJSON), &allowList); err != nil {
+			return linode.CreateDatabaseInstanceRequest{}, fmt.Sprintf("invalid allow_list JSON: %v", err)
+		}
+
+		req.AllowList = allowList
+	}
+
+	if clusterSizeValue, ok := args[paramDatabaseClusterSize]; ok {
+		clusterSize, ok := numberArgToInt(clusterSizeValue)
+		if !ok || clusterSize < 1 {
+			return linode.CreateDatabaseInstanceRequest{}, "cluster_size must be a positive integer"
+		}
+
+		req.ClusterSize = clusterSize
+	}
+
+	if engineConfigJSON := request.GetString(paramDatabaseEngineConfig, ""); engineConfigJSON != "" {
+		var engineConfig map[string]any
+		if err := json.Unmarshal([]byte(engineConfigJSON), &engineConfig); err != nil {
+			return linode.CreateDatabaseInstanceRequest{}, fmt.Sprintf("invalid engine_config JSON: %v", err)
+		}
+
+		req.EngineConfig = engineConfig
+	}
+
+	if forkJSON := request.GetString(paramDatabaseFork, ""); forkJSON != "" {
+		var fork map[string]any
+		if err := json.Unmarshal([]byte(forkJSON), &fork); err != nil {
+			return linode.CreateDatabaseInstanceRequest{}, fmt.Sprintf("invalid fork JSON: %v", err)
+		}
+
+		req.Fork = fork
+	}
+
+	privateNetwork, validationMessage := optionalBoolArg(args, paramDatabasePrivateNetwork)
+	if validationMessage != "" {
+		return linode.CreateDatabaseInstanceRequest{}, validationMessage
+	}
+
+	if privateNetwork != nil {
+		req.PrivateNetwork = privateNetwork
+	}
+
+	sslConnection, validationMessage := optionalBoolArg(args, paramDatabaseSSLConnection)
+	if validationMessage != "" {
+		return linode.CreateDatabaseInstanceRequest{}, validationMessage
+	}
+
+	if sslConnection != nil {
+		req.SSLConnection = sslConnection
+	}
+
+	return req, ""
+}
+
+func requiredStringArg(args map[string]any, key string) (string, string) {
+	value, ok := args[key].(string)
+	if !ok || strings.TrimSpace(value) == "" {
+		return "", key + " must be a non-empty string"
+	}
+
+	return value, ""
+}
+
+func numberArgToInt(value any) (int, bool) {
+	switch typed := value.(type) {
+	case int:
+		return typed, true
+	case int64:
+		return int(typed), true
+	case float64:
+		if typed != float64(int(typed)) {
+			return 0, false
+		}
+
+		return int(typed), true
+	default:
+		return 0, false
+	}
+}
+
+func optionalBoolArg(args map[string]any, key string) (*bool, string) {
+	value, valueOK := args[key]
+	if !valueOK {
+		return nil, ""
+	}
+
+	boolValue, ok := value.(bool)
+	if !ok {
+		return nil, key + " must be a boolean"
+	}
+
+	return &boolValue, ""
 }
