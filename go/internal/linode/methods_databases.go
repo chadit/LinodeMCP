@@ -99,6 +99,28 @@ func (c *Client) httpCreateDatabaseInstance(ctx context.Context, req *CreateData
 	return &instance, nil
 }
 
+// UpdateDatabaseInstance updates one MySQL Managed Database instance.
+func (c *Client) httpUpdateDatabaseInstance(ctx context.Context, instanceID int, req *UpdateDatabaseInstanceRequest) (*DatabaseInstance, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointDatabaseInstances + "/" + url.PathEscape(strconv.Itoa(instanceID))
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateDatabaseInstance", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var instance DatabaseInstance
+	if err := c.handleResponse(resp, &instance); err != nil {
+		return nil, err
+	}
+
+	return &instance, nil
+}
+
 // GetDatabaseMySQLConfig retrieves MySQL Managed Database advanced parameters.
 func (c *Client) httpGetDatabaseMySQLConfig(ctx context.Context) (map[string]any, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

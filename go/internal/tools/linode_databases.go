@@ -26,6 +26,8 @@ const (
 	paramDatabaseRegion         = "region"
 	paramDatabaseSSLConnection  = "ssl_connection"
 	paramDatabaseType           = "type"
+	paramDatabaseUpdates        = "updates"
+	paramDatabaseVersion        = "version"
 
 	databaseEnginesPageSizeMin = 25
 	databaseEnginesPageSizeMax = 500
@@ -120,6 +122,30 @@ func NewLinodeDatabaseInstanceCreateTool(cfg *config.Config) (mcp.Tool, profiles
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return handleDatabaseInstanceCreateRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapWrite, handler
+}
+
+// NewLinodeDatabaseInstanceUpdateTool creates a tool for updating one MySQL Managed Database instance.
+func NewLinodeDatabaseInstanceUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_database_instance_update",
+		mcp.WithDescription("Updates a MySQL Managed Database instance."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The MySQL Managed Database instance ID to update.")),
+		mcp.WithString(paramDatabaseAllowList, mcp.Description("JSON array of CIDR strings allowed to connect (optional).")),
+		mcp.WithString(paramDatabaseEngineConfig, mcp.Description("JSON object of MySQL engine configuration values (optional).")),
+		mcp.WithString(paramDatabaseLabel, mcp.Description("New label for the database instance (optional).")),
+		mcp.WithString(paramDatabasePrivateNetwork, mcp.Description("JSON object of private network settings (optional).")),
+		mcp.WithString(paramDatabaseType, mcp.Description("New Linode type for the database instance (optional).")),
+		mcp.WithString(paramDatabaseUpdates, mcp.Description("JSON object of maintenance update settings (optional).")),
+		mcp.WithString(paramDatabaseVersion, mcp.Description("New MySQL version for the database instance (optional).")),
+		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm database update.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleDatabaseInstanceUpdateRequest(ctx, &request, cfg)
 	}
 
 	return tool, profiles.CapWrite, handler
@@ -266,6 +292,42 @@ func handleDatabaseInstanceCreateRequest(ctx context.Context, request *mcp.CallT
 	return MarshalToolResponse(response)
 }
 
+func handleDatabaseInstanceUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This updates a Managed Database instance. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	instanceID, validationMessage := databaseInstanceIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	req, validationMessage := databaseInstanceUpdateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	instance, err := client.UpdateDatabaseInstance(ctx, instanceID, req)
+	if err != nil {
+		return mcp.NewToolResultError(formatDatabaseInstanceUpdateError(err)), nil
+	}
+
+	response := struct {
+		Message  string                   `json:"message"`
+		Instance *linode.DatabaseInstance `json:"database_instance"`
+	}{
+		Message:  fmt.Sprintf("Managed Database instance '%s' (ID: %d) updated", instance.Label, instance.ID),
+		Instance: instance,
+	}
+
+	return MarshalToolResponse(response)
+}
+
 func databaseEnginesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
 	args := request.GetArguments()
 
@@ -328,6 +390,93 @@ func databaseEngineIDFromTool(request *mcp.CallToolRequest) (string, string) {
 	}
 
 	return engineID, ""
+}
+
+func formatDatabaseInstanceUpdateError(err error) string {
+	return "Failed to update Managed Database instance: " + err.Error()
+}
+
+func databaseInstanceUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateDatabaseInstanceRequest, string) {
+	args := request.GetArguments()
+	req := &linode.UpdateDatabaseInstanceRequest{}
+
+	var changed bool
+
+	allowList, hasAllowList, validationMessage := optionalStringSliceJSONField(args, paramDatabaseAllowList, "allow_list")
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if hasAllowList {
+		req.AllowList = &allowList
+		changed = true
+	}
+
+	engineConfig, hasEngineConfig, validationMessage := optionalMapJSONField(args, paramDatabaseEngineConfig, "engine_config")
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if hasEngineConfig {
+		req.EngineConfig = engineConfig
+		changed = true
+	}
+
+	label, hasLabel, validationMessage := optionalStringField(args, paramDatabaseLabel)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if hasLabel {
+		req.Label = &label
+		changed = true
+	}
+
+	privateNetwork, hasPrivateNetwork, validationMessage := optionalMapJSONField(args, paramDatabasePrivateNetwork, "private_network")
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if hasPrivateNetwork {
+		req.PrivateNetwork = privateNetwork
+		changed = true
+	}
+
+	databaseType, hasDatabaseType, validationMessage := optionalStringField(args, paramDatabaseType)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if hasDatabaseType {
+		req.Type = &databaseType
+		changed = true
+	}
+
+	updates, hasUpdates, validationMessage := optionalMapJSONField(args, paramDatabaseUpdates, "updates")
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if hasUpdates {
+		req.Updates = updates
+		changed = true
+	}
+
+	version, hasVersion, validationMessage := optionalStringField(args, paramDatabaseVersion)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if hasVersion {
+		req.Version = &version
+		changed = true
+	}
+
+	if !changed {
+		return nil, "at least one update field must be provided"
+	}
+
+	return req, ""
 }
 
 func databaseInstanceCreateRequestFromTool(request *mcp.CallToolRequest) (linode.CreateDatabaseInstanceRequest, string) {
@@ -436,6 +585,56 @@ func numberArgToInt(value any) (int, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func optionalStringSliceJSONField(args map[string]any, key, label string) ([]string, bool, string) {
+	jsonValue, hasValue, validationMessage := optionalStringField(args, key)
+	if validationMessage != "" || !hasValue {
+		return nil, hasValue, validationMessage
+	}
+
+	var values []string
+	if err := json.Unmarshal([]byte(jsonValue), &values); err != nil {
+		return nil, false, fmt.Sprintf("invalid %s JSON: %v", label, err)
+	}
+
+	if values == nil {
+		return nil, false, label + " must be a JSON array"
+	}
+
+	return values, true, ""
+}
+
+func optionalMapJSONField(args map[string]any, key, label string) (map[string]any, bool, string) {
+	jsonValue, hasValue, validationMessage := optionalStringField(args, key)
+	if validationMessage != "" || !hasValue {
+		return nil, hasValue, validationMessage
+	}
+
+	var values map[string]any
+	if err := json.Unmarshal([]byte(jsonValue), &values); err != nil {
+		return nil, false, fmt.Sprintf("invalid %s JSON: %v", label, err)
+	}
+
+	if values == nil {
+		return nil, false, label + " must be a JSON object"
+	}
+
+	return values, true, ""
+}
+
+func optionalStringField(args map[string]any, key string) (string, bool, string) {
+	value, exists := args[key]
+	if !exists {
+		return "", false, ""
+	}
+
+	stringValue, isString := value.(string)
+	if !isString || strings.TrimSpace(stringValue) == "" {
+		return "", false, key + " must be a non-empty string"
+	}
+
+	return stringValue, true, ""
 }
 
 func optionalBoolArg(args map[string]any, key string) (*bool, string) {

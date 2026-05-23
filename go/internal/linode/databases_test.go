@@ -398,6 +398,72 @@ func TestClientCreateDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 	assert.Equal(t, int32(1), attempts.Load(), "non-idempotent create POST must not be retried")
 }
 
+func TestClientUpdateDatabaseInstanceSuccess(t *testing.T) {
+	t.Parallel()
+
+	label := databaseInstanceLabel
+	databaseType := databaseInstanceType
+	version := databaseEngineVersion
+	allowList := []string{"203.0.113.0/24"}
+	expectedReq := linode.UpdateDatabaseInstanceRequest{
+		AllowList:      &allowList,
+		EngineConfig:   map[string]any{"binlog_retention_period": float64(600)},
+		Label:          &label,
+		PrivateNetwork: map[string]any{"public_access": false, "vpc_id": float64(123), "subnet_id": float64(456)},
+		Type:           &databaseType,
+		Updates:        map[string]any{"frequency": "weekly", "hour_of_day": float64(1)},
+		Version:        &version,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+
+		var gotReq linode.UpdateDatabaseInstanceRequest
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&gotReq))
+		assert.Equal(t, expectedReq, gotReq)
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineMySQL, Version: databaseEngineVersion, Status: oauthClientStatus}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.UpdateDatabaseInstance(t.Context(), databaseInstanceID, &expectedReq)
+
+	require.NoError(t, err, "UpdateDatabaseInstance should succeed on 200 response")
+	require.NotNil(t, got)
+	assert.Equal(t, databaseInstanceID, got.ID)
+	assert.Equal(t, databaseInstanceLabel, got.Label)
+}
+
+func TestClientUpdateDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	label := databaseInstanceLabel
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: "temporary failure"}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
+	_, err := client.UpdateDatabaseInstance(t.Context(), databaseInstanceID, &linode.UpdateDatabaseInstanceRequest{Label: &label})
+
+	require.Error(t, err)
+	assert.Equal(t, int32(1), attempts.Load(), "side-effecting update PUT must not be retried")
+}
+
 func TestClientGetDatabaseEngineSuccess(t *testing.T) {
 	t.Parallel()
 
