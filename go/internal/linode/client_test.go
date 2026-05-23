@@ -3354,6 +3354,98 @@ func TestClientDeleteAccountServiceTransferDoesNotRetryTransientError(t *testing
 	assert.Equal(t, int32(1), requestCount.Load(), "mutating transfer cancellation must not be retried")
 }
 
+// TestClientAcceptAccountServiceTransferSuccess verifies AcceptAccountServiceTransfer sends a POST
+// request to /account/service-transfers/{token}/accept with no body.
+func TestClientAcceptAccountServiceTransferSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/account/service-transfers/service-token-example/accept", r.URL.Path, "request path should include transfer token accept action")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		assert.Equal(t, http.NoBody, r.Body, "POST accept request should not send a body")
+
+		w.Header().Set("Content-Type", "application/json")
+		_, writeErr := w.Write([]byte(`{}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	err := client.AcceptAccountServiceTransfer(t.Context(), accountServiceTransferToken)
+
+	require.NoError(t, err, "AcceptAccountServiceTransfer should succeed on 200 response")
+}
+
+func TestClientAcceptAccountServiceTransferEscapesToken(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/account/service-transfers/service%2Ftoken%3Fquery/accept", r.URL.EscapedPath(), "path parameter should be escaped")
+		assert.Empty(t, r.URL.RawQuery, "encoded question mark should not become a query string")
+		w.Header().Set("Content-Type", "application/json")
+		_, writeErr := w.Write([]byte(`{}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	err := client.AcceptAccountServiceTransfer(t.Context(), "service/token?query")
+
+	require.NoError(t, err, "AcceptAccountServiceTransfer should escape path parameters")
+}
+
+func TestClientAcceptAccountServiceTransferAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/account/service-transfers/service-token-example/accept", r.URL.Path, "request path should include transfer token accept action")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	err := client.AcceptAccountServiceTransfer(t.Context(), accountServiceTransferToken)
+
+	require.Error(t, err, "AcceptAccountServiceTransfer should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	require.NotNil(t, apiErr, "APIError should be present")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+func TestClientAcceptAccountServiceTransferDoesNotRetryTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	err := client.AcceptAccountServiceTransfer(t.Context(), accountServiceTransferToken)
+
+	require.Error(t, err, "AcceptAccountServiceTransfer should return the transient error")
+	assert.Equal(t, int32(1), requestCount.Load(), "mutating service transfer acceptance must not be retried")
+}
+
 // TestClientGetAccountEntityTransferSuccess verifies GetAccountEntityTransfer sends a GET
 // request to /account/entity-transfers/{token} and decodes the response.
 func TestClientGetAccountEntityTransferSuccess(t *testing.T) {
