@@ -964,6 +964,11 @@ func (c *Client) PatchDatabaseInstance(ctx context.Context, instanceID int) erro
 	return c.httpPatchDatabaseInstance(ctx, instanceID)
 }
 
+// ResumeDatabaseInstance resumes one suspended MySQL Managed Database instance without retrying the POST.
+func (c *Client) ResumeDatabaseInstance(ctx context.Context, instanceID int) error {
+	return c.httpResumeDatabaseInstance(ctx, instanceID)
+}
+
 // ListVolumes retrieves all volumes with automatic retry on transient failures.
 func (c *Client) ListVolumes(ctx context.Context) ([]Volume, error) {
 	var volumes []Volume
