@@ -769,7 +769,7 @@ func TestLinodeInstanceDeleteTool(t *testing.T) {
 			wantContains: errConfirmEqualsTrue,
 		},
 		{
-			name:         "missing instance id",
+			name:         caseMissingInstanceID,
 			args:         map[string]any{keyConfirm: true},
 			wantContains: "instance_id is required",
 		},

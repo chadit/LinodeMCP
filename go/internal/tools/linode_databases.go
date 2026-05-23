@@ -15,6 +15,7 @@ import (
 
 const (
 	paramDatabaseEngineID       = "engine_id"
+	paramDatabaseInstanceID     = "instance_id"
 	paramDatabaseAllowList      = "allow_list"
 	paramDatabaseClusterSize    = "cluster_size"
 	paramDatabaseEngine         = "engine"
@@ -77,6 +78,22 @@ func NewLinodeDatabaseInstanceListTool(cfg *config.Config) (mcp.Tool, profiles.C
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return handleDatabaseInstancesListRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeDatabaseInstanceGetTool creates a tool for getting one MySQL Managed Database instance.
+func NewLinodeDatabaseInstanceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_database_instance_get",
+		mcp.WithDescription("Retrieves a single MySQL Managed Database instance by ID."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The MySQL Managed Database instance ID to retrieve.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleDatabaseInstanceGetRequest(ctx, &request, cfg)
 	}
 
 	return tool, profiles.CapRead, handler
@@ -159,6 +176,25 @@ func handleDatabaseMySQLConfigGetRequest(ctx context.Context, request *mcp.CallT
 	}
 
 	return MarshalToolResponse(mysqlConfig)
+}
+
+func handleDatabaseInstanceGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	instanceID, validationMessage := databaseInstanceIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	instance, err := client.GetDatabaseInstance(ctx, instanceID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve MySQL Managed Database instance: %v", err)), nil
+	}
+
+	return MarshalToolResponse(instance)
 }
 
 func handleDatabaseEnginesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -260,6 +296,20 @@ func databaseInstancesPaginationFromTool(request *mcp.CallToolRequest) (int, int
 	}
 
 	return page, pageSize, ""
+}
+
+func databaseInstanceIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	instanceIDValue, hasInstanceID := request.GetArguments()[paramDatabaseInstanceID]
+	if !hasInstanceID {
+		return 0, "instance_id must be a positive integer"
+	}
+
+	instanceID, ok := numberArgToInt(instanceIDValue)
+	if !ok || instanceID < 1 {
+		return 0, "instance_id must be a positive integer"
+	}
+
+	return instanceID, ""
 }
 
 func databaseEngineIDFromTool(request *mcp.CallToolRequest) (string, string) {
