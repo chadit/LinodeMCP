@@ -202,6 +202,23 @@ func NewLinodeDatabaseInstanceDeleteTool(cfg *config.Config) (mcp.Tool, profiles
 	return tool, profiles.CapDestroy, handler
 }
 
+// NewLinodeDatabaseInstancePatchTool creates a tool for patching one MySQL Managed Database instance.
+func NewLinodeDatabaseInstancePatchTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_database_instance_patch",
+		mcp.WithDescription("Applies security patches and updates to a MySQL Managed Database instance."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The MySQL Managed Database instance ID to patch.")),
+		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm database patching. This may cause maintenance downtime for single-node clusters.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleDatabaseInstancePatchRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapWrite, handler
+}
+
 // NewLinodeDatabaseEngineGetTool creates a tool for getting one Managed Database engine.
 func NewLinodeDatabaseEngineGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
@@ -461,8 +478,42 @@ func handleDatabaseInstanceDeleteRequest(ctx context.Context, request *mcp.CallT
 	return MarshalToolResponse(response)
 }
 
+func handleDatabaseInstancePatchRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This patches a Managed Database instance. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	instanceID, validationMessage := databaseInstanceIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := client.PatchDatabaseInstance(ctx, instanceID); err != nil {
+		return mcp.NewToolResultError(formatDatabaseInstancePatchError(instanceID, err)), nil
+	}
+
+	response := struct {
+		Message    string `json:"message"`
+		InstanceID int    `json:"instance_id"`
+	}{
+		Message:    "Managed Database instance " + strconv.Itoa(instanceID) + " patch started",
+		InstanceID: instanceID,
+	}
+
+	return MarshalToolResponse(response)
+}
+
 func formatDatabaseInstanceDeleteError(instanceID int, err error) string {
 	return "Failed to delete Managed Database instance " + strconv.Itoa(instanceID) + ": " + err.Error()
+}
+
+func formatDatabaseInstancePatchError(instanceID int, err error) string {
+	return "Failed to patch Managed Database instance " + strconv.Itoa(instanceID) + ": " + err.Error()
 }
 
 func databaseEnginesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {

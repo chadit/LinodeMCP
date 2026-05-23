@@ -217,6 +217,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_database_instance_create":              profiles.CapWrite,
 		"linode_database_instance_update":              profiles.CapWrite,
 		"linode_database_instance_delete":              profiles.CapDestroy,
+		"linode_database_instance_patch":               profiles.CapWrite,
 	}
 
 	for _, descriptor := range descriptors {
