@@ -1,8 +1,10 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"strconv"
 	"strings"
 
@@ -14,50 +16,65 @@ import (
 )
 
 const (
-	accountAvailabilityPageSizeMin    = 25
-	accountAvailabilityPageSizeMax    = 500
-	accountBetasPageSizeMin           = 25
-	accountBetasPageSizeMax           = 500
-	accountOAuthClientsPageSizeMin    = 25
-	accountOAuthClientsPageSizeMax    = 500
-	accountPaymentMethodsPageSizeMin  = 25
-	accountPaymentMethodsPageSizeMax  = 500
-	accountMaintenancePageSizeMin     = 25
-	accountMaintenancePageSizeMax     = 500
-	accountNotificationsPageSizeMin   = 25
-	accountNotificationsPageSizeMax   = 500
-	accountEventsPageSizeMin          = 25
-	accountEventsPageSizeMax          = 500
-	accountUsersPageSizeMin           = 25
-	accountUsersPageSizeMax           = 500
-	accountUserUsernameParam          = "username"
-	errAccountUserUsernamePathParam   = "username must not contain '/', '?', '#', or '..'"
-	errAccountUserUpdateSSHKeys       = "ssh_keys must be an array of non-empty strings"
-	accountUserEmailParam             = "email"
-	accountLoginsPageSizeMin          = 25
-	accountLoginsPageSizeMax          = 500
-	maxAccountLoginIDFromJSON         = 9007199254740991
-	maxAccountPaymentIDFromJSON       = 9007199254740991
-	accountInvoicesPageSizeMin        = 25
-	accountInvoicesPageSizeMax        = 500
-	accountPaymentsPageSizeMin        = 25
-	accountPaymentsPageSizeMax        = 500
-	accountInvoiceItemsPageSizeMin    = 25
-	accountInvoiceItemsPageSizeMax    = 500
-	errAccountInvoiceIDPositive       = "invoice_id must be a positive integer"
-	errAccountPaymentIDPositive       = "payment_id must be a positive integer"
-	errAccountLoginIDPositive         = "login_id must be a positive integer"
-	errLabelRequired                  = "label is required"
-	errRedirectURIRequired            = "redirect_uri is required"
-	errPaymentMethodDataRequired      = "data is required"
-	errPaymentMethodTypeRequired      = "type is required"
-	oauthClientThumbnailPNGParam      = "thumbnail_png_base64"
-	errThumbnailPNGRequired           = "thumbnail_png_base64 is required"
-	accountChildAccountsPageSizeMin   = 25
-	accountChildAccountsPageSizeMax   = 500
-	accountEventIDParam               = "event_id"
-	accountEntityTransfersPageSizeMin = 25
-	accountEntityTransfersPageSizeMax = 500
+	accountAvailabilityPageSizeMin     = 25
+	accountAvailabilityPageSizeMax     = 500
+	accountBetasPageSizeMin            = 25
+	accountBetasPageSizeMax            = 500
+	accountOAuthClientsPageSizeMin     = 25
+	accountOAuthClientsPageSizeMax     = 500
+	accountPaymentMethodsPageSizeMin   = 25
+	accountPaymentMethodsPageSizeMax   = 500
+	accountMaintenancePageSizeMin      = 25
+	accountMaintenancePageSizeMax      = 500
+	accountNotificationsPageSizeMin    = 25
+	accountNotificationsPageSizeMax    = 500
+	accountEventsPageSizeMin           = 25
+	accountEventsPageSizeMax           = 500
+	accountUsersPageSizeMin            = 25
+	accountUsersPageSizeMax            = 500
+	accountUserUsernameParam           = "username"
+	errAccountUserUsernamePathParam    = "username must not contain '/', '?', '#', or '..'"
+	errAccountUserUpdateSSHKeys        = "ssh_keys must be an array of non-empty strings"
+	errAccountUserGrantsUpdateEmpty    = "at least one grant section is required"
+	errAccountUserGrantsGlobalObject   = "global must be an object matching the grants schema"
+	errAccountUserGrantsArray          = "grant sections must be arrays of grant objects"
+	accountUserGrantsGlobalParam       = "global"
+	accountUserGrantsLinodeParam       = "linode"
+	accountUserGrantsDomainParam       = "domain"
+	accountUserGrantsNodeBalancerParam = "nodebalancer"
+	accountUserGrantsImageParam        = "image"
+	accountUserGrantsLongviewParam     = "longview"
+	accountUserGrantsStackScriptParam  = "stackscript"
+	accountUserGrantsVolumeParam       = "volume"
+	accountUserGrantsDatabaseParam     = "database"
+	accountUserGrantsFirewallParam     = "firewall"
+	accountUserGrantsVPCParam          = "vpc"
+	accountUserGrantsLKEClusterParam   = "lkecluster"
+	accountUserEmailParam              = "email"
+	accountLoginsPageSizeMin           = 25
+	accountLoginsPageSizeMax           = 500
+	maxAccountLoginIDFromJSON          = 9007199254740991
+	maxAccountPaymentIDFromJSON        = 9007199254740991
+	accountInvoicesPageSizeMin         = 25
+	accountInvoicesPageSizeMax         = 500
+	accountPaymentsPageSizeMin         = 25
+	accountPaymentsPageSizeMax         = 500
+	accountInvoiceItemsPageSizeMin     = 25
+	accountInvoiceItemsPageSizeMax     = 500
+	errAccountInvoiceIDPositive        = "invoice_id must be a positive integer"
+	errAccountPaymentIDPositive        = "payment_id must be a positive integer"
+	errAccountLoginIDPositive          = "login_id must be a positive integer"
+	errLabelRequired                   = "label is required"
+	errRedirectURIRequired             = "redirect_uri is required"
+	errPaymentMethodDataRequired       = "data is required"
+	errPaymentMethodTypeRequired       = "type is required"
+	oauthClientThumbnailPNGParam       = "thumbnail_png_base64"
+	errThumbnailPNGRequired            = "thumbnail_png_base64 is required"
+	accountChildAccountsPageSizeMin    = 25
+	accountChildAccountsPageSizeMax    = 500
+	accountEventIDParam                = "event_id"
+	accountEntityTransfersPageSizeMin  = 25
+	accountEntityTransfersPageSizeMax  = 500
 )
 
 // NewLinodeAccountTool creates a tool for retrieving Linode account information.
@@ -259,6 +276,34 @@ func NewLinodeAccountUserGrantsTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeAccountUserGrantsUpdateTool creates a tool for updating one account user's grants.
+func NewLinodeAccountUserGrantsUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_user_grants_update",
+		"Updates grants for one account user by username.",
+		[]mcp.ToolOption{
+			mcp.WithString(accountUserUsernameParam, mcp.Required(), mcp.Description("Account username whose grants should be updated.")),
+			mcp.WithObject(accountUserGrantsGlobalParam, mcp.Description("Optional global grants object.")),
+			mcp.WithArray(accountUserGrantsLinodeParam, mcp.Description("Optional Linode resource grants.")),
+			mcp.WithArray(accountUserGrantsDomainParam, mcp.Description("Optional domain resource grants.")),
+			mcp.WithArray(accountUserGrantsNodeBalancerParam, mcp.Description("Optional NodeBalancer resource grants.")),
+			mcp.WithArray(accountUserGrantsImageParam, mcp.Description("Optional image resource grants.")),
+			mcp.WithArray(accountUserGrantsLongviewParam, mcp.Description("Optional Longview resource grants.")),
+			mcp.WithArray(accountUserGrantsStackScriptParam, mcp.Description("Optional StackScript resource grants.")),
+			mcp.WithArray(accountUserGrantsVolumeParam, mcp.Description("Optional volume resource grants.")),
+			mcp.WithArray(accountUserGrantsDatabaseParam, mcp.Description("Optional database resource grants.")),
+			mcp.WithArray(accountUserGrantsFirewallParam, mcp.Description("Optional firewall resource grants.")),
+			mcp.WithArray(accountUserGrantsVPCParam, mcp.Description("Optional VPC resource grants.")),
+			mcp.WithArray(accountUserGrantsLKEClusterParam, mcp.Description("Optional LKE cluster resource grants.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm account user grants update.")),
+		},
+		handleLinodeAccountUserGrantsUpdateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountUserUpdateTool creates a tool for updating one account user.
@@ -1828,6 +1873,34 @@ func handleLinodeAccountUserGrantsRequest(ctx context.Context, request *mcp.Call
 	return mcp.NewToolResultError("Failed to retrieve linode_account_user_grants: " + getFailure.Error()), nil
 }
 
+func handleLinodeAccountUserGrantsUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This updates account user grants. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	username, validationMessage := accountUserUsernamePathParamFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	updateRequest, validationMessage := accountUserGrantsUpdateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	grants, updateFailure := client.UpdateAccountUserGrants(ctx, username, updateRequest)
+	if updateFailure == nil {
+		return MarshalToolResponse(grants)
+	}
+
+	return mcp.NewToolResultError("Failed to update linode_account_user_grants_update: " + updateFailure.Error()), nil
+}
+
 func accountUserUsernamePathParamFromTool(request *mcp.CallToolRequest) (string, string) {
 	username, validationMessage := requiredAccountUserString(request.GetArguments(), accountUserUsernameParam)
 	if validationMessage != "" {
@@ -1903,6 +1976,111 @@ func deleteAccountUserErrorMessage(ctx context.Context, client *linode.Client, u
 	}
 
 	return ""
+}
+
+func accountUserGrantsUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateAccountUserGrantsRequest, string) {
+	args := request.GetArguments()
+	req := &linode.UpdateAccountUserGrantsRequest{}
+
+	var hasUpdate bool
+
+	if raw, exists := args[accountUserGrantsGlobalParam]; exists {
+		var global linode.UpdateAccountUserGlobalGrants
+		if !decodeToolJSONValue(raw, &global) || !accountUserGlobalGrantUpdateValid(&global) {
+			return nil, errAccountUserGrantsGlobalObject
+		}
+
+		req.Global = &global
+		hasUpdate = true
+	}
+
+	sections := []struct {
+		name string
+		set  func(*[]linode.UpdateAccountUserGrant)
+	}{
+		{name: accountUserGrantsLinodeParam, set: func(grants *[]linode.UpdateAccountUserGrant) { req.Linode = grants }},
+		{name: accountUserGrantsDomainParam, set: func(grants *[]linode.UpdateAccountUserGrant) { req.Domain = grants }},
+		{name: accountUserGrantsNodeBalancerParam, set: func(grants *[]linode.UpdateAccountUserGrant) { req.NodeBalancer = grants }},
+		{name: accountUserGrantsImageParam, set: func(grants *[]linode.UpdateAccountUserGrant) { req.Image = grants }},
+		{name: accountUserGrantsLongviewParam, set: func(grants *[]linode.UpdateAccountUserGrant) { req.Longview = grants }},
+		{name: accountUserGrantsStackScriptParam, set: func(grants *[]linode.UpdateAccountUserGrant) { req.StackScript = grants }},
+		{name: accountUserGrantsVolumeParam, set: func(grants *[]linode.UpdateAccountUserGrant) { req.Volume = grants }},
+		{name: accountUserGrantsDatabaseParam, set: func(grants *[]linode.UpdateAccountUserGrant) { req.Database = grants }},
+		{name: accountUserGrantsFirewallParam, set: func(grants *[]linode.UpdateAccountUserGrant) { req.Firewall = grants }},
+		{name: accountUserGrantsVPCParam, set: func(grants *[]linode.UpdateAccountUserGrant) { req.VPC = grants }},
+		{name: accountUserGrantsLKEClusterParam, set: func(grants *[]linode.UpdateAccountUserGrant) { req.LKECluster = grants }},
+	}
+
+	for _, section := range sections {
+		raw, exists := args[section.name]
+		if !exists {
+			continue
+		}
+
+		var grants []linode.UpdateAccountUserGrant
+		if !decodeToolJSONValue(raw, &grants) || !accountUserGrantUpdatesValid(grants) {
+			return nil, errAccountUserGrantsArray
+		}
+
+		section.set(&grants)
+
+		hasUpdate = true
+	}
+
+	if !hasUpdate {
+		return nil, errAccountUserGrantsUpdateEmpty
+	}
+
+	return req, ""
+}
+
+func accountUserGlobalGrantUpdateValid(global *linode.UpdateAccountUserGlobalGrants) bool {
+	if global.AccountAccess == nil && global.AddDatabases == nil && global.AddDomains == nil && global.AddFirewalls == nil && global.AddImages == nil && global.AddLinodes == nil && global.AddLongview == nil && global.AddNodeBalancers == nil && global.AddStackScripts == nil && global.AddVolumes == nil && global.AddVPCs == nil && global.CancelAccount == nil && global.ChildAccountAccess == nil && global.LongviewSubscription == nil {
+		return false
+	}
+
+	if global.AccountAccess == nil {
+		return true
+	}
+
+	switch *global.AccountAccess {
+	case "", grantPermissionReadOnly, grantPermissionReadWrite:
+		return true
+	default:
+		return false
+	}
+}
+
+func accountUserGrantUpdatesValid(grants []linode.UpdateAccountUserGrant) bool {
+	for _, grant := range grants {
+		if grant.ID <= 0 || grant.Permissions == nil {
+			return false
+		}
+
+		switch *grant.Permissions {
+		case "", grantPermissionReadOnly, grantPermissionReadWrite:
+		default:
+			return false
+		}
+	}
+
+	return true
+}
+
+func decodeToolJSONValue(raw, target any) bool {
+	if raw == nil {
+		return false
+	}
+
+	encoded, err := json.Marshal(raw)
+	if err != nil {
+		return false
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(encoded))
+	decoder.DisallowUnknownFields()
+
+	return decoder.Decode(target) == nil
 }
 
 func accountUserUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateAccountUserRequest, string) {

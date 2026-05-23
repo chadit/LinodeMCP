@@ -651,6 +651,28 @@ func (c *Client) httpGetAccountUserGrants(ctx context.Context, username string) 
 	return &grants, nil
 }
 
+// httpUpdateAccountUserGrants updates one account user's grants by username.
+func (c *Client) httpUpdateAccountUserGrants(ctx context.Context, username string, request *UpdateAccountUserGrantsRequest) (*Grants, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountUsers + "/" + url.PathEscape(username) + "/grants"
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, request)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateAccountUserGrants", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var grants Grants
+	if err := c.handleResponse(resp, &grants); err != nil {
+		return nil, err
+	}
+
+	return &grants, nil
+}
+
 // httpUpdateAccountUser updates one account user by username.
 func (c *Client) httpUpdateAccountUser(ctx context.Context, username string, request *UpdateAccountUserRequest) (*AccountUser, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

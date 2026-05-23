@@ -438,6 +438,13 @@ func (c *Client) GetAccountUserGrants(ctx context.Context, username string) (*Gr
 	return grants, err
 }
 
+// UpdateAccountUserGrants updates account user grants without retrying the mutating request.
+// Retrying can replay grant changes after a transient error, so this method
+// delegates exactly once.
+func (c *Client) UpdateAccountUserGrants(ctx context.Context, username string, request *UpdateAccountUserGrantsRequest) (*Grants, error) {
+	return c.httpUpdateAccountUserGrants(ctx, username, request)
+}
+
 // UpdateAccountUser updates an account user without retrying the mutating request.
 // Retrying can replay user updates after a transient error, so this method
 // delegates exactly once.

@@ -54,6 +54,53 @@ type Grants struct {
 	LKECluster   []Grant      `json:"lkecluster"`
 }
 
+// UpdateAccountUserGrantsRequest contains editable grant sections for
+// PUT /account/users/{username}/grants. Pointer fields preserve the caller's
+// intent so omitted sections are not serialized, while empty arrays can still
+// be sent when a grant category needs to be cleared.
+type UpdateAccountUserGrantsRequest struct {
+	Global       *UpdateAccountUserGlobalGrants `json:"global,omitempty"`
+	Linode       *[]UpdateAccountUserGrant      `json:"linode,omitempty"`
+	Domain       *[]UpdateAccountUserGrant      `json:"domain,omitempty"`
+	NodeBalancer *[]UpdateAccountUserGrant      `json:"nodebalancer,omitempty"`
+	Image        *[]UpdateAccountUserGrant      `json:"image,omitempty"`
+	Longview     *[]UpdateAccountUserGrant      `json:"longview,omitempty"`
+	StackScript  *[]UpdateAccountUserGrant      `json:"stackscript,omitempty"`
+	Volume       *[]UpdateAccountUserGrant      `json:"volume,omitempty"`
+	Database     *[]UpdateAccountUserGrant      `json:"database,omitempty"`
+	Firewall     *[]UpdateAccountUserGrant      `json:"firewall,omitempty"`
+	VPC          *[]UpdateAccountUserGrant      `json:"vpc,omitempty"`
+	LKECluster   *[]UpdateAccountUserGrant      `json:"lkecluster,omitempty"`
+}
+
+// UpdateAccountUserGrant contains one resource grant update. It intentionally
+// excludes Grant.Label because labels are returned by read APIs but are not part
+// of the update payload.
+type UpdateAccountUserGrant struct {
+	ID          int              `json:"id"`
+	Permissions *GrantPermission `json:"permissions"`
+}
+
+// UpdateAccountUserGlobalGrants contains optional global grant fields for
+// account user grants updates. Pointers preserve partial update intent so an
+// omitted permission is not serialized as false.
+type UpdateAccountUserGlobalGrants struct {
+	AccountAccess        *GrantPermission `json:"account_access,omitempty"`
+	AddDatabases         *bool            `json:"add_databases,omitempty"`
+	AddDomains           *bool            `json:"add_domains,omitempty"`
+	AddFirewalls         *bool            `json:"add_firewalls,omitempty"`
+	AddImages            *bool            `json:"add_images,omitempty"`
+	AddLinodes           *bool            `json:"add_linodes,omitempty"`
+	AddLongview          *bool            `json:"add_longview,omitempty"`
+	AddNodeBalancers     *bool            `json:"add_nodebalancers,omitempty"`
+	AddStackScripts      *bool            `json:"add_stackscripts,omitempty"`
+	AddVolumes           *bool            `json:"add_volumes,omitempty"`
+	AddVPCs              *bool            `json:"add_vpcs,omitempty"`
+	CancelAccount        *bool            `json:"cancel_account,omitempty"`
+	ChildAccountAccess   *bool            `json:"child_account_access,omitempty"`
+	LongviewSubscription *bool            `json:"longview_subscription,omitempty"`
+}
+
 // GlobalGrants captures the account-level permission booleans the OAuth
 // flow returns. The Linode API exposes each capability as its own bool;
 // keeping them as separate fields matches the wire format and avoids
