@@ -25,6 +25,7 @@ const (
 	accountServiceTransferToken  = "service-token-example"
 	accountEntityTransferDate    = "2021-02-11T16:37:03"
 	accountEntityTransferExpiry  = "2021-02-12T16:37:03"
+	accountTransferRegion        = "us-east"
 	accountLoginUsername         = "account-login-user"
 	accountMaintenancePath       = "/account/maintenance"
 	accountMaintenanceLabel      = "web-1"
@@ -723,6 +724,107 @@ func TestClientAllowObjectStorageBucketAccessDoesNotRetry(t *testing.T) {
 
 	require.Error(t, err, "AllowObjectStorageBucketAccess should fail on 500 response")
 	assert.Equal(t, int32(1), calls, "AllowObjectStorageBucketAccess must not retry and replay a state-changing request")
+}
+
+// TestClientGetAccountTransferSuccess verifies GetAccountTransfer sends a GET
+// request to /account/transfer and returns the account transfer response.
+func TestClientGetAccountTransferSuccess(t *testing.T) {
+	t.Parallel()
+
+	transfer := linode.AccountTransfer{
+		Billable: 10,
+		Quota:    4000,
+		Used:     123,
+		RegionTransfers: []linode.AccountRegionTransfer{{
+			ID:       accountTransferRegion,
+			Billable: 2,
+			Quota:    1000,
+			Used:     50,
+		}},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/transfer", r.URL.Path, "request path should be /account/transfer")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(transfer))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.GetAccountTransfer(t.Context())
+
+	require.NoError(t, err, "GetAccountTransfer should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, 10, result.Billable)
+	assert.Equal(t, 4000, result.Quota)
+	assert.Equal(t, 123, result.Used)
+	require.Len(t, result.RegionTransfers, 1)
+	assert.Equal(t, accountTransferRegion, result.RegionTransfers[0].ID)
+	assert.Equal(t, 50, result.RegionTransfers[0].Used)
+}
+
+// TestClientGetAccountTransferAPIError verifies GetAccountTransfer propagates
+// API errors through the handleResponse error chain.
+func TestClientGetAccountTransferAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/transfer", r.URL.Path, "request path should be /account/transfer")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetAccountTransfer(t.Context())
+
+	require.Error(t, err, "GetAccountTransfer should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	require.NotNil(t, apiErr, "APIError should be present")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+// TestClientGetAccountTransferRetriesTransientError verifies read-only transfer retries.
+func TestClientGetAccountTransferRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		current := requestCount.Add(1)
+		if current == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+
+			return
+		}
+
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/transfer", r.URL.Path, "request path should be /account/transfer")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountTransfer{Used: 123}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	result, err := client.GetAccountTransfer(t.Context())
+
+	require.NoError(t, err, "GetAccountTransfer should succeed after retry")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, 123, result.Used)
+	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
 // TestClientGetAccountSettingsSuccess verifies GetAccountSettings sends a GET

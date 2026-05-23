@@ -12,6 +12,7 @@ const (
 	endpointProfile                      = "/profile"
 	endpointProfileGrants                = "/profile/grants"
 	endpointAccount                      = "/account"
+	endpointAccountTransfer              = "/account/transfer"
 	endpointAccountSettings              = "/account/settings"
 	endpointAccountSettingsManagedEnable = "/account/settings/managed-enable"
 	endpointAccountCancel                = "/account/cancel"
@@ -94,6 +95,26 @@ func (c *Client) httpGetAccount(ctx context.Context) (*Account, error) {
 	}
 
 	return &account, nil
+}
+
+// httpGetAccountTransfer retrieves the authenticated account's network transfer usage.
+func (c *Client) httpGetAccountTransfer(ctx context.Context) (*AccountTransfer, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointAccountTransfer, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccountTransfer", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var transfer AccountTransfer
+	if err := c.handleResponse(resp, &transfer); err != nil {
+		return nil, err
+	}
+
+	return &transfer, nil
 }
 
 // httpGetAccountSettings retrieves account-wide settings from the Linode API.

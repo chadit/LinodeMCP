@@ -113,6 +113,21 @@ func (c *Client) GetAccount(ctx context.Context) (*Account, error) {
 	return account, err
 }
 
+// GetAccountTransfer retrieves account network transfer usage with automatic retry on transient failures.
+func (c *Client) GetAccountTransfer(ctx context.Context) (*AccountTransfer, error) {
+	var transfer *AccountTransfer
+
+	err := c.executeWithRetry(ctx, "GetAccountTransfer", func() error {
+		var err error
+
+		transfer, err = c.httpGetAccountTransfer(ctx)
+
+		return err
+	})
+
+	return transfer, err
+}
+
 // GetAccountSettings retrieves account-wide settings with automatic retry on transient failures.
 func (c *Client) GetAccountSettings(ctx context.Context) (*AccountSettings, error) {
 	var settings *AccountSettings
