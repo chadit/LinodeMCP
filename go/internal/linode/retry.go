@@ -430,6 +430,13 @@ func (c *Client) UpdateAccountUser(ctx context.Context, username string, request
 	return c.httpUpdateAccountUser(ctx, username, request)
 }
 
+// DeleteAccountUser deletes an account user without retrying the destructive request.
+// Retrying can replay account user deletion after a transient error, so this method
+// delegates exactly once.
+func (c *Client) DeleteAccountUser(ctx context.Context, username string) error {
+	return c.httpDeleteAccountUser(ctx, username)
+}
+
 // CreateAccountUser creates a user without retrying the mutating request.
 // Retrying can create duplicate account users after a transient error, so this
 // method delegates exactly once.

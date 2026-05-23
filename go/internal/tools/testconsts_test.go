@@ -238,6 +238,12 @@ const (
 	// Validation case names used in table-driven test rows.
 	caseRequiresConfirm           = "requires confirm"
 	caseMissingConfirm            = "missing confirm"
+	caseSlashUsername             = "slash username"
+	caseQueryUsername             = "query username"
+	caseDotdotUsername            = "dotdot username"
+	valueSlashUsername            = "user/name"
+	valueQueryUsername            = "user?name"
+	valueDotdotUsername           = "user..name"
 	casePaymentMethodConfirmFalse = "payment method confirm false"
 	caseConfirmFalse              = "confirm false"
 	caseMissing                   = "missing"

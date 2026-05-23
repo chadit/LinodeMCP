@@ -266,6 +266,22 @@ func NewLinodeAccountUserUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 	return tool, profiles.CapAdmin, handler
 }
 
+// NewLinodeAccountUserDeleteTool creates a tool for deleting one account user.
+func NewLinodeAccountUserDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_user_delete",
+		"Deletes one account user by username.",
+		[]mcp.ToolOption{
+			mcp.WithString(accountUserUsernameParam, mcp.Required(), mcp.Description("Account username to delete.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm account user deletion.")),
+		},
+		handleLinodeAccountUserDeleteRequest,
+	)
+
+	return tool, profiles.CapDestroy, handler
+}
+
 // NewLinodeAccountUserCreateTool creates a tool for creating account users.
 func NewLinodeAccountUserCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -1817,6 +1833,42 @@ func handleLinodeAccountUserUpdateRequest(ctx context.Context, request *mcp.Call
 	}
 
 	return mcp.NewToolResultError("Failed to update linode_account_user_update: " + updateFailure.Error()), nil
+}
+
+func handleLinodeAccountUserDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This deletes an account user. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	username, validationMessage := accountUserUsernamePathParamFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if deleteFailureMessage := deleteAccountUserErrorMessage(ctx, client, username); deleteFailureMessage != "" {
+		return mcp.NewToolResultError(deleteFailureMessage), nil
+	}
+
+	return MarshalToolResponse(struct {
+		Message  string `json:"message"`
+		Username string `json:"username"`
+	}{
+		Message:  "Account user deleted successfully",
+		Username: username,
+	})
+}
+
+func deleteAccountUserErrorMessage(ctx context.Context, client *linode.Client, username string) string {
+	if err := client.DeleteAccountUser(ctx, username); err != nil {
+		return "Failed to delete linode_account_user_delete: " + err.Error()
+	}
+
+	return ""
 }
 
 func accountUserUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateAccountUserRequest, string) {

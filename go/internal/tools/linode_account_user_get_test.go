@@ -54,9 +54,9 @@ func TestLinodeAccountUserGetTool(t *testing.T) {
 			{name: "empty username", args: map[string]any{keyUsername: ""}, wantMessage: errUsernameNonEmpty},
 			{name: "blank username", args: map[string]any{keyUsername: blankString}, wantMessage: errUsernameNonEmpty},
 			{name: "numeric username", args: map[string]any{keyUsername: 123}, wantMessage: errUsernameNonEmpty},
-			{name: "slash username", args: map[string]any{keyUsername: "user/name"}, wantMessage: errUsernamePathParamInvalid},
-			{name: "query username", args: map[string]any{keyUsername: "user?name"}, wantMessage: errUsernamePathParamInvalid},
-			{name: "dotdot username", args: map[string]any{keyUsername: "user..name"}, wantMessage: errUsernamePathParamInvalid},
+			{name: caseSlashUsername, args: map[string]any{keyUsername: valueSlashUsername}, wantMessage: errUsernamePathParamInvalid},
+			{name: caseQueryUsername, args: map[string]any{keyUsername: valueQueryUsername}, wantMessage: errUsernamePathParamInvalid},
+			{name: caseDotdotUsername, args: map[string]any{keyUsername: valueDotdotUsername}, wantMessage: errUsernamePathParamInvalid},
 		}
 
 		for _, testCase := range cases {
