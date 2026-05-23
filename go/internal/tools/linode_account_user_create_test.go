@@ -104,10 +104,10 @@ func TestLinodeAccountUserCreateTool(t *testing.T) {
 			args        map[string]any
 			wantMessage string
 		}{
-			{name: "missing username", args: map[string]any{keyEmail: accountUserEmail, keyConfirm: true}, wantMessage: errUsernameRequired},
-			{name: "empty username", args: map[string]any{keyUsername: "", keyEmail: accountUserEmail, keyConfirm: true}, wantMessage: errUsernameNonEmpty},
-			{name: "blank username", args: map[string]any{keyUsername: blankString, keyEmail: accountUserEmail, keyConfirm: true}, wantMessage: errUsernameNonEmpty},
-			{name: "numeric username", args: map[string]any{keyUsername: 123, keyEmail: accountUserEmail, keyConfirm: true}, wantMessage: errUsernameNonEmpty},
+			{name: caseMissingUsername, args: map[string]any{keyEmail: accountUserEmail, keyConfirm: true}, wantMessage: errUsernameRequired},
+			{name: caseEmptyUsername, args: map[string]any{keyUsername: "", keyEmail: accountUserEmail, keyConfirm: true}, wantMessage: errUsernameNonEmpty},
+			{name: caseBlankUsername, args: map[string]any{keyUsername: blankString, keyEmail: accountUserEmail, keyConfirm: true}, wantMessage: errUsernameNonEmpty},
+			{name: caseNumericUsername, args: map[string]any{keyUsername: 123, keyEmail: accountUserEmail, keyConfirm: true}, wantMessage: errUsernameNonEmpty},
 			{name: "missing email", args: map[string]any{keyUsername: accountUserUsername, keyConfirm: true}, wantMessage: errEmailRequired},
 			{name: "empty email", args: map[string]any{keyUsername: accountUserUsername, keyEmail: "", keyConfirm: true}, wantMessage: errEmailNonEmpty},
 			{name: "blank email", args: map[string]any{keyUsername: accountUserUsername, keyEmail: blankString, keyConfirm: true}, wantMessage: errEmailNonEmpty},
