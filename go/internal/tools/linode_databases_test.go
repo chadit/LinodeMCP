@@ -28,7 +28,7 @@ const (
 	databaseEngineIDSeparatorMessage = "engine_id must not contain query, fragment, or traversal segments"
 	databaseEngineName               = "mysql"
 	databaseVersion                  = "8.0.26"
-	databaseInstancesPath            = "/databases/instances"
+	databaseInstancesPath            = "/databases/mysql/instances"
 	databaseMySQLConfigPath          = "/databases/mysql/config"
 	databaseInstanceID               = 123
 	databaseInstanceLabel            = "primary-db"
@@ -293,7 +293,7 @@ func TestLinodeDatabaseInstanceListTool(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, databaseInstancesPath, r.URL.Path, "request path should be /databases/instances")
+			assert.Equal(t, databaseInstancesPath, r.URL.Path, "request path should be /databases/mysql/instances")
 			assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
 			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
 			w.Header().Set("Content-Type", "application/json")
@@ -326,7 +326,7 @@ func TestLinodeDatabaseInstanceListTool(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, databaseInstancesPath, r.URL.Path, "request path should be /databases/instances")
+			assert.Equal(t, databaseInstancesPath, r.URL.Path, "request path should be /databases/mysql/instances")
 			w.WriteHeader(http.StatusInternalServerError)
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyErrors: []map[string]string{{keyReason: temporaryFailure}},
