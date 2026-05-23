@@ -110,6 +110,10 @@ func Categories(toolName string) []string {
 		cats = append(cats, "networking")
 	}
 
+	if strings.HasPrefix(toolName, "linode_database_") {
+		cats = append(cats, "databases")
+	}
+
 	if strings.HasPrefix(toolName, "linode_lke_") {
 		cats = append(cats, "lke")
 	}

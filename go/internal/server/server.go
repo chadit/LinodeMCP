@@ -783,6 +783,7 @@ func collectAllToolEntries(cfg *config.Config) []toolEntry {
 		dnsToolEntries(cfg),
 		volumeToolEntries(cfg),
 		objectStorageToolEntries(cfg),
+		databaseToolEntries(cfg),
 		lkeToolEntries(cfg),
 		vpcToolEntries(cfg),
 		instanceDeepToolEntries(cfg),
@@ -965,6 +966,12 @@ func objectStorageToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeObjectStorageSSLGetTool,
 		tools.NewLinodeObjectStorageSSLDeleteTool,
 		tools.NewLinodeObjectStorageSSLUploadTool,
+	})
+}
+
+func databaseToolEntries(cfg *config.Config) []toolEntry {
+	return entriesFromFactories(cfg, []toolFactory{
+		tools.NewLinodeDatabaseEngineListTool,
 	})
 }
 
