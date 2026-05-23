@@ -27,6 +27,8 @@ const (
 	accountEntityTransferExpiry  = "2021-02-12T16:37:03"
 	accountTransferRegion        = "us-east"
 	accountLoginUsername         = "account-login-user"
+	accountUserPasswordCreated   = "2024-01-02T03:04:05"
+	accountUserLastLoginDatetime = "2024-02-03T04:05:06"
 	accountMaintenancePath       = "/account/maintenance"
 	accountMaintenanceLabel      = "web-1"
 	accountMaintenanceEntityType = "linode"
@@ -3988,6 +3990,118 @@ func TestClientGetAccountInvoiceAPIError(t *testing.T) {
 	require.NotNil(t, apiErr, "APIError should be present")
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
 	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+// TestClientListAccountUsersSuccess verifies ListAccountUsers sends a GET
+// request to /account/users with pagination query parameters.
+func TestClientListAccountUsersSuccess(t *testing.T) {
+	t.Parallel()
+
+	passwordCreated := accountUserPasswordCreated
+	verifiedPhoneNumber := "+15555550123"
+	users := linode.PaginatedResponse[linode.AccountUser]{
+		Data: []linode.AccountUser{{
+			Email:               "user@example.com",
+			LastLogin:           &linode.AccountUserLastLogin{LoginDatetime: accountUserLastLoginDatetime, Status: statusSuccessful},
+			PasswordCreated:     &passwordCreated,
+			Restricted:          true,
+			SSHKeys:             []string{"ssh-rsa AAAA..."},
+			TFAEnabled:          true,
+			UserType:            "default",
+			Username:            accountLoginUsername,
+			VerifiedPhoneNumber: &verifiedPhoneNumber,
+		}},
+		Page:    2,
+		Pages:   3,
+		Results: 60,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/users", r.URL.Path, "request path should be /account/users")
+		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(users))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.ListAccountUsers(t.Context(), 2, 25)
+
+	require.NoError(t, err, "ListAccountUsers should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, 2, result.Page)
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, accountLoginUsername, result.Data[0].Username)
+	assert.Equal(t, "user@example.com", result.Data[0].Email)
+	assert.True(t, result.Data[0].Restricted)
+	assert.True(t, result.Data[0].TFAEnabled)
+}
+
+// TestClientListAccountUsersAPIError verifies ListAccountUsers propagates API errors.
+func TestClientListAccountUsersAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/users", r.URL.Path, "request path should be /account/users")
+		assert.Empty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.ListAccountUsers(t.Context(), 0, 0)
+
+	require.Error(t, err, "ListAccountUsers should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	require.NotNil(t, apiErr, "APIError should be present")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+// TestClientListAccountUsersRetriesTransientError verifies the read-only list retries transient failures.
+func TestClientListAccountUsersRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			assert.NoError(t, writeErr)
+
+			return
+		}
+
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/account/users", r.URL.Path, "request path should be /account/users")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountUser]{
+			Data: []linode.AccountUser{{Username: accountLoginUsername, Email: "user@example.com"}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	result, err := client.ListAccountUsers(t.Context(), 0, 0)
+
+	require.NoError(t, err, "ListAccountUsers should succeed after retry")
+	require.NotNil(t, result, "result should not be nil")
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, accountLoginUsername, result.Data[0].Username)
+	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
 // TestClientListAccountLoginsSuccess verifies ListAccountLogins sends a GET

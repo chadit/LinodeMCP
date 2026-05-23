@@ -24,6 +24,7 @@ const (
 	endpointAccountOAuthClients          = "/account/oauth-clients"
 	endpointAccountPaymentMethods        = "/account/payment-methods"
 	endpointAccountEvents                = "/account/events"
+	endpointAccountUsers                 = "/account/users"
 	endpointAccountLogins                = "/account/logins"
 	endpointAccountInvoices              = "/account/invoices"
 	endpointAccountPayments              = "/account/payments"
@@ -544,6 +545,28 @@ func (c *Client) httpListAccountEvents(ctx context.Context, page, pageSize int) 
 	}
 
 	return &events, nil
+}
+
+// httpListAccountUsers retrieves users for the account.
+func (c *Client) httpListAccountUsers(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountUser], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointAccountUsers, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListAccountUsers", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var users PaginatedResponse[AccountUser]
+	if err := c.handleResponse(resp, &users); err != nil {
+		return nil, err
+	}
+
+	return &users, nil
 }
 
 // httpListAccountLogins retrieves user logins for the account.

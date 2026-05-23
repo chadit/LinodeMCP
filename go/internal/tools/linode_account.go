@@ -28,6 +28,8 @@ const (
 	accountNotificationsPageSizeMax   = 500
 	accountEventsPageSizeMin          = 25
 	accountEventsPageSizeMax          = 500
+	accountUsersPageSizeMin           = 25
+	accountUsersPageSizeMax           = 500
 	accountLoginsPageSizeMin          = 25
 	accountLoginsPageSizeMax          = 500
 	maxAccountLoginIDFromJSON         = 9007199254740991
@@ -204,6 +206,22 @@ func NewLinodeAccountEventsTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
 		},
 		handleLinodeAccountEventsRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeAccountUsersTool creates a tool for listing account users.
+func NewLinodeAccountUsersTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_users",
+		"Lists users on the account.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		},
+		handleLinodeAccountUsersRequest,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -1600,6 +1618,41 @@ func accountEventsPaginationFromTool(request *mcp.CallToolRequest) (int, int, st
 	}
 
 	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountEventsPageSizeMin, accountEventsPageSizeMax)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	return page, pageSize, ""
+}
+
+func handleLinodeAccountUsersRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	page, pageSize, validationMessage := accountUsersPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	users, listFailure := client.ListAccountUsers(ctx, page, pageSize)
+	if listFailure == nil {
+		return MarshalToolResponse(users)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_account_users: " + listFailure.Error()), nil
+}
+
+func accountUsersPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
+	args := request.GetArguments()
+
+	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountUsersPageSizeMin, accountUsersPageSizeMax)
 	if validationMessage != "" {
 		return 0, 0, validationMessage
 	}
