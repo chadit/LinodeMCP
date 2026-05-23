@@ -23,7 +23,7 @@ func TestClientCreateAccountUserSuccess(t *testing.T) {
 	t.Parallel()
 
 	request := &linode.CreateAccountUserRequest{Username: accountUserCreateUsername, Email: accountUserCreateEmail}
-	created := linode.AccountUser{Username: request.Username, Email: request.Email, UserType: "default"}
+	created := linode.AccountUser{Username: request.Username, Email: request.Email, UserType: accountUserTypeDefault}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")

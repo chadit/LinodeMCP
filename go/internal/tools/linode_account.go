@@ -31,6 +31,7 @@ const (
 	accountUsersPageSizeMin           = 25
 	accountUsersPageSizeMax           = 500
 	accountUserUsernameParam          = "username"
+	errAccountUserUsernamePathParam   = "username must not contain '/', '?', or '..'"
 	accountUserEmailParam             = "email"
 	accountLoginsPageSizeMin          = 25
 	accountLoginsPageSizeMax          = 500
@@ -224,6 +225,21 @@ func NewLinodeAccountUsersTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
 		},
 		handleLinodeAccountUsersRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeAccountUserGetTool creates a tool for retrieving one account user.
+func NewLinodeAccountUserGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_user_get",
+		"Gets one account user by username.",
+		[]mcp.ToolOption{
+			mcp.WithString(accountUserUsernameParam, mcp.Required(), mcp.Description("Account username to retrieve.")),
+		},
+		handleLinodeAccountUserGetRequest,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -1720,6 +1736,38 @@ func accountUsersPaginationFromTool(request *mcp.CallToolRequest) (int, int, str
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeAccountUserGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	username, validationMessage := accountUserUsernamePathParamFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	user, getFailure := client.GetAccountUser(ctx, username)
+	if getFailure == nil {
+		return MarshalToolResponse(user)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_account_user_get: " + getFailure.Error()), nil
+}
+
+func accountUserUsernamePathParamFromTool(request *mcp.CallToolRequest) (string, string) {
+	username, validationMessage := requiredAccountUserString(request.GetArguments(), accountUserUsernameParam)
+	if validationMessage != "" {
+		return "", validationMessage
+	}
+
+	if strings.ContainsAny(username, "/?") || strings.Contains(username, "..") {
+		return "", errAccountUserUsernamePathParam
+	}
+
+	return username, ""
 }
 
 func handleLinodeAccountUserCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
