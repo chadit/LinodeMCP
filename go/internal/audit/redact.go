@@ -31,11 +31,13 @@ func RedactionFields() []string {
 		"kubeconfig",
 		"pass",
 		"password",
+		"password_created",
 		"private_key",
 		"root_pass",
 		"secret",
 		"service_token",
 		"ssh_key",
+		"ssh_keys",
 		"token",
 	}
 }

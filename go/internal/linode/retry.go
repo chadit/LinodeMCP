@@ -423,6 +423,13 @@ func (c *Client) GetAccountUser(ctx context.Context, username string) (*AccountU
 	return user, err
 }
 
+// UpdateAccountUser updates an account user without retrying the mutating request.
+// Retrying can replay user updates after a transient error, so this method
+// delegates exactly once.
+func (c *Client) UpdateAccountUser(ctx context.Context, username string, request *UpdateAccountUserRequest) (*AccountUser, error) {
+	return c.httpUpdateAccountUser(ctx, username, request)
+}
+
 // CreateAccountUser creates a user without retrying the mutating request.
 // Retrying can create duplicate account users after a transient error, so this
 // method delegates exactly once.

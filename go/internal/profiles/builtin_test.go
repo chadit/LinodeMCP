@@ -23,6 +23,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: toolProfile, Capability: profiles.CapRead},
 		{Name: toolAccount, Capability: profiles.CapRead},
 		{Name: "linode_account_users", Capability: profiles.CapRead},
+		{Name: "linode_account_user_update", Capability: profiles.CapAdmin},
 		{Name: "linode_account_oauth_clients", Capability: profiles.CapRead},
 
 		// Compute reads
@@ -456,5 +457,6 @@ func TestCategoriesIncludesAccountUsersInCore(t *testing.T) {
 
 	assert.Contains(t, profiles.Categories("linode_account_users"), "core")
 	assert.Contains(t, profiles.Categories("linode_account_user_get"), "core")
+	assert.Contains(t, profiles.Categories("linode_account_user_update"), "core")
 	assert.Contains(t, profiles.Categories("linode_account_user_create"), "core")
 }
