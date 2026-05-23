@@ -34,8 +34,13 @@ const (
 	databaseInstanceIDParam          = "instance_id"
 	databaseInstanceIDMessage        = "instance_id must be a positive integer"
 	databaseInstancePath             = "/databases/mysql/instances/123"
+	databaseInstanceCredentialsPath  = "/databases/mysql/instances/123/credentials"
 	databaseInstanceLabel            = "primary-db"
 	databaseInstanceType             = typeG6Standard2
+	databaseCredentialsPassword      = "secret"
+	caseStringInstanceID             = "string instance id"
+	caseSlashInstanceID              = "slash instance id"
+	caseTraversalInstanceID          = "traversal instance id"
 	databaseEngineParam              = "engine"
 	databaseInvalidInstanceIDQuery   = "123?x=1"
 	databaseInvalidAPIURL            = "https://example.invalid"
@@ -521,13 +526,141 @@ func TestLinodeDatabaseInstanceGetTool(t *testing.T) {
 			args map[string]any
 		}{
 			{name: caseMissingInstanceID, args: map[string]any{}},
-			{name: "string instance id", args: map[string]any{databaseInstanceIDParam: "123"}},
+			{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123"}},
 			{name: "zero instance id", args: map[string]any{databaseInstanceIDParam: 0}},
 			{name: "negative instance id", args: map[string]any{databaseInstanceIDParam: -1}},
 			{name: "fractional instance id", args: map[string]any{databaseInstanceIDParam: 123.4}},
-			{name: "slash instance id", args: map[string]any{databaseInstanceIDParam: "/"}},
+			{name: caseSlashInstanceID, args: map[string]any{databaseInstanceIDParam: "/"}},
 			{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery}},
-			{name: "traversal instance id", args: map[string]any{databaseInstanceIDParam: pathTraversalValue}},
+			{name: caseTraversalInstanceID, args: map[string]any{databaseInstanceIDParam: pathTraversalValue}},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "validation errors should be returned as tool result errors")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid instance_id should return an error result")
+
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, databaseInstanceIDMessage)
+			})
+		}
+	})
+}
+
+func TestLinodeDatabaseInstanceCredentialsGetTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeDatabaseInstanceCredentialsGetTool(cfg)
+
+		assert.Equal(t, "linode_database_instance_credentials_get", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Equal(t, profiles.CapAdmin, capability, "credentials tool should require admin capability")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, databaseInstanceIDParam, "schema should include instance_id")
+		assert.NotContains(t, props, keyConfirm, "credentials get tool must not require confirm")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, databaseInstanceCredentialsPath, r.URL.Path, "request path should include credentials path")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseCredentials{Username: keyGrantLinode, Password: databaseCredentialsPassword}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeDatabaseInstanceCredentialsGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, keyGrantLinode)
+		assert.Contains(t, textContent.Text, databaseCredentialsPassword)
+	})
+
+	t.Run("client error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, databaseInstanceCredentialsPath, r.URL.Path, "request path should include credentials path")
+			w.WriteHeader(http.StatusInternalServerError)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: temporaryFailure}},
+			}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeDatabaseInstanceCredentialsGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "client errors should be returned as tool result errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failures should return an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to retrieve MySQL Managed Database credentials")
+	})
+
+	t.Run("client configuration error", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		_, _, handler := tools.NewLinodeDatabaseInstanceCredentialsGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "configuration errors should be returned as tool result errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "missing client config should return an error result")
+	})
+
+	t.Run("instance id validation", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		_, _, handler := tools.NewLinodeDatabaseInstanceCredentialsGetTool(cfg)
+
+		cases := []struct {
+			name string
+			args map[string]any
+		}{
+			{name: caseMissingInstanceID, args: map[string]any{}},
+			{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123"}},
+			{name: "zero instance id", args: map[string]any{databaseInstanceIDParam: 0}},
+			{name: "negative instance id", args: map[string]any{databaseInstanceIDParam: -1}},
+			{name: "fractional instance id", args: map[string]any{databaseInstanceIDParam: 123.4}},
+			{name: caseSlashInstanceID, args: map[string]any{databaseInstanceIDParam: "/"}},
+			{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery}},
+			{name: caseTraversalInstanceID, args: map[string]any{databaseInstanceIDParam: pathTraversalValue}},
 		}
 
 		for _, testCase := range cases {
@@ -998,10 +1131,10 @@ func TestLinodeDatabaseInstanceDeleteTool(t *testing.T) {
 			args map[string]any
 		}{
 			{name: caseMissingInstanceID, args: map[string]any{keyConfirm: true}},
-			{name: "string instance id", args: map[string]any{databaseInstanceIDParam: "123", keyConfirm: true}},
-			{name: "slash instance id", args: map[string]any{databaseInstanceIDParam: "/", keyConfirm: true}},
+			{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123", keyConfirm: true}},
+			{name: caseSlashInstanceID, args: map[string]any{databaseInstanceIDParam: "/", keyConfirm: true}},
 			{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery, keyConfirm: true}},
-			{name: "traversal instance id", args: map[string]any{databaseInstanceIDParam: pathTraversalValue, keyConfirm: true}},
+			{name: caseTraversalInstanceID, args: map[string]any{databaseInstanceIDParam: pathTraversalValue, keyConfirm: true}},
 		}
 
 		for _, testCase := range cases {
