@@ -571,6 +571,13 @@ func (c *Client) DeleteAccountServiceTransfer(ctx context.Context, token string)
 	return c.httpDeleteAccountServiceTransfer(ctx, token)
 }
 
+// AcceptAccountServiceTransfer accepts an account service transfer without retrying
+// the mutating request. Retrying can replay transfer acceptance after a transient
+// error, so this method delegates exactly once.
+func (c *Client) AcceptAccountServiceTransfer(ctx context.Context, token string) error {
+	return c.httpAcceptAccountServiceTransfer(ctx, token)
+}
+
 // AcceptAccountEntityTransfer accepts an account entity transfer without retrying
 // the mutating request. Retrying can replay transfer acceptance after a transient
 // error, so this method delegates exactly once.

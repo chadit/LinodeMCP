@@ -592,6 +592,24 @@ func NewLinodeAccountServiceTransferDeleteTool(cfg *config.Config) (mcp.Tool, pr
 	return tool, profiles.CapDestroy, handler
 }
 
+// NewLinodeAccountServiceTransferAcceptTool creates a tool for accepting one account service transfer.
+func NewLinodeAccountServiceTransferAcceptTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_service_transfer_accept",
+		"Accepts one account service transfer request by token.",
+		[]mcp.ToolOption{
+			mcp.WithString("token", mcp.Required(),
+				mcp.Description("Service transfer token to accept.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm service transfer acceptance.")),
+		},
+		handleLinodeAccountServiceTransferAcceptRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
 // NewLinodeAccountEntityTransferGetTool creates a tool for retrieving one account entity transfer.
 func NewLinodeAccountEntityTransferGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -2077,6 +2095,37 @@ func handleLinodeAccountServiceTransferDeleteRequest(ctx context.Context, reques
 	return MarshalToolResponse(response)
 }
 
+func handleLinodeAccountServiceTransferAcceptRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This accepts an account service transfer. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	token, validationMessage := accountTransferTokenFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, prepErr := prepareClient(request, cfg)
+	if prepErr != nil {
+		return mcp.NewToolResultError(prepErr.Error()), nil
+	}
+
+	acceptFailureMessage := acceptAccountServiceTransfer(ctx, client, token)
+	if acceptFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to accept linode_account_service_transfer_accept: " + acceptFailureMessage), nil
+	}
+
+	response := struct {
+		Message string `json:"message"`
+		Token   string `json:"token"`
+	}{
+		Message: "Account service transfer accepted successfully",
+		Token:   token,
+	}
+
+	return MarshalToolResponse(response)
+}
+
 func handleLinodeAccountEntityTransferGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	token, validationMessage := accountTransferTokenFromTool(request)
 	if validationMessage != "" {
@@ -2350,6 +2399,15 @@ func deleteAccountServiceTransfer(ctx context.Context, client *linode.Client, to
 	deleteFailure := client.DeleteAccountServiceTransfer(ctx, token)
 	if deleteFailure != nil {
 		return deleteFailure.Error()
+	}
+
+	return ""
+}
+
+func acceptAccountServiceTransfer(ctx context.Context, client *linode.Client, token string) string {
+	acceptFailure := client.AcceptAccountServiceTransfer(ctx, token)
+	if acceptFailure != nil {
+		return acceptFailure.Error()
 	}
 
 	return ""

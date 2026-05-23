@@ -741,6 +741,23 @@ func (c *Client) httpDeleteAccountServiceTransfer(ctx context.Context, token str
 	return c.handleResponse(resp, nil)
 }
 
+// httpAcceptAccountServiceTransfer accepts one account service transfer by token.
+func (c *Client) httpAcceptAccountServiceTransfer(ctx context.Context, token string) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountServiceTransfers + "/" + url.PathEscape(token) + "/accept"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "AcceptAccountServiceTransfer", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	return c.handleResponse(resp, nil)
+}
+
 // httpGetAccountEntityTransfer retrieves one account entity transfer by token.
 func (c *Client) httpGetAccountEntityTransfer(ctx context.Context, token string) (*AccountEntityTransfer, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
