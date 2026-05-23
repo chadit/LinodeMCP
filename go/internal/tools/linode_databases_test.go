@@ -38,6 +38,8 @@ const (
 	databaseInstanceType             = typeG6Standard2
 	databaseEngineParam              = "engine"
 	databaseInvalidInstanceIDQuery   = "123?x=1"
+	databaseInvalidAPIURL            = "https://example.invalid"
+	caseQueryInstanceID              = "query instance id"
 	databaseAllowListParam           = "allow_list"
 	databaseEngineConfigParam        = "engine_config"
 	databasePrivateNetworkParam      = "private_network"
@@ -524,7 +526,7 @@ func TestLinodeDatabaseInstanceGetTool(t *testing.T) {
 			{name: "negative instance id", args: map[string]any{databaseInstanceIDParam: -1}},
 			{name: "fractional instance id", args: map[string]any{databaseInstanceIDParam: 123.4}},
 			{name: "slash instance id", args: map[string]any{databaseInstanceIDParam: "/"}},
-			{name: "query instance id", args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery}},
+			{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery}},
 			{name: "traversal instance id", args: map[string]any{databaseInstanceIDParam: pathTraversalValue}},
 		}
 
@@ -573,14 +575,14 @@ func TestLinodeDatabaseInstanceCreateTool(t *testing.T) {
 	t.Run("confirm validation", func(t *testing.T) {
 		t.Parallel()
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: "https://example.invalid", Token: tokenTest}}}}
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: databaseInvalidAPIURL, Token: tokenTest}}}}
 		_, _, handler := tools.NewLinodeDatabaseInstanceCreateTool(cfg)
 
 		cases := []struct {
 			name  string
 			value any
 		}{
-			{name: "missing confirm"},
+			{name: caseMissingConfirm},
 			{name: caseFalseConfirm, value: false},
 			{name: caseStringConfirm, value: boolStringTrue},
 			{name: caseNumericConfirm, value: 1},
@@ -740,14 +742,14 @@ func TestLinodeDatabaseInstanceUpdateTool(t *testing.T) {
 	t.Run("confirm validation", func(t *testing.T) {
 		t.Parallel()
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: "https://example.invalid", Token: tokenTest}}}}
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: databaseInvalidAPIURL, Token: tokenTest}}}}
 		_, _, handler := tools.NewLinodeDatabaseInstanceUpdateTool(cfg)
 
 		cases := []struct {
 			name  string
 			value any
 		}{
-			{name: "missing confirm"},
+			{name: caseMissingConfirm},
 			{name: caseFalseConfirm, value: false},
 			{name: caseStringConfirm, value: boolStringTrue},
 			{name: caseNumericConfirm, value: 1},
@@ -835,7 +837,7 @@ func TestLinodeDatabaseInstanceUpdateTool(t *testing.T) {
 			wantMessage string
 		}{
 			{name: caseMissingInstanceID, args: map[string]any{keyLabel: databaseInstanceLabel, keyConfirm: true}, wantMessage: databaseInstanceIDMessage},
-			{name: "query instance id", args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery, keyLabel: databaseInstanceLabel, keyConfirm: true}, wantMessage: databaseInstanceIDMessage},
+			{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery, keyLabel: databaseInstanceLabel, keyConfirm: true}, wantMessage: databaseInstanceIDMessage},
 			{name: "empty update", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}, wantMessage: "at least one update field must be provided"},
 			{name: caseMissingLabel, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, keyLabel: "", keyConfirm: true}, wantMessage: "label must be a non-empty string"},
 			{name: "invalid allow list", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseAllowListParam: invalidJSON, keyConfirm: true}, wantMessage: databaseInvalidAllowListJSON},
@@ -894,6 +896,155 @@ func TestLinodeDatabaseInstanceUpdateTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, "Failed to update Managed Database instance")
+	})
+}
+
+func TestLinodeDatabaseInstanceDeleteTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeDatabaseInstanceDeleteTool(cfg)
+
+		assert.Equal(t, "linode_database_instance_delete", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Equal(t, profiles.CapDestroy, capability, "tool should be destroy capability")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, databaseInstanceIDParam, "schema should include instance_id")
+		assert.Contains(t, props, keyConfirm, "schema should include confirm")
+		assert.Contains(t, tool.InputSchema.Required, databaseInstanceIDParam, "instance_id must be marked required")
+		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
+	})
+
+	t.Run("confirm validation", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: databaseInvalidAPIURL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeDatabaseInstanceDeleteTool(cfg)
+
+		cases := []struct {
+			name  string
+			value any
+		}{
+			{name: caseMissingConfirm},
+			{name: caseFalseConfirm, value: false},
+			{name: caseStringConfirm, value: boolStringTrue},
+			{name: caseNumericConfirm, value: 1},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				args := map[string]any{databaseInstanceIDParam: databaseInstanceID}
+				if testCase.value != nil {
+					args[keyConfirm] = testCase.value
+				}
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, args))
+
+				require.NoError(t, err)
+				require.NotNil(t, result)
+				assert.True(t, result.IsError)
+
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, "confirm=true")
+			})
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			assert.Equal(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			assert.Equal(t, http.NoBody, r.Body, "delete request should not send a body")
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeDatabaseInstanceDeleteTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}))
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "deleted")
+		assert.Contains(t, textContent.Text, "123")
+	})
+
+	t.Run("input validation", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		_, _, handler := tools.NewLinodeDatabaseInstanceDeleteTool(cfg)
+
+		cases := []struct {
+			name string
+			args map[string]any
+		}{
+			{name: caseMissingInstanceID, args: map[string]any{keyConfirm: true}},
+			{name: "string instance id", args: map[string]any{databaseInstanceIDParam: "123", keyConfirm: true}},
+			{name: "slash instance id", args: map[string]any{databaseInstanceIDParam: "/", keyConfirm: true}},
+			{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery, keyConfirm: true}},
+			{name: "traversal instance id", args: map[string]any{databaseInstanceIDParam: pathTraversalValue, keyConfirm: true}},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+
+				require.NoError(t, err)
+				require.NotNil(t, result)
+				assert.True(t, result.IsError)
+
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, databaseInstanceIDMessage)
+			})
+		}
+	})
+
+	t.Run("client error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, databaseInstancePath, r.URL.Path, "request path should include instance id")
+			w.WriteHeader(http.StatusInternalServerError)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: temporaryFailure}},
+			}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeDatabaseInstanceDeleteTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}))
+
+		require.NoError(t, err, "client errors should be returned as tool result errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failures should return an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to delete Managed Database instance")
 	})
 }
 

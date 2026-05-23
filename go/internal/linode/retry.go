@@ -934,6 +934,11 @@ func (c *Client) UpdateDatabaseInstance(ctx context.Context, instanceID int, req
 	return c.httpUpdateDatabaseInstance(ctx, instanceID, req)
 }
 
+// DeleteDatabaseInstance deletes one MySQL Managed Database instance without retrying the DELETE.
+func (c *Client) DeleteDatabaseInstance(ctx context.Context, instanceID int) error {
+	return c.httpDeleteDatabaseInstance(ctx, instanceID)
+}
+
 // ListVolumes retrieves all volumes with automatic retry on transient failures.
 func (c *Client) ListVolumes(ctx context.Context) ([]Volume, error) {
 	var volumes []Volume

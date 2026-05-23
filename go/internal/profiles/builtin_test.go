@@ -42,6 +42,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_database_instance_list", Capability: profiles.CapRead},
 		{Name: "linode_database_instance_get", Capability: profiles.CapRead},
 		{Name: "linode_database_instance_update", Capability: profiles.CapWrite},
+		{Name: "linode_database_instance_delete", Capability: profiles.CapDestroy},
 		// Compute writes / destroys
 		{Name: "linode_instance_create", Capability: profiles.CapWrite},
 		{Name: "linode_stackscript_create", Capability: profiles.CapWrite},
@@ -482,4 +483,5 @@ func TestCategoriesDatabasesTools(t *testing.T) {
 	assert.Contains(t, profiles.Categories("linode_database_instance_list"), "databases")
 	assert.Contains(t, profiles.Categories("linode_database_instance_get"), "databases")
 	assert.Contains(t, profiles.Categories("linode_database_instance_update"), "databases")
+	assert.Contains(t, profiles.Categories("linode_database_instance_delete"), "databases")
 }
