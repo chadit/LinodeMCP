@@ -18,6 +18,7 @@ const (
 	keyCertificate       = "certificate"
 	keyPrivateKey        = "private_key"
 	keyEmail             = "email"
+	keyUsername          = "username"
 	keyLabel             = "label"
 	keyRegion            = "region"
 	keyType              = "type"

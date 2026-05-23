@@ -607,6 +607,26 @@ func (c *Client) httpListAccountUsers(ctx context.Context, page, pageSize int) (
 	return &users, nil
 }
 
+// httpCreateAccountUser creates a user on the account.
+func (c *Client) httpCreateAccountUser(ctx context.Context, request *CreateAccountUserRequest) (*AccountUser, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountUsers, request)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateAccountUser", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var user AccountUser
+	if err := c.handleResponse(resp, &user); err != nil {
+		return nil, err
+	}
+
+	return &user, nil
+}
+
 // httpListAccountLogins retrieves user logins for the account.
 func (c *Client) httpListAccountLogins(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountLogin], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

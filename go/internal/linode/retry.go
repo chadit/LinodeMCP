@@ -408,6 +408,13 @@ func (c *Client) ListAccountUsers(ctx context.Context, page, pageSize int) (*Pag
 	return users, err
 }
 
+// CreateAccountUser creates a user without retrying the mutating request.
+// Retrying can create duplicate account users after a transient error, so this
+// method delegates exactly once.
+func (c *Client) CreateAccountUser(ctx context.Context, request *CreateAccountUserRequest) (*AccountUser, error) {
+	return c.httpCreateAccountUser(ctx, request)
+}
+
 // ListAccountLogins retrieves account user logins with automatic retry on transient failures.
 func (c *Client) ListAccountLogins(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountLogin], error) {
 	var logins *PaginatedResponse[AccountLogin]

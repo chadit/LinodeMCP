@@ -200,7 +200,13 @@ type AccountEventEntity struct {
 	URL   string `json:"url"`
 }
 
-// AccountUser represents one user returned by GET /account/users.
+// CreateAccountUserRequest contains the required fields for POST /account/users.
+type CreateAccountUserRequest struct {
+	Username string `json:"username"`
+	Email    string `json:"email"`
+}
+
+// AccountUser represents one user returned by account user endpoints.
 type AccountUser struct {
 	Email               string                `json:"email"`
 	LastLogin           *AccountUserLastLogin `json:"last_login"`

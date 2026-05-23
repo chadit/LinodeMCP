@@ -455,4 +455,5 @@ func TestCategoriesIncludesAccountUsersInCore(t *testing.T) {
 	t.Parallel()
 
 	assert.Contains(t, profiles.Categories("linode_account_users"), "core")
+	assert.Contains(t, profiles.Categories("linode_account_user_create"), "core")
 }

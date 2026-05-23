@@ -30,6 +30,8 @@ const (
 	accountEventsPageSizeMax          = 500
 	accountUsersPageSizeMin           = 25
 	accountUsersPageSizeMax           = 500
+	accountUserUsernameParam          = "username"
+	accountUserEmailParam             = "email"
 	accountLoginsPageSizeMin          = 25
 	accountLoginsPageSizeMax          = 500
 	maxAccountLoginIDFromJSON         = 9007199254740991
@@ -225,6 +227,23 @@ func NewLinodeAccountUsersTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeAccountUserCreateTool creates a tool for creating account users.
+func NewLinodeAccountUserCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_user_create",
+		"Creates a user on the account.",
+		[]mcp.ToolOption{
+			mcp.WithString(accountUserUsernameParam, mcp.Required(), mcp.Description("Username for the new account user.")),
+			mcp.WithString(accountUserEmailParam, mcp.Required(), mcp.Description("Email address for the new account user.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm account user creation.")),
+		},
+		handleLinodeAccountUserCreateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountLoginsTool creates a tool for listing account user logins.
@@ -1701,6 +1720,59 @@ func accountUsersPaginationFromTool(request *mcp.CallToolRequest) (int, int, str
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeAccountUserCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This creates an account user. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	createRequest, validationMessage := accountUserCreateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	user, createFailure := client.CreateAccountUser(ctx, createRequest)
+	if createFailure == nil {
+		return MarshalToolResponse(user)
+	}
+
+	return mcp.NewToolResultError("Failed to create linode_account_user_create: " + createFailure.Error()), nil
+}
+
+func accountUserCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateAccountUserRequest, string) {
+	args := request.GetArguments()
+
+	username, validationMessage := requiredAccountUserString(args, accountUserUsernameParam)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	email, validationMessage := requiredAccountUserString(args, accountUserEmailParam)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	return &linode.CreateAccountUserRequest{Username: username, Email: email}, ""
+}
+
+func requiredAccountUserString(args map[string]any, name string) (string, string) {
+	raw, found := args[name]
+	if !found {
+		return "", name + " is required"
+	}
+
+	value, isString := raw.(string)
+	if !isString || strings.TrimSpace(value) == "" {
+		return "", name + " must be a non-empty string"
+	}
+
+	return value, ""
 }
 
 func handleLinodeAccountLoginsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
