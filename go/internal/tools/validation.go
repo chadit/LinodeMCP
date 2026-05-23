@@ -8,6 +8,11 @@ import (
 	"unicode"
 )
 
+const (
+	grantPermissionReadOnly  = "read_only"
+	grantPermissionReadWrite = "read_write"
+)
+
 // Limits for input validation across Linode API tool parameters.
 const (
 	minPasswordLength    = 12
@@ -278,7 +283,7 @@ func validateKeyLabel(label string) error {
 
 // validateKeyPermissions rejects any permission value other than read_only or read_write.
 func validateKeyPermissions(permissions string) error {
-	if permissions != "read_only" && permissions != "read_write" {
+	if permissions != grantPermissionReadOnly && permissions != grantPermissionReadWrite {
 		return fmt.Errorf("got '%s': %w", permissions, ErrKeyPermissionsInvalid)
 	}
 
