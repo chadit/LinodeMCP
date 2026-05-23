@@ -212,6 +212,18 @@ type AccountAvailability struct {
 	Unavailable []string `json:"unavailable"`
 }
 
+// BetaProgram represents a beta program available for account enrollment.
+type BetaProgram struct {
+	BetaClass      string  `json:"class"`
+	Description    *string `json:"description"`
+	Ended          *string `json:"ended"`
+	GreenlightOnly bool    `json:"greenlight_only"`
+	ID             string  `json:"id"`
+	Label          string  `json:"label"`
+	MoreInfo       string  `json:"more_info"`
+	Started        string  `json:"started"`
+}
+
 // AccountBetaProgram represents a beta program that the account is enrolled in.
 type AccountBetaProgram struct {
 	Description *string `json:"description"`

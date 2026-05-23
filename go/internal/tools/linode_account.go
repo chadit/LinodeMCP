@@ -18,6 +18,8 @@ import (
 const (
 	accountAvailabilityPageSizeMin     = 25
 	accountAvailabilityPageSizeMax     = 500
+	betasPageSizeMin                   = 25
+	betasPageSizeMax                   = 500
 	accountBetasPageSizeMin            = 25
 	accountBetasPageSizeMax            = 500
 	accountOAuthClientsPageSizeMin     = 25
@@ -976,6 +978,22 @@ func NewLinodeAccountChildAccountTokenTool(cfg *config.Config) (mcp.Tool, profil
 	)
 
 	return tool, profiles.CapAdmin, handler
+}
+
+// NewLinodeBetasTool creates a tool for listing available beta programs.
+func NewLinodeBetasTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_betas",
+		"Lists available beta programs.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		},
+		handleLinodeBetasRequest,
+	)
+
+	return tool, profiles.CapRead, handler
 }
 
 // NewLinodeAccountBetaGetTool creates a tool for retrieving one enrolled account beta program.
@@ -3401,6 +3419,41 @@ func isAccountAvailabilityRegionSlug(regionID string) bool {
 	}
 
 	return true
+}
+
+func handleLinodeBetasRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	page, pageSize, validationMessage := betasPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	betas, listFailure := client.ListBetas(ctx, page, pageSize)
+	if listFailure == nil {
+		return MarshalToolResponse(betas)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_betas: " + listFailure.Error()), nil
+}
+
+func betasPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
+	args := request.GetArguments()
+
+	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	pageSize, validationMessage := optionalPaginationInt(args, "page_size", betasPageSizeMin, betasPageSizeMax)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	return page, pageSize, ""
 }
 
 func handleLinodeAccountAvailabilityRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
