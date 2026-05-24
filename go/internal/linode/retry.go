@@ -1216,6 +1216,21 @@ func (c *Client) GetImageShareGroupToken(ctx context.Context, tokenUUID string) 
 	return token, err
 }
 
+// ListImagesByShareGroupToken retrieves images available through an image share group token with automatic retry on transient failures.
+func (c *Client) ListImagesByShareGroupToken(ctx context.Context, tokenUUID string, page, pageSize int) (*PaginatedResponse[Image], error) {
+	var images *PaginatedResponse[Image]
+
+	err := c.executeWithRetry(ctx, "ListImagesByShareGroupToken", func() error {
+		var err error
+
+		images, err = c.httpListImagesByShareGroupToken(ctx, tokenUUID, page, pageSize)
+
+		return err
+	})
+
+	return images, err
+}
+
 // UpdateImageShareGroupToken updates a token label without automatic retry.
 // Replaying this mutating token operation could repeat side effects after a transient failure.
 func (c *Client) UpdateImageShareGroupToken(ctx context.Context, tokenUUID string, req *UpdateImageShareGroupTokenRequest) (*ImageShareGroupToken, error) {
