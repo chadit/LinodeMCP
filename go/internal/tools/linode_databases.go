@@ -235,6 +235,23 @@ func NewLinodeDatabaseInstancePatchTool(cfg *config.Config) (mcp.Tool, profiles.
 	return tool, profiles.CapWrite, handler
 }
 
+// NewLinodeDatabaseInstanceSuspendTool creates a tool for suspending one active MySQL Managed Database instance.
+func NewLinodeDatabaseInstanceSuspendTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_database_instance_suspend",
+		mcp.WithDescription("Suspends an active MySQL Managed Database instance."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The MySQL Managed Database instance ID to suspend.")),
+		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm suspending the database instance.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleDatabaseInstanceSuspendRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapWrite, handler
+}
+
 // NewLinodeDatabaseInstanceResumeTool creates a tool for resuming one suspended MySQL Managed Database instance.
 func NewLinodeDatabaseInstanceResumeTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
@@ -560,6 +577,36 @@ func handleDatabaseInstancePatchRequest(ctx context.Context, request *mcp.CallTo
 	return MarshalToolResponse(response)
 }
 
+func handleDatabaseInstanceSuspendRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This suspends a Managed Database instance. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	instanceID, validationMessage := databaseInstanceIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := client.SuspendDatabaseInstance(ctx, instanceID); err != nil {
+		return mcp.NewToolResultError(formatDatabaseInstanceSuspendError(instanceID, err)), nil
+	}
+
+	response := struct {
+		Message    string `json:"message"`
+		InstanceID int    `json:"instance_id"`
+	}{
+		Message:    "Managed Database instance " + strconv.Itoa(instanceID) + " suspend started",
+		InstanceID: instanceID,
+	}
+
+	return MarshalToolResponse(response)
+}
+
 func handleDatabaseInstanceResumeRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	if result := RequireConfirm(request, "This resumes a Managed Database instance. Set confirm=true to proceed."); result != nil {
 		return result, nil
@@ -596,6 +643,10 @@ func formatDatabaseInstanceDeleteError(instanceID int, err error) string {
 
 func formatDatabaseInstancePatchError(instanceID int, err error) string {
 	return "Failed to patch Managed Database instance " + strconv.Itoa(instanceID) + ": " + err.Error()
+}
+
+func formatDatabaseInstanceSuspendError(instanceID int, err error) string {
+	return "Failed to suspend Managed Database instance " + strconv.Itoa(instanceID) + ": " + err.Error()
 }
 
 func formatDatabaseInstanceResumeError(instanceID int, err error) string {
