@@ -275,6 +275,28 @@ func (c *Client) httpUpdateImageShareGroupToken(ctx context.Context, tokenUUID s
 	return &token, nil
 }
 
+// GetImageShareGroupByToken retrieves a share group through a membership token UUID.
+func (c *Client) httpGetImageShareGroupByToken(ctx context.Context, tokenUUID string) (*ImageShareGroup, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointImageShareGroups + "/tokens/" + escapeImageShareGroupTokenUUID(tokenUUID) + "/sharegroup"
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetImageShareGroupByToken", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var shareGroup ImageShareGroup
+	if err := c.handleResponse(resp, &shareGroup); err != nil {
+		return nil, err
+	}
+
+	return &shareGroup, nil
+}
+
 func escapeImageShareGroupTokenUUID(tokenUUID string) string {
 	escapedTokenUUID := url.PathEscape(tokenUUID)
 	if tokenUUID == "." || tokenUUID == ".." {

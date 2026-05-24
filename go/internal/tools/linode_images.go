@@ -138,6 +138,22 @@ func NewLinodeImageShareGroupTokenImagesListTool(cfg *config.Config) (mcp.Tool, 
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeImageShareGroupByTokenGetTool creates a tool for retrieving a token's share group.
+func NewLinodeImageShareGroupByTokenGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_image_sharegroup_by_token_get",
+		mcp.WithDescription("Gets a share group by membership token UUID."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithString("token_uuid", mcp.Required(), mcp.Description("Image share group token UUID.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleImageShareGroupByTokenGetRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
 func handleImageShareGroupsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	page, pageSize, validationMessage := imageShareGroupsPaginationFromTool(request)
 	if validationMessage != "" {
@@ -243,6 +259,25 @@ func handleImageShareGroupTokenDeleteRequest(ctx context.Context, request *mcp.C
 
 func formatImageShareGroupTokenDeleteError(err error) string {
 	return "Failed to remove image share group token: " + err.Error()
+}
+
+func handleImageShareGroupByTokenGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	tokenUUID, validationMessage := imageShareGroupTokenUUIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	shareGroup, err := client.GetImageShareGroupByToken(ctx, tokenUUID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve image share group by token: %v", err)), nil
+	}
+
+	return MarshalToolResponse(shareGroup)
 }
 
 func imageShareGroupTokenUUIDFromTool(request *mcp.CallToolRequest) (string, string) {

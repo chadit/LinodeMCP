@@ -1243,6 +1243,21 @@ func (c *Client) DeleteImageShareGroupToken(ctx context.Context, tokenUUID strin
 	return c.httpDeleteImageShareGroupToken(ctx, tokenUUID)
 }
 
+// GetImageShareGroupByToken retrieves a token's share group with automatic retry on transient failures.
+func (c *Client) GetImageShareGroupByToken(ctx context.Context, tokenUUID string) (*ImageShareGroup, error) {
+	var shareGroup *ImageShareGroup
+
+	err := c.executeWithRetry(ctx, "GetImageShareGroupByToken", func() error {
+		var err error
+
+		shareGroup, err = c.httpGetImageShareGroupByToken(ctx, tokenUUID)
+
+		return err
+	})
+
+	return shareGroup, err
+}
+
 // CreateImage creates a private image from a Linode disk without automatic retry.
 // Replaying this non-idempotent create operation could create duplicate images.
 func (c *Client) CreateImage(ctx context.Context, req *CreateImageRequest) (*Image, error) {

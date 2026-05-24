@@ -38,8 +38,8 @@ func TestLinodeImageShareGroupCreateTool(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		description := "shared CI images"
-		updated := "2025-04-15T22:44:02"
+		description := shareGroupDescription
+		updated := shareGroupUpdated
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
@@ -73,7 +73,7 @@ func TestLinodeImageShareGroupCreateTool(t *testing.T) {
 				Label:        imageShareGroupLabel,
 				Description:  &description,
 				IsSuspended:  false,
-				Created:      "2025-04-14T22:44:02",
+				Created:      shareGroupCreated,
 				Updated:      &updated,
 				ImagesCount:  1,
 				MembersCount: 0,

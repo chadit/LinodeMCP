@@ -8137,8 +8137,8 @@ func TestLinodeImageShareGroupsListTool(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		description := "shared CI images"
-		updated := "2025-04-15T22:44:02"
+		description := shareGroupDescription
+		updated := shareGroupUpdated
 		shareGroups := []linode.ImageShareGroup{
 			{
 				ID:           1,
@@ -8146,7 +8146,7 @@ func TestLinodeImageShareGroupsListTool(t *testing.T) {
 				Label:        shareGroupLabelFixture,
 				Description:  &description,
 				IsSuspended:  false,
-				Created:      "2025-04-14T22:44:02",
+				Created:      shareGroupCreated,
 				Updated:      &updated,
 				ImagesCount:  2,
 				MembersCount: 3,
