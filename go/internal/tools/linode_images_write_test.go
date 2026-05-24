@@ -69,7 +69,7 @@ func TestLinodeImageShareGroupCreateTool(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(linode.ImageShareGroup{
 				ID:           1,
-				UUID:         "1533863e-16a4-47b5-b829-ac0f35c13278",
+				UUID:         shareGroupUUIDExample,
 				Label:        imageShareGroupLabel,
 				Description:  &description,
 				IsSuspended:  false,

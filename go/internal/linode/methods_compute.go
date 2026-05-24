@@ -231,7 +231,29 @@ func (c *Client) httpGetImageShareGroup(ctx context.Context, shareGroupID int) (
 	return &shareGroup, nil
 }
 
-// ListImagesByShareGroup retrieves images shared in an owned image share group.
+// ListImageShareGroupsByImage retrieves share groups that contain an image.
+func (c *Client) httpListImageShareGroupsByImage(ctx context.Context, imageID string, page, pageSize int) (*PaginatedResponse[ImageShareGroup], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	baseEndpoint := endpointImages + "/" + escapeImageIDSegment(imageID) + "/sharegroups"
+	endpoint := withPaginationQuery(baseEndpoint, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListImageShareGroupsByImage", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[ImageShareGroup]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
+}
+
 func (c *Client) httpListImagesByShareGroup(ctx context.Context, shareGroupID, page, pageSize int) (*PaginatedResponse[Image], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
