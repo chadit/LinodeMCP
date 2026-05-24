@@ -332,6 +332,23 @@ func NewLinodeDatabaseInstanceDeleteTool(cfg *config.Config) (mcp.Tool, profiles
 	return tool, profiles.CapDestroy, handler
 }
 
+// NewLinodeDatabasePostgreSQLInstanceDeleteTool creates a tool for deleting one PostgreSQL Managed Database instance.
+func NewLinodeDatabasePostgreSQLInstanceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_database_postgresql_instance_delete",
+		mcp.WithDescription("Deletes a PostgreSQL Managed Database instance. WARNING: This is irreversible."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The PostgreSQL Managed Database instance ID to delete.")),
+		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm PostgreSQL database deletion. This action is irreversible.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleDatabasePostgreSQLInstanceDeleteRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapDestroy, handler
+}
+
 // NewLinodeDatabaseInstancePatchTool creates a tool for patching one MySQL Managed Database instance.
 func NewLinodeDatabaseInstancePatchTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
@@ -780,6 +797,36 @@ func handleDatabaseInstanceDeleteRequest(ctx context.Context, request *mcp.CallT
 	return MarshalToolResponse(response)
 }
 
+func handleDatabasePostgreSQLInstanceDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This deletes a PostgreSQL Managed Database instance. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	instanceID, validationMessage := databaseInstanceIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := client.DeleteDatabasePostgreSQLInstance(ctx, instanceID); err != nil {
+		return mcp.NewToolResultError(formatDatabasePostgreSQLInstanceDeleteError(instanceID, err)), nil
+	}
+
+	response := struct {
+		Message    string `json:"message"`
+		InstanceID int    `json:"instance_id"`
+	}{
+		Message:    "PostgreSQL Managed Database instance " + strconv.Itoa(instanceID) + " deleted",
+		InstanceID: instanceID,
+	}
+
+	return MarshalToolResponse(response)
+}
+
 func handleDatabaseInstancePatchRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	if result := RequireConfirm(request, "This patches a Managed Database instance. Set confirm=true to proceed."); result != nil {
 		return result, nil
@@ -872,6 +919,10 @@ func handleDatabaseInstanceResumeRequest(ctx context.Context, request *mcp.CallT
 
 func formatDatabaseInstanceDeleteError(instanceID int, err error) string {
 	return "Failed to delete Managed Database instance " + strconv.Itoa(instanceID) + ": " + err.Error()
+}
+
+func formatDatabasePostgreSQLInstanceDeleteError(instanceID int, err error) string {
+	return "Failed to delete PostgreSQL Managed Database instance " + strconv.Itoa(instanceID) + ": " + err.Error()
 }
 
 func formatDatabaseInstancePatchError(instanceID int, err error) string {

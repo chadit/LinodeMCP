@@ -223,6 +223,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_database_instance_update":              profiles.CapWrite,
 		"linode_database_postgresql_instance_update":   profiles.CapWrite,
 		"linode_database_instance_delete":              profiles.CapDestroy,
+		"linode_database_postgresql_instance_delete":   profiles.CapDestroy,
 		"linode_database_instance_patch":               profiles.CapWrite,
 		"linode_database_instance_suspend":             profiles.CapWrite,
 		"linode_database_instance_resume":              profiles.CapWrite,

@@ -49,6 +49,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_database_instance_credentials_reset", Capability: profiles.CapAdmin},
 		{Name: "linode_database_instance_update", Capability: profiles.CapWrite},
 		{Name: "linode_database_instance_delete", Capability: profiles.CapDestroy},
+		{Name: "linode_database_postgresql_instance_delete", Capability: profiles.CapDestroy},
 		{Name: "linode_database_instance_patch", Capability: profiles.CapWrite},
 		{Name: "linode_database_instance_suspend", Capability: profiles.CapWrite},
 		{Name: "linode_database_instance_resume", Capability: profiles.CapWrite},
@@ -499,6 +500,7 @@ func TestCategoriesDatabasesTools(t *testing.T) {
 	assert.Contains(t, profiles.Categories("linode_database_instance_credentials_reset"), "databases")
 	assert.Contains(t, profiles.Categories("linode_database_instance_update"), "databases")
 	assert.Contains(t, profiles.Categories("linode_database_instance_delete"), "databases")
+	assert.Contains(t, profiles.Categories("linode_database_postgresql_instance_delete"), "databases")
 	assert.Contains(t, profiles.Categories("linode_database_instance_patch"), "databases")
 	assert.Contains(t, profiles.Categories("linode_database_instance_suspend"), "databases")
 	assert.Contains(t, profiles.Categories("linode_database_instance_resume"), "databases")
