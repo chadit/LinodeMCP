@@ -30,6 +30,7 @@ const (
 	keyUsername                 = "username"
 	keyLabel                    = "label"
 	keyRegion                   = "region"
+	keyRegions                  = "regions"
 	keyType                     = "type"
 	keyDomain                   = "domain"
 	keyName                     = "name"
@@ -92,6 +93,7 @@ const (
 	invalidTokenUUID            = "not-a-uuid"
 	imageShareGroupTokenCreated = "2025-08-04T10:09:09"
 	shareGroupTokenValueFixture = "eyJhbGciOiJIUzI1NiJ9.test.signature"
+	privateImage123Fixture      = "private/123"
 
 	// Tool-specific resource ID keys.
 	keyLinodeID       = "linode_id"
@@ -118,6 +120,7 @@ const (
 
 	// Linode region IDs commonly used in fixtures.
 	regionUSEast         = "us-east"
+	singleRegionJSON     = `["us-east"]`
 	regionUSEast1        = "us-east-1"
 	serviceLinodes       = "Linodes"
 	serviceNodeBalancers = "NodeBalancers"
@@ -177,6 +180,7 @@ const (
 	caseTraversalShareGroupID       = "traversal sharegroup id"
 	caseMissingImageID              = "missing image id"
 	caseTraversalImageID            = "traversal image id"
+	caseQueryImageID                = "query image id"
 	shareGroupIDQueryValue          = "123?query"
 	stageAlpha                      = "alpha"
 	stageBeta                       = "beta"
@@ -282,6 +286,7 @@ const (
 	errPaymentMethodIDPositive     = "payment_method_id must be a positive integer"
 	errPaymentIDPositive           = "payment_id must be a positive integer"
 	errRegionIDSlug                = "lowercase region slug"
+	errRegionsLowercaseSlug        = "regions entries must be lowercase region slugs"
 	errBetaIDRequired              = "id is required"
 	errBetaIDNonEmpty              = "id must be a non-empty string"
 	errBetaIDChars                 = "id must contain only letters"

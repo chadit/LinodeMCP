@@ -38,6 +38,25 @@ func NewLinodeImageUploadTool(cfg *config.Config) (mcp.Tool, profiles.Capability
 	return tool, profiles.CapWrite, handler
 }
 
+// NewLinodeImageReplicateTool creates a tool for replicating an image to regions.
+func NewLinodeImageReplicateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_image_replicate",
+		mcp.WithDescription("Replicates an image to one or more compute regions."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithString("image_id", mcp.Required(), mcp.Description("Image ID, such as private/123.")),
+		mcp.WithString("regions", mcp.Required(), mcp.Description("JSON array of region slug strings to keep or replicate the image to.")),
+		mcp.WithBoolean(paramConfirm, mcp.Required(),
+			mcp.Description("Must be true to confirm image replication.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeImageReplicateRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapWrite, handler
+}
+
 func handleLinodeImageUploadRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	if result := RequireConfirm(request, "This creates an image upload. Set confirm=true to proceed."); result != nil {
 		return result, nil
@@ -881,6 +900,90 @@ func handleLinodeImageShareGroupTokenCreateRequest(ctx context.Context, request 
 	}
 
 	return result, nil
+}
+
+func handleLinodeImageReplicateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This replicates an image to the requested regions. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	imageID, validationMessage := privateImageIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	regions, validationMessage := requiredImageReplicationRegionsFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	environment := request.GetString(paramEnvironment, "")
+	if environment != "" {
+		request.GetArguments()[paramEnvironment] = environment
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	image, err := client.ReplicateImage(ctx, imageID, &linode.ReplicateImageRequest{Regions: regions})
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to replicate image: %v", err)), nil
+	}
+
+	response := struct {
+		Message string        `json:"message"`
+		Image   *linode.Image `json:"image"`
+	}{
+		Message: fmt.Sprintf("Image '%s' replicated successfully", image.ID),
+		Image:   image,
+	}
+
+	result, err := MarshalToolResponse(response)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to format image replication response: %v", err)), nil
+	}
+
+	return result, nil
+}
+
+func requiredImageReplicationRegionsFromTool(request *mcp.CallToolRequest) ([]string, string) {
+	regionsArg, regionsPresent := request.GetArguments()["regions"]
+	if !regionsPresent {
+		return nil, "regions is required"
+	}
+
+	regionsJSON, regionsIsString := regionsArg.(string)
+	if !regionsIsString {
+		return nil, "regions must be a JSON string array"
+	}
+
+	var regions []string
+	if err := json.Unmarshal([]byte(regionsJSON), &regions); err != nil {
+		return nil, "regions must be a JSON string array"
+	}
+
+	if len(regions) == 0 {
+		return nil, "regions must contain at least one region"
+	}
+
+	for _, region := range regions {
+		trimmed := strings.TrimSpace(region)
+		if trimmed == "" {
+			return nil, "regions entries must be non-empty strings"
+		}
+
+		if trimmed != region {
+			return nil, "regions entries must be lowercase region slugs"
+		}
+
+		if err := validateRegionSlug(region); err != nil {
+			return nil, "regions entries must be lowercase region slugs"
+		}
+	}
+
+	return regions, ""
 }
 
 func handleLinodeImageCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

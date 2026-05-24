@@ -849,6 +849,13 @@ func (c *Client) ListTypes(ctx context.Context) ([]InstanceType, error) {
 	return types, err
 }
 
+// ReplicateImage replicates an image without retrying the mutating request.
+// Retrying can replay image replication after a transient error, so this method
+// delegates exactly once.
+func (c *Client) ReplicateImage(ctx context.Context, imageID string, req *ReplicateImageRequest) (*Image, error) {
+	return c.httpReplicateImage(ctx, imageID, req)
+}
+
 // ListDatabaseEngines retrieves Managed Database engines with automatic retry on transient failures.
 func (c *Client) ListDatabaseEngines(ctx context.Context, page, pageSize int) ([]DatabaseEngine, error) {
 	var engines []DatabaseEngine
