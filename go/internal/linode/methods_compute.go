@@ -284,6 +284,23 @@ func escapeImageShareGroupTokenUUID(tokenUUID string) string {
 	return escapedTokenUUID
 }
 
+// DeleteImageShareGroupToken removes one image share group membership token.
+func (c *Client) httpDeleteImageShareGroupToken(ctx context.Context, tokenUUID string) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointImageShareGroups + "/tokens/" + escapeImageShareGroupTokenUUID(tokenUUID)
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteImageShareGroupToken", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return c.handleResponse(resp, nil)
+}
+
 // CreateImage creates a private image from a Linode disk.
 func (c *Client) httpCreateImage(ctx context.Context, req *CreateImageRequest) (*Image, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
