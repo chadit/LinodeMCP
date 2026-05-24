@@ -69,6 +69,21 @@ func NewLinodeDatabaseMySQLConfigGetTool(cfg *config.Config) (mcp.Tool, profiles
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeDatabasePostgreSQLConfigGetTool creates a tool for listing PostgreSQL Managed Database advanced parameters.
+func NewLinodeDatabasePostgreSQLConfigGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_database_postgresql_config_get",
+		mcp.WithDescription("Lists PostgreSQL Managed Database advanced parameters."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleDatabasePostgreSQLConfigGetRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeDatabaseInstanceListTool creates a tool for listing Managed Database instances.
 func NewLinodeDatabaseInstanceListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
@@ -337,6 +352,20 @@ func handleDatabaseMySQLConfigGetRequest(ctx context.Context, request *mcp.CallT
 	}
 
 	return MarshalToolResponse(mysqlConfig)
+}
+
+func handleDatabasePostgreSQLConfigGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	postgresqlConfig, err := client.GetDatabasePostgreSQLConfig(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve PostgreSQL Managed Database advanced parameters: %v", err)), nil
+	}
+
+	return MarshalToolResponse(postgresqlConfig)
 }
 
 func handleDatabaseInstanceGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

@@ -12,6 +12,7 @@ const (
 	endpointDatabaseInstances           = "/databases/mysql/instances"
 	endpointDatabasePostgreSQLInstances = "/databases/postgresql/instances"
 	endpointDatabaseMySQLConfig         = "/databases/mysql/config"
+	endpointDatabasePostgreSQLConfig    = "/databases/postgresql/config"
 )
 
 // ListDatabaseEngines retrieves available Managed Database engines.
@@ -286,6 +287,26 @@ func (c *Client) httpGetDatabaseMySQLConfig(ctx context.Context) (map[string]any
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpointDatabaseMySQLConfig, nil)
 	if err != nil {
 		return nil, &NetworkError{Operation: "GetDatabaseMySQLConfig", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var config map[string]any
+	if err := c.handleResponse(resp, &config); err != nil {
+		return nil, err
+	}
+
+	return config, nil
+}
+
+// GetDatabasePostgreSQLConfig retrieves PostgreSQL Managed Database advanced parameters.
+func (c *Client) httpGetDatabasePostgreSQLConfig(ctx context.Context) (map[string]any, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointDatabasePostgreSQLConfig, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetDatabasePostgreSQLConfig", Err: err}
 	}
 
 	defer drainClose(resp)

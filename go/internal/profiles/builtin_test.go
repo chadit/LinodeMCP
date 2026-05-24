@@ -39,6 +39,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_database_engine_list", Capability: profiles.CapRead},
 		{Name: "linode_database_engine_get", Capability: profiles.CapRead},
 		{Name: "linode_database_mysql_config_get", Capability: profiles.CapRead},
+		{Name: "linode_database_postgresql_config_get", Capability: profiles.CapRead},
 		{Name: "linode_database_instance_list", Capability: profiles.CapRead},
 		{Name: "linode_database_postgresql_instance_list", Capability: profiles.CapRead},
 		{Name: "linode_database_instance_get", Capability: profiles.CapRead},
@@ -487,6 +488,7 @@ func TestCategoriesDatabasesTools(t *testing.T) {
 	assert.Contains(t, profiles.Categories("linode_database_engine_list"), "databases")
 	assert.Contains(t, profiles.Categories("linode_database_engine_get"), "databases")
 	assert.Contains(t, profiles.Categories("linode_database_mysql_config_get"), "databases")
+	assert.Contains(t, profiles.Categories("linode_database_postgresql_config_get"), "databases")
 	assert.Contains(t, profiles.Categories("linode_database_instance_list"), "databases")
 	assert.Contains(t, profiles.Categories("linode_database_postgresql_instance_list"), "databases")
 	assert.Contains(t, profiles.Categories("linode_database_instance_get"), "databases")

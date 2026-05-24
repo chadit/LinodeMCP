@@ -22,6 +22,7 @@ const (
 	databaseInstancesPath                = "/databases/mysql/instances"
 	databasePostgreSQLInstancesPath      = "/databases/postgresql/instances"
 	databaseMySQLConfigPath              = "/databases/mysql/config"
+	databasePostgreSQLConfigPath         = "/databases/postgresql/config"
 	databaseInstanceID                   = 123
 	databaseInstancePath                 = "/databases/mysql/instances/123"
 	databaseInstanceSSLPath              = "/databases/mysql/instances/123/ssl"
@@ -35,6 +36,7 @@ const (
 	databaseInstanceType                 = "g6-dedicated-2"
 	databaseCredentialsPassword          = "secret"
 	databaseConfigTypeInteger            = "integer"
+	databaseConfigMaxConnections         = "max_connections"
 )
 
 func TestClientListDatabaseEnginesSuccess(t *testing.T) {
@@ -100,15 +102,15 @@ func TestClientGetDatabaseMySQLConfigSuccess(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"binlog_retention_period": map[string]any{
-				"description": "The minimum amount of time in seconds to keep binlog entries before deletion.",
-				"example":     600,
-				keyType:       databaseConfigTypeInteger,
+				keyDescription: "The minimum amount of time in seconds to keep binlog entries before deletion.",
+				keyExample:     600,
+				keyType:        databaseConfigTypeInteger,
 			},
 			"mysql": map[string]any{
 				"connect_timeout": map[string]any{
-					"description": "The number of seconds that the mysqld server waits for a connect packet.",
-					"example":     10,
-					keyType:       databaseConfigTypeInteger,
+					keyDescription: "The number of seconds that the mysqld server waits for a connect packet.",
+					keyExample:     10,
+					keyType:        databaseConfigTypeInteger,
 				},
 			},
 		}))
@@ -178,6 +180,92 @@ func TestClientGetDatabaseMySQLConfigRetriesTransientRead(t *testing.T) {
 
 	require.NoError(t, err, "read-only GetDatabaseMySQLConfig should retry transient failures")
 	assert.Contains(t, got, "mysql")
+	assert.Equal(t, int32(2), attempts.Load(), "transient read should be retried once")
+}
+
+func TestClientGetDatabasePostgreSQLConfigSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, databasePostgreSQLConfigPath, r.URL.Path, "request path should be /databases/postgresql/config")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			"pg": map[string]any{
+				databaseConfigMaxConnections: map[string]any{
+					keyDescription: "Sets the maximum number of concurrent connections.",
+					keyExample:     100,
+					keyType:        databaseConfigTypeInteger,
+				},
+			},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.GetDatabasePostgreSQLConfig(t.Context())
+
+	require.NoError(t, err, "GetDatabasePostgreSQLConfig should succeed on 200 response")
+	assert.Contains(t, got, "pg")
+}
+
+func TestClientGetDatabasePostgreSQLConfigAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, databasePostgreSQLConfigPath, r.URL.Path, "request path should be /databases/postgresql/config")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errForbidden}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	_, err := client.GetDatabasePostgreSQLConfig(t.Context())
+
+	require.Error(t, err)
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+}
+
+func TestClientGetDatabasePostgreSQLConfigRetriesTransientRead(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+
+		assert.Equal(t, databasePostgreSQLConfigPath, r.URL.Path, "request path should be /databases/postgresql/config")
+
+		if attempts.Load() == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
+			}))
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			"pg": map[string]any{
+				databaseConfigMaxConnections: map[string]any{keyType: databaseConfigTypeInteger},
+			},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
+	got, err := client.GetDatabasePostgreSQLConfig(t.Context())
+
+	require.NoError(t, err, "read-only GetDatabasePostgreSQLConfig should retry transient failures")
+	assert.Contains(t, got, "pg")
 	assert.Equal(t, int32(2), attempts.Load(), "transient read should be retried once")
 }
 
@@ -661,7 +749,7 @@ func TestClientCreateDatabaseInstanceSuccess(t *testing.T) {
 		Region:         regionUSEast,
 		AllowList:      []string{"203.0.113.0/24"},
 		ClusterSize:    3,
-		EngineConfig:   map[string]any{"max_connections": float64(100)},
+		EngineConfig:   map[string]any{databaseConfigMaxConnections: float64(100)},
 		PrivateNetwork: &privateNetwork,
 		SSLConnection:  &sslConnection,
 	}

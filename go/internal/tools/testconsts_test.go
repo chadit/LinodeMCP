@@ -15,6 +15,7 @@ const (
 
 	// Common JSON request/response keys.
 	keyConfirm           = "confirm"
+	keyDescription       = "description"
 	keyCertificate       = "certificate"
 	keyPrivateKey        = "private_key"
 	keyEmail             = "email"
