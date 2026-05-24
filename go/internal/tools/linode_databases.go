@@ -449,6 +449,23 @@ func NewLinodeDatabaseInstanceSuspendTool(cfg *config.Config) (mcp.Tool, profile
 	return tool, profiles.CapWrite, handler
 }
 
+// NewLinodeDatabasePostgreSQLInstanceSuspendTool creates a tool for suspending one active PostgreSQL Managed Database instance.
+func NewLinodeDatabasePostgreSQLInstanceSuspendTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_database_postgresql_instance_suspend",
+		mcp.WithDescription("Suspends an active PostgreSQL Managed Database instance."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The PostgreSQL Managed Database instance ID to suspend.")),
+		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm suspending the PostgreSQL database instance.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleDatabasePostgreSQLInstanceSuspendRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapWrite, handler
+}
+
 // NewLinodeDatabaseInstanceResumeTool creates a tool for resuming one suspended MySQL Managed Database instance.
 func NewLinodeDatabaseInstanceResumeTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
@@ -1068,6 +1085,36 @@ func handleDatabaseInstanceSuspendRequest(ctx context.Context, request *mcp.Call
 	return MarshalToolResponse(response)
 }
 
+func handleDatabasePostgreSQLInstanceSuspendRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This suspends a PostgreSQL Managed Database instance. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	instanceID, validationMessage := databaseInstanceIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := client.SuspendDatabasePostgreSQLInstance(ctx, instanceID); err != nil {
+		return mcp.NewToolResultError(formatDatabasePostgreSQLInstanceSuspendError(instanceID, err)), nil
+	}
+
+	response := struct {
+		Message    string `json:"message"`
+		InstanceID int    `json:"instance_id"`
+	}{
+		Message:    "PostgreSQL Managed Database instance " + strconv.Itoa(instanceID) + " suspend started",
+		InstanceID: instanceID,
+	}
+
+	return MarshalToolResponse(response)
+}
+
 func handleDatabaseInstanceResumeRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	if result := RequireConfirm(request, "This resumes a Managed Database instance. Set confirm=true to proceed."); result != nil {
 		return result, nil
@@ -1146,6 +1193,10 @@ func formatDatabasePostgreSQLInstancePatchError(instanceID int, err error) strin
 
 func formatDatabaseInstanceSuspendError(instanceID int, err error) string {
 	return "Failed to suspend Managed Database instance " + strconv.Itoa(instanceID) + ": " + err.Error()
+}
+
+func formatDatabasePostgreSQLInstanceSuspendError(instanceID int, err error) string {
+	return "Failed to suspend PostgreSQL Managed Database instance " + strconv.Itoa(instanceID) + ": " + err.Error()
 }
 
 func formatDatabaseInstanceResumeError(instanceID int, err error) string {

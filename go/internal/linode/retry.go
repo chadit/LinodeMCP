@@ -1084,6 +1084,11 @@ func (c *Client) SuspendDatabaseInstance(ctx context.Context, instanceID int) er
 	return c.httpSuspendDatabaseInstance(ctx, instanceID)
 }
 
+// SuspendDatabasePostgreSQLInstance suspends one active PostgreSQL Managed Database instance without retrying the POST.
+func (c *Client) SuspendDatabasePostgreSQLInstance(ctx context.Context, instanceID int) error {
+	return c.httpSuspendDatabasePostgreSQLInstance(ctx, instanceID)
+}
+
 // ResumeDatabaseInstance resumes one suspended MySQL Managed Database instance without retrying the POST.
 func (c *Client) ResumeDatabaseInstance(ctx context.Context, instanceID int) error {
 	return c.httpResumeDatabaseInstance(ctx, instanceID)
