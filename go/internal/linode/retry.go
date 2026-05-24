@@ -939,6 +939,21 @@ func (c *Client) GetDatabaseInstance(ctx context.Context, instanceID int) (*Data
 	return instance, err
 }
 
+// GetDatabasePostgreSQLInstance retrieves one PostgreSQL Managed Database instance with automatic retry on transient failures.
+func (c *Client) GetDatabasePostgreSQLInstance(ctx context.Context, instanceID int) (*DatabaseInstance, error) {
+	var instance *DatabaseInstance
+
+	err := c.executeWithRetry(ctx, "GetDatabasePostgreSQLInstance", func() error {
+		var err error
+
+		instance, err = c.httpGetDatabasePostgreSQLInstance(ctx, instanceID)
+
+		return err
+	})
+
+	return instance, err
+}
+
 // GetDatabaseInstanceSSL retrieves the SSL CA certificate for a MySQL Managed Database instance with automatic retry on transient failures.
 func (c *Client) GetDatabaseInstanceSSL(ctx context.Context, instanceID int) (*DatabaseSSL, error) {
 	var ssl *DatabaseSSL

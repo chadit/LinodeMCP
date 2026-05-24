@@ -134,6 +134,22 @@ func NewLinodeDatabaseInstanceGetTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeDatabasePostgreSQLInstanceGetTool creates a tool for getting one PostgreSQL Managed Database instance.
+func NewLinodeDatabasePostgreSQLInstanceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_database_postgresql_instance_get",
+		mcp.WithDescription("Retrieves a single PostgreSQL Managed Database instance by ID."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The PostgreSQL Managed Database instance ID to retrieve.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleDatabasePostgreSQLInstanceGetRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeDatabaseInstanceSSLGetTool creates a tool for getting a MySQL Managed Database SSL CA certificate.
 func NewLinodeDatabaseInstanceSSLGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
@@ -412,6 +428,25 @@ func handleDatabaseInstanceGetRequest(ctx context.Context, request *mcp.CallTool
 	instance, err := client.GetDatabaseInstance(ctx, instanceID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve MySQL Managed Database instance: %v", err)), nil
+	}
+
+	return MarshalToolResponse(instance)
+}
+
+func handleDatabasePostgreSQLInstanceGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	instanceID, validationMessage := databaseInstanceIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	instance, err := client.GetDatabasePostgreSQLInstance(ctx, instanceID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve PostgreSQL Managed Database instance: %v", err)), nil
 	}
 
 	return MarshalToolResponse(instance)
