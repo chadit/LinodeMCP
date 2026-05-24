@@ -14,6 +14,8 @@ const (
 	tokenTest            = "test-token"
 	imageShareGroupLabel = "DevOps Base Images"
 	errTemporaryFailure  = "temporary failure"
+	errNotFound          = "not found"
+	errImageIDPositive   = "image_id must be a positive integer"
 
 	// Common JSON request/response keys.
 	keyConfirm                  = "confirm"
@@ -75,6 +77,7 @@ const (
 	keyValidForShareGroupUUID   = "valid_for_sharegroup_uuid"
 	keyShareGroupID             = "sharegroup_id"
 	keyTokenUUID                = "token_uuid"
+	keyImageID                  = "image_id"
 	shareGroupDescription       = "shared CI images"
 	shareGroupUpdated           = "2025-04-15T22:44:02"
 	shareGroupCreated           = "2025-04-14T22:44:02"
