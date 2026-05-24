@@ -6073,3 +6073,48 @@ func TestClientUpdateAccountSettingsDoesNotRetry(t *testing.T) {
 	require.Error(t, err, "UpdateAccountSettings should fail on 500 response")
 	assert.Equal(t, int32(1), calls, "UpdateAccountSettings must not retry and replay a mutating request")
 }
+
+func TestClientListImageShareGroupsSuccess(t *testing.T) {
+	t.Parallel()
+
+	description := "shared CI images"
+	updated := "2025-04-15T22:44:02"
+	shareGroups := []linode.ImageShareGroup{
+		{
+			ID:           1,
+			UUID:         "1533863e-16a4-47b5-b829-ac0f35c13278",
+			Label:        "DevOps Base Images",
+			Description:  &description,
+			IsSuspended:  false,
+			Created:      "2025-04-14T22:44:02",
+			Updated:      &updated,
+			ImagesCount:  2,
+			MembersCount: 3,
+		},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/images/sharegroups", r.URL.Path, "request path should be /images/sharegroups")
+		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		assert.Equal(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			"data":    shareGroups,
+			"page":    2,
+			"pages":   3,
+			"results": 7,
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	result, err := client.ListImageShareGroups(t.Context(), 2, 25)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, "DevOps Base Images", result.Data[0].Label)
+	assert.Equal(t, 2, result.Page)
+	assert.Equal(t, 7, result.Results)
+}

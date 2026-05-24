@@ -7990,6 +7990,132 @@ func TestLinodeImagesListTool(t *testing.T) {
 	})
 }
 
+func TestLinodeImageShareGroupsListTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeImageShareGroupsListTool(cfg)
+
+		assert.Equal(t, "linode_image_sharegroups_list", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Contains(t, tool.InputSchema.Properties, keyPage, "schema should include page")
+		assert.Contains(t, tool.InputSchema.Properties, keyPageSize, "schema should include page_size")
+		assert.NotContains(t, tool.InputSchema.Properties, keyConfirm, "read-only list tool must not require confirm")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		description := "shared CI images"
+		updated := "2025-04-15T22:44:02"
+		shareGroups := []linode.ImageShareGroup{
+			{
+				ID:           1,
+				UUID:         "1533863e-16a4-47b5-b829-ac0f35c13278",
+				Label:        "DevOps Base Images",
+				Description:  &description,
+				IsSuspended:  false,
+				Created:      "2025-04-14T22:44:02",
+				Updated:      &updated,
+				ImagesCount:  2,
+				MembersCount: 3,
+			},
+		}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/images/sharegroups", r.URL.Path, "request path should be /images/sharegroups")
+			assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyData:    shareGroups,
+				keyPage:    2,
+				keyPages:   3,
+				keyResults: 7,
+			}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeImageShareGroupsListTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, `"count": 1`, "response should include count")
+		assert.Contains(t, textContent.Text, "DevOps Base Images", "response should contain share group label")
+		assert.Contains(t, textContent.Text, "1533863e-16a4-47b5-b829-ac0f35c13278", "response should contain share group UUID")
+	})
+
+	t.Run("invalid pagination", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		_, _, handler := tools.NewLinodeImageShareGroupsListTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyPageSize: 24})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError, "invalid page_size should be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, errPageSizeRange)
+	})
+
+	t.Run("client error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: "temporary failure"}},
+			}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeImageShareGroupsListTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError, "upstream API error should be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to retrieve image share groups")
+	})
+}
+
 // createRequestWithArgs builds a CallToolRequest with the given arguments.
 func createRequestWithArgs(t *testing.T, args map[string]any) mcp.CallToolRequest {
 	t.Helper()

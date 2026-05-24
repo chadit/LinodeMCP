@@ -210,6 +210,20 @@ type Image struct {
 	Deprecated   bool     `json:"deprecated"`
 }
 
+// ImageShareGroup represents an owned image share group.
+type ImageShareGroup struct {
+	ID           int     `json:"id"`
+	UUID         string  `json:"uuid"`
+	Label        string  `json:"label"`
+	Description  *string `json:"description"`
+	IsSuspended  bool    `json:"is_suspended"`
+	Created      string  `json:"created"`
+	Updated      *string `json:"updated"`
+	Expiry       *string `json:"expiry"`
+	ImagesCount  int     `json:"images_count"`
+	MembersCount int     `json:"members_count"`
+}
+
 // CreateImageRequest represents the request body for creating a private image from a Linode disk.
 type CreateImageRequest struct {
 	DiskID      int      `json:"disk_id"`

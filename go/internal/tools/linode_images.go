@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -9,6 +10,11 @@ import (
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
+)
+
+const (
+	imageShareGroupsPageSizeMin = 25
+	imageShareGroupsPageSizeMax = 500
 )
 
 // NewLinodeImageListTool creates a tool for listing Linode images.
@@ -42,6 +48,58 @@ func NewLinodeImageListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 	}
 
 	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeImageShareGroupsListTool creates a tool for listing image share groups.
+func NewLinodeImageShareGroupsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_image_sharegroups_list",
+		mcp.WithDescription("Lists owned image share groups with optional pagination."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+		mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleImageShareGroupsListRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleImageShareGroupsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	page, pageSize, validationMessage := imageShareGroupsPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	shareGroups, err := client.ListImageShareGroups(ctx, page, pageSize)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve image share groups: %v", err)), nil
+	}
+
+	return FormatListResponse(shareGroups.Data, nil, "image_sharegroups")
+}
+
+func imageShareGroupsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
+	args := request.GetArguments()
+
+	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	pageSize, validationMessage := optionalPaginationInt(args, "page_size", imageShareGroupsPageSizeMin, imageShareGroupsPageSizeMax)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	return page, pageSize, ""
 }
 
 func filterImagesByPublic(images []linode.Image, isPublicFilter string) []linode.Image {
