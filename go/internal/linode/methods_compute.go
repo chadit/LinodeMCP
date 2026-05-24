@@ -148,6 +148,23 @@ func (c *Client) httpGetImage(ctx context.Context, imageID string) (*Image, erro
 	return &image, nil
 }
 
+// DeleteImage deletes a private image.
+func (c *Client) httpDeleteImage(ctx context.Context, imageID string) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointImages + "/" + escapeImageIDSegment(imageID)
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteImage", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return c.handleResponse(resp, nil)
+}
+
 // ListImageShareGroups retrieves owned image share groups.
 func (c *Client) httpListImageShareGroups(ctx context.Context, page, pageSize int) (*PaginatedResponse[ImageShareGroup], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

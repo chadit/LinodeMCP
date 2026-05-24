@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -16,7 +18,9 @@ import (
 const (
 	imageShareGroupsPageSizeMin  = 25
 	imageShareGroupsPageSizeMax  = 500
+	imageIDPrefixPrivate         = "private"
 	errImageShareGroupIDPositive = "sharegroup_id must be a positive integer"
+	errImageIDPrivateIdentifier  = "image_id must be a private image identifier like private/12345"
 )
 
 var imageShareGroupTokenUUIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
@@ -68,6 +72,23 @@ func NewLinodeImageGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, f
 	}
 
 	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeImageDeleteTool creates a tool for deleting a private image.
+func NewLinodeImageDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_image_delete",
+		mcp.WithDescription("Deletes a private image by image ID. WARNING: this cannot be undone and replicated instances are also deleted."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithString("image_id", mcp.Required(), mcp.Description("The image ID to delete, for example private/12345.")),
+		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm image deletion.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleImageDeleteRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapDestroy, handler
 }
 
 // NewLinodeImageShareGroupsListTool creates a tool for listing image share groups.
@@ -291,6 +312,74 @@ func NewLinodeImageShareGroupByTokenGetTool(cfg *config.Config) (mcp.Tool, profi
 	}
 
 	return tool, profiles.CapRead, handler
+}
+
+func handleImageDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if confirmResult := RequireConfirm(request, "confirm=true is required"); confirmResult != nil {
+		return confirmResult, nil
+	}
+
+	imageID, validationMessage := privateImageIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := client.DeleteImage(ctx, imageID); err != nil {
+		return mcp.NewToolResultError(formatImageDeleteError(imageID, err)), nil
+	}
+
+	return mcp.NewToolResultText(fmt.Sprintf("Image %s deleted successfully", imageID)), nil
+}
+
+func formatImageDeleteError(imageID string, err error) string {
+	return "Failed to remove image " + imageID + ": " + err.Error()
+}
+
+func privateImageIDFromTool(request *mcp.CallToolRequest) (string, string) {
+	imageID := strings.TrimSpace(request.GetString("image_id", ""))
+	if imageID == "" {
+		return "", "image_id must be a non-empty string"
+	}
+
+	if strings.ContainsAny(imageID, "?#") || hasTraversalSegment(imageID) || strings.HasPrefix(imageID, "/") || strings.HasSuffix(imageID, "/") || strings.Contains(imageID, "//") {
+		return "", errImageIDPrivateIdentifier
+	}
+
+	segments := strings.Split(imageID, "/")
+	if len(segments) != 2 || segments[0] != imageIDPrefixPrivate {
+		return "", errImageIDPrivateIdentifier
+	}
+
+	if !isPositiveDecimalString(segments[1]) {
+		return "", errImageIDPrivateIdentifier
+	}
+
+	return imageID, ""
+}
+
+func isPositiveDecimalString(value string) bool {
+	if value == "" {
+		return false
+	}
+
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+
+	imageNumber, err := strconv.Atoi(value)
+
+	return err == nil && imageNumber > 0
+}
+
+func hasTraversalSegment(value string) bool {
+	return slices.Contains(strings.Split(value, "/"), "..")
 }
 
 func handleImageShareGroupsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -629,7 +718,7 @@ func imageIDFromTool(request *mcp.CallToolRequest) (string, string) {
 	}
 
 	switch parts[0] {
-	case "linode", "private", "shared":
+	case "linode", imageIDPrefixPrivate, "shared":
 	default:
 		return "", "image_id prefix must be linode, private, or shared"
 	}

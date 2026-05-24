@@ -1174,6 +1174,12 @@ func (c *Client) GetImage(ctx context.Context, imageID string) (*Image, error) {
 	return image, err
 }
 
+// DeleteImage deletes a private image without automatic retry.
+// Replaying this destructive operation could repeat side effects after a transient failure.
+func (c *Client) DeleteImage(ctx context.Context, imageID string) error {
+	return c.httpDeleteImage(ctx, imageID)
+}
+
 // ListImageShareGroups retrieves owned image share groups with automatic retry on transient failures.
 func (c *Client) ListImageShareGroups(ctx context.Context, page, pageSize int) (*PaginatedResponse[ImageShareGroup], error) {
 	var shareGroups *PaginatedResponse[ImageShareGroup]
