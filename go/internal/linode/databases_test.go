@@ -25,6 +25,7 @@ const (
 	databasePostgreSQLConfigPath         = "/databases/postgresql/config"
 	databaseInstanceID                   = 123
 	databaseInstancePath                 = "/databases/mysql/instances/123"
+	databasePostgreSQLInstancePath       = "/databases/postgresql/instances/123"
 	databaseInstanceSSLPath              = "/databases/mysql/instances/123/ssl"
 	databaseSSLCACertificate             = "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t"
 	databaseInstanceCredentialsPath      = "/databases/mysql/instances/123/credentials"
@@ -464,6 +465,83 @@ func TestClientGetDatabaseInstanceSuccess(t *testing.T) {
 	require.NotNil(t, got)
 	assert.Equal(t, databaseInstanceID, got.ID)
 	assert.Equal(t, databaseInstanceLabel, got.Label)
+}
+
+func TestClientGetDatabasePostgreSQLInstanceSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include PostgreSQL instance id")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEnginePostgreSQL, Version: databaseEngineVersion, Status: oauthClientStatus}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.GetDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
+
+	require.NoError(t, err, "GetDatabasePostgreSQLInstance should succeed on 200 response")
+	require.NotNil(t, got)
+	assert.Equal(t, databaseInstanceID, got.ID)
+	assert.Equal(t, databaseInstanceLabel, got.Label)
+	assert.Equal(t, databaseEnginePostgreSQL, got.Engine)
+}
+
+func TestClientGetDatabasePostgreSQLInstanceAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include PostgreSQL instance id")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errForbidden}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	_, err := client.GetDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
+
+	require.Error(t, err)
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+}
+
+func TestClientGetDatabasePostgreSQLInstanceRetriesTransientRead(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+
+		assert.Equal(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include PostgreSQL instance id")
+
+		if attempts.Load() == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
+			}))
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Engine: databaseEnginePostgreSQL}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
+	got, err := client.GetDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
+
+	require.NoError(t, err, "read-only GetDatabasePostgreSQLInstance should retry transient failures")
+	require.NotNil(t, got)
+	assert.Equal(t, int32(2), attempts.Load(), "transient read should be retried once")
 }
 
 func TestClientGetDatabaseInstanceSSLSuccess(t *testing.T) {

@@ -36,6 +36,7 @@ const (
 	databaseInstanceIDParam              = "instance_id"
 	databaseInstanceIDMessage            = "instance_id must be a positive integer"
 	databaseInstancePath                 = "/databases/mysql/instances/123"
+	databasePostgreSQLInstancePath       = "/databases/postgresql/instances/123"
 	databaseInstanceSSLPath              = "/databases/mysql/instances/123/ssl"
 	databaseSSLCACertificate             = "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t"
 	databaseInstanceCredentialsPath      = "/databases/mysql/instances/123/credentials"
@@ -770,6 +771,120 @@ func TestLinodeDatabaseInstanceGetTool(t *testing.T) {
 
 		cfg := &config.Config{}
 		_, _, handler := tools.NewLinodeDatabaseInstanceGetTool(cfg)
+
+		cases := []struct {
+			name string
+			args map[string]any
+		}{
+			{name: caseMissingInstanceID, args: map[string]any{}},
+			{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123"}},
+			{name: caseZeroInstanceID, args: map[string]any{databaseInstanceIDParam: 0}},
+			{name: caseNegativeInstanceID, args: map[string]any{databaseInstanceIDParam: -1}},
+			{name: caseFractionalInstanceID, args: map[string]any{databaseInstanceIDParam: 123.4}},
+			{name: caseSlashInstanceID, args: map[string]any{databaseInstanceIDParam: "/"}},
+			{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery}},
+			{name: caseTraversalInstanceID, args: map[string]any{databaseInstanceIDParam: pathTraversalValue}},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "validation errors should be returned as tool result errors")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid instance_id should return an error result")
+
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, databaseInstanceIDMessage)
+			})
+		}
+	})
+}
+
+func TestLinodeDatabasePostgreSQLInstanceGetTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeDatabasePostgreSQLInstanceGetTool(cfg)
+
+		assert.Equal(t, "linode_database_postgresql_instance_get", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read capability")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, databaseInstanceIDParam, "schema should include instance_id")
+		assert.NotContains(t, props, keyConfirm, "read-only get tool must not require confirm")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include PostgreSQL instance id")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: "postgresql", Version: databaseVersion, Status: statusActive}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, databaseInstanceLabel)
+		assert.Contains(t, textContent.Text, "postgresql")
+	})
+
+	t.Run("client error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, databasePostgreSQLInstancePath, r.URL.Path, "request path should include PostgreSQL instance id")
+			w.WriteHeader(http.StatusInternalServerError)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: temporaryFailure}},
+			}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "client errors should be returned as tool result errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failures should return an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to retrieve PostgreSQL Managed Database instance")
+	})
+
+	t.Run("instance id validation", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceGetTool(cfg)
 
 		cases := []struct {
 			name string
