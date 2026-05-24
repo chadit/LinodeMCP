@@ -92,7 +92,7 @@ func TestLinodeImageShareGroupTokenGetTool(t *testing.T) {
 			caseQuery:    tokenUUIDWithQuery,
 			caseFragment: tokenUUIDWithFragment,
 			caseDotdot:   tokenUUIDWithDotdot,
-			"not_uuid":   "not-a-uuid",
+			caseNotUUID:  invalidTokenUUID,
 			caseEmpty:    blankString,
 			caseNumeric:  123,
 		}
