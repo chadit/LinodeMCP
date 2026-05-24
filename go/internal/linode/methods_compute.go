@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -166,6 +167,28 @@ func (c *Client) httpCreateImageShareGroup(ctx context.Context, req *CreateImage
 	return &shareGroup, nil
 }
 
+// UpdateImageShareGroup updates an owned image share group.
+func (c *Client) httpUpdateImageShareGroup(ctx context.Context, shareGroupID int, req *UpdateImageShareGroupRequest) (*ImageShareGroup, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointImageShareGroups + "/" + escapeImageShareGroupID(shareGroupID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateImageShareGroup", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var shareGroup ImageShareGroup
+	if err := c.handleResponse(resp, &shareGroup); err != nil {
+		return nil, err
+	}
+
+	return &shareGroup, nil
+}
+
 // ListImageShareGroupTokens retrieves image share group tokens for the user.
 func (c *Client) httpListImageShareGroupTokens(ctx context.Context, page, pageSize int) (*PaginatedResponse[ImageShareGroupToken], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -304,6 +327,10 @@ func escapeImageShareGroupTokenUUID(tokenUUID string) string {
 	}
 
 	return escapedTokenUUID
+}
+
+func escapeImageShareGroupID(shareGroupID int) string {
+	return strings.ReplaceAll(url.PathEscape(strconv.Itoa(shareGroupID)), ".", "%2E")
 }
 
 // DeleteImageShareGroupToken removes one image share group membership token.
