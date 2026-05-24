@@ -15,6 +15,9 @@ import (
 
 const (
 	databaseEnginesPath                       = "/databases/engines"
+	databaseTypesPath                         = "/databases/types"
+	databaseTypeID                            = "g6-dedicated-1"
+	databaseTypeLabel                         = "DBaaS - Dedicated 80GB"
 	databaseEngineMySQL                       = "mysql"
 	databaseEngineID                          = "mysql/8.0.26"
 	databaseEngineEscapedPath                 = "/databases/engines/mysql%2F8.0.26"
@@ -100,6 +103,109 @@ func TestClientListDatabaseEnginesAPIError(t *testing.T) {
 	var apiErr *linode.APIError
 	require.ErrorAs(t, err, &apiErr)
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+}
+
+func TestClientListDatabaseTypesSuccess(t *testing.T) {
+	t.Parallel()
+
+	types := []linode.DatabaseType{{
+		ID:     databaseTypeID,
+		Label:  databaseTypeLabel,
+		Class:  "dedicated",
+		Disk:   25600,
+		Memory: 1024,
+		VCPUs:  1,
+		Engines: linode.DatabaseTypeEngines{
+			MySQL: []linode.DatabaseTypeEngine{{Quantity: 1, Price: linode.Price{Hourly: 0.03, Monthly: 20}}},
+		},
+	}}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, databaseTypesPath, r.URL.Path, "request path should be /databases/types")
+		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyData:    types,
+			keyPage:    2,
+			keyPages:   3,
+			keyResults: 51,
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
+	got, err := client.ListDatabaseTypes(t.Context(), 2, 25)
+
+	require.NoError(t, err, "ListDatabaseTypes should succeed on 200 response")
+	require.Len(t, got, 1)
+	assert.Equal(t, databaseTypeID, got[0].ID)
+	assert.Equal(t, databaseTypeLabel, got[0].Label)
+	assert.Equal(t, 1, got[0].Engines.MySQL[0].Quantity)
+}
+
+func TestClientListDatabaseTypesAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, databaseTypesPath, r.URL.Path, "request path should be /databases/types")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errForbidden}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	_, err := client.ListDatabaseTypes(t.Context(), 0, 0)
+
+	require.Error(t, err)
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+}
+
+func TestClientListDatabaseTypesRetriesTransientRead(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	types := []linode.DatabaseType{{ID: databaseTypeID, Label: databaseTypeLabel}}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+
+		assert.Equal(t, databaseTypesPath, r.URL.Path, "request path should be /databases/types")
+
+		if attempts.Load() == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
+			}))
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyData:    types,
+			keyPage:    1,
+			keyPages:   1,
+			keyResults: 1,
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
+	got, err := client.ListDatabaseTypes(t.Context(), 0, 0)
+
+	require.NoError(t, err, "read-only ListDatabaseTypes should retry transient failures")
+	require.Len(t, got, 1)
+	assert.Equal(t, databaseTypeID, got[0].ID)
+	assert.Equal(t, int32(2), attempts.Load(), "transient read should be retried once")
 }
 
 func TestClientGetDatabaseMySQLConfigSuccess(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 
 const (
 	endpointDatabaseEngines             = "/databases/engines"
+	endpointDatabaseTypes               = "/databases/types"
 	endpointDatabaseInstances           = "/databases/mysql/instances"
 	endpointDatabasePostgreSQLInstances = "/databases/postgresql/instances"
 	endpointDatabaseMySQLConfig         = "/databases/mysql/config"
@@ -30,6 +31,28 @@ func (c *Client) httpListDatabaseEngines(ctx context.Context, page, pageSize int
 	defer drainClose(resp)
 
 	var response PaginatedResponse[DatabaseEngine]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
+}
+
+// ListDatabaseTypes retrieves available Managed Database node types.
+func (c *Client) httpListDatabaseTypes(ctx context.Context, page, pageSize int) ([]DatabaseType, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointDatabaseTypes, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListDatabaseTypes", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[DatabaseType]
 	if err := c.handleResponse(resp, &response); err != nil {
 		return nil, err
 	}

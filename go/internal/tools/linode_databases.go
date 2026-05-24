@@ -33,6 +33,9 @@ const (
 	databaseEnginesPageSizeMin = 25
 	databaseEnginesPageSizeMax = 500
 
+	databaseTypesPageSizeMin = 25
+	databaseTypesPageSizeMax = 500
+
 	databaseInstancesPageSizeMin = 25
 	databaseInstancesPageSizeMax = 500
 )
@@ -49,6 +52,23 @@ func NewLinodeDatabaseEngineListTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return handleDatabaseEnginesListRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeDatabaseTypeListTool creates a tool for listing Managed Database node types.
+func NewLinodeDatabaseTypeListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_database_type_list",
+		mcp.WithDescription("Lists available Managed Database node types with optional pagination."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+		mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleDatabaseTypesListRequest(ctx, &request, cfg)
 	}
 
 	return tool, profiles.CapRead, handler
@@ -763,6 +783,25 @@ func handleDatabaseEnginesListRequest(ctx context.Context, request *mcp.CallTool
 	return FormatListResponse(engines, nil, "database_engines")
 }
 
+func handleDatabaseTypesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	page, pageSize, validationMessage := databaseTypesPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	types, err := client.ListDatabaseTypes(ctx, page, pageSize)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Managed Database types: %v", err)), nil
+	}
+
+	return FormatListResponse(types, nil, "database_types")
+}
+
 func handleDatabaseInstancesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	page, pageSize, validationMessage := databaseInstancesPaginationFromTool(request)
 	if validationMessage != "" {
@@ -1216,6 +1255,22 @@ func databaseEnginesPaginationFromTool(request *mcp.CallToolRequest) (int, int, 
 	}
 
 	pageSize, validationMessage := optionalPaginationInt(args, "page_size", databaseEnginesPageSizeMin, databaseEnginesPageSizeMax)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	return page, pageSize, ""
+}
+
+func databaseTypesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
+	args := request.GetArguments()
+
+	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	pageSize, validationMessage := optionalPaginationInt(args, "page_size", databaseTypesPageSizeMin, databaseTypesPageSizeMax)
 	if validationMessage != "" {
 		return 0, 0, validationMessage
 	}
