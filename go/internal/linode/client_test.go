@@ -6074,6 +6074,70 @@ func TestClientUpdateAccountSettingsDoesNotRetry(t *testing.T) {
 	assert.Equal(t, int32(1), calls, "UpdateAccountSettings must not retry and replay a mutating request")
 }
 
+func TestClientListImageShareGroupTokensSuccess(t *testing.T) {
+	t.Parallel()
+
+	updated := "2025-08-04T11:09:09"
+	expiry := "2025-09-04T10:09:09"
+	tokens := []linode.ImageShareGroupToken{
+		{
+			TokenUUID:              "13428362-5458-4dad-b14b-8d0d4d648f8c",
+			Status:                 oauthClientStatus,
+			Label:                  "Backend Services - Engineering",
+			Created:                "2025-08-04T10:09:09",
+			Updated:                &updated,
+			Expiry:                 &expiry,
+			ValidForShareGroupUUID: "e1d0e58b-f89f-4237-84ab-b82077342359",
+			ShareGroupUUID:         "e1d0e58b-f89f-4237-84ab-b82077342359",
+			ShareGroupLabel:        "DevOps Base Images",
+		},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/images/sharegroups/tokens", r.URL.Path, "request path should be /images/sharegroups/tokens")
+		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		assert.Equal(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyData:   tokens,
+			"page":    2,
+			"pages":   3,
+			"results": 7,
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	result, err := client.ListImageShareGroupTokens(t.Context(), 2, 25)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, "Backend Services - Engineering", result.Data[0].Label)
+	assert.Equal(t, "13428362-5458-4dad-b14b-8d0d4d648f8c", result.Data[0].TokenUUID)
+	assert.Equal(t, 2, result.Page)
+	assert.Equal(t, 7, result.Results)
+}
+
+func TestClientListImageShareGroupTokensError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: "temporary failure"}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	result, err := client.ListImageShareGroupTokens(t.Context(), 1, 25)
+
+	require.Error(t, err)
+	assert.Nil(t, result)
+}
+
 func TestClientListImageShareGroupsSuccess(t *testing.T) {
 	t.Parallel()
 

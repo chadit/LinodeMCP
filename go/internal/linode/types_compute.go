@@ -224,6 +224,19 @@ type ImageShareGroup struct {
 	MembersCount int     `json:"members_count"`
 }
 
+// ImageShareGroupToken represents a token associated with an image share group.
+type ImageShareGroupToken struct {
+	TokenUUID              string  `json:"token_uuid"`
+	Status                 string  `json:"status"`
+	Label                  string  `json:"label"`
+	Created                string  `json:"created"`
+	Updated                *string `json:"updated"`
+	Expiry                 *string `json:"expiry"`
+	ValidForShareGroupUUID string  `json:"valid_for_sharegroup_uuid"`
+	ShareGroupUUID         string  `json:"sharegroup_uuid"`
+	ShareGroupLabel        string  `json:"sharegroup_label"`
+}
+
 // CreateImageRequest represents the request body for creating a private image from a Linode disk.
 type CreateImageRequest struct {
 	DiskID      int      `json:"disk_id"`
