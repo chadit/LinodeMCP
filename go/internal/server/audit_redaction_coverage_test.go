@@ -39,10 +39,13 @@ func TestRedactionCoversSensitiveArgNames(t *testing.T) {
 	//   - required_token_scopes: a profile-builder arg holding a list
 	//     of OAuth scope names (e.g. "linodes:read_write"), not a
 	//     token value.
+	//   - token_uuid: an image share group token resource identifier,
+	//     not token material. Safe to log.
 	knownSafe := map[string]struct{}{
 		"key_id":                {},
 		"sshkey_id":             {},
 		"required_token_scopes": {},
+		"token_uuid":            {},
 	}
 
 	srv := newCapabilityTestServer(t)

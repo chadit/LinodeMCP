@@ -213,12 +213,7 @@ func (c *Client) httpGetImageShareGroupToken(ctx context.Context, tokenUUID stri
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	escapedTokenUUID := url.PathEscape(tokenUUID)
-	if tokenUUID == "." || tokenUUID == ".." {
-		escapedTokenUUID = strings.ReplaceAll(escapedTokenUUID, ".", "%2E")
-	}
-
-	endpoint := endpointImageShareGroups + "/tokens/" + escapedTokenUUID
+	endpoint := endpointImageShareGroups + "/tokens/" + escapeImageShareGroupTokenUUID(tokenUUID)
 
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -233,6 +228,37 @@ func (c *Client) httpGetImageShareGroupToken(ctx context.Context, tokenUUID stri
 	}
 
 	return &token, nil
+}
+
+// UpdateImageShareGroupToken updates a single image share group membership token label.
+func (c *Client) httpUpdateImageShareGroupToken(ctx context.Context, tokenUUID string, req *UpdateImageShareGroupTokenRequest) (*ImageShareGroupToken, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointImageShareGroupMembershipCreate + "/" + escapeImageShareGroupTokenUUID(tokenUUID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateImageShareGroupToken", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var token ImageShareGroupToken
+	if err := c.handleResponse(resp, &token); err != nil {
+		return nil, err
+	}
+
+	return &token, nil
+}
+
+func escapeImageShareGroupTokenUUID(tokenUUID string) string {
+	escapedTokenUUID := url.PathEscape(tokenUUID)
+	if tokenUUID == "." || tokenUUID == ".." {
+		escapedTokenUUID = strings.ReplaceAll(escapedTokenUUID, ".", "%2E")
+	}
+
+	return escapedTokenUUID
 }
 
 // CreateImage creates a private image from a Linode disk.

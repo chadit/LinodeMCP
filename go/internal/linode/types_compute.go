@@ -258,6 +258,11 @@ type CreateImageShareGroupTokenRequest struct {
 	ValidForShareGroupUUID string `json:"valid_for_sharegroup_uuid"`
 }
 
+// UpdateImageShareGroupTokenRequest represents the request body for updating an image share group membership token.
+type UpdateImageShareGroupTokenRequest struct {
+	Label string `json:"label"`
+}
+
 // CreateImageRequest represents the request body for creating a private image from a Linode disk.
 type CreateImageRequest struct {
 	DiskID      int      `json:"disk_id"`
