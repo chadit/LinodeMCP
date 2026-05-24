@@ -1216,6 +1216,12 @@ func (c *Client) GetImageShareGroupToken(ctx context.Context, tokenUUID string) 
 	return token, err
 }
 
+// UpdateImageShareGroupToken updates a token label without automatic retry.
+// Replaying this mutating token operation could repeat side effects after a transient failure.
+func (c *Client) UpdateImageShareGroupToken(ctx context.Context, tokenUUID string, req *UpdateImageShareGroupTokenRequest) (*ImageShareGroupToken, error) {
+	return c.httpUpdateImageShareGroupToken(ctx, tokenUUID, req)
+}
+
 // CreateImage creates a private image from a Linode disk without automatic retry.
 // Replaying this non-idempotent create operation could create duplicate images.
 func (c *Client) CreateImage(ctx context.Context, req *CreateImageRequest) (*Image, error) {

@@ -153,6 +153,75 @@ func NewLinodeImageShareGroupTokenCreateTool(cfg *config.Config) (mcp.Tool, prof
 	return tool, profiles.CapAdmin, handler
 }
 
+// NewLinodeImageShareGroupTokenUpdateTool creates a tool for updating image share group membership token labels.
+func NewLinodeImageShareGroupTokenUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_image_sharegroup_token_update",
+		mcp.WithDescription("Updates an image share group membership token label."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithString("token_uuid", mcp.Required(), mcp.Description("The UUID of the token to update.")),
+		mcp.WithString("label", mcp.Required(), mcp.Description("The new descriptive label for the token.")),
+		mcp.WithBoolean(paramConfirm, mcp.Required(),
+			mcp.Description("Must be true to confirm image share group token update.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeImageShareGroupTokenUpdateRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapAdmin, handler
+}
+
+func handleLinodeImageShareGroupTokenUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This updates an image share group token. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	tokenUUID, validationMessage := imageShareGroupTokenUUIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	label := strings.TrimSpace(request.GetString("label", ""))
+	if label == "" {
+		return mcp.NewToolResultError("label is required"), nil
+	}
+
+	environment := request.GetString(paramEnvironment, "")
+	if environment != "" {
+		request.GetArguments()[paramEnvironment] = environment
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	updated, err := client.UpdateImageShareGroupToken(ctx, tokenUUID, &linode.UpdateImageShareGroupTokenRequest{Label: label})
+	if err != nil {
+		return mcp.NewToolResultError(formatImageShareGroupTokenUpdateError(err)), nil
+	}
+
+	response := struct {
+		Message string                       `json:"message"`
+		Token   *linode.ImageShareGroupToken `json:"token"`
+	}{
+		Message: fmt.Sprintf("Image share group token '%s' updated successfully", updated.TokenUUID),
+		Token:   updated,
+	}
+
+	result, err := MarshalToolResponse(response)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to format image share group token response: %v", err)), nil
+	}
+
+	return result, nil
+}
+
+func formatImageShareGroupTokenUpdateError(err error) string {
+	return "Failed to update image share group token: " + err.Error()
+}
+
 func handleLinodeImageShareGroupTokenCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	if result := RequireConfirm(request, "This creates single-use image share group token material. Set confirm=true to proceed."); result != nil {
 		return result, nil
