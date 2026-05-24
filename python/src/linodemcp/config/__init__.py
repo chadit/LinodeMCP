@@ -168,6 +168,12 @@ DEFAULT_AUDIT_RETENTION_DAYS = 14
 # the Phase 3b sink.
 DEFAULT_AUDIT_SQLITE_BUSY_TIMEOUT_MS = 5000
 
+# Default for audit.redact_pii: PII fields (tax_id, phone, address_1/2,
+# city, state, zip) are redacted alongside the always-on credential
+# list. Operators who need raw PII in audit (e.g. for accountability
+# investigations) can opt out by setting audit.redact_pii: false.
+DEFAULT_AUDIT_REDACT_PII = True
+
 
 @dataclass
 class AuditSQLiteConfig:
@@ -233,14 +239,18 @@ class ReportConfig:
 class AuditConfig:
     """Audit-log settings.
 
-    The JSONL sink is always on (Phase 2); these fields tune retention
-    and the optional SQLite sink (Phase 3b). ``retention_days`` of 0
-    means "never delete"; an absent key defaults to
-    DEFAULT_AUDIT_RETENTION_DAYS. The absent-vs-zero distinction is
+    The JSONL sink is always on (Phase 2); these fields tune retention,
+    the optional SQLite sink (Phase 3b), the optional PII redaction tier
+    (Phase 4c), and named custom reports (Phase 4a/b).
+    ``retention_days`` of 0 means "never delete"; an absent key defaults
+    to DEFAULT_AUDIT_RETENTION_DAYS. ``redact_pii`` defaults to True so
+    PII fields are redacted alongside credentials; operators opt out by
+    setting it to False. Both absent-vs-explicit distinctions are
     handled at parse time via ``dict.get`` returning None.
     """
 
     retention_days: int = DEFAULT_AUDIT_RETENTION_DAYS
+    redact_pii: bool = DEFAULT_AUDIT_REDACT_PII
     sqlite: AuditSQLiteConfig = field(default_factory=AuditSQLiteConfig)
     reports: dict[str, ReportConfig] = field(default_factory=dict[str, ReportConfig])
 
@@ -464,11 +474,12 @@ def _apply_environment_overrides(data: dict[str, Any]) -> None:
 def _apply_audit_overrides(data: dict[str, Any]) -> None:
     """Apply LINODEMCP_AUDIT_* environment overrides onto the raw dict."""
     retention = os.getenv("LINODEMCP_AUDIT_RETENTION_DAYS")
+    redact_pii = os.getenv("LINODEMCP_AUDIT_REDACT_PII")
     sqlite_enabled = os.getenv("LINODEMCP_AUDIT_SQLITE_ENABLED")
     sqlite_path = os.getenv("LINODEMCP_AUDIT_SQLITE_PATH")
     sqlite_timeout = os.getenv("LINODEMCP_AUDIT_SQLITE_BUSY_TIMEOUT_MS")
 
-    if not any((retention, sqlite_enabled, sqlite_path, sqlite_timeout)):
+    if not any((retention, redact_pii, sqlite_enabled, sqlite_path, sqlite_timeout)):
         return
 
     data.setdefault("audit", {})
@@ -477,6 +488,9 @@ def _apply_audit_overrides(data: dict[str, Any]) -> None:
     if retention is not None:
         with contextlib.suppress(ValueError):
             audit["retention_days"] = int(retention)
+
+    if redact_pii is not None:
+        audit["redact_pii"] = redact_pii.lower() in ("true", "1")
 
     if sqlite_enabled is None and sqlite_path is None and sqlite_timeout is None:
         return
@@ -713,7 +727,7 @@ def _parse_audit(raw: Any) -> AuditConfig:
     An absent ``retention_days`` key defaults to
     DEFAULT_AUDIT_RETENTION_DAYS; an explicit 0 is preserved as
     "never delete" because ``dict.get`` returns None only when the key
-    is absent.
+    is absent. Same absent-vs-explicit handling for ``redact_pii``.
     """
     audit_data = cast("dict[str, Any]", raw) if isinstance(raw, dict) else {}
     sqlite_raw = audit_data.get("sqlite")
@@ -726,8 +740,14 @@ def _parse_audit(raw: Any) -> AuditConfig:
         DEFAULT_AUDIT_RETENTION_DAYS if retention_raw is None else int(retention_raw)
     )
 
+    redact_pii_raw = audit_data.get("redact_pii")
+    redact_pii = (
+        DEFAULT_AUDIT_REDACT_PII if redact_pii_raw is None else bool(redact_pii_raw)
+    )
+
     return AuditConfig(
         retention_days=retention_days,
+        redact_pii=redact_pii,
         sqlite=AuditSQLiteConfig(
             enabled=bool(sqlite_data.get("enabled", False)),
             path=str(sqlite_data.get("path", "")),
@@ -941,6 +961,7 @@ def _config_to_data(cfg: Config) -> dict[str, Any]:
         "profiles_builtin_overrides": overrides,
         "audit": {
             "retention_days": cfg.audit.retention_days,
+            "redact_pii": cfg.audit.redact_pii,
             "sqlite": {
                 "enabled": cfg.audit.sqlite.enabled,
                 "path": cfg.audit.sqlite.path,

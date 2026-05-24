@@ -53,22 +53,91 @@ def redaction_field_set() -> frozenset[str]:
     return frozenset(redaction_fields())
 
 
+def redaction_fields_pii() -> list[str]:
+    """Conservative PII arg list that gets scrubbed in addition to
+    ``redaction_fields`` when the ``audit.redact_pii`` config flag is
+    true (Phase 4c, default true).
+
+    Each name was source-verified against the live tool schemas: every
+    occurrence in current tools is unambiguously postal address / PII,
+    never a non-sensitive filter or selector. Names deliberately left
+    out so login identifiers stay readable in audit reports: email,
+    first_name, last_name, company. Names dropped after source review
+    because they collide with non-PII tool args: country
+    (linode_regions_list filter), address (network/IP address in
+    linode_instance_ips, linode_networking, linode_nodebalancers).
+
+    Cross-language parity is asserted by the unit test that mirrors
+    this list against the Go equivalent at
+    ``go/internal/audit/redact.go``.
+    """
+    return [
+        "address_1",
+        "address_2",
+        "city",
+        "phone",
+        "phone_number",
+        "state",
+        "tax_id",
+        "zip",
+    ]
+
+
+def redaction_field_set_pii() -> frozenset[str]:
+    """Return the PII redaction list as a frozenset for O(1) lookups."""
+    return frozenset(redaction_fields_pii())
+
+
 def redact(args: dict[str, Any] | None) -> tuple[dict[str, Any] | None, list[str]]:
-    """Walk ``args`` and replace sensitive values with REDACTED_VALUE.
+    """Walk ``args`` and replace sensitive (credential) values with
+    REDACTED_VALUE.
 
     Returns the redacted copy and a sorted list of every key that
     was redacted (deduped across the recursive walk). The original
-    args dict is NOT mutated.
+    args dict is NOT mutated. Credentials are always redacted; this
+    entry point does NOT touch PII fields. Use ``redact_with_pii``
+    for the combined set.
 
     The walk recurses into nested dicts but does NOT recurse into
     lists of dicts. Deliberate simplification: every sensitive arg
     in the current tool surface lives at the top level or inside a
     nested object literal, never inside an array element.
     """
+    return _redact_with_fields(args, redaction_field_set())
+
+
+def redact_with_pii(
+    args: dict[str, Any] | None,
+) -> tuple[dict[str, Any] | None, list[str]]:
+    """Walk ``args`` and replace BOTH credential and PII values with
+    REDACTED_VALUE.
+
+    Used by the audit middleware when ``audit.redact_pii`` is true
+    (Phase 4c default). When the operator opts out via
+    ``audit.redact_pii: false``, the middleware uses ``redact``
+    instead so PII passes through in cleartext while credentials stay
+    scrubbed.
+    """
+    return _redact_with_fields(args, _combined_redaction_field_set())
+
+
+def _combined_redaction_field_set() -> frozenset[str]:
+    """Union of credential and PII redaction names. The disjoint-sets
+    test guards against an entry sneaking into both lists.
+    """
+    return redaction_field_set() | redaction_field_set_pii()
+
+
+def _redact_with_fields(
+    args: dict[str, Any] | None,
+    fields: frozenset[str],
+) -> tuple[dict[str, Any] | None, list[str]]:
+    """Shared walker entry point. Extracted so credential-only and
+    credential+PII paths share the same recursive copy logic.
+    """
     if args is None:
         return None, []
 
-    fields = redaction_field_set()
     redacted_keys: set[str] = set()
     out = _redact_map(args, fields, redacted_keys)
 

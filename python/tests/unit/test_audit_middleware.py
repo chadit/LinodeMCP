@@ -90,3 +90,75 @@ async def test_set_audit_sink_none_restores_noop(sample_config: Config) -> None:
     assert sink.events() == [], (
         "previously-installed sink must not receive events after set_audit_sink(None)"
     )
+
+
+_PII_HELLO_ARGS = {
+    "name": "Auditor",
+    "phone": "+1-555-0100",
+    "tax_id": "TX-99",
+    "address_1": "123 Main St",
+    "city": "Springfield",
+    "country": "us",
+    "token": "shh-credential",
+}
+
+
+@pytest.mark.asyncio
+async def test_audit_middleware_redacts_pii_when_flag_on(
+    sample_config: Config,
+) -> None:
+    """With set_audit_redact_pii(True), the captured event scrubs PII
+    fields by name while non-PII passes through and credentials stay
+    scrubbed. Hello ignores unknown args, but the audit walker reads
+    the raw input map, so this exercises the Phase 4c tier end-to-end.
+    """
+    srv = Server(_full_access(sample_config))
+    sink = CapturingSink()
+    srv.set_audit_sink(sink)
+    srv.set_audit_redact_pii(redact_pii=True)
+
+    await srv.dispatch("hello", dict(_PII_HELLO_ARGS))
+
+    event = sink.events()[0]
+    assert event.args["phone"] == "[REDACTED]"
+    assert event.args["tax_id"] == "[REDACTED]"
+    assert event.args["address_1"] == "[REDACTED]"
+    assert event.args["city"] == "[REDACTED]"
+    assert event.args["token"] == "[REDACTED]", (
+        "credential is always redacted regardless of redact_pii"
+    )
+    assert event.args["country"] == "us", (
+        "country is a non-sensitive filter, must pass through"
+    )
+    assert event.args["name"] == "Auditor"
+    assert "phone" in event.args_redacted
+    assert "token" in event.args_redacted
+
+
+@pytest.mark.asyncio
+async def test_audit_middleware_leaves_pii_when_flag_off(
+    sample_config: Config,
+) -> None:
+    """With the default opt-out (set_audit_redact_pii(False) or never
+    set), PII passes through in cleartext while credentials are still
+    scrubbed.
+    """
+    srv = Server(_full_access(sample_config))
+    sink = CapturingSink()
+    srv.set_audit_sink(sink)
+    srv.set_audit_redact_pii(redact_pii=False)
+
+    await srv.dispatch("hello", dict(_PII_HELLO_ARGS))
+
+    event = sink.events()[0]
+    assert event.args["phone"] == "+1-555-0100"
+    assert event.args["tax_id"] == "TX-99"
+    assert event.args["address_1"] == "123 Main St"
+    assert event.args["city"] == "Springfield"
+    assert event.args["token"] == "[REDACTED]", (
+        "credential is still redacted when redact_pii=False"
+    )
+    assert "phone" not in event.args_redacted, (
+        "PII names absent from args_redacted when flag is off"
+    )
+    assert "token" in event.args_redacted

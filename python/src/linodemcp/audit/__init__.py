@@ -52,8 +52,11 @@ from linodemcp.audit.redact import (
     REDACTED_VALUE,
     is_redacted,
     redact,
+    redact_with_pii,
     redaction_field_set,
+    redaction_field_set_pii,
     redaction_fields,
+    redaction_fields_pii,
 )
 from linodemcp.audit.retention import (
     DEFAULT_AUDIT_RETENTION_DAYS,
@@ -114,8 +117,11 @@ __all__ = [
     "new_event_id",
     "read_recent",
     "redact",
+    "redact_with_pii",
     "redaction_field_set",
+    "redaction_field_set_pii",
     "redaction_fields",
+    "redaction_fields_pii",
     "resolve_default_audit_dir",
     "summarize",
     "validate_group_by",

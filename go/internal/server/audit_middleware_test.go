@@ -87,3 +87,94 @@ func findEventByTool(events []audit.Event, tool string) *audit.Event {
 
 	return nil
 }
+
+// helloCallWithPIIArgs sends a hello call with extra PII-named args.
+// The hello tool ignores unknown args, but the audit middleware walks
+// the raw arguments map and redacts by name regardless of which tool
+// owned them; that's how the PII tier exercises here without needing
+// a real PII-accepting tool.
+const helloCallWithPIIArgs = `{
+	"jsonrpc": "2.0",
+	"id": 2,
+	"method": "tools/call",
+	"params": {
+		"name": "hello",
+		"arguments": {
+			"name": "Auditor",
+			"phone": "+1-555-0100",
+			"tax_id": "TX-99",
+			"address_1": "123 Main St",
+			"city": "Springfield",
+			"country": "us",
+			"token": "shh-credential"
+		}
+	}
+}`
+
+// TestAuditMiddlewareRedactsPIIWhenFlagOn confirms the Phase 4c wiring:
+// when set_audit_redact_pii(true) is in effect, the captured event's
+// args carry [REDACTED] for PII names while non-PII passes through
+// and credentials stay scrubbed.
+func TestAuditMiddlewareRedactsPIIWhenFlagOn(t *testing.T) {
+	t.Parallel()
+
+	srv, err := server.New(fullAccessConfig())
+	require.NoError(t, err)
+
+	sink := audit.NewCapturingSink()
+	srv.SetAuditSink(sink)
+	srv.SetAuditRedactPII(true)
+
+	_ = srv.HandleMessage(t.Context(), []byte(helloCallWithPIIArgs))
+
+	events := sink.Events()
+	helloEvent := findEventByTool(events, "hello")
+	require.NotNil(t, helloEvent)
+
+	assert.True(t, audit.IsRedacted(helloEvent.Args["phone"]),
+		"phone is PII and must be redacted when redact_pii=true")
+	assert.True(t, audit.IsRedacted(helloEvent.Args["tax_id"]))
+	assert.True(t, audit.IsRedacted(helloEvent.Args["address_1"]))
+	assert.True(t, audit.IsRedacted(helloEvent.Args["city"]))
+	assert.True(t, audit.IsRedacted(helloEvent.Args["token"]),
+		"credential is always redacted regardless of redact_pii")
+	assert.Equal(t, "us", helloEvent.Args["country"],
+		"country is a non-sensitive filter, must pass through")
+	assert.Equal(t, "Auditor", helloEvent.Args["name"],
+		"non-PII non-credential args pass through")
+	assert.Contains(t, helloEvent.ArgsRedacted, "phone")
+	assert.Contains(t, helloEvent.ArgsRedacted, "token")
+}
+
+// TestAuditMiddlewareLeavesPIIWhenFlagOff is the inverse: with the
+// operator's opt-out (set_audit_redact_pii(false), the default for
+// tests), PII passes through in cleartext while credentials stay
+// scrubbed.
+func TestAuditMiddlewareLeavesPIIWhenFlagOff(t *testing.T) {
+	t.Parallel()
+
+	srv, err := server.New(fullAccessConfig())
+	require.NoError(t, err)
+
+	sink := audit.NewCapturingSink()
+	srv.SetAuditSink(sink)
+	// Explicitly opt out; this is also the Server default for tests.
+	srv.SetAuditRedactPII(false)
+
+	_ = srv.HandleMessage(t.Context(), []byte(helloCallWithPIIArgs))
+
+	events := sink.Events()
+	helloEvent := findEventByTool(events, "hello")
+	require.NotNil(t, helloEvent)
+
+	assert.Equal(t, "+1-555-0100", helloEvent.Args["phone"],
+		"PII passes through when redact_pii=false")
+	assert.Equal(t, "TX-99", helloEvent.Args["tax_id"])
+	assert.Equal(t, "123 Main St", helloEvent.Args["address_1"])
+	assert.Equal(t, "Springfield", helloEvent.Args["city"])
+	assert.True(t, audit.IsRedacted(helloEvent.Args["token"]),
+		"credential is redacted even with redact_pii=false")
+	assert.NotContains(t, helloEvent.ArgsRedacted, "phone",
+		"PII names absent from ArgsRedacted when flag is off")
+	assert.Contains(t, helloEvent.ArgsRedacted, "token")
+}

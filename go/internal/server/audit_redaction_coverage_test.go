@@ -87,3 +87,70 @@ func matchesAnySubstring(argName string, substrings []string) bool {
 
 	return false
 }
+
+// TestRedactionCoversSensitivePIIArgNames is the Phase 4c PII tier
+// catch-net. Parallel structure to TestRedactionCoversSensitiveArgNames
+// but for PII substrings against the PII redaction list. The PII tier
+// is operator-controllable (audit.redact_pii), but the catch-net runs
+// regardless: a tool that ships a new PII arg without updating either
+// the PII redaction list or this allowlist is a bug worth surfacing,
+// even if the running operator has PII redaction off today.
+//
+// A PII-substring hit must be either in the PII redaction list
+// (RedactionFieldsPII), in the credential list (a PII name with
+// secret-like content also gets always-on redaction), or explicitly
+// allowlisted as a name that contains a PII substring but is not
+// personally identifying (e.g. firewall IP addresses, network
+// address args).
+func TestRedactionCoversSensitivePIIArgNames(t *testing.T) {
+	t.Parallel()
+
+	// Case-insensitive substrings that flag an arg name as potentially
+	// carrying PII. Conservative scope per the spec.
+	piiSubstrings := []string{"tax", "address", "phone", "dob", "card", "cvv"}
+
+	// Arg names that match a PII substring but are NOT personally
+	// identifying. Each entry needs a justification because the
+	// heuristic exists to catch real PII leaks; a careless addition
+	// here silently disables the catch-net.
+	//
+	//   - address: an IPv4 or IPv6 network address (linode_instance_ips,
+	//     linode_networking, linode_nodebalancers). Network addresses
+	//     are operational, not PII.
+	//   - addresses: a list of network addresses on firewall rules
+	//     (linode_firewalls). Same reasoning as `address`.
+	knownSafePII := map[string]struct{}{
+		"address":   {},
+		"addresses": {},
+	}
+
+	srv := newCapabilityTestServer(t)
+	infos := srv.AllToolInfos()
+	require.NotEmpty(t, infos, "server must register at least one tool")
+
+	piiSet := audit.RedactionFieldSetPII()
+	credSet := audit.RedactionFieldSet()
+
+	for _, info := range infos {
+		for argName := range info.InputSchema.Properties {
+			if !matchesAnySubstring(argName, piiSubstrings) {
+				continue
+			}
+
+			if _, safe := knownSafePII[argName]; safe {
+				continue
+			}
+
+			_, inPII := piiSet[argName]
+			_, inCred := credSet[argName]
+			assert.True(
+				t, inPII || inCred,
+				"tool %q declares arg %q which looks like PII (matches one of %v) "+
+					"but is not in the PII redaction list; add it to "+
+					"RedactionFieldsPII() in both Go and Python, or allowlist it "+
+					"in knownSafePII with a justification",
+				info.Name, argName, piiSubstrings,
+			)
+		}
+	}
+}

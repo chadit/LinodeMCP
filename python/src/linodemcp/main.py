@@ -164,6 +164,7 @@ def _start_audit(
     )
     audit_sink = MultiSink(jsonl_sink, sqlite_sink) if sqlite_sink else jsonl_sink
     server.set_audit_sink(audit_sink)
+    server.set_audit_redact_pii(cfg.audit.redact_pii)
 
     set_audit_reports(cfg.audit.reports)
 

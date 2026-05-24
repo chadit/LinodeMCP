@@ -200,6 +200,7 @@ func makeEvent(tool string, capability audit.Capability) audit.Event {
 		"session-1",
 		1,
 		"0.1.0",
+		false,
 	)
 }
 

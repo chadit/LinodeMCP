@@ -79,6 +79,15 @@ type Server struct {
 	// writer. Tests inject a CapturingSink via SetAuditSink to
 	// assert handler-call events.
 	auditSink audit.Sink
+
+	// auditRedactPII selects which redaction tier the capture
+	// middleware uses (Phase 4c). False applies the always-on
+	// credential list only; true also applies the PII list. main wires
+	// this to cfg.Audit.RedactPII via SetAuditRedactPII at startup.
+	// Default false so tests that build a Server without going through
+	// main keep credential-only redaction behavior; production startup
+	// flips it to true unless the operator opts out.
+	auditRedactPII bool
 }
 
 // New creates a new LinodeMCP server. Returns an error if config is nil or if
@@ -528,6 +537,14 @@ func (s *Server) SetAuditSink(sink audit.Sink) {
 	s.auditSink = sink
 }
 
+// SetAuditRedactPII selects the redaction tier the capture middleware
+// applies to event args (Phase 4c). Main wires this to
+// cfg.Audit.RedactPII at startup; tests use it to opt into PII
+// redaction when asserting the combined-redaction path.
+func (s *Server) SetAuditRedactPII(redactPII bool) {
+	s.auditRedactPII = redactPII
+}
+
 // addTool registers a tool with mcp-go and the local list, wrapping the
 // handler so each in-flight invocation is tracked in s.inflight. Shutdown
 // uses that WaitGroup to drain handlers before returning. Takes the tool by
@@ -604,6 +621,7 @@ func (s *Server) newAuditEvent(
 		"",
 		0,
 		appinfo.Version,
+		s.auditRedactPII,
 	)
 }
 

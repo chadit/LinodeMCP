@@ -46,6 +46,7 @@ func TestNewEventPopulatesEveryField(t *testing.T) {
 		fixtureSession,
 		3,
 		fixtureVersion,
+		false,
 	)
 
 	assert.False(t, evt.TS.IsZero(), "TS must be populated")
@@ -197,5 +198,6 @@ func newFixtureEvent(t *testing.T) audit.Event {
 		fixtureSession,
 		1,
 		fixtureVersion,
+		false,
 	)
 }

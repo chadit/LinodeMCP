@@ -187,6 +187,12 @@ class Server:
         # nothing yet. Phase 2 swaps in the JSONL writer; tests inject
         # CapturingSink via set_audit_sink before exercising dispatch.
         self._audit_sink: Sink = NoopSink()
+        # Phase 4c: PII redaction tier flag. Default False so tests
+        # that build a Server without going through main keep
+        # credential-only redaction. main flips it to
+        # cfg.audit.redact_pii at startup (default True unless the
+        # operator opts out).
+        self._audit_redact_pii: bool = False
         self._idle = asyncio.Event()
         self._idle.set()
 
@@ -280,6 +286,7 @@ class Server:
             session_id="",
             credential_generation=0,
             linodemcp_version=LINODEMCP_VERSION,
+            redact_pii=self._audit_redact_pii,
         )
 
         try:
@@ -312,6 +319,14 @@ class Server:
         producing a None-deref on the next call.
         """
         self._audit_sink = sink if sink is not None else NoopSink()
+
+    def set_audit_redact_pii(self, redact_pii: bool) -> None:
+        """Select the redaction tier the capture middleware applies to
+        event args (Phase 4c). Main wires this to
+        ``cfg.audit.redact_pii`` at startup; tests use it to opt into
+        PII redaction when asserting the combined-redaction path.
+        """
+        self._audit_redact_pii = redact_pii
 
     def _capability_for(self, name: str) -> AuditCapability:
         """Translate the registered tool's capability into the audit wire form.

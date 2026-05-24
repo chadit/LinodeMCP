@@ -13,8 +13,11 @@ from typing import Any, cast
 from linodemcp.audit import (
     is_redacted,
     redact,
+    redact_with_pii,
     redaction_field_set,
+    redaction_field_set_pii,
     redaction_fields,
+    redaction_fields_pii,
 )
 
 _ARG_ROOT_PASS = "root_pass"
@@ -148,3 +151,123 @@ def test_redaction_field_set_matches_list() -> None:
 
     for name in fields:
         assert name in field_set
+
+
+def test_redaction_fields_pii_locks_conservative_scope() -> None:
+    """The PII list mirrors the source-verified Go list. Each name
+    appears only in account-update or profile-verification tool
+    schemas; drift here means the wrong field gets redacted (or
+    missed). The expected set must stay in sync with the Go side at
+    ``go/internal/audit/redact.go``.
+    """
+    expected = {
+        "address_1",
+        "address_2",
+        "city",
+        "phone",
+        "phone_number",
+        "state",
+        "tax_id",
+        "zip",
+    }
+    assert set(redaction_fields_pii()) == expected
+
+
+def test_redaction_pii_list_no_duplicates() -> None:
+    """PII list must not contain duplicates. Same drift guard as the
+    credential-side dup check.
+    """
+    fields = redaction_fields_pii()
+    assert len(fields) == len(set(fields)), (
+        "PII redaction list must not contain duplicates"
+    )
+
+
+def test_redaction_lists_disjoint() -> None:
+    """Credential and PII lists share no entries. The combined-set
+    helper assumes disjoint sets so it can merge without dedup; an
+    overlap would still work today (set semantics) but signals
+    taxonomy drift worth catching now.
+    """
+    overlap = set(redaction_fields()) & set(redaction_fields_pii())
+    assert overlap == set(), (
+        f"credential and PII lists must be disjoint; overlap: {sorted(overlap)}"
+    )
+
+
+def test_redact_with_pii_scrubs_pii_fields() -> None:
+    """The PII-aware entry point redacts both credential and PII names
+    in one walk. This is the path the audit middleware takes when
+    audit.redact_pii=true.
+    """
+    args = {
+        "linode_id": 42,
+        "label": "primary",
+        "token": "abc123",
+        "tax_id": "TX-99",
+        "phone": "+1-555-0100",
+        "address_1": "123 Main St",
+        "city": "Springfield",
+        "country": "us",  # not in PII list, must pass through
+    }
+
+    redacted, keys = redact_with_pii(args)
+
+    assert redacted is not None
+    assert redacted["linode_id"] == 42
+    assert redacted["label"] == "primary"
+    assert redacted["country"] == "us", (
+        "country is a region filter, must NOT be redacted"
+    )
+    assert is_redacted(redacted["token"]), "credential still redacted"
+    assert is_redacted(redacted["tax_id"])
+    assert is_redacted(redacted["phone"])
+    assert is_redacted(redacted["address_1"])
+    assert is_redacted(redacted["city"])
+    assert sorted(keys) == sorted(
+        ["token", "tax_id", "phone", "address_1", "city"],
+    )
+
+
+def test_redact_leaves_pii_when_flag_off() -> None:
+    """When the operator opts out of PII redaction (audit.redact_pii=
+    false), the middleware uses ``redact`` (credentials-only). PII
+    passes through in cleartext; credentials stay scrubbed.
+    """
+    args = {
+        "token": "abc123",
+        "tax_id": "TX-99",
+        "phone": "+1-555-0100",
+        "address_1": "123 Main St",
+    }
+
+    redacted, keys = redact(args)
+
+    assert redacted is not None
+    assert is_redacted(redacted["token"]), "credential must always be redacted"
+    assert redacted["tax_id"] == "TX-99", (
+        "PII passes through when caller uses redact (flag-off path)"
+    )
+    assert redacted["phone"] == "+1-555-0100"
+    assert redacted["address_1"] == "123 Main St"
+    assert keys == ["token"], (
+        "only the credential should appear in the redacted-key list"
+    )
+
+
+def test_redaction_field_set_pii_matches_list() -> None:
+    """Set helper for the PII list reflects the same membership."""
+    fields = redaction_fields_pii()
+    field_set = redaction_field_set_pii()
+
+    assert len(field_set) == len(fields)
+
+    for name in fields:
+        assert name in field_set
+
+
+def test_redact_with_pii_none_args() -> None:
+    """None safety on the PII-aware path mirrors the credential path."""
+    redacted, keys = redact_with_pii(None)
+    assert redacted is None
+    assert keys == []

@@ -35,9 +35,31 @@ func TestAuditDefaults(t *testing.T) {
 	require.NotNil(t, cfg.Audit.RetentionDays, "retention_days must be defaulted to a non-nil pointer")
 	assert.Equal(t, config.DefaultAuditRetentionDays, *cfg.Audit.RetentionDays,
 		"omitted retention_days defaults to 14")
+	require.NotNil(t, cfg.Audit.RedactPII, "redact_pii must be defaulted to a non-nil pointer")
+	assert.True(t, *cfg.Audit.RedactPII,
+		"omitted redact_pii defaults to true (PII redaction on)")
 	assert.False(t, cfg.Audit.SQLite.Enabled, "SQLite sink is off by default")
 	assert.Equal(t, config.DefaultAuditSQLiteBusyTimeoutMS, cfg.Audit.SQLite.BusyTimeoutMS,
 		"omitted busy_timeout_ms defaults to 5000")
+}
+
+// TestAuditRedactPIIExplicitFalsePreserved verifies an explicit
+// redact_pii: false survives defaulting rather than being clobbered to
+// true. Same pointer-default discipline as retention_days, since an
+// operator who explicitly opts out of PII redaction must not be
+// quietly re-enrolled by the defaulter on the next reload.
+func TestAuditRedactPIIExplicitFalsePreserved(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := writeConfigFile(t, dir, "config.yml", minimalConfigWith("audit:\n  redact_pii: false\n"))
+
+	cfg, err := config.Load(path)
+	require.NoError(t, err)
+
+	require.NotNil(t, cfg.Audit.RedactPII)
+	assert.False(t, *cfg.Audit.RedactPII,
+		"explicit redact_pii: false must be preserved as opt-out")
 }
 
 // TestAuditRetentionExplicitZeroPreserved verifies an explicit 0
@@ -106,18 +128,21 @@ func TestAuditSQLiteBlockParses(t *testing.T) {
 // process-global state.
 func TestAuditEnvOverrides(t *testing.T) {
 	t.Setenv("LINODEMCP_AUDIT_RETENTION_DAYS", "7")
+	t.Setenv("LINODEMCP_AUDIT_REDACT_PII", "false")
 	t.Setenv("LINODEMCP_AUDIT_SQLITE_ENABLED", "true")
 	t.Setenv("LINODEMCP_AUDIT_SQLITE_PATH", "/var/audit.db")
 	t.Setenv("LINODEMCP_AUDIT_SQLITE_BUSY_TIMEOUT_MS", "999")
 
 	dir := t.TempDir()
-	path := writeConfigFile(t, dir, "config.yml", minimalConfigWith("audit:\n  retention_days: 30\n"))
+	path := writeConfigFile(t, dir, "config.yml", minimalConfigWith("audit:\n  retention_days: 30\n  redact_pii: true\n"))
 
 	cfg, err := config.Load(path)
 	require.NoError(t, err)
 
 	require.NotNil(t, cfg.Audit.RetentionDays)
 	assert.Equal(t, 7, *cfg.Audit.RetentionDays, "env override beats the file value")
+	require.NotNil(t, cfg.Audit.RedactPII)
+	assert.False(t, *cfg.Audit.RedactPII, "env override beats the file value for redact_pii")
 	assert.True(t, cfg.Audit.SQLite.Enabled)
 	assert.Equal(t, "/var/audit.db", cfg.Audit.SQLite.Path)
 	assert.Equal(t, 999, cfg.Audit.SQLite.BusyTimeoutMS)

@@ -102,6 +102,12 @@ type Event struct {
 // args is redacted in place: the returned event holds redacted args
 // and the list of redacted keys. Callers that need the unredacted
 // values must keep their own copy.
+//
+// redactPII controls the PII redaction tier (Phase 4c): false applies
+// only the always-on credential list (Redact); true also applies the
+// PII list (RedactWithPII). The middleware passes the value from
+// cfg.Audit.RedactPII; tests and direct constructors pass false to
+// keep the existing credential-only redaction behavior.
 func NewEvent(
 	tool string,
 	capability Capability,
@@ -111,9 +117,16 @@ func NewEvent(
 	sessionID string,
 	credentialGeneration uint64,
 	linodemcpVersion string,
+	redactPII bool,
 ) Event {
 	now := time.Now().UTC()
-	redactedArgs, redactedKeys := Redact(args)
+
+	redactFn := Redact
+	if redactPII {
+		redactFn = RedactWithPII
+	}
+
+	redactedArgs, redactedKeys := redactFn(args)
 
 	return Event{
 		TS:                   now,

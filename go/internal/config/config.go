@@ -53,6 +53,13 @@ const (
 	// in milliseconds, applied when the SQLite sink is enabled but no
 	// explicit timeout is configured. Consumed by the Phase 3b sink.
 	DefaultAuditSQLiteBusyTimeoutMS = 5000
+
+	// DefaultAuditRedactPII is the default for audit.redact_pii: PII
+	// fields (tax_id, phone, address_1/2, city, state, zip) are redacted
+	// alongside the always-on credential list. Operators who need raw
+	// PII in audit (e.g. for accountability investigations) can opt out
+	// by setting audit.redact_pii: false.
+	DefaultAuditRedactPII = true
 )
 
 const (
@@ -116,15 +123,17 @@ type Config struct {
 }
 
 // AuditConfig holds audit-log settings. The JSONL sink is always on
-// (Phase 2); these fields tune retention and the optional SQLite sink
-// (Phase 3b).
+// (Phase 2); these fields tune retention, the optional SQLite sink
+// (Phase 3b), the optional PII redaction tier (Phase 4c), and named
+// custom reports (Phase 4a/b).
 //
-// RetentionDays is a pointer so an explicit 0 ("never delete") is
-// distinguishable from "unset" (nil → defaults to
-// DefaultAuditRetentionDays). After setDefaults runs it is always
+// RetentionDays and RedactPII are pointers so an explicit zero value
+// ("never delete" / "log PII in cleartext") is distinguishable from
+// "unset" (nil → defaults). After setDefaults runs they are always
 // non-nil, so consumers can dereference safely.
 type AuditConfig struct {
 	RetentionDays *int                    `json:"retention_days" yaml:"retention_days"`
+	RedactPII     *bool                   `json:"redact_pii"     yaml:"redact_pii"`
 	SQLite        AuditSQLiteConfig       `json:"sqlite"         yaml:"sqlite"`
 	Reports       map[string]ReportConfig `json:"reports"        yaml:"reports"`
 }
@@ -350,6 +359,11 @@ func setAuditDefaults(cfg *Config) {
 		cfg.Audit.RetentionDays = &days
 	}
 
+	if cfg.Audit.RedactPII == nil {
+		redact := DefaultAuditRedactPII
+		cfg.Audit.RedactPII = &redact
+	}
+
 	if cfg.Audit.SQLite.BusyTimeoutMS == 0 {
 		cfg.Audit.SQLite.BusyTimeoutMS = DefaultAuditSQLiteBusyTimeoutMS
 	}
@@ -477,6 +491,11 @@ func applyAuditOverrides(cfg *Config) {
 		if days, err := strconv.Atoi(v); err == nil {
 			cfg.Audit.RetentionDays = &days
 		}
+	}
+
+	if v := os.Getenv("LINODEMCP_AUDIT_REDACT_PII"); v != "" {
+		redact := v == boolTrue || v == "1"
+		cfg.Audit.RedactPII = &redact
 	}
 
 	if v := os.Getenv("LINODEMCP_AUDIT_SQLITE_ENABLED"); v != "" {

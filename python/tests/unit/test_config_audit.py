@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from linodemcp.config import (
+    DEFAULT_AUDIT_REDACT_PII,
     DEFAULT_AUDIT_RETENTION_DAYS,
     DEFAULT_AUDIT_SQLITE_BUSY_TIMEOUT_MS,
     ConfigInvalidError,
@@ -39,12 +40,33 @@ def _write(tmp_path: Path, audit_block: str) -> Path:
 
 
 def test_audit_defaults(tmp_path: Path) -> None:
-    """An omitted audit block defaults retention to 14, SQLite off."""
+    """An omitted audit block defaults retention to 14, PII redaction on,
+    SQLite off."""
     cfg = load_from_file(_write(tmp_path, ""))
 
     assert cfg.audit.retention_days == DEFAULT_AUDIT_RETENTION_DAYS
+    assert cfg.audit.redact_pii is DEFAULT_AUDIT_REDACT_PII
+    assert cfg.audit.redact_pii is True
     assert cfg.audit.sqlite.enabled is False
     assert cfg.audit.sqlite.busy_timeout_ms == DEFAULT_AUDIT_SQLITE_BUSY_TIMEOUT_MS
+
+
+def test_audit_redact_pii_explicit_false_preserved(tmp_path: Path) -> None:
+    """An explicit redact_pii: false survives parsing rather than being
+    clobbered back to the True default. The absent-vs-explicit distinction
+    matters: a quiet re-enrollment would defeat an operator's opt-out.
+    """
+    cfg = load_from_file(_write(tmp_path, "audit:\n  redact_pii: false\n"))
+    assert cfg.audit.redact_pii is False
+
+
+def test_audit_redact_pii_explicit_true_preserved(tmp_path: Path) -> None:
+    """An explicit redact_pii: true round-trips. Belt-and-suspenders against
+    a future refactor that might fold redact_pii into a multi-value or
+    invert the field meaning.
+    """
+    cfg = load_from_file(_write(tmp_path, "audit:\n  redact_pii: true\n"))
+    assert cfg.audit.redact_pii is True
 
 
 def test_audit_retention_explicit_zero_preserved(tmp_path: Path) -> None:
@@ -88,13 +110,17 @@ def test_audit_env_overrides(
 ) -> None:
     """LINODEMCP_AUDIT_* env vars override the file values."""
     monkeypatch.setenv("LINODEMCP_AUDIT_RETENTION_DAYS", "7")
+    monkeypatch.setenv("LINODEMCP_AUDIT_REDACT_PII", "false")
     monkeypatch.setenv("LINODEMCP_AUDIT_SQLITE_ENABLED", "true")
     monkeypatch.setenv("LINODEMCP_AUDIT_SQLITE_PATH", "/var/audit.db")
     monkeypatch.setenv("LINODEMCP_AUDIT_SQLITE_BUSY_TIMEOUT_MS", "999")
 
-    cfg = load_from_file(_write(tmp_path, "audit:\n  retention_days: 30\n"))
+    cfg = load_from_file(
+        _write(tmp_path, "audit:\n  retention_days: 30\n  redact_pii: true\n"),
+    )
 
     assert cfg.audit.retention_days == 7
+    assert cfg.audit.redact_pii is False
     assert cfg.audit.sqlite.enabled is True
     assert cfg.audit.sqlite.path == "/var/audit.db"
     assert cfg.audit.sqlite.busy_timeout_ms == 999

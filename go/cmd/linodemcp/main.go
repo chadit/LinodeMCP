@@ -79,6 +79,7 @@ func setupAudit(ctx context.Context, srv *server.Server, cfg *config.Config, log
 	}
 
 	srv.SetAuditSink(sink)
+	srv.SetAuditRedactPII(*cfg.Audit.RedactPII)
 
 	sweeper := audit.NewRetentionSweeper(
 		filepath.Dir(jsonlSink.Path()),

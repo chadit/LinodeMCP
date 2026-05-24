@@ -48,19 +48,48 @@ func RedactionFields() []string {
 // slices.Index(RedactionFields(), key) >= 0 but cheaper when called
 // per-key over a deep args tree.
 func RedactionFieldSet() map[string]struct{} {
-	fields := RedactionFields()
-	out := make(map[string]struct{}, len(fields))
-
-	for _, name := range fields {
-		out[name] = struct{}{}
-	}
-
-	return out
+	return setFromSlice(RedactionFields())
 }
 
-// Redact walks the args map and replaces sensitive values with
-// RedactedValue. Returns the redacted copy and a sorted list of
-// every key that was redacted (deduped across the recursive walk).
+// RedactionFieldsPII is the conservative PII arg list that gets
+// scrubbed in addition to RedactionFields when the audit.redact_pii
+// config flag is true (Phase 4c, default true). Match semantics are
+// the same as the credential list: exact field name, no substring.
+//
+// Each name was source-verified against the live tool schemas: every
+// occurrence in current tools is unambiguously postal address / PII,
+// never a non-sensitive filter or selector. Cross-language parity is
+// asserted by the unit test that mirrors this list against the Python
+// equivalent at `python/src/linodemcp/audit/redact.py`.
+//
+// Names deliberately left out so login identifiers stay readable in
+// audit reports: email, first_name, last_name, company. Names dropped
+// after source review because they collide with non-PII tool args:
+// country (linode_regions_list filter), address (network/IP address
+// in linode_instance_ips, linode_networking, linode_nodebalancers).
+func RedactionFieldsPII() []string {
+	return []string{
+		"address_1",
+		"address_2",
+		"city",
+		"phone",
+		"phone_number",
+		"state",
+		"tax_id",
+		"zip",
+	}
+}
+
+// RedactionFieldSetPII returns the PII redaction list as a set.
+func RedactionFieldSetPII() map[string]struct{} {
+	return setFromSlice(RedactionFieldsPII())
+}
+
+// Redact walks the args map and replaces sensitive (credential)
+// values with RedactedValue. Returns the redacted copy and a sorted
+// list of every key that was redacted (deduped across the recursive
+// walk). Credentials are always redacted; this entry point does NOT
+// touch PII fields. Use RedactWithPII for the combined set.
 //
 // The original args map is NOT mutated; callers that need the
 // unredacted values can keep their own copy.
@@ -72,9 +101,61 @@ func RedactionFieldSet() map[string]struct{} {
 // If a future tool needs array-element redaction, the walker grows
 // to handle it then.
 func Redact(args map[string]any) (map[string]any, []string) {
-	fields := RedactionFieldSet()
-	redactedKeys := make(map[string]struct{})
+	return redactWithFields(args, RedactionFieldSet())
+}
 
+// RedactWithPII walks the args map and replaces BOTH credential and
+// PII values with RedactedValue. Used by the audit middleware when
+// audit.redact_pii is true (Phase 4c default). When the operator
+// opts out via audit.redact_pii: false, the middleware uses Redact
+// instead so PII passes through in cleartext while credentials stay
+// scrubbed.
+func RedactWithPII(args map[string]any) (map[string]any, []string) {
+	return redactWithFields(args, combinedRedactionFieldSet())
+}
+
+// combinedRedactionFieldSet returns the union of credential and PII
+// redaction names. The disjoint-sets test in redact_test.go guards
+// against an entry sneaking into both lists, so a plain merge here
+// is safe.
+func combinedRedactionFieldSet() map[string]struct{} {
+	creds := RedactionFields()
+	pii := RedactionFieldsPII()
+	out := make(map[string]struct{}, len(creds)+len(pii))
+
+	for _, name := range creds {
+		out[name] = struct{}{}
+	}
+
+	for _, name := range pii {
+		out[name] = struct{}{}
+	}
+
+	return out
+}
+
+// setFromSlice builds a presence-set from a name slice. The audit
+// package builds these sets on every Redact call rather than caching;
+// the lists are short enough that the allocation cost stays under the
+// audit-overhead budget documented in the spec's Performance section.
+func setFromSlice(names []string) map[string]struct{} {
+	out := make(map[string]struct{}, len(names))
+
+	for _, name := range names {
+		out[name] = struct{}{}
+	}
+
+	return out
+}
+
+// redactWithFields is the shared walker entry point used by both
+// Redact and RedactWithPII. Extracted so the credential-only and
+// credential+PII paths share the same recursive copy logic.
+func redactWithFields(
+	args map[string]any,
+	fields map[string]struct{},
+) (map[string]any, []string) {
+	redactedKeys := make(map[string]struct{})
 	out := redactMap(args, fields, redactedKeys)
 	keys := make([]string, 0, len(redactedKeys))
 

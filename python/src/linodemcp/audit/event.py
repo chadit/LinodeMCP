@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
-from linodemcp.audit.redact import redact
+from linodemcp.audit.redact import redact, redact_with_pii
 
 # Constant prefix on every event_id. Combined with a 26-char ULID
 # body, the full id looks like ``evt_01HQXY3ZKQ8M7VRBNP4W5T2J9F``.
@@ -185,6 +185,8 @@ def new_event(
     session_id: str,
     credential_generation: int,
     linodemcp_version: str,
+    *,
+    redact_pii: bool = False,
 ) -> Event:
     """Construct an Event with timestamp, ULID, and metadata populated.
 
@@ -192,9 +194,17 @@ def new_event(
     later via :meth:`Event.finalize`. ``args`` is redacted in place:
     the returned event holds redacted args and the list of redacted
     keys. Callers that need the unredacted values keep their own copy.
+
+    ``redact_pii`` controls the PII redaction tier (Phase 4c). The
+    default False applies only the always-on credential list; the
+    middleware passes True when the operator's config has
+    ``audit.redact_pii: true`` (the default). Keyword-only to avoid
+    accidental positional confusion with the other booleans the
+    capture middleware might add later.
     """
     now = datetime.now(UTC)
-    redacted_args, redacted_keys = redact(args)
+    redact_fn = redact_with_pii if redact_pii else redact
+    redacted_args, redacted_keys = redact_fn(args)
 
     return Event(
         ts=now,

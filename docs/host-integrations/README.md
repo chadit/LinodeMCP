@@ -11,13 +11,15 @@ docs/host-integrations/
 ├── README.md            # this file
 ├── claude-code/
 │   └── commands/
-│       └── profile.md   # slash command for profile management
+│       ├── profile.md   # slash command for profile management
+│       └── audit.md     # slash commands for audit queries
 └── claude-desktop/
     └── commands/
-        └── profile.md   # shell wrappers (no native slash commands)
+        ├── profile.md   # shell wrappers for profiles (no native slash commands)
+        └── audit.md     # jq-based audit queries + ask-Claude patterns
 ```
 
-Each host directory is self-contained. Pick the one that matches your environment and read its `commands/profile.md` for the integration walk-through.
+Each host directory is self-contained. Pick the one that matches your environment and read its `commands/profile.md` for the integration walk-through; `commands/audit.md` then adds the audit-log query shortcuts (depends on the server already being registered).
 
 ## What the host needs to know
 
@@ -52,7 +54,9 @@ If the config file ends up malformed, the server keeps running with its previous
 ## When to look at the per-host docs
 
 - You want a `/profile` slash command in Claude Code: read `claude-code/commands/profile.md`.
+- You want `/audit` slash commands in Claude Code: read `claude-code/commands/audit.md`.
 - You're on Claude Desktop and want shell aliases or a wrapper script: read `claude-desktop/commands/profile.md`.
+- You're on Claude Desktop and want audit-log queries from the terminal: read `claude-desktop/commands/audit.md`.
 - You're on another host (Cline, Continue, etc.): these patterns transfer. The MCP server registration shape is the same; only the slash-command or alias mechanism differs.
 
 ## Security notes for the docs in this directory

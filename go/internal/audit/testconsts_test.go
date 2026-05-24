@@ -26,4 +26,15 @@ const (
 	// satisfy goconst.
 	keyRegion = "region"
 	valUSEast = "us-east"
+	// PII arg names reused across the PII-redaction tests in
+	// redact_test.go. Same goconst pressure as the credential-side
+	// constants above.
+	argTaxID    = "tax_id"
+	argPhone    = "phone"
+	argAddress1 = "address_1"
+	argCity     = "city"
+	// valFakeToken is a non-secret stand-in token value used across
+	// multiple redaction tests. Extracted because the literal now
+	// appears 3+ times.
+	valFakeToken = "abc123"
 )
