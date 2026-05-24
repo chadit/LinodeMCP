@@ -992,6 +992,7 @@ func databaseToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeDatabaseInstanceDeleteTool,
 		tools.NewLinodeDatabasePostgreSQLInstanceDeleteTool,
 		tools.NewLinodeDatabaseInstancePatchTool,
+		tools.NewLinodeDatabasePostgreSQLInstancePatchTool,
 		tools.NewLinodeDatabaseInstanceSuspendTool,
 		tools.NewLinodeDatabaseInstanceResumeTool,
 	})

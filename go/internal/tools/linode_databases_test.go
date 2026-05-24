@@ -37,6 +37,7 @@ const (
 	databaseInstanceIDMessage                 = "instance_id must be a positive integer"
 	databaseInstancePath                      = "/databases/mysql/instances/123"
 	databasePostgreSQLInstancePath            = "/databases/postgresql/instances/123"
+	databasePostgreSQLInstancePatchPath       = "/databases/postgresql/instances/123/patch"
 	databaseInstanceSSLPath                   = "/databases/mysql/instances/123/ssl"
 	databaseSSLCACertificate                  = "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t"
 	databaseInstanceCredentialsPath           = "/databases/mysql/instances/123/credentials"
