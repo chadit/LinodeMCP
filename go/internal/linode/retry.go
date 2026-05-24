@@ -894,6 +894,21 @@ func (c *Client) ListDatabaseInstances(ctx context.Context, page, pageSize int) 
 	return instances, err
 }
 
+// ListDatabasePostgreSQLInstances retrieves PostgreSQL Managed Database instances with automatic retry on transient failures.
+func (c *Client) ListDatabasePostgreSQLInstances(ctx context.Context, page, pageSize int) ([]DatabaseInstance, error) {
+	var instances []DatabaseInstance
+
+	err := c.executeWithRetry(ctx, "ListDatabasePostgreSQLInstances", func() error {
+		var err error
+
+		instances, err = c.httpListDatabasePostgreSQLInstances(ctx, page, pageSize)
+
+		return err
+	})
+
+	return instances, err
+}
+
 // GetDatabaseInstance retrieves one MySQL Managed Database instance with automatic retry on transient failures.
 func (c *Client) GetDatabaseInstance(ctx context.Context, instanceID int) (*DatabaseInstance, error) {
 	var instance *DatabaseInstance
