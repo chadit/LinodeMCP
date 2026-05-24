@@ -257,23 +257,59 @@ func newDatabaseInstanceCreateTool(
 
 // NewLinodeDatabaseInstanceUpdateTool creates a tool for updating one MySQL Managed Database instance.
 func NewLinodeDatabaseInstanceUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	return newDatabaseInstanceUpdateTool(
+		cfg,
 		"linode_database_instance_update",
-		mcp.WithDescription("Updates a MySQL Managed Database instance."),
+		"Updates a MySQL Managed Database instance.",
+		"The MySQL Managed Database instance ID to update.",
+		"JSON object of MySQL engine configuration values (optional).",
+		"New MySQL version for the database instance (optional).",
+		"This updates a Managed Database instance. Set confirm=true to proceed.",
+		handleDatabaseInstanceUpdateRequest,
+	)
+}
+
+// NewLinodeDatabasePostgreSQLInstanceUpdateTool creates a tool for updating one PostgreSQL Managed Database instance.
+func NewLinodeDatabasePostgreSQLInstanceUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	return newDatabaseInstanceUpdateTool(
+		cfg,
+		"linode_database_postgresql_instance_update",
+		"Updates a PostgreSQL Managed Database instance.",
+		"The PostgreSQL Managed Database instance ID to update.",
+		"JSON object of PostgreSQL engine configuration values (optional).",
+		"New PostgreSQL version for the database instance (optional).",
+		"This updates a PostgreSQL Managed Database instance. Set confirm=true to proceed.",
+		handleDatabasePostgreSQLInstanceUpdateRequest,
+	)
+}
+
+func newDatabaseInstanceUpdateTool(
+	cfg *config.Config,
+	name string,
+	description string,
+	instanceIDDescription string,
+	engineConfigDescription string,
+	versionDescription string,
+	confirmDescription string,
+	handle func(context.Context, *mcp.CallToolRequest, *config.Config) (*mcp.CallToolResult, error),
+) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		name,
+		mcp.WithDescription(description),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The MySQL Managed Database instance ID to update.")),
+		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description(instanceIDDescription)),
 		mcp.WithString(paramDatabaseAllowList, mcp.Description("JSON array of CIDR strings allowed to connect (optional).")),
-		mcp.WithString(paramDatabaseEngineConfig, mcp.Description("JSON object of MySQL engine configuration values (optional).")),
+		mcp.WithString(paramDatabaseEngineConfig, mcp.Description(engineConfigDescription)),
 		mcp.WithString(paramDatabaseLabel, mcp.Description("New label for the database instance (optional).")),
 		mcp.WithString(paramDatabasePrivateNetwork, mcp.Description("JSON object of private network settings (optional).")),
 		mcp.WithString(paramDatabaseType, mcp.Description("New Linode type for the database instance (optional).")),
 		mcp.WithString(paramDatabaseUpdates, mcp.Description("JSON object of maintenance update settings (optional).")),
-		mcp.WithString(paramDatabaseVersion, mcp.Description("New MySQL version for the database instance (optional).")),
-		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm database update.")),
+		mcp.WithString(paramDatabaseVersion, mcp.Description(versionDescription)),
+		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description(confirmDescription)),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleDatabaseInstanceUpdateRequest(ctx, &request, cfg)
+		return handle(ctx, &request, cfg)
 	}
 
 	return tool, profiles.CapWrite, handler
@@ -643,7 +679,43 @@ func handleDatabasePostgreSQLInstanceCreateRequest(ctx context.Context, request 
 }
 
 func handleDatabaseInstanceUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This updates a Managed Database instance. Set confirm=true to proceed."); result != nil {
+	return handleDatabaseInstanceUpdateRequestWithClient(
+		ctx,
+		request,
+		cfg,
+		"This updates a Managed Database instance. Set confirm=true to proceed.",
+		func(ctx context.Context, client *linode.Client, instanceID int, req *linode.UpdateDatabaseInstanceRequest) (*linode.DatabaseInstance, error) {
+			return client.UpdateDatabaseInstance(ctx, instanceID, req)
+		},
+		"Managed Database",
+		formatDatabaseInstanceUpdateError,
+	)
+}
+
+func handleDatabasePostgreSQLInstanceUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	return handleDatabaseInstanceUpdateRequestWithClient(
+		ctx,
+		request,
+		cfg,
+		"This updates a PostgreSQL Managed Database instance. Set confirm=true to proceed.",
+		func(ctx context.Context, client *linode.Client, instanceID int, req *linode.UpdateDatabaseInstanceRequest) (*linode.DatabaseInstance, error) {
+			return client.UpdateDatabasePostgreSQLInstance(ctx, instanceID, req)
+		},
+		"PostgreSQL Managed Database",
+		formatDatabasePostgreSQLInstanceUpdateError,
+	)
+}
+
+func handleDatabaseInstanceUpdateRequestWithClient(
+	ctx context.Context,
+	request *mcp.CallToolRequest,
+	cfg *config.Config,
+	confirmMessage string,
+	update func(context.Context, *linode.Client, int, *linode.UpdateDatabaseInstanceRequest) (*linode.DatabaseInstance, error),
+	messagePrefix string,
+	formatError func(error) string,
+) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, confirmMessage); result != nil {
 		return result, nil
 	}
 
@@ -662,16 +734,16 @@ func handleDatabaseInstanceUpdateRequest(ctx context.Context, request *mcp.CallT
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	instance, err := client.UpdateDatabaseInstance(ctx, instanceID, req)
+	instance, err := update(ctx, client, instanceID, req)
 	if err != nil {
-		return mcp.NewToolResultError(formatDatabaseInstanceUpdateError(err)), nil
+		return mcp.NewToolResultError(formatError(err)), nil
 	}
 
 	response := struct {
 		Message  string                   `json:"message"`
 		Instance *linode.DatabaseInstance `json:"database_instance"`
 	}{
-		Message:  fmt.Sprintf("Managed Database instance '%s' (ID: %d) updated", instance.Label, instance.ID),
+		Message:  fmt.Sprintf("%s instance '%s' (ID: %d) updated", messagePrefix, instance.Label, instance.ID),
 		Instance: instance,
 	}
 
@@ -880,6 +952,10 @@ func databaseEngineIDFromTool(request *mcp.CallToolRequest) (string, string) {
 
 func formatDatabaseInstanceUpdateError(err error) string {
 	return "Failed to update Managed Database instance: " + err.Error()
+}
+
+func formatDatabasePostgreSQLInstanceUpdateError(err error) string {
+	return "Failed to update PostgreSQL Managed Database instance: " + err.Error()
 }
 
 func databaseInstanceUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateDatabaseInstanceRequest, string) {

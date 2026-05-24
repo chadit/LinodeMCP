@@ -1019,6 +1019,11 @@ func (c *Client) UpdateDatabaseInstance(ctx context.Context, instanceID int, req
 	return c.httpUpdateDatabaseInstance(ctx, instanceID, req)
 }
 
+// UpdateDatabasePostgreSQLInstance updates one PostgreSQL Managed Database instance without retrying the PUT.
+func (c *Client) UpdateDatabasePostgreSQLInstance(ctx context.Context, instanceID int, req *UpdateDatabaseInstanceRequest) (*DatabaseInstance, error) {
+	return c.httpUpdateDatabasePostgreSQLInstance(ctx, instanceID, req)
+}
+
 // DeleteDatabaseInstance deletes one MySQL Managed Database instance without retrying the DELETE.
 func (c *Client) DeleteDatabaseInstance(ctx context.Context, instanceID int) error {
 	return c.httpDeleteDatabaseInstance(ctx, instanceID)
