@@ -215,6 +215,28 @@ func (c *Client) httpListMembersByImageShareGroup(ctx context.Context, shareGrou
 	return &response, nil
 }
 
+// GetImageShareGroupMemberToken retrieves a member token linked to an owned image share group.
+func (c *Client) httpGetImageShareGroupMemberToken(ctx context.Context, shareGroupID int, tokenUUID string) (*ImageShareGroupMember, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointImageShareGroups + "/" + escapeImageShareGroupID(shareGroupID) + "/members/" + escapeImageShareGroupTokenUUID(tokenUUID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetImageShareGroupMemberToken", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var member ImageShareGroupMember
+	if err := c.handleResponse(resp, &member); err != nil {
+		return nil, err
+	}
+
+	return &member, nil
+}
+
 // CreateImageShareGroup creates a group to share images with other users.
 func (c *Client) httpCreateImageShareGroup(ctx context.Context, req *CreateImageShareGroupRequest) (*ImageShareGroup, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

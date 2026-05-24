@@ -306,6 +306,7 @@ const (
 	caseEmpty                     = "empty"
 	caseSlash                     = "slash"
 	caseQuery                     = "query"
+	pathQueryValue                = "123?query"
 	caseDotTraversal              = "dot traversal"
 	caseFragment                  = "fragment"
 	caseDotdot                    = "dotdot"
