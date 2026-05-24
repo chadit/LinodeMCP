@@ -112,6 +112,122 @@ func imageShareGroupImagesFromTool(imagesJSON string) ([]linode.ImageShareGroupI
 	return images, nil
 }
 
+// NewLinodeImageShareGroupUpdateTool creates a tool for updating image share groups.
+func NewLinodeImageShareGroupUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_image_sharegroup_update",
+		mcp.WithDescription("Updates an image share group's label or description."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("The numeric image share group ID to update.")),
+		mcp.WithString("label", mcp.Description("New descriptive name for the share group (optional).")),
+		mcp.WithString("description", mcp.Description("New detailed description for the share group (optional).")),
+		mcp.WithBoolean(paramConfirm, mcp.Required(),
+			mcp.Description("Must be true to confirm image share group update.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeImageShareGroupUpdateRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleLinodeImageShareGroupUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This updates an image share group. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	shareGroupID, validationMessage := imageShareGroupIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	req, validationMessage := imageShareGroupUpdateFromTool(request.GetArguments())
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	environment := request.GetString(paramEnvironment, "")
+	if environment != "" {
+		request.GetArguments()[paramEnvironment] = environment
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	updated, err := client.UpdateImageShareGroup(ctx, shareGroupID, req)
+	if err != nil {
+		return mcp.NewToolResultError(formatImageShareGroupUpdateError(err)), nil
+	}
+
+	response := struct {
+		Message    string                  `json:"message"`
+		ShareGroup *linode.ImageShareGroup `json:"share_group"`
+	}{
+		Message:    fmt.Sprintf("Image share group '%s' (%d) updated successfully", updated.Label, updated.ID),
+		ShareGroup: updated,
+	}
+
+	result, err := MarshalToolResponse(response)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to format image share group response: %v", err)), nil
+	}
+
+	return result, nil
+}
+
+func imageShareGroupIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	raw, exists := request.GetArguments()["sharegroup_id"]
+	if !exists {
+		return 0, "sharegroup_id must be a positive integer"
+	}
+
+	shareGroupID, ok := numberArgToInt(raw)
+	if !ok || shareGroupID <= 0 {
+		return 0, "sharegroup_id must be a positive integer"
+	}
+
+	return shareGroupID, ""
+}
+
+func imageShareGroupUpdateFromTool(args map[string]any) (*linode.UpdateImageShareGroupRequest, string) {
+	req := &linode.UpdateImageShareGroupRequest{}
+
+	var hasUpdate bool
+
+	label, hasLabel, validationMessage := optionalStringField(args, "label")
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if hasLabel {
+		req.Label = &label
+		hasUpdate = true
+	}
+
+	description, hasDescription, validationMessage := optionalStringField(args, "description")
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if hasDescription {
+		req.Description = &description
+		hasUpdate = true
+	}
+
+	if !hasUpdate {
+		return nil, "at least one of label or description is required"
+	}
+
+	return req, ""
+}
+
+func formatImageShareGroupUpdateError(err error) string {
+	return "Failed to update image share group: " + err.Error()
+}
+
 // NewLinodeImageCreateTool creates a tool for creating private Linode images.
 func NewLinodeImageCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(

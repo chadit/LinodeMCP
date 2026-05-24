@@ -1180,6 +1180,12 @@ func (c *Client) CreateImageShareGroup(ctx context.Context, req *CreateImageShar
 	return c.httpCreateImageShareGroup(ctx, req)
 }
 
+// UpdateImageShareGroup updates an image share group without automatic retry.
+// Replaying this mutating operation could repeat side effects after a transient failure.
+func (c *Client) UpdateImageShareGroup(ctx context.Context, shareGroupID int, req *UpdateImageShareGroupRequest) (*ImageShareGroup, error) {
+	return c.httpUpdateImageShareGroup(ctx, shareGroupID, req)
+}
+
 // ListImageShareGroupTokens retrieves image share group tokens with automatic retry on transient failures.
 func (c *Client) ListImageShareGroupTokens(ctx context.Context, page, pageSize int) (*PaginatedResponse[ImageShareGroupToken], error) {
 	var tokens *PaginatedResponse[ImageShareGroupToken]

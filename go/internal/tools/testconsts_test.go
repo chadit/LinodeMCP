@@ -274,6 +274,7 @@ const (
 	errTokenNonEmpty               = "token must be a non-empty string"
 	errTokenNoSeparators           = "token must not contain path separators"
 	errValidForShareGroupUUID      = "valid_for_sharegroup_uuid is required"
+	imageShareGroupCreated         = "2025-04-14T22:44:02"
 	errEventIDRequired             = "event_id is required"
 	errEventIDPositive             = "event_id must be a positive integer"
 	keyComments                    = "comments"
