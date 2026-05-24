@@ -36,6 +36,7 @@ const (
 	databaseInstancePatchPath                 = "/databases/mysql/instances/123/patch"
 	databaseInstanceSuspendPath               = "/databases/mysql/instances/123/suspend"
 	databaseInstanceResumePath                = "/databases/mysql/instances/123/resume"
+	databasePostgreSQLInstanceResumePath      = "/databases/postgresql/instances/123/resume"
 	databaseInstanceLabel                     = "primary-db"
 	databaseInstanceType                      = "g6-dedicated-2"
 	databaseCredentialsPassword               = "secret"
@@ -1362,6 +1363,49 @@ func TestClientResumeDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Equal(t, int32(1), attempts.Load(), "side-effecting resume POST must not be retried")
+}
+
+func TestClientResumeDatabasePostgreSQLInstanceSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, databasePostgreSQLInstanceResumePath, r.URL.Path, "request path should include PostgreSQL instance id and resume suffix")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		assert.Equal(t, http.NoBody, r.Body, "resume request should not send a body")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	err := client.ResumeDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
+
+	require.NoError(t, err, "ResumeDatabasePostgreSQLInstance should succeed on 200 response")
+}
+
+func TestClientResumeDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, databasePostgreSQLInstanceResumePath, r.URL.Path, "request path should include PostgreSQL instance id and resume suffix")
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
+	err := client.ResumeDatabasePostgreSQLInstance(t.Context(), databaseInstanceID)
+
+	require.Error(t, err)
+	assert.Equal(t, int32(1), attempts.Load(), "side-effecting PostgreSQL resume POST must not be retried")
 }
 
 func TestClientGetDatabaseEngineSuccess(t *testing.T) {
