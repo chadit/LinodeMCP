@@ -60,6 +60,8 @@ const (
 	shareGroupUpdatedFixture     = "2025-04-15T22:44:02"
 	shareGroupTokenUUIDFixture   = "sharegroup-token-uuid-fixture"
 	shareGroupTokenValueFixture  = "sample-sharegroup-membership-token"
+	memberLabelFixture           = "Engineering"
+	memberTokenFixture           = "member-token"
 	imageLinuxDebianFixture      = "Linux Debian"
 	privateImage15Fixture        = "private/15"
 	sharedImage1Fixture          = "shared/1"

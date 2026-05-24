@@ -47,8 +47,8 @@ func TestLinodeImageShareGroupDeleteTool(t *testing.T) {
 		{name: "missing sharegroup id", args: map[string]any{keyConfirm: true}, wantContains: errShareGroupIDPositive},
 		{name: "zero sharegroup id", args: map[string]any{keyShareGroupID: 0, keyConfirm: true}, wantContains: errShareGroupIDPositive},
 		{name: "negative sharegroup id", args: map[string]any{keyShareGroupID: -1, keyConfirm: true}, wantContains: errShareGroupIDPositive},
-		{name: "slash sharegroup id", args: map[string]any{keyShareGroupID: pathSeparatorValue, keyConfirm: true}, wantContains: errShareGroupIDPositive},
-		{name: "query sharegroup id", args: map[string]any{keyShareGroupID: "1?2", keyConfirm: true}, wantContains: errShareGroupIDPositive},
+		{name: caseSlashShareGroupID, args: map[string]any{keyShareGroupID: pathSeparatorValue, keyConfirm: true}, wantContains: errShareGroupIDPositive},
+		{name: caseQueryShareGroupID, args: map[string]any{keyShareGroupID: "1?2", keyConfirm: true}, wantContains: errShareGroupIDPositive},
 		{name: "traversal sharegroup id", args: map[string]any{keyShareGroupID: pathTraversalValue, keyConfirm: true}, wantContains: errShareGroupIDPositive},
 	}
 

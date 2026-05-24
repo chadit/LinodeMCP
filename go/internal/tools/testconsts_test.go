@@ -16,6 +16,8 @@ const (
 	errTemporaryFailure  = "temporary failure"
 	errNotFound          = "not found"
 	errImageIDPositive   = "image_id must be a positive integer"
+	memberLabelFixture   = "Engineering"
+	memberTokenFixture   = "member-token"
 
 	// Common JSON request/response keys.
 	keyConfirm                  = "confirm"
@@ -288,6 +290,8 @@ const (
 	// Validation case names used in table-driven test rows.
 	caseRequiresConfirm           = "requires confirm"
 	caseMissingConfirm            = "missing confirm"
+	caseSlashShareGroupID         = "slash sharegroup id"
+	caseQueryShareGroupID         = "query sharegroup id"
 	caseSlashUsername             = "slash username"
 	caseQueryUsername             = "query username"
 	caseDotdotUsername            = "dotdot username"

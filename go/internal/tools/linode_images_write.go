@@ -308,6 +308,106 @@ func formatImageShareGroupImageUpdateError(err error) string {
 	return "Failed to update shared image: " + err.Error()
 }
 
+// NewLinodeImageShareGroupMembersAddTool creates a tool for adding members to an image share group.
+func NewLinodeImageShareGroupMembersAddTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_image_sharegroup_members_add",
+		mcp.WithDescription("Adds members to an image share group using a membership token."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("The numeric image share group ID to add members to.")),
+		mcp.WithString("label", mcp.Required(), mcp.Description("Label for the member being added.")),
+		mcp.WithString("token", mcp.Required(), mcp.Description("Membership token used to add the member.")),
+		mcp.WithBoolean(paramConfirm, mcp.Required(),
+			mcp.Description("Must be true to confirm adding members to the share group.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeImageShareGroupMembersAddRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleLinodeImageShareGroupMembersAddRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This adds members to an image share group. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	shareGroupID, validationMessage := imageShareGroupIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	req, validationMessage := imageShareGroupMemberAddFromTool(request.GetArguments())
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	environment := request.GetString(paramEnvironment, "")
+	if environment != "" {
+		request.GetArguments()[paramEnvironment] = environment
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	shareGroup, err := client.AddImageShareGroupMembers(ctx, shareGroupID, req)
+	if err != nil {
+		return mcp.NewToolResultError(formatImageShareGroupMembersAddError(err)), nil
+	}
+
+	response := struct {
+		Message    string                  `json:"message"`
+		ShareGroup *linode.ImageShareGroup `json:"share_group"`
+	}{
+		Message:    fmt.Sprintf("Added members to image share group %d", shareGroupID),
+		ShareGroup: shareGroup,
+	}
+
+	result, err := MarshalToolResponse(response)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to format image share group member response: %v", err)), nil
+	}
+
+	return result, nil
+}
+
+func imageShareGroupMemberAddFromTool(args map[string]any) (*linode.AddImageShareGroupMembersRequest, string) {
+	label, labelOK := requiredTrimmedStringArg(args, "label")
+	if !labelOK {
+		return nil, "label is required"
+	}
+
+	token, tokenOK := requiredTrimmedStringArg(args, "token")
+	if !tokenOK {
+		return nil, "token is required"
+	}
+
+	return &linode.AddImageShareGroupMembersRequest{Label: label, Token: token}, ""
+}
+
+func requiredTrimmedStringArg(args map[string]any, name string) (string, bool) {
+	raw, exists := args[name]
+	if !exists {
+		return "", false
+	}
+
+	value, ok := raw.(string)
+	if !ok {
+		return "", false
+	}
+
+	value = strings.TrimSpace(value)
+
+	return value, value != ""
+}
+
+func formatImageShareGroupMembersAddError(err error) string {
+	return "Failed to add members to image share group: " + err.Error()
+}
+
 func imageShareGroupImagesFromTool(imagesJSON string) ([]linode.ImageShareGroupImage, error) {
 	if strings.TrimSpace(imagesJSON) == "" {
 		return nil, nil

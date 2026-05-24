@@ -257,6 +257,28 @@ func (c *Client) httpAddImageShareGroupImages(ctx context.Context, shareGroupID 
 	return &image, nil
 }
 
+// AddImageShareGroupMembers adds members to an owned image share group.
+func (c *Client) httpAddImageShareGroupMembers(ctx context.Context, shareGroupID int, req *AddImageShareGroupMembersRequest) (*ImageShareGroup, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointImageShareGroups + "/" + escapeImageShareGroupID(shareGroupID) + "/members"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "AddImageShareGroupMembers", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var shareGroup ImageShareGroup
+	if err := c.handleResponse(resp, &shareGroup); err != nil {
+		return nil, err
+	}
+
+	return &shareGroup, nil
+}
+
 // DeleteImageShareGroupImage revokes access to one shared image in an owned image share group.
 func (c *Client) httpDeleteImageShareGroupImage(ctx context.Context, shareGroupID, imageID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

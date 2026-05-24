@@ -113,10 +113,10 @@ func TestLinodeImageShareGroupCreateToolValidation(t *testing.T) {
 	t.Parallel()
 
 	for name, confirm := range map[string]any{
-		"missing confirm": nil,
-		"false confirm":   false,
-		"string confirm":  boolStringTrue,
-		"numeric confirm": 1,
+		caseMissingConfirm: nil,
+		"false confirm":    false,
+		"string confirm":   boolStringTrue,
+		"numeric confirm":  1,
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()

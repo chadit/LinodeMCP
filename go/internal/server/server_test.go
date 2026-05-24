@@ -158,6 +158,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 	want := map[string]profiles.Capability{
 		"linode_image_create":                                   profiles.CapWrite,
 		"linode_image_sharegroup_images_add":                    profiles.CapWrite,
+		"linode_image_sharegroup_members_add":                   profiles.CapWrite,
 		"linode_image_sharegroup_image_delete":                  profiles.CapDestroy,
 		"linode_image_sharegroup_image_update":                  profiles.CapWrite,
 		"linode_image_sharegroup_token_create":                  profiles.CapAdmin,
