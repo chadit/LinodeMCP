@@ -43,7 +43,7 @@ func TestLinodeImageShareGroupTokenGetTool(t *testing.T) {
 			TokenUUID:              shareGroupTokenGetUUID,
 			Status:                 statusActive,
 			Label:                  "Backend Services - Engineering",
-			Created:                "2025-08-04T10:09:09",
+			Created:                imageShareGroupTokenCreated,
 			Updated:                &updated,
 			Expiry:                 &expiry,
 			ValidForShareGroupUUID: shareGroupUUIDFixture,

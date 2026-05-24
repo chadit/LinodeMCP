@@ -28,7 +28,7 @@ func TestClientGetImageShareGroupTokenSuccess(t *testing.T) {
 		TokenUUID:              imageShareGroupTokenUUID,
 		Status:                 oauthClientStatus,
 		Label:                  "Backend Services - Engineering",
-		Created:                "2025-08-04T10:09:09",
+		Created:                imageShareGroupTokenCreated,
 		Updated:                &updated,
 		Expiry:                 &expiry,
 		ValidForShareGroupUUID: imageShareGroupUUID,

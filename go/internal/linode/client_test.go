@@ -6084,7 +6084,7 @@ func TestClientListImageShareGroupTokensSuccess(t *testing.T) {
 			TokenUUID:              "13428362-5458-4dad-b14b-8d0d4d648f8c",
 			Status:                 oauthClientStatus,
 			Label:                  "Backend Services - Engineering",
-			Created:                "2025-08-04T10:09:09",
+			Created:                imageShareGroupTokenCreated,
 			Updated:                &updated,
 			Expiry:                 &expiry,
 			ValidForShareGroupUUID: "e1d0e58b-f89f-4237-84ab-b82077342359",
