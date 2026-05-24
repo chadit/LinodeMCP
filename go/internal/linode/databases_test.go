@@ -17,6 +17,9 @@ const (
 	databaseEnginesPath                       = "/databases/engines"
 	databaseTypesPath                         = "/databases/types"
 	databaseTypeID                            = "g6-dedicated-1"
+	databaseTypeEscapedPath                   = "/databases/types/g6-dedicated-1"
+	databaseTypeIDWithSeparators              = "g6/dedicated?plan=1"
+	databaseTypeEscapedSeparatorPath          = "/databases/types/g6%2Fdedicated%3Fplan=1"
 	databaseTypeLabel                         = "DBaaS - Dedicated 80GB"
 	databaseEngineMySQL                       = "mysql"
 	databaseEngineID                          = "mysql/8.0.26"
@@ -206,6 +209,101 @@ func TestClientListDatabaseTypesRetriesTransientRead(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.Equal(t, databaseTypeID, got[0].ID)
 	assert.Equal(t, int32(2), attempts.Load(), "transient read should be retried once")
+}
+
+func TestClientGetDatabaseTypeSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, databaseTypeEscapedPath, r.URL.EscapedPath(), "request path should escape type id")
+		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseType{ID: databaseTypeID, Label: databaseTypeLabel}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.GetDatabaseType(t.Context(), databaseTypeID, 2, 25)
+
+	require.NoError(t, err, "GetDatabaseType should succeed on 200 response")
+	require.NotNil(t, got, "database type should not be nil")
+	assert.Equal(t, databaseTypeID, got.ID)
+	assert.Equal(t, databaseTypeLabel, got.Label)
+}
+
+func TestClientGetDatabaseTypeEscapesPathSeparators(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, databaseTypeEscapedSeparatorPath, r.URL.EscapedPath(), "request path should escape separators in type id")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseType{ID: databaseTypeIDWithSeparators, Label: databaseTypeLabel}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.GetDatabaseType(t.Context(), databaseTypeIDWithSeparators, 0, 0)
+
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, databaseTypeIDWithSeparators, got.ID)
+}
+
+func TestClientGetDatabaseTypeAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, databaseTypeEscapedPath, r.URL.EscapedPath(), "request path should escape type id")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errForbidden}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	_, err := client.GetDatabaseType(t.Context(), databaseTypeID, 0, 0)
+
+	require.Error(t, err)
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+}
+
+func TestClientGetDatabaseTypeRetriesTransientRead(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+
+		assert.Equal(t, databaseTypeEscapedPath, r.URL.EscapedPath(), "request path should escape type id")
+
+		if attempts.Load() == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
+			}))
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseType{ID: databaseTypeID, Label: databaseTypeLabel}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
+	got, err := client.GetDatabaseType(t.Context(), databaseTypeID, 0, 0)
+
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, int32(2), attempts.Load(), "transient read failures should be retried")
 }
 
 func TestClientGetDatabaseMySQLConfigSuccess(t *testing.T) {

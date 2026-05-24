@@ -22,6 +22,10 @@ const (
 	databaseEnginesPath                       = "/databases/engines"
 	databaseTypesPath                         = "/databases/types"
 	databaseTypeID                            = "g6-dedicated-1"
+	databaseTypeIDParam                       = "type_id"
+	databaseTypeEscapedPath                   = "/databases/types/g6-dedicated-1"
+	databaseTypeIDRequiredMessage             = "type_id must be a non-empty string"
+	databaseTypeIDSeparatorMessage            = "type_id must not contain separators, query, fragment, or traversal segments"
 	databaseTypeLabel                         = "DBaaS - Dedicated 80GB"
 	databaseEngineEscapedPath                 = "/databases/engines/mysql%2F8.0.26"
 	databaseEngineID                          = "mysql/8.0.26"
@@ -360,6 +364,120 @@ func TestLinodeDatabaseTypeListTool(t *testing.T) {
 				require.NoError(t, err, "validation errors should be returned as tool result errors")
 				require.NotNil(t, result, "result should not be nil")
 				assert.True(t, result.IsError, "invalid pagination should return an error result")
+
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, testCase.wantMessage)
+			})
+		}
+	})
+}
+
+func TestLinodeDatabaseTypeGetTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeDatabaseTypeGetTool(cfg)
+
+		assert.Equal(t, "linode_database_type_get", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read capability")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, databaseTypeIDParam, "schema should include type_id")
+		assert.NotContains(t, props, keyConfirm, "read-only get tool must not require confirm")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, databaseTypeEscapedPath, r.URL.EscapedPath(), "request path should escape type id")
+			assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseType{ID: databaseTypeID, Label: databaseTypeLabel}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeDatabaseTypeGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{databaseTypeIDParam: databaseTypeID, keyPage: 2, keyPageSize: 25})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, databaseTypeID)
+		assert.Contains(t, textContent.Text, databaseTypeLabel)
+	})
+
+	t.Run("client error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, databaseTypeEscapedPath, r.URL.EscapedPath(), "request path should escape type id")
+			w.WriteHeader(http.StatusInternalServerError)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: temporaryFailure}},
+			}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeDatabaseTypeGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{databaseTypeIDParam: databaseTypeID})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "client errors should be returned as tool result errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failures should return an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to retrieve Managed Database type")
+	})
+
+	t.Run("type id validation", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		_, _, handler := tools.NewLinodeDatabaseTypeGetTool(cfg)
+
+		cases := []struct {
+			name        string
+			args        map[string]any
+			wantMessage string
+		}{
+			{name: "missing type id", args: map[string]any{}, wantMessage: databaseTypeIDRequiredMessage},
+			{name: "numeric type id", args: map[string]any{databaseTypeIDParam: 123}, wantMessage: databaseTypeIDRequiredMessage},
+			{name: "blank type id", args: map[string]any{databaseTypeIDParam: ""}, wantMessage: databaseTypeIDRequiredMessage},
+			{name: "slash type id", args: map[string]any{databaseTypeIDParam: "g6/dedicated-1"}, wantMessage: databaseTypeIDSeparatorMessage},
+			{name: "query type id", args: map[string]any{databaseTypeIDParam: "g6-dedicated-1?x=1"}, wantMessage: databaseTypeIDSeparatorMessage},
+			{name: "fragment type id", args: map[string]any{databaseTypeIDParam: "g6-dedicated-1#frag"}, wantMessage: databaseTypeIDSeparatorMessage},
+			{name: "traversal type id", args: map[string]any{databaseTypeIDParam: "g6-..-1"}, wantMessage: databaseTypeIDSeparatorMessage},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "validation errors should be returned as tool result errors")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid type_id should return an error result")
 
 				textContent, ok := result.Content[0].(mcp.TextContent)
 				require.True(t, ok, "content should be TextContent")

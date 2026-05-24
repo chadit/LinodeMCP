@@ -27,6 +27,7 @@ const (
 	paramDatabaseRegion         = "region"
 	paramDatabaseSSLConnection  = "ssl_connection"
 	paramDatabaseType           = "type"
+	paramDatabaseTypeID         = "type_id"
 	paramDatabaseUpdates        = "updates"
 	paramDatabaseVersion        = "version"
 
@@ -69,6 +70,28 @@ func NewLinodeDatabaseTypeListTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return handleDatabaseTypesListRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeDatabaseTypeGetTool creates a tool for getting one Managed Database node type.
+func NewLinodeDatabaseTypeGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_database_type_get",
+		mcp.WithDescription("Retrieves a single Managed Database node type by ID."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithString(
+			paramDatabaseTypeID,
+			mcp.Description("The Managed Database type ID to retrieve, for example g6-dedicated-1 (required)."),
+			mcp.Required(),
+		),
+		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+		mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleDatabaseTypeGetRequest(ctx, &request, cfg)
 	}
 
 	return tool, profiles.CapRead, handler
@@ -802,6 +825,30 @@ func handleDatabaseTypesListRequest(ctx context.Context, request *mcp.CallToolRe
 	return FormatListResponse(types, nil, "database_types")
 }
 
+func handleDatabaseTypeGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	typeID, validationMessage := databaseTypeIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	page, pageSize, validationMessage := databaseTypesPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	databaseType, err := client.GetDatabaseType(ctx, typeID, page, pageSize)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Managed Database type: %v", err)), nil
+	}
+
+	return MarshalToolResponse(databaseType)
+}
+
 func handleDatabaseInstancesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	page, pageSize, validationMessage := databaseInstancesPaginationFromTool(request)
 	if validationMessage != "" {
@@ -1276,6 +1323,19 @@ func databaseTypesPaginationFromTool(request *mcp.CallToolRequest) (int, int, st
 	}
 
 	return page, pageSize, ""
+}
+
+func databaseTypeIDFromTool(request *mcp.CallToolRequest) (string, string) {
+	typeID, ok := request.GetArguments()[paramDatabaseTypeID].(string)
+	if !ok || strings.TrimSpace(typeID) == "" {
+		return "", "type_id must be a non-empty string"
+	}
+
+	if typeID != strings.TrimSpace(typeID) || strings.Contains(typeID, "/") || strings.Contains(typeID, "?") || strings.Contains(typeID, "#") || strings.Contains(typeID, "..") {
+		return "", "type_id must not contain separators, query, fragment, or traversal segments"
+	}
+
+	return typeID, ""
 }
 
 func databaseInstancesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {

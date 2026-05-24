@@ -60,6 +60,29 @@ func (c *Client) httpListDatabaseTypes(ctx context.Context, page, pageSize int) 
 	return response.Data, nil
 }
 
+// GetDatabaseType retrieves a Managed Database node type by ID.
+func (c *Client) httpGetDatabaseType(ctx context.Context, typeID string, page, pageSize int) (*DatabaseType, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointDatabaseTypes + "/" + url.PathEscape(typeID)
+	endpoint = withPaginationQuery(endpoint, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetDatabaseType", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var databaseType DatabaseType
+	if err := c.handleResponse(resp, &databaseType); err != nil {
+		return nil, err
+	}
+
+	return &databaseType, nil
+}
+
 // ListDatabaseInstances retrieves Managed Database instances.
 func (c *Client) httpListDatabaseInstances(ctx context.Context, page, pageSize int) ([]DatabaseInstance, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
