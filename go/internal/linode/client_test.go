@@ -6421,3 +6421,119 @@ func TestClientCreateImageShareGroupDoesNotRetry(t *testing.T) {
 	require.Error(t, err, "CreateImageShareGroup should fail on 500 response")
 	assert.Equal(t, int32(1), calls.Load(), "CreateImageShareGroup must not retry and replay a mutating request")
 }
+
+const (
+	uploadImageLabelFixture  = "custom-image"
+	uploadImageTagProd       = "prod"
+	uploadImageTagWeb        = "web"
+	uploadImageStatusFixture = "creating"
+	uploadImageTargetFixture = "https://uploads.example.test/custom-image"
+)
+
+func TestClientUploadImageSuccess(t *testing.T) {
+	t.Parallel()
+
+	request := &linode.UploadImageRequest{
+		Label:       uploadImageLabelFixture,
+		Region:      regionUSEast,
+		Description: "custom upload",
+		CloudInit:   true,
+		Tags:        []string{uploadImageTagProd, uploadImageTagWeb},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/images/upload", r.URL.Path, "request path should be /images/upload")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
+
+		var body map[string]any
+		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
+			return
+		}
+
+		assert.Equal(t, uploadImageLabelFixture, body[keyLabel])
+		assert.Equal(t, regionUSEast, body["region"])
+		assert.Equal(t, "custom upload", body[keyDescription])
+		assert.Equal(t, true, body["cloud_init"])
+		assert.Equal(t, []any{uploadImageTagProd, uploadImageTagWeb}, body["tags"])
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			"image": linode.Image{
+				ID:          "private/99",
+				Label:       uploadImageLabelFixture,
+				Description: "custom upload",
+				Status:      uploadImageStatusFixture,
+				Tags:        []string{uploadImageTagProd, uploadImageTagWeb},
+			},
+			"upload_to": uploadImageTargetFixture,
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	result, err := client.UploadImage(t.Context(), request)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, "private/99", result.Image.ID)
+	assert.Equal(t, uploadImageLabelFixture, result.Image.Label)
+	assert.Equal(t, uploadImageTargetFixture, result.UploadTo)
+}
+
+func TestClientUploadImageAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: "region is required"}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	_, err := client.UploadImage(t.Context(), &linode.UploadImageRequest{Label: uploadImageLabelFixture})
+
+	require.Error(t, err, "UploadImage should return API errors")
+	assert.ErrorContains(t, err, "region is required")
+}
+
+func TestClientUploadImageNetworkError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	baseURL := srv.URL
+	srv.Close()
+
+	client := linode.NewClient(baseURL, "test-token", nil, linode.WithMaxRetries(0))
+	_, err := client.UploadImage(t.Context(), &linode.UploadImageRequest{Label: uploadImageLabelFixture, Region: regionUSEast})
+
+	require.Error(t, err, "UploadImage should wrap network errors")
+
+	var networkErr *linode.NetworkError
+	require.ErrorAs(t, err, &networkErr, "network error should wrap as NetworkError")
+	assert.Equal(t, "UploadImage", networkErr.Operation)
+}
+
+func TestClientUploadImageDoesNotRetry(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
+	_, err := client.UploadImage(t.Context(), &linode.UploadImageRequest{Label: uploadImageLabelFixture, Region: regionUSEast})
+
+	require.Error(t, err, "UploadImage should fail on 500 response")
+	assert.Equal(t, int32(1), calls.Load(), "UploadImage must not retry and replay a mutating request")
+}
