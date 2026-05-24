@@ -924,6 +924,7 @@ func dnsToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeDomainRecordGetTool,
 		tools.NewLinodeDomainImportTool,
 		tools.NewLinodeDomainCreateTool,
+		tools.NewLinodeDomainCloneTool,
 		tools.NewLinodeDomainUpdateTool,
 		tools.NewLinodeDomainDeleteTool,
 		tools.NewLinodeDomainRecordCreateTool,

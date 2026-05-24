@@ -96,6 +96,28 @@ func (c *Client) httpImportDomain(ctx context.Context, req *ImportDomainRequest)
 	return &domain, nil
 }
 
+// CloneDomain clones a DNS domain and its records.
+func (c *Client) httpCloneDomain(ctx context.Context, domainID int, req *CloneDomainRequest) (*Domain, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointDomains+"/%d/clone", domainID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CloneDomain", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var domain Domain
+	if err := c.handleResponse(resp, &domain); err != nil {
+		return nil, err
+	}
+
+	return &domain, nil
+}
+
 // CreateDomain creates a new DNS domain.
 func (c *Client) httpCreateDomain(ctx context.Context, req *CreateDomainRequest) (*Domain, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

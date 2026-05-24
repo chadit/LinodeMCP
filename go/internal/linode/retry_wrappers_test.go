@@ -181,6 +181,67 @@ func TestImportDomainRouteAndRetrySafety(t *testing.T) {
 	})
 }
 
+func TestCloneDomainRouteAndRetrySafety(t *testing.T) {
+	t.Parallel()
+
+	t.Run("happy path uses exact POST domains clone route and body", func(t *testing.T) {
+		t.Parallel()
+
+		var requestCount atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requestCount.Add(1)
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/domains/111/clone", r.URL.Path, "request path should be /domains/111/clone")
+
+			var body map[string]any
+			if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
+				return
+			}
+
+			assert.Equal(t, domainExample, body["domain"], "domain should be sent")
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyID:     222,
+				keyDomain: domainExample,
+				keyType:   "master",
+				keyStatus: oauthClientStatus,
+			}), "encoding domain response should not fail")
+		}))
+		t.Cleanup(srv.Close)
+
+		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+		domain, err := client.CloneDomain(t.Context(), 111, &linode.CloneDomainRequest{Domain: domainExample})
+
+		require.NoError(t, err, "CloneDomain should succeed")
+		require.NotNil(t, domain, "cloned domain should not be nil")
+		assert.Equal(t, 222, domain.ID, "domain ID should match response")
+		assert.Equal(t, int32(1), requestCount.Load(), "CloneDomain should make one request")
+	})
+
+	t.Run("transient server error is not replayed", func(t *testing.T) {
+		t.Parallel()
+
+		var requestCount atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			requestCount.Add(1)
+			w.WriteHeader(http.StatusInternalServerError)
+			_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			assert.NoError(t, err, "writing error response should succeed")
+		}))
+		t.Cleanup(srv.Close)
+
+		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+		domain, err := client.CloneDomain(t.Context(), 111, &linode.CloneDomainRequest{Domain: domainExample})
+
+		require.Error(t, err, "CloneDomain should return the first transient error")
+		assert.Nil(t, domain, "domain should be nil on error")
+		assert.Equal(t, int32(1), requestCount.Load(), "non-idempotent domain clone must not be retried")
+	})
+}
+
 // Ensures the retry wrapper generator produces correct delegation for all method signatures used by the Linode client.
 func TestRetryWrappersDelegationPatterns(t *testing.T) {
 	t.Parallel()

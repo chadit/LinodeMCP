@@ -1489,6 +1489,11 @@ func (c *Client) ImportDomain(ctx context.Context, req *ImportDomainRequest) (*D
 	return c.httpImportDomain(ctx, req)
 }
 
+// CloneDomain clones a domain without retrying this non-idempotent create operation.
+func (c *Client) CloneDomain(ctx context.Context, domainID int, req *CloneDomainRequest) (*Domain, error) {
+	return c.httpCloneDomain(ctx, domainID, req)
+}
+
 // CreateDomain creates a new domain with automatic retry on transient failures.
 func (c *Client) CreateDomain(ctx context.Context, req *CreateDomainRequest) (*Domain, error) {
 	var domain *Domain
