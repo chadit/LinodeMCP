@@ -86,6 +86,62 @@ func handleLinodeDomainImportRequest(ctx context.Context, request *mcp.CallToolR
 	return MarshalToolResponse(response)
 }
 
+// NewLinodeDomainCloneTool creates a tool for cloning a domain.
+func NewLinodeDomainCloneTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_domain_clone",
+		"Clones a DNS domain and all associated records to a new domain name.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("domain_id", mcp.Required(), mcp.Description("The ID of the domain to clone")),
+			mcp.WithString("domain", mcp.Required(), mcp.Description("The new domain name for the clone")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be set to true to confirm domain cloning.")),
+		},
+		handleLinodeDomainCloneRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleLinodeDomainCloneRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	domainID := request.GetInt("domain_id", 0)
+	domain := request.GetString("domain", "")
+
+	if result := RequireConfirm(request, "This clones a DNS domain. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	if domainID <= 0 {
+		return mcp.NewToolResultError("domain_id must be a positive integer"), nil
+	}
+
+	if domain == "" {
+		return mcp.NewToolResultError("domain is required"), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	req := linode.CloneDomainRequest{Domain: domain}
+
+	clonedDomain, err := client.CloneDomain(ctx, domainID, &req)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to clone domain %d: %v", domainID, err)), nil
+	}
+
+	response := struct {
+		Message string         `json:"message"`
+		Domain  *linode.Domain `json:"domain"`
+	}{
+		Message: fmt.Sprintf("Domain %d cloned as '%s' (ID: %d)", domainID, clonedDomain.Domain, clonedDomain.ID),
+		Domain:  clonedDomain,
+	}
+
+	return MarshalToolResponse(response)
+}
+
 // NewLinodeDomainCreateTool creates a tool for creating a domain.
 func NewLinodeDomainCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(

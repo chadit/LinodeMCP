@@ -105,6 +105,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		// DNS
 		{Name: "linode_domain_list", Capability: profiles.CapRead},
 		{Name: "linode_domain_create", Capability: profiles.CapWrite},
+		{Name: "linode_domain_clone", Capability: profiles.CapWrite},
 		{Name: "linode_domain_delete", Capability: profiles.CapDestroy},
 		{Name: "linode_domain_record_create", Capability: profiles.CapWrite},
 

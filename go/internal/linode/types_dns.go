@@ -43,6 +43,11 @@ type ImportDomainRequest struct {
 	RemoteNameserver string `json:"remote_nameserver"`
 }
 
+// CloneDomainRequest represents the request body for cloning a domain.
+type CloneDomainRequest struct {
+	Domain string `json:"domain"`
+}
+
 // CreateDomainRequest represents the request body for creating a domain.
 type CreateDomainRequest struct {
 	Domain      string   `json:"domain"`
