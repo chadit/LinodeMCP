@@ -73,6 +73,7 @@ const (
 	keyGrantLKECluster          = "lkecluster"
 	keyRemoteNameserver         = "remote_nameserver"
 	keyValidForShareGroupUUID   = "valid_for_sharegroup_uuid"
+	keyShareGroupID             = "sharegroup_id"
 	keyTokenUUID                = "token_uuid"
 	shareGroupDescription       = "shared CI images"
 	shareGroupUpdated           = "2025-04-15T22:44:02"
