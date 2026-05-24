@@ -79,6 +79,28 @@ func (c *Client) httpGetDatabaseInstance(ctx context.Context, instanceID int) (*
 	return &instance, nil
 }
 
+// GetDatabaseInstanceSSL retrieves the SSL CA certificate for a MySQL Managed Database instance.
+func (c *Client) httpGetDatabaseInstanceSSL(ctx context.Context, instanceID int) (*DatabaseSSL, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointDatabaseInstances + "/" + url.PathEscape(strconv.Itoa(instanceID)) + "/ssl"
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetDatabaseInstanceSSL", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var ssl DatabaseSSL
+	if err := c.handleResponse(resp, &ssl); err != nil {
+		return nil, err
+	}
+
+	return &ssl, nil
+}
+
 // GetDatabaseInstanceCredentials retrieves MySQL Managed Database credentials.
 func (c *Client) httpGetDatabaseInstanceCredentials(ctx context.Context, instanceID int) (*DatabaseCredentials, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

@@ -23,6 +23,8 @@ const (
 	databaseMySQLConfigPath              = "/databases/mysql/config"
 	databaseInstanceID                   = 123
 	databaseInstancePath                 = "/databases/mysql/instances/123"
+	databaseInstanceSSLPath              = "/databases/mysql/instances/123/ssl"
+	databaseSSLCACertificate             = "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t"
 	databaseInstanceCredentialsPath      = "/databases/mysql/instances/123/credentials"
 	databaseInstanceCredentialsResetPath = "/databases/mysql/instances/123/credentials/reset"
 	databaseInstancePatchPath            = "/databases/mysql/instances/123/patch"
@@ -283,6 +285,82 @@ func TestClientGetDatabaseInstanceSuccess(t *testing.T) {
 	require.NotNil(t, got)
 	assert.Equal(t, databaseInstanceID, got.ID)
 	assert.Equal(t, databaseInstanceLabel, got.Label)
+}
+
+func TestClientGetDatabaseInstanceSSLSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, databaseInstanceSSLPath, r.URL.Path, "request path should include instance ssl path")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseSSL{CACertificate: databaseSSLCACertificate}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.GetDatabaseInstanceSSL(t.Context(), databaseInstanceID)
+
+	require.NoError(t, err, "GetDatabaseInstanceSSL should succeed on 200 response")
+	require.NotNil(t, got)
+	assert.Equal(t, databaseSSLCACertificate, got.CACertificate)
+}
+
+func TestClientGetDatabaseInstanceSSLAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, databaseInstanceSSLPath, r.URL.Path, "request path should include instance ssl path")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errForbidden}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	_, err := client.GetDatabaseInstanceSSL(t.Context(), databaseInstanceID)
+
+	require.Error(t, err)
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+}
+
+func TestClientGetDatabaseInstanceSSLRetriesTransientRead(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+
+		assert.Equal(t, databaseInstanceSSLPath, r.URL.Path, "request path should include instance ssl path")
+
+		if attempts.Load() == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
+			}))
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseSSL{CACertificate: databaseSSLCACertificate}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
+	got, err := client.GetDatabaseInstanceSSL(t.Context(), databaseInstanceID)
+
+	require.NoError(t, err, "read-only GetDatabaseInstanceSSL should retry transient failures")
+	require.NotNil(t, got)
+	assert.Equal(t, databaseSSLCACertificate, got.CACertificate)
+	assert.Equal(t, int32(2), attempts.Load(), "transient read should be retried once")
 }
 
 func TestClientGetDatabaseInstanceAPIError(t *testing.T) {
