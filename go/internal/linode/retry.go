@@ -1189,6 +1189,12 @@ func (c *Client) ListImageShareGroupTokens(ctx context.Context, page, pageSize i
 	return tokens, err
 }
 
+// CreateImageShareGroupToken creates a single-use image share group membership token without automatic retry.
+// Replaying this non-idempotent create operation could create duplicate token material.
+func (c *Client) CreateImageShareGroupToken(ctx context.Context, req *CreateImageShareGroupTokenRequest) (*ImageShareGroupToken, error) {
+	return c.httpCreateImageShareGroupToken(ctx, req)
+}
+
 // CreateImage creates a private image from a Linode disk without automatic retry.
 // Replaying this non-idempotent create operation could create duplicate images.
 func (c *Client) CreateImage(ctx context.Context, req *CreateImageRequest) (*Image, error) {

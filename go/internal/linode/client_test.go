@@ -6089,7 +6089,7 @@ func TestClientListImageShareGroupTokensSuccess(t *testing.T) {
 			Expiry:                 &expiry,
 			ValidForShareGroupUUID: "e1d0e58b-f89f-4237-84ab-b82077342359",
 			ShareGroupUUID:         "e1d0e58b-f89f-4237-84ab-b82077342359",
-			ShareGroupLabel:        "DevOps Base Images",
+			ShareGroupLabel:        shareGroupLabelFixture,
 		},
 	}
 
@@ -6147,7 +6147,7 @@ func TestClientListImageShareGroupsSuccess(t *testing.T) {
 		{
 			ID:           1,
 			UUID:         "1533863e-16a4-47b5-b829-ac0f35c13278",
-			Label:        "DevOps Base Images",
+			Label:        shareGroupLabelFixture,
 			Description:  &description,
 			IsSuspended:  false,
 			Created:      "2025-04-14T22:44:02",
@@ -6178,7 +6178,7 @@ func TestClientListImageShareGroupsSuccess(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Len(t, result.Data, 1)
-	assert.Equal(t, "DevOps Base Images", result.Data[0].Label)
+	assert.Equal(t, shareGroupLabelFixture, result.Data[0].Label)
 	assert.Equal(t, 2, result.Page)
 	assert.Equal(t, 7, result.Results)
 }
