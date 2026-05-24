@@ -192,6 +192,29 @@ func (c *Client) httpListImagesByShareGroup(ctx context.Context, shareGroupID, p
 	return &response, nil
 }
 
+// ListMembersByImageShareGroup retrieves members linked to an owned image share group.
+func (c *Client) httpListMembersByImageShareGroup(ctx context.Context, shareGroupID, page, pageSize int) (*PaginatedResponse[ImageShareGroupMember], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	baseEndpoint := endpointImageShareGroups + "/" + escapeImageShareGroupID(shareGroupID) + "/members"
+	endpoint := withPaginationQuery(baseEndpoint, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListMembersByImageShareGroup", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[ImageShareGroupMember]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
+}
+
 // CreateImageShareGroup creates a group to share images with other users.
 func (c *Client) httpCreateImageShareGroup(ctx context.Context, req *CreateImageShareGroupRequest) (*ImageShareGroup, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

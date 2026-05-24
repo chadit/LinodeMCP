@@ -224,6 +224,16 @@ type ImageShareGroup struct {
 	MembersCount int     `json:"members_count"`
 }
 
+// ImageShareGroupMember represents a member linked to an image share group.
+type ImageShareGroupMember struct {
+	TokenUUID string  `json:"token_uuid"`
+	Status    string  `json:"status"`
+	Label     string  `json:"label"`
+	Created   string  `json:"created"`
+	Updated   *string `json:"updated"`
+	Expiry    *string `json:"expiry"`
+}
+
 // ImageShareGroupImage represents an image to add when creating an image share group.
 type ImageShareGroupImage struct {
 	ID          string `json:"id"`
