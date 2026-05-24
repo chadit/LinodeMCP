@@ -7,11 +7,12 @@ import (
 )
 
 const (
-	endpointInstances    = "/linode/instances"
-	endpointRegions      = "/regions"
-	endpointTypes        = "/linode/types"
-	endpointImages       = "/images"
-	endpointStackScripts = "/linode/stackscripts"
+	endpointInstances        = "/linode/instances"
+	endpointRegions          = "/regions"
+	endpointTypes            = "/linode/types"
+	endpointImages           = "/images"
+	endpointImageShareGroups = "/images/sharegroups"
+	endpointStackScripts     = "/linode/stackscripts"
 )
 
 // ListInstances retrieves all Linode instances for the authenticated user.
@@ -118,6 +119,28 @@ func (c *Client) httpListImages(ctx context.Context) ([]Image, error) {
 	}
 
 	return response.Data, nil
+}
+
+// ListImageShareGroups retrieves owned image share groups.
+func (c *Client) httpListImageShareGroups(ctx context.Context, page, pageSize int) (*PaginatedResponse[ImageShareGroup], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointImageShareGroups, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListImageShareGroups", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[ImageShareGroup]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
 }
 
 // CreateImage creates a private image from a Linode disk.

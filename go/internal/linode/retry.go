@@ -1159,6 +1159,21 @@ func (c *Client) ListImages(ctx context.Context) ([]Image, error) {
 	return images, err
 }
 
+// ListImageShareGroups retrieves owned image share groups with automatic retry on transient failures.
+func (c *Client) ListImageShareGroups(ctx context.Context, page, pageSize int) (*PaginatedResponse[ImageShareGroup], error) {
+	var shareGroups *PaginatedResponse[ImageShareGroup]
+
+	err := c.executeWithRetry(ctx, "ListImageShareGroups", func() error {
+		var err error
+
+		shareGroups, err = c.httpListImageShareGroups(ctx, page, pageSize)
+
+		return err
+	})
+
+	return shareGroups, err
+}
+
 // CreateImage creates a private image from a Linode disk without automatic retry.
 // Replaying this non-idempotent create operation could create duplicate images.
 func (c *Client) CreateImage(ctx context.Context, req *CreateImageRequest) (*Image, error) {
