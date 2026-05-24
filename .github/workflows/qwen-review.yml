@@ -2,10 +2,16 @@ name: Qwen Code Review
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
   review:
+    # Qwen is intentionally limited to Chad's same-repo PRs. Fork PRs and
+    # other authors skip this job so QWEN_API_KEY is not exposed to
+    # untrusted code.
+    if: >-
+      github.event.pull_request.user.login == 'chadit' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read
