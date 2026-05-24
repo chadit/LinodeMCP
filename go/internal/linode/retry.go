@@ -879,6 +879,21 @@ func (c *Client) GetDatabaseMySQLConfig(ctx context.Context) (map[string]any, er
 	return config, err
 }
 
+// GetDatabasePostgreSQLConfig retrieves PostgreSQL Managed Database advanced parameters with automatic retry on transient failures.
+func (c *Client) GetDatabasePostgreSQLConfig(ctx context.Context) (map[string]any, error) {
+	var config map[string]any
+
+	err := c.executeWithRetry(ctx, "GetDatabasePostgreSQLConfig", func() error {
+		var err error
+
+		config, err = c.httpGetDatabasePostgreSQLConfig(ctx)
+
+		return err
+	})
+
+	return config, err
+}
+
 // ListDatabaseInstances retrieves Managed Database instances with automatic retry on transient failures.
 func (c *Client) ListDatabaseInstances(ctx context.Context, page, pageSize int) ([]DatabaseInstance, error) {
 	var instances []DatabaseInstance
