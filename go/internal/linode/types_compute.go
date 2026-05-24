@@ -226,6 +226,7 @@ type ImageShareGroup struct {
 
 // ImageShareGroupToken represents a token associated with an image share group.
 type ImageShareGroupToken struct {
+	Token                  string  `json:"token,omitempty"`
 	TokenUUID              string  `json:"token_uuid"`
 	Status                 string  `json:"status"`
 	Label                  string  `json:"label"`
@@ -235,6 +236,12 @@ type ImageShareGroupToken struct {
 	ValidForShareGroupUUID string  `json:"valid_for_sharegroup_uuid"`
 	ShareGroupUUID         string  `json:"sharegroup_uuid"`
 	ShareGroupLabel        string  `json:"sharegroup_label"`
+}
+
+// CreateImageShareGroupTokenRequest represents the request body for creating an image share group membership token.
+type CreateImageShareGroupTokenRequest struct {
+	Label                  string `json:"label,omitempty"`
+	ValidForShareGroupUUID string `json:"valid_for_sharegroup_uuid"`
 }
 
 // CreateImageRequest represents the request body for creating a private image from a Linode disk.

@@ -8023,7 +8023,7 @@ func TestLinodeImageShareGroupTokensListTool(t *testing.T) {
 				Expiry:                 &expiry,
 				ValidForShareGroupUUID: "e1d0e58b-f89f-4237-84ab-b82077342359",
 				ShareGroupUUID:         "e1d0e58b-f89f-4237-84ab-b82077342359",
-				ShareGroupLabel:        "DevOps Base Images",
+				ShareGroupLabel:        shareGroupLabelFixture,
 			},
 		}
 
@@ -8143,7 +8143,7 @@ func TestLinodeImageShareGroupsListTool(t *testing.T) {
 			{
 				ID:           1,
 				UUID:         "1533863e-16a4-47b5-b829-ac0f35c13278",
-				Label:        "DevOps Base Images",
+				Label:        shareGroupLabelFixture,
 				Description:  &description,
 				IsSuspended:  false,
 				Created:      "2025-04-14T22:44:02",
@@ -8188,7 +8188,7 @@ func TestLinodeImageShareGroupsListTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, `"count": 1`, "response should include count")
-		assert.Contains(t, textContent.Text, "DevOps Base Images", "response should contain share group label")
+		assert.Contains(t, textContent.Text, shareGroupLabelFixture, "response should contain share group label")
 		assert.Contains(t, textContent.Text, "1533863e-16a4-47b5-b829-ac0f35c13278", "response should contain share group UUID")
 	})
 

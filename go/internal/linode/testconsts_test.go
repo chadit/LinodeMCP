@@ -43,9 +43,13 @@ const (
 	serviceNodeBalancers = "NodeBalancers"
 
 	// fwLabelNew is the firewall label reused across the retry-wrapper tests.
-	fwLabelNew              = "new-fw"
-	paymentMethodCreditCard = "credit_card"
-	paymentMethodToken      = "tok_123"
-	domainExample           = "example.com"
-	remoteNameserverExample = "ns1.example.com"
+	fwLabelNew                  = "new-fw"
+	paymentMethodCreditCard     = "credit_card"
+	paymentMethodToken          = "tok_123"
+	domainExample               = "example.com"
+	remoteNameserverExample     = "ns1.example.com"
+	shareGroupUUIDFixture       = "e1d0e58b-f89f-4237-84ab-b82077342359"
+	shareGroupLabelFixture      = "DevOps Base Images"
+	shareGroupTokenUUIDFixture  = "sharegroup-token-uuid-fixture"
+	shareGroupTokenValueFixture = "sample-sharegroup-membership-token"
 )

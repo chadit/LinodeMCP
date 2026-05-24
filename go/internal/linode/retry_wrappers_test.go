@@ -116,6 +116,78 @@ func TestCreateImageRouteAndRetrySafety(t *testing.T) {
 	})
 }
 
+func TestCreateImageShareGroupTokenRouteAndRetrySafety(t *testing.T) {
+	t.Parallel()
+
+	t.Run("happy path uses exact POST image share group tokens route and body", func(t *testing.T) {
+		t.Parallel()
+
+		var requestCount atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requestCount.Add(1)
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/images/sharegroups/tokens", r.URL.Path, "request path should be /images/sharegroups/tokens")
+
+			var body map[string]any
+			if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
+				return
+			}
+
+			assert.Equal(t, "release-token", body["label"], "label should be sent")
+			assert.Equal(t, shareGroupUUIDFixture, body["valid_for_sharegroup_uuid"], "share group UUID should be sent")
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				"token":                     "eyJhbGciOiJIUzI1NiJ9.test.signature",
+				"token_uuid":                shareGroupTokenUUIDFixture,
+				keyStatus:                   oauthClientStatus,
+				keyLabel:                    "release-token",
+				"created":                   "2025-08-04T10:09:09",
+				"updated":                   nil,
+				"expiry":                    nil,
+				"valid_for_sharegroup_uuid": shareGroupUUIDFixture,
+				"sharegroup_uuid":           shareGroupUUIDFixture,
+				"sharegroup_label":          shareGroupLabelFixture,
+			}), "encoding token response should not fail")
+		}))
+		t.Cleanup(srv.Close)
+
+		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+		token, err := client.CreateImageShareGroupToken(t.Context(), &linode.CreateImageShareGroupTokenRequest{
+			Label:                  "release-token",
+			ValidForShareGroupUUID: shareGroupUUIDFixture,
+		})
+
+		require.NoError(t, err, "CreateImageShareGroupToken should succeed")
+		require.NotNil(t, token, "created token should not be nil")
+		assert.Equal(t, shareGroupTokenUUIDFixture, token.TokenUUID, "token UUID should match response")
+		assert.Equal(t, "eyJhbGciOiJIUzI1NiJ9.test.signature", token.Token, "token material should match response")
+		assert.Equal(t, int32(1), requestCount.Load(), "CreateImageShareGroupToken should make one request")
+	})
+
+	t.Run("transient server error is not replayed", func(t *testing.T) {
+		t.Parallel()
+
+		var requestCount atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			requestCount.Add(1)
+			w.WriteHeader(http.StatusInternalServerError)
+			_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			assert.NoError(t, err, "writing error response should succeed")
+		}))
+		t.Cleanup(srv.Close)
+
+		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+		token, err := client.CreateImageShareGroupToken(t.Context(), &linode.CreateImageShareGroupTokenRequest{ValidForShareGroupUUID: shareGroupUUIDFixture})
+
+		require.Error(t, err, "CreateImageShareGroupToken should return the first transient error")
+		assert.Nil(t, token, "token should be nil on error")
+		assert.Equal(t, int32(1), requestCount.Load(), "non-idempotent token creation must not be retried")
+	})
+}
+
 func TestImportDomainRouteAndRetrySafety(t *testing.T) {
 	t.Parallel()
 

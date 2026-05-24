@@ -7,12 +7,13 @@ import (
 )
 
 const (
-	endpointInstances        = "/linode/instances"
-	endpointRegions          = "/regions"
-	endpointTypes            = "/linode/types"
-	endpointImages           = "/images"
-	endpointImageShareGroups = "/images/sharegroups"
-	endpointStackScripts     = "/linode/stackscripts"
+	endpointInstances                       = "/linode/instances"
+	endpointRegions                         = "/regions"
+	endpointTypes                           = "/linode/types"
+	endpointImages                          = "/images"
+	endpointImageShareGroups                = "/images/sharegroups"
+	endpointImageShareGroupMembershipCreate = "/images/sharegroups/tokens"
+	endpointStackScripts                    = "/linode/stackscripts"
 )
 
 // ListInstances retrieves all Linode instances for the authenticated user.
@@ -163,6 +164,26 @@ func (c *Client) httpListImageShareGroupTokens(ctx context.Context, page, pageSi
 	}
 
 	return &response, nil
+}
+
+// CreateImageShareGroupToken creates a single-use image share group membership token.
+func (c *Client) httpCreateImageShareGroupToken(ctx context.Context, req *CreateImageShareGroupTokenRequest) (*ImageShareGroupToken, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointImageShareGroupMembershipCreate, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateImageShareGroupToken", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var token ImageShareGroupToken
+	if err := c.handleResponse(resp, &token); err != nil {
+		return nil, err
+	}
+
+	return &token, nil
 }
 
 // CreateImage creates a private image from a Linode disk.
