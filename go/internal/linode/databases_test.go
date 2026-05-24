@@ -37,6 +37,9 @@ const (
 	databaseCredentialsPassword          = "secret"
 	databaseConfigTypeInteger            = "integer"
 	databaseConfigMaxConnections         = "max_connections"
+	databaseAllowListCIDR                = "203.0.113.0/24"
+	databaseEnginePostgreSQLID           = "postgresql/16"
+	databaseEnginePostgreSQL             = "postgresql"
 )
 
 func TestClientListDatabaseEnginesSuccess(t *testing.T) {
@@ -358,7 +361,7 @@ func TestClientListDatabaseInstancesRetriesTransientRead(t *testing.T) {
 func TestClientListDatabasePostgreSQLInstancesSuccess(t *testing.T) {
 	t.Parallel()
 
-	instances := []linode.DatabaseInstance{{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: "postgresql", Version: databaseEngineVersion, Status: oauthClientStatus}}
+	instances := []linode.DatabaseInstance{{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEnginePostgreSQL, Version: databaseEngineVersion, Status: oauthClientStatus}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
@@ -382,7 +385,7 @@ func TestClientListDatabasePostgreSQLInstancesSuccess(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.Equal(t, databaseInstanceID, got[0].ID)
 	assert.Equal(t, databaseInstanceLabel, got[0].Label)
-	assert.Equal(t, "postgresql", got[0].Engine)
+	assert.Equal(t, databaseEnginePostgreSQL, got[0].Engine)
 }
 
 func TestClientListDatabasePostgreSQLInstancesAPIError(t *testing.T) {
@@ -747,7 +750,7 @@ func TestClientCreateDatabaseInstanceSuccess(t *testing.T) {
 		Type:           databaseInstanceType,
 		Engine:         databaseEngineID,
 		Region:         regionUSEast,
-		AllowList:      []string{"203.0.113.0/24"},
+		AllowList:      []string{databaseAllowListCIDR},
 		ClusterSize:    3,
 		EngineConfig:   map[string]any{databaseConfigMaxConnections: float64(100)},
 		PrivateNetwork: &privateNetwork,
@@ -801,13 +804,77 @@ func TestClientCreateDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 	assert.Equal(t, int32(1), attempts.Load(), "non-idempotent create POST must not be retried")
 }
 
+func TestClientCreateDatabasePostgreSQLInstanceSuccess(t *testing.T) {
+	t.Parallel()
+
+	privateNetwork := true
+	sslConnection := true
+	expectedReq := linode.CreateDatabaseInstanceRequest{
+		Label:          databaseInstanceLabel,
+		Type:           databaseInstanceType,
+		Engine:         databaseEnginePostgreSQLID,
+		Region:         regionUSEast,
+		AllowList:      []string{databaseAllowListCIDR},
+		ClusterSize:    3,
+		EngineConfig:   map[string]any{databaseConfigMaxConnections: float64(100)},
+		PrivateNetwork: &privateNetwork,
+		SSLConnection:  &sslConnection,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, databasePostgreSQLInstancesPath, r.URL.Path, "request path should be /databases/postgresql/instances")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+
+		var gotReq linode.CreateDatabaseInstanceRequest
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&gotReq))
+		assert.Equal(t, expectedReq, gotReq)
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEnginePostgreSQL, Version: databaseEngineVersion, Status: oauthClientStatus}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.CreateDatabasePostgreSQLInstance(t.Context(), &expectedReq)
+
+	require.NoError(t, err, "CreateDatabasePostgreSQLInstance should succeed on 200 response")
+	require.NotNil(t, got)
+	assert.Equal(t, databaseInstanceID, got.ID)
+	assert.Equal(t, databaseInstanceLabel, got.Label)
+}
+
+func TestClientCreateDatabasePostgreSQLInstanceAPIErrorDoesNotRetry(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, databasePostgreSQLInstancesPath, r.URL.Path, "request path should be /databases/postgresql/instances")
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
+	_, err := client.CreateDatabasePostgreSQLInstance(t.Context(), &linode.CreateDatabaseInstanceRequest{Label: databaseInstanceLabel, Type: databaseInstanceType, Engine: databaseEnginePostgreSQLID, Region: regionUSEast})
+
+	require.Error(t, err)
+	assert.Equal(t, int32(1), attempts.Load(), "non-idempotent PostgreSQL create POST must not be retried")
+}
+
 func TestClientUpdateDatabaseInstanceSuccess(t *testing.T) {
 	t.Parallel()
 
 	label := databaseInstanceLabel
 	databaseType := databaseInstanceType
 	version := databaseEngineVersion
-	allowList := []string{"203.0.113.0/24"}
+	allowList := []string{databaseAllowListCIDR}
 	expectedReq := linode.UpdateDatabaseInstanceRequest{
 		AllowList:      &allowList,
 		EngineConfig:   map[string]any{"binlog_retention_period": float64(600)},

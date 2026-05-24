@@ -185,17 +185,47 @@ func NewLinodeDatabaseInstanceCredentialsResetTool(cfg *config.Config) (mcp.Tool
 
 // NewLinodeDatabaseInstanceCreateTool creates a tool for creating or restoring a MySQL Managed Database instance.
 func NewLinodeDatabaseInstanceCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	return newDatabaseInstanceCreateTool(
+		cfg,
 		"linode_database_instance_create",
-		mcp.WithDescription("Creates or restores a MySQL Managed Database instance. This creates a billable resource."),
+		"Creates or restores a MySQL Managed Database instance. This creates a billable resource.",
+		"Database engine ID, for example mysql/8.0.26.",
+		"JSON object of MySQL engine configuration values (optional).",
+		handleDatabaseInstanceCreateRequest,
+	)
+}
+
+// NewLinodeDatabasePostgreSQLInstanceCreateTool creates a tool for creating or restoring a PostgreSQL Managed Database instance.
+func NewLinodeDatabasePostgreSQLInstanceCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	return newDatabaseInstanceCreateTool(
+		cfg,
+		"linode_database_postgresql_instance_create",
+		"Creates or restores a PostgreSQL Managed Database instance. This creates a billable resource.",
+		"PostgreSQL database engine ID, for example postgresql/16.",
+		"JSON object of PostgreSQL engine configuration values (optional).",
+		handleDatabasePostgreSQLInstanceCreateRequest,
+	)
+}
+
+func newDatabaseInstanceCreateTool(
+	cfg *config.Config,
+	name string,
+	description string,
+	engineDescription string,
+	engineConfigDescription string,
+	handle func(context.Context, *mcp.CallToolRequest, *config.Config) (*mcp.CallToolResult, error),
+) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		name,
+		mcp.WithDescription(description),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithString(paramDatabaseLabel, mcp.Required(), mcp.Description("Label for the database instance.")),
 		mcp.WithString(paramDatabaseType, mcp.Required(), mcp.Description("Linode type for the database instance.")),
-		mcp.WithString(paramDatabaseEngine, mcp.Required(), mcp.Description("Database engine ID, for example mysql/8.0.26.")),
+		mcp.WithString(paramDatabaseEngine, mcp.Required(), mcp.Description(engineDescription)),
 		mcp.WithString(paramDatabaseRegion, mcp.Required(), mcp.Description("Region for the database instance.")),
 		mcp.WithString(paramDatabaseAllowList, mcp.Description("JSON array of CIDR strings allowed to connect (optional).")),
 		mcp.WithNumber(paramDatabaseClusterSize, mcp.Description("Number of nodes in the cluster (optional).")),
-		mcp.WithString(paramDatabaseEngineConfig, mcp.Description("JSON object of MySQL engine configuration values (optional).")),
+		mcp.WithString(paramDatabaseEngineConfig, mcp.Description(engineConfigDescription)),
 		mcp.WithString(paramDatabaseFork, mcp.Description("JSON object describing source database fork/restore settings (optional).")),
 		mcp.WithBoolean(paramDatabasePrivateNetwork, mcp.Description("Whether to use private networking (optional).")),
 		mcp.WithBoolean(paramDatabaseSSLConnection, mcp.Description("Whether to require SSL connections (optional).")),
@@ -203,7 +233,7 @@ func NewLinodeDatabaseInstanceCreateTool(cfg *config.Config) (mcp.Tool, profiles
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleDatabaseInstanceCreateRequest(ctx, &request, cfg)
+		return handle(ctx, &request, cfg)
 	}
 
 	return tool, profiles.CapWrite, handler
@@ -540,6 +570,37 @@ func handleDatabaseInstanceCreateRequest(ctx context.Context, request *mcp.CallT
 		Instance *linode.DatabaseInstance `json:"database_instance"`
 	}{
 		Message:  fmt.Sprintf("Managed Database instance '%s' (ID: %d) created", instance.Label, instance.ID),
+		Instance: instance,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func handleDatabasePostgreSQLInstanceCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This creates a billable PostgreSQL Managed Database instance. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	req, validationMessage := databaseInstanceCreateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	instance, err := client.CreateDatabasePostgreSQLInstance(ctx, &req)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to create PostgreSQL Managed Database instance: %v", err)), nil
+	}
+
+	response := struct {
+		Message  string                   `json:"message"`
+		Instance *linode.DatabaseInstance `json:"database_instance"`
+	}{
+		Message:  fmt.Sprintf("PostgreSQL Managed Database instance '%s' (ID: %d) created", instance.Label, instance.ID),
 		Instance: instance,
 	}
 
