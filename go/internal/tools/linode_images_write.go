@@ -16,6 +16,115 @@ import (
 
 var imageShareGroupImageIDPattern = regexp.MustCompile(`^shared/[1-9]\d*$`)
 
+// NewLinodeImageUploadTool creates a tool for uploading a custom image.
+func NewLinodeImageUploadTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	options := []mcp.ToolOption{
+		mcp.WithDescription("Creates an upload target for a custom image."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithString("label", mcp.Required(), mcp.Description("The custom image label.")),
+		mcp.WithString("region", mcp.Required(), mcp.Description("The region for the image upload.")),
+		mcp.WithString("description", mcp.Description("Detailed description for the image (optional).")),
+		mcp.WithBoolean("cloud_init", mcp.Description("Whether the image supports cloud-init.")),
+		mcp.WithString("tags", mcp.Description("JSON array of tag strings to apply to the image (optional).")),
+		mcp.WithBoolean(paramConfirm, mcp.Required(),
+			mcp.Description("Must be true to confirm image upload creation.")),
+	}
+	tool := mcp.NewTool("linode_image_upload", options...)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeImageUploadRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleLinodeImageUploadRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This creates an image upload. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	label := strings.TrimSpace(request.GetString("label", ""))
+	if label == "" {
+		return mcp.NewToolResultError("label is required"), nil
+	}
+
+	region := strings.TrimSpace(request.GetString("region", ""))
+	if region == "" {
+		return mcp.NewToolResultError("region is required"), nil
+	}
+
+	tags, err := optionalTagsFromTool(request)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	req := linode.UploadImageRequest{
+		Label:       label,
+		Region:      region,
+		Description: request.GetString("description", ""),
+		CloudInit:   request.GetBool("cloud_init", false),
+		Tags:        tags,
+	}
+
+	upload, err := client.UploadImage(ctx, &req)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to upload image: %v", err)), nil
+	}
+
+	response := struct {
+		Message  string                      `json:"message"`
+		UploadTo string                      `json:"upload_to"`
+		Image    *linode.UploadImageResponse `json:"upload"`
+	}{
+		Message:  fmt.Sprintf("Image upload '%s' (%s) created successfully", upload.Image.Label, upload.Image.ID),
+		UploadTo: upload.UploadTo,
+		Image:    upload,
+	}
+
+	result, err := MarshalToolResponse(response)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to format image upload response: %v", err)), nil
+	}
+
+	return result, nil
+}
+
+func optionalTagsFromTool(request *mcp.CallToolRequest) ([]string, error) {
+	rawTags, tagsPresent := request.GetArguments()["tags"]
+	if !tagsPresent {
+		return nil, nil
+	}
+
+	tagsText, tagsOK := rawTags.(string)
+	if !tagsOK {
+		return nil, ErrTagsMustBeJSONStringArray
+	}
+
+	tagsText = strings.TrimSpace(tagsText)
+	if tagsText == "" {
+		return nil, nil
+	}
+
+	var values []string
+	if err := json.Unmarshal([]byte(tagsText), &values); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrTagsMustBeJSONStringArray, err)
+	}
+
+	for index, value := range values {
+		values[index] = strings.TrimSpace(value)
+		if values[index] == "" {
+			return nil, ErrTagsEntriesNonEmpty
+		}
+	}
+
+	return values, nil
+}
+
 // NewLinodeImageShareGroupCreateTool creates a tool for creating image share groups.
 func NewLinodeImageShareGroupCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(

@@ -19,6 +19,8 @@ var (
 // Sentinel errors for image share group validation.
 var (
 	ErrImageShareGroupImageIDRequired = errors.New("image id is required")
+	ErrTagsMustBeJSONStringArray      = errors.New("tags must be a JSON string array")
+	ErrTagsEntriesNonEmpty            = errors.New("tags entries must be non-empty strings")
 )
 
 // Sentinel errors for SSH key validation.

@@ -14,6 +14,7 @@ const (
 	endpointRegions                         = "/regions"
 	endpointTypes                           = "/linode/types"
 	endpointImages                          = "/images"
+	endpointImagesUpload                    = "/images/upload"
 	endpointImageShareGroups                = "/images/sharegroups"
 	endpointImageShareGroupMembershipCreate = "/images/sharegroups/tokens"
 	endpointStackScripts                    = "/linode/stackscripts"
@@ -584,6 +585,26 @@ func (c *Client) httpCreateImage(ctx context.Context, req *CreateImageRequest) (
 	}
 
 	return &image, nil
+}
+
+// UploadImage creates an image upload target for a custom image.
+func (c *Client) httpUploadImage(ctx context.Context, req *UploadImageRequest) (*UploadImageResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointImagesUpload, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UploadImage", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var upload UploadImageResponse
+	if err := c.handleResponse(resp, &upload); err != nil {
+		return nil, err
+	}
+
+	return &upload, nil
 }
 
 // ListStackScripts retrieves StackScripts available to the authenticated user.

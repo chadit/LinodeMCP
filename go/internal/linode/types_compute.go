@@ -310,6 +310,21 @@ type CreateImageRequest struct {
 	Tags        []string `json:"tags,omitempty"`
 }
 
+// UploadImageRequest represents the request body for uploading a custom image.
+type UploadImageRequest struct {
+	Label       string   `json:"label"`
+	Region      string   `json:"region"`
+	Description string   `json:"description,omitempty"`
+	CloudInit   bool     `json:"cloud_init,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+}
+
+// UploadImageResponse represents the image upload target returned by the API.
+type UploadImageResponse struct {
+	Image    Image  `json:"image"`
+	UploadTo string `json:"upload_to"`
+}
+
 // StackScript represents a Linode StackScript for automated deployments.
 type StackScript struct {
 	Username          string   `json:"username"`
