@@ -416,6 +416,23 @@ func (c *Client) httpResumeDatabaseInstance(ctx context.Context, instanceID int)
 	return c.handleResponse(resp, nil)
 }
 
+// ResumeDatabasePostgreSQLInstance resumes one suspended PostgreSQL Managed Database instance.
+func (c *Client) httpResumeDatabasePostgreSQLInstance(ctx context.Context, instanceID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointDatabasePostgreSQLInstances + "/" + url.PathEscape(strconv.Itoa(instanceID)) + "/resume"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "ResumeDatabasePostgreSQLInstance", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return c.handleResponse(resp, nil)
+}
+
 // GetDatabaseMySQLConfig retrieves MySQL Managed Database advanced parameters.
 func (c *Client) httpGetDatabaseMySQLConfig(ctx context.Context) (map[string]any, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

@@ -1074,6 +1074,11 @@ func (c *Client) ResumeDatabaseInstance(ctx context.Context, instanceID int) err
 	return c.httpResumeDatabaseInstance(ctx, instanceID)
 }
 
+// ResumeDatabasePostgreSQLInstance resumes one suspended PostgreSQL Managed Database instance without retrying the POST.
+func (c *Client) ResumeDatabasePostgreSQLInstance(ctx context.Context, instanceID int) error {
+	return c.httpResumeDatabasePostgreSQLInstance(ctx, instanceID)
+}
+
 // ListVolumes retrieves all volumes with automatic retry on transient failures.
 func (c *Client) ListVolumes(ctx context.Context) ([]Volume, error) {
 	var volumes []Volume
