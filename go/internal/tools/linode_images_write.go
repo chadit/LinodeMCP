@@ -92,6 +92,98 @@ func handleLinodeImageShareGroupCreateRequest(ctx context.Context, request *mcp.
 	return result, nil
 }
 
+// NewLinodeImageShareGroupImagesAddTool creates a tool for adding images to an image share group.
+func NewLinodeImageShareGroupImagesAddTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_image_sharegroup_images_add",
+		mcp.WithDescription("Adds one or more private images to an image share group."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("The numeric image share group ID to add images to.")),
+		mcp.WithString("images", mcp.Required(), mcp.Description("JSON array of images to add, each with required id and optional label/description.")),
+		mcp.WithBoolean(paramConfirm, mcp.Required(),
+			mcp.Description("Must be true to confirm adding images to the share group.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeImageShareGroupImagesAddRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleLinodeImageShareGroupImagesAddRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This adds images to an image share group. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	shareGroupID, validationMessage := imageShareGroupIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	images, validationMessage := requiredImageShareGroupImagesFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	environment := request.GetString(paramEnvironment, "")
+	if environment != "" {
+		request.GetArguments()[paramEnvironment] = environment
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	image, err := client.AddImageShareGroupImages(ctx, shareGroupID, &linode.AddImageShareGroupImagesRequest{Images: images})
+	if err != nil {
+		return mcp.NewToolResultError(formatImageShareGroupImagesAddError(err)), nil
+	}
+
+	response := struct {
+		Message string        `json:"message"`
+		Image   *linode.Image `json:"image"`
+	}{
+		Message: fmt.Sprintf("Added image set to image share group %d; last returned image: '%s'", shareGroupID, image.ID),
+		Image:   image,
+	}
+
+	result, err := MarshalToolResponse(response)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to format image share group image response: %v", err)), nil
+	}
+
+	return result, nil
+}
+
+func requiredImageShareGroupImagesFromTool(request *mcp.CallToolRequest) ([]linode.ImageShareGroupImage, string) {
+	imagesArg, imagesPresent := request.GetArguments()["images"]
+	if !imagesPresent {
+		return nil, "images is required"
+	}
+
+	imagesJSON, imagesIsString := imagesArg.(string)
+	if !imagesIsString {
+		return nil, "images must be a JSON string"
+	}
+
+	images, err := imageShareGroupImagesFromTool(imagesJSON)
+	if err != nil {
+		return nil, err.Error()
+	}
+
+	if len(images) == 0 {
+		return nil, "images must contain at least one image"
+	}
+
+	return images, ""
+}
+
+func formatImageShareGroupImagesAddError(err error) string {
+	return "Failed to add image to share group: " + err.Error()
+}
+
 func imageShareGroupImagesFromTool(imagesJSON string) ([]linode.ImageShareGroupImage, error) {
 	if strings.TrimSpace(imagesJSON) == "" {
 		return nil, nil
@@ -176,20 +268,6 @@ func handleLinodeImageShareGroupUpdateRequest(ctx context.Context, request *mcp.
 	}
 
 	return result, nil
-}
-
-func imageShareGroupIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	raw, exists := request.GetArguments()["sharegroup_id"]
-	if !exists {
-		return 0, "sharegroup_id must be a positive integer"
-	}
-
-	shareGroupID, ok := numberArgToInt(raw)
-	if !ok || shareGroupID <= 0 {
-		return 0, "sharegroup_id must be a positive integer"
-	}
-
-	return shareGroupID, ""
 }
 
 func imageShareGroupUpdateFromTool(args map[string]any) (*linode.UpdateImageShareGroupRequest, string) {

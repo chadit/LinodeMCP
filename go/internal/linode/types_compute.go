@@ -238,6 +238,11 @@ type CreateImageShareGroupRequest struct {
 	Images      []ImageShareGroupImage `json:"images,omitempty"`
 }
 
+// AddImageShareGroupImagesRequest represents the request body for adding images to a share group.
+type AddImageShareGroupImagesRequest struct {
+	Images []ImageShareGroupImage `json:"images"`
+}
+
 // UpdateImageShareGroupRequest represents the request body for updating an image share group.
 type UpdateImageShareGroupRequest struct {
 	Label       *string `json:"label,omitempty"`

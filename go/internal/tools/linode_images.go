@@ -318,7 +318,7 @@ func handleImageShareGroupByTokenGetRequest(ctx context.Context, request *mcp.Ca
 func imageShareGroupIDFromTool(request *mcp.CallToolRequest) (int, string) {
 	value, exists := request.GetArguments()["sharegroup_id"]
 	if !exists {
-		return 0, "sharegroup_id is required"
+		return 0, "sharegroup_id must be a positive integer"
 	}
 
 	shareGroupID, ok := numberArgToInt(value)

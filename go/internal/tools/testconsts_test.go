@@ -316,6 +316,8 @@ const (
 	caseMissingClusterID          = "missing cluster id"
 	testStackScript               = "#!/bin/bash"
 	keyImages                     = "images"
+	imagePrivate15Fixture         = "private/15"
+	imagePrivate15JSON            = `[{"id":"private/15"}]`
 	testDebian12Image             = "linode/debian12"
 	keyScript                     = "script"
 	testStackScriptLabel          = "test-script"

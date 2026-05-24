@@ -1195,6 +1195,13 @@ func (c *Client) CreateImageShareGroup(ctx context.Context, req *CreateImageShar
 	return c.httpCreateImageShareGroup(ctx, req)
 }
 
+// AddImageShareGroupImages adds images to a share group without automatic retry.
+// Replaying this non-idempotent operation could add images more than once or
+// duplicate side effects if the server processed the first request.
+func (c *Client) AddImageShareGroupImages(ctx context.Context, shareGroupID int, req *AddImageShareGroupImagesRequest) (*Image, error) {
+	return c.httpAddImageShareGroupImages(ctx, shareGroupID, req)
+}
+
 // UpdateImageShareGroup updates an image share group without automatic retry.
 // Replaying this mutating operation could repeat side effects after a transient failure.
 func (c *Client) UpdateImageShareGroup(ctx context.Context, shareGroupID int, req *UpdateImageShareGroupRequest) (*ImageShareGroup, error) {
