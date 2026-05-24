@@ -210,6 +210,11 @@ type Image struct {
 	Deprecated   bool     `json:"deprecated"`
 }
 
+// ReplicateImageRequest represents the request body for replicating an image to regions.
+type ReplicateImageRequest struct {
+	Regions []string `json:"regions"`
+}
+
 // ImageShareGroup represents an owned image share group.
 type ImageShareGroup struct {
 	ID           int     `json:"id"`

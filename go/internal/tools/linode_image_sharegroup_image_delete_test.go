@@ -54,7 +54,7 @@ func TestLinodeImageShareGroupImageDeleteTool(t *testing.T) {
 		{name: caseMissingImageID, args: map[string]any{keyShareGroupID: 1234, keyConfirm: true}, wantContains: errImageIDPositive},
 		{name: "zero image id", args: map[string]any{keyShareGroupID: 1234, keyImageID: 0, keyConfirm: true}, wantContains: errImageIDPositive},
 		{name: "slash image id", args: map[string]any{keyShareGroupID: 1234, keyImageID: pathSeparatorValue, keyConfirm: true}, wantContains: errImageIDPositive},
-		{name: "query image id", args: map[string]any{keyShareGroupID: 1234, keyImageID: "5?6", keyConfirm: true}, wantContains: errImageIDPositive},
+		{name: caseQueryImageID, args: map[string]any{keyShareGroupID: 1234, keyImageID: "5?6", keyConfirm: true}, wantContains: errImageIDPositive},
 		{name: caseTraversalImageID, args: map[string]any{keyShareGroupID: 1234, keyImageID: pathTraversalValue, keyConfirm: true}, wantContains: errImageIDPositive},
 	}
 

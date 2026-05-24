@@ -165,6 +165,28 @@ func (c *Client) httpDeleteImage(ctx context.Context, imageID string) error {
 	return c.handleResponse(resp, nil)
 }
 
+// ReplicateImage replicates an image to the requested regions.
+func (c *Client) httpReplicateImage(ctx context.Context, imageID string, req *ReplicateImageRequest) (*Image, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointImages + "/" + escapeImageIDSegment(imageID) + "/regions"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ReplicateImage", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var image Image
+	if err := c.handleResponse(resp, &image); err != nil {
+		return nil, err
+	}
+
+	return &image, nil
+}
+
 // ListImageShareGroups retrieves owned image share groups.
 func (c *Client) httpListImageShareGroups(ctx context.Context, page, pageSize int) (*PaginatedResponse[ImageShareGroup], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

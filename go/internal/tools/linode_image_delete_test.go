@@ -46,7 +46,7 @@ func TestLinodeImageDeleteTool(t *testing.T) {
 		{name: caseNumericConfirmRejected, args: map[string]any{keyImageID: privateImage12345Fixture, keyConfirm: 1}, wantContains: errConfirmEqualsTrue},
 		{name: caseMissingImageID, args: map[string]any{keyConfirm: true}, wantContains: errImageIDNonEmpty},
 		{name: "blank image id", args: map[string]any{keyImageID: blankString, keyConfirm: true}, wantContains: errImageIDNonEmpty},
-		{name: "query image id", args: map[string]any{keyImageID: "private/123?query", keyConfirm: true}, wantContains: errImageIDPathFragment},
+		{name: caseQueryImageID, args: map[string]any{keyImageID: "private/123?query", keyConfirm: true}, wantContains: errImageIDPathFragment},
 		{name: "fragment image id", args: map[string]any{keyImageID: "private/123#frag", keyConfirm: true}, wantContains: errImageIDPathFragment},
 		{name: caseTraversalImageID, args: map[string]any{keyImageID: "private/..", keyConfirm: true}, wantContains: errImageIDPathFragment},
 		{name: "separator-only image id", args: map[string]any{keyImageID: "/private/123", keyConfirm: true}, wantContains: errImageIDPathFragment},
