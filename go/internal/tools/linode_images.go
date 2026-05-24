@@ -70,6 +70,22 @@ func NewLinodeImageShareGroupsListTool(cfg *config.Config) (mcp.Tool, profiles.C
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeImageShareGroupGetTool creates a tool for retrieving one image share group.
+func NewLinodeImageShareGroupGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_image_sharegroup_get",
+		mcp.WithDescription("Gets a single image share group by ID."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("Image share group ID.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleImageShareGroupGetRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeImageShareGroupTokensListTool creates a tool for listing image share group tokens.
 func NewLinodeImageShareGroupTokensListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
@@ -171,6 +187,25 @@ func handleImageShareGroupsListRequest(ctx context.Context, request *mcp.CallToo
 	}
 
 	return FormatListResponse(shareGroups.Data, nil, "image_sharegroups")
+}
+
+func handleImageShareGroupGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	shareGroupID, validationMessage := imageShareGroupIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	shareGroup, err := client.GetImageShareGroup(ctx, shareGroupID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve image share group: %v", err)), nil
+	}
+
+	return MarshalToolResponse(shareGroup)
 }
 
 func handleImageShareGroupTokensListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -278,6 +313,20 @@ func handleImageShareGroupByTokenGetRequest(ctx context.Context, request *mcp.Ca
 	}
 
 	return MarshalToolResponse(shareGroup)
+}
+
+func imageShareGroupIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	value, exists := request.GetArguments()["sharegroup_id"]
+	if !exists {
+		return 0, "sharegroup_id is required"
+	}
+
+	shareGroupID, ok := numberArgToInt(value)
+	if !ok || shareGroupID < 1 {
+		return 0, "sharegroup_id must be a positive integer"
+	}
+
+	return shareGroupID, ""
 }
 
 func imageShareGroupTokenUUIDFromTool(request *mcp.CallToolRequest) (string, string) {

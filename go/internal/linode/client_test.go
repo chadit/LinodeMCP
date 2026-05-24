@@ -6145,16 +6145,16 @@ func TestClientListImageShareGroupTokensError(t *testing.T) {
 func TestClientListImageShareGroupsSuccess(t *testing.T) {
 	t.Parallel()
 
-	description := "shared CI images"
-	updated := "2025-04-15T22:44:02"
+	description := shareGroupDescriptionFixture
+	updated := shareGroupUpdatedFixture
 	shareGroups := []linode.ImageShareGroup{
 		{
 			ID:           1,
-			UUID:         "1533863e-16a4-47b5-b829-ac0f35c13278",
+			UUID:         shareGroupUUIDExample,
 			Label:        imageShareGroupLabel,
 			Description:  &description,
 			IsSuspended:  false,
-			Created:      "2025-04-14T22:44:02",
+			Created:      shareGroupCreatedFixture,
 			Updated:      &updated,
 			ImagesCount:  2,
 			MembersCount: 3,
@@ -6187,11 +6187,130 @@ func TestClientListImageShareGroupsSuccess(t *testing.T) {
 	assert.Equal(t, 7, result.Results)
 }
 
+func TestClientGetImageShareGroupSuccess(t *testing.T) {
+	t.Parallel()
+
+	description := shareGroupDescriptionFixture
+	updated := shareGroupUpdatedFixture
+	shareGroup := linode.ImageShareGroup{
+		ID:           123,
+		UUID:         shareGroupUUIDExample,
+		Label:        imageShareGroupLabel,
+		Description:  &description,
+		IsSuspended:  false,
+		Created:      shareGroupCreatedFixture,
+		Updated:      &updated,
+		ImagesCount:  2,
+		MembersCount: 3,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/images/sharegroups/123", r.URL.Path, "request path should include share group ID")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(shareGroup))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	result, err := client.GetImageShareGroup(t.Context(), 123)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, 123, result.ID)
+	assert.Equal(t, imageShareGroupLabel, result.Label)
+}
+
+func TestClientGetImageShareGroupAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/images/sharegroups/123", r.URL.Path, "request path should include share group ID")
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]any{{keyReason: "temporary share group failure"}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	result, err := client.GetImageShareGroup(t.Context(), 123)
+
+	require.Error(t, err)
+	assert.Nil(t, result)
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, "temporary share group failure", apiErr.Message)
+}
+
+func TestClientGetImageShareGroupNetworkError(t *testing.T) {
+	t.Parallel()
+
+	client := linode.NewClient("http://127.0.0.1:1", "token", nil, linode.WithMaxRetries(0))
+	_, err := client.GetImageShareGroup(t.Context(), 123)
+
+	require.Error(t, err, "GetImageShareGroup should fail when server is unreachable")
+
+	var netErr *linode.NetworkError
+	require.ErrorAs(t, err, &netErr, "error should be a NetworkError")
+	assert.Equal(t, "GetImageShareGroup", netErr.Operation)
+}
+
+func TestClientGetImageShareGroupRetriesTransientFailure(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	description := shareGroupDescriptionFixture
+	updated := shareGroupUpdatedFixture
+	shareGroup := linode.ImageShareGroup{
+		ID:           123,
+		UUID:         shareGroupUUIDExample,
+		Label:        imageShareGroupLabel,
+		Description:  &description,
+		IsSuspended:  false,
+		Created:      shareGroupCreatedFixture,
+		Updated:      &updated,
+		ImagesCount:  2,
+		MembersCount: 3,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/images/sharegroups/123", r.URL.Path, "request path should include share group ID")
+
+		if requestCount.Add(1) == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]any{{keyReason: errTemporaryFailure}},
+			}))
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(shareGroup))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
+	result, err := client.GetImageShareGroup(t.Context(), 123)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, int32(2), requestCount.Load())
+	assert.Equal(t, imageShareGroupLabel, result.Label)
+}
+
 func TestClientCreateImageShareGroupSuccess(t *testing.T) {
 	t.Parallel()
 
-	description := "shared CI images"
-	updated := "2025-04-15T22:44:02"
+	description := shareGroupDescriptionFixture
+	updated := shareGroupUpdatedFixture
 	request := &linode.CreateImageShareGroupRequest{
 		Label:       imageShareGroupLabel,
 		Description: description,
@@ -6229,11 +6348,11 @@ func TestClientCreateImageShareGroupSuccess(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		assert.NoError(t, json.NewEncoder(w).Encode(linode.ImageShareGroup{
 			ID:           1,
-			UUID:         "1533863e-16a4-47b5-b829-ac0f35c13278",
+			UUID:         shareGroupUUIDExample,
 			Label:        imageShareGroupLabel,
 			Description:  &description,
 			IsSuspended:  false,
-			Created:      "2025-04-14T22:44:02",
+			Created:      shareGroupCreatedFixture,
 			Updated:      &updated,
 			ImagesCount:  1,
 			MembersCount: 0,
