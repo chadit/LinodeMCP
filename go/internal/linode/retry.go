@@ -1217,6 +1217,12 @@ func (c *Client) AddImageShareGroupImages(ctx context.Context, shareGroupID int,
 	return c.httpAddImageShareGroupImages(ctx, shareGroupID, req)
 }
 
+// DeleteImageShareGroupImage revokes access to one shared image without automatic retry.
+// Replaying this destructive operation could repeat side effects after a transient failure.
+func (c *Client) DeleteImageShareGroupImage(ctx context.Context, shareGroupID, imageID int) error {
+	return c.httpDeleteImageShareGroupImage(ctx, shareGroupID, imageID)
+}
+
 // UpdateImageShareGroup updates an image share group without automatic retry.
 // Replaying this mutating operation could repeat side effects after a transient failure.
 func (c *Client) UpdateImageShareGroup(ctx context.Context, shareGroupID int, req *UpdateImageShareGroupRequest) (*ImageShareGroup, error) {

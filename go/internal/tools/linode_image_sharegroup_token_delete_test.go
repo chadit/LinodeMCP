@@ -124,7 +124,7 @@ func TestLinodeImageShareGroupTokenDeleteTool(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyErrors: []map[string]string{{keyReason: "not found"}},
+				keyErrors: []map[string]string{{keyReason: errNotFound}},
 			}))
 		}))
 		defer srv.Close()
