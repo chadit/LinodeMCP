@@ -84,7 +84,7 @@ func TestLinodeImageShareGroupImagesListTool(t *testing.T) {
 
 		invalidValues := map[string]any{
 			caseSlash:   paymentMethodIDSlash,
-			caseQuery:   "123?query",
+			caseQuery:   pathQueryValue,
 			caseDotdot:  pathTraversalValue,
 			caseEmpty:   blankString,
 			caseNumeric: 0,

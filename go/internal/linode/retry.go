@@ -1219,6 +1219,21 @@ func (c *Client) ListMembersByImageShareGroup(ctx context.Context, shareGroupID,
 	return members, err
 }
 
+// GetImageShareGroupMemberToken retrieves a member token linked to an owned image share group with automatic retry on transient failures.
+func (c *Client) GetImageShareGroupMemberToken(ctx context.Context, shareGroupID int, tokenUUID string) (*ImageShareGroupMember, error) {
+	var member *ImageShareGroupMember
+
+	err := c.executeWithRetry(ctx, "GetImageShareGroupMemberToken", func() error {
+		var err error
+
+		member, err = c.httpGetImageShareGroupMemberToken(ctx, shareGroupID, tokenUUID)
+
+		return err
+	})
+
+	return member, err
+}
+
 // CreateImageShareGroup creates an image share group without automatic retry.
 // Replaying this non-idempotent create operation could create duplicate share groups.
 func (c *Client) CreateImageShareGroup(ctx context.Context, req *CreateImageShareGroupRequest) (*ImageShareGroup, error) {

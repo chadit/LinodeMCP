@@ -17,20 +17,21 @@ import (
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-func TestLinodeImageShareGroupMembersListTool(t *testing.T) {
+func TestLinodeImageShareGroupMemberTokenGetTool(t *testing.T) {
 	t.Parallel()
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
 
 		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeImageShareGroupMembersListTool(cfg)
+		tool, capability, handler := tools.NewLinodeImageShareGroupMemberTokenGetTool(cfg)
 
-		assert.Equal(t, "linode_image_sharegroup_members_list", tool.Name, "tool name should match")
+		assert.Equal(t, "linode_image_sharegroup_member_token_get", tool.Name, "tool name should match")
 		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
 		assert.NotEmpty(t, tool.Description, "tool should have a description")
 		assert.Contains(t, tool.InputSchema.Properties, keyShareGroupID, "schema should include sharegroup_id")
-		assert.NotContains(t, tool.InputSchema.Properties, keyConfirm, "read-only list tool must not require confirm")
+		assert.Contains(t, tool.InputSchema.Properties, keyTokenUUID, "schema should include token_uuid")
+		assert.NotContains(t, tool.InputSchema.Properties, keyConfirm, "read-only get tool must not require confirm")
 		require.NotNil(t, handler, "handler should not be nil")
 	})
 
@@ -38,22 +39,21 @@ func TestLinodeImageShareGroupMembersListTool(t *testing.T) {
 		t.Parallel()
 
 		updated := "2025-08-05T10:09:09"
-		members := []linode.ImageShareGroupMember{
-			{TokenUUID: shareGroupTokenGetUUID, Status: statusActive, Label: "Engineering - Backend", Created: "2025-08-04T10:07:59", Updated: &updated},
+		member := linode.ImageShareGroupMember{
+			TokenUUID: shareGroupTokenGetUUID,
+			Status:    statusActive,
+			Label:     "Engineering - Backend",
+			Created:   imageShareGroupTokenCreated,
+			Updated:   &updated,
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-			assert.Equal(t, "/images/sharegroups/123/members", r.URL.Path, "request path should include share group ID and members suffix")
-			assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+			assert.Equal(t, "/images/sharegroups/123/members/"+shareGroupTokenGetUUID, r.URL.Path, "request path should include share group ID and token UUID")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
 			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyData:    members,
-				keyPage:    2,
-				keyPages:   3,
-				keyResults: 51,
-			}))
+			assert.NoError(t, json.NewEncoder(w).Encode(member))
 		}))
 		defer srv.Close()
 
@@ -65,9 +65,9 @@ func TestLinodeImageShareGroupMembersListTool(t *testing.T) {
 				},
 			},
 		}
-		_, _, handler := tools.NewLinodeImageShareGroupMembersListTool(cfg)
+		_, _, handler := tools.NewLinodeImageShareGroupMemberTokenGetTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyShareGroupID: 123, keyPage: 2, keyPageSize: 25})
+		req := createRequestWithArgs(t, map[string]any{keyShareGroupID: 123, keyTokenUUID: shareGroupTokenGetUUID})
 		result, err := handler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return an error")
@@ -80,18 +80,21 @@ func TestLinodeImageShareGroupMembersListTool(t *testing.T) {
 		assert.Contains(t, textContent.Text, shareGroupTokenGetUUID, "response should contain token UUID")
 	})
 
-	t.Run("rejects invalid sharegroup_id before client call", func(t *testing.T) {
+	t.Run("rejects invalid path params before client call", func(t *testing.T) {
 		t.Parallel()
 
-		invalidValues := map[string]any{
-			caseSlash:   paymentMethodIDSlash,
-			caseQuery:   pathQueryValue,
-			caseDotdot:  pathTraversalValue,
-			caseEmpty:   blankString,
-			caseNumeric: 0,
+		invalidArgs := map[string]map[string]any{
+			"slash sharegroup_id":  {keyShareGroupID: paymentMethodIDSlash, keyTokenUUID: shareGroupTokenGetUUID},
+			"query sharegroup_id":  {keyShareGroupID: pathQueryValue, keyTokenUUID: shareGroupTokenGetUUID},
+			"dotdot sharegroup_id": {keyShareGroupID: pathTraversalValue, keyTokenUUID: shareGroupTokenGetUUID},
+			"zero sharegroup_id":   {keyShareGroupID: 0, keyTokenUUID: shareGroupTokenGetUUID},
+			"slash token_uuid":     {keyShareGroupID: 123, keyTokenUUID: tokenUUIDWithSlash},
+			"query token_uuid":     {keyShareGroupID: 123, keyTokenUUID: tokenUUIDWithQuery},
+			"dotdot token_uuid":    {keyShareGroupID: 123, keyTokenUUID: tokenUUIDWithDotdot},
+			"numeric token_uuid":   {keyShareGroupID: 123, keyTokenUUID: 123},
 		}
 
-		for name, value := range invalidValues {
+		for name, args := range invalidArgs {
 			t.Run(name, func(t *testing.T) {
 				t.Parallel()
 
@@ -110,41 +113,25 @@ func TestLinodeImageShareGroupMembersListTool(t *testing.T) {
 						},
 					},
 				}
-				_, _, handler := tools.NewLinodeImageShareGroupMembersListTool(cfg)
+				_, _, handler := tools.NewLinodeImageShareGroupMemberTokenGetTool(cfg)
 
-				req := createRequestWithArgs(t, map[string]any{keyShareGroupID: value})
-				result, err := handler(t.Context(), req)
+				result, err := handler(t.Context(), createRequestWithArgs(t, args))
 
 				require.NoError(t, err)
 				require.NotNil(t, result)
-				assert.True(t, result.IsError, "invalid sharegroup_id should be an error result")
-				assert.False(t, called.Load(), "invalid sharegroup_id must be rejected before the client call")
+				assert.True(t, result.IsError, "invalid path params should be an error result")
+				assert.False(t, called.Load(), "invalid path params must be rejected before the client call")
 			})
 		}
-	})
-
-	t.Run("missing sharegroup_id", func(t *testing.T) {
-		t.Parallel()
-
-		cfg := &config.Config{}
-		_, _, handler := tools.NewLinodeImageShareGroupMembersListTool(cfg)
-
-		req := createRequestWithArgs(t, map[string]any{})
-		result, err := handler(t.Context(), req)
-
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.True(t, result.IsError, "missing sharegroup_id should be an error result")
 	})
 
 	t.Run("client error", func(t *testing.T) {
 		t.Parallel()
 
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyErrors: []map[string]string{{keyReason: temporaryFailure}},
-			}))
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}))
 		}))
 		defer srv.Close()
 
@@ -156,16 +143,12 @@ func TestLinodeImageShareGroupMembersListTool(t *testing.T) {
 				},
 			},
 		}
-		_, _, handler := tools.NewLinodeImageShareGroupMembersListTool(cfg)
+		_, _, handler := tools.NewLinodeImageShareGroupMemberTokenGetTool(cfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyShareGroupID: 123})
-		result, err := handler(t.Context(), req)
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyShareGroupID: 123, keyTokenUUID: shareGroupTokenGetUUID}))
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
-		assert.True(t, result.IsError, "upstream API error should be an error result")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Failed to retrieve image share group members")
+		assert.True(t, result.IsError, "client failure should be an error result")
 	})
 }
