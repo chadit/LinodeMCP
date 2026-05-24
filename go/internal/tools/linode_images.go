@@ -105,6 +105,24 @@ func NewLinodeImageShareGroupImagesListTool(cfg *config.Config) (mcp.Tool, profi
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeImageShareGroupMembersListTool creates a tool for listing members linked to an owned image share group.
+func NewLinodeImageShareGroupMembersListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_image_sharegroup_members_list",
+		mcp.WithDescription("Lists members linked to an owned image share group."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("Image share group ID.")),
+		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+		mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleImageShareGroupMembersListRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeImageShareGroupTokensListTool creates a tool for listing image share group tokens.
 func NewLinodeImageShareGroupTokensListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
@@ -284,6 +302,30 @@ func handleImageShareGroupImagesListRequest(ctx context.Context, request *mcp.Ca
 	}
 
 	return FormatListResponse(images.Data, nil, "images")
+}
+
+func handleImageShareGroupMembersListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	shareGroupID, validationMessage := imageShareGroupIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	page, pageSize, validationMessage := imageShareGroupsPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	members, err := client.ListMembersByImageShareGroup(ctx, shareGroupID, page, pageSize)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve image share group members: %v", err)), nil
+	}
+
+	return FormatListResponse(members.Data, nil, "image_sharegroup_members")
 }
 
 func handleImageShareGroupTokensListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
