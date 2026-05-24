@@ -7,6 +7,30 @@ type DatabaseEngine struct {
 	Version string `json:"version"`
 }
 
+// DatabaseType represents a Managed Database node plan type.
+type DatabaseType struct {
+	ID         string              `json:"id"`
+	Label      string              `json:"label"`
+	Class      string              `json:"class"`
+	Disk       int                 `json:"disk"`
+	Memory     int                 `json:"memory"`
+	VCPUs      int                 `json:"vcpus"`
+	Deprecated bool                `json:"deprecated"`
+	Engines    DatabaseTypeEngines `json:"engines"`
+}
+
+// DatabaseTypeEngines contains engine-specific node quantities and prices.
+type DatabaseTypeEngines struct {
+	MySQL      []DatabaseTypeEngine `json:"mysql"`
+	PostgreSQL []DatabaseTypeEngine `json:"postgresql"`
+}
+
+// DatabaseTypeEngine represents pricing for one Managed Database node quantity.
+type DatabaseTypeEngine struct {
+	Quantity int   `json:"quantity"`
+	Price    Price `json:"price"`
+}
+
 // DatabaseInstance represents a Managed Database instance.
 type DatabaseInstance struct {
 	ID              int      `json:"id"`

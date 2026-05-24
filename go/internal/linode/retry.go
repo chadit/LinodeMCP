@@ -864,6 +864,21 @@ func (c *Client) ListDatabaseEngines(ctx context.Context, page, pageSize int) ([
 	return engines, err
 }
 
+// ListDatabaseTypes retrieves Managed Database node types with automatic retry on transient failures.
+func (c *Client) ListDatabaseTypes(ctx context.Context, page, pageSize int) ([]DatabaseType, error) {
+	var types []DatabaseType
+
+	err := c.executeWithRetry(ctx, "ListDatabaseTypes", func() error {
+		var err error
+
+		types, err = c.httpListDatabaseTypes(ctx, page, pageSize)
+
+		return err
+	})
+
+	return types, err
+}
+
 // GetDatabaseMySQLConfig retrieves MySQL Managed Database advanced parameters with automatic retry on transient failures.
 func (c *Client) GetDatabaseMySQLConfig(ctx context.Context) (map[string]any, error) {
 	var config map[string]any
