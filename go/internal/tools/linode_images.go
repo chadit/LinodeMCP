@@ -23,7 +23,10 @@ const (
 	errImageIDPrivateIdentifier  = "image_id must be a private image identifier like private/12345"
 )
 
-var imageShareGroupTokenUUIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+var (
+	imageShareGroupImageIDSlugPattern = regexp.MustCompile(`^private/[1-9]\d*$`)
+	imageShareGroupTokenUUIDPattern   = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+)
 
 // NewLinodeImageListTool creates a tool for listing Linode images.
 func NewLinodeImageListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
@@ -119,6 +122,24 @@ func NewLinodeImageShareGroupGetTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return handleImageShareGroupGetRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeImageShareGroupsByImageListTool creates a tool for listing share groups that contain an image.
+func NewLinodeImageShareGroupsByImageListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_image_sharegroups_by_image_list",
+		mcp.WithDescription("Lists owned image share groups that currently include a private image."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithString("image_id", mcp.Required(), mcp.Description("Private image ID, for example private/12345.")),
+		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+		mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleImageShareGroupsByImageListRequest(ctx, &request, cfg)
 	}
 
 	return tool, profiles.CapRead, handler
@@ -439,6 +460,30 @@ func handleImageGetRequest(ctx context.Context, request *mcp.CallToolRequest, cf
 	return MarshalToolResponse(image)
 }
 
+func handleImageShareGroupsByImageListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	imageID, validationMessage := imageShareGroupSourceImageIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	page, pageSize, validationMessage := imageShareGroupsPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	shareGroups, err := client.ListImageShareGroupsByImage(ctx, imageID, page, pageSize)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve image share groups by image: %v", err)), nil
+	}
+
+	return FormatListResponse(shareGroups.Data, nil, "image_sharegroups")
+}
+
 func handleImageShareGroupImagesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	shareGroupID, validationMessage := imageShareGroupIDFromTool(request)
 	if validationMessage != "" {
@@ -742,6 +787,23 @@ func imageShareGroupIDFromTool(request *mcp.CallToolRequest) (int, string) {
 	}
 
 	return shareGroupID, ""
+}
+
+func imageShareGroupSourceImageIDFromTool(request *mcp.CallToolRequest) (string, string) {
+	imageID, validationMessage := requiredStringArg(request.GetArguments(), "image_id")
+	if validationMessage != "" {
+		return "", validationMessage
+	}
+
+	if strings.ContainsAny(imageID, "?#") || strings.Contains(imageID, "..") {
+		return "", "image_id must not contain query separators, fragments, or traversal segments"
+	}
+
+	if !imageShareGroupImageIDSlugPattern.MatchString(imageID) {
+		return "", errImageIDPrivateIdentifier
+	}
+
+	return imageID, ""
 }
 
 func imageShareGroupImageIDFromTool(request *mcp.CallToolRequest) (int, string) {

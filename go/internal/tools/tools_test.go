@@ -7865,7 +7865,7 @@ func TestLinodeImagesListTool(t *testing.T) {
 
 		images := []linode.Image{
 			{ID: imageIDUbuntu2204, Label: imageUbuntu2204, Type: typeManualImage, IsPublic: true, Deprecated: false},
-			{ID: "private/12345", Label: "Custom Image", Type: typeManualImage, IsPublic: false, Deprecated: false},
+			{ID: privateImage12345Fixture, Label: "Custom Image", Type: typeManualImage, IsPublic: false, Deprecated: false},
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -7900,7 +7900,7 @@ func TestLinodeImagesListTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, imageIDUbuntu2204, "response should contain public image")
-		assert.Contains(t, textContent.Text, "private/12345", "response should contain private image")
+		assert.Contains(t, textContent.Text, privateImage12345Fixture, "response should contain private image")
 	})
 
 	t.Run("filter by public", func(t *testing.T) {
@@ -7908,7 +7908,7 @@ func TestLinodeImagesListTool(t *testing.T) {
 
 		images := []linode.Image{
 			{ID: imageIDUbuntu2204, Label: imageUbuntu2204, IsPublic: true},
-			{ID: "private/12345", Label: "Custom Image", IsPublic: false},
+			{ID: privateImage12345Fixture, Label: "Custom Image", IsPublic: false},
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -7942,7 +7942,7 @@ func TestLinodeImagesListTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, `"count": 1`, "filtered count should be 1")
-		assert.Contains(t, textContent.Text, "private/12345", "response should contain private image")
+		assert.Contains(t, textContent.Text, privateImage12345Fixture, "response should contain private image")
 		assert.NotContains(t, textContent.Text, imageIDUbuntu2204, "response should not contain public image")
 	})
 
@@ -8142,7 +8142,7 @@ func TestLinodeImageShareGroupsListTool(t *testing.T) {
 		shareGroups := []linode.ImageShareGroup{
 			{
 				ID:           1,
-				UUID:         "1533863e-16a4-47b5-b829-ac0f35c13278",
+				UUID:         shareGroupUUIDExample,
 				Label:        shareGroupLabelFixture,
 				Description:  &description,
 				IsSuspended:  false,
@@ -8189,7 +8189,7 @@ func TestLinodeImageShareGroupsListTool(t *testing.T) {
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, `"count": 1`, "response should include count")
 		assert.Contains(t, textContent.Text, shareGroupLabelFixture, "response should contain share group label")
-		assert.Contains(t, textContent.Text, "1533863e-16a4-47b5-b829-ac0f35c13278", "response should contain share group UUID")
+		assert.Contains(t, textContent.Text, shareGroupUUIDExample, "response should contain share group UUID")
 	})
 
 	t.Run("invalid pagination", func(t *testing.T) {

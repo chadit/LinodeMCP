@@ -1210,6 +1210,21 @@ func (c *Client) GetImageShareGroup(ctx context.Context, shareGroupID int) (*Ima
 	return shareGroup, err
 }
 
+// ListImageShareGroupsByImage retrieves share groups that contain an image with automatic retry on transient failures.
+func (c *Client) ListImageShareGroupsByImage(ctx context.Context, imageID string, page, pageSize int) (*PaginatedResponse[ImageShareGroup], error) {
+	var shareGroups *PaginatedResponse[ImageShareGroup]
+
+	err := c.executeWithRetry(ctx, "ListImageShareGroupsByImage", func() error {
+		var err error
+
+		shareGroups, err = c.httpListImageShareGroupsByImage(ctx, imageID, page, pageSize)
+
+		return err
+	})
+
+	return shareGroups, err
+}
+
 // ListImagesByShareGroup retrieves images shared in an owned image share group with automatic retry on transient failures.
 func (c *Client) ListImagesByShareGroup(ctx context.Context, shareGroupID, page, pageSize int) (*PaginatedResponse[Image], error) {
 	var images *PaginatedResponse[Image]

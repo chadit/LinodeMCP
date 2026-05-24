@@ -165,6 +165,7 @@ const (
 	imageIDUbuntu2204               = "linode/ubuntu22.04"
 	imageIDUbuntu2404               = "linode/ubuntu24.04"
 	privateImage12345Fixture        = "private/12345"
+	shareGroupUUIDExample           = "1533863e-16a4-47b5-b829-ac0f35c13278"
 	typeManualImage                 = "manual"
 	typeLinode4GB                   = "Linode 4GB"
 	rootPassStrong                  = "Str0ngP@ssw0rd!"
