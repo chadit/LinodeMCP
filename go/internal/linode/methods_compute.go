@@ -146,6 +146,26 @@ func (c *Client) httpListImageShareGroups(ctx context.Context, page, pageSize in
 	return &response, nil
 }
 
+// CreateImageShareGroup creates a group to share images with other users.
+func (c *Client) httpCreateImageShareGroup(ctx context.Context, req *CreateImageShareGroupRequest) (*ImageShareGroup, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointImageShareGroups, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateImageShareGroup", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var shareGroup ImageShareGroup
+	if err := c.handleResponse(resp, &shareGroup); err != nil {
+		return nil, err
+	}
+
+	return &shareGroup, nil
+}
+
 // ListImageShareGroupTokens retrieves image share group tokens for the user.
 func (c *Client) httpListImageShareGroupTokens(ctx context.Context, page, pageSize int) (*PaginatedResponse[ImageShareGroupToken], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

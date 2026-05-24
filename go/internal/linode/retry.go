@@ -1174,6 +1174,12 @@ func (c *Client) ListImageShareGroups(ctx context.Context, page, pageSize int) (
 	return shareGroups, err
 }
 
+// CreateImageShareGroup creates an image share group without automatic retry.
+// Replaying this non-idempotent create operation could create duplicate share groups.
+func (c *Client) CreateImageShareGroup(ctx context.Context, req *CreateImageShareGroupRequest) (*ImageShareGroup, error) {
+	return c.httpCreateImageShareGroup(ctx, req)
+}
+
 // ListImageShareGroupTokens retrieves image share group tokens with automatic retry on transient failures.
 func (c *Client) ListImageShareGroupTokens(ctx context.Context, page, pageSize int) (*PaginatedResponse[ImageShareGroupToken], error) {
 	var tokens *PaginatedResponse[ImageShareGroupToken]
