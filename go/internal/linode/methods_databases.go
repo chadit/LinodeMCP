@@ -270,6 +270,23 @@ func (c *Client) httpDeleteDatabaseInstance(ctx context.Context, instanceID int)
 	return c.handleResponse(resp, nil)
 }
 
+// DeleteDatabasePostgreSQLInstance deletes one PostgreSQL Managed Database instance.
+func (c *Client) httpDeleteDatabasePostgreSQLInstance(ctx context.Context, instanceID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointDatabasePostgreSQLInstances + "/" + url.PathEscape(strconv.Itoa(instanceID))
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteDatabasePostgreSQLInstance", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return c.handleResponse(resp, nil)
+}
+
 // PatchDatabaseInstance applies security patches and updates to one MySQL Managed Database instance.
 func (c *Client) httpPatchDatabaseInstance(ctx context.Context, instanceID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

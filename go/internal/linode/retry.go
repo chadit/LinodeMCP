@@ -1024,6 +1024,11 @@ func (c *Client) DeleteDatabaseInstance(ctx context.Context, instanceID int) err
 	return c.httpDeleteDatabaseInstance(ctx, instanceID)
 }
 
+// DeleteDatabasePostgreSQLInstance deletes one PostgreSQL Managed Database instance without retrying the DELETE.
+func (c *Client) DeleteDatabasePostgreSQLInstance(ctx context.Context, instanceID int) error {
+	return c.httpDeleteDatabasePostgreSQLInstance(ctx, instanceID)
+}
+
 // PatchDatabaseInstance applies security patches and updates to one MySQL Managed Database instance without retrying the POST.
 func (c *Client) PatchDatabaseInstance(ctx context.Context, instanceID int) error {
 	return c.httpPatchDatabaseInstance(ctx, instanceID)
