@@ -158,6 +158,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 	want := map[string]profiles.Capability{
 		"linode_image_create":                                   profiles.CapWrite,
 		"linode_domain_record_get":                              profiles.CapRead,
+		"linode_domain_zone_file_get":                           profiles.CapRead,
 		"linode_account_availability":                           profiles.CapRead,
 		"linode_account_transfer":                               profiles.CapRead,
 		"linode_account_settings":                               profiles.CapRead,

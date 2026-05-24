@@ -20,6 +20,11 @@ type Domain struct {
 	Group       string   `json:"group"`
 }
 
+// DomainZoneFile represents the rendered zone file lines for a domain.
+type DomainZoneFile struct {
+	ZoneFile []string `json:"zone_file"`
+}
+
 // DomainRecord represents a DNS record within a domain.
 type DomainRecord struct {
 	ID       int    `json:"id"`

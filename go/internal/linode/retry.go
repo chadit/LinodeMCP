@@ -1225,6 +1225,21 @@ func (c *Client) ListDomainRecords(ctx context.Context, domainID int) ([]DomainR
 	return records, err
 }
 
+// GetDomainZoneFile retrieves the rendered zone file for a domain with automatic retry on transient failures.
+func (c *Client) GetDomainZoneFile(ctx context.Context, domainID int) (*DomainZoneFile, error) {
+	var zoneFile *DomainZoneFile
+
+	err := c.executeWithRetry(ctx, "GetDomainZoneFile", func() error {
+		var err error
+
+		zoneFile, err = c.httpGetDomainZoneFile(ctx, domainID)
+
+		return err
+	})
+
+	return zoneFile, err
+}
+
 // ListFirewalls retrieves all firewalls with automatic retry on transient failures.
 func (c *Client) ListFirewalls(ctx context.Context) ([]Firewall, error) {
 	var firewalls []Firewall

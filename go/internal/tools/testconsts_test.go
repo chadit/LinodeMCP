@@ -135,6 +135,7 @@ const (
 	labelTestCluster                = "test-cluster"
 	domainExample                   = "example.com"
 	remoteNameserverExample         = "ns1.example.com"
+	domainZoneTTL                   = "$TTL 864000"
 	hostWWW                         = "www"
 	imageUbuntu2204                 = "Ubuntu 22.04"
 	imageUbuntu2404                 = "Ubuntu 24.04 Disk"
