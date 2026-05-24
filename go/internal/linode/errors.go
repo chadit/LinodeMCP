@@ -19,6 +19,9 @@ var ErrCircuitOpen = errors.New("circuit breaker open")
 // count this; it's a caller-side decision, not an upstream-health signal.
 var ErrRateLimitWaitCanceled = errors.New("rate limit wait canceled")
 
+// ErrUpdateImageRequestRequired is returned when UpdateImage is called without a request body.
+var ErrUpdateImageRequestRequired = errors.New("update image request is required")
+
 // APIError represents an error returned by the Linode API.
 // RetryAfter carries the server's Retry-After hint when present so the retry
 // loop can honor it instead of computing its own backoff.

@@ -33,6 +33,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_region_list", Capability: profiles.CapRead},
 		{Name: "linode_type_list", Capability: profiles.CapRead},
 		{Name: "linode_image_list", Capability: profiles.CapRead},
+		{Name: "linode_image_update", Capability: profiles.CapWrite},
 		{Name: "linode_image_sharegroups_list", Capability: profiles.CapRead},
 		{Name: "linode_image_sharegroup_get", Capability: profiles.CapRead},
 		{Name: "linode_image_sharegroups_by_image_list", Capability: profiles.CapRead},

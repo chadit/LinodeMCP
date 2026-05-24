@@ -347,3 +347,13 @@ const (
 	keyScript                     = "script"
 	testStackScriptLabel          = "test-script"
 )
+
+const (
+	privateImageTraversalFixture = "private/.."
+	privateImageZeroFixture      = "private/0"
+	errTagsMust                  = "tags must"
+)
+
+const (
+	keyEnvironment = "environment"
+)

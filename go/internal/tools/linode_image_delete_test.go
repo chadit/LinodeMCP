@@ -48,12 +48,12 @@ func TestLinodeImageDeleteTool(t *testing.T) {
 		{name: "blank image id", args: map[string]any{keyImageID: blankString, keyConfirm: true}, wantContains: errImageIDNonEmpty},
 		{name: caseQueryImageID, args: map[string]any{keyImageID: "private/123?query", keyConfirm: true}, wantContains: errImageIDPathFragment},
 		{name: "fragment image id", args: map[string]any{keyImageID: "private/123#frag", keyConfirm: true}, wantContains: errImageIDPathFragment},
-		{name: caseTraversalImageID, args: map[string]any{keyImageID: "private/..", keyConfirm: true}, wantContains: errImageIDPathFragment},
+		{name: caseTraversalImageID, args: map[string]any{keyImageID: privateImageTraversalFixture, keyConfirm: true}, wantContains: errImageIDPathFragment},
 		{name: "separator-only image id", args: map[string]any{keyImageID: "/private/123", keyConfirm: true}, wantContains: errImageIDPathFragment},
 		{name: "public image id", args: map[string]any{keyImageID: imageIDUbuntu2204, keyConfirm: true}, wantContains: errImageIDPathFragment},
 		{name: "non-numeric private image id", args: map[string]any{keyImageID: "private/not-a-number", keyConfirm: true}, wantContains: errImageIDPathFragment},
 		{name: "extra segment image id", args: map[string]any{keyImageID: "private/123/456", keyConfirm: true}, wantContains: errImageIDPathFragment},
-		{name: "zero private image id", args: map[string]any{keyImageID: "private/0", keyConfirm: true}, wantContains: errImageIDPathFragment},
+		{name: "zero private image id", args: map[string]any{keyImageID: privateImageZeroFixture, keyConfirm: true}, wantContains: errImageIDPathFragment},
 		{name: "signed private image id", args: map[string]any{keyImageID: "private/+123", keyConfirm: true}, wantContains: errImageIDPathFragment},
 	}
 

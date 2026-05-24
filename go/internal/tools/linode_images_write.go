@@ -57,6 +57,27 @@ func NewLinodeImageReplicateTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 	return tool, profiles.CapWrite, handler
 }
 
+// NewLinodeImageUpdateTool creates a tool for updating editable image metadata.
+func NewLinodeImageUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_image_update",
+		"Updates editable metadata for a Linode image.",
+		[]mcp.ToolOption{
+			mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+			mcp.WithString("image_id", mcp.Required(), mcp.Description("The editable image ID, for example private/12345 or shared/123.")),
+			mcp.WithString("label", mcp.Description("New image label (optional).")),
+			mcp.WithString("description", mcp.Description("New image description (optional).")),
+			mcp.WithString("tags", mcp.Description("JSON array of tag strings to apply to the image (optional).")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm image update.")),
+		},
+		handleLinodeImageUpdateRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
 func handleLinodeImageUploadRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	if result := RequireConfirm(request, "This creates an image upload. Set confirm=true to proceed."); result != nil {
 		return result, nil
@@ -142,6 +163,167 @@ func optionalTagsFromTool(request *mcp.CallToolRequest) ([]string, error) {
 	}
 
 	return values, nil
+}
+
+func handleLinodeImageUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This updates image metadata. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	imageID, validationMessage := editableImageIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	req, validationMessage := imageUpdateFromTool(request.GetArguments())
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	updated, err := client.UpdateImage(ctx, imageID, req)
+	if err != nil {
+		return mcp.NewToolResultError(formatImageUpdateError(err)), nil
+	}
+
+	response := struct {
+		Message string        `json:"message"`
+		Image   *linode.Image `json:"image"`
+	}{
+		Message: fmt.Sprintf("Image '%s' updated successfully", updated.ID),
+		Image:   updated,
+	}
+
+	result, err := MarshalToolResponse(response)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to format image response: %v", err)), nil
+	}
+
+	return result, nil
+}
+
+func editableImageIDFromTool(request *mcp.CallToolRequest) (string, string) {
+	imageID, validationMessage := imageIDFromTool(request)
+	if validationMessage != "" {
+		return "", validationMessage
+	}
+
+	prefix, _, _ := strings.Cut(imageID, "/")
+	if prefix == "linode" {
+		return "", "image_id must reference an editable private or shared image"
+	}
+
+	return imageID, ""
+}
+
+func imageUpdateFromTool(args map[string]any) (*linode.UpdateImageRequest, string) {
+	req := &linode.UpdateImageRequest{}
+
+	var hasUpdate bool
+
+	label, hasLabel, validationMessage := optionalStringField(args, "label")
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if hasLabel {
+		req.Label = &label
+		hasUpdate = true
+	}
+
+	description, hasDescription, validationMessage := optionalStringField(args, "description")
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if hasDescription {
+		req.Description = &description
+		hasUpdate = true
+	}
+
+	tags, hasTags, validationMessage := optionalTagsField(args, "tags")
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if hasTags {
+		req.Tags = &tags
+		hasUpdate = true
+	}
+
+	if !hasUpdate {
+		return nil, "at least one of label, description, or tags is required"
+	}
+
+	return req, ""
+}
+
+func optionalTagsField(args map[string]any, name string) ([]string, bool, string) {
+	rawTags, tagsPresent := args[name]
+	if !tagsPresent {
+		return nil, false, ""
+	}
+
+	values, validationMessage := tagsValueFromToolArg(rawTags)
+	if validationMessage != "" {
+		return nil, false, validationMessage
+	}
+
+	return values, true, ""
+}
+
+func tagsValueFromToolArg(rawTags any) ([]string, string) {
+	switch tags := rawTags.(type) {
+	case string:
+		tagsText := strings.TrimSpace(tags)
+
+		var values []string
+		if err := json.Unmarshal([]byte(tagsText), &values); err != nil {
+			return nil, fmt.Errorf("%w: %w", ErrTagsMustBeJSONStringArray, err).Error()
+		}
+
+		if values == nil {
+			return nil, ErrTagsMustBeJSONStringArray.Error()
+		}
+
+		return normalizeTags(values)
+	case []string:
+		return normalizeTags(tags)
+	case []any:
+		values := make([]string, 0, len(tags))
+		for _, tag := range tags {
+			tagText, ok := tag.(string)
+			if !ok {
+				return nil, ErrTagsMustBeJSONStringArray.Error()
+			}
+
+			values = append(values, tagText)
+		}
+
+		return normalizeTags(values)
+	default:
+		return nil, ErrTagsMustBeJSONStringArray.Error()
+	}
+}
+
+func normalizeTags(values []string) ([]string, string) {
+	normalized := make([]string, len(values))
+	for index, value := range values {
+		normalized[index] = strings.TrimSpace(value)
+		if normalized[index] == "" {
+			return nil, ErrTagsEntriesNonEmpty.Error()
+		}
+	}
+
+	return normalized, ""
+}
+
+func formatImageUpdateError(err error) string {
+	return "Failed to update image: " + err.Error()
 }
 
 // NewLinodeImageShareGroupCreateTool creates a tool for creating image share groups.

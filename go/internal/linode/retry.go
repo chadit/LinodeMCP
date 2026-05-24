@@ -1187,6 +1187,12 @@ func (c *Client) DeleteImage(ctx context.Context, imageID string) error {
 	return c.httpDeleteImage(ctx, imageID)
 }
 
+// UpdateImage updates editable fields for a Linode image without automatic retry.
+// Replaying this mutating operation could repeat side effects after a transient failure.
+func (c *Client) UpdateImage(ctx context.Context, imageID string, req *UpdateImageRequest) (*Image, error) {
+	return c.httpUpdateImage(ctx, imageID, req)
+}
+
 // ListImageShareGroups retrieves owned image share groups with automatic retry on transient failures.
 func (c *Client) ListImageShareGroups(ctx context.Context, page, pageSize int) (*PaginatedResponse[ImageShareGroup], error) {
 	var shareGroups *PaginatedResponse[ImageShareGroup]
