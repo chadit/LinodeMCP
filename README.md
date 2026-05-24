@@ -650,6 +650,31 @@ The AI can also help compose profiles via the `linode_profile_*` builder tools. 
 
 For the full reference (schema, capability tags, builder workflow, token-scope validation, security model), see [docs/profiles.md](docs/profiles.md). For copy-paste starting points, see [docs/profile-recipes.md](docs/profile-recipes.md). For host-specific wiring, see [docs/host-integrations/](docs/host-integrations/README.md).
 
+## Auditing
+
+Every tool call is recorded as a structured audit event. The default JSONL sink is always on; an opt-in SQLite sink dual-writes for fast indexed queries.
+
+Where the log lives:
+
+- System service install (UID < 1000 or systemd-managed): `/var/log/linodemcp/audit.log`
+- Otherwise: `$XDG_STATE_HOME/linodemcp/audit.log` (default `~/.local/state/linodemcp/audit.log`)
+
+Five MCP tools query the log; all carry `CapMeta` so they are available in every profile, including read-only ones:
+
+| Tool | Purpose |
+| --- | --- |
+| `linode_audit_recent` | Most recent events with filters (tool glob, status, capability, since/until) |
+| `linode_audit_summary` | Counts grouped by tool, status, profile, environment |
+| `linode_audit_health` | Audit subsystem state (paths, disk bytes, SQLite stats) |
+| `linode_audit_export` | Dump a filtered range to a temp file in JSON / CSV / NDJSON |
+| `linode_audit_report` | Run a named report from config |
+
+Sensitive values are redacted before write. The credential list (API tokens, passwords, SSH keys, etc.) is always on; the PII list (postal address, phone, tax ID) is on by default and can be disabled with `audit.redact_pii: false` for operators investigating account-level activity. Both tiers redact by exact field name to keep results reviewable.
+
+Retention defaults to 14 days; set `audit.retention_days: 0` to keep events forever (loud warning logged at startup).
+
+For copy-paste integration with specific MCP hosts, see [docs/host-integrations/claude-code/commands/audit.md](docs/host-integrations/claude-code/commands/audit.md) and [docs/host-integrations/claude-desktop/commands/audit.md](docs/host-integrations/claude-desktop/commands/audit.md). For the full reference (event schema, sinks, redaction model, query tools, investigative patterns), see [docs/audit-log.md](docs/audit-log.md). For the custom-report filter grammar, see [docs/audit-reports.md](docs/audit-reports.md).
+
 ## Development
 
 ### Go Development
