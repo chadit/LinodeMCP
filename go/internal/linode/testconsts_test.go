@@ -11,8 +11,11 @@ const (
 	keyPage        = "page"
 	keyPages       = "pages"
 	keyResults     = "results"
+	keyErrors      = "errors"
+	keyReason      = "reason"
 
 	errTemporaryFailure         = "temporary failure"
+	errNotFound                 = "not found"
 	imageShareGroupTokenCreated = "2025-08-04T10:09:09"
 
 	// Common JSON field names used in test fixtures.
