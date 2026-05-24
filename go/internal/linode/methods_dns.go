@@ -76,6 +76,26 @@ func (c *Client) httpListDomainRecords(ctx context.Context, domainID int) ([]Dom
 	return response.Data, nil
 }
 
+// ImportDomain imports a domain zone from a remote nameserver.
+func (c *Client) httpImportDomain(ctx context.Context, req *ImportDomainRequest) (*Domain, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointDomains+"/import", req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ImportDomain", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var domain Domain
+	if err := c.handleResponse(resp, &domain); err != nil {
+		return nil, err
+	}
+
+	return &domain, nil
+}
+
 // CreateDomain creates a new DNS domain.
 func (c *Client) httpCreateDomain(ctx context.Context, req *CreateDomainRequest) (*Domain, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
