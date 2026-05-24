@@ -191,6 +191,23 @@ func (c *Client) httpResetDatabaseInstanceCredentials(ctx context.Context, insta
 	return &credentials, nil
 }
 
+// ResetDatabasePostgreSQLInstanceCredentials resets PostgreSQL Managed Database credentials.
+func (c *Client) httpResetDatabasePostgreSQLInstanceCredentials(ctx context.Context, instanceID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointDatabasePostgreSQLInstances + "/" + url.PathEscape(strconv.Itoa(instanceID)) + "/credentials/reset"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "ResetDatabasePostgreSQLInstanceCredentials", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return c.handleResponse(resp, nil)
+}
+
 // CreateDatabaseInstance creates or restores a MySQL Managed Database instance.
 func (c *Client) httpCreateDatabaseInstance(ctx context.Context, req *CreateDatabaseInstanceRequest) (*DatabaseInstance, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

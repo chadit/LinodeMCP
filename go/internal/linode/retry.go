@@ -1004,6 +1004,11 @@ func (c *Client) ResetDatabaseInstanceCredentials(ctx context.Context, instanceI
 	return c.httpResetDatabaseInstanceCredentials(ctx, instanceID)
 }
 
+// ResetDatabasePostgreSQLInstanceCredentials resets PostgreSQL Managed Database credentials without retrying the POST.
+func (c *Client) ResetDatabasePostgreSQLInstanceCredentials(ctx context.Context, instanceID int) error {
+	return c.httpResetDatabasePostgreSQLInstanceCredentials(ctx, instanceID)
+}
+
 // CreateDatabaseInstance creates or restores a MySQL Managed Database instance without retrying the POST.
 func (c *Client) CreateDatabaseInstance(ctx context.Context, req *CreateDatabaseInstanceRequest) (*DatabaseInstance, error) {
 	return c.httpCreateDatabaseInstance(ctx, req)
