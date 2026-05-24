@@ -48,6 +48,10 @@ from linodemcp.tools.linode_audit_recent import (
     create_linode_audit_recent_tool,
     handle_linode_audit_recent,
 )
+from linodemcp.tools.linode_audit_report import (
+    create_linode_audit_report_tool,
+    handle_linode_audit_report,
+)
 from linodemcp.tools.linode_audit_summary import (
     create_linode_audit_summary_tool,
     handle_linode_audit_summary,
@@ -616,6 +620,7 @@ __all__ = [
     "create_linode_audit_export_tool",
     "create_linode_audit_health_tool",
     "create_linode_audit_recent_tool",
+    "create_linode_audit_report_tool",
     "create_linode_audit_summary_tool",
     "create_linode_domain_create_tool",
     "create_linode_domain_delete_tool",
@@ -872,6 +877,7 @@ __all__ = [
     "handle_linode_audit_export",
     "handle_linode_audit_health",
     "handle_linode_audit_recent",
+    "handle_linode_audit_report",
     "handle_linode_audit_summary",
     "handle_linode_domain_create",
     "handle_linode_domain_delete",

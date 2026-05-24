@@ -26,6 +26,7 @@ from linodemcp.profiles import (
 )
 from linodemcp.server import Server
 from linodemcp.tools import helpers as tool_helpers
+from linodemcp.tools.linode_audit_report import set_audit_reports
 from linodemcp.tools.linode_audit_summary import set_audit_sqlite_path
 from linodemcp.version import get_version_info
 
@@ -163,6 +164,8 @@ def _start_audit(
     )
     audit_sink = MultiSink(jsonl_sink, sqlite_sink) if sqlite_sink else jsonl_sink
     server.set_audit_sink(audit_sink)
+
+    set_audit_reports(cfg.audit.reports)
 
     # Phase 2b/3a: sweep rotated JSONL logs older than the retention
     # window. Phase 3c: hourly retention sweep over the SQLite rows.

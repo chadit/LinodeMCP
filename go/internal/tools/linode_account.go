@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"math"
 	"strconv"
 	"strings"
 
@@ -3201,13 +3202,17 @@ func intSliceFromAnySlice(values []any, name string) ([]int, string) {
 		return nil, name + " must include at least one ID"
 	}
 
-	maxInt := int(^uint(0) >> 1)
 	ids := make([]int, 0, len(values))
 
 	for _, value := range values {
 		switch number := value.(type) {
 		case float64:
-			if number <= 0 || number > float64(maxInt) || number != float64(int(number)) {
+			// math.MaxInt64 has no exact float64 representation: float64(math.MaxInt64)
+			// rounds up to 2^63 (math.MaxInt64+1). Use >= against that float so any
+			// value at or above the representable boundary is rejected. math.Trunc
+			// rejects fractional values without going through an int conversion that
+			// overflows for out-of-range floats.
+			if number <= 0 || number >= float64(math.MaxInt64) || math.Trunc(number) != number {
 				return nil, name + " must be an array of positive integers"
 			}
 
