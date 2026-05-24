@@ -45,10 +45,10 @@ func TestClientAddImageShareGroupImagesSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-			keyID:          "shared/1",
+			keyID:          sharedImage1Fixture,
 			keyLabel:       imageLinuxDebianFixture,
 			keyDescription: "Official Debian Linux image for server deployment",
-			keyStatus:      "available",
+			keyStatus:      imageStatusAvailableFixture,
 			keyType:        "shared",
 			"tags":         []string{"repair-image", "fix-1"},
 			keyCreated:     "2025-08-04T10:07:59",
@@ -67,7 +67,7 @@ func TestClientAddImageShareGroupImagesSuccess(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, image)
-	assert.Equal(t, "shared/1", image.ID, "image ID should match response")
+	assert.Equal(t, sharedImage1Fixture, image.ID, "image ID should match response")
 	assert.Equal(t, int32(1), requestCount.Load(), "request should be sent once")
 }
 

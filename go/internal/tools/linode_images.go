@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	imageShareGroupsPageSizeMin = 25
-	imageShareGroupsPageSizeMax = 500
+	imageShareGroupsPageSizeMin  = 25
+	imageShareGroupsPageSizeMax  = 500
+	errImageShareGroupIDPositive = "sharegroup_id must be a positive integer"
 )
 
 var imageShareGroupTokenUUIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
@@ -81,6 +82,24 @@ func NewLinodeImageShareGroupGetTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return handleImageShareGroupGetRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeImageShareGroupImagesListTool creates a tool for listing images shared in an owned image share group.
+func NewLinodeImageShareGroupImagesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_image_sharegroup_images_list",
+		mcp.WithDescription("Lists images shared in an owned image share group."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("Image share group ID.")),
+		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+		mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleImageShareGroupImagesListRequest(ctx, &request, cfg)
 	}
 
 	return tool, profiles.CapRead, handler
@@ -225,6 +244,30 @@ func handleImageShareGroupGetRequest(ctx context.Context, request *mcp.CallToolR
 	return MarshalToolResponse(shareGroup)
 }
 
+func handleImageShareGroupImagesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	shareGroupID, validationMessage := imageShareGroupIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	page, pageSize, validationMessage := imageShareGroupsPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	images, err := client.ListImagesByShareGroup(ctx, shareGroupID, page, pageSize)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve image share group images: %v", err)), nil
+	}
+
+	return FormatListResponse(images.Data, nil, "images")
+}
+
 func handleImageShareGroupTokensListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	page, pageSize, validationMessage := imageShareGroupsPaginationFromTool(request)
 	if validationMessage != "" {
@@ -366,7 +409,7 @@ func imageShareGroupIDFromTool(request *mcp.CallToolRequest) (int, string) {
 
 	shareGroupID, ok := numberArgToInt(raw)
 	if !ok || shareGroupID <= 0 {
-		return 0, "sharegroup_id must be a positive integer"
+		return 0, errImageShareGroupIDPositive
 	}
 
 	return shareGroupID, ""

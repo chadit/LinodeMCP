@@ -17,7 +17,7 @@ func TestClientListImagesByShareGroupTokenSuccess(t *testing.T) {
 	t.Parallel()
 
 	images := []linode.Image{
-		{ID: "private/123", Label: "shared-ubuntu", Type: "manual", Status: "available", Created: "2025-01-01T00:00:00", Size: 2500},
+		{ID: "private/123", Label: "shared-ubuntu", Type: "manual", Status: imageStatusAvailableFixture, Created: "2025-01-01T00:00:00", Size: 2500},
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

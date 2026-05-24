@@ -62,5 +62,7 @@ const (
 	shareGroupTokenValueFixture  = "sample-sharegroup-membership-token"
 	imageLinuxDebianFixture      = "Linux Debian"
 	privateImage15Fixture        = "private/15"
+	sharedImage1Fixture          = "shared/1"
+	imageStatusAvailableFixture  = "available"
 	keyCreated                   = "created"
 )
