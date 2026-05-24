@@ -221,6 +221,23 @@ func (c *Client) httpPatchDatabaseInstance(ctx context.Context, instanceID int) 
 	return c.handleResponse(resp, nil)
 }
 
+// SuspendDatabaseInstance suspends one active MySQL Managed Database instance.
+func (c *Client) httpSuspendDatabaseInstance(ctx context.Context, instanceID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointDatabaseInstances + "/" + url.PathEscape(strconv.Itoa(instanceID)) + "/suspend"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "SuspendDatabaseInstance", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return c.handleResponse(resp, nil)
+}
+
 // ResumeDatabaseInstance resumes one suspended MySQL Managed Database instance.
 func (c *Client) httpResumeDatabaseInstance(ctx context.Context, instanceID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

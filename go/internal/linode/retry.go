@@ -979,6 +979,11 @@ func (c *Client) PatchDatabaseInstance(ctx context.Context, instanceID int) erro
 	return c.httpPatchDatabaseInstance(ctx, instanceID)
 }
 
+// SuspendDatabaseInstance suspends one active MySQL Managed Database instance without retrying the POST.
+func (c *Client) SuspendDatabaseInstance(ctx context.Context, instanceID int) error {
+	return c.httpSuspendDatabaseInstance(ctx, instanceID)
+}
+
 // ResumeDatabaseInstance resumes one suspended MySQL Managed Database instance without retrying the POST.
 func (c *Client) ResumeDatabaseInstance(ctx context.Context, instanceID int) error {
 	return c.httpResumeDatabaseInstance(ctx, instanceID)

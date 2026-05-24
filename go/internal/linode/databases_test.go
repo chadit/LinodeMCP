@@ -28,6 +28,7 @@ const (
 	databaseInstanceCredentialsPath      = "/databases/mysql/instances/123/credentials"
 	databaseInstanceCredentialsResetPath = "/databases/mysql/instances/123/credentials/reset"
 	databaseInstancePatchPath            = "/databases/mysql/instances/123/patch"
+	databaseInstanceSuspendPath          = "/databases/mysql/instances/123/suspend"
 	databaseInstanceResumePath           = "/databases/mysql/instances/123/resume"
 	databaseInstanceLabel                = "primary-db"
 	databaseInstanceType                 = "g6-dedicated-2"
@@ -775,6 +776,49 @@ func TestClientPatchDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Equal(t, int32(1), attempts.Load(), "side-effecting patch POST must not be retried")
+}
+
+func TestClientSuspendDatabaseInstanceSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, databaseInstanceSuspendPath, r.URL.Path, "request path should include instance id and suspend suffix")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		assert.Equal(t, http.NoBody, r.Body, "suspend request should not send a body")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	err := client.SuspendDatabaseInstance(t.Context(), databaseInstanceID)
+
+	require.NoError(t, err, "SuspendDatabaseInstance should succeed on 200 response")
+}
+
+func TestClientSuspendDatabaseInstanceAPIErrorDoesNotRetry(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, databaseInstanceSuspendPath, r.URL.Path, "request path should include instance id and suspend suffix")
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
+	err := client.SuspendDatabaseInstance(t.Context(), databaseInstanceID)
+
+	require.Error(t, err)
+	assert.Equal(t, int32(1), attempts.Load(), "side-effecting suspend POST must not be retried")
 }
 
 func TestClientResumeDatabaseInstanceSuccess(t *testing.T) {
