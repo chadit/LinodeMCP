@@ -230,6 +230,29 @@ func (c *Client) httpGetImageShareGroupToken(ctx context.Context, tokenUUID stri
 	return &token, nil
 }
 
+// ListImagesByShareGroupToken retrieves images available through an image share group token.
+func (c *Client) httpListImagesByShareGroupToken(ctx context.Context, tokenUUID string, page, pageSize int) (*PaginatedResponse[Image], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	baseEndpoint := endpointImageShareGroups + "/tokens/" + escapeImageShareGroupTokenUUID(tokenUUID) + "/sharegroup/images"
+	endpoint := withPaginationQuery(baseEndpoint, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListImagesByShareGroupToken", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[Image]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
+}
+
 // UpdateImageShareGroupToken updates a single image share group membership token label.
 func (c *Client) httpUpdateImageShareGroupToken(ctx context.Context, tokenUUID string, req *UpdateImageShareGroupTokenRequest) (*ImageShareGroupToken, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

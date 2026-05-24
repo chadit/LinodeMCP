@@ -7864,8 +7864,8 @@ func TestLinodeImagesListTool(t *testing.T) {
 		t.Parallel()
 
 		images := []linode.Image{
-			{ID: imageIDUbuntu2204, Label: imageUbuntu2204, Type: "manual", IsPublic: true, Deprecated: false},
-			{ID: "private/12345", Label: "Custom Image", Type: "manual", IsPublic: false, Deprecated: false},
+			{ID: imageIDUbuntu2204, Label: imageUbuntu2204, Type: typeManualImage, IsPublic: true, Deprecated: false},
+			{ID: "private/12345", Label: "Custom Image", Type: typeManualImage, IsPublic: false, Deprecated: false},
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

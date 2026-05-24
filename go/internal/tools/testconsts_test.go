@@ -121,6 +121,7 @@ const (
 
 	// Common test fixture values.
 	statusActive                    = "active"
+	statusAvailable                 = "available"
 	statusEnabled                   = "enabled"
 	statusOK                        = "ok"
 	statusReady                     = "ready"
@@ -151,6 +152,7 @@ const (
 	imageUbuntu2404                 = "Ubuntu 24.04 Disk"
 	imageIDUbuntu2204               = "linode/ubuntu22.04"
 	imageIDUbuntu2404               = "linode/ubuntu24.04"
+	typeManualImage                 = "manual"
 	typeLinode4GB                   = "Linode 4GB"
 	rootPassStrong                  = "Str0ngP@ssw0rd!"
 	objectStorageKey                = "TESTKEY00000000EXAMPLE"
@@ -192,6 +194,11 @@ const (
 	errEUUIDNoSeparators            = "euuid must not contain path separators"
 	objectPhotoJPG                  = "photo.jpg"
 	filesystemExt4                  = "ext4"
+
+	tokenUUIDWithSlash    = "token/uuid"
+	tokenUUIDWithQuery    = "token?uuid"
+	tokenUUIDWithFragment = "token#uuid"
+	tokenUUIDWithDotdot   = "token..uuid"
 
 	// Builder-tool test fixtures: tool names + arg keys reused across
 	// linode_profile_builder_test.go, linode_profile_draft_test.go, and
@@ -280,6 +287,8 @@ const (
 	caseSlash                     = "slash"
 	caseQuery                     = "query"
 	caseDotTraversal              = "dot traversal"
+	caseFragment                  = "fragment"
+	caseDotdot                    = "dotdot"
 	caseNumeric                   = "numeric"
 	caseMissingLabel              = "missing label"
 	caseMissingAddress            = "missing address"
