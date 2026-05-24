@@ -1189,6 +1189,21 @@ func (c *Client) GetImageShareGroup(ctx context.Context, shareGroupID int) (*Ima
 	return shareGroup, err
 }
 
+// ListImagesByShareGroup retrieves images shared in an owned image share group with automatic retry on transient failures.
+func (c *Client) ListImagesByShareGroup(ctx context.Context, shareGroupID, page, pageSize int) (*PaginatedResponse[Image], error) {
+	var images *PaginatedResponse[Image]
+
+	err := c.executeWithRetry(ctx, "ListImagesByShareGroup", func() error {
+		var err error
+
+		images, err = c.httpListImagesByShareGroup(ctx, shareGroupID, page, pageSize)
+
+		return err
+	})
+
+	return images, err
+}
+
 // CreateImageShareGroup creates an image share group without automatic retry.
 // Replaying this non-idempotent create operation could create duplicate share groups.
 func (c *Client) CreateImageShareGroup(ctx context.Context, req *CreateImageShareGroupRequest) (*ImageShareGroup, error) {

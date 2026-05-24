@@ -229,7 +229,7 @@ func handleLinodeImageShareGroupUpdateRequest(ctx context.Context, request *mcp.
 		return result, nil
 	}
 
-	shareGroupID, validationMessage := imageShareGroupIDFromTool(request)
+	shareGroupID, validationMessage := imageShareGroupIDFromWriteTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}
@@ -268,6 +268,20 @@ func handleLinodeImageShareGroupUpdateRequest(ctx context.Context, request *mcp.
 	}
 
 	return result, nil
+}
+
+func imageShareGroupIDFromWriteTool(request *mcp.CallToolRequest) (int, string) {
+	raw, exists := request.GetArguments()["sharegroup_id"]
+	if !exists {
+		return 0, errImageShareGroupIDPositive
+	}
+
+	shareGroupID, ok := numberArgToInt(raw)
+	if !ok || shareGroupID <= 0 {
+		return 0, errImageShareGroupIDPositive
+	}
+
+	return shareGroupID, ""
 }
 
 func imageShareGroupUpdateFromTool(args map[string]any) (*linode.UpdateImageShareGroupRequest, string) {
