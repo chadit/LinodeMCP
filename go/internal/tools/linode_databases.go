@@ -199,6 +199,23 @@ func NewLinodeDatabaseInstanceCredentialsResetTool(cfg *config.Config) (mcp.Tool
 	return tool, profiles.CapAdmin, handler
 }
 
+// NewLinodeDatabasePostgreSQLInstanceCredentialsResetTool creates a tool for resetting PostgreSQL Managed Database credentials.
+func NewLinodeDatabasePostgreSQLInstanceCredentialsResetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_database_postgresql_instance_credentials_reset",
+		mcp.WithDescription("Resets credentials for a PostgreSQL Managed Database instance by ID."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The PostgreSQL Managed Database instance ID whose credentials to reset.")),
+		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm resetting PostgreSQL database credentials.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleDatabasePostgreSQLInstanceCredentialsResetRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapAdmin, handler
+}
+
 // NewLinodeDatabaseInstanceCreateTool creates a tool for creating or restoring a MySQL Managed Database instance.
 func NewLinodeDatabaseInstanceCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	return newDatabaseInstanceCreateTool(
@@ -571,6 +588,36 @@ func handleDatabaseInstanceCredentialsResetRequest(ctx context.Context, request 
 		Message:     "MySQL Managed Database credentials reset",
 		InstanceID:  instanceID,
 		Credentials: credentials,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func handleDatabasePostgreSQLInstanceCredentialsResetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This resets PostgreSQL Managed Database credentials. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	instanceID, validationMessage := databaseInstanceIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := client.ResetDatabasePostgreSQLInstanceCredentials(ctx, instanceID); err != nil {
+		return mcp.NewToolResultError(formatDatabasePostgreSQLInstanceCredentialsResetError(err)), nil
+	}
+
+	response := struct {
+		Message    string `json:"message"`
+		InstanceID int    `json:"instance_id"`
+	}{
+		Message:    "PostgreSQL Managed Database credentials reset",
+		InstanceID: instanceID,
 	}
 
 	return MarshalToolResponse(response)
@@ -1007,6 +1054,10 @@ func formatDatabaseInstanceUpdateError(err error) string {
 
 func formatDatabasePostgreSQLInstanceUpdateError(err error) string {
 	return "Failed to update PostgreSQL Managed Database instance: " + err.Error()
+}
+
+func formatDatabasePostgreSQLInstanceCredentialsResetError(err error) string {
+	return "Failed to reset PostgreSQL Managed Database credentials: " + err.Error()
 }
 
 func databaseInstanceUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateDatabaseInstanceRequest, string) {

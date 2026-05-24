@@ -19,67 +19,68 @@ import (
 const (
 	temporaryFailure = "temporary failure"
 
-	databaseEnginesPath                  = "/databases/engines"
-	databaseEngineEscapedPath            = "/databases/engines/mysql%2F8.0.26"
-	databaseEngineID                     = "mysql/8.0.26"
-	databaseEngineIDParam                = "engine_id"
-	databaseEngineIDRequiredMessage      = "engine_id must be a non-empty string"
-	databaseEngineIDShapeMessage         = "engine_id must use the engine/version format"
-	databaseEngineIDSeparatorMessage     = "engine_id must not contain query, fragment, or traversal segments"
-	databaseEngineName                   = "mysql"
-	databaseVersion                      = "8.0.26"
-	databaseInstancesPath                = "/databases/mysql/instances"
-	databasePostgreSQLInstancesPath      = "/databases/postgresql/instances"
-	databaseMySQLConfigPath              = "/databases/mysql/config"
-	databasePostgreSQLConfigPath         = "/databases/postgresql/config"
-	databaseInstanceID                   = 123
-	databaseInstanceIDParam              = "instance_id"
-	databaseInstanceIDMessage            = "instance_id must be a positive integer"
-	databaseInstancePath                 = "/databases/mysql/instances/123"
-	databasePostgreSQLInstancePath       = "/databases/postgresql/instances/123"
-	databaseInstanceSSLPath              = "/databases/mysql/instances/123/ssl"
-	databaseSSLCACertificate             = "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t"
-	databaseInstanceCredentialsPath      = "/databases/mysql/instances/123/credentials"
-	databaseInstanceCredentialsResetPath = "/databases/mysql/instances/123/credentials/reset"
-	databaseInstancePatchPath            = "/databases/mysql/instances/123/patch"
-	databaseInstanceSuspendPath          = "/databases/mysql/instances/123/suspend"
-	databaseInstanceResumePath           = "/databases/mysql/instances/123/resume"
-	databaseInstanceLabel                = "primary-db"
-	databaseInstanceType                 = typeG6Standard2
-	databaseCredentialsPassword          = "secret"
-	databaseConfigMaxConnections         = "max_connections"
-	caseStringInstanceID                 = "string instance id"
-	caseZeroInstanceID                   = "zero instance id"
-	caseNegativeInstanceID               = "negative instance id"
-	caseFractionalInstanceID             = "fractional instance id"
-	caseSlashInstanceID                  = "slash instance id"
-	caseTraversalInstanceID              = "traversal instance id"
-	databaseEngineParam                  = "engine"
-	databaseInvalidInstanceIDQuery       = "123?x=1"
-	databaseInvalidAPIURL                = "https://example.invalid"
-	caseQueryInstanceID                  = "query instance id"
-	databaseAllowListParam               = "allow_list"
-	databaseEngineConfigParam            = "engine_config"
-	databasePrivateNetworkParam          = "private_network"
-	databaseUpdatesParam                 = "updates"
-	databaseVersionParam                 = "version"
-	databaseInvalidAllowListJSON         = "invalid allow_list JSON"
-	databaseInvalidEngineConfigJSON      = "invalid engine_config JSON"
-	databaseInvalidPrivateNetworkJSON    = "invalid private_network JSON"
-	databaseInvalidUpdatesJSON           = "invalid updates JSON"
-	databasePostgreSQLConfigNamespace    = "pg"
-	databaseJSONNull                     = "null"
-	databaseJSONArray                    = "[]"
-	caseFalseConfirm                     = "false confirm"
-	caseStringConfirm                    = "string confirm"
-	caseNumericConfirm                   = "numeric confirm"
-	invalidJSON                          = "not-json"
-	databaseEnginePostgreSQLID           = "postgresql/16"
-	databaseEnginePostgreSQL             = "postgresql"
-	databaseSSLConnectionParam           = "ssl_connection"
-	databaseLabelRequiredMessage         = "label must be a non-empty string"
-	caseInvalidAllowList                 = "invalid allow list"
-	caseInvalidEngineConfig              = "invalid engine config"
+	databaseEnginesPath                    = "/databases/engines"
+	databaseEngineEscapedPath              = "/databases/engines/mysql%2F8.0.26"
+	databaseEngineID                       = "mysql/8.0.26"
+	databaseEngineIDParam                  = "engine_id"
+	databaseEngineIDRequiredMessage        = "engine_id must be a non-empty string"
+	databaseEngineIDShapeMessage           = "engine_id must use the engine/version format"
+	databaseEngineIDSeparatorMessage       = "engine_id must not contain query, fragment, or traversal segments"
+	databaseEngineName                     = "mysql"
+	databaseVersion                        = "8.0.26"
+	databaseInstancesPath                  = "/databases/mysql/instances"
+	databasePostgreSQLInstancesPath        = "/databases/postgresql/instances"
+	databaseMySQLConfigPath                = "/databases/mysql/config"
+	databasePostgreSQLConfigPath           = "/databases/postgresql/config"
+	databaseInstanceID                     = 123
+	databaseInstanceIDParam                = "instance_id"
+	databaseInstanceIDMessage              = "instance_id must be a positive integer"
+	databaseInstancePath                   = "/databases/mysql/instances/123"
+	databasePostgreSQLInstancePath         = "/databases/postgresql/instances/123"
+	databaseInstanceSSLPath                = "/databases/mysql/instances/123/ssl"
+	databaseSSLCACertificate               = "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t"
+	databaseInstanceCredentialsPath        = "/databases/mysql/instances/123/credentials"
+	databaseInstanceCredentialsResetPath   = "/databases/mysql/instances/123/credentials/reset"
+	databasePostgreSQLCredentialsResetPath = "/databases/postgresql/instances/123/credentials/reset"
+	databaseInstancePatchPath              = "/databases/mysql/instances/123/patch"
+	databaseInstanceSuspendPath            = "/databases/mysql/instances/123/suspend"
+	databaseInstanceResumePath             = "/databases/mysql/instances/123/resume"
+	databaseInstanceLabel                  = "primary-db"
+	databaseInstanceType                   = typeG6Standard2
+	databaseCredentialsPassword            = "secret"
+	databaseConfigMaxConnections           = "max_connections"
+	caseStringInstanceID                   = "string instance id"
+	caseZeroInstanceID                     = "zero instance id"
+	caseNegativeInstanceID                 = "negative instance id"
+	caseFractionalInstanceID               = "fractional instance id"
+	caseSlashInstanceID                    = "slash instance id"
+	caseTraversalInstanceID                = "traversal instance id"
+	databaseEngineParam                    = "engine"
+	databaseInvalidInstanceIDQuery         = "123?x=1"
+	databaseInvalidAPIURL                  = "https://example.invalid"
+	caseQueryInstanceID                    = "query instance id"
+	databaseAllowListParam                 = "allow_list"
+	databaseEngineConfigParam              = "engine_config"
+	databasePrivateNetworkParam            = "private_network"
+	databaseUpdatesParam                   = "updates"
+	databaseVersionParam                   = "version"
+	databaseInvalidAllowListJSON           = "invalid allow_list JSON"
+	databaseInvalidEngineConfigJSON        = "invalid engine_config JSON"
+	databaseInvalidPrivateNetworkJSON      = "invalid private_network JSON"
+	databaseInvalidUpdatesJSON             = "invalid updates JSON"
+	databasePostgreSQLConfigNamespace      = "pg"
+	databaseJSONNull                       = "null"
+	databaseJSONArray                      = "[]"
+	caseFalseConfirm                       = "false confirm"
+	caseStringConfirm                      = "string confirm"
+	caseNumericConfirm                     = "numeric confirm"
+	invalidJSON                            = "not-json"
+	databaseEnginePostgreSQLID             = "postgresql/16"
+	databaseEnginePostgreSQL               = "postgresql"
+	databaseSSLConnectionParam             = "ssl_connection"
+	databaseLabelRequiredMessage           = "label must be a non-empty string"
+	caseInvalidAllowList                   = "invalid allow list"
+	caseInvalidEngineConfig                = "invalid engine config"
 )
 
 func TestLinodeDatabaseEngineListTool(t *testing.T) {
@@ -1310,6 +1311,170 @@ func TestLinodeDatabaseInstanceCredentialsResetTool(t *testing.T) {
 
 		cfg := &config.Config{}
 		_, _, handler := tools.NewLinodeDatabaseInstanceCredentialsResetTool(cfg)
+
+		cases := []struct {
+			name string
+			args map[string]any
+		}{
+			{name: caseMissingInstanceID, args: map[string]any{keyConfirm: true}},
+			{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123", keyConfirm: true}},
+			{name: caseZeroInstanceID, args: map[string]any{databaseInstanceIDParam: 0, keyConfirm: true}},
+			{name: caseNegativeInstanceID, args: map[string]any{databaseInstanceIDParam: -1, keyConfirm: true}},
+			{name: caseFractionalInstanceID, args: map[string]any{databaseInstanceIDParam: 123.4, keyConfirm: true}},
+			{name: caseSlashInstanceID, args: map[string]any{databaseInstanceIDParam: "/", keyConfirm: true}},
+			{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery, keyConfirm: true}},
+			{name: caseTraversalInstanceID, args: map[string]any{databaseInstanceIDParam: pathTraversalValue, keyConfirm: true}},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+
+				require.NoError(t, err, "validation errors should be returned as tool result errors")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid instance_id should return an error result")
+
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, databaseInstanceIDMessage)
+			})
+		}
+	})
+}
+
+func TestLinodeDatabasePostgreSQLInstanceCredentialsResetTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeDatabasePostgreSQLInstanceCredentialsResetTool(cfg)
+
+		assert.Equal(t, "linode_database_postgresql_instance_credentials_reset", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Equal(t, profiles.CapAdmin, capability, "PostgreSQL credentials reset tool should require admin capability")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, databaseInstanceIDParam, "schema should include instance_id")
+		assert.Contains(t, props, keyConfirm, "schema should include confirm")
+		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
+	})
+
+	t.Run("confirm validation", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: databaseInvalidAPIURL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceCredentialsResetTool(cfg)
+
+		cases := []struct {
+			name  string
+			value any
+		}{
+			{name: caseMissingConfirm},
+			{name: caseFalseConfirm, value: false},
+			{name: caseStringConfirm, value: boolStringTrue},
+			{name: caseNumericConfirm, value: 1},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				args := map[string]any{databaseInstanceIDParam: databaseInstanceID}
+				if testCase.value != nil {
+					args[keyConfirm] = testCase.value
+				}
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, args))
+
+				require.NoError(t, err)
+				require.NotNil(t, result)
+				assert.True(t, result.IsError)
+
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, "confirm=true")
+			})
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, databasePostgreSQLCredentialsResetPath, r.URL.Path, "request path should include PostgreSQL credentials reset path")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			assert.Equal(t, http.NoBody, r.Body, "request body should be empty")
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceCredentialsResetTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}))
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "PostgreSQL Managed Database credentials reset")
+		assert.Contains(t, textContent.Text, "instance_id")
+	})
+
+	t.Run("client error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, databasePostgreSQLCredentialsResetPath, r.URL.Path, "request path should include PostgreSQL credentials reset path")
+			w.WriteHeader(http.StatusInternalServerError)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: temporaryFailure}},
+			}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceCredentialsResetTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}))
+
+		require.NoError(t, err, "client errors should be returned as tool result errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failures should return an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to reset PostgreSQL Managed Database credentials")
+	})
+
+	t.Run("client configuration error", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceCredentialsResetTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}))
+
+		require.NoError(t, err, "configuration errors should be returned as tool result errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "missing client config should return an error result")
+	})
+
+	t.Run("instance id validation", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceCredentialsResetTool(cfg)
 
 		cases := []struct {
 			name string
