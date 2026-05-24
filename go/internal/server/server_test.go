@@ -161,6 +161,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_image_sharegroup_members_add":                   profiles.CapWrite,
 		"linode_image_sharegroup_image_delete":                  profiles.CapDestroy,
 		"linode_image_sharegroup_image_update":                  profiles.CapWrite,
+		"linode_image_sharegroup_member_token_delete":           profiles.CapDestroy,
 		"linode_image_sharegroup_token_create":                  profiles.CapAdmin,
 		"linode_domain_record_get":                              profiles.CapRead,
 		"linode_domain_zone_file_get":                           profiles.CapRead,

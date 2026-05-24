@@ -1346,6 +1346,12 @@ func (c *Client) DeleteImageShareGroupToken(ctx context.Context, tokenUUID strin
 	return c.httpDeleteImageShareGroupToken(ctx, tokenUUID)
 }
 
+// DeleteImageShareGroupMemberToken revokes one accepted membership token without automatic retry.
+// Replaying this destructive DELETE could repeat revocation side effects after a transient response.
+func (c *Client) DeleteImageShareGroupMemberToken(ctx context.Context, shareGroupID int, tokenUUID string) error {
+	return c.httpDeleteImageShareGroupMemberToken(ctx, shareGroupID, tokenUUID)
+}
+
 // GetImageShareGroupByToken retrieves a token's share group with automatic retry on transient failures.
 func (c *Client) GetImageShareGroupByToken(ctx context.Context, tokenUUID string) (*ImageShareGroup, error) {
 	var shareGroup *ImageShareGroup
