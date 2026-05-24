@@ -37,6 +37,12 @@ type DomainRecord struct {
 	Updated  string `json:"updated"`
 }
 
+// ImportDomainRequest represents the request body for importing a domain zone.
+type ImportDomainRequest struct {
+	Domain           string `json:"domain"`
+	RemoteNameserver string `json:"remote_nameserver"`
+}
+
 // CreateDomainRequest represents the request body for creating a domain.
 type CreateDomainRequest struct {
 	Domain      string   `json:"domain"`

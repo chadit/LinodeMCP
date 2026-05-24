@@ -1109,6 +1109,150 @@ func TestLinodeFirewallDeleteTool(t *testing.T) {
 	})
 }
 
+// End-to-end verification of the domain import workflow.
+func TestLinodeDomainImportTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	tool, _, handler := tools.NewLinodeDomainImportTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+		assert.Equal(t, "linode_domain_import", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, "domain", "schema should include domain property")
+		assert.Contains(t, props, keyRemoteNameserver, "schema should include remote_nameserver property")
+		assert.Contains(t, props, "confirm", "schema should include confirm property")
+	})
+
+	confirmTests := []struct {
+		name  string
+		value any
+		set   bool
+	}{
+		{name: caseMissing, set: false},
+		{name: caseConfirmFalse, value: false, set: true},
+		{name: "string", value: boolStringTrue, set: true},
+		{name: "numeric", value: 1, set: true},
+	}
+	for _, tt := range confirmTests {
+		t.Run("confirm "+tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			args := map[string]any{keyDomain: domainExample, keyRemoteNameserver: remoteNameserverExample}
+			if tt.set {
+				args[keyConfirm] = tt.value
+			}
+
+			req := createRequestWithArgs(t, args)
+			result, err := handler(t.Context(), req)
+			require.NoError(t, err, "handler should not return Go error")
+			require.NotNil(t, result, "handler should return a result")
+			assert.True(t, result.IsError, "result should be a tool error")
+			assertErrorContains(t, result, errConfirmEqualsTrue)
+		})
+	}
+
+	validationTests := []struct {
+		name         string
+		args         map[string]any
+		wantContains string
+	}{
+		{name: "missing domain", args: map[string]any{keyRemoteNameserver: remoteNameserverExample, keyConfirm: true}, wantContains: "domain is required"},
+		{name: "missing remote nameserver", args: map[string]any{keyDomain: domainExample, keyConfirm: true}, wantContains: "remote_nameserver is required"},
+	}
+	for _, tt := range validationTests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			req := createRequestWithArgs(t, tt.args)
+			result, err := handler(t.Context(), req)
+			require.NoError(t, err, "handler should not return Go error")
+			require.NotNil(t, result, "handler should return a result")
+			assert.True(t, result.IsError, "result should be a tool error")
+			assertErrorContains(t, result, tt.wantContains)
+		})
+	}
+
+	t.Run("successful import", func(t *testing.T) {
+		t.Parallel()
+
+		domain := linode.Domain{
+			ID:     111,
+			Domain: domainExample,
+			Type:   keyMaster,
+			Status: statusActive,
+		}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/domains/import", r.URL.Path, "request path should match domain import endpoint")
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+
+			var body map[string]any
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode")
+			assert.Equal(t, domainExample, body["domain"], "domain should be sent")
+			assert.Equal(t, remoteNameserverExample, body[keyRemoteNameserver], "remote_nameserver should be sent")
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(domain), "encoding response should succeed")
+		}))
+		defer srv.Close()
+
+		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, successHandler := tools.NewLinodeDomainImportTool(successCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyDomain:           domainExample,
+			keyRemoteNameserver: remoteNameserverExample,
+			keyConfirm:          true,
+		})
+		result, err := successHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.False(t, result.IsError, "result should not be an error")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent type")
+		assert.Contains(t, textContent.Text, domainExample, "response should contain the domain name")
+		assert.Contains(t, textContent.Text, "imported successfully", "response should confirm import")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusBadRequest)
+			_, err := w.Write([]byte(`{"errors":[{"reason":"invalid domain"}]}`))
+			assert.NoError(t, err, "writing API error should succeed")
+		}))
+		defer srv.Close()
+
+		errorCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, errorHandler := tools.NewLinodeDomainImportTool(errorCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyDomain:           domainExample,
+			keyRemoteNameserver: remoteNameserverExample,
+			keyConfirm:          true,
+		})
+		result, err := errorHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "handler should return a result")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "Failed to import domain")
+	})
+}
+
 // End-to-end verification of the domain creation workflow.
 func TestLinodeDomainCreateTool(t *testing.T) {
 	t.Parallel()
@@ -1136,7 +1280,7 @@ func TestLinodeDomainCreateTool(t *testing.T) {
 		wantContains string
 	}{
 		{name: "missing domain", args: map[string]any{keyType: keyMaster, keyConfirm: true}, wantContains: "domain is required"},
-		{name: caseMissingType, args: map[string]any{"domain": domainExample, keyConfirm: true}, wantContains: errTypeRequired},
+		{name: caseMissingType, args: map[string]any{keyDomain: domainExample, keyConfirm: true}, wantContains: errTypeRequired},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1174,7 +1318,7 @@ func TestLinodeDomainCreateTool(t *testing.T) {
 		_, _, successHandler := tools.NewLinodeDomainCreateTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			"domain":    domainExample,
+			keyDomain:   domainExample,
 			keyType:     keyMaster,
 			keySoaEmail: "admin@example.com",
 			keyConfirm:  true,

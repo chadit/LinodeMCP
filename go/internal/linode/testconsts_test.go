@@ -21,6 +21,7 @@ const (
 	keySSHKey    = "ssh_key"
 	keyType      = "type"
 	keyToken     = "token"
+	keyDomain    = "domain"
 	keyIsDefault = "is_default"
 	keyLastFour  = "last_four"
 
@@ -45,4 +46,6 @@ const (
 	fwLabelNew              = "new-fw"
 	paymentMethodCreditCard = "credit_card"
 	paymentMethodToken      = "tok_123"
+	domainExample           = "example.com"
+	remoteNameserverExample = "ns1.example.com"
 )

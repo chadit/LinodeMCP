@@ -1484,6 +1484,11 @@ func (c *Client) DeleteFirewall(ctx context.Context, firewallID int) error {
 	})
 }
 
+// ImportDomain imports a domain zone without retrying this non-idempotent create operation.
+func (c *Client) ImportDomain(ctx context.Context, req *ImportDomainRequest) (*Domain, error) {
+	return c.httpImportDomain(ctx, req)
+}
+
 // CreateDomain creates a new domain with automatic retry on transient failures.
 func (c *Client) CreateDomain(ctx context.Context, req *CreateDomainRequest) (*Domain, error) {
 	var domain *Domain

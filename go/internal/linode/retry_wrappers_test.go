@@ -73,7 +73,7 @@ func TestCreateImageRouteAndRetrySafety(t *testing.T) {
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyID:        "private/15",
 				keyLabel:     "custom-image",
-				"status":     "creating",
+				keyStatus:    "creating",
 				"created_by": "tester",
 			}), "encoding image response should not fail")
 		}))
@@ -113,6 +113,71 @@ func TestCreateImageRouteAndRetrySafety(t *testing.T) {
 		require.Error(t, err, "CreateImage should return the first transient error")
 		assert.Nil(t, image, "image should be nil on error")
 		assert.Equal(t, int32(1), requestCount.Load(), "non-idempotent image creation must not be retried")
+	})
+}
+
+func TestImportDomainRouteAndRetrySafety(t *testing.T) {
+	t.Parallel()
+
+	t.Run("happy path uses exact POST domains import route and body", func(t *testing.T) {
+		t.Parallel()
+
+		var requestCount atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requestCount.Add(1)
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/domains/import", r.URL.Path, "request path should be /domains/import")
+
+			var body map[string]any
+			if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
+				return
+			}
+
+			assert.Equal(t, domainExample, body["domain"], "domain should be sent")
+			assert.Equal(t, remoteNameserverExample, body["remote_nameserver"], "remote_nameserver should be sent")
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyID:     111,
+				keyDomain: domainExample,
+				keyType:   "master",
+				keyStatus: oauthClientStatus,
+			}), "encoding domain response should not fail")
+		}))
+		t.Cleanup(srv.Close)
+
+		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+		domain, err := client.ImportDomain(t.Context(), &linode.ImportDomainRequest{
+			Domain:           domainExample,
+			RemoteNameserver: remoteNameserverExample,
+		})
+
+		require.NoError(t, err, "ImportDomain should succeed")
+		require.NotNil(t, domain, "imported domain should not be nil")
+		assert.Equal(t, 111, domain.ID, "domain ID should match response")
+		assert.Equal(t, int32(1), requestCount.Load(), "ImportDomain should make one request")
+	})
+
+	t.Run("transient server error is not replayed", func(t *testing.T) {
+		t.Parallel()
+
+		var requestCount atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			requestCount.Add(1)
+			w.WriteHeader(http.StatusInternalServerError)
+			_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			assert.NoError(t, err, "writing error response should succeed")
+		}))
+		t.Cleanup(srv.Close)
+
+		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+		domain, err := client.ImportDomain(t.Context(), &linode.ImportDomainRequest{Domain: domainExample, RemoteNameserver: remoteNameserverExample})
+
+		require.Error(t, err, "ImportDomain should return the first transient error")
+		assert.Nil(t, domain, "domain should be nil on error")
+		assert.Equal(t, int32(1), requestCount.Load(), "non-idempotent domain import must not be retried")
 	})
 }
 

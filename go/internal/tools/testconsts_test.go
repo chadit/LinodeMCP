@@ -23,6 +23,7 @@ const (
 	keyLabel             = "label"
 	keyRegion            = "region"
 	keyType              = "type"
+	keyDomain            = "domain"
 	keyName              = "name"
 	keySize              = "size"
 	keyIPv4              = "ipv4"
@@ -68,6 +69,7 @@ const (
 	keyAccountAccess     = "account_access"
 	keyGrantLinode       = "linode"
 	keyGrantLKECluster   = "lkecluster"
+	keyRemoteNameserver  = "remote_nameserver"
 
 	// Tool-specific resource ID keys.
 	keyLinodeID       = "linode_id"
@@ -132,6 +134,7 @@ const (
 	labelProdCluster                = "prod-cluster"
 	labelTestCluster                = "test-cluster"
 	domainExample                   = "example.com"
+	remoteNameserverExample         = "ns1.example.com"
 	hostWWW                         = "www"
 	imageUbuntu2204                 = "Ubuntu 22.04"
 	imageUbuntu2404                 = "Ubuntu 24.04 Disk"

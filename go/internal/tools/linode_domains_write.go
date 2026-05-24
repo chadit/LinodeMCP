@@ -11,6 +11,81 @@ import (
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
+// NewLinodeDomainImportTool creates a tool for importing a domain zone.
+func NewLinodeDomainImportTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_domain_import",
+		mcp.WithDescription("Imports a DNS domain zone from a remote nameserver that allows zone transfers."),
+		mcp.WithString(
+			paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
+		),
+		mcp.WithString(
+			"domain",
+			mcp.Required(),
+			mcp.Description("The domain name to import (for example, 'example.com')"),
+		),
+		mcp.WithString(
+			"remote_nameserver",
+			mcp.Required(),
+			mcp.Description("The remote nameserver that allows zone transfers (AXFR)"),
+		),
+		mcp.WithBoolean(
+			paramConfirm,
+			mcp.Required(),
+			mcp.Description("Must be set to true to confirm domain import."),
+		),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeDomainImportRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleLinodeDomainImportRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	domain := request.GetString("domain", "")
+	remoteNameserver := request.GetString("remote_nameserver", "")
+
+	if result := RequireConfirm(request, "This imports a DNS domain zone. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	if domain == "" {
+		return mcp.NewToolResultError("domain is required"), nil
+	}
+
+	if remoteNameserver == "" {
+		return mcp.NewToolResultError("remote_nameserver is required"), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	req := linode.ImportDomainRequest{
+		Domain:           domain,
+		RemoteNameserver: remoteNameserver,
+	}
+
+	importedDomain, err := client.ImportDomain(ctx, &req)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to import domain: %v", err)), nil
+	}
+
+	response := struct {
+		Message string         `json:"message"`
+		Domain  *linode.Domain `json:"domain"`
+	}{
+		Message: fmt.Sprintf("Domain '%s' (ID: %d) imported successfully", importedDomain.Domain, importedDomain.ID),
+		Domain:  importedDomain,
+	}
+
+	return MarshalToolResponse(response)
+}
+
 // NewLinodeDomainCreateTool creates a tool for creating a domain.
 func NewLinodeDomainCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
