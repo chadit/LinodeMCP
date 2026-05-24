@@ -93,8 +93,8 @@ func TestLinodeImageShareGroupTokenUpdateRejectsInvalidRequest(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing token uuid", args: map[string]any{keyLabel: updatedShareGroupTokenLabel, keyConfirm: true}, wantContains: "token_uuid must be a non-empty string"},
-		{name: "empty token uuid", args: map[string]any{keyTokenUUID: blankString, keyLabel: updatedShareGroupTokenLabel, keyConfirm: true}, wantContains: "token_uuid must be a non-empty string"},
+		{name: "missing token uuid", args: map[string]any{keyLabel: updatedShareGroupTokenLabel, keyConfirm: true}, wantContains: errTokenUUIDNonEmpty},
+		{name: "empty token uuid", args: map[string]any{keyTokenUUID: blankString, keyLabel: updatedShareGroupTokenLabel, keyConfirm: true}, wantContains: errTokenUUIDNonEmpty},
 		{name: "path separator token uuid", args: map[string]any{keyTokenUUID: tokenUUIDWithSlash, keyLabel: updatedShareGroupTokenLabel, keyConfirm: true}, wantContains: errTokenUUIDUnsafe},
 		{name: "query separator token uuid", args: map[string]any{keyTokenUUID: tokenUUIDWithQuery, keyLabel: updatedShareGroupTokenLabel, keyConfirm: true}, wantContains: errTokenUUIDUnsafe},
 		{name: "fragment separator token uuid", args: map[string]any{keyTokenUUID: tokenUUIDWithFragment, keyLabel: updatedShareGroupTokenLabel, keyConfirm: true}, wantContains: errTokenUUIDUnsafe},

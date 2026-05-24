@@ -38,6 +38,7 @@ const (
 	keyErrors                    = "errors"
 	keyReason                    = "reason"
 	errForbidden                 = "forbidden"
+	errNotFound                  = "not found"
 	oauthClientID                = "client-123"
 	oauthClientIDWithSeparators  = "client/123?query"
 	oauthClientStatus            = "active"
@@ -6126,7 +6127,7 @@ func TestClientListImageShareGroupTokensError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-			keyErrors: []map[string]string{{keyReason: "temporary failure"}},
+			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
 		}))
 	}))
 	defer srv.Close()

@@ -2688,9 +2688,9 @@ func TestLinodeImageCreateTool(t *testing.T) {
 		wantContains string
 	}{
 		{name: caseRequiresConfirm, args: map[string]any{keyDiskID: 123}, wantContains: errConfirmEqualsTrue},
-		{name: "false confirm rejected", args: map[string]any{keyDiskID: 123, keyConfirm: false}, wantContains: errConfirmEqualsTrue},
-		{name: "string confirm rejected", args: map[string]any{keyDiskID: 123, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
-		{name: "numeric confirm rejected", args: map[string]any{keyDiskID: 123, keyConfirm: 1}, wantContains: errConfirmEqualsTrue},
+		{name: caseFalseConfirmRejected, args: map[string]any{keyDiskID: 123, keyConfirm: false}, wantContains: errConfirmEqualsTrue},
+		{name: caseStringConfirmRejected, args: map[string]any{keyDiskID: 123, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
+		{name: caseNumericConfirmRejected, args: map[string]any{keyDiskID: 123, keyConfirm: 1}, wantContains: errConfirmEqualsTrue},
 		{name: "missing disk id", args: map[string]any{keyConfirm: true}, wantContains: tools.ErrDiskIDRequired.Error()},
 		{name: "zero disk id", args: map[string]any{keyDiskID: 0, keyConfirm: true}, wantContains: tools.ErrDiskIDRequired.Error()},
 		{name: "negative disk id", args: map[string]any{keyDiskID: -1, keyConfirm: true}, wantContains: tools.ErrDiskIDRequired.Error()},
@@ -2828,11 +2828,11 @@ func TestLinodeImageShareGroupTokenCreateTool(t *testing.T) {
 		wantContains string
 	}{
 		{name: caseRequiresConfirm, args: map[string]any{keyValidForShareGroupUUID: shareGroupUUIDFixture}, wantContains: errConfirmEqualsTrue},
-		{name: "false confirm rejected", args: map[string]any{keyValidForShareGroupUUID: shareGroupUUIDFixture, keyConfirm: false}, wantContains: errConfirmEqualsTrue},
-		{name: "string confirm rejected", args: map[string]any{keyValidForShareGroupUUID: shareGroupUUIDFixture, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
-		{name: "numeric confirm rejected", args: map[string]any{keyValidForShareGroupUUID: shareGroupUUIDFixture, keyConfirm: 1}, wantContains: errConfirmEqualsTrue},
+		{name: caseFalseConfirmRejected, args: map[string]any{keyValidForShareGroupUUID: shareGroupUUIDFixture, keyConfirm: false}, wantContains: errConfirmEqualsTrue},
+		{name: caseStringConfirmRejected, args: map[string]any{keyValidForShareGroupUUID: shareGroupUUIDFixture, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
+		{name: caseNumericConfirmRejected, args: map[string]any{keyValidForShareGroupUUID: shareGroupUUIDFixture, keyConfirm: 1}, wantContains: errConfirmEqualsTrue},
 		{name: "missing share group uuid", args: map[string]any{keyConfirm: true}, wantContains: errValidForShareGroupUUID},
-		{name: "empty share group uuid", args: map[string]any{keyValidForShareGroupUUID: "   ", keyConfirm: true}, wantContains: errValidForShareGroupUUID},
+		{name: "empty share group uuid", args: map[string]any{keyValidForShareGroupUUID: blankString, keyConfirm: true}, wantContains: errValidForShareGroupUUID},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {

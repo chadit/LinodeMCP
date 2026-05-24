@@ -1237,6 +1237,12 @@ func (c *Client) UpdateImageShareGroupToken(ctx context.Context, tokenUUID strin
 	return c.httpUpdateImageShareGroupToken(ctx, tokenUUID, req)
 }
 
+// DeleteImageShareGroupToken removes one image share group membership token without automatic retry.
+// Replaying this destructive DELETE could remove or race token state after a transient response.
+func (c *Client) DeleteImageShareGroupToken(ctx context.Context, tokenUUID string) error {
+	return c.httpDeleteImageShareGroupToken(ctx, tokenUUID)
+}
+
 // CreateImage creates a private image from a Linode disk without automatic retry.
 // Replaying this non-idempotent create operation could create duplicate images.
 func (c *Client) CreateImage(ctx context.Context, req *CreateImageRequest) (*Image, error) {
