@@ -8,9 +8,10 @@ import (
 )
 
 const (
-	endpointDatabaseEngines     = "/databases/engines"
-	endpointDatabaseInstances   = "/databases/mysql/instances"
-	endpointDatabaseMySQLConfig = "/databases/mysql/config"
+	endpointDatabaseEngines             = "/databases/engines"
+	endpointDatabaseInstances           = "/databases/mysql/instances"
+	endpointDatabasePostgreSQLInstances = "/databases/postgresql/instances"
+	endpointDatabaseMySQLConfig         = "/databases/mysql/config"
 )
 
 // ListDatabaseEngines retrieves available Managed Database engines.
@@ -45,6 +46,28 @@ func (c *Client) httpListDatabaseInstances(ctx context.Context, page, pageSize i
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, &NetworkError{Operation: "ListDatabaseInstances", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[DatabaseInstance]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
+}
+
+// ListDatabasePostgreSQLInstances retrieves PostgreSQL Managed Database instances.
+func (c *Client) httpListDatabasePostgreSQLInstances(ctx context.Context, page, pageSize int) ([]DatabaseInstance, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointDatabasePostgreSQLInstances, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListDatabasePostgreSQLInstances", Err: err}
 	}
 
 	defer drainClose(resp)

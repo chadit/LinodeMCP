@@ -211,6 +211,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_database_engine_get":                   profiles.CapRead,
 		"linode_database_mysql_config_get":             profiles.CapRead,
 		"linode_database_instance_list":                profiles.CapRead,
+		"linode_database_postgresql_instance_list":     profiles.CapRead,
 		"linode_database_instance_get":                 profiles.CapRead,
 		"linode_database_instance_ssl_get":             profiles.CapRead,
 		"linode_database_instance_credentials_get":     profiles.CapAdmin,

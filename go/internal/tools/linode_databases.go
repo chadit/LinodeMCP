@@ -86,6 +86,23 @@ func NewLinodeDatabaseInstanceListTool(cfg *config.Config) (mcp.Tool, profiles.C
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeDatabasePostgreSQLInstanceListTool creates a tool for listing PostgreSQL Managed Database instances.
+func NewLinodeDatabasePostgreSQLInstanceListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_database_postgresql_instance_list",
+		mcp.WithDescription("Lists PostgreSQL Managed Database instances with optional pagination."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+		mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleDatabasePostgreSQLInstancesListRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeDatabaseInstanceGetTool creates a tool for getting one MySQL Managed Database instance.
 func NewLinodeDatabaseInstanceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
@@ -445,6 +462,25 @@ func handleDatabaseInstancesListRequest(ctx context.Context, request *mcp.CallTo
 	instances, err := client.ListDatabaseInstances(ctx, page, pageSize)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Managed Database instances: %v", err)), nil
+	}
+
+	return FormatListResponse(instances, nil, "database_instances")
+}
+
+func handleDatabasePostgreSQLInstancesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	page, pageSize, validationMessage := databaseInstancesPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	instances, err := client.ListDatabasePostgreSQLInstances(ctx, page, pageSize)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve PostgreSQL Managed Database instances: %v", err)), nil
 	}
 
 	return FormatListResponse(instances, nil, "database_instances")
