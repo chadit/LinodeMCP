@@ -70,6 +70,12 @@ const (
 	caseStringConfirm                    = "string confirm"
 	caseNumericConfirm                   = "numeric confirm"
 	invalidJSON                          = "not-json"
+	databaseEnginePostgreSQLID           = "postgresql/16"
+	databaseEnginePostgreSQL             = "postgresql"
+	databaseSSLConnectionParam           = "ssl_connection"
+	databaseLabelRequiredMessage         = "label must be a non-empty string"
+	caseInvalidAllowList                 = "invalid allow list"
+	caseInvalidEngineConfig              = "invalid engine config"
 )
 
 func TestLinodeDatabaseEngineListTool(t *testing.T) {
@@ -559,7 +565,7 @@ func TestLinodeDatabasePostgreSQLInstanceListTool(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		instances := []linode.DatabaseInstance{{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: "postgresql", Version: databaseVersion, Status: statusActive}}
+		instances := []linode.DatabaseInstance{{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEnginePostgreSQL, Version: databaseVersion, Status: statusActive}}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
@@ -589,7 +595,7 @@ func TestLinodeDatabasePostgreSQLInstanceListTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, databaseInstanceLabel)
-		assert.Contains(t, textContent.Text, "postgresql")
+		assert.Contains(t, textContent.Text, databaseEnginePostgreSQL)
 	})
 
 	t.Run("client error", func(t *testing.T) {
@@ -1295,7 +1301,7 @@ func TestLinodeDatabaseInstanceCreateTool(t *testing.T) {
 			assert.Equal(t, databaseInstanceType, body[keyType])
 			assert.Equal(t, databaseEngineID, body[databaseEngineParam])
 			assert.Equal(t, regionUSEast, body[keyRegion])
-			assert.Equal(t, true, body["ssl_connection"])
+			assert.Equal(t, true, body[databaseSSLConnectionParam])
 
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineName, Version: databaseVersion, Status: statusActive}))
@@ -1305,7 +1311,7 @@ func TestLinodeDatabaseInstanceCreateTool(t *testing.T) {
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 		_, _, handler := tools.NewLinodeDatabaseInstanceCreateTool(cfg)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, "ssl_connection": true, keyConfirm: true}))
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, databaseSSLConnectionParam: true, keyConfirm: true}))
 
 		require.NoError(t, err, "handler should not return an error")
 		require.NotNil(t, result, "result should not be nil")
@@ -1328,16 +1334,16 @@ func TestLinodeDatabaseInstanceCreateTool(t *testing.T) {
 			args        map[string]any
 			wantMessage string
 		}{
-			{name: caseMissingLabel, args: map[string]any{keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, keyConfirm: true}, wantMessage: "label must be a non-empty string"},
-			{name: "missing type", args: map[string]any{keyLabel: databaseInstanceLabel, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, keyConfirm: true}, wantMessage: "type must be a non-empty string"},
+			{name: caseMissingLabel, args: map[string]any{keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, keyConfirm: true}, wantMessage: databaseLabelRequiredMessage},
+			{name: caseMissingType, args: map[string]any{keyLabel: databaseInstanceLabel, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, keyConfirm: true}, wantMessage: "type must be a non-empty string"},
 			{name: "missing engine", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, keyRegion: regionUSEast, keyConfirm: true}, wantMessage: "engine must be a non-empty string"},
 			{name: "missing region", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyConfirm: true}, wantMessage: "region must be a non-empty string"},
-			{name: "invalid allow list", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, databaseAllowListParam: invalidJSON, keyConfirm: true}, wantMessage: databaseInvalidAllowListJSON},
+			{name: caseInvalidAllowList, args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, databaseAllowListParam: invalidJSON, keyConfirm: true}, wantMessage: databaseInvalidAllowListJSON},
 			{name: "invalid cluster size", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, "cluster_size": "3", keyConfirm: true}, wantMessage: "cluster_size must be a positive integer"},
-			{name: "invalid engine config", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, databaseEngineConfigParam: invalidJSON, keyConfirm: true}, wantMessage: databaseInvalidEngineConfigJSON},
+			{name: caseInvalidEngineConfig, args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, databaseEngineConfigParam: invalidJSON, keyConfirm: true}, wantMessage: databaseInvalidEngineConfigJSON},
 			{name: "invalid fork", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, "fork": invalidJSON, keyConfirm: true}, wantMessage: "invalid fork JSON"},
 			{name: "invalid private network bool", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, databasePrivateNetworkParam: boolStringTrue, keyConfirm: true}, wantMessage: "private_network must be a boolean"},
-			{name: "invalid ssl bool", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, "ssl_connection": boolStringTrue, keyConfirm: true}, wantMessage: "ssl_connection must be a boolean"},
+			{name: "invalid ssl bool", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, databaseSSLConnectionParam: boolStringTrue, keyConfirm: true}, wantMessage: "ssl_connection must be a boolean"},
 		}
 
 		for _, testCase := range cases {
@@ -1381,6 +1387,160 @@ func TestLinodeDatabaseInstanceCreateTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, "Failed to create Managed Database instance")
+	})
+}
+
+func TestLinodeDatabasePostgreSQLInstanceCreateTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeDatabasePostgreSQLInstanceCreateTool(cfg)
+
+		assert.Equal(t, "linode_database_postgresql_instance_create", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Equal(t, profiles.CapWrite, capability, "tool should be write capability")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, keyConfirm, "schema should include confirm")
+		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
+		assert.Contains(t, props, keyLabel, "schema should include label")
+		assert.Contains(t, props, keyType, "schema should include type")
+		assert.Contains(t, props, databaseEngineParam, "schema should include engine")
+		assert.Contains(t, props, keyRegion, "schema should include region")
+	})
+
+	t.Run("confirm validation", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: databaseInvalidAPIURL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceCreateTool(cfg)
+
+		cases := []struct {
+			name  string
+			value any
+		}{{name: caseMissingConfirm}, {name: caseFalseConfirm, value: false}, {name: caseStringConfirm, value: boolStringTrue}, {name: caseNumericConfirm, value: 1}}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				args := map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast}
+				if testCase.value != nil {
+					args[keyConfirm] = testCase.value
+				}
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, args))
+				require.NoError(t, err)
+				require.NotNil(t, result)
+				assert.True(t, result.IsError)
+
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, "confirm=true")
+			})
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, databasePostgreSQLInstancesPath, r.URL.Path, "request path should be /databases/postgresql/instances")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+
+			var body map[string]any
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			assert.Equal(t, databaseInstanceLabel, body[keyLabel])
+			assert.Equal(t, databaseInstanceType, body[keyType])
+			assert.Equal(t, databaseEnginePostgreSQLID, body[databaseEngineParam])
+			assert.Equal(t, regionUSEast, body[keyRegion])
+			assert.Equal(t, true, body[databaseSSLConnectionParam])
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEnginePostgreSQL, Version: databaseVersion, Status: statusActive}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceCreateTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, databaseSSLConnectionParam: true, keyConfirm: true}))
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, databaseInstanceLabel)
+		assert.Contains(t, textContent.Text, "created")
+	})
+
+	t.Run("required field validation", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceCreateTool(cfg)
+
+		cases := []struct {
+			name        string
+			args        map[string]any
+			wantMessage string
+		}{
+			{name: caseMissingLabel, args: map[string]any{keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, keyConfirm: true}, wantMessage: databaseLabelRequiredMessage},
+			{name: caseMissingType, args: map[string]any{keyLabel: databaseInstanceLabel, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, keyConfirm: true}, wantMessage: "type must be a non-empty string"},
+			{name: "missing engine", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, keyRegion: regionUSEast, keyConfirm: true}, wantMessage: "engine must be a non-empty string"},
+			{name: "missing region", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyConfirm: true}, wantMessage: "region must be a non-empty string"},
+			{name: caseInvalidAllowList, args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, databaseAllowListParam: invalidJSON, keyConfirm: true}, wantMessage: databaseInvalidAllowListJSON},
+			{name: "invalid cluster size", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, "cluster_size": "3", keyConfirm: true}, wantMessage: "cluster_size must be a positive integer"},
+			{name: caseInvalidEngineConfig, args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, databaseEngineConfigParam: invalidJSON, keyConfirm: true}, wantMessage: databaseInvalidEngineConfigJSON},
+			{name: "invalid fork", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, "fork": invalidJSON, keyConfirm: true}, wantMessage: "invalid fork JSON"},
+			{name: "invalid private network bool", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, databasePrivateNetworkParam: boolStringTrue, keyConfirm: true}, wantMessage: "private_network must be a boolean"},
+			{name: "invalid ssl bool", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, databaseSSLConnectionParam: boolStringTrue, keyConfirm: true}, wantMessage: "ssl_connection must be a boolean"},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+				require.NoError(t, err)
+				require.NotNil(t, result)
+				assert.True(t, result.IsError)
+
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, testCase.wantMessage)
+			})
+		}
+	})
+
+	t.Run("client error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, databasePostgreSQLInstancesPath, r.URL.Path, "request path should be /databases/postgresql/instances")
+			w.WriteHeader(http.StatusInternalServerError)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryFailure}}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceCreateTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, keyConfirm: true}))
+		require.NoError(t, err, "client errors should be returned as tool result errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failures should return an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to create PostgreSQL Managed Database instance")
 	})
 }
 
@@ -1509,9 +1669,9 @@ func TestLinodeDatabaseInstanceUpdateTool(t *testing.T) {
 			{name: caseMissingInstanceID, args: map[string]any{keyLabel: databaseInstanceLabel, keyConfirm: true}, wantMessage: databaseInstanceIDMessage},
 			{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery, keyLabel: databaseInstanceLabel, keyConfirm: true}, wantMessage: databaseInstanceIDMessage},
 			{name: "empty update", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}, wantMessage: "at least one update field must be provided"},
-			{name: caseMissingLabel, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, keyLabel: "", keyConfirm: true}, wantMessage: "label must be a non-empty string"},
-			{name: "invalid allow list", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseAllowListParam: invalidJSON, keyConfirm: true}, wantMessage: databaseInvalidAllowListJSON},
-			{name: "invalid engine config", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseEngineConfigParam: invalidJSON, keyConfirm: true}, wantMessage: databaseInvalidEngineConfigJSON},
+			{name: caseMissingLabel, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, keyLabel: "", keyConfirm: true}, wantMessage: databaseLabelRequiredMessage},
+			{name: caseInvalidAllowList, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseAllowListParam: invalidJSON, keyConfirm: true}, wantMessage: databaseInvalidAllowListJSON},
+			{name: caseInvalidEngineConfig, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseEngineConfigParam: invalidJSON, keyConfirm: true}, wantMessage: databaseInvalidEngineConfigJSON},
 			{name: "invalid private network", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databasePrivateNetworkParam: invalidJSON, keyConfirm: true}, wantMessage: "invalid private_network JSON"},
 			{name: "invalid updates", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseUpdatesParam: invalidJSON, keyConfirm: true}, wantMessage: "invalid updates JSON"},
 			{name: "numeric version", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseVersionParam: 8, keyConfirm: true}, wantMessage: "version must be a non-empty string"},

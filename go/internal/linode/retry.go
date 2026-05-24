@@ -994,6 +994,11 @@ func (c *Client) CreateDatabaseInstance(ctx context.Context, req *CreateDatabase
 	return c.httpCreateDatabaseInstance(ctx, req)
 }
 
+// CreateDatabasePostgreSQLInstance creates or restores a PostgreSQL Managed Database instance without retrying the POST.
+func (c *Client) CreateDatabasePostgreSQLInstance(ctx context.Context, req *CreateDatabaseInstanceRequest) (*DatabaseInstance, error) {
+	return c.httpCreateDatabasePostgreSQLInstance(ctx, req)
+}
+
 // UpdateDatabaseInstance updates one MySQL Managed Database instance without retrying the PUT.
 func (c *Client) UpdateDatabaseInstance(ctx context.Context, instanceID int, req *UpdateDatabaseInstanceRequest) (*DatabaseInstance, error) {
 	return c.httpUpdateDatabaseInstance(ctx, instanceID, req)

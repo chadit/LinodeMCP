@@ -189,6 +189,26 @@ func (c *Client) httpCreateDatabaseInstance(ctx context.Context, req *CreateData
 	return &instance, nil
 }
 
+// CreateDatabasePostgreSQLInstance creates or restores a PostgreSQL Managed Database instance.
+func (c *Client) httpCreateDatabasePostgreSQLInstance(ctx context.Context, req *CreateDatabaseInstanceRequest) (*DatabaseInstance, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointDatabasePostgreSQLInstances, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateDatabasePostgreSQLInstance", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var instance DatabaseInstance
+	if err := c.handleResponse(resp, &instance); err != nil {
+		return nil, err
+	}
+
+	return &instance, nil
+}
+
 // UpdateDatabaseInstance updates one MySQL Managed Database instance.
 func (c *Client) httpUpdateDatabaseInstance(ctx context.Context, instanceID int, req *UpdateDatabaseInstanceRequest) (*DatabaseInstance, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
