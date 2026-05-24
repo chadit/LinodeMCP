@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -11,6 +12,105 @@ import (
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
+
+// NewLinodeImageShareGroupCreateTool creates a tool for creating image share groups.
+func NewLinodeImageShareGroupCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_image_sharegroup_create",
+		mcp.WithDescription("Creates a share group for sharing images with other users."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithString("label", mcp.Required(), mcp.Description("The share group's descriptive name.")),
+		mcp.WithString("description", mcp.Description("Detailed description for the share group (optional).")),
+		mcp.WithString("images", mcp.Description("JSON array of images to include, each with required id and optional label/description.")),
+		mcp.WithBoolean(paramConfirm, mcp.Required(),
+			mcp.Description("Must be true to confirm image share group creation.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeImageShareGroupCreateRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleLinodeImageShareGroupCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	confirm, confirmOK := request.GetArguments()[paramConfirm].(bool)
+	if !confirmOK || !confirm {
+		return mcp.NewToolResultError("This creates an image share group. Set confirm=true to proceed."), nil
+	}
+
+	label := strings.TrimSpace(request.GetString("label", ""))
+	if label == "" {
+		return mcp.NewToolResultError("label is required"), nil
+	}
+
+	var imagesJSON string
+
+	if imagesArg, ok := request.GetArguments()["images"]; ok {
+		var imagesOK bool
+
+		imagesJSON, imagesOK = imagesArg.(string)
+		if !imagesOK {
+			return mcp.NewToolResultError("images must be a JSON string"), nil
+		}
+	}
+
+	images, err := imageShareGroupImagesFromTool(imagesJSON)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	req := linode.CreateImageShareGroupRequest{
+		Label:       label,
+		Description: request.GetString("description", ""),
+		Images:      images,
+	}
+
+	created, err := client.CreateImageShareGroup(ctx, &req)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to create image share group: %v", err)), nil
+	}
+
+	response := struct {
+		Message    string                  `json:"message"`
+		ShareGroup *linode.ImageShareGroup `json:"share_group"`
+	}{
+		Message:    fmt.Sprintf("Image share group '%s' (%d) created successfully", created.Label, created.ID),
+		ShareGroup: created,
+	}
+
+	result, err := MarshalToolResponse(response)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to format image share group response: %v", err)), nil
+	}
+
+	return result, nil
+}
+
+func imageShareGroupImagesFromTool(imagesJSON string) ([]linode.ImageShareGroupImage, error) {
+	if strings.TrimSpace(imagesJSON) == "" {
+		return nil, nil
+	}
+
+	var images []linode.ImageShareGroupImage
+	if err := json.Unmarshal([]byte(imagesJSON), &images); err != nil {
+		return nil, fmt.Errorf("invalid images JSON: %w", err)
+	}
+
+	for i := range images {
+		images[i].ID = strings.TrimSpace(images[i].ID)
+		if images[i].ID == "" {
+			return nil, fmt.Errorf("images[%d].id: %w", i, ErrImageShareGroupImageIDRequired)
+		}
+	}
+
+	return images, nil
+}
 
 // NewLinodeImageCreateTool creates a tool for creating private Linode images.
 func NewLinodeImageCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {

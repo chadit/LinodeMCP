@@ -16,6 +16,11 @@ var (
 	ErrDiskIDInvalid          = errors.New("disk_id must be a valid integer")
 )
 
+// Sentinel errors for image share group validation.
+var (
+	ErrImageShareGroupImageIDRequired = errors.New("image id is required")
+)
+
 // Sentinel errors for SSH key validation.
 var (
 	ErrSSHKeyRequired      = errors.New("ssh_key is required")

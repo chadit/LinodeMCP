@@ -7,11 +7,13 @@ package tools_test
 // names.
 const (
 	// Environment config keys and labels.
-	envKeyDefault   = "default"
-	envLabelDefault = "Default"
-	envProd         = "prod"
-	apiURLLinodeV4  = "https://api.linode.com/v4"
-	tokenTest       = "test-token"
+	envKeyDefault        = "default"
+	envLabelDefault      = "Default"
+	envProd              = "prod"
+	apiURLLinodeV4       = "https://api.linode.com/v4"
+	tokenTest            = "test-token"
+	imageShareGroupLabel = "DevOps Base Images"
+	errTemporaryFailure  = "temporary failure"
 
 	// Common JSON request/response keys.
 	keyConfirm                  = "confirm"

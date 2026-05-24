@@ -711,10 +711,10 @@ func TestClientAllowObjectStorageBucketAccessEscapesPathParams(t *testing.T) {
 func TestClientAllowObjectStorageBucketAccessDoesNotRetry(t *testing.T) {
 	t.Parallel()
 
-	var calls int32
+	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&calls, 1)
+		calls.Add(1)
 		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
 		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/access", r.URL.Path, "request path should match access endpoint")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -727,7 +727,7 @@ func TestClientAllowObjectStorageBucketAccessDoesNotRetry(t *testing.T) {
 	err := client.AllowObjectStorageBucketAccess(t.Context(), "us-east-1", "my-bucket", linode.AllowObjectStorageBucketAccessRequest{})
 
 	require.Error(t, err, "AllowObjectStorageBucketAccess should fail on 500 response")
-	assert.Equal(t, int32(1), calls, "AllowObjectStorageBucketAccess must not retry and replay a state-changing request")
+	assert.Equal(t, int32(1), calls.Load(), "AllowObjectStorageBucketAccess must not retry and replay a state-changing request")
 }
 
 // TestClientGetAccountTransferSuccess verifies GetAccountTransfer sends a GET
@@ -1996,7 +1996,7 @@ func TestClientUpdateOAuthClientThumbnailDoesNotRetryTransientError(t *testing.T
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount.Add(1)
 		assert.Equal(t, "/account/oauth-clients/"+oauthClientID+"/thumbnail", r.URL.Path, "request path should update client thumbnail")
-		http.Error(w, "temporary failure", http.StatusInternalServerError)
+		http.Error(w, errTemporaryFailure, http.StatusInternalServerError)
 	}))
 	defer srv.Close()
 
@@ -2084,7 +2084,7 @@ func TestClientGetOAuthClientThumbnailRetriesOnTransientError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		count := requestCount.Add(1)
 		if count == 1 {
-			http.Error(w, "temporary failure", http.StatusInternalServerError)
+			http.Error(w, errTemporaryFailure, http.StatusInternalServerError)
 
 			return
 		}
@@ -5578,10 +5578,10 @@ func TestClientEnrollAccountBetaAPIError(t *testing.T) {
 func TestClientEnrollAccountBetaDoesNotRetry(t *testing.T) {
 	t.Parallel()
 
-	var calls int32
+	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&calls, 1)
+		calls.Add(1)
 
 		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
 		assert.Equal(t, "/account/betas", r.URL.Path, "request path should be /account/betas")
@@ -5596,7 +5596,7 @@ func TestClientEnrollAccountBetaDoesNotRetry(t *testing.T) {
 	err := client.EnrollAccountBeta(t.Context(), &linode.EnrollAccountBetaRequest{ID: betaExampleOpen})
 
 	require.Error(t, err, "EnrollAccountBeta should fail on 500 response")
-	assert.Equal(t, int32(1), calls, "EnrollAccountBeta must not retry and replay a mutating request")
+	assert.Equal(t, int32(1), calls.Load(), "EnrollAccountBeta must not retry and replay a mutating request")
 }
 
 // TestClientAcknowledgeAccountAgreementsSuccess verifies that
@@ -5644,10 +5644,10 @@ func TestClientAcknowledgeAccountAgreementsSuccess(t *testing.T) {
 func TestClientAcknowledgeAccountAgreementsDoesNotRetry(t *testing.T) {
 	t.Parallel()
 
-	var calls int32
+	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&calls, 1)
+		calls.Add(1)
 
 		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
 		assert.Equal(t, "/account/agreements", r.URL.Path, "request path should be /account/agreements")
@@ -5663,7 +5663,7 @@ func TestClientAcknowledgeAccountAgreementsDoesNotRetry(t *testing.T) {
 	err := client.AcknowledgeAccountAgreements(t.Context(), &linode.AcknowledgeAccountAgreementsRequest{PrivacyPolicy: &privacyPolicy})
 
 	require.Error(t, err, "AcknowledgeAccountAgreements should fail on 500 response")
-	assert.Equal(t, int32(1), calls, "AcknowledgeAccountAgreements must not retry and replay a mutating request")
+	assert.Equal(t, int32(1), calls.Load(), "AcknowledgeAccountAgreements must not retry and replay a mutating request")
 }
 
 // TestClientCancelAccountSuccess verifies CancelAccount sends a POST request to
@@ -5730,10 +5730,10 @@ func TestClientCancelAccountWithoutComments(t *testing.T) {
 func TestClientCancelAccountDoesNotRetry(t *testing.T) {
 	t.Parallel()
 
-	var calls int32
+	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&calls, 1)
+		calls.Add(1)
 
 		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
 		assert.Equal(t, "/account/cancel", r.URL.Path, "request path should be /account/cancel")
@@ -5749,7 +5749,7 @@ func TestClientCancelAccountDoesNotRetry(t *testing.T) {
 	_, err := client.CancelAccount(t.Context(), &linode.CancelAccountRequest{Comments: &errComments})
 
 	require.Error(t, err, "CancelAccount should fail on 500 response")
-	assert.Equal(t, int32(1), calls, "CancelAccount must not retry and replay a destructive request")
+	assert.Equal(t, int32(1), calls.Load(), "CancelAccount must not retry and replay a destructive request")
 }
 
 // TestClientUpdateAccountSuccess verifies that UpdateAccount sends a PUT
@@ -5850,10 +5850,10 @@ func TestClientUpdateAccountAPIError(t *testing.T) {
 func TestClientUpdateAccountDoesNotRetry(t *testing.T) {
 	t.Parallel()
 
-	var calls int32
+	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&calls, 1)
+		calls.Add(1)
 
 		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
 		assert.Equal(t, "/account", r.URL.Path, "request path should be /account")
@@ -5868,7 +5868,7 @@ func TestClientUpdateAccountDoesNotRetry(t *testing.T) {
 	_, err := client.UpdateAccount(t.Context(), &linode.UpdateAccountRequest{})
 
 	require.Error(t, err, "UpdateAccount should fail on 500 response")
-	assert.Equal(t, int32(1), calls, "UpdateAccount must not retry and replay a mutating request")
+	assert.Equal(t, int32(1), calls.Load(), "UpdateAccount must not retry and replay a mutating request")
 }
 
 // TestClientEnableAccountManagedSuccess verifies that EnableAccountManaged sends a POST
@@ -5946,10 +5946,10 @@ func TestClientEnableAccountManagedAPIError(t *testing.T) {
 func TestClientEnableAccountManagedDoesNotRetry(t *testing.T) {
 	t.Parallel()
 
-	var calls int32
+	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&calls, 1)
+		calls.Add(1)
 
 		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
 		assert.Equal(t, "/account/settings/managed-enable", r.URL.Path, "request path should be /account/settings/managed-enable")
@@ -5964,7 +5964,7 @@ func TestClientEnableAccountManagedDoesNotRetry(t *testing.T) {
 	err := client.EnableAccountManaged(t.Context())
 
 	require.Error(t, err, "EnableAccountManaged should fail on 500 response")
-	assert.Equal(t, int32(1), calls, "EnableAccountManaged must not retry and replay a mutating request")
+	assert.Equal(t, int32(1), calls.Load(), "EnableAccountManaged must not retry and replay a mutating request")
 }
 
 // TestClientUpdateAccountSettingsSuccess verifies that UpdateAccountSettings sends a PUT
@@ -6053,10 +6053,10 @@ func TestClientUpdateAccountSettingsAPIError(t *testing.T) {
 func TestClientUpdateAccountSettingsDoesNotRetry(t *testing.T) {
 	t.Parallel()
 
-	var calls int32
+	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&calls, 1)
+		calls.Add(1)
 
 		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
 		assert.Equal(t, "/account/settings", r.URL.Path, "request path should be /account/settings")
@@ -6071,7 +6071,7 @@ func TestClientUpdateAccountSettingsDoesNotRetry(t *testing.T) {
 	_, err := client.UpdateAccountSettings(t.Context(), &linode.UpdateAccountSettingsRequest{})
 
 	require.Error(t, err, "UpdateAccountSettings should fail on 500 response")
-	assert.Equal(t, int32(1), calls, "UpdateAccountSettings must not retry and replay a mutating request")
+	assert.Equal(t, int32(1), calls.Load(), "UpdateAccountSettings must not retry and replay a mutating request")
 }
 
 func TestClientListImageShareGroupTokensSuccess(t *testing.T) {
@@ -6147,7 +6147,7 @@ func TestClientListImageShareGroupsSuccess(t *testing.T) {
 		{
 			ID:           1,
 			UUID:         "1533863e-16a4-47b5-b829-ac0f35c13278",
-			Label:        shareGroupLabelFixture,
+			Label:        imageShareGroupLabel,
 			Description:  &description,
 			IsSuspended:  false,
 			Created:      "2025-04-14T22:44:02",
@@ -6178,7 +6178,126 @@ func TestClientListImageShareGroupsSuccess(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Len(t, result.Data, 1)
-	assert.Equal(t, shareGroupLabelFixture, result.Data[0].Label)
+	assert.Equal(t, imageShareGroupLabel, result.Data[0].Label)
 	assert.Equal(t, 2, result.Page)
 	assert.Equal(t, 7, result.Results)
+}
+
+func TestClientCreateImageShareGroupSuccess(t *testing.T) {
+	t.Parallel()
+
+	description := "shared CI images"
+	updated := "2025-04-15T22:44:02"
+	request := &linode.CreateImageShareGroupRequest{
+		Label:       imageShareGroupLabel,
+		Description: description,
+		Images: []linode.ImageShareGroupImage{
+			{ID: "private/7", Label: "Linux Debian", Description: "Official Debian Linux image"},
+		},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/images/sharegroups", r.URL.Path, "request path should be /images/sharegroups")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
+
+		var body map[string]any
+		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
+			return
+		}
+
+		assert.Equal(t, imageShareGroupLabel, body[keyLabel])
+		assert.Equal(t, description, body[keyDescription])
+
+		if !assert.Len(t, body["images"], 1) {
+			return
+		}
+
+		image, ok := body["images"].([]any)[0].(map[string]any)
+		if !assert.True(t, ok, "image payload should be an object") {
+			return
+		}
+
+		assert.Equal(t, "private/7", image[keyID])
+		assert.Equal(t, "Linux Debian", image["label"])
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.ImageShareGroup{
+			ID:           1,
+			UUID:         "1533863e-16a4-47b5-b829-ac0f35c13278",
+			Label:        imageShareGroupLabel,
+			Description:  &description,
+			IsSuspended:  false,
+			Created:      "2025-04-14T22:44:02",
+			Updated:      &updated,
+			ImagesCount:  1,
+			MembersCount: 0,
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	result, err := client.CreateImageShareGroup(t.Context(), request)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, imageShareGroupLabel, result.Label)
+	assert.Equal(t, 1, result.ImagesCount)
+}
+
+func TestClientCreateImageShareGroupAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: "label is required"}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	_, err := client.CreateImageShareGroup(t.Context(), &linode.CreateImageShareGroupRequest{Label: imageShareGroupLabel})
+
+	require.Error(t, err, "CreateImageShareGroup should return API errors")
+	assert.ErrorContains(t, err, "label is required")
+}
+
+func TestClientCreateImageShareGroupNetworkError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	baseURL := srv.URL
+	srv.Close()
+
+	client := linode.NewClient(baseURL, "test-token", nil, linode.WithMaxRetries(0))
+	_, err := client.CreateImageShareGroup(t.Context(), &linode.CreateImageShareGroupRequest{Label: imageShareGroupLabel})
+
+	require.Error(t, err, "CreateImageShareGroup should wrap network errors")
+
+	var networkErr *linode.NetworkError
+	require.ErrorAs(t, err, &networkErr, "network error should wrap as NetworkError")
+	assert.Equal(t, "CreateImageShareGroup", networkErr.Operation)
+}
+
+func TestClientCreateImageShareGroupDoesNotRetry(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
+	_, err := client.CreateImageShareGroup(t.Context(), &linode.CreateImageShareGroupRequest{Label: imageShareGroupLabel})
+
+	require.Error(t, err, "CreateImageShareGroup should fail on 500 response")
+	assert.Equal(t, int32(1), calls.Load(), "CreateImageShareGroup must not retry and replay a mutating request")
 }
