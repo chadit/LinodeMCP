@@ -399,6 +399,23 @@ func NewLinodeDatabaseInstancePatchTool(cfg *config.Config) (mcp.Tool, profiles.
 	return tool, profiles.CapWrite, handler
 }
 
+// NewLinodeDatabasePostgreSQLInstancePatchTool creates a tool for patching one PostgreSQL Managed Database instance.
+func NewLinodeDatabasePostgreSQLInstancePatchTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_database_postgresql_instance_patch",
+		mcp.WithDescription("Applies security patches and updates to a PostgreSQL Managed Database instance."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The PostgreSQL Managed Database instance ID to patch.")),
+		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm PostgreSQL database patching. This may cause maintenance downtime for single-node clusters.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleDatabasePostgreSQLInstancePatchRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapWrite, handler
+}
+
 // NewLinodeDatabaseInstanceSuspendTool creates a tool for suspending one active MySQL Managed Database instance.
 func NewLinodeDatabaseInstanceSuspendTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
@@ -939,6 +956,36 @@ func handleDatabaseInstancePatchRequest(ctx context.Context, request *mcp.CallTo
 	return MarshalToolResponse(response)
 }
 
+func handleDatabasePostgreSQLInstancePatchRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This patches a PostgreSQL Managed Database instance. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	instanceID, validationMessage := databaseInstanceIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := client.PatchDatabasePostgreSQLInstance(ctx, instanceID); err != nil {
+		return mcp.NewToolResultError(formatDatabasePostgreSQLInstancePatchError(instanceID, err)), nil
+	}
+
+	response := struct {
+		Message    string `json:"message"`
+		InstanceID int    `json:"instance_id"`
+	}{
+		Message:    "PostgreSQL Managed Database instance " + strconv.Itoa(instanceID) + " patch started",
+		InstanceID: instanceID,
+	}
+
+	return MarshalToolResponse(response)
+}
+
 func handleDatabaseInstanceSuspendRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	if result := RequireConfirm(request, "This suspends a Managed Database instance. Set confirm=true to proceed."); result != nil {
 		return result, nil
@@ -1009,6 +1056,10 @@ func formatDatabasePostgreSQLInstanceDeleteError(instanceID int, err error) stri
 
 func formatDatabaseInstancePatchError(instanceID int, err error) string {
 	return "Failed to patch Managed Database instance " + strconv.Itoa(instanceID) + ": " + err.Error()
+}
+
+func formatDatabasePostgreSQLInstancePatchError(instanceID int, err error) string {
+	return "Failed to patch PostgreSQL Managed Database instance " + strconv.Itoa(instanceID) + ": " + err.Error()
 }
 
 func formatDatabaseInstanceSuspendError(instanceID int, err error) string {
