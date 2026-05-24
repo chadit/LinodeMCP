@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -16,6 +17,8 @@ const (
 	imageShareGroupsPageSizeMin = 25
 	imageShareGroupsPageSizeMax = 500
 )
+
+var imageShareGroupTokenUUIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // NewLinodeImageListTool creates a tool for listing Linode images.
 func NewLinodeImageListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
@@ -84,6 +87,22 @@ func NewLinodeImageShareGroupTokensListTool(cfg *config.Config) (mcp.Tool, profi
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeImageShareGroupTokenGetTool creates a tool for retrieving one image share group token.
+func NewLinodeImageShareGroupTokenGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_image_sharegroup_token_get",
+		mcp.WithDescription("Gets a single image share group token by token UUID."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithString("token_uuid", mcp.Required(), mcp.Description("Image share group token UUID.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleImageShareGroupTokenGetRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
 func handleImageShareGroupsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	page, pageSize, validationMessage := imageShareGroupsPaginationFromTool(request)
 	if validationMessage != "" {
@@ -120,6 +139,42 @@ func handleImageShareGroupTokensListRequest(ctx context.Context, request *mcp.Ca
 	}
 
 	return FormatListResponse(tokens.Data, nil, "image_sharegroup_tokens")
+}
+
+func handleImageShareGroupTokenGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	tokenUUID, validationMessage := imageShareGroupTokenUUIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	token, err := client.GetImageShareGroupToken(ctx, tokenUUID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve image share group token: %v", err)), nil
+	}
+
+	return MarshalToolResponse(token)
+}
+
+func imageShareGroupTokenUUIDFromTool(request *mcp.CallToolRequest) (string, string) {
+	tokenUUID, validationMessage := requiredStringArg(request.GetArguments(), "token_uuid")
+	if validationMessage != "" {
+		return "", validationMessage
+	}
+
+	if strings.ContainsAny(tokenUUID, "/?#") || strings.Contains(tokenUUID, "..") {
+		return "", "token_uuid must not contain path separators, query separators, fragments, or traversal segments"
+	}
+
+	if !imageShareGroupTokenUUIDPattern.MatchString(tokenUUID) {
+		return "", "token_uuid must be a UUID"
+	}
+
+	return tokenUUID, ""
 }
 
 func imageShareGroupsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {

@@ -143,7 +143,7 @@ func TestCreateImageShareGroupTokenRouteAndRetrySafety(t *testing.T) {
 				"token_uuid":                shareGroupTokenUUIDFixture,
 				keyStatus:                   oauthClientStatus,
 				keyLabel:                    "release-token",
-				"created":                   "2025-08-04T10:09:09",
+				"created":                   imageShareGroupTokenCreated,
 				"updated":                   nil,
 				"expiry":                    nil,
 				"valid_for_sharegroup_uuid": shareGroupUUIDFixture,

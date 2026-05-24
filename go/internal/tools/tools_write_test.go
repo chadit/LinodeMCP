@@ -2884,7 +2884,7 @@ func TestLinodeImageShareGroupTokenCreateTool(t *testing.T) {
 				keyTokenUUID:              shareGroupTokenUUIDFixture,
 				keyStatus:                 statusActive,
 				keyLabel:                  "release-token",
-				"created":                 "2025-08-04T10:09:09",
+				"created":                 imageShareGroupTokenCreated,
 				"updated":                 nil,
 				"expiry":                  nil,
 				keyValidForShareGroupUUID: shareGroupUUIDFixture,
