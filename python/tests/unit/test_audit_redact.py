@@ -49,6 +49,7 @@ def test_redaction_list_matches_go_canonical() -> None:
         "ssh_key",
         "ssh_keys",
         "token",
+        "token_uuid",
     }
     assert set(redaction_fields()) == expected
 

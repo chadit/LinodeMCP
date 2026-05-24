@@ -35,6 +35,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_image_list", Capability: profiles.CapRead},
 		{Name: "linode_image_sharegroups_list", Capability: profiles.CapRead},
 		{Name: "linode_image_sharegroup_tokens_list", Capability: profiles.CapRead},
+		{Name: "linode_image_sharegroup_token_get", Capability: profiles.CapRead},
 		{Name: "linode_stackscript_list", Capability: profiles.CapRead},
 
 		// Databases reads

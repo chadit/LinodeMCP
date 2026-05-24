@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 )
 
 const (
@@ -174,6 +176,33 @@ func (c *Client) httpCreateImageShareGroupToken(ctx context.Context, req *Create
 	resp, err := c.makeRequest(ctx, http.MethodPost, endpointImageShareGroupMembershipCreate, req)
 	if err != nil {
 		return nil, &NetworkError{Operation: "CreateImageShareGroupToken", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var token ImageShareGroupToken
+	if err := c.handleResponse(resp, &token); err != nil {
+		return nil, err
+	}
+
+	return &token, nil
+}
+
+// GetImageShareGroupToken retrieves a single image share group token by UUID.
+func (c *Client) httpGetImageShareGroupToken(ctx context.Context, tokenUUID string) (*ImageShareGroupToken, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	escapedTokenUUID := url.PathEscape(tokenUUID)
+	if tokenUUID == "." || tokenUUID == ".." {
+		escapedTokenUUID = strings.ReplaceAll(escapedTokenUUID, ".", "%2E")
+	}
+
+	endpoint := endpointImageShareGroups + "/tokens/" + escapedTokenUUID
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetImageShareGroupToken", Err: err}
 	}
 
 	defer drainClose(resp)

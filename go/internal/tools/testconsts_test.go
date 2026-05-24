@@ -75,6 +75,7 @@ const (
 	shareGroupUUIDFixture       = "e1d0e58b-f89f-4237-84ab-b82077342359"
 	shareGroupLabelFixture      = "DevOps Base Images"
 	shareGroupTokenUUIDFixture  = "sharegroup-token-uuid-fixture"
+	shareGroupTokenGetUUID      = "00000000-0000-4000-8000-000000000001"
 	shareGroupTokenValueFixture = "eyJhbGciOiJIUzI1NiJ9.test.signature"
 
 	// Tool-specific resource ID keys.
