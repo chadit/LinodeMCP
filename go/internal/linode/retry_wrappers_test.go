@@ -685,6 +685,98 @@ func TestGetSSHKeyRetries(t *testing.T) {
 	})
 }
 
+const domainZoneTTL = "$TTL 864000"
+
+func TestGetDomainZoneFileRoute(t *testing.T) {
+	t.Parallel()
+
+	t.Run("happy path uses exact GET domain zone file route", func(t *testing.T) {
+		t.Parallel()
+
+		var requestCount atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requestCount.Add(1)
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/domains/123/zone-file", r.URL.Path, "request path should include domain ID and zone-file suffix")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+
+			body, err := io.ReadAll(r.Body)
+			assert.NoError(t, err, "request body should read")
+			assert.Empty(t, body, "GET request should not include a body")
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				"zone_file": []string{
+					"; example.com [123]",
+					domainZoneTTL,
+				},
+			}), "encoding domain zone file response should not fail")
+		}))
+		defer srv.Close()
+
+		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+		zoneFile, err := client.GetDomainZoneFile(t.Context(), 123)
+		require.NoError(t, err, "GetDomainZoneFile should succeed")
+		require.NotNil(t, zoneFile, "zoneFile should not be nil")
+		assert.Equal(t, []string{"; example.com [123]", domainZoneTTL}, zoneFile.ZoneFile, "zone file lines should match response")
+		assert.Equal(t, int32(1), requestCount.Load(), "GetDomainZoneFile should make one request")
+	})
+
+	t.Run("transient server error retries read-only request", func(t *testing.T) {
+		t.Parallel()
+
+		var requestCount atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			count := requestCount.Add(1)
+			if count == 1 {
+				w.WriteHeader(http.StatusInternalServerError)
+				_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+				assert.NoError(t, err, "writing transient error response should succeed")
+
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				"zone_file": []string{domainZoneTTL},
+			}), "encoding domain zone file response should not fail")
+		}))
+		defer srv.Close()
+
+		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+		zoneFile, err := client.GetDomainZoneFile(t.Context(), 123)
+		require.NoError(t, err, "GetDomainZoneFile should succeed after retry")
+		require.NotNil(t, zoneFile, "zoneFile should not be nil")
+		assert.Equal(t, []string{"$TTL 864000"}, zoneFile.ZoneFile, "zone file lines should match response")
+		assert.Equal(t, int32(2), requestCount.Load(), "read-only GET should retry once then succeed")
+	})
+
+	t.Run("permanent API error is not retried", func(t *testing.T) {
+		t.Parallel()
+
+		var requestCount atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			requestCount.Add(1)
+			w.WriteHeader(http.StatusNotFound)
+			_, err := w.Write([]byte(`{"errors":[{"reason":"domain not found"}]}`))
+			assert.NoError(t, err, "writing not found response should succeed")
+		}))
+		defer srv.Close()
+
+		client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+
+		zoneFile, err := client.GetDomainZoneFile(t.Context(), 123)
+		require.Error(t, err, "GetDomainZoneFile should return permanent API errors")
+		assert.Nil(t, zoneFile, "zoneFile should be nil on error")
+		assert.Equal(t, int32(1), requestCount.Load(), "permanent API errors should not be retried")
+	})
+}
+
 func TestGetDomainRecordRoute(t *testing.T) {
 	t.Parallel()
 

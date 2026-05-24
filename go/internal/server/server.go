@@ -920,6 +920,7 @@ func dnsToolEntries(cfg *config.Config) []toolEntry {
 	return entriesFromFactories(cfg, []toolFactory{
 		tools.NewLinodeDomainListTool,
 		tools.NewLinodeDomainGetTool,
+		tools.NewLinodeDomainZoneFileGetTool,
 		tools.NewLinodeDomainRecordListTool,
 		tools.NewLinodeDomainRecordGetTool,
 		tools.NewLinodeDomainImportTool,

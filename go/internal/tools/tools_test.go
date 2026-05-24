@@ -8511,6 +8511,146 @@ func TestLinodeSSHKeyGetToolAPIError(t *testing.T) {
 	assert.True(t, result.IsError, "should return an error result for API 404")
 }
 
+func TestLinodeDomainZoneFileGetTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeDomainZoneFileGetTool(cfg)
+
+		assert.Equal(t, "linode_domain_zone_file_get", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapRead, capability, "domain zone file get should be read-only")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+		assert.Contains(t, tool.InputSchema.Properties, keyDomainID, "schema should include domain_id")
+	})
+
+	t.Run("invalid domain id rejected before client call", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name  string
+			value any
+			set   bool
+		}{
+			{name: caseMissing, set: false},
+			{name: caseZero, value: 0, set: true},
+			{name: "negative", value: -1, set: true},
+			{name: "slash", value: "1/2", set: true},
+			{name: "query", value: "1?x=2", set: true},
+			{name: "path traversal", value: pathTraversalValue, set: true},
+		}
+
+		for _, tt := range cases {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls atomic.Int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					calls.Add(1)
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+					envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+				}}
+				_, _, handler := tools.NewLinodeDomainZoneFileGetTool(cfg)
+
+				args := map[string]any{}
+				if tt.set {
+					args[keyDomainID] = tt.value
+				}
+
+				req := createRequestWithArgs(t, args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should not return a transport error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "should return an error result")
+				assertErrorContains(t, result, "domain_id must be a positive integer")
+				assert.Equal(t, int32(0), calls.Load(), "validation failure must happen before client call")
+			})
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/domains/123/zone-file", r.URL.Path, "request path should include domain ID and zone-file suffix")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+
+			body, err := io.ReadAll(r.Body)
+			assert.NoError(t, err, "request body should read")
+			assert.Empty(t, body, "GET request should not include a body")
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				"zone_file": []string{"; example.com [123]", domainZoneTTL},
+			}), "encoding domain zone file response should not fail")
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeDomainZoneFileGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyDomainID: 123})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, `"zone_file": [`, "response should include zone_file")
+		assert.Contains(t, textContent.Text, "; example.com [123]", "response should include zone file line")
+		assert.Contains(t, textContent.Text, domainZoneTTL, "response should include TTL line")
+	})
+
+	t.Run("api error maps to tool error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: "domain not found"}},
+			}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeDomainZoneFileGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyDomainID: 999})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError, "should return an error result for API 404")
+		assertErrorContains(t, result, "Failed to retrieve zone file for domain 999")
+	})
+}
+
 func TestLinodeDomainRecordGetTool(t *testing.T) {
 	t.Parallel()
 

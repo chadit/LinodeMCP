@@ -76,6 +76,28 @@ func (c *Client) httpListDomainRecords(ctx context.Context, domainID int) ([]Dom
 	return response.Data, nil
 }
 
+// GetDomainZoneFile retrieves the rendered zone file for a domain.
+func (c *Client) httpGetDomainZoneFile(ctx context.Context, domainID int) (*DomainZoneFile, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointDomains+"/%d/zone-file", domainID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetDomainZoneFile", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var zoneFile DomainZoneFile
+	if err := c.handleResponse(resp, &zoneFile); err != nil {
+		return nil, err
+	}
+
+	return &zoneFile, nil
+}
+
 // ImportDomain imports a domain zone from a remote nameserver.
 func (c *Client) httpImportDomain(ctx context.Context, req *ImportDomainRequest) (*Domain, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
