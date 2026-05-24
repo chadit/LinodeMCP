@@ -195,6 +195,8 @@ const (
 	aclPrivate                      = "private"
 	errRegionInvalid                = "region must contain only lowercase letters, numbers, and hyphens"
 	pathTraversalValue              = ".."
+	pathSeparatorValue              = "1/2"
+	errShareGroupIDPositive         = "sharegroup_id must be a positive integer"
 	errEUUIDNonEmpty                = "euuid must be a non-empty string"
 	errEUUIDNoSeparators            = "euuid must not contain path separators"
 	objectPhotoJPG                  = "photo.jpg"

@@ -211,6 +211,23 @@ func (c *Client) httpUpdateImageShareGroup(ctx context.Context, shareGroupID int
 	return &shareGroup, nil
 }
 
+// DeleteImageShareGroup removes an owned image share group.
+func (c *Client) httpDeleteImageShareGroup(ctx context.Context, shareGroupID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointImageShareGroups+"/%d", shareGroupID)
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteImageShareGroup", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return c.handleResponse(resp, nil)
+}
+
 // ListImageShareGroupTokens retrieves image share group tokens for the user.
 func (c *Client) httpListImageShareGroupTokens(ctx context.Context, page, pageSize int) (*PaginatedResponse[ImageShareGroupToken], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

@@ -1201,6 +1201,12 @@ func (c *Client) UpdateImageShareGroup(ctx context.Context, shareGroupID int, re
 	return c.httpUpdateImageShareGroup(ctx, shareGroupID, req)
 }
 
+// DeleteImageShareGroup deletes an owned image share group without automatic retry.
+// Replaying this destructive operation could repeat side effects after a transient failure.
+func (c *Client) DeleteImageShareGroup(ctx context.Context, shareGroupID int) error {
+	return c.httpDeleteImageShareGroup(ctx, shareGroupID)
+}
+
 // ListImageShareGroupTokens retrieves image share group tokens with automatic retry on transient failures.
 func (c *Client) ListImageShareGroupTokens(ctx context.Context, page, pageSize int) (*PaginatedResponse[ImageShareGroupToken], error) {
 	var tokens *PaginatedResponse[ImageShareGroupToken]

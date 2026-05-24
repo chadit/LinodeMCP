@@ -178,20 +178,6 @@ func handleLinodeImageShareGroupUpdateRequest(ctx context.Context, request *mcp.
 	return result, nil
 }
 
-func imageShareGroupIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	raw, exists := request.GetArguments()["sharegroup_id"]
-	if !exists {
-		return 0, "sharegroup_id must be a positive integer"
-	}
-
-	shareGroupID, ok := numberArgToInt(raw)
-	if !ok || shareGroupID <= 0 {
-		return 0, "sharegroup_id must be a positive integer"
-	}
-
-	return shareGroupID, ""
-}
-
 func imageShareGroupUpdateFromTool(args map[string]any) (*linode.UpdateImageShareGroupRequest, string) {
 	req := &linode.UpdateImageShareGroupRequest{}
 

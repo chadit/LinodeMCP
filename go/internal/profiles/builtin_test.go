@@ -37,6 +37,8 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_image_sharegroup_get", Capability: profiles.CapRead},
 		{Name: "linode_image_sharegroup_create", Capability: profiles.CapWrite},
 		{Name: "linode_image_sharegroup_update", Capability: profiles.CapWrite},
+
+		{Name: "linode_image_sharegroup_delete", Capability: profiles.CapDestroy},
 		{Name: "linode_image_sharegroup_tokens_list", Capability: profiles.CapRead},
 		{Name: "linode_image_sharegroup_token_get", Capability: profiles.CapRead},
 		{Name: "linode_image_sharegroup_token_delete", Capability: profiles.CapDestroy},
