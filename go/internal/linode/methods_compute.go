@@ -566,6 +566,23 @@ func (c *Client) httpDeleteImageShareGroupToken(ctx context.Context, tokenUUID s
 	return c.handleResponse(resp, nil)
 }
 
+// DeleteImageShareGroupMemberToken revokes one accepted membership token from an owned image share group.
+func (c *Client) httpDeleteImageShareGroupMemberToken(ctx context.Context, shareGroupID int, tokenUUID string) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointImageShareGroups + "/" + escapeImageShareGroupID(shareGroupID) + "/members/" + escapeImageShareGroupTokenUUID(tokenUUID)
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteImageShareGroupMemberToken", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return c.handleResponse(resp, nil)
+}
+
 // CreateImage creates a private image from a Linode disk.
 func (c *Client) httpCreateImage(ctx context.Context, req *CreateImageRequest) (*Image, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
