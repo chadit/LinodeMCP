@@ -77,7 +77,7 @@ func TestClientUpdateImageShareGroupTokenEscapesDotSegments(t *testing.T) {
 		escapedPath string
 	}{
 		{name: "single dot", tokenUUID: ".", escapedPath: "/images/sharegroups/tokens/%2E"},
-		{name: "double dot", tokenUUID: "..", escapedPath: "/images/sharegroups/tokens/%2E%2E"},
+		{name: "double dot", tokenUUID: pathTraversalDotDot, escapedPath: "/images/sharegroups/tokens/%2E%2E"},
 	}
 
 	for _, testCase := range cases {

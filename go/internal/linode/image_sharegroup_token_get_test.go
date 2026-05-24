@@ -79,7 +79,7 @@ func TestClientGetImageShareGroupTokenEscapesStandaloneTraversalMarker(t *testin
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/images/sharegroups/tokens/%2E%2E", r.URL.EscapedPath(), "standalone traversal marker should be encoded")
 		w.Header().Set("Content-Type", "application/json")
-		assert.NoError(t, json.NewEncoder(w).Encode(linode.ImageShareGroupToken{TokenUUID: ".."}))
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.ImageShareGroupToken{TokenUUID: pathTraversalDotDot}))
 	}))
 	defer srv.Close()
 

@@ -1234,6 +1234,12 @@ func (c *Client) GetImageShareGroupMemberToken(ctx context.Context, shareGroupID
 	return member, err
 }
 
+// UpdateImageShareGroupMember updates a membership token label without automatic retry.
+// Replaying this mutating operation could repeat side effects after a transient failure.
+func (c *Client) UpdateImageShareGroupMember(ctx context.Context, shareGroupID int, tokenUUID string, req *UpdateImageShareGroupMemberRequest) (*ImageShareGroupMember, error) {
+	return c.httpUpdateImageShareGroupMember(ctx, shareGroupID, tokenUUID, req)
+}
+
 // CreateImageShareGroup creates an image share group without automatic retry.
 // Replaying this non-idempotent create operation could create duplicate share groups.
 func (c *Client) CreateImageShareGroup(ctx context.Context, req *CreateImageShareGroupRequest) (*ImageShareGroup, error) {
