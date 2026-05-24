@@ -54,6 +54,22 @@ func NewLinodeImageListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeImageGetTool creates a tool for retrieving one Linode image.
+func NewLinodeImageGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_image_get",
+		mcp.WithDescription("Gets one Linode image by ID."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithString("image_id", mcp.Required(), mcp.Description("Image ID, such as linode/debian11, private/123, or shared/123.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleImageGetRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeImageShareGroupsListTool creates a tool for listing image share groups.
 func NewLinodeImageShareGroupsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
@@ -313,6 +329,25 @@ func handleImageShareGroupGetRequest(ctx context.Context, request *mcp.CallToolR
 	}
 
 	return MarshalToolResponse(shareGroup)
+}
+
+func handleImageGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	imageID, validationMessage := imageIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	image, err := client.GetImage(ctx, imageID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve image: %v", err)), nil
+	}
+
+	return MarshalToolResponse(image)
 }
 
 func handleImageShareGroupImagesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -580,6 +615,30 @@ func handleImageShareGroupByTokenGetRequest(ctx context.Context, request *mcp.Ca
 	}
 
 	return MarshalToolResponse(shareGroup)
+}
+
+func imageIDFromTool(request *mcp.CallToolRequest) (string, string) {
+	imageID, validationMessage := requiredStringArg(request.GetArguments(), "image_id")
+	if validationMessage != "" {
+		return "", validationMessage
+	}
+
+	parts := strings.Split(imageID, "/")
+	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
+		return "", "image_id must be a prefixed image ID such as linode/debian11, private/123, or shared/123"
+	}
+
+	switch parts[0] {
+	case "linode", "private", "shared":
+	default:
+		return "", "image_id prefix must be linode, private, or shared"
+	}
+
+	if strings.ContainsAny(imageID, "?#") || strings.Contains(imageID, "..") {
+		return "", "image_id must not contain query separators, fragments, or traversal segments"
+	}
+
+	return imageID, ""
 }
 
 func imageShareGroupIDFromTool(request *mcp.CallToolRequest) (int, string) {

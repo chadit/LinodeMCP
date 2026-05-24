@@ -1159,6 +1159,21 @@ func (c *Client) ListImages(ctx context.Context) ([]Image, error) {
 	return images, err
 }
 
+// GetImage retrieves one image with automatic retry on transient failures.
+func (c *Client) GetImage(ctx context.Context, imageID string) (*Image, error) {
+	var image *Image
+
+	err := c.executeWithRetry(ctx, "GetImage", func() error {
+		var err error
+
+		image, err = c.httpGetImage(ctx, imageID)
+
+		return err
+	})
+
+	return image, err
+}
+
 // ListImageShareGroups retrieves owned image share groups with automatic retry on transient failures.
 func (c *Client) ListImageShareGroups(ctx context.Context, page, pageSize int) (*PaginatedResponse[ImageShareGroup], error) {
 	var shareGroups *PaginatedResponse[ImageShareGroup]
