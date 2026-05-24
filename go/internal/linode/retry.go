@@ -984,6 +984,21 @@ func (c *Client) GetDatabaseInstanceCredentials(ctx context.Context, instanceID 
 	return credentials, err
 }
 
+// GetDatabasePostgreSQLInstanceCredentials retrieves PostgreSQL Managed Database credentials with automatic retry on transient failures.
+func (c *Client) GetDatabasePostgreSQLInstanceCredentials(ctx context.Context, instanceID int) (*DatabaseCredentials, error) {
+	var credentials *DatabaseCredentials
+
+	err := c.executeWithRetry(ctx, "GetDatabasePostgreSQLInstanceCredentials", func() error {
+		var err error
+
+		credentials, err = c.httpGetDatabasePostgreSQLInstanceCredentials(ctx, instanceID)
+
+		return err
+	})
+
+	return credentials, err
+}
+
 // GetDatabaseEngine retrieves a Managed Database engine with automatic retry on transient failures.
 func (c *Client) GetDatabaseEngine(ctx context.Context, engineID string) (*DatabaseEngine, error) {
 	var engine *DatabaseEngine

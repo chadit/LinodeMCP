@@ -182,6 +182,22 @@ func NewLinodeDatabaseInstanceCredentialsGetTool(cfg *config.Config) (mcp.Tool, 
 	return tool, profiles.CapAdmin, handler
 }
 
+// NewLinodeDatabasePostgreSQLInstanceCredentialsGetTool creates a tool for getting PostgreSQL Managed Database credentials.
+func NewLinodeDatabasePostgreSQLInstanceCredentialsGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_database_postgresql_instance_credentials_get",
+		mcp.WithDescription("Retrieves credentials for a PostgreSQL Managed Database instance by ID."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber(paramDatabaseInstanceID, mcp.Required(), mcp.Description("The PostgreSQL Managed Database instance ID whose credentials to retrieve.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleDatabasePostgreSQLInstanceCredentialsGetRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapAdmin, handler
+}
+
 // NewLinodeDatabaseInstanceCredentialsResetTool creates a tool for resetting MySQL Managed Database credentials.
 func NewLinodeDatabaseInstanceCredentialsResetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
@@ -555,6 +571,25 @@ func handleDatabaseInstanceCredentialsGetRequest(ctx context.Context, request *m
 	credentials, err := client.GetDatabaseInstanceCredentials(ctx, instanceID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve MySQL Managed Database credentials: %v", err)), nil
+	}
+
+	return MarshalToolResponse(credentials)
+}
+
+func handleDatabasePostgreSQLInstanceCredentialsGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	instanceID, validationMessage := databaseInstanceIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	credentials, err := client.GetDatabasePostgreSQLInstanceCredentials(ctx, instanceID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve PostgreSQL Managed Database credentials: %v", err)), nil
 	}
 
 	return MarshalToolResponse(credentials)
