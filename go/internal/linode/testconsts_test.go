@@ -64,6 +64,7 @@ const (
 	memberTokenFixture           = "member-token"
 	imageLinuxDebianFixture      = "Linux Debian"
 	privateImage15Fixture        = "private/15"
+	privateImage12345Fixture     = "private/12345"
 	sharedImage1Fixture          = "shared/1"
 	imageStatusAvailableFixture  = "available"
 	typeManualImage              = "manual"

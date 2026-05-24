@@ -144,9 +144,9 @@ func TestLinodeImageUploadToolValidation(t *testing.T) {
 		want string
 	}{
 		{name: caseMissingLabel, args: map[string]any{keyRegion: regionUSEast, keyConfirm: true}, want: errLabelRequired},
-		{name: caseBlankLabelImageShareGroupToken, args: map[string]any{keyLabel: "  ", keyRegion: regionUSEast, keyConfirm: true}, want: errLabelRequired},
+		{name: caseBlankLabelImageShareGroupToken, args: map[string]any{keyLabel: blankString, keyRegion: regionUSEast, keyConfirm: true}, want: errLabelRequired},
 		{name: caseMissingRegion, args: map[string]any{keyLabel: imageUploadLabelFixture, keyConfirm: true}, want: errRegionRequired},
-		{name: "blank region", args: map[string]any{keyLabel: imageUploadLabelFixture, keyRegion: "  ", keyConfirm: true}, want: errRegionRequired},
+		{name: "blank region", args: map[string]any{keyLabel: imageUploadLabelFixture, keyRegion: blankString, keyConfirm: true}, want: errRegionRequired},
 		{name: "non-string tags", args: map[string]any{keyLabel: imageUploadLabelFixture, keyRegion: regionUSEast, keyTags: []any{envProd}, keyConfirm: true}, want: "tags must be a JSON string array"},
 		{name: "malformed tags", args: map[string]any{keyLabel: imageUploadLabelFixture, keyRegion: regionUSEast, keyTags: `[`, keyConfirm: true}, want: "tags must be a JSON string array"},
 		{name: "empty tag", args: map[string]any{keyLabel: imageUploadLabelFixture, keyRegion: regionUSEast, keyTags: `["prod",""]`, keyConfirm: true}, want: "tags entries must be non-empty strings"},
