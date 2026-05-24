@@ -126,6 +126,28 @@ func (c *Client) httpListImages(ctx context.Context) ([]Image, error) {
 	return response.Data, nil
 }
 
+// GetImage retrieves a single Linode image by ID.
+func (c *Client) httpGetImage(ctx context.Context, imageID string) (*Image, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointImages + "/" + url.PathEscape(imageID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetImage", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var image Image
+	if err := c.handleResponse(resp, &image); err != nil {
+		return nil, err
+	}
+
+	return &image, nil
+}
+
 // ListImageShareGroups retrieves owned image share groups.
 func (c *Client) httpListImageShareGroups(ctx context.Context, page, pageSize int) (*PaginatedResponse[ImageShareGroup], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
