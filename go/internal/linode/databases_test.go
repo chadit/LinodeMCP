@@ -28,6 +28,7 @@ const (
 	databasePostgreSQLInstancePath            = "/databases/postgresql/instances/123"
 	databasePostgreSQLInstancePatchPath       = "/databases/postgresql/instances/123/patch"
 	databaseInstanceSSLPath                   = "/databases/mysql/instances/123/ssl"
+	databasePostgreSQLInstanceSSLPath         = "/databases/postgresql/instances/123/ssl"
 	databaseSSLCACertificate                  = "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t"
 	databaseInstanceCredentialsPath           = "/databases/mysql/instances/123/credentials"
 	databasePostgreSQLInstanceCredentialsPath = "/databases/postgresql/instances/123/credentials"
@@ -620,6 +621,82 @@ func TestClientGetDatabaseInstanceSSLRetriesTransientRead(t *testing.T) {
 	got, err := client.GetDatabaseInstanceSSL(t.Context(), databaseInstanceID)
 
 	require.NoError(t, err, "read-only GetDatabaseInstanceSSL should retry transient failures")
+	require.NotNil(t, got)
+	assert.Equal(t, databaseSSLCACertificate, got.CACertificate)
+	assert.Equal(t, int32(2), attempts.Load(), "transient read should be retried once")
+}
+
+func TestClientGetDatabasePostgreSQLInstanceSSLSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, databasePostgreSQLInstanceSSLPath, r.URL.Path, "request path should include PostgreSQL instance ssl path")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseSSL{CACertificate: databaseSSLCACertificate}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.GetDatabasePostgreSQLInstanceSSL(t.Context(), databaseInstanceID)
+
+	require.NoError(t, err, "GetDatabasePostgreSQLInstanceSSL should succeed on 200 response")
+	require.NotNil(t, got)
+	assert.Equal(t, databaseSSLCACertificate, got.CACertificate)
+}
+
+func TestClientGetDatabasePostgreSQLInstanceSSLAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, databasePostgreSQLInstanceSSLPath, r.URL.Path, "request path should include PostgreSQL instance ssl path")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errForbidden}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	_, err := client.GetDatabasePostgreSQLInstanceSSL(t.Context(), databaseInstanceID)
+
+	require.Error(t, err)
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+}
+
+func TestClientGetDatabasePostgreSQLInstanceSSLRetriesTransientRead(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+
+		assert.Equal(t, databasePostgreSQLInstanceSSLPath, r.URL.Path, "request path should include PostgreSQL instance ssl path")
+
+		if attempts.Load() == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
+			}))
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseSSL{CACertificate: databaseSSLCACertificate}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
+	got, err := client.GetDatabasePostgreSQLInstanceSSL(t.Context(), databaseInstanceID)
+
+	require.NoError(t, err, "read-only GetDatabasePostgreSQLInstanceSSL should retry transient failures")
 	require.NotNil(t, got)
 	assert.Equal(t, databaseSSLCACertificate, got.CACertificate)
 	assert.Equal(t, int32(2), attempts.Load(), "transient read should be retried once")

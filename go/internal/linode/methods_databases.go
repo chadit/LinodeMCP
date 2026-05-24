@@ -147,6 +147,28 @@ func (c *Client) httpGetDatabaseInstanceSSL(ctx context.Context, instanceID int)
 	return &ssl, nil
 }
 
+// GetDatabasePostgreSQLInstanceSSL retrieves the SSL CA certificate for a PostgreSQL Managed Database instance.
+func (c *Client) httpGetDatabasePostgreSQLInstanceSSL(ctx context.Context, instanceID int) (*DatabaseSSL, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointDatabasePostgreSQLInstances + "/" + url.PathEscape(strconv.Itoa(instanceID)) + "/ssl"
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetDatabasePostgreSQLInstanceSSL", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var ssl DatabaseSSL
+	if err := c.handleResponse(resp, &ssl); err != nil {
+		return nil, err
+	}
+
+	return &ssl, nil
+}
+
 // GetDatabaseInstanceCredentials retrieves MySQL Managed Database credentials.
 func (c *Client) httpGetDatabaseInstanceCredentials(ctx context.Context, instanceID int) (*DatabaseCredentials, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
