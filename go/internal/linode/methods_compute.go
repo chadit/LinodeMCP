@@ -143,6 +143,28 @@ func (c *Client) httpListImageShareGroups(ctx context.Context, page, pageSize in
 	return &response, nil
 }
 
+// ListImageShareGroupTokens retrieves image share group tokens for the user.
+func (c *Client) httpListImageShareGroupTokens(ctx context.Context, page, pageSize int) (*PaginatedResponse[ImageShareGroupToken], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointImageShareGroups+"/tokens", page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListImageShareGroupTokens", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[ImageShareGroupToken]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
+}
+
 // CreateImage creates a private image from a Linode disk.
 func (c *Client) httpCreateImage(ctx context.Context, req *CreateImageRequest) (*Image, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
