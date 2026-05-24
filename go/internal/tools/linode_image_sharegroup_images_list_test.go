@@ -83,8 +83,9 @@ func TestLinodeImageShareGroupImagesListTool(t *testing.T) {
 		t.Parallel()
 
 		invalidValues := map[string]any{
-			caseSlash:   paymentMethodIDSlash,
-			caseQuery:   pathQueryValue,
+			caseSlash: paymentMethodIDSlash,
+			caseQuery: shareGroupIDQueryValue,
+
 			caseDotdot:  pathTraversalValue,
 			caseEmpty:   blankString,
 			caseNumeric: 0,

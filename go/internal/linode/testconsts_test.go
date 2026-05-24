@@ -67,4 +67,5 @@ const (
 	sharedImage1Fixture          = "shared/1"
 	imageStatusAvailableFixture  = "available"
 	keyCreated                   = "created"
+	pathTraversalDotDot          = ".."
 )
