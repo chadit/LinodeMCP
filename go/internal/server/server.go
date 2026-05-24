@@ -974,6 +974,7 @@ func databaseToolEntries(cfg *config.Config) []toolEntry {
 	return entriesFromFactories(cfg, []toolFactory{
 		tools.NewLinodeDatabaseEngineListTool,
 		tools.NewLinodeDatabaseTypeListTool,
+		tools.NewLinodeDatabaseTypeGetTool,
 		tools.NewLinodeDatabaseEngineGetTool,
 		tools.NewLinodeDatabaseMySQLConfigGetTool,
 		tools.NewLinodeDatabasePostgreSQLConfigGetTool,
