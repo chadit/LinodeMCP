@@ -273,6 +273,28 @@ func (c *Client) httpUpdateImageShareGroup(ctx context.Context, shareGroupID int
 	return &shareGroup, nil
 }
 
+// UpdateImageShareGroupImage updates a shared image's label or description.
+func (c *Client) httpUpdateImageShareGroupImage(ctx context.Context, shareGroupID int, imageID string, req *UpdateImageShareGroupImageRequest) (*Image, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointImageShareGroups + "/" + escapeImageShareGroupID(shareGroupID) + "/images/" + escapeImageIDSegment(imageID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateImageShareGroupImage", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var image Image
+	if err := c.handleResponse(resp, &image); err != nil {
+		return nil, err
+	}
+
+	return &image, nil
+}
+
 // DeleteImageShareGroup removes an owned image share group.
 func (c *Client) httpDeleteImageShareGroup(ctx context.Context, shareGroupID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -432,6 +454,10 @@ func escapeImageShareGroupTokenUUID(tokenUUID string) string {
 
 func escapeImageShareGroupID(shareGroupID int) string {
 	return strings.ReplaceAll(url.PathEscape(strconv.Itoa(shareGroupID)), ".", "%2E")
+}
+
+func escapeImageIDSegment(imageID string) string {
+	return strings.ReplaceAll(url.PathEscape(imageID), ".", "%2E")
 }
 
 // DeleteImageShareGroupToken removes one image share group membership token.

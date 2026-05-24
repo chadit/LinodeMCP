@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -12,6 +13,8 @@ import (
 	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
+
+var imageShareGroupImageIDPattern = regexp.MustCompile(`^shared/[1-9]\d*$`)
 
 // NewLinodeImageShareGroupCreateTool creates a tool for creating image share groups.
 func NewLinodeImageShareGroupCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
@@ -182,6 +185,127 @@ func requiredImageShareGroupImagesFromTool(request *mcp.CallToolRequest) ([]lino
 
 func formatImageShareGroupImagesAddError(err error) string {
 	return "Failed to add image to share group: " + err.Error()
+}
+
+// NewLinodeImageShareGroupImageUpdateTool creates a tool for updating a shared image.
+func NewLinodeImageShareGroupImageUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_image_sharegroup_image_update",
+		mcp.WithDescription("Updates a shared image's label or description within an image share group."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("The numeric image share group ID that contains the shared image.")),
+		mcp.WithString("image_id", mcp.Required(), mcp.Description("The shared image ID, for example shared/1.")),
+		mcp.WithString("label", mcp.Description("New descriptive name for the shared image (optional).")),
+		mcp.WithString("description", mcp.Description("New detailed description for the shared image (optional).")),
+		mcp.WithBoolean(paramConfirm, mcp.Required(),
+			mcp.Description("Must be true to confirm shared image update.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeImageShareGroupImageUpdateRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleLinodeImageShareGroupImageUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This updates a shared image. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	shareGroupID, validationMessage := imageShareGroupIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	imageID, validationMessage := imageShareGroupSharedImageIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	req, validationMessage := imageShareGroupImageUpdateFromTool(request.GetArguments())
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	environment := request.GetString(paramEnvironment, "")
+	if environment != "" {
+		request.GetArguments()[paramEnvironment] = environment
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	updated, err := client.UpdateImageShareGroupImage(ctx, shareGroupID, imageID, req)
+	if err != nil {
+		return mcp.NewToolResultError(formatImageShareGroupImageUpdateError(err)), nil
+	}
+
+	response := struct {
+		Message string        `json:"message"`
+		Image   *linode.Image `json:"image"`
+	}{
+		Message: fmt.Sprintf("Shared image '%s' in image share group %d updated successfully", updated.ID, shareGroupID),
+		Image:   updated,
+	}
+
+	result, err := MarshalToolResponse(response)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to format shared image response: %v", err)), nil
+	}
+
+	return result, nil
+}
+
+func imageShareGroupSharedImageIDFromTool(request *mcp.CallToolRequest) (string, string) {
+	imageID, validationMessage := requiredStringArg(request.GetArguments(), "image_id")
+	if validationMessage != "" {
+		return "", validationMessage
+	}
+
+	if !imageShareGroupImageIDPattern.MatchString(imageID) {
+		return "", "image_id must match shared/<positive integer>"
+	}
+
+	return imageID, ""
+}
+
+func imageShareGroupImageUpdateFromTool(args map[string]any) (*linode.UpdateImageShareGroupImageRequest, string) {
+	req := &linode.UpdateImageShareGroupImageRequest{}
+
+	var hasUpdate bool
+
+	label, hasLabel, validationMessage := optionalStringField(args, "label")
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if hasLabel {
+		req.Label = &label
+		hasUpdate = true
+	}
+
+	description, hasDescription, validationMessage := optionalStringField(args, "description")
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if hasDescription {
+		req.Description = &description
+		hasUpdate = true
+	}
+
+	if !hasUpdate {
+		return nil, "at least one of label or description is required"
+	}
+
+	return req, ""
+}
+
+func formatImageShareGroupImageUpdateError(err error) string {
+	return "Failed to update shared image: " + err.Error()
 }
 
 func imageShareGroupImagesFromTool(imagesJSON string) ([]linode.ImageShareGroupImage, error) {

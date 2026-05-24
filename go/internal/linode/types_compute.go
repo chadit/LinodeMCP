@@ -249,6 +249,12 @@ type UpdateImageShareGroupRequest struct {
 	Description *string `json:"description,omitempty"`
 }
 
+// UpdateImageShareGroupImageRequest represents the request body for updating a shared image.
+type UpdateImageShareGroupImageRequest struct {
+	Label       *string `json:"label,omitempty"`
+	Description *string `json:"description,omitempty"`
+}
+
 // ImageShareGroupToken represents a token associated with an image share group.
 type ImageShareGroupToken struct {
 	Token                  string  `json:"token,omitempty"`
