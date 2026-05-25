@@ -943,6 +943,7 @@ func computeToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeStackScriptGetTool,
 		tools.NewLinodeStackScriptListTool,
 		tools.NewLinodeStackScriptCreateTool,
+		tools.NewLinodeStackScriptDeleteTool,
 		tools.NewLinodeSSHKeyCreateTool,
 		tools.NewLinodeSSHKeyUpdateTool,
 		tools.NewLinodeSSHKeyDeleteTool,

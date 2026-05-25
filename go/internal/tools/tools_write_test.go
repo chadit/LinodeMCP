@@ -3312,3 +3312,146 @@ func TestLinodeStackScriptCreateTool(t *testing.T) {
 		assertErrorContains(t, result, "images is required")
 	})
 }
+
+// End-to-end verification of the StackScript deletion workflow.
+func TestLinodeStackScriptDeleteTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+	}}
+	tool, capability, handler := tools.NewLinodeStackScriptDeleteTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+		assert.Equal(t, "linode_stackscript_delete", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapDestroy, capability, "delete tool should be destroy capability")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+		assert.Contains(t, tool.Description, "WARNING", "description should contain WARNING")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, keyStackScriptID, "schema should include stackscript_id property")
+		assert.Contains(t, props, keyConfirm, "schema should include confirm property")
+	})
+
+	validationTests := []struct {
+		name         string
+		args         map[string]any
+		wantContains string
+	}{
+		{
+			name:         caseRequiresConfirm,
+			args:         map[string]any{keyStackScriptID: testStackScriptID},
+			wantContains: errConfirmEqualsTrue,
+		},
+		{
+			name:         caseFalseConfirmRejected,
+			args:         map[string]any{keyStackScriptID: testStackScriptID, keyConfirm: false},
+			wantContains: errConfirmEqualsTrue,
+		},
+		{
+			name:         caseStringConfirmRejected,
+			args:         map[string]any{keyStackScriptID: testStackScriptID, keyConfirm: boolStringTrue},
+			wantContains: errConfirmEqualsTrue,
+		},
+		{
+			name:         caseNumericConfirmRejected,
+			args:         map[string]any{keyStackScriptID: testStackScriptID, keyConfirm: float64(1)},
+			wantContains: errConfirmEqualsTrue,
+		},
+		{
+			name:         caseZero,
+			args:         map[string]any{keyStackScriptID: float64(0), keyConfirm: true},
+			wantContains: "stackscript_id must be an integer greater than or equal to 1",
+		},
+		{
+			name:         "fractional stackscript id",
+			args:         map[string]any{keyStackScriptID: 456.5, keyConfirm: true},
+			wantContains: errStackScriptIDInteger,
+		},
+		{
+			name:         "separator stackscript id",
+			args:         map[string]any{keyStackScriptID: pathSeparatorValue, keyConfirm: true},
+			wantContains: errStackScriptIDInteger,
+		},
+		{
+			name:         "query stackscript id",
+			args:         map[string]any{keyStackScriptID: configIDQueryValue, keyConfirm: true},
+			wantContains: errStackScriptIDInteger,
+		},
+		{
+			name:         "traversal stackscript id",
+			args:         map[string]any{keyStackScriptID: pathTraversalValue, keyConfirm: true},
+			wantContains: errStackScriptIDInteger,
+		},
+	}
+	for _, tt := range validationTests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			req := createRequestWithArgs(t, tt.args)
+			result, err := handler(t.Context(), req)
+			require.NoError(t, err, "handler should not return Go error")
+			require.NotNil(t, result, "handler should return a result")
+			assert.True(t, result.IsError, "result should be a tool error")
+			assertErrorContains(t, result, tt.wantContains)
+		})
+	}
+
+	t.Run("successful deletion", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/linode/stackscripts/456", r.URL.Path, "request path should match stackscript endpoint")
+			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(srv.Close)
+
+		successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, successHandler := tools.NewLinodeStackScriptDeleteTool(successCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyStackScriptID: testStackScriptID,
+			keyConfirm:       true,
+		})
+		result, err := successHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.False(t, result.IsError, "result should not be an error")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent type")
+		assert.Contains(t, textContent.Text, "deleted successfully", "response should confirm deletion")
+	})
+
+	t.Run("client error propagates", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			_, err := w.Write([]byte(`{"errors":[{"reason":"not found"}]}`))
+			assert.NoError(t, err, "writing error response should succeed")
+		}))
+		t.Cleanup(srv.Close)
+
+		errCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, errHandler := tools.NewLinodeStackScriptDeleteTool(errCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyStackScriptID: testStackScriptID,
+			keyConfirm:       true,
+		})
+		result, err := errHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.True(t, result.IsError, "result should be a tool error")
+	})
+}

@@ -1653,6 +1653,13 @@ func (c *Client) CreateStackScript(ctx context.Context, req *CreateStackScriptRe
 	return script, err
 }
 
+// DeleteStackScript deletes a StackScript without retrying the DELETE call.
+func (c *Client) DeleteStackScript(ctx context.Context, stackScriptID int) error {
+	return c.executeWithoutRetry(ctx, "DeleteStackScript", func() error {
+		return c.httpDeleteStackScript(ctx, stackScriptID)
+	})
+}
+
 // GetFirewall retrieves a single firewall by ID with automatic retry on transient failures.
 func (c *Client) GetFirewall(ctx context.Context, firewallID int) (*Firewall, error) {
 	var firewall *Firewall
