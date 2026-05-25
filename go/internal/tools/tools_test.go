@@ -8618,6 +8618,114 @@ func TestLinodeAccountUpdateTool(t *testing.T) {
 	})
 }
 
+// TestLinodeAccountUpdateToolDryRun covers the Phase 1 dry-run path
+// on the Admin-tier reference tool. Kept as a sibling function (not a
+// subtest of TestLinodeAccountUpdateTool) so the parent function's
+// maintidx stays under the per-function threshold.
+func TestLinodeAccountUpdateToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	t.Run("schema property", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, _, _ := tools.NewLinodeAccountUpdateTool(cfg)
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run",
+			"schema must advertise the dry_run boolean to the model")
+	})
+
+	t.Run("returns preview without mutating", func(t *testing.T) {
+		t.Parallel()
+
+		var methodsSeen []string
+
+		accountBody := `{"company":"Acme Corp","email":"ops@acme.example","first_name":"Pat","last_name":"Lee","phone":"+1-555-0100","city":"Springfield","country":"US"}`
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsSeen = append(methodsSeen, r.Method)
+			assert.Equal(t, "/account", r.URL.Path)
+
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(accountBody))
+
+				return
+			}
+
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		dryRunCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, dryRunHandler := tools.NewLinodeAccountUpdateTool(dryRunCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyDryRun: true,
+		})
+		result, err := dryRunHandler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError, "dry_run with valid args should not be a tool error")
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, true, body[keyDryRun])
+		assert.Equal(t, "linode_account_update", body["tool"])
+
+		would, isWouldObject := body["would_execute"].(map[string]any)
+		require.True(t, isWouldObject)
+		assert.Equal(t, "PUT", would["method"])
+		assert.Equal(t, "/account", would["path"])
+
+		state, stateIsObject := body["current_state"].(map[string]any)
+		require.True(t, stateIsObject)
+		assert.Equal(t, "Acme Corp", state["company"])
+		assert.Equal(t, "+1-555-0100", state["phone"],
+			"current_state surfaces PII to the model directly; the redaction tier only scrubs audit args, not tool responses")
+
+		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+			"dry_run must only issue a single GET request, never PUT")
+	})
+
+	t.Run("does not require confirm", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "dry_run path must only issue GET")
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"company":"NoConfirm Inc","email":"x@example.com"}`))
+		}))
+		defer srv.Close()
+
+		dryRunCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, dryRunHandler := tools.NewLinodeAccountUpdateTool(dryRunCfg)
+
+		// Intentionally omit confirm; the dry-run path must not gate on it.
+		req := createRequestWithArgs(t, map[string]any{
+			keyDryRun: true,
+		})
+		result, err := dryRunHandler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.False(t, result.IsError,
+			"dry_run without confirm must succeed; confirm only gates real execution")
+	})
+}
+
 // End-to-end verification of the SSH key get workflow.
 func TestLinodeSSHKeyGetTool(t *testing.T) {
 	t.Parallel()

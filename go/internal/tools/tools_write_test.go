@@ -1649,6 +1649,117 @@ func TestLinodeDomainUpdateTool(t *testing.T) {
 		require.True(t, ok, "content should be TextContent type")
 		assert.Contains(t, textContent.Text, "modified successfully", "response should confirm update")
 	})
+
+	t.Run("dry_run schema property", func(t *testing.T) {
+		t.Parallel()
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run",
+			"schema must advertise the dry_run boolean to the model")
+	})
+
+	t.Run("dry_run returns preview without mutating", func(t *testing.T) {
+		t.Parallel()
+
+		var methodsSeen []string
+
+		domainBody := `{"id":222,"domain":"dry.example.com","type":"master","status":"active","soa_email":"existing@example.com"}`
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsSeen = append(methodsSeen, r.Method)
+			assert.Equal(t, "/domains/222", r.URL.Path)
+
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(domainBody))
+
+				return
+			}
+
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, dryRunHandler := tools.NewLinodeDomainUpdateTool(dryRunCfg)
+
+		// Intentionally omit optional args; dry_run path returns current
+		// state via GET regardless of what update fields would be sent.
+		req := createRequestWithArgs(t, map[string]any{
+			keyDomainID: float64(222),
+			keyDryRun:   true,
+		})
+		result, err := dryRunHandler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError, "dry_run with valid args should not be a tool error")
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, true, body[keyDryRun])
+		assert.Equal(t, "linode_domain_update", body["tool"])
+
+		would, isWouldObject := body["would_execute"].(map[string]any)
+		require.True(t, isWouldObject)
+		assert.Equal(t, "PUT", would["method"])
+		assert.Equal(t, "/domains/222", would["path"])
+
+		state, stateIsObject := body["current_state"].(map[string]any)
+		require.True(t, stateIsObject)
+		assert.InDelta(t, 222, state[keyBetaID], 0)
+		assert.Equal(t, "dry.example.com", state["domain"])
+
+		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+			"dry_run must only issue a single GET request, never PUT")
+	})
+
+	t.Run("dry_run does not require confirm", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "dry_run path must only issue GET")
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":333,"domain":"no-confirm.example.com","status":"active"}`))
+		}))
+		defer srv.Close()
+
+		dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, dryRunHandler := tools.NewLinodeDomainUpdateTool(dryRunCfg)
+
+		// Intentionally omit confirm; the dry-run path must not gate on it.
+		req := createRequestWithArgs(t, map[string]any{
+			keyDomainID: float64(333),
+			keyDryRun:   true,
+		})
+		result, err := dryRunHandler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.False(t, result.IsError,
+			"dry_run without confirm must succeed; confirm only gates real execution")
+	})
+
+	t.Run("dry_run still validates domain_id", func(t *testing.T) {
+		t.Parallel()
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyDryRun: true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError,
+			"dry_run with missing domain_id must error out the same way the real call would")
+		assertErrorContains(t, result, errDomainIDRequired)
+	})
 }
 
 // End-to-end verification of the domain deletion workflow.

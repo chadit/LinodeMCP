@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -1121,7 +1122,7 @@ func NewLinodeAccountUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_account_update",
-		"Updates account billing and contact information.",
+		"Updates account billing and contact information. Pass dry_run=true to preview without updating.",
 		[]mcp.ToolOption{
 			mcp.WithString("address_1", mcp.Description("First line of the account billing address (optional)")),
 			mcp.WithString("address_2", mcp.Description("Second line of the account billing address (optional)")),
@@ -1136,7 +1137,8 @@ func NewLinodeAccountUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 			mcp.WithString("tax_id", mcp.Description("Tax identification number, or an empty string if not applicable (optional)")),
 			mcp.WithString("zip", mcp.Description("Zip or postal code for the account address (optional)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm account update.")),
+				mcp.Description("Must be true to confirm account update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountUpdateRequest,
 	)
@@ -3692,6 +3694,10 @@ func cancelAccountRequestFromTool(request *mcp.CallToolRequest) (*linode.CancelA
 }
 
 func handleLinodeAccountUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if IsDryRun(request) {
+		return handleLinodeAccountUpdateDryRun(ctx, request, cfg)
+	}
+
 	if result := RequireConfirm(request, "This updates account billing/contact information. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
@@ -3720,6 +3726,33 @@ func handleLinodeAccountUpdateRequest(ctx context.Context, request *mcp.CallTool
 	}
 
 	return mcp.NewToolResultError("Failed to update account: " + updateErr.Error()), nil
+}
+
+// handleLinodeAccountUpdateDryRun fetches the current account state
+// and returns the dry-run preview without making the PUT call. The
+// response includes the account's PII fields (tax_id, phone, address,
+// etc.) which are returned to the model directly; audit-log Phase 4c's
+// PII redaction tier scrubs the args sent to the call but does not
+// touch tool responses, so the model can compare current vs proposed
+// values.
+func handleLinodeAccountUpdateDryRun(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	account, err := client.GetAccount(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch account for dry-run: %v", err)), nil
+	}
+
+	return BuildDryRunResponse(
+		"linode_account_update",
+		request.GetString(paramEnvironment, ""),
+		"PUT",
+		"/account",
+		account,
+	)
 }
 
 func updateAccountRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateAccountRequest, string) {

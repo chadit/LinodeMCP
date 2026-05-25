@@ -8,7 +8,15 @@ from mcp.types import TextContent, Tool
 from linodemcp.config import Config
 from linodemcp.linode import RetryableClient
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
+from linodemcp.tools.helpers import (
+    DRY_RUN_PROP,
+    ENV_PARAM_SCHEMA,
+    PARAM_DRY_RUN,
+    error_response,
+    execute_dry_run,
+    execute_tool,
+    is_dry_run,
+)
 
 
 def create_linode_account_tool() -> tuple[Tool, Capability]:
@@ -56,7 +64,10 @@ def create_linode_account_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_update tool."""
     return Tool(
         name="linode_account_update",
-        description=("Updates Linode account contact and billing-address information."),
+        description=(
+            "Updates Linode account contact and billing-address information. "
+            "Pass dry_run=true to preview without updating."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -75,8 +86,12 @@ def create_linode_account_update_tool() -> tuple[Tool, Capability]:
                 "tax_id": {"type": "string", "description": "Tax ID"},
                 "confirm": {
                     "type": "boolean",
-                    "description": "Set true to confirm this mutating operation.",
+                    "description": (
+                        "Set true to confirm this mutating operation. Ignored "
+                        "when dry_run=true."
+                    ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["confirm"],
         },
@@ -87,6 +102,20 @@ async def handle_linode_account_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_account_update tool request."""
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_account()
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_account_update",
+            "PUT",
+            "/account",
+            _fetch,
+        )
+
     if not arguments.get("confirm"):
         return error_response(
             "This updates account information. Set confirm=true to proceed."

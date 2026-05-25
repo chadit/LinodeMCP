@@ -240,7 +240,7 @@ func NewLinodeDomainUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_domain_update",
-		"Updates an existing DNS domain. Can modify SOA email, description, TTL, and status.",
+		"Updates an existing DNS domain. Can modify SOA email, description, TTL, and status. Pass dry_run=true to preview without updating.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("domain_id", mcp.Required(), mcp.Description("The ID of the domain to update")),
 			mcp.WithString("soa_email", mcp.Description("New SOA email address (optional)")),
@@ -248,7 +248,8 @@ func NewLinodeDomainUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 			mcp.WithString("status", mcp.Description("New status: 'active', 'disabled', or 'edit_mode' (optional)")),
 			mcp.WithNumber("ttl_sec", mcp.Description("New default TTL in seconds (optional)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm domain update.")),
+				mcp.Description("Must be set to true to confirm domain update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeDomainUpdateRequest,
 	)
@@ -258,6 +259,11 @@ func NewLinodeDomainUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 
 func handleLinodeDomainUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	domainID := request.GetInt("domain_id", 0)
+
+	if IsDryRun(request) {
+		return handleLinodeDomainUpdateDryRun(ctx, request, cfg, domainID)
+	}
+
 	soaEmail := request.GetString("soa_email", "")
 	description := request.GetString("description", "")
 	status := request.GetString("status", "")
@@ -297,6 +303,34 @@ func handleLinodeDomainUpdateRequest(ctx context.Context, request *mcp.CallToolR
 	}
 
 	return MarshalToolResponse(response)
+}
+
+// handleLinodeDomainUpdateDryRun fetches the current domain state and
+// returns the dry-run preview without making the PUT call. domain_id
+// validation runs here too so a malformed dry-run errors out the same
+// way the real call would.
+func handleLinodeDomainUpdateDryRun(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config, domainID int) (*mcp.CallToolResult, error) {
+	if domainID == 0 {
+		return mcp.NewToolResultError("domain_id is required"), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	domain, err := client.GetDomain(ctx, domainID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch domain %d for dry-run: %v", domainID, err)), nil
+	}
+
+	return BuildDryRunResponse(
+		"linode_domain_update",
+		request.GetString(paramEnvironment, ""),
+		"PUT",
+		fmt.Sprintf("/domains/%d", domainID),
+		domain,
+	)
 }
 
 // NewLinodeDomainDeleteTool creates a tool for deleting a domain.
