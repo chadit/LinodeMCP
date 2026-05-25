@@ -28,6 +28,9 @@ var ErrLinodeIDPositive = errors.New("linode_id must be a positive integer")
 // ErrConfigIDPositive is returned when a config ID argument is not positive.
 var ErrConfigIDPositive = errors.New("config_id must be a positive integer")
 
+// ErrDiskIDPositive is returned when a disk ID argument is not positive.
+var ErrDiskIDPositive = errors.New("disk_id must be a positive integer")
+
 // ErrInterfaceIDPositive is returned when an interface ID argument is not positive.
 var ErrInterfaceIDPositive = errors.New("interface_id must be a positive integer")
 

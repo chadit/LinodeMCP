@@ -3173,6 +3173,13 @@ func (c *Client) ResetInstancePassword(ctx context.Context, linodeID int, rootPa
 	})
 }
 
+// ResetInstanceDiskPassword resets a disk root password without retrying the credential mutation.
+func (c *Client) ResetInstanceDiskPassword(ctx context.Context, linodeID, diskID int, password string) error {
+	return c.executeWithoutRetry(ctx, "ResetInstanceDiskPassword", func() error {
+		return c.httpResetInstanceDiskPassword(ctx, linodeID, diskID, password)
+	})
+}
+
 // UpdateProfile updates the user profile with automatic retry on transient failures.
 func (c *Client) UpdateProfile(ctx context.Context, req *UpdateProfileRequest) (*Profile, error) {
 	var profile *Profile

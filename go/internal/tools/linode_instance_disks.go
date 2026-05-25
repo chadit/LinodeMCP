@@ -443,3 +443,71 @@ func handleInstanceDiskResizeRequest(ctx context.Context, request *mcp.CallToolR
 
 	return MarshalToolResponse(response)
 }
+
+// NewLinodeInstanceDiskPasswordResetTool creates a tool for resetting a disk root password.
+func NewLinodeInstanceDiskPasswordResetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_instance_disk_password_reset",
+		"Resets the root password for a disk on a Linode instance. The instance must be powered off.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance")),
+			mcp.WithNumber("disk_id", mcp.Required(),
+				mcp.Description("The ID of the disk")),
+			mcp.WithString("password", mcp.Required(),
+				mcp.Description("New disk root password (min 12 chars, must include upper, lower, and digits)")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm disk password reset.")),
+		},
+		handleInstanceDiskPasswordResetRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleInstanceDiskPasswordResetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This resets the root password for a disk. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	linodeID := request.GetInt("linode_id", 0)
+	if linodeID == 0 {
+		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
+	}
+
+	diskID := request.GetInt("disk_id", 0)
+	if diskID == 0 {
+		return mcp.NewToolResultError(ErrDiskIDRequired.Error()), nil
+	}
+
+	password := request.GetString("password", "")
+	if password == "" {
+		return mcp.NewToolResultError("password is required"), nil
+	}
+
+	if err := validateRootPassword(password); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := client.ResetInstanceDiskPassword(ctx, linodeID, diskID, password); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to reset password for disk %d on instance %d: %v", diskID, linodeID, err)), nil
+	}
+
+	response := struct {
+		Message  string `json:"message"`
+		LinodeID int    `json:"linode_id"`
+		DiskID   int    `json:"disk_id"`
+	}{
+		Message:  fmt.Sprintf("Password reset for disk %d on instance %d", diskID, linodeID),
+		LinodeID: linodeID,
+		DiskID:   diskID,
+	}
+
+	return MarshalToolResponse(response)
+}
