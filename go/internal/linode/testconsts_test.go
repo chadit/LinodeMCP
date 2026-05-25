@@ -73,5 +73,6 @@ const (
 	labelBootConfig              = "boot-config"
 	configDeviceSlotSDA          = "sda"
 	configKernelLatest           = "linode/latest-64bit"
+	purposePublic                = "public"
 	pathTraversalDotDot          = ".."
 )

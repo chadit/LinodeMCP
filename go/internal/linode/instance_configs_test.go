@@ -29,7 +29,7 @@ func TestClientListInstanceConfigsSuccess(t *testing.T) {
 			},
 			Helpers: &linode.ConfigHelpers{Distro: &distro},
 			Interfaces: []linode.ConfigInterface{
-				{Purpose: "public"},
+				{Purpose: purposePublic},
 			},
 		},
 	}
