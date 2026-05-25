@@ -100,6 +100,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 
 		// Compute deep (backups, configs, disks, IPs)
 		{Name: "linode_instance_backup_list", Capability: profiles.CapRead},
+		{Name: "linode_instance_stats_get", Capability: profiles.CapRead},
 		{Name: "linode_instance_backup_create", Capability: profiles.CapWrite},
 		{Name: "linode_instance_firewalls_apply", Capability: profiles.CapWrite},
 		{Name: "linode_instance_interface_firewalls_list", Capability: profiles.CapRead},

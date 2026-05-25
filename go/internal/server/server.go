@@ -1074,7 +1074,10 @@ func vpcToolEntries(cfg *config.Config) []toolEntry {
 }
 
 func instanceDeepToolEntries(cfg *config.Config) []toolEntry {
-	factories := append([]toolFactory{}, instanceBackupToolFactories()...)
+	backupFactories := instanceBackupToolFactories()
+	factories := make([]toolFactory, 0, 1+len(backupFactories))
+	factories = append(factories, tools.NewLinodeInstanceStatsGetTool)
+	factories = append(factories, backupFactories...)
 	factories = append(factories, instanceFirewallToolFactories()...)
 	factories = append(factories, instanceInterfaceToolFactories()...)
 	factories = append(factories, instanceConfigToolFactories()...)

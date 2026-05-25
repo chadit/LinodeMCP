@@ -36,6 +36,28 @@ func (c *Client) httpListInstanceBackups(ctx context.Context, linodeID int) (*In
 	return &backups, nil
 }
 
+// GetInstanceStats retrieves daily statistics for a Linode instance.
+func (c *Client) httpGetInstanceStats(ctx context.Context, linodeID int) (*InstanceStats, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%d/stats", linodeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetInstanceStats", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var stats InstanceStats
+	if err := c.handleResponse(resp, &stats); err != nil {
+		return nil, err
+	}
+
+	return &stats, nil
+}
+
 // GetInstanceBackup retrieves a specific backup for a Linode instance.
 func (c *Client) httpGetInstanceBackup(ctx context.Context, linodeID, backupID int) (*InstanceBackup, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
