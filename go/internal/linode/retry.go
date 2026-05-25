@@ -879,6 +879,21 @@ func (c *Client) ListKernels(ctx context.Context, page, pageSize int) ([]Kernel,
 	return kernels, err
 }
 
+// GetKernel retrieves a single Linode kernel with automatic retry on transient failures.
+func (c *Client) GetKernel(ctx context.Context, kernelID string) (*Kernel, error) {
+	var kernel *Kernel
+
+	err := c.executeWithRetry(ctx, "GetKernel", func() error {
+		var err error
+
+		kernel, err = c.httpGetKernel(ctx, kernelID)
+
+		return err
+	})
+
+	return kernel, err
+}
+
 // ListTypes retrieves all Linode types with automatic retry on transient failures.
 func (c *Client) ListTypes(ctx context.Context) ([]InstanceType, error) {
 	var types []InstanceType
