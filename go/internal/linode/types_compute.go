@@ -215,6 +215,13 @@ type ReplicateImageRequest struct {
 	Regions []string `json:"regions"`
 }
 
+// UpdateImageRequest represents editable fields for a Linode image.
+type UpdateImageRequest struct {
+	Label       *string   `json:"label,omitempty"`
+	Description *string   `json:"description,omitempty"`
+	Tags        *[]string `json:"tags,omitempty"`
+}
+
 // ImageShareGroup represents an owned image share group.
 type ImageShareGroup struct {
 	ID           int     `json:"id"`

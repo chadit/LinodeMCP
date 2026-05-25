@@ -131,7 +131,7 @@ func (c *Client) httpGetImage(ctx context.Context, imageID string) (*Image, erro
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointImages + "/" + url.PathEscape(imageID)
+	endpoint := endpointImages + "/" + escapeImageIDSegment(imageID)
 
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -175,6 +175,32 @@ func (c *Client) httpReplicateImage(ctx context.Context, imageID string, req *Re
 	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
 	if err != nil {
 		return nil, &NetworkError{Operation: "ReplicateImage", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var image Image
+	if err := c.handleResponse(resp, &image); err != nil {
+		return nil, err
+	}
+
+	return &image, nil
+}
+
+// UpdateImage updates editable fields for a Linode image.
+func (c *Client) httpUpdateImage(ctx context.Context, imageID string, req *UpdateImageRequest) (*Image, error) {
+	if req == nil {
+		return nil, ErrUpdateImageRequestRequired
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointImages + "/" + escapeImageIDSegment(imageID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateImage", Err: err}
 	}
 
 	defer drainClose(resp)

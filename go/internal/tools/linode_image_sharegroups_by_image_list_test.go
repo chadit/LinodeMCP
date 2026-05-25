@@ -99,9 +99,9 @@ func TestLinodeImageShareGroupsByImageListTool(t *testing.T) {
 			"unsupported shared":  "shared/12345",
 			"unsupported linode":  "linode/ubuntu24.04",
 			"non-numeric private": "private/abc",
-			"zero private":        "private/0",
+			"zero private":        privateImageZeroFixture,
 			caseQuery:             "private/12345?query",
-			caseDotdot:            "private/..",
+			caseDotdot:            privateImageTraversalFixture,
 			caseEmpty:             blankString,
 			caseNumeric:           12345,
 		}

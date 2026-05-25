@@ -907,6 +907,8 @@ func computeToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeImageDeleteTool,
 		tools.NewLinodeImageUploadTool,
 		tools.NewLinodeImageReplicateTool,
+		tools.NewLinodeImageUpdateTool,
+
 		tools.NewLinodeImageShareGroupsListTool,
 		tools.NewLinodeImageShareGroupGetTool,
 		tools.NewLinodeImageShareGroupsByImageListTool,
