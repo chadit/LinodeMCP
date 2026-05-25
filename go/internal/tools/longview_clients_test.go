@@ -298,3 +298,147 @@ func TestLinodeLongviewClientUpdateTool(t *testing.T) {
 		}
 	})
 }
+
+func TestLinodeLongviewClientDeleteTool(t *testing.T) {
+	t.Parallel()
+
+	const errLongviewClientIDPositive = "client_id must be a positive integer"
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+
+		tool, capability, handler := tools.NewLinodeLongviewClientDeleteTool(cfg)
+		assert.Equal(t, "linode_longview_client_delete", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapDestroy, capability, "delete should require destroy capability")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Contains(t, tool.InputSchema.Properties, keyClientID, "schema should include client_id")
+		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "schema should include confirm")
+		assert.Contains(t, tool.InputSchema.Required, keyClientID, "client_id must be marked required")
+		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			assert.Equal(t, "/longview/clients/789", r.URL.Path, "request path should match")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeLongviewClientDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyClientID: 789, keyConfirm: true})
+		result, err := handler(t.Context(), req)
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Longview client deleted successfully", "response should confirm deletion")
+		assert.Contains(t, textContent.Text, "789", "response should contain deleted client ID")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			assert.Equal(t, "/longview/clients/789", r.URL.Path, "request path should match")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeLongviewClientDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyClientID: 789, keyConfirm: true})
+		result, err := handler(t.Context(), req)
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to delete linode_longview_client_delete", "response should identify failed tool")
+		assert.Contains(t, textContent.Text, errForbidden, "response should include API error detail")
+	})
+
+	t.Run("confirm rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name  string
+			value any
+			set   bool
+		}{
+			{name: caseMissing, set: false},
+			{name: caseFalse, value: false, set: true},
+			{name: caseString, value: boolStringTrue, set: true},
+			{name: caseNumeric, value: 1, set: true},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeLongviewClientDeleteTool(cfg)
+
+				args := map[string]any{keyClientID: 789}
+				if testCase.set {
+					args[keyConfirm] = testCase.value
+				}
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, args))
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "missing or invalid confirm should be an error result")
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, errConfirmEqualsTrue, "response should require confirm=true")
+			})
+		}
+	})
+
+	t.Run("validation rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name string
+			args map[string]any
+			want string
+		}{
+			{name: "missing client id", args: map[string]any{keyConfirm: true}, want: errLongviewClientIDPositive},
+			{name: "zero client id", args: map[string]any{keyClientID: 0, keyConfirm: true}, want: errLongviewClientIDPositive},
+			{name: "unsafe large client id", args: map[string]any{keyClientID: 9007199254740992.0, keyConfirm: true}, want: errLongviewClientIDPositive},
+			{name: "slash client id", args: map[string]any{keyClientID: "789/1", keyConfirm: true}, want: errLongviewClientIDPositive},
+			{name: "query client id", args: map[string]any{keyClientID: "789?x=1", keyConfirm: true}, want: errLongviewClientIDPositive},
+			{name: "traversal client id", args: map[string]any{keyClientID: pathTraversalValue, keyConfirm: true}, want: errLongviewClientIDPositive},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeLongviewClientDeleteTool(cfg)
+				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid input should be an error result")
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, testCase.want, "response should describe validation error")
+			})
+		}
+	})
+}

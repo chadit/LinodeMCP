@@ -840,6 +840,7 @@ func coreToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeAccountOAuthClientsTool,
 		tools.NewLinodeLongviewClientsTool,
 		tools.NewLinodeLongviewClientUpdateTool,
+		tools.NewLinodeLongviewClientDeleteTool,
 		tools.NewLinodeAccountPaymentMethodsTool,
 		tools.NewLinodeAccountPaymentMethodGetTool,
 		tools.NewLinodeAccountPaymentMethodCreateTool,

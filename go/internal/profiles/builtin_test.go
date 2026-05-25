@@ -28,6 +28,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_account_oauth_clients", Capability: profiles.CapRead},
 		{Name: "linode_longview_clients", Capability: profiles.CapRead},
 		{Name: "linode_longview_client_update", Capability: profiles.CapAdmin},
+		{Name: "linode_longview_client_delete", Capability: profiles.CapDestroy},
 
 		// Compute reads
 		{Name: toolInstancesList, Capability: profiles.CapRead},
