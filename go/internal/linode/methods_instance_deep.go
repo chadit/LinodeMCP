@@ -1,7 +1,9 @@
 package linode
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -283,6 +285,63 @@ func (c *Client) httpListInstanceConfigs(ctx context.Context, linodeID, page, pa
 	}
 
 	return response.Data, nil
+}
+
+// ListInstanceConfigInterfaces retrieves all interfaces for a configuration profile on a Linode instance.
+func (c *Client) httpListInstanceConfigInterfaces(ctx context.Context, linodeID, configID int) ([]ConfigInterfaceResponse, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	if configID <= 0 {
+		return nil, ErrConfigIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	encodedConfigID := url.PathEscape(strconv.Itoa(configID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/configs/%s/interfaces", encodedLinodeID, encodedConfigID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListInstanceConfigInterfaces", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var interfaces configInterfaceListResponse
+	if err := c.handleResponse(resp, &interfaces); err != nil {
+		return nil, err
+	}
+
+	return []ConfigInterfaceResponse(interfaces), nil
+}
+
+type configInterfaceListResponse []ConfigInterfaceResponse
+
+func (r *configInterfaceListResponse) UnmarshalJSON(data []byte) error {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) > 0 && trimmed[0] == '[' {
+		var interfaces []ConfigInterfaceResponse
+		if err := json.Unmarshal(trimmed, &interfaces); err != nil {
+			return fmt.Errorf("decode configuration profile interfaces array: %w", err)
+		}
+
+		*r = interfaces
+
+		return nil
+	}
+
+	var response PaginatedResponse[ConfigInterfaceResponse]
+	if err := json.Unmarshal(trimmed, &response); err != nil {
+		return fmt.Errorf("decode configuration profile interfaces envelope: %w", err)
+	}
+
+	*r = response.Data
+
+	return nil
 }
 
 // GetInstanceConfig retrieves a specific configuration profile for a Linode instance.

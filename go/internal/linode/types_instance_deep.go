@@ -84,6 +84,20 @@ type ConfigInterface struct {
 	IPRanges    []string             `json:"ip_ranges,omitempty"`
 }
 
+// ConfigInterfaceResponse represents a legacy network interface returned by a configuration profile interface list.
+type ConfigInterfaceResponse struct {
+	ID          int                  `json:"id"`
+	Active      bool                 `json:"active"`
+	Purpose     string               `json:"purpose"`
+	Label       *string              `json:"label"`
+	IPAMAddress *string              `json:"ipam_address"`
+	Primary     bool                 `json:"primary"`
+	SubnetID    *int                 `json:"subnet_id"`
+	VPCID       *int                 `json:"vpc_id"`
+	IPv4        *ConfigInterfaceIPv4 `json:"ipv4"`
+	IPRanges    []string             `json:"ip_ranges,omitempty"`
+}
+
 // ConfigInterfaceIPv4 contains IPv4 settings for a configuration interface.
 type ConfigInterfaceIPv4 struct {
 	NAT1To1 *string `json:"nat_1_1,omitempty"`

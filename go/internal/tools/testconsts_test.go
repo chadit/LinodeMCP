@@ -134,6 +134,7 @@ const (
 	errPageSizeInteger  = "page_size must be an integer"
 	errConfigIDRequired = "config_id is required"
 	errConfigIDInteger  = "config_id must be an integer"
+	errConfigIDMin      = "config_id must be an integer greater than or equal to 1"
 
 	// Linode region IDs commonly used in fixtures.
 	regionUSEast         = "us-east"

@@ -231,6 +231,56 @@ func configIDFromTool(request *mcp.CallToolRequest) (int, string) {
 	return configID, ""
 }
 
+// NewLinodeInstanceConfigInterfacesListTool creates a tool for listing interfaces on a Linode configuration profile.
+func NewLinodeInstanceConfigInterfacesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_instance_config_interfaces_list",
+		"Lists interfaces assigned to a specific configuration profile on a Linode instance.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance")),
+			mcp.WithNumber("config_id", mcp.Required(),
+				mcp.Description("The ID of the configuration profile")),
+		},
+		handleInstanceConfigInterfacesListRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleInstanceConfigInterfacesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	configID, validationMessage := configIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	interfaces, err := client.ListInstanceConfigInterfaces(ctx, linodeID, configID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to list interfaces for config %d on instance %d: %v", configID, linodeID, err)), nil
+	}
+
+	response := struct {
+		Count      int                              `json:"count"`
+		Interfaces []linode.ConfigInterfaceResponse `json:"interfaces"`
+	}{
+		Count:      len(interfaces),
+		Interfaces: interfaces,
+	}
+
+	return MarshalToolResponse(response)
+}
+
 // NewLinodeInstanceConfigCreateTool creates a tool for creating a Linode configuration profile.
 func NewLinodeInstanceConfigCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
