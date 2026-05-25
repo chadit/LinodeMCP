@@ -2877,6 +2877,21 @@ func (c *Client) ListInstanceConfigs(ctx context.Context, linodeID, page, pageSi
 	return configs, err
 }
 
+// GetInstanceConfig retrieves a specific configuration profile with automatic retry on transient failures.
+func (c *Client) GetInstanceConfig(ctx context.Context, linodeID, configID int) (*InstanceConfig, error) {
+	var config *InstanceConfig
+
+	err := c.executeWithRetry(ctx, "GetInstanceConfig", func() error {
+		var retryErr error
+
+		config, retryErr = c.httpGetInstanceConfig(ctx, linodeID, configID)
+
+		return retryErr
+	})
+
+	return config, err
+}
+
 // GetInstanceDisk retrieves a specific disk with automatic retry on transient failures.
 func (c *Client) GetInstanceDisk(ctx context.Context, linodeID, diskID int) (*InstanceDisk, error) {
 	var disk *InstanceDisk

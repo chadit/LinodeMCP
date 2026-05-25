@@ -109,6 +109,7 @@ const (
 	keyVolumeID       = "volume_id"
 	keyDomainID       = "domain_id"
 	keyDiskID         = "disk_id"
+	keyConfigID       = "config_id"
 	keyClusterID      = "cluster_id"
 	keyPoolID         = "pool_id"
 	keySubnetID       = "subnet_id"
@@ -117,14 +118,16 @@ const (
 	keyNodeBalancerID = "nodebalancer_id"
 
 	// Pagination response keys.
-	keyData            = "data"
-	keyPage            = "page"
-	keyPageSize        = "page_size"
-	keyPages           = "pages"
-	keyResults         = "results"
-	errPageInteger     = "page must be an integer"
-	errPageSizeRange   = "page_size must be"
-	errPageSizeInteger = "page_size must be an integer"
+	keyData             = "data"
+	keyPage             = "page"
+	keyPageSize         = "page_size"
+	keyPages            = "pages"
+	keyResults          = "results"
+	errPageInteger      = "page must be an integer"
+	errPageSizeRange    = "page_size must be"
+	errPageSizeInteger  = "page_size must be an integer"
+	errConfigIDRequired = "config_id is required"
+	errConfigIDInteger  = "config_id must be an integer"
 
 	// Linode region IDs commonly used in fixtures.
 	regionUSEast         = "us-east"
@@ -166,6 +169,9 @@ const (
 	labelWebSubnet                  = "web-subnet"
 	labelMyDisk                     = "my-disk"
 	labelBootConfig                 = "boot-config"
+	configKernelLatest              = "linode/latest-64bit"
+	configDeviceSlotSDA             = "sda"
+	keyKernel                       = "kernel"
 	configDevicesSDAJSON            = `{"sda":{"disk_id":456}}`
 	jsonObjectEmpty                 = `{}`
 	labelProdCluster                = "prod-cluster"
@@ -345,6 +351,7 @@ const (
 	caseMissingType               = "missing type"
 	caseMissingFirewallID         = "missing firewall_id"
 	caseMissingLinodeID           = "missing linode id"
+	caseNegativeLinodeID          = "negative linode id"
 	caseMissingInstanceID         = "missing instance id"
 	caseMissingVPCID              = "missing vpc id"
 	caseMissingSubnetID           = "missing subnet id"

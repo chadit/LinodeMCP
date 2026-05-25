@@ -34,7 +34,7 @@ func instanceConfigCreateValidationCases() []instanceConfigCreateValidationCase 
 		{name: caseStringConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
 		{name: caseNumericConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: float64(1)}, wantContains: errConfirmEqualsTrue},
 		{name: caseMissingLinodeID, args: map[string]any{keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: "negative linode id", args: map[string]any{keyLinodeID: float64(-1), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: caseNegativeLinodeID, args: map[string]any{keyLinodeID: float64(-1), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
 		{name: "fractional linode id", args: map[string]any{keyLinodeID: float64(1.5), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
 		{name: "slash linode id", args: map[string]any{keyLinodeID: paymentMethodIDSlash, keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
 		{name: "query linode id", args: map[string]any{keyLinodeID: "123?query", keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
@@ -43,7 +43,7 @@ func instanceConfigCreateValidationCases() []instanceConfigCreateValidationCase 
 		{name: "non-string label", args: map[string]any{keyLinodeID: float64(123), keyLabel: float64(99), keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: "label must be a string"},
 		{name: caseBlankLabelImageShareGroupToken, args: map[string]any{keyLinodeID: float64(123), keyLabel: "  ", keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLabelRequired},
 		{name: "missing devices", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyConfirm: true}, wantContains: "devices is required"},
-		{name: "non-string devices", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: map[string]any{"sda": map[string]any{"disk_id": 456}}, keyConfirm: true}, wantContains: "devices must be a string"},
+		{name: "non-string devices", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: map[string]any{configDeviceSlotSDA: map[string]any{"disk_id": 456}}, keyConfirm: true}, wantContains: "devices must be a string"},
 		{name: "null devices", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: databaseJSONNull, keyConfirm: true}, wantContains: "devices must be a JSON object"},
 		{name: "empty devices", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: jsonObjectEmpty, keyConfirm: true}, wantContains: "devices must include at least one device slot"},
 		{name: "invalid devices", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: `[`, keyConfirm: true}, wantContains: "invalid devices JSON"},
@@ -58,7 +58,7 @@ func instanceConfigCreateValidationCases() []instanceConfigCreateValidationCase 
 		{name: "negative memory limit", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyMemoryLimit: float64(-1), keyConfirm: true}, wantContains: "memory_limit must be an integer greater than or equal to 1"},
 		{name: "fractional memory limit", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyMemoryLimit: 1.5, keyConfirm: true}, wantContains: "memory_limit must be an integer"},
 		{name: "string memory limit", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyMemoryLimit: "64", keyConfirm: true}, wantContains: "memory_limit must be an integer"},
-		{name: "non-string kernel", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, "kernel": float64(1), keyConfirm: true}, wantContains: "kernel must be a string"},
+		{name: "non-string kernel", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyKernel: float64(1), keyConfirm: true}, wantContains: "kernel must be a string"},
 		{name: "non-string comments", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, "comments": float64(1), keyConfirm: true}, wantContains: "comments must be a string"},
 		{name: "non-string root device", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, "root_device": float64(1), keyConfirm: true}, wantContains: "root_device must be a string"},
 		{name: "non-string run level", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyRunLevel: float64(1), keyConfirm: true}, wantContains: "run_level must be a string"},
@@ -125,7 +125,7 @@ func TestLinodeInstanceConfigCreateTool(t *testing.T) {
 			ID:    789,
 			Label: labelBootConfig,
 			Devices: map[string]*linode.ConfigDevice{
-				"sda": {DiskID: &diskID},
+				configDeviceSlotSDA: {DiskID: &diskID},
 			},
 		}
 
@@ -136,10 +136,10 @@ func TestLinodeInstanceConfigCreateTool(t *testing.T) {
 			var got linode.CreateConfigRequest
 			assert.NoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should decode")
 			assert.Equal(t, labelBootConfig, got.Label, "label should match")
-			assert.Contains(t, got.Devices, "sda", "devices should include sda")
-			assert.NotNil(t, got.Devices["sda"].DiskID, "sda disk_id should be set")
-			assert.Equal(t, diskID, *got.Devices["sda"].DiskID, "disk ID should match")
-			assert.Equal(t, "linode/latest-64bit", got.Kernel, "kernel should match")
+			assert.Contains(t, got.Devices, configDeviceSlotSDA, "devices should include sda")
+			assert.NotNil(t, got.Devices[configDeviceSlotSDA].DiskID, "sda disk_id should be set")
+			assert.Equal(t, diskID, *got.Devices[configDeviceSlotSDA].DiskID, "disk ID should match")
+			assert.Equal(t, configKernelLatest, got.Kernel, "kernel should match")
 			assert.Equal(t, 512, got.MemoryLimit, "memory limit should match")
 			assert.Equal(t, "/dev/sda", got.RootDevice, "root device should match")
 			assert.Equal(t, envKeyDefault, got.RunLevel, "run level should match")
@@ -169,7 +169,7 @@ func TestLinodeInstanceConfigCreateTool(t *testing.T) {
 			keyLinodeID:    float64(123),
 			keyLabel:       labelBootConfig,
 			keyDevices:     configDevicesSDAJSON,
-			"kernel":       "linode/latest-64bit",
+			keyKernel:      configKernelLatest,
 			keyMemoryLimit: float64(512),
 			"root_device":  "/dev/sda",
 			keyRunLevel:    envKeyDefault,

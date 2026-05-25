@@ -22,7 +22,7 @@ func TestClientCreateInstanceConfigSendsRequest(t *testing.T) {
 		Devices: map[string]*linode.ConfigDevice{
 			configDeviceSlotSDA: {DiskID: &diskID},
 		},
-		Kernel:     "linode/latest-64bit",
+		Kernel:     configKernelLatest,
 		RootDevice: "/dev/sda",
 		RunLevel:   "default",
 		VirtMode:   "paravirt",

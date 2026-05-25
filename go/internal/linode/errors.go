@@ -25,6 +25,9 @@ var ErrUpdateImageRequestRequired = errors.New("update image request is required
 // ErrLinodeIDPositive is returned when a Linode ID argument is not positive.
 var ErrLinodeIDPositive = errors.New("linode_id must be a positive integer")
 
+// ErrConfigIDPositive is returned when a config ID argument is not positive.
+var ErrConfigIDPositive = errors.New("config_id must be a positive integer")
+
 // ErrCreateConfigRequestRequired is returned when CreateInstanceConfig is called without a request body.
 var ErrCreateConfigRequestRequired = errors.New("create config request is required")
 

@@ -101,6 +101,62 @@ func instanceConfigsPaginationFromTool(request *mcp.CallToolRequest) (int, int, 
 	return page, pageSize, ""
 }
 
+// NewLinodeInstanceConfigGetTool creates a tool for retrieving a specific configuration profile on a Linode instance.
+func NewLinodeInstanceConfigGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_instance_config_get",
+		"Retrieves details of a specific configuration profile on a Linode instance.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance")),
+			mcp.WithNumber("config_id", mcp.Required(),
+				mcp.Description("The ID of the configuration profile to retrieve")),
+		},
+		handleInstanceConfigGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleInstanceConfigGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	configID, validationMessage := configIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	configProfile, err := client.GetInstanceConfig(ctx, linodeID, configID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve config %d for instance %d: %v", configID, linodeID, err)), nil
+	}
+
+	return MarshalToolResponse(configProfile)
+}
+
+func configIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	args := request.GetArguments()
+	if _, exists := args["config_id"]; !exists {
+		return 0, ErrConfigIDRequired.Error()
+	}
+
+	configID, validationMessage := optionalPaginationInt(args, "config_id", 1, 0)
+	if validationMessage != "" {
+		return 0, validationMessage
+	}
+
+	return configID, ""
+}
+
 // NewLinodeInstanceConfigCreateTool creates a tool for creating a Linode configuration profile.
 func NewLinodeInstanceConfigCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(

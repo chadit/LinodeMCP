@@ -22,7 +22,7 @@ func TestClientListInstanceConfigsSuccess(t *testing.T) {
 		{
 			ID:         77,
 			Label:      labelBootConfig,
-			Kernel:     "linode/latest-64bit",
+			Kernel:     configKernelLatest,
 			RootDevice: "/dev/sda",
 			Devices: map[string]*linode.ConfigDevice{
 				configDeviceSlotSDA: {DiskID: &diskID},
@@ -53,7 +53,7 @@ func TestClientListInstanceConfigsSuccess(t *testing.T) {
 	require.NoError(t, err, "ListInstanceConfigs should succeed on 200 response")
 	require.Len(t, got, 1)
 	assert.Equal(t, labelBootConfig, got[0].Label)
-	assert.Equal(t, "linode/latest-64bit", got[0].Kernel)
+	assert.Equal(t, configKernelLatest, got[0].Kernel)
 	assert.Equal(t, diskID, *got[0].Devices[configDeviceSlotSDA].DiskID)
 	require.NotNil(t, got[0].Helpers)
 	require.NotNil(t, got[0].Helpers.Distro)
