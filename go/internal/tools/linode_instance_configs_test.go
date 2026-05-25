@@ -395,11 +395,11 @@ func TestLinodeInstanceConfigInterfaceGetTool(t *testing.T) {
 		{name: caseSlashConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathSeparatorValue, keyInterfaceID: float64(456)}, wantContains: errConfigIDPositive},
 		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: shareGroupIDQueryValue, keyInterfaceID: float64(456)}, wantContains: errConfigIDPositive},
 		{name: caseTraversalConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathTraversalValue, keyInterfaceID: float64(456)}, wantContains: errConfigIDPositive},
-		{name: "missing interface id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789)}, wantContains: errInterfaceIDPositive},
+		{name: caseMissingInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789)}, wantContains: errInterfaceIDPositive},
 		{name: "negative interface id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(-1)}, wantContains: errInterfaceIDPositive},
-		{name: "slash interface id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: pathSeparatorValue}, wantContains: errInterfaceIDPositive},
-		{name: "query interface id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: shareGroupIDQueryValue}, wantContains: errInterfaceIDPositive},
-		{name: "traversal interface id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: pathTraversalValue}, wantContains: errInterfaceIDPositive},
+		{name: caseSlashInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: pathSeparatorValue}, wantContains: errInterfaceIDPositive},
+		{name: caseQueryInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: shareGroupIDQueryValue}, wantContains: errInterfaceIDPositive},
+		{name: caseTraversalInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: pathTraversalValue}, wantContains: errInterfaceIDPositive},
 	}
 
 	for _, tt := range validationTests {
@@ -481,6 +481,141 @@ func TestLinodeInstanceConfigInterfaceGetTool(t *testing.T) {
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
 		assertErrorContains(t, result, "Failed to retrieve configuration profile interface")
+	})
+}
+
+func TestLinodeInstanceConfigInterfaceDeleteTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	tool, capability, handler := tools.NewLinodeInstanceConfigInterfaceDeleteTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+		assert.Equal(t, "linode_instance_config_interface_delete", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapDestroy, capability, "capability should be destroy")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, keyLinodeID, "schema should include linode_id")
+		assert.Contains(t, props, keyConfigID, "schema should include config_id")
+		assert.Contains(t, props, keyInterfaceID, "schema should include interface_id")
+		assert.Contains(t, props, keyConfirm, "schema should include confirm")
+		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
+	})
+
+	confirmTests := []struct {
+		name  string
+		value any
+		set   bool
+	}{
+		{name: caseMissingConfirm, set: false},
+		{name: caseRequiresConfirm, value: false, set: true},
+		{name: caseStringConfirmRejected, value: boolStringTrue, set: true},
+		{name: caseNumericConfirmRejected, value: 1, set: true},
+	}
+	for _, tt := range confirmTests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			args := map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(456)}
+			if tt.set {
+				args[keyConfirm] = tt.value
+			}
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+			require.NoError(t, err, "handler should not return Go error")
+			require.NotNil(t, result, "handler should return a result")
+			assert.True(t, result.IsError, "result should be a tool error")
+			assertErrorContains(t, result, errConfirmEqualsTrue)
+		})
+	}
+
+	validationTests := []instanceConfigCreateValidationCase{
+		{name: caseMissingLinodeID, args: map[string]any{keyConfigID: float64(789), keyInterfaceID: float64(456), keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: pathSeparatorValue, keyConfigID: float64(789), keyInterfaceID: float64(456), keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfigID: float64(789), keyInterfaceID: float64(456), keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyConfigID: float64(789), keyInterfaceID: float64(456), keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: caseMissingConfigID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyConfirm: true}, wantContains: errConfigIDPositive},
+		{name: caseSlashConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathSeparatorValue, keyInterfaceID: float64(456), keyConfirm: true}, wantContains: errConfigIDPositive},
+		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: shareGroupIDQueryValue, keyInterfaceID: float64(456), keyConfirm: true}, wantContains: errConfigIDPositive},
+		{name: caseTraversalConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathTraversalValue, keyInterfaceID: float64(456), keyConfirm: true}, wantContains: errConfigIDPositive},
+		{name: caseMissingInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyConfirm: true}, wantContains: errInterfaceIDPositive},
+		{name: caseSlashInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: pathSeparatorValue, keyConfirm: true}, wantContains: errInterfaceIDPositive},
+		{name: caseQueryInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: shareGroupIDQueryValue, keyConfirm: true}, wantContains: errInterfaceIDPositive},
+		{name: caseTraversalInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: pathTraversalValue, keyConfirm: true}, wantContains: errInterfaceIDPositive},
+	}
+	for _, tt := range validationTests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
+			require.NoError(t, err, "handler should not return Go error")
+			require.NotNil(t, result, "handler should return a result")
+			assert.True(t, result.IsError, "result should be a tool error")
+			assertErrorContains(t, result, tt.wantContains)
+		})
+	}
+
+	t.Run("successful deletion", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/linode/instances/123/configs/789/interfaces/456", r.URL.Path, "request path should match")
+			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query params")
+			w.Header().Set("Content-Type", "application/json")
+			_, writeErr := w.Write([]byte(`{}`))
+			assert.NoError(t, writeErr, "writing empty response should not fail")
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeInstanceConfigInterfaceDeleteTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(456), keyConfirm: true})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.False(t, result.IsError, "result should not be a tool error")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "removed", "response should report interface removal")
+	})
+
+	t.Run("client error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/linode/instances/123/configs/789/interfaces/456", r.URL.Path, "request path should match")
+			http.Error(w, `{"errors":[{"reason":"temporary failure"}]}`, http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeInstanceConfigInterfaceDeleteTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(456), keyConfirm: true})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "Failed to remove configuration profile interface")
 	})
 }
 
@@ -816,10 +951,10 @@ func TestLinodeInstanceConfigInterfaceUpdateTool(t *testing.T) {
 		{name: caseSlashConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: paymentMethodIDSlash, keyInterfaceID: float64(101), keyInterface: interfacePrimaryJSON, keyConfirm: true}, wantContains: errConfigIDPositive},
 		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: shareGroupIDQueryValue, keyInterfaceID: float64(101), keyInterface: interfacePrimaryJSON, keyConfirm: true}, wantContains: errConfigIDPositive},
 		{name: caseTraversalConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathTraversalValue, keyInterfaceID: float64(101), keyInterface: interfacePrimaryJSON, keyConfirm: true}, wantContains: errConfigIDPositive},
-		{name: "missing interface id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterface: interfacePrimaryJSON, keyConfirm: true}, wantContains: errInterfaceIDPositive},
-		{name: "slash interface id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: paymentMethodIDSlash, keyInterface: interfacePrimaryJSON, keyConfirm: true}, wantContains: errInterfaceIDPositive},
-		{name: "query interface id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: shareGroupIDQueryValue, keyInterface: interfacePrimaryJSON, keyConfirm: true}, wantContains: errInterfaceIDPositive},
-		{name: "traversal interface id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: pathTraversalValue, keyInterface: interfacePrimaryJSON, keyConfirm: true}, wantContains: errInterfaceIDPositive},
+		{name: caseMissingInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterface: interfacePrimaryJSON, keyConfirm: true}, wantContains: errInterfaceIDPositive},
+		{name: caseSlashInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: paymentMethodIDSlash, keyInterface: interfacePrimaryJSON, keyConfirm: true}, wantContains: errInterfaceIDPositive},
+		{name: caseQueryInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: shareGroupIDQueryValue, keyInterface: interfacePrimaryJSON, keyConfirm: true}, wantContains: errInterfaceIDPositive},
+		{name: caseTraversalInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: pathTraversalValue, keyInterface: interfacePrimaryJSON, keyConfirm: true}, wantContains: errInterfaceIDPositive},
 		{name: "missing interface", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(101), keyConfirm: true}, wantContains: "interface is required"},
 		{name: "non-string interface", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(101), keyInterface: []any{}, keyConfirm: true}, wantContains: "interface must be a string"},
 		{name: "invalid interface", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(101), keyInterface: `{`, keyConfirm: true}, wantContains: errInvalidInterfaceJSON},

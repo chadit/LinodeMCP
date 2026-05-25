@@ -230,6 +230,71 @@ func TestClientGetInstanceConfigInterfaceSendsRequest(t *testing.T) {
 	assert.True(t, got.Active, "interface active flag should match")
 }
 
+func TestClientDeleteInstanceConfigInterfaceSendsRequest(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/linode/instances/123/configs/789/interfaces/456", r.URL.Path, "request path should match")
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query params")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		w.Header().Set("Content-Type", "application/json")
+		_, writeErr := w.Write([]byte(`{}`))
+		assert.NoError(t, writeErr, "writing empty response should not fail")
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	err := client.DeleteInstanceConfigInterface(t.Context(), 123, 789, 456)
+
+	require.NoError(t, err, "DeleteInstanceConfigInterface should succeed")
+}
+
+func TestClientDeleteInstanceConfigInterfaceDoesNotRetryDelete(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		assert.Equal(t, "/linode/instances/123/configs/789/interfaces/456", r.URL.Path, "request path should match")
+		http.Error(w, `{"errors":[{"reason":"temporary failure"}]}`, http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(2))
+	err := client.DeleteInstanceConfigInterface(t.Context(), 123, 789, 456)
+
+	require.Error(t, err, "server failure should be returned")
+	assert.Equal(t, int32(1), attempts.Load(), "DELETE interface removal must not be retried")
+}
+
+func TestClientDeleteInstanceConfigInterfaceRejectsInvalidIDs(t *testing.T) {
+	t.Parallel()
+
+	var called atomic.Bool
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called.Store(true)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	err := client.DeleteInstanceConfigInterface(t.Context(), 0, 789, 456)
+	require.ErrorIs(t, err, linode.ErrLinodeIDPositive, "invalid linode ID should be rejected")
+
+	err = client.DeleteInstanceConfigInterface(t.Context(), 123, 0, 456)
+	require.ErrorIs(t, err, linode.ErrConfigIDPositive, "invalid config ID should be rejected")
+
+	err = client.DeleteInstanceConfigInterface(t.Context(), 123, 789, 0)
+	require.ErrorIs(t, err, linode.ErrInterfaceIDPositive, "zero interface ID should be rejected")
+
+	err = client.DeleteInstanceConfigInterface(t.Context(), 123, 789, -1)
+	require.ErrorIs(t, err, linode.ErrInterfaceIDPositive, "negative interface ID should be rejected")
+	assert.False(t, called.Load(), "invalid IDs should not issue HTTP request")
+}
+
 func TestClientGetInstanceConfigInterfaceRejectsInvalidIDs(t *testing.T) {
 	t.Parallel()
 
