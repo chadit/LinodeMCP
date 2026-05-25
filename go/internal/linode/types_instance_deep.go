@@ -52,6 +52,22 @@ type InstanceDisk struct {
 	Updated    string `json:"updated"`
 }
 
+// InstanceConfig represents a configuration profile for a Linode instance.
+type InstanceConfig struct {
+	ID          int            `json:"id"`
+	Label       string         `json:"label"`
+	Kernel      string         `json:"kernel"`
+	Comments    string         `json:"comments"`
+	MemoryLimit int            `json:"memory_limit"`
+	RootDevice  string         `json:"root_device"`
+	RunLevel    string         `json:"run_level"`
+	VirtMode    string         `json:"virt_mode"`
+	Devices     map[string]any `json:"devices,omitempty"`
+	Helpers     map[string]any `json:"helpers,omitempty"`
+	Created     string         `json:"created"`
+	Updated     string         `json:"updated"`
+}
+
 // CreateDiskRequest represents the request body for creating an instance disk.
 type CreateDiskRequest struct {
 	Label           string   `json:"label"`

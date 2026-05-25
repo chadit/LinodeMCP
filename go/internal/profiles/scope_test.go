@@ -185,7 +185,7 @@ func TestRequiredScopesUnknownToolReturnsNil(t *testing.T) {
 }
 
 // TestRequiredScopesPrefixOrdering confirms that longer prefixes win
-// over shorter ones. The instance backup/disk/IP sub-tools share the
+// over shorter ones. The instance backup/config/disk/IP sub-tools share the
 // linode_instance_ root but live under /linode/instances themselves;
 // they should resolve to linodes:* not to a hypothetical shorter route.
 func TestRequiredScopesPrefixOrdering(t *testing.T) {
@@ -193,6 +193,7 @@ func TestRequiredScopesPrefixOrdering(t *testing.T) {
 
 	cases := []string{
 		"linode_instance_backup_list",
+		"linode_instance_config_list",
 		"linode_instance_disk_create",
 		"linode_instance_ip_allocate",
 		"linode_instance_ip_update_rdns",
