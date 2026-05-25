@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -102,6 +103,119 @@ func handleLinodeInstancesRequest(ctx context.Context, request *mcp.CallToolRequ
 	}
 
 	return formatInstancesResponse(instances, statusFilter)
+}
+
+// NewLinodeInstanceInterfaceAddTool creates a tool for adding an interface to a Linode instance.
+func NewLinodeInstanceInterfaceAddTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_instance_interface_add",
+		"Adds a network interface to a Linode instance. WARNING: This changes instance network configuration.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance")),
+			mcp.WithString("interface", mcp.Required(),
+				mcp.Description("JSON object defining exactly one interface type: public, vpc, or vlan.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm interface creation.")),
+		},
+		handleInstanceInterfaceAddRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleInstanceInterfaceAddRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This adds a network interface to the Linode instance. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	interfaceReq, validationMessage := instanceInterfaceAddRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	createdInterface, err := client.AddInstanceInterface(ctx, linodeID, interfaceReq)
+	if err != nil {
+		return mcp.NewToolResultError(formatAddInstanceInterfaceError(linodeID, err)), nil
+	}
+
+	response := struct {
+		Message   string                    `json:"message"`
+		Interface *linode.InstanceInterface `json:"interface"`
+		LinodeID  int                       `json:"linode_id"`
+	}{
+		Message:   fmt.Sprintf("Interface added to instance %d successfully", linodeID),
+		Interface: createdInterface,
+		LinodeID:  linodeID,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func instanceInterfaceAddRequestFromTool(request *mcp.CallToolRequest) (*linode.AddInstanceInterfaceRequest, string) {
+	interfaceJSON, validationMessage := stringArgument(request, "interface", true)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	var interfaceReq *linode.AddInstanceInterfaceRequest
+	if err := strictDecodeJSON(interfaceJSON, &interfaceReq); err != nil {
+		return nil, fmt.Sprintf("invalid interface JSON: %v", err)
+	}
+
+	if interfaceReq == nil {
+		return nil, interfaceJSONObjRequired
+	}
+
+	if validationMessage := validateInstanceInterfaceAddRequest(interfaceReq); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	return interfaceReq, ""
+}
+
+func validateInstanceInterfaceAddRequest(req *linode.AddInstanceInterfaceRequest) string {
+	var typeCount int
+	if req.Public != nil {
+		typeCount++
+	}
+
+	if req.VPC != nil {
+		typeCount++
+
+		if req.VPC.SubnetID <= 0 {
+			return "interface.vpc.subnet_id must be a positive integer"
+		}
+	}
+
+	if req.VLAN != nil {
+		typeCount++
+
+		if strings.TrimSpace(req.VLAN.Label) == "" {
+			return "interface.vlan.vlan_label is required"
+		}
+	}
+
+	if typeCount != 1 {
+		return "interface must define exactly one of public, vpc, or vlan"
+	}
+
+	return ""
+}
+
+func formatAddInstanceInterfaceError(linodeID int, err error) string {
+	return "Failed to add interface to instance " + strconv.Itoa(linodeID) + ": " + err.Error()
 }
 
 // NewLinodeInstanceInterfacesListTool creates a tool for listing interfaces assigned to a Linode instance.

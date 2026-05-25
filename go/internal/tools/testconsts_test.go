@@ -23,6 +23,13 @@ const (
 	errInvalidDevicesJSON    = "invalid devices JSON"
 	errConfigIDPositive      = "config_id must be a positive integer"
 	errInvalidInterfaceJSON  = "invalid interface JSON"
+	errInterfaceRequired     = "interface is required"
+	errInterfaceString       = "interface must be a string"
+	errInterfaceJSONObject   = "interface must be a JSON object"
+	caseInvalidInterface     = "invalid interface"
+	caseMissingInterface     = "missing interface"
+	caseNonStringInterface   = "non-string interface"
+	caseNullInterface        = "null interface"
 	interfacePrimaryJSON     = `{"primary":true}`
 	memberLabelFixture       = "Engineering"
 	memberTokenFixture       = "member-token"

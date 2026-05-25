@@ -45,6 +45,47 @@ type InstanceInterface struct {
 	Version      int                    `json:"version,omitempty"`
 }
 
+// AddInstanceInterfaceRequest represents the request body for adding a Linode
+// interface to an existing instance. Exactly one of Public, VPC, or VLAN should
+// be set.
+type AddInstanceInterfaceRequest struct {
+	Public       *InterfacePublicConfig         `json:"public,omitempty"`
+	VPC          *AddInstanceInterfaceVPCConfig `json:"vpc,omitempty"`
+	VLAN         *InterfaceVLANConfig           `json:"vlan,omitempty"`
+	DefaultRoute *AddInterfaceDefaultRoute      `json:"default_route,omitempty"`
+	FirewallID   *int                           `json:"firewall_id,omitempty"`
+}
+
+// AddInstanceInterfaceVPCConfig holds VPC settings for a new Linode interface.
+type AddInstanceInterfaceVPCConfig struct {
+	SubnetID int                       `json:"subnet_id"`
+	IPv4     *AddInstanceInterfaceIPv4 `json:"ipv4,omitempty"`
+}
+
+// AddInstanceInterfaceIPv4 holds IPv4 settings for a new VPC interface.
+type AddInstanceInterfaceIPv4 struct {
+	Addresses []AddInterfaceIPv4Address `json:"addresses,omitempty"`
+	Ranges    []InterfaceIPv4Range      `json:"ranges,omitempty"`
+}
+
+// AddInterfaceIPv4Address represents an IPv4 address assignment for a new interface.
+type AddInterfaceIPv4Address struct {
+	Address      string  `json:"address"`
+	NAT11Address *string `json:"nat_1_1_address,omitempty"`
+	Primary      *bool   `json:"primary,omitempty"`
+}
+
+// InterfaceIPv4Range represents an IPv4 range on an interface.
+type InterfaceIPv4Range struct {
+	Range string `json:"range"`
+}
+
+// AddInterfaceDefaultRoute controls default-route assignment for a new interface.
+type AddInterfaceDefaultRoute struct {
+	IPv4 *bool `json:"ipv4,omitempty"`
+	IPv6 *bool `json:"ipv6,omitempty"`
+}
+
 // InterfacePublicConfig holds public-interface configuration. Sub-fields are
 // derived from BIMHelperScripts reference; live-response field discovery is
 // deferred per the linode-interfaces-fix spec.
