@@ -365,7 +365,7 @@ func TestLinodeInstanceConfigInterfacesListTool(t *testing.T) {
 		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfigID: "456"}, wantContains: errLinodeIDInteger},
 		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyConfigID: "456"}, wantContains: errLinodeIDInteger},
 		{name: caseSlashConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathSeparatorValue}, wantContains: errConfigIDInteger},
-		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: "456?query"}, wantContains: errConfigIDInteger},
+		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: configIDQueryValue}, wantContains: errConfigIDInteger},
 		{name: caseTraversalConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathTraversalValue}, wantContains: errConfigIDInteger},
 		{name: "negative config id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(-456)}, wantContains: errConfigIDMin},
 	}
@@ -544,7 +544,7 @@ func TestLinodeInstanceConfigGetTool(t *testing.T) {
 		{name: "malformed linode id", args: map[string]any{keyLinodeID: "123/../?bad=1", keyConfigID: "456"}, wantContains: errLinodeIDInteger},
 		{name: caseNegativeLinodeID, args: map[string]any{keyLinodeID: float64(-123), keyConfigID: "456"}, wantContains: errLinodeIDInteger},
 		{name: caseSlashConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: "456/789"}, wantContains: errConfigIDInteger},
-		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: "456?query"}, wantContains: errConfigIDInteger},
+		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: configIDQueryValue}, wantContains: errConfigIDInteger},
 		{name: caseTraversalConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathTraversalValue}, wantContains: errConfigIDInteger},
 		{name: "negative config id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(-456)}, wantContains: errConfigIDMin},
 	}

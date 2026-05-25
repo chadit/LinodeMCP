@@ -276,6 +276,33 @@ func (c *Client) httpUpdateInstanceInterface(ctx context.Context, linodeID, inte
 	return &instanceInterface, nil
 }
 
+// DeleteInstanceInterface deletes an interface from a Linode instance.
+func (c *Client) httpDeleteInstanceInterface(ctx context.Context, linodeID, interfaceID int) error {
+	if linodeID <= 0 {
+		return ErrLinodeIDPositive
+	}
+
+	if interfaceID <= 0 {
+		return ErrInterfaceIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	encodedInterfaceID := url.PathEscape(strconv.Itoa(interfaceID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/interfaces/%s", encodedLinodeID, encodedInterfaceID)
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteInstanceInterface", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return c.handleResponse(resp, nil)
+}
+
 // GetInstanceConfigInterface retrieves a specific network interface from a configuration profile.
 func (c *Client) httpGetInstanceConfigInterface(ctx context.Context, linodeID, configID, interfaceID int) (*ConfigInterfaceResponse, error) {
 	if err := validateInstanceConfigInterfaceIDs(linodeID, configID, interfaceID); err != nil {

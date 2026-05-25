@@ -49,7 +49,7 @@ func TestLinodeInstanceInterfaceGetTool(t *testing.T) {
 		{name: caseSlashInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: pathSeparatorValue}, wantContains: errInterfaceIDInteger},
 		{name: caseQueryInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: shareGroupIDQueryValue}, wantContains: errInterfaceIDInteger},
 		{name: caseTraversalInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: pathTraversalValue}, wantContains: errInterfaceIDInteger},
-		{name: caseNegativeInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(-1)}, wantContains: "interface_id must be an integer greater than or equal to 1"},
+		{name: caseNegativeInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(-1)}, wantContains: errInterfaceIDMinOne},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -226,5 +226,137 @@ func TestLinodeInstanceInterfacesListTool(t *testing.T) {
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
 		assertErrorContains(t, result, "Failed to list interfaces for instance 123")
+	})
+}
+
+func TestLinodeInstanceInterfaceDeleteTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	tool, capability, handler := tools.NewLinodeInstanceInterfaceDeleteTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+		assert.Equal(t, "linode_instance_interface_delete", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Equal(t, profiles.CapDestroy, capability, "tool should be destroy capability")
+		require.NotNil(t, handler, "handler should not be nil")
+		assert.Contains(t, tool.Description, "WARNING", "tool description should contain WARNING")
+		assert.Contains(t, tool.InputSchema.Properties, keyLinodeID, "schema should include linode_id")
+		assert.Contains(t, tool.InputSchema.Properties, keyInterfaceID, "schema should include interface_id")
+		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "schema should include confirm")
+		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be required")
+	})
+
+	confirmTests := []struct {
+		name  string
+		value any
+		set   bool
+	}{
+		{name: caseMissingConfirm, set: false},
+		{name: caseRequiresConfirm, value: false, set: true},
+		{name: caseStringConfirmRejected, value: boolStringTrue, set: true},
+		{name: caseNumericConfirmRejected, value: 1, set: true},
+	}
+	for _, tt := range confirmTests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			args := map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456)}
+			if tt.set {
+				args[keyConfirm] = tt.value
+			}
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+
+			require.NoError(t, err, "handler should not return Go error")
+			require.NotNil(t, result, "handler should return a result")
+			assert.True(t, result.IsError, "result should be a tool error")
+			assertErrorContains(t, result, errConfirmEqualsTrue)
+		})
+	}
+
+	validationTests := []struct {
+		name string
+		args map[string]any
+		want string
+	}{
+		{name: caseMissingLinodeID, args: map[string]any{keyInterfaceID: float64(456), keyConfirm: true}, want: errLinodeIDRequired},
+		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: pathSeparatorValue, keyInterfaceID: float64(456), keyConfirm: true}, want: errLinodeIDInteger},
+		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyInterfaceID: float64(456), keyConfirm: true}, want: errLinodeIDInteger},
+		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyInterfaceID: float64(456), keyConfirm: true}, want: errLinodeIDInteger},
+		{name: caseMissingInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfirm: true}, want: tools.ErrInterfaceIDRequired.Error()},
+		{name: caseSlashInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: pathSeparatorValue, keyConfirm: true}, want: errInterfaceIDInteger},
+		{name: caseQueryInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: interfaceIDQueryValue, keyConfirm: true}, want: errInterfaceIDInteger},
+		{name: caseTraversalInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: pathTraversalValue, keyConfirm: true}, want: errInterfaceIDInteger},
+		{name: caseNegativeInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(-1), keyConfirm: true}, want: errInterfaceIDMinOne},
+		{name: caseZeroInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(0), keyConfirm: true}, want: errInterfaceIDMinOne},
+	}
+	for _, tt := range validationTests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
+
+			require.NoError(t, err, "handler should not return Go error")
+			require.NotNil(t, result, "handler should return a result")
+			assert.True(t, result.IsError, "result should be a tool error")
+			assertErrorContains(t, result, tt.want)
+		})
+	}
+
+	t.Run("successful deletion", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			assert.Equal(t, "/linode/instances/123/interfaces/456", r.URL.Path, "request path should match")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(srv.Close)
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeInstanceInterfaceDeleteTool(srvCfg)
+
+		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyConfirm: true}))
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.False(t, result.IsError, "result should not be a tool error")
+		assertErrorContains(t, result, "deleted")
+	})
+
+	t.Run("client error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: errForbidden}},
+			}), "encoding error response should not fail")
+		}))
+		t.Cleanup(srv.Close)
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeInstanceInterfaceDeleteTool(srvCfg)
+
+		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyConfirm: true}))
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "Failed to delete interface 456 from instance 123")
 	})
 }
