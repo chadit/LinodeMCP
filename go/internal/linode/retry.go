@@ -2973,6 +2973,21 @@ func (c *Client) ListInstanceInterfaces(ctx context.Context, linodeID int) ([]In
 	return interfaces, err
 }
 
+// ListInstanceInterfaceHistory retrieves Linode interface history with automatic retry on transient failures.
+func (c *Client) ListInstanceInterfaceHistory(ctx context.Context, linodeID, page, pageSize int) (*PaginatedResponse[InstanceInterfaceHistory], error) {
+	var history *PaginatedResponse[InstanceInterfaceHistory]
+
+	err := c.executeWithRetry(ctx, "ListInstanceInterfaceHistory", func() error {
+		var retryErr error
+
+		history, retryErr = c.httpListInstanceInterfaceHistory(ctx, linodeID, page, pageSize)
+
+		return retryErr
+	})
+
+	return history, err
+}
+
 // AddInstanceInterface creates an interface without retrying the POST create call.
 func (c *Client) AddInstanceInterface(ctx context.Context, linodeID int, req *AddInstanceInterfaceRequest) (*InstanceInterface, error) {
 	var instanceInterface *InstanceInterface

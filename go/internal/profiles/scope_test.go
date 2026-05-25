@@ -193,6 +193,7 @@ func TestRequiredScopesPrefixOrdering(t *testing.T) {
 
 	cases := []string{
 		"linode_instance_backup_list",
+		"linode_instance_interface_history_list",
 		toolLinodeInstanceConfigList,
 		"linode_instance_config_interfaces_list",
 		"linode_instance_config_interface_get",
