@@ -26,6 +26,8 @@ const (
 	accountBetasPageSizeMax            = 500
 	accountOAuthClientsPageSizeMin     = 25
 	accountOAuthClientsPageSizeMax     = 500
+	longviewClientsPageSizeMin         = 25
+	longviewClientsPageSizeMax         = 500
 	accountPaymentMethodsPageSizeMin   = 25
 	accountPaymentMethodsPageSizeMax   = 500
 	accountMaintenancePageSizeMin      = 25
@@ -521,6 +523,22 @@ func NewLinodeAccountOAuthClientsTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
 		},
 		handleLinodeAccountOAuthClientsRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeLongviewClientsTool creates a tool for listing Longview clients.
+func NewLinodeLongviewClientsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_longview_clients",
+		"Lists Longview clients configured for the account.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		},
+		handleLinodeLongviewClientsRequest,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -1244,6 +1262,41 @@ func accountOAuthClientsPaginationFromTool(request *mcp.CallToolRequest) (int, i
 	}
 
 	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountOAuthClientsPageSizeMin, accountOAuthClientsPageSizeMax)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	return page, pageSize, ""
+}
+
+func handleLinodeLongviewClientsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	page, pageSize, validationMessage := longviewClientsPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	clients, listFailure := client.ListLongviewClients(ctx, page, pageSize)
+	if listFailure == nil {
+		return MarshalToolResponse(clients)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_longview_clients: " + listFailure.Error()), nil
+}
+
+func longviewClientsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
+	args := request.GetArguments()
+
+	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	pageSize, validationMessage := optionalPaginationInt(args, "page_size", longviewClientsPageSizeMin, longviewClientsPageSizeMax)
 	if validationMessage != "" {
 		return 0, 0, validationMessage
 	}
