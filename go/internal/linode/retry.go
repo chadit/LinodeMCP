@@ -2832,6 +2832,21 @@ func (c *Client) CancelInstanceBackups(ctx context.Context, linodeID int) error 
 	})
 }
 
+// CreateInstanceConfig creates a configuration profile without retrying the POST create call.
+func (c *Client) CreateInstanceConfig(ctx context.Context, linodeID int, req *CreateConfigRequest) (*InstanceConfig, error) {
+	var config *InstanceConfig
+
+	err := c.executeWithoutRetry(ctx, "CreateInstanceConfig", func() error {
+		var retryErr error
+
+		config, retryErr = c.httpCreateInstanceConfig(ctx, linodeID, req)
+
+		return retryErr
+	})
+
+	return config, err
+}
+
 // ListInstanceDisks retrieves all disks for an instance with automatic retry on transient failures.
 func (c *Client) ListInstanceDisks(ctx context.Context, linodeID int) ([]InstanceDisk, error) {
 	var disks []InstanceDisk
@@ -3067,6 +3082,37 @@ func (c *Client) UpdateProfile(ctx context.Context, req *UpdateProfileRequest) (
 	})
 
 	return profile, err
+}
+
+func (c *Client) executeWithoutRetry(ctx context.Context, operation string, run func() error) error {
+	if err := c.circuit.Allow(); err != nil {
+		return fmt.Errorf("%s: %w", operation, err)
+	}
+
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context canceled: %w", err)
+	}
+
+	err := run()
+	if err == nil {
+		c.circuit.RecordSuccess()
+
+		return nil
+	}
+
+	if c.shouldRecordCircuitFailure(err) {
+		c.circuit.RecordFailure()
+	}
+
+	return err
+}
+
+func (*Client) shouldRecordCircuitFailure(err error) bool {
+	if apiErr, ok := errors.AsType[*APIError](err); ok {
+		return apiErr.IsRateLimitError() || apiErr.IsServerError()
+	}
+
+	return isNetworkError(err) || isTimeoutError(err)
 }
 
 func (c *Client) executeWithRetry(ctx context.Context, operation string, retryFunc func() error) error {

@@ -41,6 +41,69 @@ type RestoreBackupRequest struct {
 	Overwrite bool `json:"overwrite"`
 }
 
+// InstanceConfig represents a Linode configuration profile.
+type InstanceConfig struct {
+	ID          int                      `json:"id"`
+	Label       string                   `json:"label"`
+	Kernel      string                   `json:"kernel,omitempty"`
+	Comments    string                   `json:"comments,omitempty"`
+	MemoryLimit int                      `json:"memory_limit,omitempty"`
+	RootDevice  string                   `json:"root_device,omitempty"`
+	RunLevel    string                   `json:"run_level,omitempty"`
+	VirtMode    string                   `json:"virt_mode,omitempty"`
+	Devices     map[string]*ConfigDevice `json:"devices,omitempty"`
+	Helpers     *ConfigHelpers           `json:"helpers,omitempty"`
+	Interfaces  []ConfigInterface        `json:"interfaces,omitempty"`
+	Created     string                   `json:"created,omitempty"`
+	Updated     string                   `json:"updated,omitempty"`
+}
+
+// ConfigDevice assigns a disk or volume to a configuration device slot.
+type ConfigDevice struct {
+	DiskID   *int `json:"disk_id,omitempty"`
+	VolumeID *int `json:"volume_id,omitempty"`
+}
+
+// ConfigHelpers contains boot helper settings for a configuration profile.
+type ConfigHelpers struct {
+	DevtmpfsAutomount *bool `json:"devtmpfs_automount,omitempty"`
+	Distro            *bool `json:"distro,omitempty"`
+	ModulesDep        *bool `json:"modules_dep,omitempty"`
+	Network           *bool `json:"network,omitempty"`
+	UpdatedbDisabled  *bool `json:"updatedb_disabled,omitempty"`
+}
+
+// ConfigInterface represents a legacy network interface in a configuration profile.
+type ConfigInterface struct {
+	Purpose     string               `json:"purpose"`
+	Label       *string              `json:"label,omitempty"`
+	IPAMAddress *string              `json:"ipam_address,omitempty"`
+	Primary     *bool                `json:"primary,omitempty"`
+	SubnetID    *int                 `json:"subnet_id,omitempty"`
+	IPv4        *ConfigInterfaceIPv4 `json:"ipv4,omitempty"`
+	IPRanges    []string             `json:"ip_ranges,omitempty"`
+}
+
+// ConfigInterfaceIPv4 contains IPv4 settings for a configuration interface.
+type ConfigInterfaceIPv4 struct {
+	NAT1To1 *string `json:"nat_1_1,omitempty"`
+	VPC     *string `json:"vpc,omitempty"`
+}
+
+// CreateConfigRequest represents the request body for creating an instance configuration profile.
+type CreateConfigRequest struct {
+	Label       string                   `json:"label"`
+	Devices     map[string]*ConfigDevice `json:"devices"`
+	Kernel      string                   `json:"kernel,omitempty"`
+	Comments    string                   `json:"comments,omitempty"`
+	MemoryLimit int                      `json:"memory_limit,omitempty"`
+	RootDevice  string                   `json:"root_device,omitempty"`
+	RunLevel    string                   `json:"run_level,omitempty"`
+	VirtMode    string                   `json:"virt_mode,omitempty"`
+	Helpers     *ConfigHelpers           `json:"helpers,omitempty"`
+	Interfaces  []ConfigInterface        `json:"interfaces,omitempty"`
+}
+
 // InstanceDisk represents a disk attached to a Linode instance.
 type InstanceDisk struct {
 	ID         int    `json:"id"`
@@ -50,22 +113,6 @@ type InstanceDisk struct {
 	Filesystem string `json:"filesystem"`
 	Created    string `json:"created"`
 	Updated    string `json:"updated"`
-}
-
-// InstanceConfig represents a configuration profile for a Linode instance.
-type InstanceConfig struct {
-	ID          int            `json:"id"`
-	Label       string         `json:"label"`
-	Kernel      string         `json:"kernel"`
-	Comments    string         `json:"comments"`
-	MemoryLimit int            `json:"memory_limit"`
-	RootDevice  string         `json:"root_device"`
-	RunLevel    string         `json:"run_level"`
-	VirtMode    string         `json:"virt_mode"`
-	Devices     map[string]any `json:"devices,omitempty"`
-	Helpers     map[string]any `json:"helpers,omitempty"`
-	Created     string         `json:"created"`
-	Updated     string         `json:"updated"`
 }
 
 // CreateDiskRequest represents the request body for creating an instance disk.

@@ -1,8 +1,13 @@
 package tools
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"math"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -94,4 +99,372 @@ func instanceConfigsPaginationFromTool(request *mcp.CallToolRequest) (int, int, 
 	}
 
 	return page, pageSize, ""
+}
+
+// NewLinodeInstanceConfigCreateTool creates a tool for creating a Linode configuration profile.
+func NewLinodeInstanceConfigCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_instance_config_create",
+		"Creates a configuration profile on a Linode instance. WARNING: This changes instance boot configuration.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance")),
+			mcp.WithString("label", mcp.Required(),
+				mcp.Description("Label for the configuration profile")),
+			mcp.WithString("devices", mcp.Required(),
+				mcp.Description("JSON object mapping device slots to disk/volume IDs, e.g. {\"sda\":{\"disk_id\":123}}")),
+			mcp.WithString("kernel",
+				mcp.Description("Kernel ID to boot, e.g. linode/latest-64bit")),
+			mcp.WithString("comments",
+				mcp.Description("Optional comments for the configuration profile")),
+			mcp.WithNumber("memory_limit",
+				mcp.Description("Optional memory limit in MB")),
+			mcp.WithString("root_device",
+				mcp.Description("Root device to boot, e.g. /dev/sda")),
+			mcp.WithString("run_level",
+				mcp.Description("Run level: default, single, or binbash")),
+			mcp.WithString("virt_mode",
+				mcp.Description("Virtualization mode: paravirt or fullvirt")),
+			mcp.WithString("helpers",
+				mcp.Description("Optional helpers JSON object")),
+			mcp.WithString("interfaces",
+				mcp.Description("Optional interfaces JSON array")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm configuration profile creation.")),
+		},
+		handleInstanceConfigCreateRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleInstanceConfigCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This creates a configuration profile on the instance. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	linodeID, ok := getPositiveIntArgument(request, "linode_id")
+	if !ok {
+		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
+	}
+
+	createReq, errText := buildCreateConfigRequest(request)
+	if errText != "" {
+		return mcp.NewToolResultError(errText), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	createdConfig, err := client.CreateInstanceConfig(ctx, linodeID, &createReq)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to create configuration profile for instance %d: %v", linodeID, err)), nil
+	}
+
+	response := struct {
+		Message  string                 `json:"message"`
+		Config   *linode.InstanceConfig `json:"config"`
+		LinodeID int                    `json:"linode_id"`
+	}{
+		Message:  fmt.Sprintf("Configuration profile '%s' (ID: %d) created on instance %d", createdConfig.Label, createdConfig.ID, linodeID),
+		Config:   createdConfig,
+		LinodeID: linodeID,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func getPositiveIntArgument(request *mcp.CallToolRequest, name string) (int, bool) {
+	args, argumentsOK := request.Params.Arguments.(map[string]any)
+	if !argumentsOK {
+		return 0, false
+	}
+
+	raw, argumentFound := args[name]
+	if !argumentFound {
+		return 0, false
+	}
+
+	switch value := raw.(type) {
+	case int:
+		return value, value > 0
+	case int64:
+		if value <= 0 || value > math.MaxInt {
+			return 0, false
+		}
+
+		return int(value), true
+	case float64:
+		if value <= 0 || math.Trunc(value) != value || value > float64(math.MaxInt) {
+			return 0, false
+		}
+
+		return int(value), true
+	default:
+		return 0, false
+	}
+}
+
+func buildCreateConfigRequest(request *mcp.CallToolRequest) (linode.CreateConfigRequest, string) {
+	label, errText := stringArgument(request, "label", true)
+	if errText != "" {
+		return linode.CreateConfigRequest{}, errText
+	}
+
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return linode.CreateConfigRequest{}, "label is required"
+	}
+
+	devicesJSON, errText := stringArgument(request, "devices", true)
+	if errText != "" {
+		return linode.CreateConfigRequest{}, errText
+	}
+
+	devices, errText := parseConfigDevices(devicesJSON)
+	if errText != "" {
+		return linode.CreateConfigRequest{}, errText
+	}
+
+	req := linode.CreateConfigRequest{Label: label, Devices: devices}
+	if errText := applyConfigStringOptions(request, &req); errText != "" {
+		return linode.CreateConfigRequest{}, errText
+	}
+
+	if errText := applyConfigJSONOptions(request, &req); errText != "" {
+		return linode.CreateConfigRequest{}, errText
+	}
+
+	return req, ""
+}
+
+func stringArgument(request *mcp.CallToolRequest, name string, required bool) (string, string) {
+	args := request.GetArguments()
+
+	raw, exists := args[name]
+	if !exists {
+		if required {
+			return "", name + " is required"
+		}
+
+		return "", ""
+	}
+
+	value, ok := raw.(string)
+	if !ok {
+		return "", name + " must be a string"
+	}
+
+	return value, ""
+}
+
+func parseConfigDevices(devicesJSON string) (map[string]*linode.ConfigDevice, string) {
+	if devicesJSON == "" {
+		return nil, "devices is required"
+	}
+
+	var devices map[string]*linode.ConfigDevice
+	if err := strictDecodeJSON(devicesJSON, &devices); err != nil {
+		return nil, fmt.Sprintf("invalid devices JSON: %v", err)
+	}
+
+	if devices == nil {
+		return nil, "devices must be a JSON object"
+	}
+
+	if len(devices) == 0 {
+		return nil, "devices must include at least one device slot"
+	}
+
+	for slot, device := range devices {
+		if !validConfigDeviceSlot(slot) {
+			return nil, fmt.Sprintf("device slot %s must be one of sda through sdh", slot)
+		}
+
+		if device == nil {
+			return nil, fmt.Sprintf("device %s must be an object", slot)
+		}
+
+		if device.DiskID == nil && device.VolumeID == nil {
+			return nil, fmt.Sprintf("device %s requires disk_id or volume_id", slot)
+		}
+
+		if device.DiskID != nil && *device.DiskID <= 0 {
+			return nil, fmt.Sprintf("device %s disk_id must be greater than 0", slot)
+		}
+
+		if device.VolumeID != nil && *device.VolumeID <= 0 {
+			return nil, fmt.Sprintf("device %s volume_id must be greater than 0", slot)
+		}
+
+		if device.DiskID != nil && device.VolumeID != nil {
+			return nil, fmt.Sprintf("device %s can use disk_id or volume_id, not both", slot)
+		}
+	}
+
+	return devices, ""
+}
+
+func validConfigDeviceSlot(slot string) bool {
+	switch slot {
+	case "sda", "sdb", "sdc", "sdd", "sde", "sdf", "sdg", "sdh":
+		return true
+	default:
+		return false
+	}
+}
+
+func applyConfigStringOptions(request *mcp.CallToolRequest, req *linode.CreateConfigRequest) string {
+	kernel, validationMessage := stringArgument(request, "kernel", false)
+	if validationMessage != "" {
+		return validationMessage
+	}
+
+	if kernel != "" {
+		req.Kernel = kernel
+	}
+
+	comments, validationMessage := stringArgument(request, "comments", false)
+	if validationMessage != "" {
+		return validationMessage
+	}
+
+	if comments != "" {
+		req.Comments = comments
+	}
+
+	args := request.GetArguments()
+
+	memoryLimit, validationMessage := optionalPaginationInt(args, "memory_limit", 1, 0)
+	if validationMessage != "" {
+		return validationMessage
+	}
+
+	if memoryLimit != 0 {
+		req.MemoryLimit = memoryLimit
+	}
+
+	rootDevice, validationMessage := stringArgument(request, "root_device", false)
+	if validationMessage != "" {
+		return validationMessage
+	}
+
+	if rootDevice != "" {
+		req.RootDevice = rootDevice
+	}
+
+	runLevel, validationMessage := stringArgument(request, "run_level", false)
+	if validationMessage != "" {
+		return validationMessage
+	}
+
+	if runLevel != "" {
+		if runLevel != "default" && runLevel != "single" && runLevel != "binbash" {
+			return "run_level must be default, single, or binbash"
+		}
+
+		req.RunLevel = runLevel
+	}
+
+	virtMode, validationMessage := stringArgument(request, "virt_mode", false)
+	if validationMessage != "" {
+		return validationMessage
+	}
+
+	if virtMode != "" {
+		if virtMode != "paravirt" && virtMode != "fullvirt" {
+			return "virt_mode must be paravirt or fullvirt"
+		}
+
+		req.VirtMode = virtMode
+	}
+
+	return ""
+}
+
+func applyConfigJSONOptions(request *mcp.CallToolRequest, req *linode.CreateConfigRequest) string {
+	helpersJSON, validationMessage := stringArgument(request, "helpers", false)
+	if validationMessage != "" {
+		return validationMessage
+	}
+
+	if helpersJSON != "" {
+		var helpers *linode.ConfigHelpers
+		if err := strictDecodeJSON(helpersJSON, &helpers); err != nil {
+			return fmt.Sprintf("invalid helpers JSON: %v", err)
+		}
+
+		if helpers == nil {
+			return "helpers must be a JSON object"
+		}
+
+		req.Helpers = helpers
+	}
+
+	interfacesJSON, validationMessage := stringArgument(request, "interfaces", false)
+	if validationMessage != "" {
+		return validationMessage
+	}
+
+	if interfacesJSON != "" {
+		interfaces, errText := parseConfigInterfaces(interfacesJSON)
+		if errText != "" {
+			return errText
+		}
+
+		req.Interfaces = interfaces
+	}
+
+	return ""
+}
+
+func strictDecodeJSON(input string, target any) error {
+	decoder := json.NewDecoder(bytes.NewReader([]byte(input)))
+	decoder.DisallowUnknownFields()
+
+	if err := decoder.Decode(target); err != nil {
+		return fmt.Errorf("decode JSON: %w", err)
+	}
+
+	var trailing struct{}
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err != nil {
+			return fmt.Errorf("decode trailing JSON: %w", err)
+		}
+
+		return errUnexpectedTrailingJSON
+	}
+
+	return nil
+}
+
+func parseConfigInterfaces(interfacesJSON string) ([]linode.ConfigInterface, string) {
+	var interfaces *[]linode.ConfigInterface
+	if err := strictDecodeJSON(interfacesJSON, &interfaces); err != nil {
+		return nil, fmt.Sprintf("invalid interfaces JSON: %v", err)
+	}
+
+	if interfaces == nil {
+		return nil, "interfaces must be a JSON array"
+	}
+
+	for index, iface := range *interfaces {
+		if !validConfigInterfacePurpose(iface.Purpose) {
+			return nil, fmt.Sprintf("interfaces[%d].purpose must be public, vlan, or vpc", index)
+		}
+	}
+
+	return *interfaces, ""
+}
+
+func validConfigInterfacePurpose(purpose string) bool {
+	switch purpose {
+	case "public", "vlan", "vpc":
+		return true
+	default:
+		return false
+	}
 }

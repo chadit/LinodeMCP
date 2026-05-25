@@ -10,6 +10,7 @@ var (
 	ErrInvalidInstanceID      = errors.New("instance_id must be a valid integer")
 	ErrLinodeIDRequired       = errors.New("linode_id is required")
 	ErrLinodeIDInvalid        = errors.New("linode_id must be a valid integer")
+	errUnexpectedTrailingJSON = errors.New("unexpected trailing JSON")
 	ErrBackupIDRequired       = errors.New("backup_id is required")
 	ErrBackupIDInvalid        = errors.New("backup_id must be a valid integer")
 	ErrDiskIDRequired         = errors.New("disk_id is required")
