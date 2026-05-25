@@ -556,6 +556,33 @@ func (c *Client) httpListInstanceConfigs(ctx context.Context, linodeID, page, pa
 	return response.Data, nil
 }
 
+// ListInstanceNodeBalancers retrieves NodeBalancers assigned to a Linode instance.
+func (c *Client) httpListInstanceNodeBalancers(ctx context.Context, linodeID int) ([]NodeBalancer, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/nodebalancers", encodedLinodeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListInstanceNodeBalancers", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[NodeBalancer]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
+}
+
 // UpdateInstanceFirewalls replaces firewall assignments for a Linode instance.
 func (c *Client) httpUpdateInstanceFirewalls(ctx context.Context, linodeID, page, pageSize int, req *UpdateInstanceFirewallsRequest) ([]Firewall, error) {
 	if linodeID <= 0 {
