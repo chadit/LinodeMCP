@@ -2877,6 +2877,21 @@ func (c *Client) AddInstanceConfigInterface(ctx context.Context, linodeID, confi
 	return configInterface, err
 }
 
+// UpdateInstanceConfigInterface updates an interface without retrying the PUT update call.
+func (c *Client) UpdateInstanceConfigInterface(ctx context.Context, linodeID, configID, interfaceID int, req *UpdateConfigInterfaceRequest) (*ConfigInterfaceResponse, error) {
+	var configInterface *ConfigInterfaceResponse
+
+	err := c.executeWithoutRetry(ctx, "UpdateInstanceConfigInterface", func() error {
+		var retryErr error
+
+		configInterface, retryErr = c.httpUpdateInstanceConfigInterface(ctx, linodeID, configID, interfaceID, req)
+
+		return retryErr
+	})
+
+	return configInterface, err
+}
+
 // ReorderInstanceConfigInterfaces reorders configuration interfaces without retrying the POST reorder call.
 func (c *Client) ReorderInstanceConfigInterfaces(ctx context.Context, linodeID, configID int, req *ReorderConfigInterfacesRequest) error {
 	return c.executeWithoutRetry(ctx, "ReorderInstanceConfigInterfaces", func() error {

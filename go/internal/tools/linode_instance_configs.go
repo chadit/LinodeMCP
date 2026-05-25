@@ -19,9 +19,11 @@ import (
 )
 
 const (
-	instanceConfigsPageSizeMin = 25
-	instanceConfigsPageSizeMax = 500
-	configUpdateNoFields       = "at least one configuration field must be provided"
+	instanceConfigsPageSizeMin    = 25
+	instanceConfigsPageSizeMax    = 500
+	configUpdateNoFields          = "at least one configuration field must be provided"
+	configInterfaceUpdateNoFields = "at least one interface update field must be provided"
+	paramConfigInterfaceID        = "interface_id"
 )
 
 // NewLinodeInstanceConfigListTool creates a tool for listing configuration profiles on a Linode instance.
@@ -452,6 +454,112 @@ func parseConfigInterface(interfaceJSON string) (*linode.ConfigInterface, string
 
 func formatAddConfigInterfaceError(linodeID, configID int, err error) string {
 	return "Failed to add configuration profile interface to config " + strconv.Itoa(configID) + " for instance " + strconv.Itoa(linodeID) + ": " + err.Error()
+}
+
+// NewLinodeInstanceConfigInterfaceUpdateTool creates a tool for updating a configuration profile interface.
+func NewLinodeInstanceConfigInterfaceUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_instance_config_interface_update",
+		"Updates a network interface on a Linode configuration profile. WARNING: This changes instance network configuration and requires a reboot to take effect.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance")),
+			mcp.WithNumber("config_id", mcp.Required(),
+				mcp.Description("The ID of the configuration profile")),
+			mcp.WithNumber(paramConfigInterfaceID, mcp.Required(),
+				mcp.Description("The ID of the configuration profile interface")),
+			mcp.WithString("interface", mcp.Required(),
+				mcp.Description("JSON object with interface update fields: ip_ranges, ipv4, and/or primary.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm configuration profile interface update.")),
+		},
+		handleInstanceConfigInterfaceUpdateRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleInstanceConfigInterfaceUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This updates a network interface on the configuration profile. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	linodeID, linodeIDOK := getPositiveIntArgument(request, "linode_id")
+	if !linodeIDOK {
+		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
+	}
+
+	configID, configIDOK := getPositiveIntArgument(request, "config_id")
+	if !configIDOK {
+		return mcp.NewToolResultError("config_id must be a positive integer"), nil
+	}
+
+	interfaceID, interfaceIDOK := getPositiveIntArgument(request, paramConfigInterfaceID)
+	if !interfaceIDOK {
+		return mcp.NewToolResultError("interface_id must be a positive integer"), nil
+	}
+
+	updateReq, errText := updateConfigInterfaceFromTool(request)
+	if errText != "" {
+		return mcp.NewToolResultError(errText), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	updatedInterface, err := client.UpdateInstanceConfigInterface(ctx, linodeID, configID, interfaceID, updateReq)
+	if err != nil {
+		return mcp.NewToolResultError(formatUpdateConfigInterfaceError(linodeID, configID, interfaceID, err)), nil
+	}
+
+	response := struct {
+		Message     string                          `json:"message"`
+		Interface   *linode.ConfigInterfaceResponse `json:"interface"`
+		LinodeID    int                             `json:"linode_id"`
+		ConfigID    int                             `json:"config_id"`
+		InterfaceID int                             `json:"interface_id"`
+	}{
+		Message:     fmt.Sprintf("Configuration profile interface %d updated on config %d for instance %d", interfaceID, configID, linodeID),
+		Interface:   updatedInterface,
+		LinodeID:    linodeID,
+		ConfigID:    configID,
+		InterfaceID: interfaceID,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func updateConfigInterfaceFromTool(request *mcp.CallToolRequest) (*linode.UpdateConfigInterfaceRequest, string) {
+	interfaceJSON, validationMessage := stringArgument(request, "interface", true)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	return parseUpdateConfigInterface(interfaceJSON)
+}
+
+func parseUpdateConfigInterface(interfaceJSON string) (*linode.UpdateConfigInterfaceRequest, string) {
+	var configInterface *linode.UpdateConfigInterfaceRequest
+	if err := strictDecodeJSON(interfaceJSON, &configInterface); err != nil {
+		return nil, fmt.Sprintf("invalid interface JSON: %v", err)
+	}
+
+	if configInterface == nil {
+		return nil, "interface must be a JSON object"
+	}
+
+	if configInterface.Primary == nil && configInterface.IPv4 == nil && configInterface.IPRanges == nil {
+		return nil, configInterfaceUpdateNoFields
+	}
+
+	return configInterface, ""
+}
+
+func formatUpdateConfigInterfaceError(linodeID, configID, interfaceID int, err error) string {
+	return "Failed to update configuration profile interface " + strconv.Itoa(interfaceID) + " in config " + strconv.Itoa(configID) + " for instance " + strconv.Itoa(linodeID) + ": " + err.Error()
 }
 
 // NewLinodeInstanceConfigInterfacesReorderTool creates a tool for reordering configuration profile interfaces.
