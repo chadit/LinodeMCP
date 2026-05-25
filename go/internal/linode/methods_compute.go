@@ -861,6 +861,28 @@ func (c *Client) httpListStackScripts(ctx context.Context) ([]StackScript, error
 	return response.Data, nil
 }
 
+// GetStackScript retrieves a single StackScript by ID.
+func (c *Client) httpGetStackScript(ctx context.Context, stackScriptID int) (*StackScript, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointStackScripts + "/" + url.PathEscape(strconv.Itoa(stackScriptID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetStackScript", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var script StackScript
+	if err := c.handleResponse(resp, &script); err != nil {
+		return nil, err
+	}
+
+	return &script, nil
+}
+
 // CreateStackScript creates a new StackScript.
 func (c *Client) httpCreateStackScript(ctx context.Context, req *CreateStackScriptRequest) (*StackScript, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
