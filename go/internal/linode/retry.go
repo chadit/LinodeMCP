@@ -2907,6 +2907,13 @@ func (c *Client) GetInstanceConfig(ctx context.Context, linodeID, configID int) 
 	return config, err
 }
 
+// DeleteInstanceConfig deletes a configuration profile without retrying the DELETE call.
+func (c *Client) DeleteInstanceConfig(ctx context.Context, linodeID, configID int) error {
+	return c.executeWithoutRetry(ctx, "DeleteInstanceConfig", func() error {
+		return c.httpDeleteInstanceConfig(ctx, linodeID, configID)
+	})
+}
+
 // GetInstanceDisk retrieves a specific disk with automatic retry on transient failures.
 func (c *Client) GetInstanceDisk(ctx context.Context, linodeID, diskID int) (*InstanceDisk, error) {
 	var disk *InstanceDisk

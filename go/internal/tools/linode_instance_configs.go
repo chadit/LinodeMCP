@@ -42,6 +42,26 @@ func NewLinodeInstanceConfigListTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeInstanceConfigDeleteTool creates a tool for deleting a configuration profile from a Linode instance.
+func NewLinodeInstanceConfigDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_instance_config_delete",
+		"Deletes a configuration profile from a Linode instance. WARNING: This is irreversible.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance")),
+			mcp.WithNumber("config_id", mcp.Required(),
+				mcp.Description("The ID of the configuration profile to delete")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm deletion. This action is irreversible.")),
+		},
+		handleInstanceConfigDeleteRequest,
+	)
+
+	return tool, profiles.CapDestroy, handler
+}
+
 func handleInstanceConfigsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
 	if validationMessage != "" {
@@ -74,6 +94,43 @@ func handleInstanceConfigsListRequest(ctx context.Context, request *mcp.CallTool
 	return MarshalToolResponse(response)
 }
 
+func handleInstanceConfigDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This is irreversible. The configuration profile will be permanently deleted. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	configID, validationMessage := instanceConfigIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := client.DeleteInstanceConfig(ctx, linodeID, configID); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove configuration profile %d from instance %d: %v", configID, linodeID, err)), nil
+	}
+
+	response := struct {
+		Message  string `json:"message"`
+		LinodeID int    `json:"linode_id"`
+		ConfigID int    `json:"config_id"`
+	}{
+		Message:  fmt.Sprintf("Configuration profile %d deleted from instance %d successfully", configID, linodeID),
+		LinodeID: linodeID,
+		ConfigID: configID,
+	}
+
+	return MarshalToolResponse(response)
+}
+
 func instanceConfigLinodeIDFromTool(request *mcp.CallToolRequest) (int, string) {
 	args := request.GetArguments()
 	if _, exists := args["linode_id"]; !exists {
@@ -86,6 +143,20 @@ func instanceConfigLinodeIDFromTool(request *mcp.CallToolRequest) (int, string) 
 	}
 
 	return linodeID, ""
+}
+
+func instanceConfigIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	args := request.GetArguments()
+	if _, exists := args["config_id"]; !exists {
+		return 0, ErrConfigIDRequired.Error()
+	}
+
+	configID, validationMessage := optionalPaginationInt(args, "config_id", 1, 0)
+	if validationMessage != "" {
+		return 0, validationMessage
+	}
+
+	return configID, ""
 }
 
 func instanceConfigsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {

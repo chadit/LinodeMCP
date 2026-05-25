@@ -278,6 +278,33 @@ func (c *Client) httpGetInstanceConfig(ctx context.Context, linodeID, configID i
 	return &config, nil
 }
 
+// DeleteInstanceConfig deletes a configuration profile from a Linode instance.
+func (c *Client) httpDeleteInstanceConfig(ctx context.Context, linodeID, configID int) error {
+	if linodeID <= 0 {
+		return ErrLinodeIDPositive
+	}
+
+	if configID <= 0 {
+		return ErrConfigIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	encodedConfigID := url.PathEscape(strconv.Itoa(configID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/configs/%s", encodedLinodeID, encodedConfigID)
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteInstanceConfig", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return c.handleResponse(resp, nil)
+}
+
 // GetInstanceDisk retrieves a specific disk for a Linode instance.
 func (c *Client) httpGetInstanceDisk(ctx context.Context, linodeID, diskID int) (*InstanceDisk, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
