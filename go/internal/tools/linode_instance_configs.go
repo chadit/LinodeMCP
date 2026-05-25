@@ -23,6 +23,7 @@ const (
 	instanceConfigsPageSizeMax    = 500
 	configUpdateNoFields          = "at least one configuration field must be provided"
 	configInterfaceUpdateNoFields = "at least one interface update field must be provided"
+	interfaceJSONObjRequired      = "interface must be a JSON object"
 	paramConfigInterfaceID        = "interface_id"
 )
 
@@ -442,7 +443,7 @@ func parseConfigInterface(interfaceJSON string) (*linode.ConfigInterface, string
 	}
 
 	if configInterface == nil {
-		return nil, "interface must be a JSON object"
+		return nil, interfaceJSONObjRequired
 	}
 
 	if !validConfigInterfacePurpose(configInterface.Purpose) {
@@ -548,7 +549,7 @@ func parseUpdateConfigInterface(interfaceJSON string) (*linode.UpdateConfigInter
 	}
 
 	if configInterface == nil {
-		return nil, "interface must be a JSON object"
+		return nil, interfaceJSONObjRequired
 	}
 
 	if configInterface.Primary == nil && configInterface.IPv4 == nil && configInterface.IPRanges == nil {

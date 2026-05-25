@@ -2973,6 +2973,21 @@ func (c *Client) ListInstanceInterfaces(ctx context.Context, linodeID int) ([]In
 	return interfaces, err
 }
 
+// AddInstanceInterface creates an interface without retrying the POST create call.
+func (c *Client) AddInstanceInterface(ctx context.Context, linodeID int, req *AddInstanceInterfaceRequest) (*InstanceInterface, error) {
+	var instanceInterface *InstanceInterface
+
+	err := c.executeWithoutRetry(ctx, "AddInstanceInterface", func() error {
+		var retryErr error
+
+		instanceInterface, retryErr = c.httpAddInstanceInterface(ctx, linodeID, req)
+
+		return retryErr
+	})
+
+	return instanceInterface, err
+}
+
 // ListInstanceConfigInterfaces retrieves configuration profile interfaces with automatic retry on transient failures.
 func (c *Client) ListInstanceConfigInterfaces(ctx context.Context, linodeID, configID int) ([]ConfigInterfaceResponse, error) {
 	var interfaces []ConfigInterfaceResponse
