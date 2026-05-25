@@ -183,6 +183,42 @@ func (c *Client) httpListInstanceDisks(ctx context.Context, linodeID int) ([]Ins
 	return response.Data, nil
 }
 
+// UpdateInstanceConfig updates a configuration profile for a Linode instance.
+func (c *Client) httpUpdateInstanceConfig(ctx context.Context, linodeID, configID int, req *UpdateConfigRequest) (*InstanceConfig, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	if configID <= 0 {
+		return nil, ErrConfigIDPositive
+	}
+
+	if req == nil {
+		return nil, ErrUpdateConfigRequestRequired
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	encodedConfigID := url.PathEscape(strconv.Itoa(configID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/configs/%s", encodedLinodeID, encodedConfigID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateInstanceConfig", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var config InstanceConfig
+	if err := c.handleResponse(resp, &config); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
+}
+
 // ListInstanceConfigs retrieves all configuration profiles for a Linode instance.
 func (c *Client) httpListInstanceConfigs(ctx context.Context, linodeID, page, pageSize int) ([]InstanceConfig, error) {
 	if linodeID <= 0 {

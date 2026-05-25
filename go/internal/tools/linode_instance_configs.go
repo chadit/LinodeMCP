@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -19,6 +21,7 @@ import (
 const (
 	instanceConfigsPageSizeMin = 25
 	instanceConfigsPageSizeMax = 500
+	configUpdateNoFields       = "at least one configuration field must be provided"
 )
 
 // NewLinodeInstanceConfigListTool creates a tool for listing configuration profiles on a Linode instance.
@@ -200,8 +203,8 @@ func handleInstanceConfigCreateRequest(ctx context.Context, request *mcp.CallToo
 		return result, nil
 	}
 
-	linodeID, ok := getPositiveIntArgument(request, "linode_id")
-	if !ok {
+	linodeID, linodeIDOK := getPositiveIntArgument(request, "linode_id")
+	if !linodeIDOK {
 		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
 	}
 
@@ -231,6 +234,271 @@ func handleInstanceConfigCreateRequest(ctx context.Context, request *mcp.CallToo
 	}
 
 	return MarshalToolResponse(response)
+}
+
+// NewLinodeInstanceConfigUpdateTool creates a tool for updating a Linode configuration profile.
+func NewLinodeInstanceConfigUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_instance_config_update",
+		"Updates a configuration profile on a Linode instance. WARNING: This changes instance boot configuration.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance")),
+			mcp.WithNumber("config_id", mcp.Required(),
+				mcp.Description("The ID of the configuration profile")),
+			mcp.WithString("label",
+				mcp.Description("Updated label for the configuration profile")),
+			mcp.WithString("devices",
+				mcp.Description("JSON object mapping device slots to disk/volume IDs")),
+			mcp.WithString("kernel",
+				mcp.Description("Kernel ID to boot, e.g. linode/latest-64bit")),
+			mcp.WithString("comments",
+				mcp.Description("Optional comments for the configuration profile")),
+			mcp.WithNumber("memory_limit",
+				mcp.Description("Optional memory limit in MB")),
+			mcp.WithString("root_device",
+				mcp.Description("Root device to boot, e.g. /dev/sda")),
+			mcp.WithString("run_level",
+				mcp.Description("Run level: default, single, or binbash")),
+			mcp.WithString("virt_mode",
+				mcp.Description("Virtualization mode: paravirt or fullvirt")),
+			mcp.WithString("helpers",
+				mcp.Description("Optional helpers JSON object")),
+			mcp.WithString("interfaces",
+				mcp.Description("Optional interfaces JSON array")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm configuration profile update.")),
+		},
+		handleInstanceConfigUpdateRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleInstanceConfigUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This updates a configuration profile on the instance. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	linodeID, linodeIDOK := getPositiveIntArgument(request, "linode_id")
+	if !linodeIDOK {
+		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
+	}
+
+	configID, configIDOK := getPositiveIntArgument(request, "config_id")
+	if !configIDOK {
+		return mcp.NewToolResultError("config_id must be a positive integer"), nil
+	}
+
+	updateReq, errText := buildUpdateConfigRequest(request)
+	if errText != "" {
+		return mcp.NewToolResultError(errText), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	updatedConfig, err := client.UpdateInstanceConfig(ctx, linodeID, configID, updateReq)
+	if err != nil {
+		return mcp.NewToolResultError(formatUpdateConfigError(linodeID, configID, err)), nil
+	}
+
+	response := struct {
+		Message  string                 `json:"message"`
+		Config   *linode.InstanceConfig `json:"config"`
+		LinodeID int                    `json:"linode_id"`
+		ConfigID int                    `json:"config_id"`
+	}{
+		Message:  fmt.Sprintf("Configuration profile '%s' (ID: %d) updated on instance %d", updatedConfig.Label, updatedConfig.ID, linodeID),
+		Config:   updatedConfig,
+		LinodeID: linodeID,
+		ConfigID: configID,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func formatUpdateConfigError(linodeID, configID int, err error) string {
+	return "Failed to update configuration profile " + strconv.Itoa(configID) + " for instance " + strconv.Itoa(linodeID) + ": " + err.Error()
+}
+
+func buildUpdateConfigRequest(request *mcp.CallToolRequest) (*linode.UpdateConfigRequest, string) {
+	req := &linode.UpdateConfigRequest{}
+
+	var fields int
+
+	if errText := applyUpdateConfigStringOptions(request, req, &fields); errText != "" {
+		return nil, errText
+	}
+
+	if errText := applyUpdateConfigJSONOptions(request, req, &fields); errText != "" {
+		return nil, errText
+	}
+
+	if fields == 0 {
+		return nil, configUpdateNoFields
+	}
+
+	return req, ""
+}
+
+func applyUpdateConfigStringOptions(request *mcp.CallToolRequest, req *linode.UpdateConfigRequest, fields *int) string {
+	if validationMessage := applyUpdateConfigLabel(request, req, fields); validationMessage != "" {
+		return validationMessage
+	}
+
+	if validationMessage := applyUpdateConfigPlainString(request, "kernel", &req.Kernel, fields); validationMessage != "" {
+		return validationMessage
+	}
+
+	if validationMessage := applyUpdateConfigPlainString(request, "comments", &req.Comments, fields); validationMessage != "" {
+		return validationMessage
+	}
+
+	if validationMessage := applyUpdateConfigMemoryLimit(request, req, fields); validationMessage != "" {
+		return validationMessage
+	}
+
+	if validationMessage := applyUpdateConfigPlainString(request, "root_device", &req.RootDevice, fields); validationMessage != "" {
+		return validationMessage
+	}
+
+	if validationMessage := applyUpdateConfigEnum(request, "run_level", []string{"default", "single", "binbash"}, &req.RunLevel, fields); validationMessage != "" {
+		return validationMessage
+	}
+
+	return applyUpdateConfigEnum(request, "virt_mode", []string{"paravirt", "fullvirt"}, &req.VirtMode, fields)
+}
+
+func applyUpdateConfigLabel(request *mcp.CallToolRequest, req *linode.UpdateConfigRequest, fields *int) string {
+	label, validationMessage := stringArgument(request, "label", false)
+	if validationMessage != "" {
+		return validationMessage
+	}
+
+	if _, exists := request.GetArguments()["label"]; !exists {
+		return ""
+	}
+
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return errLabelRequired
+	}
+
+	req.Label = &label
+	*fields++
+
+	return ""
+}
+
+func applyUpdateConfigPlainString(request *mcp.CallToolRequest, name string, target **string, fields *int) string {
+	value, validationMessage := stringArgument(request, name, false)
+	if validationMessage != "" {
+		return validationMessage
+	}
+
+	if _, exists := request.GetArguments()[name]; !exists {
+		return ""
+	}
+
+	*target = &value
+	*fields++
+
+	return ""
+}
+
+func applyUpdateConfigMemoryLimit(request *mcp.CallToolRequest, req *linode.UpdateConfigRequest, fields *int) string {
+	args := request.GetArguments()
+
+	memoryLimit, validationMessage := optionalPaginationInt(args, "memory_limit", 1, 0)
+	if validationMessage != "" {
+		return validationMessage
+	}
+
+	if _, exists := args["memory_limit"]; !exists {
+		return ""
+	}
+
+	req.MemoryLimit = &memoryLimit
+	*fields++
+
+	return ""
+}
+
+func applyUpdateConfigEnum(request *mcp.CallToolRequest, name string, allowed []string, target **string, fields *int) string {
+	value, validationMessage := stringArgument(request, name, false)
+	if validationMessage != "" {
+		return validationMessage
+	}
+
+	if _, exists := request.GetArguments()[name]; !exists {
+		return ""
+	}
+
+	if slices.Contains(allowed, value) {
+		*target = &value
+		*fields++
+
+		return ""
+	}
+
+	return name + " must be " + strings.Join(allowed, ", ")
+}
+
+func applyUpdateConfigJSONOptions(request *mcp.CallToolRequest, req *linode.UpdateConfigRequest, fields *int) string {
+	devicesJSON, validationMessage := stringArgument(request, "devices", false)
+	if validationMessage != "" {
+		return validationMessage
+	}
+
+	if _, exists := request.GetArguments()["devices"]; exists {
+		devices, errText := parseConfigDevices(devicesJSON)
+		if errText != "" {
+			return errText
+		}
+
+		req.Devices = &devices
+		*fields++
+	}
+
+	helpersJSON, validationMessage := stringArgument(request, "helpers", false)
+	if validationMessage != "" {
+		return validationMessage
+	}
+
+	if _, exists := request.GetArguments()["helpers"]; exists {
+		var helpers *linode.ConfigHelpers
+		if err := strictDecodeJSON(helpersJSON, &helpers); err != nil {
+			return fmt.Sprintf("invalid helpers JSON: %v", err)
+		}
+
+		if helpers == nil {
+			return "helpers must be a JSON object"
+		}
+
+		req.Helpers = helpers
+		*fields++
+	}
+
+	interfacesJSON, validationMessage := stringArgument(request, "interfaces", false)
+	if validationMessage != "" {
+		return validationMessage
+	}
+
+	if _, exists := request.GetArguments()["interfaces"]; exists {
+		interfaces, errText := parseConfigInterfaces(interfacesJSON)
+		if errText != "" {
+			return errText
+		}
+
+		req.Interfaces = &interfaces
+		*fields++
+	}
+
+	return ""
 }
 
 func getPositiveIntArgument(request *mcp.CallToolRequest, name string) (int, bool) {

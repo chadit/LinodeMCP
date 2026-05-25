@@ -117,3 +117,113 @@ func TestClientCreateInstanceConfigRejectsNilRequest(t *testing.T) {
 	require.ErrorIs(t, err, linode.ErrCreateConfigRequestRequired, "nil request should be rejected")
 	assert.False(t, called.Load(), "nil request should not issue HTTP request")
 }
+
+func TestClientUpdateInstanceConfigSendsRequest(t *testing.T) {
+	t.Parallel()
+
+	diskID := 456
+	label := labelBootConfig
+	kernel := configKernelLatest
+	devices := map[string]*linode.ConfigDevice{
+		configDeviceSlotSDA: {DiskID: &diskID},
+	}
+	wantReq := linode.UpdateConfigRequest{
+		Label:   &label,
+		Devices: &devices,
+		Kernel:  &kernel,
+	}
+	response := linode.InstanceConfig{ID: 789, Label: label, Devices: devices}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/linode/instances/123/configs/789", r.URL.Path, "request path should match")
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+
+		var got linode.UpdateConfigRequest
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should decode")
+
+		if assert.NotNil(t, got.Label, "label should be sent") {
+			assert.Equal(t, *wantReq.Label, *got.Label, "label should match")
+		}
+
+		if assert.NotNil(t, got.Devices, "devices should be sent") {
+			assert.Equal(t, *wantReq.Devices, *got.Devices, "devices should match")
+		}
+
+		if assert.NotNil(t, got.Kernel, "kernel should be sent") {
+			assert.Equal(t, *wantReq.Kernel, *got.Kernel, "kernel should match")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(response), "encoding response should not fail")
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	got, err := client.UpdateInstanceConfig(t.Context(), 123, 789, &wantReq)
+
+	require.NoError(t, err, "UpdateInstanceConfig should succeed")
+	require.NotNil(t, got, "updated config should be returned")
+	assert.Equal(t, response.ID, got.ID, "config ID should match")
+	assert.Equal(t, response.Label, got.Label, "config label should match")
+}
+
+func TestClientUpdateInstanceConfigDoesNotRetryUpdate(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	label := labelBootConfig
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		assert.Equal(t, "/linode/instances/123/configs/789", r.URL.Path, "request path should match")
+		http.Error(w, `{"errors":[{"reason":"temporary failure"}]}`, http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(2))
+	_, err := client.UpdateInstanceConfig(t.Context(), 123, 789, &linode.UpdateConfigRequest{Label: &label})
+
+	require.Error(t, err, "server failure should be returned")
+	assert.Equal(t, int32(1), calls.Load(), "PUT update must not be retried")
+}
+
+func TestClientUpdateInstanceConfigRejectsInvalidIDs(t *testing.T) {
+	t.Parallel()
+
+	var called atomic.Bool
+
+	label := labelBootConfig
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called.Store(true)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	_, err := client.UpdateInstanceConfig(t.Context(), 0, 789, &linode.UpdateConfigRequest{Label: &label})
+	require.ErrorIs(t, err, linode.ErrLinodeIDPositive, "invalid linode ID should be rejected")
+
+	_, err = client.UpdateInstanceConfig(t.Context(), 123, 0, &linode.UpdateConfigRequest{Label: &label})
+	require.ErrorIs(t, err, linode.ErrConfigIDPositive, "invalid config ID should be rejected")
+	assert.False(t, called.Load(), "invalid IDs should not issue HTTP request")
+}
+
+func TestClientUpdateInstanceConfigRejectsNilRequest(t *testing.T) {
+	t.Parallel()
+
+	var called atomic.Bool
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called.Store(true)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	_, err := client.UpdateInstanceConfig(t.Context(), 123, 789, nil)
+
+	require.ErrorIs(t, err, linode.ErrUpdateConfigRequestRequired, "nil request should be rejected")
+	assert.False(t, called.Load(), "nil request should not issue HTTP request")
+}

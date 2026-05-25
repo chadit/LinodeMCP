@@ -104,6 +104,20 @@ type CreateConfigRequest struct {
 	Interfaces  []ConfigInterface        `json:"interfaces,omitempty"`
 }
 
+// UpdateConfigRequest represents the request body for updating an instance configuration profile.
+type UpdateConfigRequest struct {
+	Label       *string                   `json:"label,omitempty"`
+	Devices     *map[string]*ConfigDevice `json:"devices,omitempty"`
+	Kernel      *string                   `json:"kernel,omitempty"`
+	Comments    *string                   `json:"comments,omitempty"`
+	MemoryLimit *int                      `json:"memory_limit,omitempty"`
+	RootDevice  *string                   `json:"root_device,omitempty"`
+	RunLevel    *string                   `json:"run_level,omitempty"`
+	VirtMode    *string                   `json:"virt_mode,omitempty"`
+	Helpers     *ConfigHelpers            `json:"helpers,omitempty"`
+	Interfaces  *[]ConfigInterface        `json:"interfaces,omitempty"`
+}
+
 // InstanceDisk represents a disk attached to a Linode instance.
 type InstanceDisk struct {
 	ID         int    `json:"id"`
