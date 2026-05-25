@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 )
 
 const (
@@ -144,6 +145,33 @@ func (c *Client) httpListInstanceDisks(ctx context.Context, linodeID int) ([]Ins
 
 	var response PaginatedResponse[InstanceDisk]
 
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
+}
+
+// ListInstanceConfigs retrieves all configuration profiles for a Linode instance.
+func (c *Client) httpListInstanceConfigs(ctx context.Context, linodeID, page, pageSize int) ([]InstanceConfig, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	endpoint := withPaginationQuery(fmt.Sprintf(endpointInstanceDeep+"/%s/configs", encodedLinodeID), page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListInstanceConfigs", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[InstanceConfig]
 	if err := c.handleResponse(resp, &response); err != nil {
 		return nil, err
 	}

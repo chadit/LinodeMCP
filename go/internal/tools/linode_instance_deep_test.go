@@ -85,6 +85,122 @@ func TestLinodeInstanceBackupsListTool(t *testing.T) {
 	})
 }
 
+// TestLinodeInstanceConfigsListTool verifies the instance configuration profile list tool
+// registers correctly, validates inputs, and returns configuration profile data.
+func TestLinodeInstanceConfigsListTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	tool, capability, handler := tools.NewLinodeInstanceConfigListTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+		assert.Equal(t, "linode_instance_config_list", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read capability")
+		require.NotNil(t, handler, "handler should not be nil")
+		assert.Contains(t, tool.InputSchema.Properties, keyLinodeID, "schema should include linode_id")
+		assert.Contains(t, tool.InputSchema.Properties, "page", "schema should include page")
+		assert.Contains(t, tool.InputSchema.Properties, keyPageSize, "schema should include page_size")
+	})
+
+	validationTests := []struct {
+		name         string
+		args         map[string]any
+		wantContains string
+	}{
+		{name: caseMissingLinodeID, args: map[string]any{}, wantContains: errLinodeIDRequired},
+		{name: "separator linode id", args: map[string]any{keyLinodeID: "123/.."}, wantContains: errLinodeIDInteger},
+		{name: "query linode id", args: map[string]any{keyLinodeID: "123?query"}, wantContains: errLinodeIDInteger},
+		{name: "negative linode id", args: map[string]any{keyLinodeID: float64(-1)}, wantContains: "linode_id must be an integer greater than or equal to 1"},
+		{name: "fractional linode id", args: map[string]any{keyLinodeID: float64(123.9)}, wantContains: errLinodeIDInteger},
+		{name: "invalid page", args: map[string]any{keyLinodeID: float64(123), "page": float64(0)}, wantContains: "page must be an integer greater than or equal to 1"},
+		{name: "invalid page size low", args: map[string]any{keyLinodeID: float64(123), keyPageSize: float64(10)}, wantContains: "page_size must be an integer from 25 through 500"},
+		{name: "invalid page size high", args: map[string]any{keyLinodeID: float64(123), keyPageSize: float64(501)}, wantContains: "page_size must be an integer from 25 through 500"},
+	}
+	for _, tt := range validationTests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			req := createRequestWithArgs(t, tt.args)
+			result, err := handler(t.Context(), req)
+			require.NoError(t, err, "handler should not return Go error")
+			require.NotNil(t, result, "handler should return a result")
+			assert.True(t, result.IsError, "result should be a tool error")
+			assertErrorContains(t, result, tt.wantContains)
+		})
+	}
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		configs := []linode.InstanceConfig{
+			{ID: 77, Label: "boot-config", Kernel: "linode/latest-64bit", RootDevice: "/dev/sda"},
+		}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/linode/instances/123/configs", r.URL.Path, "request path should match")
+			assert.Equal(t, "2", r.URL.Query().Get("page"), "page query should match")
+			assert.Equal(t, "50", r.URL.Query().Get(keyPageSize), "page_size query should match")
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyData: configs, keyPage: 2, keyPages: 3, keyResults: 1,
+			}), "encoding response should not fail")
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeInstanceConfigListTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), "page": float64(2), keyPageSize: float64(50)})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.False(t, result.IsError, "result should not be a tool error")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "boot-config", "response should contain config label")
+		assert.Contains(t, textContent.Text, "linode/latest-64bit", "response should contain config kernel")
+	})
+
+	t.Run("client error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: errForbidden}},
+			}), "encoding error response should not fail")
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeInstanceConfigListTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "Failed to list configuration profiles for instance 123")
+	})
+}
+
 // TestLinodeInstanceBackupGetTool verifies the instance backup get tool
 // registers correctly, validates required fields, and retrieves backup details.
 func TestLinodeInstanceBackupGetTool(t *testing.T) {

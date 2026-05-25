@@ -22,6 +22,9 @@ var ErrRateLimitWaitCanceled = errors.New("rate limit wait canceled")
 // ErrUpdateImageRequestRequired is returned when UpdateImage is called without a request body.
 var ErrUpdateImageRequestRequired = errors.New("update image request is required")
 
+// ErrLinodeIDPositive is returned when a Linode ID argument is not positive.
+var ErrLinodeIDPositive = errors.New("linode_id must be a positive integer")
+
 // APIError represents an error returned by the Linode API.
 // RetryAfter carries the server's Retry-After hint when present so the retry
 // loop can honor it instead of computing its own backoff.

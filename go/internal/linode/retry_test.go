@@ -15,6 +15,13 @@ import (
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
+func writeRetryTestResponse(t *testing.T, w http.ResponseWriter, body string) {
+	t.Helper()
+
+	_, err := w.Write([]byte(body))
+	assert.NoError(t, err, "writing response should not fail")
+}
+
 // TestRetryableClientGetProfileSuccessNoRetry verifies that a successful
 // first attempt returns immediately without any retries.
 func TestRetryableClientGetProfileSuccessNoRetry(t *testing.T) {
@@ -55,7 +62,7 @@ func TestRetryableClientRetriesOnServerError(t *testing.T) {
 		count := callCount.Add(1)
 		if count <= 2 {
 			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			writeRetryTestResponse(t, w, `{"errors":[{"reason":"server error"}]}`)
 
 			return
 		}
@@ -90,7 +97,7 @@ func TestRetryableClientNoRetryOnAuthError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		callCount.Add(1)
 		w.WriteHeader(http.StatusUnauthorized)
-		_, _ = w.Write([]byte(`{"errors":[{"reason":"invalid token"}]}`))
+		writeRetryTestResponse(t, w, `{"errors":[{"reason":"invalid token"}]}`)
 	}))
 	defer srv.Close()
 
@@ -118,7 +125,7 @@ func TestRetryableClientExhaustsRetries(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		callCount.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"errors":[{"reason":"always failing"}]}`))
+		writeRetryTestResponse(t, w, `{"errors":[{"reason":"always failing"}]}`)
 	}))
 	defer srv.Close()
 
@@ -147,7 +154,7 @@ func TestRetryableClientContextCancelStopsRetry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		callCount.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"errors":[{"reason":"failing"}]}`))
+		writeRetryTestResponse(t, w, `{"errors":[{"reason":"failing"}]}`)
 	}))
 	defer srv.Close()
 
@@ -196,7 +203,7 @@ func TestRetryHonorsRetryAfterHint(t *testing.T) {
 		if count == 1 {
 			w.Header().Set("Retry-After", "1")
 			w.WriteHeader(http.StatusTooManyRequests)
-			_, _ = w.Write([]byte(`{"errors":[{"reason":"slow down"}]}`))
+			writeRetryTestResponse(t, w, `{"errors":[{"reason":"slow down"}]}`)
 
 			return
 		}
@@ -241,7 +248,7 @@ func TestRetryClampsRetryAfterToMaxDelay(t *testing.T) {
 		if count == 1 {
 			w.Header().Set("Retry-After", "3600")
 			w.WriteHeader(http.StatusTooManyRequests)
-			_, _ = w.Write([]byte(`{"errors":[{"reason":"slow down"}]}`))
+			writeRetryTestResponse(t, w, `{"errors":[{"reason":"slow down"}]}`)
 
 			return
 		}
@@ -281,7 +288,7 @@ func TestRetryableClientListInstancesRetries(t *testing.T) {
 		count := callCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusTooManyRequests)
-			_, _ = w.Write([]byte(`{"errors":[{"reason":"rate limited"}]}`))
+			writeRetryTestResponse(t, w, `{"errors":[{"reason":"rate limited"}]}`)
 
 			return
 		}
@@ -310,6 +317,49 @@ func TestRetryableClientListInstancesRetries(t *testing.T) {
 	assert.Len(t, instances, 1, "should return one instance after retry")
 }
 
+// TestRetryableClientListInstanceConfigsRetries verifies that ListInstanceConfigs
+// retries transient read failures and succeeds on the second attempt.
+func TestRetryableClientListInstanceConfigsRetries(t *testing.T) {
+	t.Parallel()
+
+	var callCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/linode/instances/123/configs", r.URL.Path, "request path should match")
+
+		count := callCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			writeRetryTestResponse(t, w, `{"errors":[{"reason":"rate limited"}]}`)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyData:    []linode.InstanceConfig{{ID: 77, Label: "boot-config"}},
+			keyPage:    1,
+			keyPages:   1,
+			keyResults: 1,
+		}), "encoding configs response should not fail")
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(
+		srv.URL, "token", nil,
+		linode.WithMaxRetries(2),
+		linode.WithBaseDelay(1*time.Millisecond),
+		linode.WithMaxDelay(10*time.Millisecond),
+		linode.WithBackoffFactor(2.0),
+		linode.WithJitter(false),
+	)
+
+	configs, err := client.ListInstanceConfigs(t.Context(), 123, 0, 0)
+	require.NoError(t, err, "ListInstanceConfigs should succeed after retry")
+	assert.Len(t, configs, 1, "should return one config after retry")
+	assert.Equal(t, int32(2), callCount.Load(), "should retry once")
+}
+
 // TestRetryableClientGetInstanceRetries verifies that GetInstance retries
 // on a 500 server error and succeeds on the second attempt.
 func TestRetryableClientGetInstanceRetries(t *testing.T) {
@@ -321,7 +371,7 @@ func TestRetryableClientGetInstanceRetries(t *testing.T) {
 		count := callCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(`{"errors":[{"reason":"temporary"}]}`))
+			writeRetryTestResponse(t, w, `{"errors":[{"reason":"temporary"}]}`)
 
 			return
 		}
@@ -359,7 +409,7 @@ func TestRetryableClientUpdateInstanceSuccess(t *testing.T) {
 		assert.Equal(t, "/linode/instances/42", r.URL.Path, "endpoint should match")
 
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"id":42,"label":"updated-label","tags":["prod"],"status":"running"}`))
+		writeRetryTestResponse(t, w, `{"id":42,"label":"updated-label","tags":["prod"],"status":"running"}`)
 	}))
 	defer srv.Close()
 
@@ -395,13 +445,13 @@ func TestRetryableClientUpdateInstanceRetries(t *testing.T) {
 		count := callCount.Add(1)
 		if count == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(`{"errors":[{"reason":"temporary"}]}`))
+			writeRetryTestResponse(t, w, `{"errors":[{"reason":"temporary"}]}`)
 
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"id":99,"label":"updated-ok","status":"running"}`))
+		writeRetryTestResponse(t, w, `{"id":99,"label":"updated-ok","status":"running"}`)
 	}))
 	defer srv.Close()
 
@@ -432,7 +482,7 @@ func TestRetryableClientUpdateInstanceNoRetryOnAuthError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		callCount.Add(1)
 		w.WriteHeader(http.StatusUnauthorized)
-		_, _ = w.Write([]byte(`{"errors":[{"reason":"unauthorized"}]}`))
+		writeRetryTestResponse(t, w, `{"errors":[{"reason":"unauthorized"}]}`)
 	}))
 	defer srv.Close()
 
