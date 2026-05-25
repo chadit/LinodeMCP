@@ -83,6 +83,7 @@ func Categories(toolName string) []string {
 		toolName,
 		"linode_instance_",
 		"linode_region_",
+		"linode_kernel_",
 		"linode_type_",
 		"linode_image_",
 		"linode_stackscript_",

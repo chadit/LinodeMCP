@@ -864,6 +864,21 @@ func (c *Client) ListRegions(ctx context.Context) ([]Region, error) {
 	return regions, err
 }
 
+// ListKernels retrieves all Linode kernels with automatic retry on transient failures.
+func (c *Client) ListKernels(ctx context.Context, page, pageSize int) ([]Kernel, error) {
+	var kernels []Kernel
+
+	err := c.executeWithRetry(ctx, "ListKernels", func() error {
+		var err error
+
+		kernels, err = c.httpListKernels(ctx, page, pageSize)
+
+		return err
+	})
+
+	return kernels, err
+}
+
 // ListTypes retrieves all Linode types with automatic retry on transient failures.
 func (c *Client) ListTypes(ctx context.Context) ([]InstanceType, error) {
 	var types []InstanceType
