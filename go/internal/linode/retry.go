@@ -2884,6 +2884,21 @@ func (c *Client) ReorderInstanceConfigInterfaces(ctx context.Context, linodeID, 
 	})
 }
 
+// GetInstanceConfigInterface retrieves an interface with automatic retry on transient failures.
+func (c *Client) GetInstanceConfigInterface(ctx context.Context, linodeID, configID, interfaceID int) (*ConfigInterfaceResponse, error) {
+	var configInterface *ConfigInterfaceResponse
+
+	err := c.executeWithRetry(ctx, "GetInstanceConfigInterface", func() error {
+		var retryErr error
+
+		configInterface, retryErr = c.httpGetInstanceConfigInterface(ctx, linodeID, configID, interfaceID)
+
+		return retryErr
+	})
+
+	return configInterface, err
+}
+
 // ListInstanceDisks retrieves all disks for an instance with automatic retry on transient failures.
 func (c *Client) ListInstanceDisks(ctx context.Context, linodeID int) ([]InstanceDisk, error) {
 	var disks []InstanceDisk

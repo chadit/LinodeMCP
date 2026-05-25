@@ -74,5 +74,6 @@ const (
 	configDeviceSlotSDA          = "sda"
 	configKernelLatest           = "linode/latest-64bit"
 	purposePublic                = "public"
+	purposeVPC                   = "vpc"
 	pathTraversalDotDot          = ".."
 )

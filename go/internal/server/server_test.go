@@ -246,6 +246,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_database_instance_resume":                       profiles.CapWrite,
 		"linode_database_postgresql_instance_resume":            profiles.CapWrite,
 		"linode_instance_config_interface_add":                  profiles.CapWrite,
+		"linode_instance_config_interface_get":                  profiles.CapRead,
 	}
 
 	for _, descriptor := range descriptors {
