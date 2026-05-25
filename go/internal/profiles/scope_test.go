@@ -196,6 +196,7 @@ func TestRequiredScopesPrefixOrdering(t *testing.T) {
 		toolLinodeInstanceConfigList,
 		"linode_instance_config_interfaces_list",
 		"linode_instance_config_create",
+		"linode_instance_config_interfaces_reorder",
 		"linode_instance_config_delete",
 		"linode_instance_disk_create",
 		"linode_instance_ip_allocate",

@@ -264,8 +264,8 @@ func TestLinodeInstanceConfigDeleteTool(t *testing.T) {
 		{name: "separator linode id", args: map[string]any{keyLinodeID: "123/..", keyConfigID: float64(789), keyConfirm: true}, want: errLinodeIDInteger},
 		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfigID: float64(789), keyConfirm: true}, want: errLinodeIDInteger},
 		{name: caseMissingConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfirm: true}, want: tools.ErrConfigIDRequired.Error()},
-		{name: "separator config id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: "789/..", keyConfirm: true}, want: "config_id must be an integer"},
-		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: "789?query", keyConfirm: true}, want: "config_id must be an integer"},
+		{name: "separator config id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: "789/..", keyConfirm: true}, want: errConfigIDInteger},
+		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: configIDQueryValue, keyConfirm: true}, want: errConfigIDInteger},
 		{name: "zero config id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(0), keyConfirm: true}, want: errConfigIDMin},
 	}
 	for _, tt := range validationTests {

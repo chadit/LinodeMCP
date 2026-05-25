@@ -28,8 +28,8 @@ func TestClientListInstanceConfigsSuccess(t *testing.T) {
 				configDeviceSlotSDA: {DiskID: &diskID},
 			},
 			Helpers: &linode.ConfigHelpers{Distro: &distro},
-			Interfaces: []linode.ConfigInterface{
-				{Purpose: purposePublic},
+			Interfaces: []linode.ConfigInterfaceResponse{
+				{ID: 101, Purpose: purposePublic},
 			},
 		},
 	}

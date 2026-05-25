@@ -101,12 +101,15 @@ const (
 	privateImage123Fixture       = "private/123"
 	privateImageTraversalFixture = "private/.."
 	privateImageZeroFixture      = "private/0"
+	configIDQueryValue           = "789?query"
+	singleInterfaceIDsJSON       = "[101]"
 
 	// Tool-specific resource ID keys.
 	keyLinodeID                  = "linode_id"
 	keyDevices                   = "devices"
 	keyInterfaces                = "interfaces"
 	keyInterface                 = "interface"
+	keyIDs                       = "ids"
 	keyHelpers                   = "helpers"
 	keyMemoryLimit               = "memory_limit"
 	keyKernel                    = "kernel"

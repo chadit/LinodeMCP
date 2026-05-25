@@ -43,19 +43,19 @@ type RestoreBackupRequest struct {
 
 // InstanceConfig represents a Linode configuration profile.
 type InstanceConfig struct {
-	ID          int                      `json:"id"`
-	Label       string                   `json:"label"`
-	Kernel      string                   `json:"kernel,omitempty"`
-	Comments    string                   `json:"comments,omitempty"`
-	MemoryLimit int                      `json:"memory_limit,omitempty"`
-	RootDevice  string                   `json:"root_device,omitempty"`
-	RunLevel    string                   `json:"run_level,omitempty"`
-	VirtMode    string                   `json:"virt_mode,omitempty"`
-	Devices     map[string]*ConfigDevice `json:"devices,omitempty"`
-	Helpers     *ConfigHelpers           `json:"helpers,omitempty"`
-	Interfaces  []ConfigInterface        `json:"interfaces,omitempty"`
-	Created     string                   `json:"created,omitempty"`
-	Updated     string                   `json:"updated,omitempty"`
+	ID          int                       `json:"id"`
+	Label       string                    `json:"label"`
+	Kernel      string                    `json:"kernel,omitempty"`
+	Comments    string                    `json:"comments,omitempty"`
+	MemoryLimit int                       `json:"memory_limit,omitempty"`
+	RootDevice  string                    `json:"root_device,omitempty"`
+	RunLevel    string                    `json:"run_level,omitempty"`
+	VirtMode    string                    `json:"virt_mode,omitempty"`
+	Devices     map[string]*ConfigDevice  `json:"devices,omitempty"`
+	Helpers     *ConfigHelpers            `json:"helpers,omitempty"`
+	Interfaces  []ConfigInterfaceResponse `json:"interfaces,omitempty"`
+	Created     string                    `json:"created,omitempty"`
+	Updated     string                    `json:"updated,omitempty"`
 }
 
 // ConfigDevice assigns a disk or volume to a configuration device slot.
@@ -130,6 +130,11 @@ type UpdateConfigRequest struct {
 	VirtMode    *string                   `json:"virt_mode,omitempty"`
 	Helpers     *ConfigHelpers            `json:"helpers,omitempty"`
 	Interfaces  *[]ConfigInterface        `json:"interfaces,omitempty"`
+}
+
+// ReorderConfigInterfacesRequest represents the request body for reordering configuration profile interfaces.
+type ReorderConfigInterfacesRequest struct {
+	IDs []int `json:"ids"`
 }
 
 // InstanceDisk represents a disk attached to a Linode instance.

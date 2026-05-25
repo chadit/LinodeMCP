@@ -2877,6 +2877,13 @@ func (c *Client) AddInstanceConfigInterface(ctx context.Context, linodeID, confi
 	return configInterface, err
 }
 
+// ReorderInstanceConfigInterfaces reorders configuration interfaces without retrying the POST reorder call.
+func (c *Client) ReorderInstanceConfigInterfaces(ctx context.Context, linodeID, configID int, req *ReorderConfigInterfacesRequest) error {
+	return c.executeWithoutRetry(ctx, "ReorderInstanceConfigInterfaces", func() error {
+		return c.httpReorderInstanceConfigInterfaces(ctx, linodeID, configID, req)
+	})
+}
+
 // ListInstanceDisks retrieves all disks for an instance with automatic retry on transient failures.
 func (c *Client) ListInstanceDisks(ctx context.Context, linodeID int) ([]InstanceDisk, error) {
 	var disks []InstanceDisk
