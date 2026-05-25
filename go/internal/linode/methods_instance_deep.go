@@ -131,6 +131,27 @@ func (c *Client) httpCancelInstanceBackups(ctx context.Context, linodeID int) er
 	return c.handleResponse(resp, nil)
 }
 
+// ApplyInstanceFirewalls reapplies assigned firewalls to a Linode instance.
+func (c *Client) httpApplyInstanceFirewalls(ctx context.Context, linodeID int) error {
+	if linodeID <= 0 {
+		return ErrLinodeIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%d/firewalls/apply", linodeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "ApplyInstanceFirewalls", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return c.handleResponse(resp, nil)
+}
+
 // CreateInstanceConfig creates a configuration profile for a Linode instance.
 func (c *Client) httpCreateInstanceConfig(ctx context.Context, linodeID int, req *CreateConfigRequest) (*InstanceConfig, error) {
 	if linodeID <= 0 {

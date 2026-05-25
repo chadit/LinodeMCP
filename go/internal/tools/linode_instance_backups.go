@@ -268,6 +268,59 @@ func handleInstanceBackupsEnableRequest(ctx context.Context, request *mcp.CallTo
 	return MarshalToolResponse(response)
 }
 
+// NewLinodeInstanceFirewallsApplyTool creates a tool for reapplying assigned firewalls to a Linode instance.
+func NewLinodeInstanceFirewallsApplyTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_instance_firewalls_apply",
+		"Reapplies assigned firewalls to a Linode instance. Use this if firewall assignment was not applied successfully.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm reapplying firewalls to this Linode.")),
+		},
+		handleInstanceFirewallsApplyRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleInstanceFirewallsApplyRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This reapplies assigned firewalls to the Linode. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	args := request.GetArguments()
+	if _, exists := args["linode_id"]; !exists {
+		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
+	}
+
+	linodeID, validationMessage := optionalPaginationInt(args, "linode_id", 1, 0)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := client.ApplyInstanceFirewalls(ctx, linodeID); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to apply firewalls for instance %d: %v", linodeID, err)), nil
+	}
+
+	response := struct {
+		Message  string `json:"message"`
+		LinodeID int    `json:"linode_id"`
+	}{
+		Message:  fmt.Sprintf("Firewall apply initiated for instance %d", linodeID),
+		LinodeID: linodeID,
+	}
+
+	return MarshalToolResponse(response)
+}
+
 // NewLinodeInstanceBackupsCancelTool creates a tool for canceling the backup service on a Linode instance.
 func NewLinodeInstanceBackupsCancelTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
