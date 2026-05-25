@@ -14,6 +14,7 @@ var (
 	ErrBackupIDRequired       = errors.New("backup_id is required")
 	ErrBackupIDInvalid        = errors.New("backup_id must be a valid integer")
 	ErrConfigIDRequired       = errors.New("config_id is required")
+	ErrInterfaceIDRequired    = errors.New("interface_id is required")
 	ErrDiskIDRequired         = errors.New("disk_id is required")
 	ErrDiskIDInvalid          = errors.New("disk_id must be a valid integer")
 )

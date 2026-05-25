@@ -111,6 +111,7 @@ const (
 	privateImageTraversalFixture = "private/.."
 	privateImageZeroFixture      = "private/0"
 	configIDQueryValue           = "789?query"
+	interfaceIDQueryValue        = "456?query"
 	singleInterfaceIDsJSON       = "[101]"
 
 	// Tool-specific resource ID keys.
@@ -155,6 +156,7 @@ const (
 	errConfigIDMin         = "config_id must be an integer greater than or equal to 1"
 	errInterfaceIDPositive = "interface_id must be a positive integer"
 	errInterfaceIDInteger  = "interface_id must be an integer"
+	errInterfaceIDMinOne   = "interface_id must be an integer greater than or equal to 1"
 
 	// Linode region IDs commonly used in fixtures.
 	regionUSEast         = "us-east"
@@ -362,6 +364,7 @@ const (
 	caseTraversalConfigID         = "traversal config id"
 	caseMissingInterfaceID        = "missing interface id"
 	caseSlashInterfaceID          = "slash interface id"
+	caseZeroInterfaceID           = "zero interface id"
 	caseQueryInterfaceID          = "query interface id"
 	caseTraversalInterfaceID      = "traversal interface id"
 	caseUnknownInterfaceField     = "unknown interface field"

@@ -3078,6 +3078,13 @@ func (c *Client) UpdateInstanceInterface(ctx context.Context, linodeID, interfac
 	return instanceInterface, err
 }
 
+// DeleteInstanceInterface removes an interface without retrying the DELETE call.
+func (c *Client) DeleteInstanceInterface(ctx context.Context, linodeID, interfaceID int) error {
+	return c.executeWithoutRetry(ctx, "DeleteInstanceInterface", func() error {
+		return c.httpDeleteInstanceInterface(ctx, linodeID, interfaceID)
+	})
+}
+
 // ListInstanceConfigInterfaces retrieves configuration profile interfaces with automatic retry on transient failures.
 func (c *Client) ListInstanceConfigInterfaces(ctx context.Context, linodeID, configID int) ([]ConfigInterfaceResponse, error) {
 	var interfaces []ConfigInterfaceResponse

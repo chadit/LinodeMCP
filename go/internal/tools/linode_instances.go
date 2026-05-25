@@ -227,7 +227,7 @@ func NewLinodeInstanceInterfaceGetTool(cfg *config.Config) (mcp.Tool, profiles.C
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),
-			mcp.WithNumber("interface_id", mcp.Required(),
+			mcp.WithNumber(paramConfigInterfaceID, mcp.Required(),
 				mcp.Description("The ID of the Linode interface")),
 		},
 		handleInstanceInterfaceGetRequest,
@@ -262,11 +262,11 @@ func handleInstanceInterfaceGetRequest(ctx context.Context, request *mcp.CallToo
 
 func instanceInterfaceIDFromTool(request *mcp.CallToolRequest) (int, string) {
 	args := request.GetArguments()
-	if _, exists := args["interface_id"]; !exists {
-		return 0, "interface_id is required"
+	if _, exists := args[paramConfigInterfaceID]; !exists {
+		return 0, ErrInterfaceIDRequired.Error()
 	}
 
-	interfaceID, validationMessage := optionalPaginationInt(args, "interface_id", 1, 0)
+	interfaceID, validationMessage := optionalPaginationInt(args, paramConfigInterfaceID, 1, 0)
 	if validationMessage != "" {
 		return 0, validationMessage
 	}
@@ -276,6 +276,67 @@ func instanceInterfaceIDFromTool(request *mcp.CallToolRequest) (int, string) {
 
 func formatGetInstanceInterfaceError(linodeID, interfaceID int, err error) string {
 	return "Failed to retrieve interface " + strconv.Itoa(interfaceID) + " for instance " + strconv.Itoa(linodeID) + ": " + err.Error()
+}
+
+// NewLinodeInstanceInterfaceDeleteTool creates a tool for deleting an interface from a Linode instance.
+func NewLinodeInstanceInterfaceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_instance_interface_delete",
+		"Deletes an interface from a Linode instance. WARNING: This changes instance network configuration and is irreversible.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance")),
+			mcp.WithNumber(paramConfigInterfaceID, mcp.Required(),
+				mcp.Description("The ID of the Linode interface to delete")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm interface deletion. This action is irreversible.")),
+		},
+		handleInstanceInterfaceDeleteRequest,
+	)
+
+	return tool, profiles.CapDestroy, handler
+}
+
+func handleInstanceInterfaceDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This deletes a Linode interface and changes instance networking. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	interfaceID, validationMessage := instanceInterfaceIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := client.DeleteInstanceInterface(ctx, linodeID, interfaceID); err != nil {
+		return mcp.NewToolResultError(formatDeleteInstanceInterfaceError(linodeID, interfaceID, err)), nil
+	}
+
+	response := struct {
+		Message     string `json:"message"`
+		LinodeID    int    `json:"linode_id"`
+		InterfaceID int    `json:"interface_id"`
+	}{
+		Message:     fmt.Sprintf("Interface %d deleted from instance %d successfully", interfaceID, linodeID),
+		LinodeID:    linodeID,
+		InterfaceID: interfaceID,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func formatDeleteInstanceInterfaceError(linodeID, interfaceID int, err error) string {
+	return "Failed to delete interface " + strconv.Itoa(interfaceID) + " from instance " + strconv.Itoa(linodeID) + ": " + err.Error()
 }
 
 // NewLinodeInstanceInterfaceSettingsGetTool creates a tool for retrieving Linode interface settings.

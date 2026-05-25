@@ -1074,27 +1074,52 @@ func vpcToolEntries(cfg *config.Config) []toolEntry {
 }
 
 func instanceDeepToolEntries(cfg *config.Config) []toolEntry {
-	return entriesFromFactories(cfg, []toolFactory{
-		// Backups
+	factories := append([]toolFactory{}, instanceBackupToolFactories()...)
+	factories = append(factories, instanceFirewallToolFactories()...)
+	factories = append(factories, instanceInterfaceToolFactories()...)
+	factories = append(factories, instanceConfigToolFactories()...)
+	factories = append(factories, instanceDiskToolFactories()...)
+	factories = append(factories, instanceIPToolFactories()...)
+	factories = append(factories, instanceActionToolFactories()...)
+
+	return entriesFromFactories(cfg, factories)
+}
+
+func instanceBackupToolFactories() []toolFactory {
+	return []toolFactory{
 		tools.NewLinodeInstanceBackupListTool,
 		tools.NewLinodeInstanceBackupGetTool,
 		tools.NewLinodeInstanceBackupCreateTool,
 		tools.NewLinodeInstanceBackupRestoreTool,
 		tools.NewLinodeInstanceBackupsEnableTool,
 		tools.NewLinodeInstanceBackupsCancelTool,
-		// Firewalls
+	}
+}
+
+func instanceFirewallToolFactories() []toolFactory {
+	return []toolFactory{
 		tools.NewLinodeInstanceFirewallsUpdateTool,
 		tools.NewLinodeInstanceFirewallsApplyTool,
-		// Interfaces
+		tools.NewLinodeInstanceFirewallListTool,
+	}
+}
+
+func instanceInterfaceToolFactories() []toolFactory {
+	return []toolFactory{
 		tools.NewLinodeInstanceInterfacesListTool,
 		tools.NewLinodeInstanceInterfaceGetTool,
 		tools.NewLinodeInstanceInterfaceFirewallsListTool,
+		tools.NewLinodeInstanceInterfaceDeleteTool,
 		tools.NewLinodeInstanceInterfaceSettingsGetTool,
 		tools.NewLinodeInstanceInterfaceSettingsUpdateTool,
 		tools.NewLinodeInstanceInterfaceHistoryListTool,
 		tools.NewLinodeInstanceInterfaceAddTool,
 		tools.NewLinodeInstanceInterfaceUpdateTool,
-		// Configs
+	}
+}
+
+func instanceConfigToolFactories() []toolFactory {
+	return []toolFactory{
 		tools.NewLinodeInstanceConfigListTool,
 		tools.NewLinodeInstanceConfigGetTool,
 		tools.NewLinodeInstanceConfigInterfacesListTool,
@@ -1106,9 +1131,11 @@ func instanceDeepToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeInstanceConfigUpdateTool,
 		tools.NewLinodeInstanceConfigInterfacesReorderTool,
 		tools.NewLinodeInstanceConfigDeleteTool,
-		// Firewalls
-		tools.NewLinodeInstanceFirewallListTool,
-		// Disks
+	}
+}
+
+func instanceDiskToolFactories() []toolFactory {
+	return []toolFactory{
 		tools.NewLinodeInstanceDiskListTool,
 		tools.NewLinodeInstanceDiskGetTool,
 		tools.NewLinodeInstanceDiskCreateTool,
@@ -1117,19 +1144,27 @@ func instanceDeepToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeInstanceDiskCloneTool,
 		tools.NewLinodeInstanceDiskResizeTool,
 		tools.NewLinodeInstanceDiskPasswordResetTool,
-		// IPs
+	}
+}
+
+func instanceIPToolFactories() []toolFactory {
+	return []toolFactory{
 		tools.NewLinodeInstanceIPListTool,
 		tools.NewLinodeInstanceIPGetTool,
 		tools.NewLinodeInstanceIPAllocateTool,
 		tools.NewLinodeInstanceIPUpdateRDNSTool,
 		tools.NewLinodeInstanceIPDeleteTool,
-		// Actions
+	}
+}
+
+func instanceActionToolFactories() []toolFactory {
+	return []toolFactory{
 		tools.NewLinodeInstanceCloneTool,
 		tools.NewLinodeInstanceMigrateTool,
 		tools.NewLinodeInstanceRebuildTool,
 		tools.NewLinodeInstanceRescueTool,
 		tools.NewLinodeInstancePasswordResetTool,
-	})
+	}
 }
 
 func lkeToolEntries(cfg *config.Config) []toolEntry {
