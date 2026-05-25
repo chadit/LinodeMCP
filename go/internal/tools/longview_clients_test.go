@@ -41,13 +41,13 @@ func TestLinodeLongviewClientsTool(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyData: []map[string]any{{
-					"api_key":      "longview-api-key-secret",
-					"apps":         map[string]bool{"apache": true, databaseEngineName: true, "nginx": false},
-					"created":      "2018-01-01T00:01:01",
-					keyID:          789,
-					"install_code": "longview-install-code-secret",
-					keyLabel:       "client789",
-					keyUpdated:     "2018-01-02T00:01:01",
+					keyLongviewAPIKey:      "longview-api-key-secret",
+					keyLongviewApps:        map[string]bool{keyLongviewAppApache: true, databaseEngineName: true, keyLongviewAppNginx: false},
+					keyCreated:             longviewClientCreatedFixture,
+					keyID:                  789,
+					keyLongviewInstallCode: "longview-install-code-secret",
+					keyLabel:               longviewClientLabelFixture,
+					keyUpdated:             longviewClientUpdatedFixture,
 				}},
 				keyPage:    2,
 				keyPages:   3,
@@ -66,7 +66,7 @@ func TestLinodeLongviewClientsTool(t *testing.T) {
 		assert.False(t, result.IsError, "should not be an error result")
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "client789", "response should contain client label")
+		assert.Contains(t, textContent.Text, longviewClientLabelFixture, "response should contain client label")
 		assert.NotContains(t, textContent.Text, "longview-api-key-secret", "response should not expose Longview API key")
 		assert.NotContains(t, textContent.Text, "longview-install-code-secret", "response should not expose Longview install code")
 	})
@@ -174,11 +174,11 @@ func TestLinodeLongviewClientUpdateTool(t *testing.T) {
 
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				"api_key":      "longview-api-key-secret",
-				"apps":         map[string]bool{"apache": true, databaseEngineName: true, "nginx": false},
-				keyID:          789,
-				"install_code": "longview-install-code-secret",
-				keyLabel:       longviewClientUpdatedLabel,
+				keyLongviewAPIKey:      "longview-api-key-secret",
+				keyLongviewApps:        map[string]bool{keyLongviewAppApache: true, databaseEngineName: true, keyLongviewAppNginx: false},
+				keyID:                  789,
+				keyLongviewInstallCode: "longview-install-code-secret",
+				keyLabel:               longviewClientUpdatedLabel,
 			}))
 		}))
 		defer srv.Close()
@@ -272,7 +272,7 @@ func TestLinodeLongviewClientUpdateTool(t *testing.T) {
 			{name: "missing client id", args: map[string]any{keyLabel: longviewClientUpdatedLabel, keyConfirm: true}, want: errLongviewClientIDPositive},
 			{name: "zero client id", args: map[string]any{keyClientID: 0, keyLabel: longviewClientUpdatedLabel, keyConfirm: true}, want: errLongviewClientIDPositive},
 			{name: "unsafe large client id", args: map[string]any{keyClientID: 9007199254740992.0, keyLabel: longviewClientUpdatedLabel, keyConfirm: true}, want: errLongviewClientIDPositive},
-			{name: "slash client id", args: map[string]any{keyClientID: "789/1", keyLabel: longviewClientUpdatedLabel, keyConfirm: true}, want: errLongviewClientIDPositive},
+			{name: "slash client id", args: map[string]any{keyClientID: longviewClientSlashID, keyLabel: longviewClientUpdatedLabel, keyConfirm: true}, want: errLongviewClientIDPositive},
 			{name: "query client id", args: map[string]any{keyClientID: "789?x=1", keyLabel: longviewClientUpdatedLabel, keyConfirm: true}, want: errLongviewClientIDPositive},
 			{name: "traversal client id", args: map[string]any{keyClientID: pathTraversalValue, keyLabel: longviewClientUpdatedLabel, keyConfirm: true}, want: errLongviewClientIDPositive},
 			{name: caseMissingLabel, args: map[string]any{keyClientID: 789, keyConfirm: true}, want: errLabelRequired},
@@ -420,7 +420,7 @@ func TestLinodeLongviewClientDeleteTool(t *testing.T) {
 			{name: "missing client id", args: map[string]any{keyConfirm: true}, want: errLongviewClientIDPositive},
 			{name: "zero client id", args: map[string]any{keyClientID: 0, keyConfirm: true}, want: errLongviewClientIDPositive},
 			{name: "unsafe large client id", args: map[string]any{keyClientID: 9007199254740992.0, keyConfirm: true}, want: errLongviewClientIDPositive},
-			{name: "slash client id", args: map[string]any{keyClientID: "789/1", keyConfirm: true}, want: errLongviewClientIDPositive},
+			{name: "slash client id", args: map[string]any{keyClientID: longviewClientSlashID, keyConfirm: true}, want: errLongviewClientIDPositive},
 			{name: "query client id", args: map[string]any{keyClientID: "789?x=1", keyConfirm: true}, want: errLongviewClientIDPositive},
 			{name: "traversal client id", args: map[string]any{keyClientID: pathTraversalValue, keyConfirm: true}, want: errLongviewClientIDPositive},
 		}

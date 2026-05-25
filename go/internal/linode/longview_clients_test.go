@@ -34,11 +34,11 @@ func TestClientListLongviewClientsSuccess(t *testing.T) {
 			keyData: []map[string]any{{
 				"api_key":      longviewClientAPIKey,
 				"apps":         map[string]bool{"apache": true, databaseEngineMySQL: true, "nginx": false},
-				keyCreated:     "2018-01-01T00:01:01",
+				keyCreated:     longviewClientCreated,
 				keyID:          789,
 				"install_code": longviewClientInstallCode,
 				keyLabel:       longviewClientLabel,
-				"updated":      "2018-01-02T00:01:01",
+				keyUpdated:     longviewClientUpdated,
 			}},
 			keyPage:    2,
 			keyPages:   3,
