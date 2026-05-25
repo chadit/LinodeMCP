@@ -144,6 +144,18 @@ type ReorderConfigInterfacesRequest struct {
 	IDs []int `json:"ids"`
 }
 
+// InstanceInterfaceSettings represents interface settings for a Linode instance.
+type InstanceInterfaceSettings struct {
+	DefaultRoute  *InterfaceDefaultRoute `json:"default_route,omitempty"`
+	NetworkHelper *bool                  `json:"network_helper,omitempty"`
+}
+
+// UpdateInstanceInterfaceSettingsRequest represents fields that can update Linode interface settings.
+type UpdateInstanceInterfaceSettingsRequest struct {
+	DefaultRoute  *InterfaceDefaultRoute `json:"default_route,omitempty"`
+	NetworkHelper *bool                  `json:"network_helper,omitempty"`
+}
+
 // InstanceDisk represents a disk attached to a Linode instance.
 type InstanceDisk struct {
 	ID         int    `json:"id"`

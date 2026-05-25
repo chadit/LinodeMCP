@@ -218,6 +218,125 @@ func formatAddInstanceInterfaceError(linodeID int, err error) string {
 	return "Failed to add interface to instance " + strconv.Itoa(linodeID) + ": " + err.Error()
 }
 
+// NewLinodeInstanceInterfaceSettingsGetTool creates a tool for retrieving Linode interface settings.
+func NewLinodeInstanceInterfaceSettingsGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_instance_interface_settings_get",
+		"Retrieves interface settings for a specific Linode instance.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance")),
+		},
+		handleInstanceInterfaceSettingsGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleInstanceInterfaceSettingsGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	settings, err := client.GetInstanceInterfaceSettings(ctx, linodeID)
+	if err != nil {
+		return mcp.NewToolResultError(formatInstanceInterfaceSettingsError("retrieve", linodeID, err)), nil
+	}
+
+	return MarshalToolResponse(settings)
+}
+
+// NewLinodeInstanceInterfaceSettingsUpdateTool creates a tool for updating Linode interface settings.
+func NewLinodeInstanceInterfaceSettingsUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_instance_interface_settings_update",
+		"Updates interface settings for a specific Linode instance. WARNING: This changes instance network configuration.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance")),
+			mcp.WithString("settings", mcp.Required(),
+				mcp.Description("JSON object with optional default_route and/or network_helper fields.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm interface settings update.")),
+		},
+		handleInstanceInterfaceSettingsUpdateRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleInstanceInterfaceSettingsUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This updates interface settings for the Linode instance. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	settingsReq, validationMessage := instanceInterfaceSettingsUpdateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	settings, err := client.UpdateInstanceInterfaceSettings(ctx, linodeID, settingsReq)
+	if err != nil {
+		return mcp.NewToolResultError(formatInstanceInterfaceSettingsError("update", linodeID, err)), nil
+	}
+
+	response := struct {
+		Message  string                            `json:"message"`
+		Settings *linode.InstanceInterfaceSettings `json:"settings"`
+		LinodeID int                               `json:"linode_id"`
+	}{
+		Message:  fmt.Sprintf("Interface settings for instance %d updated successfully", linodeID),
+		Settings: settings,
+		LinodeID: linodeID,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func instanceInterfaceSettingsUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateInstanceInterfaceSettingsRequest, string) {
+	settingsJSON, validationMessage := stringArgument(request, "settings", true)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	var settingsReq *linode.UpdateInstanceInterfaceSettingsRequest
+	if err := strictDecodeJSON(settingsJSON, &settingsReq); err != nil {
+		return nil, fmt.Sprintf("invalid settings JSON: %v", err)
+	}
+
+	if settingsReq == nil {
+		return nil, interfaceJSONObjRequired
+	}
+
+	if settingsReq.DefaultRoute == nil && settingsReq.NetworkHelper == nil {
+		return nil, "at least one interface settings field is required"
+	}
+
+	return settingsReq, ""
+}
+
+func formatInstanceInterfaceSettingsError(action string, linodeID int, err error) string {
+	return "Failed to " + action + " interface settings for instance " + strconv.Itoa(linodeID) + ": " + err.Error()
+}
+
 // NewLinodeInstanceInterfaceHistoryListTool creates a tool for listing historical interface versions for a Linode instance.
 func NewLinodeInstanceInterfaceHistoryListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(

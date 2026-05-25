@@ -2988,6 +2988,36 @@ func (c *Client) ListInstanceInterfaceHistory(ctx context.Context, linodeID, pag
 	return history, err
 }
 
+// GetInstanceInterfaceSettings retrieves Linode interface settings with automatic retry on transient failures.
+func (c *Client) GetInstanceInterfaceSettings(ctx context.Context, linodeID int) (*InstanceInterfaceSettings, error) {
+	var settings *InstanceInterfaceSettings
+
+	err := c.executeWithRetry(ctx, "GetInstanceInterfaceSettings", func() error {
+		var retryErr error
+
+		settings, retryErr = c.httpGetInstanceInterfaceSettings(ctx, linodeID)
+
+		return retryErr
+	})
+
+	return settings, err
+}
+
+// UpdateInstanceInterfaceSettings updates Linode interface settings without retrying the PUT mutation.
+func (c *Client) UpdateInstanceInterfaceSettings(ctx context.Context, linodeID int, req *UpdateInstanceInterfaceSettingsRequest) (*InstanceInterfaceSettings, error) {
+	var settings *InstanceInterfaceSettings
+
+	err := c.executeWithoutRetry(ctx, "UpdateInstanceInterfaceSettings", func() error {
+		var retryErr error
+
+		settings, retryErr = c.httpUpdateInstanceInterfaceSettings(ctx, linodeID, req)
+
+		return retryErr
+	})
+
+	return settings, err
+}
+
 // AddInstanceInterface creates an interface without retrying the POST create call.
 func (c *Client) AddInstanceInterface(ctx context.Context, linodeID int, req *AddInstanceInterfaceRequest) (*InstanceInterface, error) {
 	var instanceInterface *InstanceInterface
