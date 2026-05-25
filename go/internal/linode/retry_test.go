@@ -360,6 +360,44 @@ func TestRetryableClientListInstanceConfigsRetries(t *testing.T) {
 	assert.Equal(t, int32(2), callCount.Load(), "should retry once")
 }
 
+// TestRetryableClientListInstanceConfigInterfacesRetries verifies that ListInstanceConfigInterfaces
+// retries transient read failures and succeeds on the second attempt.
+func TestRetryableClientListInstanceConfigInterfacesRetries(t *testing.T) {
+	t.Parallel()
+
+	var callCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/linode/instances/123/configs/456/interfaces", r.URL.Path, "request path should match")
+
+		count := callCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			writeRetryTestResponse(t, w, `{"errors":[{"reason":"rate limited"}]}`)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode([]linode.ConfigInterfaceResponse{{ID: 101, Purpose: purposePublic}}), "encoding interfaces response should not fail")
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(
+		srv.URL, "token", nil,
+		linode.WithMaxRetries(2),
+		linode.WithBaseDelay(1*time.Millisecond),
+		linode.WithMaxDelay(10*time.Millisecond),
+		linode.WithBackoffFactor(2.0),
+		linode.WithJitter(false),
+	)
+
+	interfaces, err := client.ListInstanceConfigInterfaces(t.Context(), 123, 456)
+	require.NoError(t, err, "ListInstanceConfigInterfaces should succeed after retry")
+	assert.Len(t, interfaces, 1, "should return one interface after retry")
+	assert.Equal(t, int32(2), callCount.Load(), "should retry once")
+}
+
 // TestRetryableClientGetInstanceRetries verifies that GetInstance retries
 // on a 500 server error and succeeds on the second attempt.
 func TestRetryableClientGetInstanceRetries(t *testing.T) {

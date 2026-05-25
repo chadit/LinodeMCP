@@ -2907,6 +2907,21 @@ func (c *Client) ListInstanceConfigs(ctx context.Context, linodeID, page, pageSi
 	return configs, err
 }
 
+// ListInstanceConfigInterfaces retrieves configuration profile interfaces with automatic retry on transient failures.
+func (c *Client) ListInstanceConfigInterfaces(ctx context.Context, linodeID, configID int) ([]ConfigInterfaceResponse, error) {
+	var interfaces []ConfigInterfaceResponse
+
+	err := c.executeWithRetry(ctx, "ListInstanceConfigInterfaces", func() error {
+		var retryErr error
+
+		interfaces, retryErr = c.httpListInstanceConfigInterfaces(ctx, linodeID, configID)
+
+		return retryErr
+	})
+
+	return interfaces, err
+}
+
 // GetInstanceConfig retrieves a specific configuration profile with automatic retry on transient failures.
 func (c *Client) GetInstanceConfig(ctx context.Context, linodeID, configID int) (*InstanceConfig, error) {
 	var config *InstanceConfig
