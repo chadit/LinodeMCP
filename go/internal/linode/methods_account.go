@@ -25,6 +25,7 @@ const (
 	endpointBetas                        = "/betas"
 	endpointAccountBetas                 = "/account/betas"
 	endpointAccountOAuthClients          = "/account/oauth-clients"
+	endpointLongviewClients              = "/longview/clients"
 	endpointAccountPaymentMethods        = "/account/payment-methods"
 	endpointAccountEvents                = "/account/events"
 	endpointAccountUsers                 = "/account/users"
@@ -368,6 +369,28 @@ func (c *Client) httpListAccountOAuthClients(ctx context.Context, page, pageSize
 	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
 
 	var clients PaginatedResponse[OAuthClient]
+	if err := c.handleResponse(resp, &clients); err != nil {
+		return nil, err
+	}
+
+	return &clients, nil
+}
+
+// httpListLongviewClients retrieves Longview clients for the account.
+func (c *Client) httpListLongviewClients(ctx context.Context, page, pageSize int) (*PaginatedResponse[LongviewClient], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointLongviewClients, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListLongviewClients", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var clients PaginatedResponse[LongviewClient]
 	if err := c.handleResponse(resp, &clients); err != nil {
 		return nil, err
 	}

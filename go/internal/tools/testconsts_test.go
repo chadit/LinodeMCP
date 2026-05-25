@@ -44,6 +44,7 @@ const (
 	keyEmail                     = "email"
 	keyUsername                  = "username"
 	keyLabel                     = "label"
+	keyUpdated                   = "updated"
 	keyRegion                    = "region"
 	keyRegions                   = "regions"
 	keyType                      = "type"

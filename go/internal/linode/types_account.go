@@ -352,6 +352,22 @@ type OAuthClient struct {
 	ThumbnailURL string `json:"thumbnail_url"`
 }
 
+// LongviewApps describes the application monitors enabled for a Longview client.
+type LongviewApps struct {
+	Apache bool `json:"apache"`
+	MySQL  bool `json:"mysql"`
+	Nginx  bool `json:"nginx"`
+}
+
+// LongviewClient represents a Longview client monitor.
+type LongviewClient struct {
+	Apps    LongviewApps `json:"apps"`
+	Created string       `json:"created"`
+	ID      int          `json:"id"`
+	Label   string       `json:"label"`
+	Updated string       `json:"updated"`
+}
+
 // AccountPaymentMethod represents a payment method available on the account.
 type AccountPaymentMethod struct {
 	ID        int            `json:"id"`

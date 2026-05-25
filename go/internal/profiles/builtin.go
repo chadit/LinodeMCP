@@ -129,7 +129,7 @@ func Categories(toolName string) []string {
 		cats = append(cats, "security")
 	}
 
-	if strings.HasPrefix(toolName, "linode_monitor_") {
+	if hasAnyPrefix(toolName, "linode_monitor_", "linode_longview_") {
 		cats = append(cats, "monitor")
 	}
 

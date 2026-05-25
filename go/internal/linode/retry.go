@@ -322,6 +322,21 @@ func (c *Client) ListAccountOAuthClients(ctx context.Context, page, pageSize int
 	return clients, err
 }
 
+// ListLongviewClients retrieves Longview clients with automatic retry on transient failures.
+func (c *Client) ListLongviewClients(ctx context.Context, page, pageSize int) (*PaginatedResponse[LongviewClient], error) {
+	var clients *PaginatedResponse[LongviewClient]
+
+	err := c.executeWithRetry(ctx, "ListLongviewClients", func() error {
+		var err error
+
+		clients, err = c.httpListLongviewClients(ctx, page, pageSize)
+
+		return err
+	})
+
+	return clients, err
+}
+
 // ListAccountPaymentMethods retrieves account payment methods with automatic retry on transient failures.
 func (c *Client) ListAccountPaymentMethods(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountPaymentMethod], error) {
 	var methods *PaginatedResponse[AccountPaymentMethod]
