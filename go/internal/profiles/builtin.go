@@ -61,6 +61,7 @@ func Categories(toolName string) []string {
 		toolName,
 		"linode_instance_backup_",
 		"linode_instance_stats_",
+		"linode_instance_transfer_",
 		"linode_instance_disk_",
 		"linode_instance_ip_",
 	) {

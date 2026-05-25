@@ -97,6 +97,33 @@ func (c *Client) httpGetInstanceStatsByYearMonth(ctx context.Context, linodeID, 
 	return &stats, nil
 }
 
+// GetInstanceTransfer retrieves monthly network transfer statistics for a Linode instance.
+func (c *Client) httpGetInstanceTransfer(ctx context.Context, linodeID int) (*InstanceTransfer, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	endpoint := fmt.Sprintf(endpointInstances+"/%s/transfer", encodedLinodeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetInstanceTransfer", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var transfer InstanceTransfer
+	if err := c.handleResponse(resp, &transfer); err != nil {
+		return nil, err
+	}
+
+	return &transfer, nil
+}
+
 // ListRegions retrieves all available Linode regions.
 func (c *Client) httpListRegions(ctx context.Context) ([]Region, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
