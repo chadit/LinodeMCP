@@ -1,5 +1,13 @@
 package linode
 
+// LongviewSubscription represents the current Longview subscription plan.
+type LongviewSubscription struct {
+	ClientsIncluded int    `json:"clients_included"`
+	ID              string `json:"id"`
+	Label           string `json:"label"`
+	Price           Price  `json:"price"`
+}
+
 // CreatedLongviewClient represents the response from creating a Longview client.
 // The create response may include setup credentials that are intentionally not
 // exposed by the read-only LongviewClient list type.
