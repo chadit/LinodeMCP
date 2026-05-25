@@ -115,7 +115,7 @@ func TestLinodeInstanceConfigsListTool(t *testing.T) {
 	}{
 		{name: caseMissingLinodeID, args: map[string]any{}, wantContains: errLinodeIDRequired},
 		{name: "separator linode id", args: map[string]any{keyLinodeID: "123/.."}, wantContains: errLinodeIDInteger},
-		{name: "query linode id", args: map[string]any{keyLinodeID: "123?query"}, wantContains: errLinodeIDInteger},
+		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: "123?query"}, wantContains: errLinodeIDInteger},
 		{name: caseNegativeLinodeID, args: map[string]any{keyLinodeID: float64(-1)}, wantContains: "linode_id must be an integer greater than or equal to 1"},
 		{name: "fractional linode id", args: map[string]any{keyLinodeID: float64(123.9)}, wantContains: errLinodeIDInteger},
 		{name: "invalid page", args: map[string]any{keyLinodeID: float64(123), "page": float64(0)}, wantContains: "page must be an integer greater than or equal to 1"},

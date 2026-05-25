@@ -2847,6 +2847,21 @@ func (c *Client) CreateInstanceConfig(ctx context.Context, linodeID int, req *Cr
 	return config, err
 }
 
+// UpdateInstanceConfig updates a configuration profile without retrying the PUT update call.
+func (c *Client) UpdateInstanceConfig(ctx context.Context, linodeID, configID int, req *UpdateConfigRequest) (*InstanceConfig, error) {
+	var config *InstanceConfig
+
+	err := c.executeWithoutRetry(ctx, "UpdateInstanceConfig", func() error {
+		var retryErr error
+
+		config, retryErr = c.httpUpdateInstanceConfig(ctx, linodeID, configID, req)
+
+		return retryErr
+	})
+
+	return config, err
+}
+
 // ListInstanceDisks retrieves all disks for an instance with automatic retry on transient failures.
 func (c *Client) ListInstanceDisks(ctx context.Context, linodeID int) ([]InstanceDisk, error) {
 	var disks []InstanceDisk

@@ -20,6 +20,8 @@ const (
 	errImageIDPathFragment   = "image_id must be a private image identifier"
 	errInvalidHelpersJSON    = "invalid helpers JSON"
 	errInvalidInterfacesJSON = "invalid interfaces JSON"
+	errInvalidDevicesJSON    = "invalid devices JSON"
+	errConfigIDPositive      = "config_id must be a positive integer"
 	memberLabelFixture       = "Engineering"
 	memberTokenFixture       = "member-token"
 
@@ -105,6 +107,7 @@ const (
 	keyInterfaces     = "interfaces"
 	keyHelpers        = "helpers"
 	keyMemoryLimit    = "memory_limit"
+	keyKernel         = "kernel"
 	keyInstanceID     = "instance_id"
 	keyVolumeID       = "volume_id"
 	keyDomainID       = "domain_id"
@@ -171,7 +174,6 @@ const (
 	labelBootConfig                 = "boot-config"
 	configKernelLatest              = "linode/latest-64bit"
 	configDeviceSlotSDA             = "sda"
-	keyKernel                       = "kernel"
 	configDevicesSDAJSON            = `{"sda":{"disk_id":456}}`
 	jsonObjectEmpty                 = `{}`
 	labelProdCluster                = "prod-cluster"
@@ -193,6 +195,8 @@ const (
 	httpMethodGET                   = "GET"
 	idAbc123                        = "abc-123"
 	caseZero                        = "zero"
+	caseNoUpdateFields              = "no update fields"
+	caseQueryLinodeID               = "query linode id"
 	caseMissingShareGroupID         = "missing sharegroup id"
 	caseZeroShareGroupID            = "zero sharegroup id"
 	caseTraversalShareGroupID       = "traversal sharegroup id"

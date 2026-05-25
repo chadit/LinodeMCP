@@ -37,21 +37,21 @@ func instanceConfigCreateValidationCases() []instanceConfigCreateValidationCase 
 		{name: caseNegativeLinodeID, args: map[string]any{keyLinodeID: float64(-1), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
 		{name: "fractional linode id", args: map[string]any{keyLinodeID: float64(1.5), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
 		{name: "slash linode id", args: map[string]any{keyLinodeID: paymentMethodIDSlash, keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: "query linode id", args: map[string]any{keyLinodeID: "123?query", keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
 		{name: "traversal linode id", args: map[string]any{keyLinodeID: pathTraversalValue, keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
 		{name: caseMissingLabel, args: map[string]any{keyLinodeID: float64(123), keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLabelRequired},
 		{name: "non-string label", args: map[string]any{keyLinodeID: float64(123), keyLabel: float64(99), keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: "label must be a string"},
 		{name: caseBlankLabelImageShareGroupToken, args: map[string]any{keyLinodeID: float64(123), keyLabel: "  ", keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLabelRequired},
 		{name: "missing devices", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyConfirm: true}, wantContains: "devices is required"},
-		{name: "non-string devices", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: map[string]any{configDeviceSlotSDA: map[string]any{"disk_id": 456}}, keyConfirm: true}, wantContains: "devices must be a string"},
+		{name: "non-string devices", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: map[string]any{configDeviceSlotSDA: map[string]any{keyDiskID: 456}}, keyConfirm: true}, wantContains: "devices must be a string"},
 		{name: "null devices", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: databaseJSONNull, keyConfirm: true}, wantContains: "devices must be a JSON object"},
 		{name: "empty devices", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: jsonObjectEmpty, keyConfirm: true}, wantContains: "devices must include at least one device slot"},
-		{name: "invalid devices", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: `[`, keyConfirm: true}, wantContains: "invalid devices JSON"},
+		{name: "invalid devices", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: `[`, keyConfirm: true}, wantContains: errInvalidDevicesJSON},
 		{name: "invalid device slot slash", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: `{"sd/a":{"disk_id":456}}`, keyConfirm: true}, wantContains: "device slot sd/a must be one of sda through sdh"},
 		{name: "invalid device slot traversal", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: `{"..":{"disk_id":456}}`, keyConfirm: true}, wantContains: "device slot .. must be one of sda through sdh"},
 		{name: "null device", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: `{"sda":null}`, keyConfirm: true}, wantContains: "device sda must be an object"},
 		{name: "empty device", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: `{"sda":{}}`, keyConfirm: true}, wantContains: "device sda requires disk_id or volume_id"},
-		{name: "unknown device field", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: `{"sda":{"disk":456}}`, keyConfirm: true}, wantContains: "invalid devices JSON"},
+		{name: "unknown device field", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: `{"sda":{"disk":456}}`, keyConfirm: true}, wantContains: errInvalidDevicesJSON},
 		{name: "invalid device id", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: `{"sda":{"disk_id":0}}`, keyConfirm: true}, wantContains: "disk_id must be greater than 0"},
 		{name: "invalid volume id", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: `{"sda":{"volume_id":0}}`, keyConfirm: true}, wantContains: "volume_id must be greater than 0"},
 		{name: "both device ids", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: `{"sda":{"disk_id":456,"volume_id":789}}`, keyConfirm: true}, wantContains: "can use disk_id or volume_id, not both"},
@@ -74,8 +74,8 @@ func instanceConfigCreateValidationCases() []instanceConfigCreateValidationCase 
 		{name: "unknown interface field", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyInterfaces: `[{"purpose":"public","typo":true}]`, keyConfirm: true}, wantContains: errInvalidInterfacesJSON},
 		{name: "trailing interfaces JSON", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyInterfaces: `[{"purpose":"public"}] {}`, keyConfirm: true}, wantContains: errInvalidInterfacesJSON},
 		{name: "invalid interface purpose", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyInterfaces: `[{"purpose":"bad"}]`, keyConfirm: true}, wantContains: "purpose must be public, vlan, or vpc"},
-		{name: "invalid run level", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyRunLevel: "bad", keyConfirm: true}, wantContains: "run_level must be"},
-		{name: "invalid virt mode", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyVirtMode: "bad", keyConfirm: true}, wantContains: "virt_mode must be"},
+		{name: "invalid run level", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyRunLevel: stageBeta, keyConfirm: true}, wantContains: "run_level must be"},
+		{name: "invalid virt mode", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyVirtMode: stageBeta, keyConfirm: true}, wantContains: "virt_mode must be"},
 	}
 }
 
@@ -218,5 +218,170 @@ func TestLinodeInstanceConfigCreateTool(t *testing.T) {
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
 		assertErrorContains(t, result, "Failed to create configuration profile")
+	})
+}
+
+func TestLinodeInstanceConfigUpdateTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	tool, capability, handler := tools.NewLinodeInstanceConfigUpdateTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+		assert.Equal(t, "linode_instance_config_update", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapWrite, capability, "capability should be write")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+		assert.Contains(t, tool.Description, "WARNING", "tool description should warn about mutation")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, keyLinodeID, "schema should include linode_id")
+		assert.Contains(t, props, keyConfigID, "schema should include config_id")
+		assert.Contains(t, props, keyConfirm, "schema should include confirm")
+	})
+
+	validationTests := []instanceConfigCreateValidationCase{
+		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyLabel: labelBootConfig}, wantContains: errConfirmEqualsTrue},
+		{name: caseFalseConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyLabel: labelBootConfig, keyConfirm: false}, wantContains: errConfirmEqualsTrue},
+		{name: caseStringConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyLabel: labelBootConfig, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
+		{name: caseNumericConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyLabel: labelBootConfig, keyConfirm: float64(1)}, wantContains: errConfirmEqualsTrue},
+		{name: caseMissingLinodeID, args: map[string]any{keyConfigID: float64(789), keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: "slash linode id", args: map[string]any{keyLinodeID: pathSeparatorValue, keyConfigID: float64(789), keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfigID: float64(789), keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: "traversal linode id", args: map[string]any{keyLinodeID: pathTraversalValue, keyConfigID: float64(789), keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: "missing config id", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errConfigIDPositive},
+		{name: "slash config id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathSeparatorValue, keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errConfigIDPositive},
+		{name: "query config id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: "789?query", keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errConfigIDPositive},
+		{name: "traversal config id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathTraversalValue, keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errConfigIDPositive},
+		{name: caseNoUpdateFields, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyConfirm: true}, wantContains: "at least one configuration field must be provided"},
+		{name: caseBlankLabelImageShareGroupToken, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyLabel: "  ", keyConfirm: true}, wantContains: errLabelRequired},
+		{name: "null devices", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyDevices: databaseJSONNull, keyConfirm: true}, wantContains: "devices must be a JSON object"},
+		{name: "empty devices", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyDevices: jsonObjectEmpty, keyConfirm: true}, wantContains: "devices must include at least one device slot"},
+		{name: "invalid devices", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyDevices: `[`, keyConfirm: true}, wantContains: errInvalidDevicesJSON},
+		{name: "invalid device slot traversal", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyDevices: `{"..":{"disk_id":456}}`, keyConfirm: true}, wantContains: "device slot .. must be one of sda through sdh"},
+		{name: "null device", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyDevices: `{"sda":null}`, keyConfirm: true}, wantContains: "device sda must be an object"},
+		{name: "empty device", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyDevices: `{"sda":{}}`, keyConfirm: true}, wantContains: "device sda requires disk_id or volume_id"},
+		{name: "unknown device field", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyDevices: `{"sda":{"disk":456}}`, keyConfirm: true}, wantContains: errInvalidDevicesJSON},
+		{name: "invalid device id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyDevices: `{"sda":{"disk_id":0}}`, keyConfirm: true}, wantContains: "disk_id must be greater than 0"},
+		{name: "invalid volume id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyDevices: `{"sda":{"volume_id":0}}`, keyConfirm: true}, wantContains: "volume_id must be greater than 0"},
+		{name: "both device ids", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyDevices: `{"sda":{"disk_id":456,"volume_id":789}}`, keyConfirm: true}, wantContains: "can use disk_id or volume_id, not both"},
+		{name: "null helpers", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyHelpers: databaseJSONNull, keyConfirm: true}, wantContains: "helpers must be a JSON object"},
+		{name: "unknown helpers field", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyHelpers: `{"typo":true}`, keyConfirm: true}, wantContains: errInvalidHelpersJSON},
+		{name: "trailing helpers JSON", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyHelpers: `{"distro":true} {}`, keyConfirm: true}, wantContains: errInvalidHelpersJSON},
+		{name: "null interfaces", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaces: databaseJSONNull, keyConfirm: true}, wantContains: "interfaces must be a JSON array"},
+		{name: "unknown interface field", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaces: `[{"purpose":"public","typo":true}]`, keyConfirm: true}, wantContains: errInvalidInterfacesJSON},
+		{name: "trailing interfaces JSON", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaces: `[{"purpose":"public"}] {}`, keyConfirm: true}, wantContains: errInvalidInterfacesJSON},
+		{name: "invalid interface purpose", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaces: `[{"purpose":"bad"}]`, keyConfirm: true}, wantContains: "purpose must be public, vlan, or vpc"},
+		{name: "invalid run level", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyRunLevel: stageBeta, keyConfirm: true}, wantContains: "run_level must be"},
+		{name: "invalid virt mode", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyVirtMode: stageBeta, keyConfirm: true}, wantContains: "virt_mode must be"},
+	}
+	for _, tt := range validationTests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			req := createRequestWithArgs(t, tt.args)
+			result, err := handler(t.Context(), req)
+			require.NoError(t, err, "handler should not return Go error")
+			require.NotNil(t, result, "handler should return a result")
+			assert.True(t, result.IsError, "result should be a tool error")
+			assertErrorContains(t, result, tt.wantContains)
+		})
+	}
+
+	t.Run("successful update", func(t *testing.T) {
+		t.Parallel()
+
+		diskID := 456
+		updated := linode.InstanceConfig{
+			ID:    789,
+			Label: labelBootConfig,
+			Devices: map[string]*linode.ConfigDevice{
+				configDeviceSlotSDA: {DiskID: &diskID},
+			},
+		}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/linode/instances/123/configs/789", r.URL.Path, "request path should match")
+			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+
+			var got linode.UpdateConfigRequest
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should decode")
+
+			if assert.NotNil(t, got.Label, "label should be set") {
+				assert.Equal(t, labelBootConfig, *got.Label, "label should match")
+			}
+
+			if assert.NotNil(t, got.Devices, "devices should be set") {
+				assert.Contains(t, *got.Devices, configDeviceSlotSDA, "devices should include sda")
+			}
+
+			if assert.NotNil(t, got.Kernel, "kernel should be set") {
+				assert.Equal(t, configKernelLatest, *got.Kernel, "kernel should match")
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(updated), "encoding response should not fail")
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeInstanceConfigUpdateTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyLinodeID: float64(123),
+			keyConfigID: float64(789),
+			keyLabel:    labelBootConfig,
+			keyDevices:  configDevicesSDAJSON,
+			keyKernel:   configKernelLatest,
+			keyConfirm:  true,
+		})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.False(t, result.IsError, "result should not be a tool error")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, labelBootConfig, "response should contain config label")
+		assert.Contains(t, textContent.Text, "789", "response should contain config ID")
+	})
+
+	t.Run("client error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/linode/instances/123/configs/789", r.URL.Path, "request path should match")
+			http.Error(w, `{"errors":[{"reason":"temporary failure"}]}`, http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeInstanceConfigUpdateTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyLinodeID: float64(123),
+			keyConfigID: float64(789),
+			keyLabel:    labelBootConfig,
+			keyConfirm:  true,
+		})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "Failed to update configuration profile")
 	})
 }
