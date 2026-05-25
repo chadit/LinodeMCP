@@ -1161,6 +1161,7 @@ func instanceActionToolFactories() []toolFactory {
 	return []toolFactory{
 		tools.NewLinodeInstanceCloneTool,
 		tools.NewLinodeInstanceMigrateTool,
+		tools.NewLinodeInstanceMutateTool,
 		tools.NewLinodeInstanceRebuildTool,
 		tools.NewLinodeInstanceRescueTool,
 		tools.NewLinodeInstancePasswordResetTool,
