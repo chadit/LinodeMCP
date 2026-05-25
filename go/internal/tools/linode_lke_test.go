@@ -583,7 +583,7 @@ func TestLinodeLKEACLGetTool(t *testing.T) {
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/lke/clusters/123/control-plane-acl", r.URL.Path, "request path should match")
+			assert.Equal(t, "/lke/clusters/123/control_plane_acl", r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(acl), "encoding response should not fail")
 		}))
@@ -1759,7 +1759,7 @@ func TestLinodeLKEACLUpdateTool(t *testing.T) {
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/lke/clusters/123/control-plane-acl", r.URL.Path, "request path should match")
+			assert.Equal(t, "/lke/clusters/123/control_plane_acl", r.URL.Path, "request path should match")
 			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(acl), "encoding response should not fail")
@@ -1822,7 +1822,7 @@ func TestLinodeLKEACLDeleteTool(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/lke/clusters/123/control-plane-acl", r.URL.Path, "request path should match")
+			assert.Equal(t, "/lke/clusters/123/control_plane_acl", r.URL.Path, "request path should match")
 			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
 			w.WriteHeader(http.StatusOK)
 		}))
