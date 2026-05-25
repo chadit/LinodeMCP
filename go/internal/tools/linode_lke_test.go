@@ -1671,21 +1671,41 @@ func TestLinodeLKEServiceTokenDeleteTool(t *testing.T) {
 		require.NotNil(t, handler, "handler should not be nil")
 	})
 
-	t.Run(caseMissingConfirm, func(t *testing.T) {
-		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123)})
-		result, err := handler(t.Context(), req)
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, errConfirmEqualsTrue)
-	})
+	confirmCases := []struct {
+		name  string
+		value any
+	}{
+		{name: caseMissingConfirm},
+		{name: caseFalseConfirmRejected, value: false},
+		{name: caseStringConfirmRejected, value: boolStringTrue},
+		{name: caseNumericConfirmRejected, value: float64(1)},
+	}
+
+	for i := range confirmCases {
+		confirmCase := confirmCases[i]
+		t.Run(confirmCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			args := map[string]any{keyClusterID: float64(123)}
+			if confirmCase.value != nil {
+				args[keyConfirm] = confirmCase.value
+			}
+
+			req := createRequestWithArgs(t, args)
+			result, err := handler(t.Context(), req)
+
+			require.NoError(t, err, "handler should not return Go error")
+			require.NotNil(t, result, "handler should return a result")
+			assert.True(t, result.IsError, "result should be a tool error")
+			assertErrorContains(t, result, errConfirmEqualsTrue)
+		})
+	}
 
 	t.Run("successful deletion", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/lke/clusters/123/service-token", r.URL.Path, "request path should match")
+			assert.Equal(t, "/lke/clusters/123/servicetoken", r.URL.Path, "request path should match")
 			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
 			w.WriteHeader(http.StatusOK)
 		}))

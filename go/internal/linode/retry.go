@@ -2591,9 +2591,9 @@ func (c *Client) ListLKEAPIEndpoints(ctx context.Context, clusterID int) ([]LKEA
 	return endpoints, err
 }
 
-// DeleteLKEServiceToken deletes the service token for an LKE cluster with automatic retry on transient failures.
+// DeleteLKEServiceToken deletes the service token for an LKE cluster without retrying the DELETE call.
 func (c *Client) DeleteLKEServiceToken(ctx context.Context, clusterID int) error {
-	return c.executeWithRetry(ctx, "DeleteLKEServiceToken", func() error {
+	return c.executeWithoutRetry(ctx, "DeleteLKEServiceToken", func() error {
 		return c.httpDeleteLKEServiceToken(ctx, clusterID)
 	})
 }
