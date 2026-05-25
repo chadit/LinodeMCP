@@ -435,7 +435,7 @@ func (c *Client) httpGetLKEControlPlaneACL(ctx context.Context, clusterID int) (
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/control-plane-acl", clusterID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/control_plane_acl", clusterID)
 
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -457,7 +457,7 @@ func (c *Client) httpUpdateLKEControlPlaneACL(ctx context.Context, clusterID int
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/control-plane-acl", clusterID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/control_plane_acl", clusterID)
 
 	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
 	if err != nil {
@@ -479,7 +479,7 @@ func (c *Client) httpDeleteLKEControlPlaneACL(ctx context.Context, clusterID int
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/control-plane-acl", clusterID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/control_plane_acl", clusterID)
 
 	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
 	if err != nil {
