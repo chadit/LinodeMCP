@@ -435,7 +435,35 @@ func (c *Client) httpUpdateInstanceFirewalls(ctx context.Context, linodeID, page
 	return response.Data, nil
 }
 
-// ListInstanceConfigInterfaces retrieves all interfaces for a configuration profile on a Linode instance.
+// ListInstanceInterfaces retrieves all interfaces for a Linode instance.
+func (c *Client) httpListInstanceInterfaces(ctx context.Context, linodeID int) ([]InstanceInterface, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/interfaces", encodedLinodeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListInstanceInterfaces", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var payload struct {
+		Interfaces []InstanceInterface `json:"interfaces"`
+	}
+	if err := c.handleResponse(resp, &payload); err != nil {
+		return nil, err
+	}
+
+	return payload.Interfaces, nil
+}
+
 func (c *Client) httpListInstanceConfigInterfaces(ctx context.Context, linodeID, configID int) ([]ConfigInterfaceResponse, error) {
 	if linodeID <= 0 {
 		return nil, ErrLinodeIDPositive
