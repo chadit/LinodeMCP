@@ -98,6 +98,21 @@ func (c *Client) GetInstance(ctx context.Context, instanceID int) (*Instance, er
 	return instance, err
 }
 
+// GetInstanceStatsByYearMonth retrieves monthly instance statistics with automatic retry on transient failures.
+func (c *Client) GetInstanceStatsByYearMonth(ctx context.Context, linodeID, year, month int) (*InstanceStats, error) {
+	var stats *InstanceStats
+
+	err := c.executeWithRetry(ctx, "GetInstanceStatsByYearMonth", func() error {
+		var retryErr error
+
+		stats, retryErr = c.httpGetInstanceStatsByYearMonth(ctx, linodeID, year, month)
+
+		return retryErr
+	})
+
+	return stats, err
+}
+
 // GetAccount retrieves the account information with automatic retry on transient failures.
 func (c *Client) GetAccount(ctx context.Context) (*Account, error) {
 	var account *Account

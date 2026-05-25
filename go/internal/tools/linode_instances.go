@@ -15,8 +15,16 @@ import (
 
 // boolTrue and boolFalse are used for boolean string comparison in filter functions.
 const (
-	boolTrue  = "true"
-	boolFalse = "false"
+	boolTrue             = "true"
+	boolFalse            = "false"
+	paramStatsYear       = "year"
+	paramStatsMonth      = "month"
+	statsYearMin         = 2000
+	statsYearMax         = 2037
+	statsMonthMin        = 1
+	statsMonthMax        = 12
+	statsYearRangeError  = "year must be an integer between 2000 and 2037"
+	statsMonthRangeError = "month must be an integer between 1 and 12"
 )
 
 // NewLinodeInstanceGetTool creates a tool for getting a single Linode instance by ID.
@@ -103,6 +111,83 @@ func handleLinodeInstancesRequest(ctx context.Context, request *mcp.CallToolRequ
 	}
 
 	return formatInstancesResponse(instances, statusFilter)
+}
+
+// NewLinodeInstanceStatsByYearMonthTool creates a tool for retrieving monthly Linode statistics.
+func NewLinodeInstanceStatsByYearMonthTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_instance_stats_month_get",
+		"Retrieves CPU, IO, IPv4, and IPv6 statistics for a Linode instance for a specific month.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance")),
+			mcp.WithNumber(paramStatsYear, mcp.Required(),
+				mcp.Description("The statistics year, from 2000 through 2037")),
+			mcp.WithNumber(paramStatsMonth, mcp.Required(),
+				mcp.Description("The statistics month, from 1 through 12")),
+		},
+		handleInstanceStatsByYearMonthRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleInstanceStatsByYearMonthRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	linodeID, validationMessage := requiredPositiveIntArgument(request, "linode_id", ErrLinodeIDRequired.Error(), "linode_id must be a positive integer")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	year, validationMessage := boundedIntArgument(request, paramStatsYear, statsYearMin, statsYearMax, statsYearRangeError)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	month, validationMessage := boundedIntArgument(request, paramStatsMonth, statsMonthMin, statsMonthMax, statsMonthRangeError)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	stats, err := client.GetInstanceStatsByYearMonth(ctx, linodeID, year, month)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve statistics for instance %d in %d-%02d: %v", linodeID, year, month, err)), nil
+	}
+
+	return MarshalToolResponse(stats)
+}
+
+func requiredPositiveIntArgument(request *mcp.CallToolRequest, key, missingMessage, invalidMessage string) (int, string) {
+	args := request.GetArguments()
+	if _, exists := args[key]; !exists {
+		return 0, missingMessage
+	}
+
+	value, validationMessage := boundedIntArgument(request, key, 1, 0, invalidMessage)
+	if validationMessage != "" {
+		return 0, validationMessage
+	}
+
+	return value, ""
+}
+
+func boundedIntArgument(request *mcp.CallToolRequest, key string, minValue, maxValue int, message string) (int, string) {
+	args := request.GetArguments()
+	if _, exists := args[key]; !exists {
+		return 0, message
+	}
+
+	value, validationMessage := optionalPaginationInt(args, key, minValue, maxValue)
+	if validationMessage != "" {
+		return 0, message
+	}
+
+	return value, ""
 }
 
 // NewLinodeInstanceInterfaceAddTool creates a tool for adding an interface to a Linode instance.

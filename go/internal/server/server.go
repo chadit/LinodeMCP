@@ -900,6 +900,7 @@ func computeToolEntries(cfg *config.Config) []toolEntry {
 	return entriesFromFactories(cfg, []toolFactory{
 		tools.NewLinodeInstanceListTool,
 		tools.NewLinodeInstanceGetTool,
+		tools.NewLinodeInstanceStatsByYearMonthTool,
 		tools.NewLinodeRegionListTool,
 		tools.NewLinodeTypeListTool,
 		tools.NewLinodeImageListTool,
