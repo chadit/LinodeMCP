@@ -43,6 +43,67 @@ func TestClientListInstanceFirewalls(t *testing.T) {
 	assert.Equal(t, instanceFirewallLabelFixture, got[0].Label, "firewall label should match")
 }
 
+func TestClientListInstanceInterfaceFirewalls(t *testing.T) {
+	t.Parallel()
+
+	firewalls := []linode.Firewall{{ID: 789, Label: instanceFirewallLabelFixture, Status: instanceFirewallStatusEnabled}}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/linode/instances/123/interfaces/456/firewalls", r.URL.EscapedPath(), "escaped request path should match")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.Firewall]{
+			Data:    firewalls,
+			Page:    1,
+			Pages:   1,
+			Results: 1,
+		}), "encoding response should not fail")
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.ListInstanceInterfaceFirewalls(t.Context(), 123, 456)
+
+	require.NoError(t, err, "list instance interface firewalls should not fail")
+	require.Len(t, got, 1, "one firewall should be returned")
+	assert.Equal(t, instanceFirewallLabelFixture, got[0].Label, "firewall label should match")
+}
+
+func TestClientListInstanceInterfaceFirewallsRejectsInvalidIDs(t *testing.T) {
+	t.Parallel()
+
+	client := linode.NewClient("https://api.linode.com/v4", "test-token", nil, linode.WithMaxRetries(0))
+
+	got, err := client.ListInstanceInterfaceFirewalls(t.Context(), 0, 456)
+	require.ErrorIs(t, err, linode.ErrLinodeIDPositive, "invalid linode ID should be rejected before request")
+	assert.Nil(t, got, "no firewalls should be returned")
+
+	got, err = client.ListInstanceInterfaceFirewalls(t.Context(), 123, 0)
+	require.ErrorIs(t, err, linode.ErrInterfaceIDPositive, "invalid interface ID should be rejected before request")
+	assert.Nil(t, got, "no firewalls should be returned")
+}
+
+func TestClientListInstanceInterfaceFirewallsHTTPError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/linode/instances/123/interfaces/456/firewalls", r.URL.Path, "request path should match")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errForbidden}},
+		}), "encoding error response should not fail")
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.ListInstanceInterfaceFirewalls(t.Context(), 123, 456)
+
+	require.Error(t, err, "HTTP error should be returned")
+	assert.Nil(t, got, "no firewalls should be returned")
+}
+
 func TestClientListInstanceFirewallsRejectsInvalidLinodeID(t *testing.T) {
 	t.Parallel()
 

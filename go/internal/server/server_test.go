@@ -249,6 +249,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_instance_firewalls_apply":                       profiles.CapWrite,
 		"linode_instance_interfaces_list":                       profiles.CapRead,
 		"linode_instance_interface_get":                         profiles.CapRead,
+		"linode_instance_interface_firewalls_list":              profiles.CapRead,
 		"linode_instance_interface_settings_get":                profiles.CapRead,
 		"linode_instance_interface_settings_update":             profiles.CapWrite,
 		"linode_instance_interface_history_list":                profiles.CapRead,

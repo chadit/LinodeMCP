@@ -135,6 +135,7 @@ const (
 	keyFirewallID                = "firewall_id"
 	keyNodeBalancerID            = "nodebalancer_id"
 	caseFractionalLinodeID       = "fractional linode id"
+	caseNegativeInterfaceID      = "negative interface id"
 	caseSeparatorLinodeID        = "separator linode id"
 	pathSeparatorLinodeID        = "123/.."
 	labelWebFirewall             = "web-firewall"
