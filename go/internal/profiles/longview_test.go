@@ -13,4 +13,5 @@ func TestLongviewCategory(t *testing.T) {
 
 	assert.Contains(t, profiles.Categories("linode_longview_plan"), "monitor")
 	assert.Contains(t, profiles.Categories("linode_longview_client_create"), "monitor")
+	assert.Contains(t, profiles.Categories("linode_longview_plan_update"), "monitor")
 }

@@ -373,6 +373,11 @@ type UpdateLongviewClientRequest struct {
 	Label *string `json:"label,omitempty"`
 }
 
+// UpdateLongviewPlanRequest contains editable fields for PUT /v4/longview/plan.
+type UpdateLongviewPlanRequest struct {
+	LongviewSubscription string `json:"longview_subscription"`
+}
+
 // AccountPaymentMethod represents a payment method available on the account.
 type AccountPaymentMethod struct {
 	ID        int            `json:"id"`

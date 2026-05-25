@@ -379,6 +379,13 @@ func (c *Client) DeleteLongviewClient(ctx context.Context, clientID int) error {
 	return c.httpDeleteLongviewClient(ctx, clientID)
 }
 
+// UpdateLongviewPlan updates the account Longview subscription plan without
+// retrying the mutating request. Retrying can replay the plan change after a
+// transient error, so this method delegates exactly once.
+func (c *Client) UpdateLongviewPlan(ctx context.Context, req *UpdateLongviewPlanRequest) (*LongviewSubscription, error) {
+	return c.httpUpdateLongviewPlan(ctx, req)
+}
+
 // ListAccountPaymentMethods retrieves account payment methods with automatic retry on transient failures.
 func (c *Client) ListAccountPaymentMethods(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountPaymentMethod], error) {
 	var methods *PaginatedResponse[AccountPaymentMethod]

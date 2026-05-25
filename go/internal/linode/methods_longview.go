@@ -67,3 +67,23 @@ func (c *Client) httpGetLongviewClient(ctx context.Context, clientID string) (*L
 
 	return &client, nil
 }
+
+// httpUpdateLongviewPlan updates the account Longview subscription plan.
+func (c *Client) httpUpdateLongviewPlan(ctx context.Context, req *UpdateLongviewPlanRequest) (*LongviewSubscription, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpointLongviewPlan, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateLongviewPlan", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var plan LongviewSubscription
+	if err := c.handleResponse(resp, &plan); err != nil {
+		return nil, err
+	}
+
+	return &plan, nil
+}
