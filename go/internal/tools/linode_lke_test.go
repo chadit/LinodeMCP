@@ -777,6 +777,11 @@ func TestLinodeLKETypesListTool(t *testing.T) {
 
 // TestLinodeLKETierVersionsListTool verifies the LKE tier versions list tool
 // registers correctly and returns tier version data.
+const (
+	keyLKETier              = "tier"
+	errLKETierInvalidChoice = "tier must be 'standard' or 'enterprise'"
+)
+
 func TestLinodeLKETierVersionsListTool(t *testing.T) {
 	t.Parallel()
 
@@ -787,6 +792,7 @@ func TestLinodeLKETierVersionsListTool(t *testing.T) {
 		t.Parallel()
 		assert.Equal(t, "linode_lke_tier_version_list", tool.Name, "tool name should match")
 		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Contains(t, tool.InputSchema.Required, keyLKETier, "tier must be marked required")
 		require.NotNil(t, handler, "handler should not be nil")
 	})
 
@@ -795,11 +801,11 @@ func TestLinodeLKETierVersionsListTool(t *testing.T) {
 
 		tierVersions := []linode.LKETierVersion{
 			{ID: lkeVersion129, Tier: classStandard},
-			{ID: lkeVersion128, Tier: "enterprise"},
+			{ID: lkeVersion128, Tier: classStandard},
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/lke/tiers/versions", r.URL.Path, "request path should match")
+			assert.Equal(t, "/lke/tiers/standard/versions", r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyData: tierVersions, keyPage: 1, keyPages: 1, keyResults: 2,
@@ -814,7 +820,7 @@ func TestLinodeLKETierVersionsListTool(t *testing.T) {
 		}
 		_, _, srvHandler := tools.NewLinodeLKETierVersionListTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{})
+		req := createRequestWithArgs(t, map[string]any{keyLKETier: classStandard})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -824,8 +830,31 @@ func TestLinodeLKETierVersionsListTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, classStandard, "response should contain standard tier")
-		assert.Contains(t, textContent.Text, "enterprise", "response should contain enterprise tier")
 	})
+
+	invalidCases := []struct {
+		name string
+		args map[string]any
+		want string
+	}{
+		{name: "missing tier", args: map[string]any{}, want: "tier is required"},
+		{name: "slash tier", args: map[string]any{keyLKETier: "standard/enterprise"}, want: errLKETierInvalidChoice},
+		{name: "query tier", args: map[string]any{keyLKETier: "standard?x=1"}, want: errLKETierInvalidChoice},
+		{name: "traversal tier", args: map[string]any{keyLKETier: pathTraversalValue}, want: errLKETierInvalidChoice},
+	}
+
+	for _, testCase := range invalidCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+
+			require.NoError(t, err, "handler should not return Go error")
+			require.NotNil(t, result, "handler should return a result")
+			assert.True(t, result.IsError, "invalid tier should return a tool error")
+			assertErrorContains(t, result, testCase.want)
+		})
+	}
 }
 
 // End-to-end verification of LKE cluster creation workflow.

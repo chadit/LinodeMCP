@@ -98,6 +98,8 @@ var (
 	ErrLKEClusterIDInvalid  = errors.New("cluster_id must be a valid integer")
 	ErrLKEPoolIDRequired    = errors.New("pool_id is required")
 	ErrLKEPoolIDInvalid     = errors.New("pool_id must be a valid integer")
+	ErrLKETierRequired      = errors.New("tier is required")
+	ErrLKETierInvalid       = errors.New("tier must be 'standard' or 'enterprise'")
 )
 
 // Sentinel errors for VPC validation.

@@ -452,21 +452,52 @@ func NewLinodeLKETypeListTool(cfg *config.Config) (mcp.Tool, profiles.Capability
 
 // NewLinodeLKETierVersionListTool creates a tool for listing available LKE tier versions.
 func NewLinodeLKETierVersionListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newListTool(
+	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_tier_version_list",
-		"Lists available LKE tier versions",
-		func(ctx context.Context, client *linode.Client) ([]linode.LKETierVersion, error) {
-			return client.ListLKETierVersions(ctx)
+		"Lists available LKE tier versions for the requested tier",
+		[]mcp.ToolOption{
+			mcp.WithString("tier", mcp.Required(), mcp.Description("LKE tier: standard or enterprise.")),
 		},
-		nil,
-		"tier_versions",
+		handleLKETierVersionList,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
+func handleLKETierVersionList(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	tier, err := parseLKETier(request.GetString("tier", ""))
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	versions, err := client.ListLKETierVersions(ctx, tier)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve LKE tier versions for tier '%s': %v", tier, err)), nil
+	}
+
+	return FormatListResponse(versions, nil, "tier_versions")
+}
+
 // parseLKEClusterID validates and converts the cluster ID string to an integer.
+func parseLKETier(raw string) (string, error) {
+	if raw == "" {
+		return "", ErrLKETierRequired
+	}
+
+	switch raw {
+	case "standard", "enterprise":
+		return raw, nil
+	default:
+		return "", fmt.Errorf("%w: %s", ErrLKETierInvalid, raw)
+	}
+}
+
 func parseLKEClusterID(raw string) (int, error) {
 	if raw == "" {
 		return 0, ErrLKEClusterIDRequired

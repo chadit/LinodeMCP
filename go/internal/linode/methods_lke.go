@@ -11,7 +11,7 @@ const (
 	endpointLKEClusters     = "/lke/clusters"
 	endpointLKEVersions     = "/lke/versions"
 	endpointLKETypes        = "/lke/types"
-	endpointLKETierVersions = "/lke/tiers/versions"
+	endpointLKETierVersions = "/lke/tiers"
 )
 
 // ListLKEClusters retrieves all LKE clusters for the authenticated user.
@@ -555,12 +555,14 @@ func (c *Client) httpListLKETypes(ctx context.Context) ([]LKEType, error) {
 	return response.Data, nil
 }
 
-// ListLKETierVersions retrieves all available LKE tier versions.
-func (c *Client) httpListLKETierVersions(ctx context.Context) ([]LKETierVersion, error) {
+// ListLKETierVersions retrieves available LKE tier versions for a tier.
+func (c *Client) httpListLKETierVersions(ctx context.Context, tier string) ([]LKETierVersion, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointLKETierVersions, nil)
+	endpoint := endpointLKETierVersions + "/" + url.PathEscape(tier) + "/versions"
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, &NetworkError{Operation: "ListLKETierVersions", Err: err}
 	}

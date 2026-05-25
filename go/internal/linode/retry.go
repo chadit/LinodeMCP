@@ -2680,14 +2680,14 @@ func (c *Client) ListLKETypes(ctx context.Context) ([]LKEType, error) {
 	return types, err
 }
 
-// ListLKETierVersions retrieves all LKE tier versions with automatic retry on transient failures.
-func (c *Client) ListLKETierVersions(ctx context.Context) ([]LKETierVersion, error) {
+// ListLKETierVersions retrieves LKE tier versions with automatic retry on transient failures.
+func (c *Client) ListLKETierVersions(ctx context.Context, tier string) ([]LKETierVersion, error) {
 	var versions []LKETierVersion
 
 	err := c.executeWithRetry(ctx, "ListLKETierVersions", func() error {
 		var err error
 
-		versions, err = c.httpListLKETierVersions(ctx)
+		versions, err = c.httpListLKETierVersions(ctx, tier)
 
 		return err
 	})
