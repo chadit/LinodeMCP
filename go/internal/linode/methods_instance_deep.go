@@ -530,6 +530,33 @@ func (c *Client) httpReorderInstanceConfigInterfaces(ctx context.Context, linode
 	return c.handleResponse(resp, nil)
 }
 
+// ListInstanceFirewalls retrieves all Cloud Firewalls assigned to a Linode instance.
+func (c *Client) httpListInstanceFirewalls(ctx context.Context, linodeID, page, pageSize int) ([]Firewall, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	endpoint := withPaginationQuery(fmt.Sprintf(endpointInstanceDeep+"/%s/firewalls", encodedLinodeID), page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListInstanceFirewalls", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[Firewall]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
+}
+
 // GetInstanceDisk retrieves a specific disk for a Linode instance.
 func (c *Client) httpGetInstanceDisk(ctx context.Context, linodeID, diskID int) (*InstanceDisk, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

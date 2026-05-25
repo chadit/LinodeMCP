@@ -249,6 +249,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_instance_config_interface_get":                  profiles.CapRead,
 		"linode_instance_config_interface_update":               profiles.CapWrite,
 		"linode_instance_config_interface_delete":               profiles.CapDestroy,
+		"linode_instance_firewall_list":                         profiles.CapRead,
 	}
 
 	for _, descriptor := range descriptors {

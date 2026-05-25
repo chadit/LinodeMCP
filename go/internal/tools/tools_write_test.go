@@ -1051,7 +1051,7 @@ func TestLinodeFirewallCreateTool(t *testing.T) {
 
 		firewall := linode.Firewall{
 			ID:     789,
-			Label:  "web-firewall",
+			Label:  labelWebFirewall,
 			Status: statusEnabled,
 		}
 
@@ -1069,7 +1069,7 @@ func TestLinodeFirewallCreateTool(t *testing.T) {
 		_, _, successHandler := tools.NewLinodeFirewallCreateTool(successCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			keyLabel:         "web-firewall",
+			keyLabel:         labelWebFirewall,
 			"inbound_policy": "DROP",
 			keyConfirm:       true,
 		})
@@ -1081,7 +1081,7 @@ func TestLinodeFirewallCreateTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent type")
-		assert.Contains(t, textContent.Text, "web-firewall", "response should contain the firewall label")
+		assert.Contains(t, textContent.Text, labelWebFirewall, "response should contain the firewall label")
 		assert.Contains(t, textContent.Text, "created successfully", "response should confirm creation")
 	})
 }
