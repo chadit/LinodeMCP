@@ -906,6 +906,7 @@ func computeToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeKernelListTool,
 		tools.NewLinodeKernelGetTool,
 		tools.NewLinodeTypeListTool,
+		tools.NewLinodeTypeGetTool,
 		tools.NewLinodeImageListTool,
 		tools.NewLinodeImageGetTool,
 		tools.NewLinodeImageDeleteTool,
