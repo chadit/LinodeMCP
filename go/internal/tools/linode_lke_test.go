@@ -689,6 +689,29 @@ func TestLinodeLKEVersionGetTool(t *testing.T) {
 		assertErrorContains(t, result, "version is required")
 	})
 
+	t.Run("invalid version path parameter", func(t *testing.T) {
+		t.Parallel()
+
+		for _, versionCase := range []struct {
+			name  string
+			value string
+		}{
+			{name: "separator version", value: lkeVersionWithSlash},
+			{name: "query version", value: lkeVersionWithQuery},
+			{name: "traversal version", value: lkeVersionTraversal},
+		} {
+			t.Run(versionCase.name, func(t *testing.T) {
+				t.Parallel()
+				req := createRequestWithArgs(t, map[string]any{keyVersion: versionCase.value})
+				result, err := handler(t.Context(), req)
+				require.NoError(t, err, "handler should not return Go error")
+				require.NotNil(t, result, "handler should return a result")
+				assert.True(t, result.IsError, "result should be a tool error")
+				assertErrorContains(t, result, "version must be a Kubernetes version ID")
+			})
+		}
+	})
+
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
@@ -708,7 +731,7 @@ func TestLinodeLKEVersionGetTool(t *testing.T) {
 		}
 		_, _, srvHandler := tools.NewLinodeLKEVersionGetTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{"version": lkeVersion129})
+		req := createRequestWithArgs(t, map[string]any{keyVersion: lkeVersion129})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")

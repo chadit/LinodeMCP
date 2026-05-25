@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -417,8 +418,8 @@ func NewLinodeLKEVersionGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 
 func handleLKEVersionGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	versionID := request.GetString("version", "")
-	if versionID == "" {
-		return mcp.NewToolResultError("version is required"), nil
+	if errMsg := validateLKEVersionID(versionID); errMsg != "" {
+		return mcp.NewToolResultError(errMsg), nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -432,6 +433,18 @@ func handleLKEVersionGetRequest(ctx context.Context, request *mcp.CallToolReques
 	}
 
 	return MarshalToolResponse(version)
+}
+
+func validateLKEVersionID(versionID string) string {
+	if versionID == "" {
+		return "version is required"
+	}
+
+	if strings.Contains(versionID, "/") || strings.Contains(versionID, "?") || strings.Contains(versionID, "..") {
+		return "version must be a Kubernetes version ID"
+	}
+
+	return ""
 }
 
 // NewLinodeLKETypeListTool creates a tool for listing available LKE node types.
