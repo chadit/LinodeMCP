@@ -7,19 +7,21 @@ package tools_test
 // names.
 const (
 	// Environment config keys and labels.
-	envKeyDefault          = "default"
-	envLabelDefault        = "Default"
-	envProd                = "prod"
-	apiURLLinodeV4         = "https://api.linode.com/v4"
-	tokenTest              = "test-token"
-	imageShareGroupLabel   = "DevOps Base Images"
-	errTemporaryFailure    = "temporary failure"
-	errNotFound            = "not found"
-	errImageIDPositive     = "image_id must be a positive integer"
-	errImageIDNonEmpty     = "image_id must be a non-empty string"
-	errImageIDPathFragment = "image_id must be a private image identifier"
-	memberLabelFixture     = "Engineering"
-	memberTokenFixture     = "member-token"
+	envKeyDefault            = "default"
+	envLabelDefault          = "Default"
+	envProd                  = "prod"
+	apiURLLinodeV4           = "https://api.linode.com/v4"
+	tokenTest                = "test-token"
+	imageShareGroupLabel     = "DevOps Base Images"
+	errTemporaryFailure      = "temporary failure"
+	errNotFound              = "not found"
+	errImageIDPositive       = "image_id must be a positive integer"
+	errImageIDNonEmpty       = "image_id must be a non-empty string"
+	errImageIDPathFragment   = "image_id must be a private image identifier"
+	errInvalidHelpersJSON    = "invalid helpers JSON"
+	errInvalidInterfacesJSON = "invalid interfaces JSON"
+	memberLabelFixture       = "Engineering"
+	memberTokenFixture       = "member-token"
 
 	// Common JSON request/response keys.
 	keyConfirm                   = "confirm"
@@ -99,6 +101,10 @@ const (
 
 	// Tool-specific resource ID keys.
 	keyLinodeID       = "linode_id"
+	keyDevices        = "devices"
+	keyInterfaces     = "interfaces"
+	keyHelpers        = "helpers"
+	keyMemoryLimit    = "memory_limit"
 	keyInstanceID     = "instance_id"
 	keyVolumeID       = "volume_id"
 	keyDomainID       = "domain_id"
@@ -159,6 +165,9 @@ const (
 	labelTestVPC                    = "test-vpc"
 	labelWebSubnet                  = "web-subnet"
 	labelMyDisk                     = "my-disk"
+	labelBootConfig                 = "boot-config"
+	configDevicesSDAJSON            = `{"sda":{"disk_id":456}}`
+	jsonObjectEmpty                 = `{}`
 	labelProdCluster                = "prod-cluster"
 	labelTestCluster                = "test-cluster"
 	domainExample                   = "example.com"

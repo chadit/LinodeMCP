@@ -337,7 +337,7 @@ func TestRetryableClientListInstanceConfigsRetries(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-			keyData:    []linode.InstanceConfig{{ID: 77, Label: "boot-config"}},
+			keyData:    []linode.InstanceConfig{{ID: 77, Label: labelBootConfig}},
 			keyPage:    1,
 			keyPages:   1,
 			keyResults: 1,

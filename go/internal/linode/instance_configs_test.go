@@ -16,8 +16,22 @@ import (
 func TestClientListInstanceConfigsSuccess(t *testing.T) {
 	t.Parallel()
 
+	diskID := 456
+	distro := true
 	configs := []linode.InstanceConfig{
-		{ID: 77, Label: "boot-config", Kernel: "linode/latest-64bit", RootDevice: "/dev/sda"},
+		{
+			ID:         77,
+			Label:      labelBootConfig,
+			Kernel:     "linode/latest-64bit",
+			RootDevice: "/dev/sda",
+			Devices: map[string]*linode.ConfigDevice{
+				configDeviceSlotSDA: {DiskID: &diskID},
+			},
+			Helpers: &linode.ConfigHelpers{Distro: &distro},
+			Interfaces: []linode.ConfigInterface{
+				{Purpose: "public"},
+			},
+		},
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -38,8 +52,14 @@ func TestClientListInstanceConfigsSuccess(t *testing.T) {
 
 	require.NoError(t, err, "ListInstanceConfigs should succeed on 200 response")
 	require.Len(t, got, 1)
-	assert.Equal(t, "boot-config", got[0].Label)
+	assert.Equal(t, labelBootConfig, got[0].Label)
 	assert.Equal(t, "linode/latest-64bit", got[0].Kernel)
+	assert.Equal(t, diskID, *got[0].Devices[configDeviceSlotSDA].DiskID)
+	require.NotNil(t, got[0].Helpers)
+	require.NotNil(t, got[0].Helpers.Distro)
+	assert.True(t, *got[0].Helpers.Distro)
+	require.Len(t, got[0].Interfaces, 1)
+	assert.Equal(t, "public", got[0].Interfaces[0].Purpose)
 }
 
 func TestClientListInstanceConfigsAPIError(t *testing.T) {

@@ -129,6 +129,37 @@ func (c *Client) httpCancelInstanceBackups(ctx context.Context, linodeID int) er
 	return c.handleResponse(resp, nil)
 }
 
+// CreateInstanceConfig creates a configuration profile for a Linode instance.
+func (c *Client) httpCreateInstanceConfig(ctx context.Context, linodeID int, req *CreateConfigRequest) (*InstanceConfig, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	if req == nil {
+		return nil, ErrCreateConfigRequestRequired
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/configs", encodedLinodeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateInstanceConfig", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var config InstanceConfig
+	if err := c.handleResponse(resp, &config); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
+}
+
 // ListInstanceDisks retrieves all disks for a Linode instance.
 func (c *Client) httpListInstanceDisks(ctx context.Context, linodeID int) ([]InstanceDisk, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

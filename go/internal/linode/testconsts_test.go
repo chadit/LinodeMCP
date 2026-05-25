@@ -70,5 +70,7 @@ const (
 	imageStatusAvailableFixture  = "available"
 	typeManualImage              = "manual"
 	keyCreated                   = "created"
+	labelBootConfig              = "boot-config"
+	configDeviceSlotSDA          = "sda"
 	pathTraversalDotDot          = ".."
 )
