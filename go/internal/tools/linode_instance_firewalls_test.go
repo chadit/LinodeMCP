@@ -58,11 +58,11 @@ func TestLinodeInstanceFirewallListTool(t *testing.T) {
 		{name: caseSeparatorLinodeID, args: map[string]any{keyLinodeID: pathSeparatorLinodeID}, wantContains: errLinodeIDInteger},
 		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue}, wantContains: errLinodeIDInteger},
 		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue}, wantContains: errLinodeIDInteger},
-		{name: caseNegativeLinodeID, args: map[string]any{keyLinodeID: float64(-1)}, wantContains: "linode_id must be an integer greater than or equal to 1"},
+		{name: caseNegativeLinodeID, args: map[string]any{keyLinodeID: float64(-1)}, wantContains: errLinodeIDMin},
 		{name: caseFractionalLinodeID, args: map[string]any{keyLinodeID: float64(123.9)}, wantContains: errLinodeIDInteger},
 		{name: caseInvalidInstanceFirewallsPage, args: map[string]any{keyLinodeID: float64(123), keyPage: float64(0)}, wantContains: errInstanceFirewallsPageMin},
-		{name: "invalid page size low", args: map[string]any{keyLinodeID: float64(123), keyPageSize: float64(10)}, wantContains: errPageSizeRange},
-		{name: "invalid page size high", args: map[string]any{keyLinodeID: float64(123), keyPageSize: float64(501)}, wantContains: errPageSizeRange},
+		{name: caseInvalidPageSizeLow, args: map[string]any{keyLinodeID: float64(123), keyPageSize: float64(10)}, wantContains: errPageSizeRange},
+		{name: caseInvalidPageSizeHigh, args: map[string]any{keyLinodeID: float64(123), keyPageSize: float64(501)}, wantContains: errPageSizeRange},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -327,7 +327,7 @@ func TestLinodeInstanceFirewallsUpdateTool(t *testing.T) {
 	}{
 		{name: "missing linode id", args: map[string]any{keyFirewallIDs: []any{float64(456)}, keyConfirm: true}, want: errLinodeIDRequired},
 		{name: "separator instance id", args: map[string]any{keyLinodeID: pathSeparatorValue, keyFirewallIDs: []any{float64(456)}, keyConfirm: true}, want: errLinodeIDInteger},
-		{name: "query linode id", args: map[string]any{keyLinodeID: "123?query", keyFirewallIDs: []any{float64(456)}, keyConfirm: true}, want: errLinodeIDInteger},
+		{name: "query linode id", args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyFirewallIDs: []any{float64(456)}, keyConfirm: true}, want: errLinodeIDInteger},
 		{name: "traversal instance id", args: map[string]any{keyLinodeID: pathTraversalValue, keyFirewallIDs: []any{float64(456)}, keyConfirm: true}, want: errLinodeIDInteger},
 		{name: "fractional instance id", args: map[string]any{keyLinodeID: float64(123.9), keyFirewallIDs: []any{float64(456)}, keyConfirm: true}, want: errLinodeIDInteger},
 		{name: "missing firewall ids", args: map[string]any{keyLinodeID: float64(123), keyConfirm: true}, want: "firewall_ids is required"},

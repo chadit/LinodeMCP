@@ -406,6 +406,8 @@ const (
 	caseMissingDomain             = "missing domain"
 	caseMissingDomainID           = "missing domain id"
 	caseMissingClusterID          = "missing cluster id"
+	caseInvalidPageSizeLow        = "invalid page size low"
+	caseInvalidPageSizeHigh       = "invalid page size high"
 	testStackScript               = "#!/bin/bash"
 	keyImages                     = "images"
 	imagePrivate15Fixture         = "private/15"

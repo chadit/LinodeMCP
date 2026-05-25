@@ -46,8 +46,8 @@ func TestLinodeInstanceInterfaceHistoryListTool(t *testing.T) {
 		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue}, wantContains: errLinodeIDInteger},
 		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue}, wantContains: errLinodeIDInteger},
 		{name: caseNegativeLinodeID, args: map[string]any{keyLinodeID: float64(-1)}, wantContains: errLinodeIDMin},
-		{name: "invalid page", args: map[string]any{keyLinodeID: float64(123), keyPage: "two"}, wantContains: errPageInteger},
-		{name: "zero page", args: map[string]any{keyLinodeID: float64(123), keyPage: float64(0)}, wantContains: "page must be an integer greater than or equal to 1"},
+		{name: caseInvalidInstanceFirewallsPage, args: map[string]any{keyLinodeID: float64(123), keyPage: "two"}, wantContains: errPageInteger},
+		{name: "zero page", args: map[string]any{keyLinodeID: float64(123), keyPage: float64(0)}, wantContains: errInstanceFirewallsPageMin},
 		{name: "invalid page size", args: map[string]any{keyLinodeID: float64(123), keyPageSize: "fifty"}, wantContains: errPageSizeInteger},
 		{name: "large page size", args: map[string]any{keyLinodeID: float64(123), keyPageSize: float64(501)}, wantContains: errPageSizeRange},
 	}

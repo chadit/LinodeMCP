@@ -615,6 +615,33 @@ func (c *Client) httpListInstanceConfigs(ctx context.Context, linodeID, page, pa
 	return response.Data, nil
 }
 
+// ListInstanceVolumes retrieves all volumes attached to a Linode instance.
+func (c *Client) httpListInstanceVolumes(ctx context.Context, linodeID, page, pageSize int) ([]Volume, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	endpoint := withPaginationQuery(fmt.Sprintf(endpointInstanceDeep+"/%s/volumes", encodedLinodeID), page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListInstanceVolumes", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[Volume]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
+}
+
 // ListInstanceNodeBalancers retrieves NodeBalancers assigned to a Linode instance.
 func (c *Client) httpListInstanceNodeBalancers(ctx context.Context, linodeID int) ([]NodeBalancer, error) {
 	if linodeID <= 0 {

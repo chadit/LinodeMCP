@@ -1132,6 +1132,7 @@ func instanceInterfaceToolFactories() []toolFactory {
 func instanceConfigToolFactories() []toolFactory {
 	return []toolFactory{
 		tools.NewLinodeInstanceConfigListTool,
+		tools.NewLinodeInstanceVolumeListTool,
 		tools.NewLinodeInstanceConfigGetTool,
 		tools.NewLinodeInstanceConfigInterfacesListTool,
 		tools.NewLinodeInstanceConfigCreateTool,

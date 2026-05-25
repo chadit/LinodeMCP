@@ -480,6 +480,49 @@ func TestRetryableClientGetInstanceConfigInterfaceRetries(t *testing.T) {
 
 // TestRetryableClientGetInstanceRetries verifies that GetInstance retries
 // on a 500 server error and succeeds on the second attempt.
+// TestRetryableClientListInstanceVolumesRetries verifies that ListInstanceVolumes
+// retries transient read failures and succeeds on the second attempt.
+func TestRetryableClientListInstanceVolumesRetries(t *testing.T) {
+	t.Parallel()
+
+	var callCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/linode/instances/123/volumes", r.URL.Path, "request path should match")
+
+		count := callCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			writeRetryTestResponse(t, w, `{"errors":[{"reason":"rate limited"}]}`)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyData:    []linode.Volume{{ID: 321, Label: "data-volume"}},
+			keyPage:    1,
+			keyPages:   1,
+			keyResults: 1,
+		}), "encoding volumes response should not fail")
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(
+		srv.URL, "token", nil,
+		linode.WithMaxRetries(2),
+		linode.WithBaseDelay(1*time.Millisecond),
+		linode.WithMaxDelay(10*time.Millisecond),
+		linode.WithBackoffFactor(2.0),
+		linode.WithJitter(false),
+	)
+
+	volumes, err := client.ListInstanceVolumes(t.Context(), 123, 0, 0)
+	require.NoError(t, err, "ListInstanceVolumes should succeed after retry")
+	assert.Len(t, volumes, 1, "should return one volume after retry")
+	assert.Equal(t, int32(2), callCount.Load(), "should retry once")
+}
+
 func TestRetryableClientGetInstanceRetries(t *testing.T) {
 	t.Parallel()
 
