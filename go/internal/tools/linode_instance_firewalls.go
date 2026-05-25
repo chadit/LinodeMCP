@@ -67,6 +67,64 @@ func handleInstanceFirewallsListRequest(ctx context.Context, request *mcp.CallTo
 	return MarshalToolResponse(response)
 }
 
+// NewLinodeInstanceInterfaceFirewallsListTool creates a tool for listing Cloud Firewalls assigned to a Linode interface.
+func NewLinodeInstanceInterfaceFirewallsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_instance_interface_firewalls_list",
+		"Lists Cloud Firewalls assigned to a specific Linode interface.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance")),
+			mcp.WithNumber("interface_id", mcp.Required(),
+				mcp.Description("The ID of the Linode interface")),
+		},
+		handleInstanceInterfaceFirewallsListRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleInstanceInterfaceFirewallsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	interfaceID, validationMessage := instanceInterfaceIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	firewalls, err := client.ListInstanceInterfaceFirewalls(ctx, linodeID, interfaceID)
+	if err != nil {
+		return mcp.NewToolResultError(formatInstanceInterfaceFirewallsListError(linodeID, interfaceID, err)), nil
+	}
+
+	response := struct {
+		Count       int               `json:"count"`
+		LinodeID    int               `json:"linode_id"`
+		InterfaceID int               `json:"interface_id"`
+		Firewalls   []linode.Firewall `json:"firewalls"`
+	}{
+		Count:       len(firewalls),
+		LinodeID:    linodeID,
+		InterfaceID: interfaceID,
+		Firewalls:   firewalls,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func formatInstanceInterfaceFirewallsListError(linodeID, interfaceID int, err error) string {
+	return "Failed to list firewalls for interface " + strconv.Itoa(interfaceID) + " on instance " + strconv.Itoa(linodeID) + ": " + err.Error()
+}
+
 // NewLinodeInstanceFirewallsUpdateTool creates a tool for replacing firewall assignments on a Linode instance.
 func NewLinodeInstanceFirewallsUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(

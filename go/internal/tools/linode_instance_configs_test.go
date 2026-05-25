@@ -396,7 +396,7 @@ func TestLinodeInstanceConfigInterfaceGetTool(t *testing.T) {
 		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: shareGroupIDQueryValue, keyInterfaceID: float64(456)}, wantContains: errConfigIDPositive},
 		{name: caseTraversalConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathTraversalValue, keyInterfaceID: float64(456)}, wantContains: errConfigIDPositive},
 		{name: caseMissingInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789)}, wantContains: errInterfaceIDPositive},
-		{name: "negative interface id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(-1)}, wantContains: errInterfaceIDPositive},
+		{name: caseNegativeInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(-1)}, wantContains: errInterfaceIDPositive},
 		{name: caseSlashInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: pathSeparatorValue}, wantContains: errInterfaceIDPositive},
 		{name: caseQueryInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: shareGroupIDQueryValue}, wantContains: errInterfaceIDPositive},
 		{name: caseTraversalInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: pathTraversalValue}, wantContains: errInterfaceIDPositive},

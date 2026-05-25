@@ -2988,6 +2988,21 @@ func (c *Client) GetInstanceInterface(ctx context.Context, linodeID, interfaceID
 	return instanceInterface, err
 }
 
+// ListInstanceInterfaceFirewalls retrieves Cloud Firewalls assigned to a Linode interface with automatic retry on transient failures.
+func (c *Client) ListInstanceInterfaceFirewalls(ctx context.Context, linodeID, interfaceID int) ([]Firewall, error) {
+	var firewalls []Firewall
+
+	err := c.executeWithRetry(ctx, "ListInstanceInterfaceFirewalls", func() error {
+		var retryErr error
+
+		firewalls, retryErr = c.httpListInstanceInterfaceFirewalls(ctx, linodeID, interfaceID)
+
+		return retryErr
+	})
+
+	return firewalls, err
+}
+
 // ListInstanceInterfaceHistory retrieves Linode interface history with automatic retry on transient failures.
 func (c *Client) ListInstanceInterfaceHistory(ctx context.Context, linodeID, page, pageSize int) (*PaginatedResponse[InstanceInterfaceHistory], error) {
 	var history *PaginatedResponse[InstanceInterfaceHistory]

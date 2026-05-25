@@ -1088,6 +1088,7 @@ func instanceDeepToolEntries(cfg *config.Config) []toolEntry {
 		// Interfaces
 		tools.NewLinodeInstanceInterfacesListTool,
 		tools.NewLinodeInstanceInterfaceGetTool,
+		tools.NewLinodeInstanceInterfaceFirewallsListTool,
 		tools.NewLinodeInstanceInterfaceSettingsGetTool,
 		tools.NewLinodeInstanceInterfaceSettingsUpdateTool,
 		tools.NewLinodeInstanceInterfaceHistoryListTool,

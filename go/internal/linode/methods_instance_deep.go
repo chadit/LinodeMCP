@@ -621,6 +621,38 @@ func (c *Client) httpGetInstanceInterface(ctx context.Context, linodeID, interfa
 	return &instanceInterface, nil
 }
 
+// ListInstanceInterfaceFirewalls retrieves Cloud Firewalls assigned to a Linode interface.
+func (c *Client) httpListInstanceInterfaceFirewalls(ctx context.Context, linodeID, interfaceID int) ([]Firewall, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	if interfaceID <= 0 {
+		return nil, ErrInterfaceIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	encodedInterfaceID := url.PathEscape(strconv.Itoa(interfaceID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/interfaces/%s/firewalls", encodedLinodeID, encodedInterfaceID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListInstanceInterfaceFirewalls", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[Firewall]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
+}
+
 // ListInstanceInterfaceHistory retrieves historical interface versions for a Linode instance.
 func (c *Client) httpListInstanceInterfaceHistory(ctx context.Context, linodeID, page, pageSize int) (*PaginatedResponse[InstanceInterfaceHistory], error) {
 	if linodeID <= 0 {
