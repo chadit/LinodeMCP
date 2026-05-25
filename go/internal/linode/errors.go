@@ -49,6 +49,9 @@ var ErrAddInstanceInterfaceRequestRequired = errors.New("add instance interface 
 // ErrUpdateInterfaceSettingsRequestRequired is returned when UpdateInstanceInterfaceSettings is called without a request body.
 var ErrUpdateInterfaceSettingsRequestRequired = errors.New("interface settings update request is required")
 
+// ErrUpdateInstanceInterfaceRequestRequired is returned when UpdateInstanceInterface is called without a request body.
+var ErrUpdateInstanceInterfaceRequestRequired = errors.New("update instance interface request is required")
+
 // ErrUpdateConfigInterfaceRequestRequired is returned when UpdateInstanceConfigInterface is called without a request body.
 var ErrUpdateConfigInterfaceRequestRequired = errors.New("update config interface request is required")
 

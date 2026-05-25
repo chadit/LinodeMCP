@@ -337,6 +337,128 @@ func formatInstanceInterfaceSettingsError(action string, linodeID int, err error
 	return "Failed to " + action + " interface settings for instance " + strconv.Itoa(linodeID) + ": " + err.Error()
 }
 
+// NewLinodeInstanceInterfaceUpdateTool creates a tool for updating an interface on a Linode instance.
+func NewLinodeInstanceInterfaceUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_instance_interface_update",
+		"Updates a network interface on a Linode instance. WARNING: This changes instance network configuration.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance")),
+			mcp.WithNumber("interface_id", mcp.Required(),
+				mcp.Description("The ID of the Linode interface")),
+			mcp.WithString("interface", mcp.Required(),
+				mcp.Description("JSON object defining exactly one interface update type: public, vpc, or vlan.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm interface update.")),
+		},
+		handleInstanceInterfaceUpdateRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleInstanceInterfaceUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This updates a network interface on the Linode instance. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	interfaceID, interfaceIDOK := getPositiveIntArgument(request, "interface_id")
+	if !interfaceIDOK {
+		return mcp.NewToolResultError(linode.ErrInterfaceIDPositive.Error()), nil
+	}
+
+	interfaceReq, validationMessage := instanceInterfaceUpdateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	updatedInterface, err := client.UpdateInstanceInterface(ctx, linodeID, interfaceID, interfaceReq)
+	if err != nil {
+		return mcp.NewToolResultError(formatUpdateInstanceInterfaceError(linodeID, interfaceID, err)), nil
+	}
+
+	response := struct {
+		Message     string                    `json:"message"`
+		Interface   *linode.InstanceInterface `json:"interface"`
+		LinodeID    int                       `json:"linode_id"`
+		InterfaceID int                       `json:"interface_id"`
+	}{
+		Message:     fmt.Sprintf("Interface %d updated on instance %d successfully", interfaceID, linodeID),
+		Interface:   updatedInterface,
+		LinodeID:    linodeID,
+		InterfaceID: interfaceID,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func instanceInterfaceUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateInstanceInterfaceRequest, string) {
+	interfaceJSON, validationMessage := stringArgument(request, "interface", true)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	var interfaceReq *linode.UpdateInstanceInterfaceRequest
+	if err := strictDecodeJSON(interfaceJSON, &interfaceReq); err != nil {
+		return nil, fmt.Sprintf("invalid interface JSON: %v", err)
+	}
+
+	if interfaceReq == nil {
+		return nil, interfaceJSONObjRequired
+	}
+
+	if validationMessage := validateInstanceInterfaceUpdateRequest(interfaceReq); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	return interfaceReq, ""
+}
+
+func validateInstanceInterfaceUpdateRequest(req *linode.UpdateInstanceInterfaceRequest) string {
+	var typeCount int
+	if req.Public != nil {
+		typeCount++
+	}
+
+	if req.VPC != nil {
+		typeCount++
+
+		if req.VPC.SubnetID <= 0 {
+			return "interface.vpc.subnet_id must be a positive integer"
+		}
+	}
+
+	if req.VLAN != nil {
+		typeCount++
+
+		if strings.TrimSpace(req.VLAN.Label) == "" {
+			return "interface.vlan.vlan_label is required"
+		}
+	}
+
+	if typeCount != 1 {
+		return "interface must define exactly one of public, vpc, or vlan"
+	}
+
+	return ""
+}
+
+func formatUpdateInstanceInterfaceError(linodeID, interfaceID int, err error) string {
+	return "Failed to update interface " + strconv.Itoa(interfaceID) + " on instance " + strconv.Itoa(linodeID) + ": " + err.Error()
+}
+
 // NewLinodeInstanceInterfaceHistoryListTool creates a tool for listing historical interface versions for a Linode instance.
 func NewLinodeInstanceInterfaceHistoryListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(

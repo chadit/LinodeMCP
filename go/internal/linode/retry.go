@@ -3033,6 +3033,21 @@ func (c *Client) AddInstanceInterface(ctx context.Context, linodeID int, req *Ad
 	return instanceInterface, err
 }
 
+// UpdateInstanceInterface updates an interface without retrying the PUT mutation.
+func (c *Client) UpdateInstanceInterface(ctx context.Context, linodeID, interfaceID int, req *UpdateInstanceInterfaceRequest) (*InstanceInterface, error) {
+	var instanceInterface *InstanceInterface
+
+	err := c.executeWithoutRetry(ctx, "UpdateInstanceInterface", func() error {
+		var retryErr error
+
+		instanceInterface, retryErr = c.httpUpdateInstanceInterface(ctx, linodeID, interfaceID, req)
+
+		return retryErr
+	})
+
+	return instanceInterface, err
+}
+
 // ListInstanceConfigInterfaces retrieves configuration profile interfaces with automatic retry on transient failures.
 func (c *Client) ListInstanceConfigInterfaces(ctx context.Context, linodeID, configID int) ([]ConfigInterfaceResponse, error) {
 	var interfaces []ConfigInterfaceResponse

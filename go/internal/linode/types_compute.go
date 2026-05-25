@@ -66,6 +66,21 @@ type AddInstanceInterfaceRequest struct {
 	FirewallID   *int                           `json:"firewall_id,omitempty"`
 }
 
+// UpdateInstanceInterfaceRequest represents the request body for updating a
+// Linode interface. Exactly one of Public, VPC, or VLAN should be set.
+type UpdateInstanceInterfaceRequest struct {
+	Public       *InterfacePublicConfig            `json:"public,omitempty"`
+	VPC          *UpdateInstanceInterfaceVPCConfig `json:"vpc,omitempty"`
+	VLAN         *InterfaceVLANConfig              `json:"vlan,omitempty"`
+	DefaultRoute *AddInterfaceDefaultRoute         `json:"default_route,omitempty"`
+}
+
+// UpdateInstanceInterfaceVPCConfig holds VPC settings for an existing Linode interface.
+type UpdateInstanceInterfaceVPCConfig struct {
+	SubnetID int                       `json:"subnet_id"`
+	IPv4     *AddInstanceInterfaceIPv4 `json:"ipv4,omitempty"`
+}
+
 // AddInstanceInterfaceVPCConfig holds VPC settings for a new Linode interface.
 type AddInstanceInterfaceVPCConfig struct {
 	SubnetID int                       `json:"subnet_id"`

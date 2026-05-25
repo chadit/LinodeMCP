@@ -62,8 +62,8 @@ func TestLinodeInstanceInterfaceAddTool(t *testing.T) {
 		{name: caseInvalidInterface, args: map[string]any{keyLinodeID: float64(123), keyInterface: `{`, keyConfirm: true}, wantContains: errInvalidInterfaceJSON},
 		{name: caseNullInterface, args: map[string]any{keyLinodeID: float64(123), keyInterface: databaseJSONNull, keyConfirm: true}, wantContains: errInterfaceJSONObject},
 		{name: "unknown interface field", args: map[string]any{keyLinodeID: float64(123), keyInterface: `{"public":{},"typo":true}`, keyConfirm: true}, wantContains: errInvalidInterfaceJSON},
-		{name: "missing interface type", args: map[string]any{keyLinodeID: float64(123), keyInterface: jsonObjectEmpty, keyConfirm: true}, wantContains: "interface must define exactly one of public, vpc, or vlan"},
-		{name: "multiple interface types", args: map[string]any{keyLinodeID: float64(123), keyInterface: `{"public":{},"vlan":{"vlan_label":"backend"}}`, keyConfirm: true}, wantContains: "interface must define exactly one of public, vpc, or vlan"},
+		{name: "missing interface type", args: map[string]any{keyLinodeID: float64(123), keyInterface: jsonObjectEmpty, keyConfirm: true}, wantContains: errInterfaceTypeExactlyOne},
+		{name: "multiple interface types", args: map[string]any{keyLinodeID: float64(123), keyInterface: `{"public":{},"vlan":{"vlan_label":"backend"}}`, keyConfirm: true}, wantContains: errInterfaceTypeExactlyOne},
 		{name: "invalid vpc subnet", args: map[string]any{keyLinodeID: float64(123), keyInterface: `{"vpc":{"subnet_id":0}}`, keyConfirm: true}, wantContains: "interface.vpc.subnet_id must be a positive integer"},
 		{name: "blank vlan label", args: map[string]any{keyLinodeID: float64(123), keyInterface: `{"vlan":{"vlan_label":"  "}}`, keyConfirm: true}, wantContains: "interface.vlan.vlan_label is required"},
 	}
