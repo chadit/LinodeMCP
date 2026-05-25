@@ -50,6 +50,41 @@ func NewLinodeInstanceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeInstanceTransferGetTool creates a tool for getting monthly transfer statistics for a Linode instance.
+func NewLinodeInstanceTransferGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_instance_transfer_get",
+		"Retrieves this month's network transfer statistics for a Linode instance.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance")),
+		},
+		handleLinodeInstanceTransferGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleLinodeInstanceTransferGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	transfer, err := client.GetInstanceTransfer(ctx, linodeID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Linode instance transfer statistics: %v", err)), nil
+	}
+
+	return MarshalToolResponse(transfer)
+}
+
 func handleLinodeInstanceGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	instanceID, err := parseInstanceID(request.GetString("instance_id", ""))
 	if err != nil {
