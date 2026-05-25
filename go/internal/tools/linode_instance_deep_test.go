@@ -99,7 +99,7 @@ func TestLinodeInstanceConfigsListTool(t *testing.T) {
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "linode_instance_config_list", tool.Name, "tool name should match")
+		assert.Equal(t, toolLinodeInstanceConfigList, tool.Name, "tool name should match")
 		assert.NotEmpty(t, tool.Description, "tool should have a description")
 		assert.Equal(t, profiles.CapRead, capability, "tool should be read capability")
 		require.NotNil(t, handler, "handler should not be nil")
@@ -115,8 +115,9 @@ func TestLinodeInstanceConfigsListTool(t *testing.T) {
 	}{
 		{name: caseMissingLinodeID, args: map[string]any{}, wantContains: errLinodeIDRequired},
 		{name: "separator linode id", args: map[string]any{keyLinodeID: "123/.."}, wantContains: errLinodeIDInteger},
-		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: "123?query"}, wantContains: errLinodeIDInteger},
+		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue}, wantContains: errLinodeIDInteger},
 		{name: caseNegativeLinodeID, args: map[string]any{keyLinodeID: float64(-1)}, wantContains: "linode_id must be an integer greater than or equal to 1"},
+
 		{name: "fractional linode id", args: map[string]any{keyLinodeID: float64(123.9)}, wantContains: errLinodeIDInteger},
 		{name: "invalid page", args: map[string]any{keyLinodeID: float64(123), "page": float64(0)}, wantContains: "page must be an integer greater than or equal to 1"},
 		{name: "invalid page size low", args: map[string]any{keyLinodeID: float64(123), keyPageSize: float64(10)}, wantContains: "page_size must be an integer from 25 through 500"},
@@ -198,6 +199,136 @@ func TestLinodeInstanceConfigsListTool(t *testing.T) {
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
 		assertErrorContains(t, result, "Failed to list configuration profiles for instance 123")
+	})
+}
+
+// TestLinodeInstanceConfigDeleteTool verifies the instance configuration profile delete tool
+// registers correctly, validates confirm, and deletes configuration profiles.
+func TestLinodeInstanceConfigDeleteTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	tool, capability, handler := tools.NewLinodeInstanceConfigDeleteTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+		assert.Equal(t, "linode_instance_config_delete", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Equal(t, profiles.CapDestroy, capability, "tool should be destroy capability")
+		require.NotNil(t, handler, "handler should not be nil")
+		assert.Contains(t, tool.Description, "WARNING", "tool description should contain WARNING")
+		assert.Contains(t, tool.InputSchema.Properties, keyLinodeID, "schema should include linode_id")
+		assert.Contains(t, tool.InputSchema.Properties, keyConfigID, "schema should include config_id")
+		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "schema should include confirm")
+		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
+	})
+
+	confirmTests := []struct {
+		name  string
+		value any
+		set   bool
+	}{
+		{name: caseMissingConfirm, set: false},
+		{name: caseRequiresConfirm, value: false, set: true},
+		{name: caseStringConfirmRejected, value: boolStringTrue, set: true},
+		{name: caseNumericConfirmRejected, value: 1, set: true},
+	}
+	for _, tt := range confirmTests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			args := map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789)}
+			if tt.set {
+				args[keyConfirm] = tt.value
+			}
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+
+			require.NoError(t, err, "handler should not return Go error")
+			require.NotNil(t, result, "handler should return a result")
+			assert.True(t, result.IsError, "result should be a tool error")
+			assertErrorContains(t, result, errConfirmEqualsTrue)
+		})
+	}
+
+	validationTests := []struct {
+		name string
+		args map[string]any
+		want string
+	}{
+		{name: caseMissingLinodeID, args: map[string]any{keyConfigID: float64(789), keyConfirm: true}, want: errLinodeIDRequired},
+		{name: "separator linode id", args: map[string]any{keyLinodeID: "123/..", keyConfigID: float64(789), keyConfirm: true}, want: errLinodeIDInteger},
+		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfigID: float64(789), keyConfirm: true}, want: errLinodeIDInteger},
+		{name: caseMissingConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfirm: true}, want: tools.ErrConfigIDRequired.Error()},
+		{name: "separator config id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: "789/..", keyConfirm: true}, want: "config_id must be an integer"},
+		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: "789?query", keyConfirm: true}, want: "config_id must be an integer"},
+		{name: "zero config id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(0), keyConfirm: true}, want: "config_id must be an integer greater than or equal to 1"},
+	}
+	for _, tt := range validationTests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
+
+			require.NoError(t, err, "handler should not return Go error")
+			require.NotNil(t, result, "handler should return a result")
+			assert.True(t, result.IsError, "result should be a tool error")
+			assertErrorContains(t, result, tt.want)
+		})
+	}
+
+	t.Run("successful deletion", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/linode/instances/123/configs/789", r.URL.Path, "request path should match")
+			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query params")
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeInstanceConfigDeleteTool(srvCfg)
+
+		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyConfirm: true}))
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.False(t, result.IsError, "result should not be a tool error")
+		assertErrorContains(t, result, "deleted")
+	})
+
+	t.Run("client error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+			_, err := w.Write([]byte(`{"errors":[{"reason":"locked"}]}`))
+			assert.NoError(t, err, "error response should write")
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeInstanceConfigDeleteTool(srvCfg)
+
+		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyConfirm: true}))
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "Failed to remove configuration profile 789 from instance 123")
 	})
 }
 
@@ -298,11 +429,11 @@ func TestLinodeInstanceConfigGetTool(t *testing.T) {
 		wantContains string
 	}{
 		{name: caseMissingLinodeID, args: map[string]any{keyConfigID: "456"}, wantContains: errLinodeIDRequired},
-		{name: "missing config id", args: map[string]any{keyLinodeID: float64(123)}, wantContains: errConfigIDRequired},
+		{name: caseMissingConfigID, args: map[string]any{keyLinodeID: float64(123)}, wantContains: errConfigIDRequired},
 		{name: "malformed linode id", args: map[string]any{keyLinodeID: "123/../?bad=1", keyConfigID: "456"}, wantContains: errLinodeIDInteger},
 		{name: caseNegativeLinodeID, args: map[string]any{keyLinodeID: float64(-123), keyConfigID: "456"}, wantContains: errLinodeIDInteger},
 		{name: "slash config id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: "456/789"}, wantContains: errConfigIDInteger},
-		{name: "query config id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: "456?query"}, wantContains: errConfigIDInteger},
+		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: "456?query"}, wantContains: errConfigIDInteger},
 		{name: "traversal config id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathTraversalValue}, wantContains: errConfigIDInteger},
 		{name: "negative config id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(-456)}, wantContains: "config_id must be an integer greater than or equal to 1"},
 	}
