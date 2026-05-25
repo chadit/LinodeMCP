@@ -418,7 +418,7 @@ func (c *Client) httpDeleteLKEServiceToken(ctx context.Context, clusterID int) e
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/service-token", clusterID)
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/servicetoken", clusterID)
 
 	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
 	if err != nil {
