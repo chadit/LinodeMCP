@@ -12,6 +12,7 @@ import (
 const (
 	endpointInstances                       = "/linode/instances"
 	endpointRegions                         = "/regions"
+	endpointKernels                         = "/linode/kernels"
 	endpointTypes                           = "/linode/types"
 	endpointImages                          = "/images"
 	endpointImagesUpload                    = "/images/upload"
@@ -137,6 +138,29 @@ func (c *Client) httpListRegions(ctx context.Context) ([]Region, error) {
 	defer drainClose(resp)
 
 	var response PaginatedResponse[Region]
+
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
+}
+
+// ListKernels retrieves all available Linode kernels.
+func (c *Client) httpListKernels(ctx context.Context, page, pageSize int) ([]Kernel, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointKernels, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListKernels", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[Kernel]
 
 	if err := c.handleResponse(resp, &response); err != nil {
 		return nil, err

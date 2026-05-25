@@ -248,6 +248,18 @@ type Resolver struct {
 	IPv6 string `json:"ipv6"`
 }
 
+// Kernel represents a Linode kernel.
+type Kernel struct {
+	ID           string `json:"id"`
+	Label        string `json:"label"`
+	Version      string `json:"version"`
+	KVM          bool   `json:"kvm"`
+	Architecture string `json:"architecture"`
+	PVOPS        bool   `json:"pvops"`
+	Deprecated   bool   `json:"deprecated"`
+	Built        string `json:"built"`
+}
+
 // InstanceType represents a Linode instance type (plan).
 type InstanceType struct {
 	ID         string  `json:"id"`
