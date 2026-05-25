@@ -398,6 +398,28 @@ func (c *Client) httpListLongviewClients(ctx context.Context, page, pageSize int
 	return &clients, nil
 }
 
+// httpUpdateLongviewClient updates one Longview client's editable fields.
+func (c *Client) httpUpdateLongviewClient(ctx context.Context, clientID int, req *UpdateLongviewClientRequest) (*LongviewClient, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointLongviewClients + "/" + url.PathEscape(strconv.Itoa(clientID))
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateLongviewClient", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var client LongviewClient
+	if err := c.handleResponse(resp, &client); err != nil {
+		return nil, err
+	}
+
+	return &client, nil
+}
+
 // httpListAccountPaymentMethods retrieves payment methods for the account.
 func (c *Client) httpListAccountPaymentMethods(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountPaymentMethod], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

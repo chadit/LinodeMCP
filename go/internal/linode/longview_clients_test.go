@@ -14,10 +14,11 @@ import (
 )
 
 const (
-	longviewClientAPIKey      = "longview-api-key-secret"
-	longviewClientInstallCode = "longview-install-code-secret"
-	longviewClientLabel       = "client789"
-	longviewClientsPath       = "/longview/clients"
+	longviewClientAPIKey       = "longview-api-key-secret"
+	longviewClientInstallCode  = "longview-install-code-secret"
+	longviewClientLabel        = "client789"
+	longviewClientUpdatedLabel = "renamed-client"
+	longviewClientsPath        = "/longview/clients"
 )
 
 func TestClientListLongviewClientsSuccess(t *testing.T) {
@@ -109,4 +110,77 @@ func TestClientListLongviewClientsRetriesTransientError(t *testing.T) {
 	require.NotNil(t, got)
 	require.Len(t, got.Data, 1)
 	assert.Equal(t, int32(2), calls.Load(), "read route should retry once after transient failure")
+}
+
+func TestClientUpdateLongviewClientSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, longviewClientsPath+"/789", r.URL.EscapedPath(), "request path should match")
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+
+		var body map[string]any
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		assert.Equal(t, map[string]any{keyLabel: longviewClientUpdatedLabel}, body, "request body should only include editable label")
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyID: 789, keyLabel: longviewClientUpdatedLabel}))
+	}))
+	defer srv.Close()
+
+	label := longviewClientUpdatedLabel
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.UpdateLongviewClient(t.Context(), 789, &linode.UpdateLongviewClientRequest{Label: &label})
+
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, 789, got.ID)
+	assert.Equal(t, label, got.Label)
+}
+
+func TestClientUpdateLongviewClientAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, longviewClientsPath+"/789", r.URL.Path, "request path should match")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	defer srv.Close()
+
+	label := longviewClientUpdatedLabel
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.UpdateLongviewClient(t.Context(), 789, &linode.UpdateLongviewClientRequest{Label: &label})
+
+	require.Error(t, err)
+	assert.Nil(t, got)
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+func TestClientUpdateLongviewClientDoesNotRetry(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, longviewClientsPath+"/789", r.URL.Path, "request path should match")
+		calls.Add(1)
+		http.Error(w, "temporary", http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	label := longviewClientUpdatedLabel
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(3))
+	_, err := client.UpdateLongviewClient(t.Context(), 789, &linode.UpdateLongviewClientRequest{Label: &label})
+
+	require.Error(t, err, "UpdateLongviewClient should fail on 503 response")
+	assert.Equal(t, int32(1), calls.Load(), "UpdateLongviewClient must not retry and replay a mutating request")
 }

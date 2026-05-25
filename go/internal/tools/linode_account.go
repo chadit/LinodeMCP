@@ -28,6 +28,11 @@ const (
 	accountOAuthClientsPageSizeMax     = 500
 	longviewClientsPageSizeMin         = 25
 	longviewClientsPageSizeMax         = 500
+	longviewClientIDParam              = "client_id"
+	maxLongviewClientIDFromJSON        = 9007199254740991
+	errLongviewClientIDPositive        = "client_id must be a positive integer"
+	errLongviewClientLabelRequired     = "label is required"
+	errLongviewClientLabelPattern      = "label must be 3-32 characters and contain only letters, digits, hyphen, or underscore"
 	accountPaymentMethodsPageSizeMin   = 25
 	accountPaymentMethodsPageSizeMax   = 500
 	accountMaintenancePageSizeMin      = 25
@@ -542,6 +547,26 @@ func NewLinodeLongviewClientsTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeLongviewClientUpdateTool creates a tool for updating one Longview client's label.
+func NewLinodeLongviewClientUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_longview_client_update",
+		"Updates the label for one Longview client.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(longviewClientIDParam, mcp.Required(),
+				mcp.Description("Longview client ID to update.")),
+			mcp.WithString("label", mcp.Required(),
+				mcp.Description("New Longview client label. Must be 3-32 letters, digits, hyphens, or underscores.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm Longview client update.")),
+		},
+		handleLinodeLongviewClientUpdateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountPaymentMethodsTool creates a tool for listing payment methods for the account.
@@ -1302,6 +1327,120 @@ func longviewClientsPaginationFromTool(request *mcp.CallToolRequest) (int, int, 
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeLongviewClientUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This updates a Longview client. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	clientID, validationMessage := longviewClientIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	req, validationMessage := longviewClientUpdateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	longviewClient, updateFailureMessage := updateLongviewClient(ctx, client, clientID, req)
+	if updateFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to update linode_longview_client_update: " + updateFailureMessage), nil
+	}
+
+	return MarshalToolResponse(struct {
+		Message string                 `json:"message"`
+		Client  *linode.LongviewClient `json:"client"`
+	}{
+		Message: "Longview client updated successfully",
+		Client:  longviewClient,
+	})
+}
+
+func longviewClientIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	value, exists := request.GetArguments()[longviewClientIDParam]
+	if !exists {
+		return 0, errLongviewClientIDPositive
+	}
+
+	switch typed := value.(type) {
+	case int:
+		if typed <= 0 {
+			return 0, errLongviewClientIDPositive
+		}
+
+		return typed, ""
+	case float64:
+		if typed <= 0 || typed > maxLongviewClientIDFromJSON || math.Trunc(typed) != typed {
+			return 0, errLongviewClientIDPositive
+		}
+
+		return int(typed), ""
+	default:
+		return 0, errLongviewClientIDPositive
+	}
+}
+
+func longviewClientUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateLongviewClientRequest, string) {
+	args := request.GetArguments()
+
+	label, hasLabel, validationMessage := optionalStringField(args, "label")
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if !hasLabel {
+		return nil, errLongviewClientLabelRequired
+	}
+
+	if !validLongviewClientLabel(label) {
+		return nil, errLongviewClientLabelPattern
+	}
+
+	return &linode.UpdateLongviewClientRequest{Label: &label}, ""
+}
+
+func validLongviewClientLabel(label string) bool {
+	if len(label) < 3 || len(label) > 32 {
+		return false
+	}
+
+	for _, char := range label {
+		if char >= 'a' && char <= 'z' {
+			continue
+		}
+
+		if char >= 'A' && char <= 'Z' {
+			continue
+		}
+
+		if char >= '0' && char <= '9' {
+			continue
+		}
+
+		if char == '-' || char == '_' {
+			continue
+		}
+
+		return false
+	}
+
+	return true
+}
+
+func updateLongviewClient(ctx context.Context, client *linode.Client, clientID int, req *linode.UpdateLongviewClientRequest) (*linode.LongviewClient, string) {
+	longviewClient, err := client.UpdateLongviewClient(ctx, clientID, req)
+	if err != nil {
+		return nil, err.Error()
+	}
+
+	return longviewClient, ""
 }
 
 func handleLinodeAccountPaymentMethodsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

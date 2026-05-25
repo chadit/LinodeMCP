@@ -337,6 +337,11 @@ func (c *Client) ListLongviewClients(ctx context.Context, page, pageSize int) (*
 	return clients, err
 }
 
+// UpdateLongviewClient updates one Longview client without retrying the mutating request.
+func (c *Client) UpdateLongviewClient(ctx context.Context, clientID int, req *UpdateLongviewClientRequest) (*LongviewClient, error) {
+	return c.httpUpdateLongviewClient(ctx, clientID, req)
+}
+
 // ListAccountPaymentMethods retrieves account payment methods with automatic retry on transient failures.
 func (c *Client) ListAccountPaymentMethods(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountPaymentMethod], error) {
 	var methods *PaginatedResponse[AccountPaymentMethod]
