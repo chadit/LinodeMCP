@@ -2973,6 +2973,21 @@ func (c *Client) ListInstanceInterfaces(ctx context.Context, linodeID int) ([]In
 	return interfaces, err
 }
 
+// GetInstanceInterface retrieves a Linode interface with automatic retry on transient failures.
+func (c *Client) GetInstanceInterface(ctx context.Context, linodeID, interfaceID int) (*InstanceInterface, error) {
+	var instanceInterface *InstanceInterface
+
+	err := c.executeWithRetry(ctx, "GetInstanceInterface", func() error {
+		var retryErr error
+
+		instanceInterface, retryErr = c.httpGetInstanceInterface(ctx, linodeID, interfaceID)
+
+		return retryErr
+	})
+
+	return instanceInterface, err
+}
+
 // ListInstanceInterfaceHistory retrieves Linode interface history with automatic retry on transient failures.
 func (c *Client) ListInstanceInterfaceHistory(ctx context.Context, linodeID, page, pageSize int) (*PaginatedResponse[InstanceInterfaceHistory], error) {
 	var history *PaginatedResponse[InstanceInterfaceHistory]

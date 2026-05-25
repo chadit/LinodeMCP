@@ -51,6 +51,74 @@ func TestClientListInstanceInterfacesSuccess(t *testing.T) {
 	assert.NotNil(t, got[0].DefaultRoute)
 }
 
+func TestClientGetInstanceInterfaceSuccess(t *testing.T) {
+	t.Parallel()
+
+	want := linode.InstanceInterface{ID: 456, MACAddress: "22:00:AB:CD:EF:02", Version: 1}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/linode/instances/123/interfaces/456", r.URL.Path, "request path should match")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(want), "encoding response should not fail")
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+	got, err := client.GetInstanceInterface(t.Context(), 123, 456)
+
+	require.NoError(t, err, "GetInstanceInterface should succeed on 200 response")
+	require.NotNil(t, got)
+	assert.Equal(t, 456, got.ID)
+	assert.Equal(t, "22:00:AB:CD:EF:02", got.MACAddress)
+}
+
+func TestClientGetInstanceInterfaceAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/linode/instances/123/interfaces/456", r.URL.Path, "request path should match")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errForbidden}},
+		}), "encoding error response should not fail")
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+	_, err := client.GetInstanceInterface(t.Context(), 123, 456)
+
+	require.Error(t, err, "GetInstanceInterface should fail on API error")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+}
+
+func TestClientGetInstanceInterfaceRejectsInvalidIDs(t *testing.T) {
+	t.Parallel()
+
+	var called atomic.Bool
+
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		called.Store(true)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetInstanceInterface(t.Context(), 0, 456)
+	require.Error(t, err, "GetInstanceInterface should reject invalid Linode IDs before request")
+	require.ErrorIs(t, err, linode.ErrLinodeIDPositive, "error should expose invalid Linode ID sentinel")
+
+	_, err = client.GetInstanceInterface(t.Context(), 123, 0)
+	require.Error(t, err, "GetInstanceInterface should reject invalid interface IDs before request")
+	require.ErrorIs(t, err, linode.ErrInterfaceIDPositive, "error should expose invalid interface ID sentinel")
+	assert.False(t, called.Load(), "invalid IDs should not reach upstream server")
+}
+
 func TestClientListInstanceInterfacesAPIError(t *testing.T) {
 	t.Parallel()
 
