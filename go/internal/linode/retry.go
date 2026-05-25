@@ -2781,6 +2781,21 @@ func (c *Client) ListInstanceBackups(ctx context.Context, linodeID int) (*Instan
 	return backups, err
 }
 
+// GetInstanceStats retrieves daily statistics for an instance with automatic retry on transient failures.
+func (c *Client) GetInstanceStats(ctx context.Context, linodeID int) (*InstanceStats, error) {
+	var stats *InstanceStats
+
+	err := c.executeWithRetry(ctx, "GetInstanceStats", func() error {
+		var retryErr error
+
+		stats, retryErr = c.httpGetInstanceStats(ctx, linodeID)
+
+		return retryErr
+	})
+
+	return stats, err
+}
+
 // GetInstanceBackup retrieves a specific backup with automatic retry on transient failures.
 func (c *Client) GetInstanceBackup(ctx context.Context, linodeID, backupID int) (*InstanceBackup, error) {
 	var backup *InstanceBackup

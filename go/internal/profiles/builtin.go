@@ -56,10 +56,11 @@ func Categories(toolName string) []string {
 		cats = append(cats, "core")
 	}
 
-	// compute_deep: per-instance backups, disks, and IPs.
+	// compute_deep: per-instance backups, stats, disks, and IPs.
 	if hasAnyPrefix(
 		toolName,
 		"linode_instance_backup_",
+		"linode_instance_stats_",
 		"linode_instance_disk_",
 		"linode_instance_ip_",
 	) {

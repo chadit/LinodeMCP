@@ -133,3 +133,23 @@ func TestCapabilityAndConfirmInvariants(t *testing.T) {
 		}
 	}
 }
+
+func TestLinodeInstanceStatsToolRegistered(t *testing.T) {
+	t.Parallel()
+
+	srv := newCapabilityTestServer(t)
+
+	var found bool
+
+	for _, info := range srv.ToolInfos() {
+		if info.Name == "linode_instance_stats_get" {
+			found = true
+
+			assert.Equal(t, profiles.CapRead, info.Capability, "stats tool should be read-only")
+			assert.Contains(t, info.InputSchema.Properties, "linode_id", "stats tool should declare linode_id")
+			assert.Contains(t, info.InputSchema.Required, "linode_id", "stats tool should require linode_id")
+		}
+	}
+
+	assert.True(t, found, "server should register the instance stats tool")
+}
