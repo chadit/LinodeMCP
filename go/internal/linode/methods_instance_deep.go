@@ -320,6 +320,64 @@ func (c *Client) httpDeleteInstanceConfigInterface(ctx context.Context, linodeID
 	return c.handleResponse(resp, nil)
 }
 
+// GetInstanceInterfaceSettings retrieves interface settings for a Linode instance.
+func (c *Client) httpGetInstanceInterfaceSettings(ctx context.Context, linodeID int) (*InstanceInterfaceSettings, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/interfaces/settings", encodedLinodeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetInstanceInterfaceSettings", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var settings InstanceInterfaceSettings
+	if err := c.handleResponse(resp, &settings); err != nil {
+		return nil, err
+	}
+
+	return &settings, nil
+}
+
+// UpdateInstanceInterfaceSettings updates interface settings for a Linode instance.
+func (c *Client) httpUpdateInstanceInterfaceSettings(ctx context.Context, linodeID int, req *UpdateInstanceInterfaceSettingsRequest) (*InstanceInterfaceSettings, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	if req == nil {
+		return nil, ErrUpdateInterfaceSettingsRequestRequired
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/interfaces/settings", encodedLinodeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateInstanceInterfaceSettings", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var settings InstanceInterfaceSettings
+	if err := c.handleResponse(resp, &settings); err != nil {
+		return nil, err
+	}
+
+	return &settings, nil
+}
+
 func validateInstanceConfigInterfaceIDs(linodeID, configID, interfaceID int) error {
 	if linodeID <= 0 {
 		return ErrLinodeIDPositive
