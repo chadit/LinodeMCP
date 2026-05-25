@@ -116,3 +116,71 @@ func longviewClientCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.
 
 	return &linode.CreateLongviewClientRequest{Label: label}, ""
 }
+
+// NewLinodeLongviewPlanUpdateTool creates a tool for updating the Longview subscription plan.
+func NewLinodeLongviewPlanUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_longview_plan_update",
+		"Updates the account Longview subscription plan.",
+		[]mcp.ToolOption{
+			mcp.WithString("longview_subscription", mcp.Required(), mcp.Description("Longview subscription plan slug to apply.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm Longview plan update.")),
+		},
+		handleLinodeLongviewPlanUpdateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
+func handleLinodeLongviewPlanUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This updates the Longview subscription plan. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	req, validationMessage := longviewPlanUpdateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	plan, updateFailureMessage := updateLongviewPlan(ctx, client, req)
+	if updateFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to update linode_longview_plan_update: " + updateFailureMessage), nil
+	}
+
+	return MarshalToolResponse(struct {
+		Message string                       `json:"message"`
+		Plan    *linode.LongviewSubscription `json:"plan"`
+	}{
+		Message: "Longview plan updated successfully",
+		Plan:    plan,
+	})
+}
+
+func longviewPlanUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateLongviewPlanRequest, string) {
+	subscription, ok := request.GetArguments()["longview_subscription"].(string)
+	if !ok {
+		return nil, "longview_subscription is required"
+	}
+
+	subscription = strings.TrimSpace(subscription)
+	if subscription == "" {
+		return nil, "longview_subscription is required"
+	}
+
+	return &linode.UpdateLongviewPlanRequest{LongviewSubscription: subscription}, ""
+}
+
+func updateLongviewPlan(ctx context.Context, client *linode.Client, req *linode.UpdateLongviewPlanRequest) (*linode.LongviewSubscription, string) {
+	plan, err := client.UpdateLongviewPlan(ctx, req)
+	if err != nil {
+		return nil, err.Error()
+	}
+
+	return plan, ""
+}
