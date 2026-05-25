@@ -60,6 +60,7 @@ const (
 	keyRootPass                  = "root_pass"
 	keyRecordID                  = "record_id"
 	keyK8sVersion                = "k8s_version"
+	keyVersion                   = "version"
 	keyVPCID                     = "vpc_id"
 	keyNodeID                    = "node_id"
 	keyNodePools                 = "node_pools"
@@ -293,8 +294,11 @@ const (
 	draftNonexistent   = "nonexistent-draft"
 
 	// LKE Kubernetes versions.
-	lkeVersion128 = "1.28"
-	lkeVersion129 = "1.29"
+	lkeVersion128       = "1.28"
+	lkeVersion129       = "1.29"
+	lkeVersionWithSlash = "1.29/edge"
+	lkeVersionWithQuery = "1.29?edge"
+	lkeVersionTraversal = "1.29..edge"
 
 	// LKE pool snapshot fixture used in multiple tests.
 	lkePoolSnapshot = `[{"type":"g6-standard-2","count":3}]`
