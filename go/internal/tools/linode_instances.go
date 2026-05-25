@@ -104,6 +104,49 @@ func handleLinodeInstancesRequest(ctx context.Context, request *mcp.CallToolRequ
 	return formatInstancesResponse(instances, statusFilter)
 }
 
+// NewLinodeInstanceInterfacesListTool creates a tool for listing interfaces assigned to a Linode instance.
+func NewLinodeInstanceInterfacesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_instance_interfaces_list",
+		"Lists interfaces assigned to a specific Linode instance.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance")),
+		},
+		handleInstanceInterfacesListRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleInstanceInterfacesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	interfaces, err := client.ListInstanceInterfaces(ctx, linodeID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to list interfaces for instance %d: %v", linodeID, err)), nil
+	}
+
+	response := struct {
+		Count      int                        `json:"count"`
+		Interfaces []linode.InstanceInterface `json:"interfaces"`
+	}{
+		Count:      len(interfaces),
+		Interfaces: interfaces,
+	}
+
+	return MarshalToolResponse(response)
+}
+
 func selectEnvironment(cfg *config.Config, environment string) (*config.EnvironmentConfig, error) {
 	if environment != "" {
 		if env, exists := cfg.Environments[environment]; exists {

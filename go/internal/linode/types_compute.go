@@ -40,6 +40,9 @@ type InstanceInterface struct {
 	DefaultRoute *InterfaceDefaultRoute `json:"default_route,omitempty"`
 	FirewallID   *int                   `json:"firewall_id,omitempty"`
 	MACAddress   string                 `json:"mac_address,omitempty"`
+	Created      string                 `json:"created,omitempty"`
+	Updated      string                 `json:"updated,omitempty"`
+	Version      int                    `json:"version,omitempty"`
 }
 
 // InterfacePublicConfig holds public-interface configuration. Sub-fields are
