@@ -77,6 +77,7 @@ const (
 	purposeVPC                   = "vpc"
 	macAddressFixture            = "22:00:AB:CD:EF:01"
 	pathTraversalDotDot          = ".."
+	lkeTierStandard              = "standard"
 	lkeVersion129                = "1.29"
 	lkeVersionWithSlash          = "1.29/edge"
 )

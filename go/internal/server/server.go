@@ -1208,6 +1208,7 @@ func lkeToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeLKEVersionGetTool,
 		tools.NewLinodeLKETypeListTool,
 		tools.NewLinodeLKETierVersionListTool,
+		tools.NewLinodeLKETierVersionGetTool,
 		// Write tools
 		tools.NewLinodeLKEClusterCreateTool,
 		tools.NewLinodeLKEClusterUpdateTool,

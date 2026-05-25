@@ -497,6 +497,86 @@ func handleLKETierVersionList(ctx context.Context, request *mcp.CallToolRequest,
 	return FormatListResponse(versions, nil, "tier_versions")
 }
 
+// NewLinodeLKETierVersionGetTool creates a tool for getting a specific Kubernetes version for an LKE tier.
+func NewLinodeLKETierVersionGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_lke_tier_version_get",
+		mcp.WithDescription("Retrieves details of a specific Kubernetes version for an LKE tier"),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithString(
+			"tier",
+			mcp.Required(),
+			mcp.Description("The LKE tier ID: standard or enterprise."),
+		),
+		mcp.WithString(
+			"version",
+			mcp.Required(),
+			mcp.Description("The Kubernetes version ID (for example, '1.31')"),
+		),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLKETierVersionGetRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleLKETierVersionGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	tier, errMessage := validateLKETierParam(request.GetString("tier", ""))
+	if errMessage != "" {
+		return mcp.NewToolResultError(errMessage), nil
+	}
+
+	versionID, errMessage := validateLKETierVersionID(request.GetString("version", ""))
+	if errMessage != "" {
+		return mcp.NewToolResultError(errMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	version, err := client.GetLKETierVersion(ctx, tier, versionID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve LKE tier version '%s' for tier '%s': %v", versionID, tier, err)), nil
+	}
+
+	return MarshalToolResponse(version)
+}
+
+func validateLKETierVersionID(raw string) (string, string) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return "", "version is required"
+	}
+
+	if value != raw || strings.ContainsAny(value, "/?#") || strings.Contains(value, "..") {
+		return "", "version must not contain path separators, query separators, fragments, or traversal segments"
+	}
+
+	return value, ""
+}
+
+func validateLKETierParam(raw string) (string, string) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return "", ErrLKETierRequired.Error()
+	}
+
+	if value != raw || strings.ContainsAny(value, "/?#") || strings.Contains(value, "..") {
+		return "", "tier must not contain path separators, query separators, fragments, or traversal segments"
+	}
+
+	tier, err := parseLKETier(value)
+	if err != nil {
+		return "", err.Error()
+	}
+
+	return tier, ""
+}
+
 // parseLKEClusterID validates and converts the cluster ID string to an integer.
 func parseLKETier(raw string) (string, error) {
 	if raw == "" {

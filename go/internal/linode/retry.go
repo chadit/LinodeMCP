@@ -2711,6 +2711,21 @@ func (c *Client) ListLKETierVersions(ctx context.Context, tier string) ([]LKETie
 	return versions, err
 }
 
+// GetLKETierVersion retrieves a specific LKE tier version with automatic retry on transient failures.
+func (c *Client) GetLKETierVersion(ctx context.Context, tierID, versionID string) (*LKETierVersion, error) {
+	var version *LKETierVersion
+
+	err := c.executeWithRetry(ctx, "GetLKETierVersion", func() error {
+		var err error
+
+		version, err = c.httpGetLKETierVersion(ctx, tierID, versionID)
+
+		return err
+	})
+
+	return version, err
+}
+
 // VPC operations
 
 // ListVPCs retrieves all VPCs with automatic retry on transient failures.
