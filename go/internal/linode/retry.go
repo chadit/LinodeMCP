@@ -1623,6 +1623,21 @@ func (c *Client) ListStackScripts(ctx context.Context) ([]StackScript, error) {
 	return scripts, err
 }
 
+// GetStackScript retrieves one StackScript with automatic retry on transient failures.
+func (c *Client) GetStackScript(ctx context.Context, stackScriptID int) (*StackScript, error) {
+	var script *StackScript
+
+	err := c.executeWithRetry(ctx, "GetStackScript", func() error {
+		var err error
+
+		script, err = c.httpGetStackScript(ctx, stackScriptID)
+
+		return err
+	})
+
+	return script, err
+}
+
 // CreateStackScript creates a new StackScript with automatic retry on transient failures.
 func (c *Client) CreateStackScript(ctx context.Context, req *CreateStackScriptRequest) (*StackScript, error) {
 	var script *StackScript

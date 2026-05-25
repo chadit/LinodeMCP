@@ -12,6 +12,22 @@ import (
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
+// NewLinodeStackScriptGetTool creates a tool for retrieving one StackScript.
+func NewLinodeStackScriptGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_stackscript_get",
+		mcp.WithDescription("Gets one StackScript by ID."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber("stackscript_id", mcp.Required(), mcp.Description("StackScript ID to retrieve.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeStackScriptGetRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeStackScriptListTool creates a tool for listing StackScripts.
 func NewLinodeStackScriptListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
@@ -40,6 +56,39 @@ func NewLinodeStackScriptListTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 	}
 
 	return tool, profiles.CapRead, handler
+}
+
+func handleLinodeStackScriptGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	stackScriptID, validationMessage := stackScriptIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	script, err := client.GetStackScript(ctx, stackScriptID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve StackScript: %v", err)), nil
+	}
+
+	return MarshalToolResponse(script)
+}
+
+func stackScriptIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	raw, exists := request.GetArguments()["stackscript_id"]
+	if !exists {
+		return 0, "stackscript_id must be a positive integer"
+	}
+
+	stackScriptID, ok := numberArgToInt(raw)
+	if !ok || stackScriptID <= 0 {
+		return 0, "stackscript_id must be a positive integer"
+	}
+
+	return stackScriptID, ""
 }
 
 func handleLinodeStackScriptsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
