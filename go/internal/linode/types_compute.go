@@ -477,6 +477,16 @@ type CreateStackScriptRequest struct {
 	RevNote     string   `json:"rev_note,omitempty"`
 }
 
+// UpdateStackScriptRequest represents the request body for updating a StackScript.
+type UpdateStackScriptRequest struct {
+	Label       *string  `json:"label,omitempty"`
+	Script      *string  `json:"script,omitempty"`
+	Images      []string `json:"images,omitempty"`
+	Description *string  `json:"description,omitempty"`
+	IsPublic    *bool    `json:"is_public,omitempty"`
+	RevNote     *string  `json:"rev_note,omitempty"`
+}
+
 // CreateInstanceRequest represents the request body for creating a Linode
 // instance under the current Linode Interfaces generation. InterfaceGeneration
 // and Interfaces are required on the wire; the Linode API rejects with

@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -68,7 +69,7 @@ func handleLinodeStackScriptCreateRequest(ctx context.Context, request *mcp.Call
 		return result, nil
 	}
 
-	label := request.GetString("label", "")
+	label := strings.TrimSpace(request.GetString("label", ""))
 	script := request.GetString("script", "")
 	imagesRaw := request.GetString("images", "")
 	description := request.GetString("description", "")
@@ -79,7 +80,7 @@ func handleLinodeStackScriptCreateRequest(ctx context.Context, request *mcp.Call
 		return mcp.NewToolResultError("label is required"), nil
 	}
 
-	if script == "" {
+	if strings.TrimSpace(script) == "" {
 		return mcp.NewToolResultError("script is required"), nil
 	}
 
@@ -97,6 +98,10 @@ func handleLinodeStackScriptCreateRequest(ctx context.Context, request *mcp.Call
 
 	if len(images) == 0 {
 		return mcp.NewToolResultError("images is required and must contain at least one image ID"), nil
+	}
+
+	if slices.ContainsFunc(images, invalidStackScriptImageID) {
+		return mcp.NewToolResultError("images entries must be valid image IDs"), nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -193,4 +198,193 @@ func handleLinodeStackScriptDeleteRequest(ctx context.Context, request *mcp.Call
 	}
 
 	return MarshalToolResponse(response)
+}
+
+// NewLinodeStackScriptUpdateTool creates a tool for updating a StackScript.
+func NewLinodeStackScriptUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_stackscript_update",
+		mcp.WithDescription("Updates editable fields on an existing StackScript."),
+		mcp.WithString(
+			paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
+		),
+		mcp.WithNumber(
+			"stackscript_id",
+			mcp.Required(),
+			mcp.Description("The StackScript ID to update."),
+		),
+		mcp.WithString(
+			"label",
+			mcp.Description("A new label for the StackScript."),
+		),
+		mcp.WithString(
+			"script",
+			mcp.Description("Updated script content."),
+		),
+		mcp.WithString(
+			"images",
+			mcp.Description("Comma-separated list of Image IDs that the StackScript supports."),
+		),
+		mcp.WithString(
+			"description",
+			mcp.Description("Updated StackScript description."),
+		),
+		mcp.WithBoolean(
+			"is_public",
+			mcp.Description("Whether the StackScript should be public."),
+		),
+		mcp.WithString(
+			"rev_note",
+			mcp.Description("A revision note for this update."),
+		),
+		mcp.WithBoolean(
+			paramConfirm,
+			mcp.Required(),
+			mcp.Description("Must be set to true to confirm StackScript update."),
+		),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeStackScriptUpdateRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleLinodeStackScriptUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This updates a StackScript in your account. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	stackScriptID, ok := numberArgToInt(request.GetArguments()["stackscript_id"])
+	if !ok || stackScriptID <= 0 {
+		return mcp.NewToolResultError("stackscript_id must be a positive integer"), nil
+	}
+
+	req, validationMessage := stackScriptUpdateFromTool(request.GetArguments())
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	updated, err := client.UpdateStackScript(ctx, stackScriptID, req)
+	if err != nil {
+		return mcp.NewToolResultError(formatStackScriptUpdateError(err)), nil
+	}
+
+	response := struct {
+		Message     string              `json:"message"`
+		StackScript *linode.StackScript `json:"stackscript"`
+	}{
+		Message:     fmt.Sprintf("StackScript '%s' (ID: %d) updated successfully", updated.Label, updated.ID),
+		StackScript: updated,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func stackScriptUpdateFromTool(args map[string]any) (*linode.UpdateStackScriptRequest, string) {
+	req := &linode.UpdateStackScriptRequest{}
+
+	var hasUpdate bool
+
+	label, hasLabel, validationMessage := optionalStringField(args, "label")
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if hasLabel {
+		req.Label = &label
+		hasUpdate = true
+	}
+
+	script, hasScript, validationMessage := optionalStringField(args, "script")
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if hasScript {
+		req.Script = &script
+		hasUpdate = true
+	}
+
+	description, hasDescription, validationMessage := optionalStringField(args, "description")
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if hasDescription {
+		req.Description = &description
+		hasUpdate = true
+	}
+
+	revNote, hasRevNote, validationMessage := optionalStringField(args, "rev_note")
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if hasRevNote {
+		req.RevNote = &revNote
+		hasUpdate = true
+	}
+
+	imagesRaw, hasImages, validationMessage := optionalStringField(args, "images")
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if hasImages {
+		images := splitStackScriptImages(imagesRaw)
+		if len(images) == 0 {
+			return nil, "images must contain at least one image ID"
+		}
+
+		if slices.ContainsFunc(images, invalidStackScriptImageID) {
+			return nil, "images entries must be valid image IDs"
+		}
+
+		req.Images = images
+		hasUpdate = true
+	}
+
+	if rawIsPublic, exists := args["is_public"]; exists {
+		isPublic, ok := rawIsPublic.(bool)
+		if !ok {
+			return nil, "is_public must be a boolean"
+		}
+
+		req.IsPublic = &isPublic
+		hasUpdate = true
+	}
+
+	if !hasUpdate {
+		return nil, "at least one editable field is required"
+	}
+
+	return req, ""
+}
+
+func splitStackScriptImages(imagesRaw string) []string {
+	var images []string
+
+	for img := range strings.SplitSeq(imagesRaw, ",") {
+		if trimmed := strings.TrimSpace(img); trimmed != "" {
+			images = append(images, trimmed)
+		}
+	}
+
+	return images
+}
+
+func invalidStackScriptImageID(imageID string) bool {
+	return strings.Count(imageID, "/") != 1 || strings.Contains(imageID, "?") || strings.Contains(imageID, "#") || strings.Contains(imageID, "..")
+}
+
+func formatStackScriptUpdateError(err error) string {
+	return "Failed to update StackScript: " + err.Error()
 }

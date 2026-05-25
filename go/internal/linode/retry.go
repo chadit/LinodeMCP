@@ -1657,7 +1657,7 @@ func (c *Client) GetStackScript(ctx context.Context, stackScriptID int) (*StackS
 func (c *Client) CreateStackScript(ctx context.Context, req *CreateStackScriptRequest) (*StackScript, error) {
 	var script *StackScript
 
-	err := c.executeWithRetry(ctx, "CreateStackScript", func() error {
+	err := c.executeWithoutRetry(ctx, "CreateStackScript", func() error {
 		var err error
 
 		script, err = c.httpCreateStackScript(ctx, req)
@@ -1673,6 +1673,22 @@ func (c *Client) DeleteStackScript(ctx context.Context, stackScriptID int) error
 	return c.executeWithoutRetry(ctx, "DeleteStackScript", func() error {
 		return c.httpDeleteStackScript(ctx, stackScriptID)
 	})
+}
+
+// UpdateStackScript updates editable fields on a StackScript without automatic retry.
+// Replaying this mutating operation could repeat side effects after a transient failure.
+func (c *Client) UpdateStackScript(ctx context.Context, stackScriptID int, req *UpdateStackScriptRequest) (*StackScript, error) {
+	var script *StackScript
+
+	err := c.executeWithoutRetry(ctx, "UpdateStackScript", func() error {
+		var err error
+
+		script, err = c.httpUpdateStackScript(ctx, stackScriptID, req)
+
+		return err
+	})
+
+	return script, err
 }
 
 // GetFirewall retrieves a single firewall by ID with automatic retry on transient failures.

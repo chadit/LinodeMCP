@@ -416,6 +416,7 @@ const (
 	caseInvalidPageSizeLow        = "invalid page size low"
 	caseInvalidPageSizeHigh       = "invalid page size high"
 	testStackScript               = "#!/bin/bash"
+	testStackScriptWithWhitespace = " #!/bin/bash\necho hello\n "
 	testStackScriptID             = float64(456)
 	keyImages                     = "images"
 	imagePrivate15Fixture         = "private/15"
@@ -423,6 +424,7 @@ const (
 	testDebian12Image             = "linode/debian12"
 	keyScript                     = "script"
 	testStackScriptLabel          = "test-script"
+	errStackScriptImagesValid     = "images entries must be valid image IDs"
 )
 
 const (

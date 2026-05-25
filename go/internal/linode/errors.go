@@ -25,6 +25,12 @@ var ErrUpdateImageRequestRequired = errors.New("update image request is required
 // ErrLinodeIDPositive is returned when a Linode ID argument is not positive.
 var ErrLinodeIDPositive = errors.New("linode_id must be a positive integer")
 
+// ErrStackScriptIDPositive is returned when a StackScript ID argument is not positive.
+var ErrStackScriptIDPositive = errors.New("stackscript_id must be a positive integer")
+
+// ErrStackScriptUpdateRequired is returned when a StackScript update request has no editable fields.
+var ErrStackScriptUpdateRequired = errors.New("at least one editable field is required")
+
 // ErrTransferYearPositive is returned when a transfer year argument is not positive.
 var ErrTransferYearPositive = errors.New("year must be a positive integer")
 

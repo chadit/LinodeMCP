@@ -91,6 +91,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_instance_create", Capability: profiles.CapWrite},
 		{Name: "linode_stackscript_create", Capability: profiles.CapWrite},
 		{Name: "linode_stackscript_delete", Capability: profiles.CapDestroy},
+		{Name: "linode_stackscript_update", Capability: profiles.CapWrite},
 		{Name: toolInstanceDelete, Capability: profiles.CapDestroy},
 		{Name: "linode_instance_boot", Capability: profiles.CapWrite},
 		{Name: "linode_instance_reboot", Capability: profiles.CapWrite},

@@ -942,6 +942,45 @@ func (c *Client) httpDeleteStackScript(ctx context.Context, stackScriptID int) e
 	return c.handleResponse(resp, nil)
 }
 
+// UpdateStackScript updates an existing StackScript.
+func (c *Client) httpUpdateStackScript(ctx context.Context, stackScriptID int, req *UpdateStackScriptRequest) (*StackScript, error) {
+	if stackScriptID <= 0 {
+		return nil, ErrStackScriptIDPositive
+	}
+
+	if updateStackScriptRequestEmpty(req) {
+		return nil, ErrStackScriptUpdateRequired
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedStackScriptID := strings.ReplaceAll(url.PathEscape(strconv.Itoa(stackScriptID)), ".", "%2E")
+	endpoint := endpointStackScripts + "/" + encodedStackScriptID
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateStackScript", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var script StackScript
+	if err := c.handleResponse(resp, &script); err != nil {
+		return nil, err
+	}
+
+	return &script, nil
+}
+
+func updateStackScriptRequestEmpty(req *UpdateStackScriptRequest) bool {
+	if req == nil {
+		return true
+	}
+
+	return req.Label == nil && req.Script == nil && len(req.Images) == 0 && req.Description == nil && req.IsPublic == nil && req.RevNote == nil
+}
+
 // BootInstance boots a Linode instance.
 func (c *Client) httpBootInstance(ctx context.Context, instanceID int, configID *int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

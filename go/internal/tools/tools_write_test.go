@@ -3207,9 +3207,39 @@ func TestLinodeStackScriptCreateTool(t *testing.T) {
 			wantContains: "script is required",
 		},
 		{
+			name:         caseBlankLabelImageShareGroupToken,
+			args:         map[string]any{keyLabel: blankString, keyScript: testStackScript, keyImages: testDebian12Image, keyConfirm: true},
+			wantContains: "label is required",
+		},
+		{
+			name:         "blank script",
+			args:         map[string]any{keyLabel: testStackScriptLabel, keyScript: blankString, keyImages: testDebian12Image, keyConfirm: true},
+			wantContains: "script is required",
+		},
+		{
 			name:         "missing images",
 			args:         map[string]any{keyLabel: testStackScriptLabel, keyScript: testStackScript, keyConfirm: true},
 			wantContains: "images is required",
+		},
+		{
+			name:         "query image",
+			args:         map[string]any{keyLabel: testStackScriptLabel, keyScript: testStackScript, keyImages: configIDQueryValue, keyConfirm: true},
+			wantContains: errStackScriptImagesValid,
+		},
+		{
+			name:         "fragment image",
+			args:         map[string]any{keyLabel: testStackScriptLabel, keyScript: testStackScript, keyImages: "linode/debian12#fragment", keyConfirm: true},
+			wantContains: errStackScriptImagesValid,
+		},
+		{
+			name:         "extra separator image",
+			args:         map[string]any{keyLabel: testStackScriptLabel, keyScript: testStackScript, keyImages: "private/15/extra", keyConfirm: true},
+			wantContains: errStackScriptImagesValid,
+		},
+		{
+			name:         "traversal image",
+			args:         map[string]any{keyLabel: testStackScriptLabel, keyScript: testStackScript, keyImages: privateImageTraversalFixture, keyConfirm: true},
+			wantContains: errStackScriptImagesValid,
 		},
 	}
 	for _, tt := range validationTests {
@@ -3230,7 +3260,7 @@ func TestLinodeStackScriptCreateTool(t *testing.T) {
 		created := linode.StackScript{
 			ID:       456,
 			Label:    testStackScriptLabel,
-			Script:   testStackScript + "\necho hello",
+			Script:   testStackScriptWithWhitespace,
 			Images:   []string{testDebian12Image},
 			IsPublic: false,
 		}
@@ -3238,6 +3268,14 @@ func TestLinodeStackScriptCreateTool(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "/linode/stackscripts", r.URL.Path, "request path should match stackscript endpoint")
 			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+
+			var body map[string]any
+			if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
+				return
+			}
+
+			assert.Equal(t, testStackScriptWithWhitespace, body[keyScript], "script should preserve exact content")
+
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(created), "encoding response should succeed")
 		}))
@@ -3250,7 +3288,7 @@ func TestLinodeStackScriptCreateTool(t *testing.T) {
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyLabel:   testStackScriptLabel,
-			keyScript:  testStackScript + "\necho hello",
+			keyScript:  testStackScriptWithWhitespace,
 			keyImages:  testDebian12Image,
 			keyConfirm: true,
 		})
