@@ -569,6 +569,24 @@ func NewLinodeLongviewClientUpdateTool(cfg *config.Config) (mcp.Tool, profiles.C
 	return tool, profiles.CapAdmin, handler
 }
 
+// NewLinodeLongviewClientDeleteTool creates a tool for deleting one Longview client.
+func NewLinodeLongviewClientDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_longview_client_delete",
+		"Deletes one Longview client.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(longviewClientIDParam, mcp.Required(),
+				mcp.Description("Longview client ID to delete.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm Longview client deletion.")),
+		},
+		handleLinodeLongviewClientDeleteRequest,
+	)
+
+	return tool, profiles.CapDestroy, handler
+}
+
 // NewLinodeAccountPaymentMethodsTool creates a tool for listing payment methods for the account.
 func NewLinodeAccountPaymentMethodsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -1441,6 +1459,43 @@ func updateLongviewClient(ctx context.Context, client *linode.Client, clientID i
 	}
 
 	return longviewClient, ""
+}
+
+func handleLinodeLongviewClientDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This deletes a Longview client. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	clientID, validationMessage := longviewClientIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	deleteFailureMessage := deleteLongviewClient(ctx, client, clientID)
+	if deleteFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to delete linode_longview_client_delete: " + deleteFailureMessage), nil
+	}
+
+	return MarshalToolResponse(struct {
+		Message  string `json:"message"`
+		ClientID int    `json:"client_id"`
+	}{
+		Message:  "Longview client deleted successfully",
+		ClientID: clientID,
+	})
+}
+
+func deleteLongviewClient(ctx context.Context, client *linode.Client, clientID int) string {
+	if err := client.DeleteLongviewClient(ctx, clientID); err != nil {
+		return err.Error()
+	}
+
+	return ""
 }
 
 func handleLinodeAccountPaymentMethodsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

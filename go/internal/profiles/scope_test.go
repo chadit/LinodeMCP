@@ -87,6 +87,12 @@ func TestRequiredScopesReadVsWrite(t *testing.T) {
 			want:       []profiles.Scope{profiles.ScopeLongviewReadWrite},
 		},
 		{
+			name:       "longview client delete",
+			toolName:   "linode_longview_client_delete",
+			capability: profiles.CapDestroy,
+			want:       []profiles.Scope{profiles.ScopeLongviewReadWrite},
+		},
+		{
 			name:       "stackscript create",
 			toolName:   "linode_stackscript_create",
 			capability: profiles.CapWrite,

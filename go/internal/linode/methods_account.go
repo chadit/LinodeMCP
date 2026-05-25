@@ -420,6 +420,23 @@ func (c *Client) httpUpdateLongviewClient(ctx context.Context, clientID int, req
 	return &client, nil
 }
 
+// httpDeleteLongviewClient deletes one Longview client.
+func (c *Client) httpDeleteLongviewClient(ctx context.Context, clientID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointLongviewClients + "/" + url.PathEscape(strconv.Itoa(clientID))
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteLongviewClient", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	return c.handleResponse(resp, nil)
+}
+
 // httpListAccountPaymentMethods retrieves payment methods for the account.
 func (c *Client) httpListAccountPaymentMethods(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountPaymentMethod], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
