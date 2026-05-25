@@ -1,0 +1,131 @@
+package tools_test
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/chadit/LinodeMCP/internal/config"
+	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/profiles"
+	"github.com/chadit/LinodeMCP/internal/tools"
+)
+
+func TestLinodeInstanceFirewallListTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	tool, capability, handler := tools.NewLinodeInstanceFirewallListTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+		assert.Equal(t, "linode_instance_firewall_list", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read capability")
+		require.NotNil(t, handler, "handler should not be nil")
+		assert.Contains(t, tool.InputSchema.Properties, keyLinodeID, "schema should include linode_id")
+		assert.Contains(t, tool.InputSchema.Properties, "page", "schema should include page")
+		assert.Contains(t, tool.InputSchema.Properties, keyPageSize, "schema should include page_size")
+		assert.NotContains(t, tool.InputSchema.Properties, keyConfirm, "read-only schema should not include confirm")
+	})
+
+	validationTests := []struct {
+		name         string
+		args         map[string]any
+		wantContains string
+	}{
+		{name: caseMissingLinodeID, args: map[string]any{}, wantContains: errLinodeIDRequired},
+		{name: caseSeparatorLinodeID, args: map[string]any{keyLinodeID: pathSeparatorLinodeID}, wantContains: errLinodeIDInteger},
+		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue}, wantContains: errLinodeIDInteger},
+		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue}, wantContains: errLinodeIDInteger},
+		{name: caseNegativeLinodeID, args: map[string]any{keyLinodeID: float64(-1)}, wantContains: "linode_id must be an integer greater than or equal to 1"},
+		{name: caseFractionalLinodeID, args: map[string]any{keyLinodeID: float64(123.9)}, wantContains: errLinodeIDInteger},
+		{name: "invalid page", args: map[string]any{keyLinodeID: float64(123), keyPage: float64(0)}, wantContains: "page must be an integer greater than or equal to 1"},
+		{name: "invalid page size low", args: map[string]any{keyLinodeID: float64(123), keyPageSize: float64(10)}, wantContains: errPageSizeRange},
+		{name: "invalid page size high", args: map[string]any{keyLinodeID: float64(123), keyPageSize: float64(501)}, wantContains: errPageSizeRange},
+	}
+	for _, tt := range validationTests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			req := createRequestWithArgs(t, tt.args)
+			result, err := handler(t.Context(), req)
+			require.NoError(t, err, "handler should not return Go error")
+			require.NotNil(t, result, "handler should return a result")
+			assert.True(t, result.IsError, "result should be a tool error")
+			assertErrorContains(t, result, tt.wantContains)
+		})
+	}
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		firewalls := []linode.Firewall{{ID: 456, Label: labelWebFirewall, Status: "enabled"}}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/linode/instances/123/firewalls", r.URL.Path, "request path should match")
+			assert.Equal(t, "2", r.URL.Query().Get("page"), "page query should match")
+			assert.Equal(t, "50", r.URL.Query().Get(keyPageSize), "page_size query should match")
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyData: firewalls, keyPage: 2, keyPages: 3, keyResults: 1,
+			}), "encoding response should not fail")
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeInstanceFirewallListTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyPage: float64(2), keyPageSize: float64(50)})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.False(t, result.IsError, "result should not be a tool error")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, labelWebFirewall, "response should contain firewall label")
+		assert.Contains(t, textContent.Text, "456", "response should contain firewall ID")
+	})
+
+	t.Run("client error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: errForbidden}},
+			}), "encoding error response should not fail")
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeInstanceFirewallListTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "Failed to list firewalls for instance 123")
+	})
+}

@@ -114,14 +114,14 @@ func TestLinodeInstanceConfigsListTool(t *testing.T) {
 		wantContains string
 	}{
 		{name: caseMissingLinodeID, args: map[string]any{}, wantContains: errLinodeIDRequired},
-		{name: "separator linode id", args: map[string]any{keyLinodeID: "123/.."}, wantContains: errLinodeIDInteger},
+		{name: caseSeparatorLinodeID, args: map[string]any{keyLinodeID: pathSeparatorLinodeID}, wantContains: errLinodeIDInteger},
 		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue}, wantContains: errLinodeIDInteger},
 		{name: caseNegativeLinodeID, args: map[string]any{keyLinodeID: float64(-1)}, wantContains: "linode_id must be an integer greater than or equal to 1"},
 
-		{name: "fractional linode id", args: map[string]any{keyLinodeID: float64(123.9)}, wantContains: errLinodeIDInteger},
-		{name: "invalid page", args: map[string]any{keyLinodeID: float64(123), "page": float64(0)}, wantContains: "page must be an integer greater than or equal to 1"},
-		{name: "invalid page size low", args: map[string]any{keyLinodeID: float64(123), keyPageSize: float64(10)}, wantContains: "page_size must be an integer from 25 through 500"},
-		{name: "invalid page size high", args: map[string]any{keyLinodeID: float64(123), keyPageSize: float64(501)}, wantContains: "page_size must be an integer from 25 through 500"},
+		{name: caseFractionalLinodeID, args: map[string]any{keyLinodeID: float64(123.9)}, wantContains: errLinodeIDInteger},
+		{name: "invalid page", args: map[string]any{keyLinodeID: float64(123), keyPage: float64(0)}, wantContains: "page must be an integer greater than or equal to 1"},
+		{name: "invalid page size low", args: map[string]any{keyLinodeID: float64(123), keyPageSize: float64(10)}, wantContains: errPageSizeRange},
+		{name: "invalid page size high", args: map[string]any{keyLinodeID: float64(123), keyPageSize: float64(501)}, wantContains: errPageSizeRange},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -161,7 +161,7 @@ func TestLinodeInstanceConfigsListTool(t *testing.T) {
 		}
 		_, _, srvHandler := tools.NewLinodeInstanceConfigListTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), "page": float64(2), keyPageSize: float64(50)})
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyPage: float64(2), keyPageSize: float64(50)})
 		result, err := srvHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return Go error")
@@ -261,7 +261,7 @@ func TestLinodeInstanceConfigDeleteTool(t *testing.T) {
 		want string
 	}{
 		{name: caseMissingLinodeID, args: map[string]any{keyConfigID: float64(789), keyConfirm: true}, want: errLinodeIDRequired},
-		{name: "separator linode id", args: map[string]any{keyLinodeID: "123/..", keyConfigID: float64(789), keyConfirm: true}, want: errLinodeIDInteger},
+		{name: caseSeparatorLinodeID, args: map[string]any{keyLinodeID: pathSeparatorLinodeID, keyConfigID: float64(789), keyConfirm: true}, want: errLinodeIDInteger},
 		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfigID: float64(789), keyConfirm: true}, want: errLinodeIDInteger},
 		{name: caseMissingConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfirm: true}, want: tools.ErrConfigIDRequired.Error()},
 		{name: "separator config id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: "789/..", keyConfirm: true}, want: errConfigIDInteger},

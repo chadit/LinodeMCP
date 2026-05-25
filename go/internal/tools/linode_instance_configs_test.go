@@ -35,7 +35,7 @@ func instanceConfigCreateValidationCases() []instanceConfigCreateValidationCase 
 		{name: caseNumericConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: float64(1)}, wantContains: errConfirmEqualsTrue},
 		{name: caseMissingLinodeID, args: map[string]any{keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
 		{name: caseNegativeLinodeID, args: map[string]any{keyLinodeID: float64(-1), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: "fractional linode id", args: map[string]any{keyLinodeID: float64(1.5), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: caseFractionalLinodeID, args: map[string]any{keyLinodeID: float64(1.5), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
 		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: paymentMethodIDSlash, keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
 		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
 		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},

@@ -2988,6 +2988,21 @@ func (c *Client) DeleteInstanceConfig(ctx context.Context, linodeID, configID in
 	})
 }
 
+// ListInstanceFirewalls retrieves all Cloud Firewalls assigned to an instance with automatic retry on transient failures.
+func (c *Client) ListInstanceFirewalls(ctx context.Context, linodeID, page, pageSize int) ([]Firewall, error) {
+	var firewalls []Firewall
+
+	err := c.executeWithRetry(ctx, "ListInstanceFirewalls", func() error {
+		var retryErr error
+
+		firewalls, retryErr = c.httpListInstanceFirewalls(ctx, linodeID, page, pageSize)
+
+		return retryErr
+	})
+
+	return firewalls, err
+}
+
 // GetInstanceDisk retrieves a specific disk with automatic retry on transient failures.
 func (c *Client) GetInstanceDisk(ctx context.Context, linodeID, diskID int) (*InstanceDisk, error) {
 	var disk *InstanceDisk

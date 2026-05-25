@@ -127,6 +127,10 @@ const (
 	keyBackupID                  = "backup_id"
 	keyFirewallID                = "firewall_id"
 	keyNodeBalancerID            = "nodebalancer_id"
+	caseFractionalLinodeID       = "fractional linode id"
+	caseSeparatorLinodeID        = "separator linode id"
+	pathSeparatorLinodeID        = "123/.."
+	labelWebFirewall             = "web-firewall"
 
 	// Pagination response keys.
 	keyData                = "data"
