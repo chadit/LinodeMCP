@@ -322,6 +322,21 @@ func (c *Client) ListAccountOAuthClients(ctx context.Context, page, pageSize int
 	return clients, err
 }
 
+// GetLongviewPlan retrieves the Longview subscription plan with automatic retry on transient failures.
+func (c *Client) GetLongviewPlan(ctx context.Context) (*LongviewSubscription, error) {
+	var plan *LongviewSubscription
+
+	err := c.executeWithRetry(ctx, "GetLongviewPlan", func() error {
+		var err error
+
+		plan, err = c.httpGetLongviewPlan(ctx)
+
+		return err
+	})
+
+	return plan, err
+}
+
 // ListLongviewClients retrieves Longview clients with automatic retry on transient failures.
 func (c *Client) ListLongviewClients(ctx context.Context, page, pageSize int) (*PaginatedResponse[LongviewClient], error) {
 	var clients *PaginatedResponse[LongviewClient]

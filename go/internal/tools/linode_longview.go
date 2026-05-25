@@ -11,6 +11,42 @@ import (
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
+// NewLinodeLongviewPlanTool creates a tool for retrieving the Longview subscription plan.
+func NewLinodeLongviewPlanTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_longview_plan",
+		"Gets the current Longview subscription plan for the account.",
+		nil,
+		handleLinodeLongviewPlanRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleLinodeLongviewPlanRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	plan, getFailureMessage := getLongviewPlan(ctx, client)
+	if getFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to retrieve linode_longview_plan: " + getFailureMessage), nil
+	}
+
+	return MarshalToolResponse(plan)
+}
+
+func getLongviewPlan(ctx context.Context, client *linode.Client) (*linode.LongviewSubscription, string) {
+	plan, err := client.GetLongviewPlan(ctx)
+	if err != nil {
+		return nil, err.Error()
+	}
+
+	return plan, ""
+}
+
 // NewLinodeLongviewClientCreateTool creates a tool for creating a Longview client.
 func NewLinodeLongviewClientCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
