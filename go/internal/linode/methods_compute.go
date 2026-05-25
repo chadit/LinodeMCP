@@ -190,6 +190,28 @@ func (c *Client) httpListTypes(ctx context.Context) ([]InstanceType, error) {
 	return response.Data, nil
 }
 
+// GetKernel retrieves a single Linode kernel by ID.
+func (c *Client) httpGetKernel(ctx context.Context, kernelID string) (*Kernel, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointKernels + "/" + url.PathEscape(kernelID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetKernel", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var kernel Kernel
+	if err := c.handleResponse(resp, &kernel); err != nil {
+		return nil, err
+	}
+
+	return &kernel, nil
+}
+
 // ListImages retrieves all available Linode images.
 func (c *Client) httpListImages(ctx context.Context) ([]Image, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

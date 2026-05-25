@@ -95,7 +95,7 @@ func TestLinodeImageShareGroupsByImageListTool(t *testing.T) {
 
 		invalidValues := map[string]any{
 			"missing slash":       "private12345",
-			"extra separator":     "private/12345/extra",
+			caseExtraSeparator:    "private/12345/extra",
 			"unsupported shared":  "shared/12345",
 			"unsupported linode":  "linode/ubuntu24.04",
 			"non-numeric private": "private/abc",
