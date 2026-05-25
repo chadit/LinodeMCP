@@ -210,6 +210,38 @@ func (c *Client) httpListInstanceConfigs(ctx context.Context, linodeID, page, pa
 	return response.Data, nil
 }
 
+// GetInstanceConfig retrieves a specific configuration profile for a Linode instance.
+func (c *Client) httpGetInstanceConfig(ctx context.Context, linodeID, configID int) (*InstanceConfig, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	if configID <= 0 {
+		return nil, ErrConfigIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	encodedConfigID := url.PathEscape(strconv.Itoa(configID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/configs/%s", encodedLinodeID, encodedConfigID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetInstanceConfig", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var config InstanceConfig
+	if err := c.handleResponse(resp, &config); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
+}
+
 // GetInstanceDisk retrieves a specific disk for a Linode instance.
 func (c *Client) httpGetInstanceDisk(ctx context.Context, linodeID, diskID int) (*InstanceDisk, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
