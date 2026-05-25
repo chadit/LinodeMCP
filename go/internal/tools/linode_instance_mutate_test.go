@@ -52,7 +52,7 @@ func TestLinodeInstanceMutateTool(t *testing.T) {
 		{name: caseNumericConfirm, args: map[string]any{keyLinodeID: float64(123), keyConfirm: float64(1)}, wantContains: errConfirmEqualsTrue},
 		{name: "missing linode id", args: map[string]any{keyConfirm: true}, wantContains: errLinodeIDRequired},
 		{name: "slash linode id", args: map[string]any{keyLinodeID: paymentMethodIDSlash, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: "query linode id", args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfirm: true}, wantContains: errLinodeIDRequired},
 		{name: "traversal linode id", args: map[string]any{keyLinodeID: pathTraversalValue, keyConfirm: true}, wantContains: errLinodeIDRequired},
 		{name: "invalid allow auto disk resize", args: map[string]any{keyLinodeID: float64(123), keyConfirm: true, "allow_auto_disk_resize": boolStringTrue}, wantContains: "allow_auto_disk_resize must be a boolean"},
 	}

@@ -3018,6 +3018,21 @@ func (c *Client) ListInstanceConfigs(ctx context.Context, linodeID, page, pageSi
 	return configs, err
 }
 
+// ListInstanceVolumes retrieves all volumes attached to an instance with automatic retry on transient failures.
+func (c *Client) ListInstanceVolumes(ctx context.Context, linodeID, page, pageSize int) ([]Volume, error) {
+	var volumes []Volume
+
+	err := c.executeWithRetry(ctx, "ListInstanceVolumes", func() error {
+		var retryErr error
+
+		volumes, retryErr = c.httpListInstanceVolumes(ctx, linodeID, page, pageSize)
+
+		return retryErr
+	})
+
+	return volumes, err
+}
+
 // ListInstanceNodeBalancers retrieves NodeBalancers assigned to an instance with automatic retry on transient failures.
 func (c *Client) ListInstanceNodeBalancers(ctx context.Context, linodeID int) ([]NodeBalancer, error) {
 	var nodeBalancers []NodeBalancer

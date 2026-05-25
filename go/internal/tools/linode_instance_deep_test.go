@@ -116,12 +116,12 @@ func TestLinodeInstanceConfigsListTool(t *testing.T) {
 		{name: caseMissingLinodeID, args: map[string]any{}, wantContains: errLinodeIDRequired},
 		{name: caseSeparatorLinodeID, args: map[string]any{keyLinodeID: pathSeparatorLinodeID}, wantContains: errLinodeIDInteger},
 		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue}, wantContains: errLinodeIDInteger},
-		{name: caseNegativeLinodeID, args: map[string]any{keyLinodeID: float64(-1)}, wantContains: "linode_id must be an integer greater than or equal to 1"},
+		{name: caseNegativeLinodeID, args: map[string]any{keyLinodeID: float64(-1)}, wantContains: errLinodeIDMin},
 
 		{name: caseFractionalLinodeID, args: map[string]any{keyLinodeID: float64(123.9)}, wantContains: errLinodeIDInteger},
-		{name: "invalid page", args: map[string]any{keyLinodeID: float64(123), keyPage: float64(0)}, wantContains: "page must be an integer greater than or equal to 1"},
-		{name: "invalid page size low", args: map[string]any{keyLinodeID: float64(123), keyPageSize: float64(10)}, wantContains: errPageSizeRange},
-		{name: "invalid page size high", args: map[string]any{keyLinodeID: float64(123), keyPageSize: float64(501)}, wantContains: errPageSizeRange},
+		{name: "invalid page", args: map[string]any{keyLinodeID: float64(123), keyPage: float64(0)}, wantContains: errInstanceFirewallsPageMin},
+		{name: caseInvalidPageSizeLow, args: map[string]any{keyLinodeID: float64(123), keyPageSize: float64(10)}, wantContains: errPageSizeRange},
+		{name: caseInvalidPageSizeHigh, args: map[string]any{keyLinodeID: float64(123), keyPageSize: float64(501)}, wantContains: errPageSizeRange},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -2207,5 +2207,119 @@ func TestLinodeInstancePasswordResetTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, "password reset", "response should confirm password reset")
+	})
+}
+
+func TestLinodeInstanceVolumesListTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	tool, capability, handler := tools.NewLinodeInstanceVolumeListTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+		assert.Equal(t, "linode_instance_volume_list", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read capability")
+		require.NotNil(t, handler, "handler should not be nil")
+		assert.Contains(t, tool.InputSchema.Properties, keyLinodeID, "schema should include linode_id")
+		assert.Contains(t, tool.InputSchema.Properties, "page", "schema should include page")
+		assert.Contains(t, tool.InputSchema.Properties, keyPageSize, "schema should include page_size")
+	})
+
+	validationTests := []struct {
+		name         string
+		args         map[string]any
+		wantContains string
+	}{
+		{name: caseMissingLinodeID, args: map[string]any{}, wantContains: errLinodeIDRequired},
+		{name: "separator linode id", args: map[string]any{keyLinodeID: "123/.."}, wantContains: errLinodeIDInteger},
+		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue}, wantContains: errLinodeIDInteger},
+		{name: caseNegativeLinodeID, args: map[string]any{keyLinodeID: float64(-1)}, wantContains: errLinodeIDMin},
+		{name: "fractional linode id", args: map[string]any{keyLinodeID: float64(123.9)}, wantContains: errLinodeIDInteger},
+		{name: caseInvalidInstanceFirewallsPage, args: map[string]any{keyLinodeID: float64(123), keyPage: float64(0)}, wantContains: errInstanceFirewallsPageMin},
+		{name: caseInvalidPageSizeLow, args: map[string]any{keyLinodeID: float64(123), keyPageSize: float64(10)}, wantContains: "page_size must be an integer from 25 through 500"},
+		{name: caseInvalidPageSizeHigh, args: map[string]any{keyLinodeID: float64(123), keyPageSize: float64(501)}, wantContains: "page_size must be an integer from 25 through 500"},
+	}
+	for _, tt := range validationTests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			req := createRequestWithArgs(t, tt.args)
+			result, err := handler(t.Context(), req)
+			require.NoError(t, err, "handler should not return Go error")
+			require.NotNil(t, result, "handler should return a result")
+			assert.True(t, result.IsError, "result should be a tool error")
+			assertErrorContains(t, result, tt.wantContains)
+		})
+	}
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		volumes := []linode.Volume{
+			{ID: 321, Label: "data-volume", Status: statusActive, Size: 50, Region: regionUSEast},
+		}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/linode/instances/123/volumes", r.URL.Path, "request path should match")
+			assert.Equal(t, "2", r.URL.Query().Get("page"), "page query should match")
+			assert.Equal(t, "50", r.URL.Query().Get(keyPageSize), "page_size query should match")
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyData: volumes, keyPage: 2, keyPages: 3, keyResults: 1,
+			}), "encoding response should not fail")
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeInstanceVolumeListTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyPage: float64(2), keyPageSize: float64(50)})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.False(t, result.IsError, "result should not be a tool error")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "data-volume", "response should contain volume label")
+		assert.Contains(t, textContent.Text, regionUSEast, "response should contain volume region")
+	})
+
+	t.Run("client error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyErrors: []map[string]string{{keyReason: errForbidden}},
+			}), "encoding error response should not fail")
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeInstanceVolumeListTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "Failed to list volumes for instance 123")
 	})
 }

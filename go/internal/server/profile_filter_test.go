@@ -12,11 +12,12 @@ import (
 )
 
 const (
-	toolInstancesList     = "linode_instance_list"
-	toolInstanceCreate    = "linode_instance_create"
-	toolVolumesList       = "linode_volume_list"
-	toolBucketAccessAllow = "linode_object_storage_bucket_access_allow"
-	toolAccountPaymentGet = "linode_account_payment_get"
+	toolInstancesList      = "linode_instance_list"
+	toolInstanceCreate     = "linode_instance_create"
+	toolVolumesList        = "linode_volume_list"
+	toolInstanceVolumeList = "linode_instance_volume_list"
+	toolBucketAccessAllow  = "linode_object_storage_bucket_access_allow"
+	toolAccountPaymentGet  = "linode_account_payment_get"
 )
 
 // toolNames extracts the registered tool name for each entry on the server.
@@ -53,6 +54,8 @@ func TestNewDefaultProfileFiltersToReadAndMeta(t *testing.T) {
 		"default profile must expose read tools like %s", toolInstancesList)
 	assert.Contains(t, names, toolAccountPaymentGet,
 		"default profile must expose read tools like %s", toolAccountPaymentGet)
+	assert.Contains(t, names, toolInstanceVolumeList,
+		"default profile must expose read tools like %s", toolInstanceVolumeList)
 	assert.NotContains(t, names, toolInstanceCreate,
 		"default profile must not expose write tools like %s", toolInstanceCreate)
 	assert.NotContains(t, names, toolBucketAccessAllow,
@@ -96,6 +99,8 @@ func TestNewFullAccessRegistersEverything(t *testing.T) {
 		"full-access must expose write tools like %s", toolInstanceCreate)
 	assert.Contains(t, names, toolInstancesList,
 		"full-access must continue to expose read tools like %s", toolInstancesList)
+	assert.Contains(t, names, toolInstanceVolumeList,
+		"full-access must continue to expose read tools like %s", toolInstanceVolumeList)
 	assert.Contains(t, names, toolBucketAccessAllow,
 		"full-access must expose write tools like %s", toolBucketAccessAllow)
 
