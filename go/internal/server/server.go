@@ -1112,6 +1112,7 @@ func instanceFirewallToolFactories() []toolFactory {
 
 func instanceInterfaceToolFactories() []toolFactory {
 	return []toolFactory{
+		tools.NewLinodeInterfacesUpgradeTool,
 		tools.NewLinodeInstanceInterfacesListTool,
 		tools.NewLinodeInstanceInterfaceGetTool,
 		tools.NewLinodeInstanceInterfaceFirewallsListTool,

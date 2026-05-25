@@ -19,7 +19,7 @@ func TestClientListInstanceInterfacesSuccess(t *testing.T) {
 	interfaces := []linode.InstanceInterface{
 		{
 			ID:         1234,
-			MACAddress: "22:00:AB:CD:EF:01",
+			MACAddress: macAddressFixture,
 			Version:    1,
 			Public: &linode.InterfacePublicConfig{
 				IPv4: &linode.InterfacePublicIPv4{
@@ -46,7 +46,7 @@ func TestClientListInstanceInterfacesSuccess(t *testing.T) {
 	require.NoError(t, err, "ListInstanceInterfaces should succeed on 200 response")
 	require.Len(t, got, 1)
 	assert.Equal(t, 1234, got[0].ID)
-	assert.Equal(t, "22:00:AB:CD:EF:01", got[0].MACAddress)
+	assert.Equal(t, macAddressFixture, got[0].MACAddress)
 	assert.NotNil(t, got[0].Public)
 	assert.NotNil(t, got[0].DefaultRoute)
 }

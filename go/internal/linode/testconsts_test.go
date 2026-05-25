@@ -75,5 +75,6 @@ const (
 	configKernelLatest           = "linode/latest-64bit"
 	purposePublic                = "public"
 	purposeVPC                   = "vpc"
+	macAddressFixture            = "22:00:AB:CD:EF:01"
 	pathTraversalDotDot          = ".."
 )

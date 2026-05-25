@@ -665,6 +665,33 @@ func (c *Client) httpListInstanceInterfaces(ctx context.Context, linodeID int) (
 	return payload.Interfaces, nil
 }
 
+// UpgradeLinodeInterfaces upgrades legacy config interfaces to Linode interfaces.
+func (c *Client) httpUpgradeLinodeInterfaces(ctx context.Context, linodeID int, req *UpgradeLinodeInterfacesRequest) (*UpgradeLinodeInterfacesResponse, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/upgrade-interfaces", encodedLinodeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpgradeLinodeInterfaces", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var result UpgradeLinodeInterfacesResponse
+	if err := c.handleResponse(resp, &result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
 // GetInstanceInterface retrieves a specific interface for a Linode instance.
 func (c *Client) httpGetInstanceInterface(ctx context.Context, linodeID, interfaceID int) (*InstanceInterface, error) {
 	if linodeID <= 0 {

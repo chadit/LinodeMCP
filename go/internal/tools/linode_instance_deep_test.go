@@ -367,7 +367,7 @@ func TestLinodeInstanceConfigInterfacesListTool(t *testing.T) {
 		{name: caseSlashConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathSeparatorValue}, wantContains: errConfigIDInteger},
 		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: configIDQueryValue}, wantContains: errConfigIDInteger},
 		{name: caseTraversalConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathTraversalValue}, wantContains: errConfigIDInteger},
-		{name: "negative config id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(-456)}, wantContains: errConfigIDMin},
+		{name: caseNegativeConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(-456)}, wantContains: errConfigIDMin},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -546,7 +546,7 @@ func TestLinodeInstanceConfigGetTool(t *testing.T) {
 		{name: caseSlashConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: "456/789"}, wantContains: errConfigIDInteger},
 		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: configIDQueryValue}, wantContains: errConfigIDInteger},
 		{name: caseTraversalConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathTraversalValue}, wantContains: errConfigIDInteger},
-		{name: "negative config id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(-456)}, wantContains: errConfigIDMin},
+		{name: caseNegativeConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(-456)}, wantContains: errConfigIDMin},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {

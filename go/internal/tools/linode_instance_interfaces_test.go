@@ -170,7 +170,7 @@ func TestLinodeInstanceInterfacesListTool(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		interfaces := []linode.InstanceInterface{{ID: 1234, MACAddress: "22:00:AB:CD:EF:01"}}
+		interfaces := []linode.InstanceInterface{{ID: 1234, MACAddress: macAddressFixture}}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
@@ -197,7 +197,7 @@ func TestLinodeInstanceInterfacesListTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "22:00:AB:CD:EF:01", "response should contain MAC address")
+		assert.Contains(t, textContent.Text, macAddressFixture, "response should contain MAC address")
 		assert.Contains(t, textContent.Text, "1234", "response should contain interface ID")
 	})
 
