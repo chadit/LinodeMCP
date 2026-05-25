@@ -25,6 +25,12 @@ var ErrUpdateImageRequestRequired = errors.New("update image request is required
 // ErrLinodeIDPositive is returned when a Linode ID argument is not positive.
 var ErrLinodeIDPositive = errors.New("linode_id must be a positive integer")
 
+// ErrTransferYearPositive is returned when a transfer year argument is not positive.
+var ErrTransferYearPositive = errors.New("year must be a positive integer")
+
+// ErrTransferMonthRange is returned when a transfer month argument is outside 1-12.
+var ErrTransferMonthRange = errors.New("month must be an integer between 1 and 12")
+
 // ErrConfigIDPositive is returned when a config ID argument is not positive.
 var ErrConfigIDPositive = errors.New("config_id must be a positive integer")
 
