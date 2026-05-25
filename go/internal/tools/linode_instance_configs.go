@@ -735,6 +735,76 @@ func formatGetConfigInterfaceError(linodeID, configID, interfaceID int, err erro
 	return "Failed to retrieve configuration profile interface " + strconv.Itoa(interfaceID) + " from config " + strconv.Itoa(configID) + " for instance " + strconv.Itoa(linodeID) + ": " + err.Error()
 }
 
+// NewLinodeInstanceConfigInterfaceDeleteTool creates a tool for deleting a configuration profile interface.
+func NewLinodeInstanceConfigInterfaceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_instance_config_interface_delete",
+		"Deletes a network interface from a Linode configuration profile. WARNING: This changes instance network configuration.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance")),
+			mcp.WithNumber("config_id", mcp.Required(),
+				mcp.Description("The ID of the configuration profile")),
+			mcp.WithNumber("interface_id", mcp.Required(),
+				mcp.Description("The ID of the configuration profile interface to delete")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm configuration profile interface deletion.")),
+		},
+		handleInstanceConfigInterfaceDeleteRequest,
+	)
+
+	return tool, profiles.CapDestroy, handler
+}
+
+func handleInstanceConfigInterfaceDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This removes a network interface from the configuration profile. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	linodeID, linodeIDOK := getPositiveIntArgument(request, "linode_id")
+	if !linodeIDOK {
+		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
+	}
+
+	configID, configIDOK := getPositiveIntArgument(request, "config_id")
+	if !configIDOK {
+		return mcp.NewToolResultError(linode.ErrConfigIDPositive.Error()), nil
+	}
+
+	interfaceID, interfaceIDOK := getPositiveIntArgument(request, "interface_id")
+	if !interfaceIDOK {
+		return mcp.NewToolResultError(linode.ErrInterfaceIDPositive.Error()), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := client.DeleteInstanceConfigInterface(ctx, linodeID, configID, interfaceID); err != nil {
+		return mcp.NewToolResultError(formatDeleteConfigInterfaceError(linodeID, configID, interfaceID, err)), nil
+	}
+
+	response := struct {
+		Message     string `json:"message"`
+		LinodeID    int    `json:"linode_id"`
+		ConfigID    int    `json:"config_id"`
+		InterfaceID int    `json:"interface_id"`
+	}{
+		Message:     fmt.Sprintf("Configuration profile interface %d removed from config %d on instance %d", interfaceID, configID, linodeID),
+		LinodeID:    linodeID,
+		ConfigID:    configID,
+		InterfaceID: interfaceID,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func formatDeleteConfigInterfaceError(linodeID, configID, interfaceID int, err error) string {
+	return "Failed to remove configuration profile interface " + strconv.Itoa(interfaceID) + " from config " + strconv.Itoa(configID) + " for instance " + strconv.Itoa(linodeID) + ": " + err.Error()
+}
+
 // NewLinodeInstanceConfigUpdateTool creates a tool for updating a Linode configuration profile.
 func NewLinodeInstanceConfigUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(

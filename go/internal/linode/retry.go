@@ -2914,6 +2914,13 @@ func (c *Client) GetInstanceConfigInterface(ctx context.Context, linodeID, confi
 	return configInterface, err
 }
 
+// DeleteInstanceConfigInterface removes an interface without retrying the DELETE call.
+func (c *Client) DeleteInstanceConfigInterface(ctx context.Context, linodeID, configID, interfaceID int) error {
+	return c.executeWithoutRetry(ctx, "DeleteInstanceConfigInterface", func() error {
+		return c.httpDeleteInstanceConfigInterface(ctx, linodeID, configID, interfaceID)
+	})
+}
+
 // ListInstanceDisks retrieves all disks for an instance with automatic retry on transient failures.
 func (c *Client) ListInstanceDisks(ctx context.Context, linodeID int) ([]InstanceDisk, error) {
 	var disks []InstanceDisk

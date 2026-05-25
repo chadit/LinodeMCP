@@ -246,6 +246,28 @@ func (c *Client) httpUpdateInstanceConfigInterface(ctx context.Context, linodeID
 	return &configInterface, nil
 }
 
+// DeleteInstanceConfigInterface removes a network interface from a configuration profile.
+func (c *Client) httpDeleteInstanceConfigInterface(ctx context.Context, linodeID, configID, interfaceID int) error {
+	if err := validateInstanceConfigInterfaceIDs(linodeID, configID, interfaceID); err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedInterfaceID := url.PathEscape(strconv.Itoa(interfaceID))
+	endpoint := instanceConfigEndpoint(linodeID, configID) + "/interfaces/" + encodedInterfaceID
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteInstanceConfigInterface", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return c.handleResponse(resp, nil)
+}
+
 func validateInstanceConfigInterfaceIDs(linodeID, configID, interfaceID int) error {
 	if linodeID <= 0 {
 		return ErrLinodeIDPositive
