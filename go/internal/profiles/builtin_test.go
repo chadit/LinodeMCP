@@ -104,6 +104,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: toolLinodeInstanceConfigList, Capability: profiles.CapRead},
 		{Name: "linode_instance_config_interfaces_list", Capability: profiles.CapRead},
 		{Name: "linode_instance_config_create", Capability: profiles.CapWrite},
+		{Name: "linode_instance_config_interface_get", Capability: profiles.CapRead},
 		{Name: "linode_instance_config_update", Capability: profiles.CapWrite},
 		{Name: "linode_instance_config_interfaces_reorder", Capability: profiles.CapWrite},
 		{Name: "linode_instance_config_delete", Capability: profiles.CapDestroy},

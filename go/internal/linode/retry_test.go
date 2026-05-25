@@ -398,6 +398,47 @@ func TestRetryableClientListInstanceConfigInterfacesRetries(t *testing.T) {
 	assert.Equal(t, int32(2), callCount.Load(), "should retry once")
 }
 
+// TestRetryableClientGetInstanceConfigInterfaceRetries verifies that GetInstanceConfigInterface
+// retries transient read failures and succeeds on the second attempt.
+func TestRetryableClientGetInstanceConfigInterfaceRetries(t *testing.T) {
+	t.Parallel()
+
+	var callCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/linode/instances/123/configs/789/interfaces/456", r.URL.Path, "request path should match")
+
+		count := callCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			writeRetryTestResponse(t, w, `{"errors":[{"reason":"rate limited"}]}`)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.ConfigInterfaceResponse{ID: 456, Active: true, Purpose: purposePublic}), "encoding interface response should not fail")
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(
+		srv.URL, "token", nil,
+		linode.WithMaxRetries(2),
+		linode.WithBaseDelay(1*time.Millisecond),
+		linode.WithMaxDelay(10*time.Millisecond),
+		linode.WithBackoffFactor(2.0),
+		linode.WithJitter(false),
+	)
+
+	configInterface, err := client.GetInstanceConfigInterface(t.Context(), 123, 789, 456)
+	require.NoError(t, err, "GetInstanceConfigInterface should succeed after retry")
+	require.NotNil(t, configInterface, "interface should be returned")
+	assert.Equal(t, purposePublic, configInterface.Purpose, "interface purpose should match")
+	assert.Equal(t, 456, configInterface.ID, "interface ID should match")
+	assert.True(t, configInterface.Active, "interface active flag should match")
+	assert.Equal(t, int32(2), callCount.Load(), "should retry once")
+}
+
 // TestRetryableClientGetInstanceRetries verifies that GetInstance retries
 // on a 500 server error and succeeds on the second attempt.
 func TestRetryableClientGetInstanceRetries(t *testing.T) {

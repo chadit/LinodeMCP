@@ -574,6 +574,59 @@ func formatReorderConfigInterfacesError(linodeID, configID int, err error) strin
 	return "Failed to reorder interfaces for configuration profile " + strconv.Itoa(configID) + " on instance " + strconv.Itoa(linodeID) + ": " + err.Error()
 }
 
+// NewLinodeInstanceConfigInterfaceGetTool creates a tool for retrieving a configuration profile interface.
+func NewLinodeInstanceConfigInterfaceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_instance_config_interface_get",
+		"Retrieves a network interface from a Linode configuration profile.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance")),
+			mcp.WithNumber("config_id", mcp.Required(),
+				mcp.Description("The ID of the configuration profile")),
+			mcp.WithNumber("interface_id", mcp.Required(),
+				mcp.Description("The ID of the configuration profile interface")),
+		},
+		handleInstanceConfigInterfaceGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleInstanceConfigInterfaceGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	linodeID, linodeIDOK := getPositiveIntArgument(request, "linode_id")
+	if !linodeIDOK {
+		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
+	}
+
+	configID, configIDOK := getPositiveIntArgument(request, "config_id")
+	if !configIDOK {
+		return mcp.NewToolResultError(linode.ErrConfigIDPositive.Error()), nil
+	}
+
+	interfaceID, interfaceIDOK := getPositiveIntArgument(request, "interface_id")
+	if !interfaceIDOK {
+		return mcp.NewToolResultError(linode.ErrInterfaceIDPositive.Error()), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	configInterface, err := client.GetInstanceConfigInterface(ctx, linodeID, configID, interfaceID)
+	if err != nil {
+		return mcp.NewToolResultError(formatGetConfigInterfaceError(linodeID, configID, interfaceID, err)), nil
+	}
+
+	return MarshalToolResponse(configInterface)
+}
+
+func formatGetConfigInterfaceError(linodeID, configID, interfaceID int, err error) string {
+	return "Failed to retrieve configuration profile interface " + strconv.Itoa(interfaceID) + " from config " + strconv.Itoa(configID) + " for instance " + strconv.Itoa(linodeID) + ": " + err.Error()
+}
+
 // NewLinodeInstanceConfigUpdateTool creates a tool for updating a Linode configuration profile.
 func NewLinodeInstanceConfigUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(

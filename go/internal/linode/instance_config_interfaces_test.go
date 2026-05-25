@@ -26,7 +26,7 @@ func TestClientListInstanceConfigInterfacesSuccess(t *testing.T) {
 		{
 			ID:       103,
 			Active:   true,
-			Purpose:  "vpc",
+			Purpose:  purposeVPC,
 			Label:    &label,
 			Primary:  primary,
 			SubnetID: &subnetID,
@@ -54,7 +54,7 @@ func TestClientListInstanceConfigInterfacesSuccess(t *testing.T) {
 	require.NoError(t, err, "ListInstanceConfigInterfaces should succeed on 200 response")
 	require.Len(t, got, 1)
 	assert.Equal(t, 103, got[0].ID)
-	assert.Equal(t, "vpc", got[0].Purpose)
+	assert.Equal(t, purposeVPC, got[0].Purpose)
 	assert.True(t, got[0].Active)
 	require.NotNil(t, got[0].VPCID)
 	assert.Equal(t, 111, *got[0].VPCID)

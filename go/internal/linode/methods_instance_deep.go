@@ -188,6 +188,49 @@ func (c *Client) httpAddInstanceConfigInterface(ctx context.Context, linodeID, c
 	return &configInterface, nil
 }
 
+// GetInstanceConfigInterface retrieves a specific network interface from a configuration profile.
+func (c *Client) httpGetInstanceConfigInterface(ctx context.Context, linodeID, configID, interfaceID int) (*ConfigInterfaceResponse, error) {
+	if err := validateInstanceConfigInterfaceIDs(linodeID, configID, interfaceID); err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedInterfaceID := url.PathEscape(strconv.Itoa(interfaceID))
+	endpoint := instanceConfigEndpoint(linodeID, configID) + "/interfaces/" + encodedInterfaceID
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetInstanceConfigInterface", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var configInterface ConfigInterfaceResponse
+	if err := c.handleResponse(resp, &configInterface); err != nil {
+		return nil, err
+	}
+
+	return &configInterface, nil
+}
+
+func validateInstanceConfigInterfaceIDs(linodeID, configID, interfaceID int) error {
+	if linodeID <= 0 {
+		return ErrLinodeIDPositive
+	}
+
+	if configID <= 0 {
+		return ErrConfigIDPositive
+	}
+
+	if interfaceID <= 0 {
+		return ErrInterfaceIDPositive
+	}
+
+	return nil
+}
+
 // ListInstanceDisks retrieves all disks for a Linode instance.
 func (c *Client) httpListInstanceDisks(ctx context.Context, linodeID int) ([]InstanceDisk, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
