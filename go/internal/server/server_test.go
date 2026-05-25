@@ -251,6 +251,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_database_postgresql_instance_resume":            profiles.CapWrite,
 		"linode_instance_firewalls_update":                      profiles.CapWrite,
 		"linode_instance_firewalls_apply":                       profiles.CapWrite,
+		"linode_interfaces_upgrade":                             profiles.CapWrite,
 		"linode_instance_interfaces_list":                       profiles.CapRead,
 		"linode_instance_interface_get":                         profiles.CapRead,
 		"linode_instance_interface_firewalls_list":              profiles.CapRead,

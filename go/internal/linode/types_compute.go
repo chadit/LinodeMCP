@@ -82,6 +82,19 @@ type UpdateInstanceInterfaceRequest struct {
 	DefaultRoute *AddInterfaceDefaultRoute         `json:"default_route,omitempty"`
 }
 
+// UpgradeLinodeInterfacesRequest represents the request body for upgrading legacy config interfaces.
+type UpgradeLinodeInterfacesRequest struct {
+	ConfigID *int  `json:"config_id,omitempty"`
+	DryRun   *bool `json:"dry_run,omitempty"`
+}
+
+// UpgradeLinodeInterfacesResponse represents the upgraded Linode interface preview or result.
+type UpgradeLinodeInterfacesResponse struct {
+	ConfigID   int                 `json:"config_id"`
+	DryRun     bool                `json:"dry_run"`
+	Interfaces []InstanceInterface `json:"interfaces"`
+}
+
 // UpdateInstanceInterfaceVPCConfig holds VPC settings for an existing Linode interface.
 type UpdateInstanceInterfaceVPCConfig struct {
 	SubnetID int                       `json:"subnet_id"`

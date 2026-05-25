@@ -78,7 +78,7 @@ func TestLinodeInstanceInterfaceHistoryListTool(t *testing.T) {
 					"linode_id":            123,
 					"version":              1,
 					"interface_data": map[string]any{
-						"mac_address": "22:00:AB:CD:EF:01",
+						"mac_address": macAddressFixture,
 					},
 				}},
 				keyPage:    2,
@@ -105,7 +105,7 @@ func TestLinodeInstanceInterfaceHistoryListTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, "interface_history_id", "response should contain history ID key")
-		assert.Contains(t, textContent.Text, "22:00:AB:CD:EF:01", "response should contain interface data")
+		assert.Contains(t, textContent.Text, macAddressFixture, "response should contain interface data")
 	})
 
 	t.Run("client error", func(t *testing.T) {

@@ -746,6 +746,88 @@ func formatListInstanceInterfaceHistoryError(linodeID int, err error) string {
 	return "Failed to list interface history for instance " + strconv.Itoa(linodeID) + ": " + err.Error()
 }
 
+// NewLinodeInterfacesUpgradeTool creates a tool for upgrading legacy config interfaces to Linode interfaces.
+func NewLinodeInterfacesUpgradeTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_interfaces_upgrade",
+		"Upgrades a Linode's legacy config interfaces to Linode interfaces. WARNING: Setting dry_run=false irreversibly changes instance network configuration.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance")),
+			mcp.WithNumber("config_id",
+				mcp.Description("Optional configuration profile ID to upgrade")),
+			mcp.WithBoolean("dry_run",
+				mcp.Description("Preview the upgrade when true or omitted; set false to perform the irreversible upgrade")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm the interface upgrade request.")),
+		},
+		handleLinodeInterfacesUpgradeRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleLinodeInterfacesUpgradeRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This can irreversibly upgrade Linode network interfaces when dry_run=false. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	upgradeReq, validationMessage := buildUpgradeLinodeInterfacesRequest(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	result, err := client.UpgradeLinodeInterfaces(ctx, linodeID, upgradeReq)
+	if err != nil {
+		return mcp.NewToolResultError(formatUpgradeLinodeInterfacesError(linodeID, err)), nil
+	}
+
+	return MarshalToolResponse(result)
+}
+
+func buildUpgradeLinodeInterfacesRequest(request *mcp.CallToolRequest) (*linode.UpgradeLinodeInterfacesRequest, string) {
+	args := request.GetArguments()
+	req := &linode.UpgradeLinodeInterfacesRequest{}
+
+	if _, exists := args["config_id"]; exists {
+		configID, validationMessage := boundedIntArgument(request, "config_id", 1, 0, "config_id must be an integer greater than or equal to 1")
+		if validationMessage != "" {
+			return nil, validationMessage
+		}
+
+		req.ConfigID = &configID
+	}
+
+	dryRun, validationMessage := optionalBoolArg(args, "dry_run")
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if dryRun == nil {
+		defaultDryRun := true
+		dryRun = &defaultDryRun
+	}
+
+	req.DryRun = dryRun
+
+	return req, ""
+}
+
+func formatUpgradeLinodeInterfacesError(linodeID int, err error) string {
+	return "Failed to upgrade interfaces for instance " + strconv.Itoa(linodeID) + ": " + err.Error()
+}
+
 // NewLinodeInstanceInterfacesListTool creates a tool for listing interfaces assigned to a Linode instance.
 func NewLinodeInstanceInterfacesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(

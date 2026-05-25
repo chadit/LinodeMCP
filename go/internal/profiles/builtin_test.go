@@ -103,6 +103,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_instance_stats_get", Capability: profiles.CapRead},
 		{Name: "linode_instance_backup_create", Capability: profiles.CapWrite},
 		{Name: "linode_instance_firewalls_apply", Capability: profiles.CapWrite},
+		{Name: "linode_interfaces_upgrade", Capability: profiles.CapWrite},
 		{Name: "linode_instance_interface_firewalls_list", Capability: profiles.CapRead},
 		{Name: "linode_instance_interface_settings_get", Capability: profiles.CapRead},
 		{Name: "linode_instance_interface_settings_update", Capability: profiles.CapWrite},

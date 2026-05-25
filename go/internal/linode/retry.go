@@ -3048,6 +3048,21 @@ func (c *Client) ListInstanceInterfaces(ctx context.Context, linodeID int) ([]In
 	return interfaces, err
 }
 
+// UpgradeLinodeInterfaces upgrades legacy config interfaces without retrying the POST upgrade call.
+func (c *Client) UpgradeLinodeInterfaces(ctx context.Context, linodeID int, req *UpgradeLinodeInterfacesRequest) (*UpgradeLinodeInterfacesResponse, error) {
+	var result *UpgradeLinodeInterfacesResponse
+
+	err := c.executeWithoutRetry(ctx, "UpgradeLinodeInterfaces", func() error {
+		var retryErr error
+
+		result, retryErr = c.httpUpgradeLinodeInterfaces(ctx, linodeID, req)
+
+		return retryErr
+	})
+
+	return result, err
+}
+
 // GetInstanceInterface retrieves a Linode interface with automatic retry on transient failures.
 func (c *Client) GetInstanceInterface(ctx context.Context, linodeID, interfaceID int) (*InstanceInterface, error) {
 	var instanceInterface *InstanceInterface

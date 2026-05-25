@@ -31,7 +31,7 @@ func TestClientListInstanceInterfaceHistorySuccess(t *testing.T) {
 				keyCreated:             "2025-08-01T00:01:01",
 				"interface_data": map[string]any{
 					keyID:         1234,
-					"mac_address": "22:00:AB:CD:EF:01",
+					"mac_address": macAddressFixture,
 				},
 			}},
 			keyPage:    2,
