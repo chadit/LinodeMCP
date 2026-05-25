@@ -338,6 +338,71 @@ func TestClientUpdateInstanceConfigRejectsInvalidIDs(t *testing.T) {
 	assert.False(t, called.Load(), "invalid IDs should not issue HTTP request")
 }
 
+func TestClientReorderInstanceConfigInterfacesSendsRequest(t *testing.T) {
+	t.Parallel()
+
+	wantReq := linode.ReorderConfigInterfacesRequest{IDs: []int{101, 102, 103}}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/linode/instances/123/configs/789/interfaces/order", r.URL.Path, "request path should match")
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+
+		var got linode.ReorderConfigInterfacesRequest
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should decode")
+		assert.Equal(t, wantReq, got, "request body should match")
+
+		w.Header().Set("Content-Type", "application/json")
+		_, writeErr := w.Write([]byte(`{}`))
+		assert.NoError(t, writeErr, "writing empty response should not fail")
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	err := client.ReorderInstanceConfigInterfaces(t.Context(), 123, 789, &wantReq)
+
+	require.NoError(t, err, "ReorderInstanceConfigInterfaces should succeed")
+}
+
+func TestClientReorderInstanceConfigInterfacesDoesNotRetryReorder(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts.Add(1)
+		http.Error(w, `{"errors":[{"reason":"temporary failure"}]}`, http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(2))
+	err := client.ReorderInstanceConfigInterfaces(t.Context(), 123, 789, &linode.ReorderConfigInterfacesRequest{IDs: []int{101}})
+
+	require.Error(t, err, "server failure should be returned")
+	assert.Equal(t, int32(1), attempts.Load(), "POST reorder should not be retried")
+}
+
+func TestClientReorderInstanceConfigInterfacesRejectsInvalidInput(t *testing.T) {
+	t.Parallel()
+
+	var called atomic.Bool
+
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		called.Store(true)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	err := client.ReorderInstanceConfigInterfaces(t.Context(), 0, 789, &linode.ReorderConfigInterfacesRequest{IDs: []int{101}})
+	require.ErrorIs(t, err, linode.ErrLinodeIDPositive, "invalid linode ID should be rejected")
+
+	err = client.ReorderInstanceConfigInterfaces(t.Context(), 123, 0, &linode.ReorderConfigInterfacesRequest{IDs: []int{101}})
+	require.ErrorIs(t, err, linode.ErrConfigIDPositive, "invalid config ID should be rejected")
+
+	err = client.ReorderInstanceConfigInterfaces(t.Context(), 123, 789, nil)
+	require.ErrorIs(t, err, linode.ErrReorderConfigInterfacesRequestRequired, "nil request should be rejected")
+	assert.False(t, called.Load(), "invalid input should not issue HTTP request")
+}
+
 func TestClientUpdateInstanceConfigRejectsNilRequest(t *testing.T) {
 	t.Parallel()
 

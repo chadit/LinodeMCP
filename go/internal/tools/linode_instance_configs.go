@@ -454,6 +454,126 @@ func formatAddConfigInterfaceError(linodeID, configID int, err error) string {
 	return "Failed to add configuration profile interface to config " + strconv.Itoa(configID) + " for instance " + strconv.Itoa(linodeID) + ": " + err.Error()
 }
 
+// NewLinodeInstanceConfigInterfacesReorderTool creates a tool for reordering configuration profile interfaces.
+func NewLinodeInstanceConfigInterfacesReorderTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_instance_config_interfaces_reorder",
+		"Reorders interfaces on a Linode configuration profile. WARNING: This changes network interface ordering.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance")),
+			mcp.WithNumber("config_id", mcp.Required(),
+				mcp.Description("The ID of the configuration profile")),
+			mcp.WithString("ids", mcp.Required(),
+				mcp.Description("JSON array of existing configuration profile interface IDs in the desired order, e.g. [101,102,103]")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm configuration interface reorder.")),
+		},
+		handleInstanceConfigInterfacesReorderRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleInstanceConfigInterfacesReorderRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This reorders network interfaces on the configuration profile. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	configID, validationMessage := instanceConfigIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	reorderReq, validationMessage := buildReorderConfigInterfacesRequest(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := client.ReorderInstanceConfigInterfaces(ctx, linodeID, configID, reorderReq); err != nil {
+		return mcp.NewToolResultError(formatReorderConfigInterfacesError(linodeID, configID, err)), nil
+	}
+
+	response := struct {
+		Message  string `json:"message"`
+		LinodeID int    `json:"linode_id"`
+		ConfigID int    `json:"config_id"`
+		IDs      []int  `json:"ids"`
+	}{
+		Message:  fmt.Sprintf("Configuration profile %d interfaces reordered on instance %d", configID, linodeID),
+		LinodeID: linodeID,
+		ConfigID: configID,
+		IDs:      reorderReq.IDs,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func buildReorderConfigInterfacesRequest(request *mcp.CallToolRequest) (*linode.ReorderConfigInterfacesRequest, string) {
+	args := request.GetArguments()
+
+	value, exists := args["ids"]
+	if !exists {
+		return nil, "ids is required"
+	}
+
+	idsJSON, ok := value.(string)
+	if !ok {
+		return nil, "ids must be a string"
+	}
+
+	idsJSON = strings.TrimSpace(idsJSON)
+	if idsJSON == "" {
+		return nil, "ids is required"
+	}
+
+	var ids []int
+
+	decoder := json.NewDecoder(strings.NewReader(idsJSON))
+	if err := decoder.Decode(&ids); err != nil {
+		return nil, "ids must be a JSON array of positive integer interface IDs"
+	}
+
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		return nil, "ids must be a JSON array of positive integer interface IDs"
+	}
+
+	if len(ids) == 0 {
+		return nil, "ids must include at least one interface ID"
+	}
+
+	seen := make(map[int]struct{}, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			return nil, "ids must contain only positive integer interface IDs"
+		}
+
+		if _, exists := seen[id]; exists {
+			return nil, "ids must not contain duplicate interface IDs"
+		}
+
+		seen[id] = struct{}{}
+	}
+
+	return &linode.ReorderConfigInterfacesRequest{IDs: ids}, ""
+}
+
+func formatReorderConfigInterfacesError(linodeID, configID int, err error) string {
+	return "Failed to reorder interfaces for configuration profile " + strconv.Itoa(configID) + " on instance " + strconv.Itoa(linodeID) + ": " + err.Error()
+}
+
 // NewLinodeInstanceConfigUpdateTool creates a tool for updating a Linode configuration profile.
 func NewLinodeInstanceConfigUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(

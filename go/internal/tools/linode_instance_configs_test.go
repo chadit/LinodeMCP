@@ -72,6 +72,7 @@ func instanceConfigCreateValidationCases() []instanceConfigCreateValidationCase 
 		{name: "invalid interfaces", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyInterfaces: `{`, keyConfirm: true}, wantContains: errInvalidInterfacesJSON},
 		{name: "null interfaces", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyInterfaces: databaseJSONNull, keyConfirm: true}, wantContains: "interfaces must be a JSON array"},
 		{name: caseUnknownInterfaceField, args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyInterfaces: `[{"purpose":"public","typo":true}]`, keyConfirm: true}, wantContains: errInvalidInterfacesJSON},
+		{name: "read-only interface id", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyInterfaces: `[{"id":101,"purpose":"public"}]`, keyConfirm: true}, wantContains: errInvalidInterfacesJSON},
 		{name: "trailing interfaces JSON", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyInterfaces: `[{"purpose":"public"}] {}`, keyConfirm: true}, wantContains: errInvalidInterfacesJSON},
 		{name: caseInvalidInterfacePurpose, args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyInterfaces: `[{"purpose":"bad"}]`, keyConfirm: true}, wantContains: "purpose must be public, vlan, or vpc"},
 		{name: "invalid run level", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyRunLevel: stageBeta, keyConfirm: true}, wantContains: "run_level must be"},
@@ -396,7 +397,7 @@ func TestLinodeInstanceConfigUpdateTool(t *testing.T) {
 		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyConfigID: float64(789), keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errLinodeIDRequired},
 		{name: caseMissingConfigID, args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errConfigIDPositive},
 		{name: caseSlashConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathSeparatorValue, keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errConfigIDPositive},
-		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: "789?query", keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errConfigIDPositive},
+		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: configIDQueryValue, keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errConfigIDPositive},
 		{name: caseTraversalConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathTraversalValue, keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errConfigIDPositive},
 		{name: caseNoUpdateFields, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyConfirm: true}, wantContains: "at least one configuration field must be provided"},
 		{name: caseBlankLabelImageShareGroupToken, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyLabel: "  ", keyConfirm: true}, wantContains: errLabelRequired},
@@ -415,6 +416,7 @@ func TestLinodeInstanceConfigUpdateTool(t *testing.T) {
 		{name: "trailing helpers JSON", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyHelpers: `{"distro":true} {}`, keyConfirm: true}, wantContains: errInvalidHelpersJSON},
 		{name: "null interfaces", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaces: databaseJSONNull, keyConfirm: true}, wantContains: "interfaces must be a JSON array"},
 		{name: caseUnknownInterfaceField, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaces: `[{"purpose":"public","typo":true}]`, keyConfirm: true}, wantContains: errInvalidInterfacesJSON},
+		{name: "read-only interface id update", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaces: `[{"id":101,"purpose":"public"}]`, keyConfirm: true}, wantContains: errInvalidInterfacesJSON},
 		{name: "trailing interfaces JSON", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaces: `[{"purpose":"public"}] {}`, keyConfirm: true}, wantContains: errInvalidInterfacesJSON},
 		{name: caseInvalidInterfacePurpose, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaces: `[{"purpose":"bad"}]`, keyConfirm: true}, wantContains: "purpose must be public, vlan, or vpc"},
 		{name: "invalid run level", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyRunLevel: stageBeta, keyConfirm: true}, wantContains: "run_level must be"},
@@ -523,5 +525,132 @@ func TestLinodeInstanceConfigUpdateTool(t *testing.T) {
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
 		assertErrorContains(t, result, "Failed to update configuration profile")
+	})
+}
+
+func TestLinodeInstanceConfigInterfacesReorderTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	tool, capability, handler := tools.NewLinodeInstanceConfigInterfacesReorderTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+		assert.Equal(t, "linode_instance_config_interfaces_reorder", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapWrite, capability, "capability should be write")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+		assert.Contains(t, tool.Description, "WARNING", "tool description should warn about mutation")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, keyLinodeID, "schema should include linode_id")
+		assert.Contains(t, props, keyConfigID, "schema should include config_id")
+		assert.Contains(t, props, keyIDs, "schema should include ids")
+		assert.Contains(t, props, keyConfirm, "schema should include confirm")
+	})
+
+	validationTests := []instanceConfigCreateValidationCase{
+		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyIDs: singleInterfaceIDsJSON}, wantContains: errConfirmEqualsTrue},
+		{name: caseFalseConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyIDs: singleInterfaceIDsJSON, keyConfirm: false}, wantContains: errConfirmEqualsTrue},
+		{name: caseStringConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyIDs: singleInterfaceIDsJSON, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
+		{name: caseNumericConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyIDs: singleInterfaceIDsJSON, keyConfirm: float64(1)}, wantContains: errConfirmEqualsTrue},
+		{name: caseMissingLinodeID, args: map[string]any{keyConfigID: float64(789), keyIDs: singleInterfaceIDsJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: pathSeparatorValue, keyConfigID: float64(789), keyIDs: singleInterfaceIDsJSON, keyConfirm: true}, wantContains: errLinodeIDInteger},
+		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfigID: float64(789), keyIDs: singleInterfaceIDsJSON, keyConfirm: true}, wantContains: errLinodeIDInteger},
+		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyConfigID: float64(789), keyIDs: singleInterfaceIDsJSON, keyConfirm: true}, wantContains: errLinodeIDInteger},
+		{name: caseMissingConfigID, args: map[string]any{keyLinodeID: float64(123), keyIDs: singleInterfaceIDsJSON, keyConfirm: true}, wantContains: "config_id is required"},
+		{name: caseSlashConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathSeparatorValue, keyIDs: singleInterfaceIDsJSON, keyConfirm: true}, wantContains: errConfigIDInteger},
+		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: configIDQueryValue, keyIDs: singleInterfaceIDsJSON, keyConfirm: true}, wantContains: errConfigIDInteger},
+		{name: caseTraversalConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathTraversalValue, keyIDs: singleInterfaceIDsJSON, keyConfirm: true}, wantContains: errConfigIDInteger},
+		{name: "missing ids", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyConfirm: true}, wantContains: "ids is required"},
+		{name: "non-string ids", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyIDs: []any{float64(101)}, keyConfirm: true}, wantContains: "ids must be a string"},
+		{name: "empty ids", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyIDs: databaseJSONArray, keyConfirm: true}, wantContains: "ids must include at least one interface ID"},
+		{name: "invalid ids", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyIDs: "[", keyConfirm: true}, wantContains: "ids must be a JSON array"},
+		{name: "zero id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyIDs: "[0]", keyConfirm: true}, wantContains: "ids must contain only positive integer"},
+		{name: "duplicate id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyIDs: "[101,101]", keyConfirm: true}, wantContains: "ids must not contain duplicate interface IDs"},
+		{name: "string id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyIDs: `["101"]`, keyConfirm: true}, wantContains: "ids must be a JSON array"},
+	}
+	for _, tt := range validationTests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
+			require.NoError(t, err, "handler should not return Go error")
+			require.NotNil(t, result, "handler should return a result")
+			assert.True(t, result.IsError, "result should be a tool error")
+			assertErrorContains(t, result, tt.wantContains)
+		})
+	}
+
+	t.Run("successful reorder", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/linode/instances/123/configs/789/interfaces/order", r.URL.Path, "request path should match")
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+
+			var got linode.ReorderConfigInterfacesRequest
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should decode")
+			assert.Equal(t, []int{101, 102, 103}, got.IDs, "ids should match")
+
+			w.Header().Set("Content-Type", "application/json")
+			_, writeErr := w.Write([]byte(`{}`))
+			assert.NoError(t, writeErr, "writing empty response should not fail")
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeInstanceConfigInterfacesReorderTool(srvCfg)
+
+		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{
+			keyLinodeID: float64(123),
+			keyConfigID: float64(789),
+			keyIDs:      "[101,102,103]",
+			keyConfirm:  true,
+		}))
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.False(t, result.IsError, "result should not be a tool error")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "789", "response should contain config ID")
+		assert.Contains(t, textContent.Text, "101", "response should contain interface ID")
+	})
+
+	t.Run("client error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/linode/instances/123/configs/789/interfaces/order", r.URL.Path, "request path should match")
+			http.Error(w, `{"errors":[{"reason":"temporary failure"}]}`, http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeInstanceConfigInterfacesReorderTool(srvCfg)
+
+		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{
+			keyLinodeID: float64(123),
+			keyConfigID: float64(789),
+			keyIDs:      singleInterfaceIDsJSON,
+			keyConfirm:  true,
+		}))
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "Failed to reorder interfaces")
 	})
 }

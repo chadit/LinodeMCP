@@ -403,6 +403,37 @@ func (c *Client) httpDeleteInstanceConfig(ctx context.Context, linodeID, configI
 	return c.handleResponse(resp, nil)
 }
 
+// ReorderInstanceConfigInterfaces reorders the interfaces for a Linode instance configuration profile.
+func (c *Client) httpReorderInstanceConfigInterfaces(ctx context.Context, linodeID, configID int, req *ReorderConfigInterfacesRequest) error {
+	if linodeID <= 0 {
+		return ErrLinodeIDPositive
+	}
+
+	if configID <= 0 {
+		return ErrConfigIDPositive
+	}
+
+	if req == nil {
+		return ErrReorderConfigInterfacesRequestRequired
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	encodedConfigID := url.PathEscape(strconv.Itoa(configID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/configs/%s/interfaces/order", encodedLinodeID, encodedConfigID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return &NetworkError{Operation: "ReorderInstanceConfigInterfaces", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return c.handleResponse(resp, nil)
+}
+
 // GetInstanceDisk retrieves a specific disk for a Linode instance.
 func (c *Client) httpGetInstanceDisk(ctx context.Context, linodeID, diskID int) (*InstanceDisk, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
