@@ -63,6 +63,40 @@ func (c *Client) httpGetInstance(ctx context.Context, instanceID int) (*Instance
 	return &instance, nil
 }
 
+// GetInstanceStatsByYearMonth retrieves monthly statistics for a Linode instance.
+func (c *Client) httpGetInstanceStatsByYearMonth(ctx context.Context, linodeID, year, month int) (*InstanceStats, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	if year < 2000 || year > 2037 {
+		return nil, ErrStatsYearRange
+	}
+
+	if month < 1 || month > 12 {
+		return nil, ErrStatsMonthRange
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointInstances+"/%d/stats/%d/%d", linodeID, year, month)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetInstanceStatsByYearMonth", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var stats InstanceStats
+	if err := c.handleResponse(resp, &stats); err != nil {
+		return nil, err
+	}
+
+	return &stats, nil
+}
+
 // ListRegions retrieves all available Linode regions.
 func (c *Client) httpListRegions(ctx context.Context) ([]Region, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

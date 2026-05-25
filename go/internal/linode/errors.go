@@ -28,6 +28,12 @@ var ErrLinodeIDPositive = errors.New("linode_id must be a positive integer")
 // ErrConfigIDPositive is returned when a config ID argument is not positive.
 var ErrConfigIDPositive = errors.New("config_id must be a positive integer")
 
+// ErrStatsYearRange is returned when a statistics year path argument is out of range.
+var ErrStatsYearRange = errors.New("year must be an integer between 2000 and 2037")
+
+// ErrStatsMonthRange is returned when a statistics month path argument is out of range.
+var ErrStatsMonthRange = errors.New("month must be an integer between 1 and 12")
+
 // ErrDiskIDPositive is returned when a disk ID argument is not positive.
 var ErrDiskIDPositive = errors.New("disk_id must be a positive integer")
 
