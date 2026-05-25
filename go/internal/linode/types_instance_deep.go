@@ -84,6 +84,13 @@ type ConfigInterface struct {
 	IPRanges    []string             `json:"ip_ranges,omitempty"`
 }
 
+// UpdateConfigInterfaceRequest represents fields that can update a configuration profile interface.
+type UpdateConfigInterfaceRequest struct {
+	Primary  *bool                `json:"primary,omitempty"`
+	IPv4     *ConfigInterfaceIPv4 `json:"ipv4,omitempty"`
+	IPRanges []string             `json:"ip_ranges,omitempty"`
+}
+
 // ConfigInterfaceResponse represents a legacy network interface returned by a configuration profile interface list.
 type ConfigInterfaceResponse struct {
 	ID          int                  `json:"id"`

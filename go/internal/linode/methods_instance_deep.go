@@ -215,6 +215,37 @@ func (c *Client) httpGetInstanceConfigInterface(ctx context.Context, linodeID, c
 	return &configInterface, nil
 }
 
+// UpdateInstanceConfigInterface updates a network interface on a configuration profile.
+func (c *Client) httpUpdateInstanceConfigInterface(ctx context.Context, linodeID, configID, interfaceID int, req *UpdateConfigInterfaceRequest) (*ConfigInterfaceResponse, error) {
+	if err := validateInstanceConfigMutation(linodeID, configID, req == nil, ErrUpdateConfigInterfaceRequestRequired); err != nil {
+		return nil, err
+	}
+
+	if interfaceID <= 0 {
+		return nil, ErrInterfaceIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedInterfaceID := url.PathEscape(strconv.Itoa(interfaceID))
+	endpoint := instanceConfigEndpoint(linodeID, configID) + "/interfaces/" + encodedInterfaceID
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateInstanceConfigInterface", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var configInterface ConfigInterfaceResponse
+	if err := c.handleResponse(resp, &configInterface); err != nil {
+		return nil, err
+	}
+
+	return &configInterface, nil
+}
+
 func validateInstanceConfigInterfaceIDs(linodeID, configID, interfaceID int) error {
 	if linodeID <= 0 {
 		return ErrLinodeIDPositive

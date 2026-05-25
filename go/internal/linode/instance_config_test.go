@@ -472,3 +472,93 @@ func TestClientUpdateInstanceConfigRejectsNilRequest(t *testing.T) {
 	require.ErrorIs(t, err, linode.ErrUpdateConfigRequestRequired, "nil request should be rejected")
 	assert.False(t, called.Load(), "nil request should not issue HTTP request")
 }
+
+func TestClientUpdateInstanceConfigInterfaceSendsRequest(t *testing.T) {
+	t.Parallel()
+
+	primary := true
+	wantReq := linode.UpdateConfigInterfaceRequest{
+		Primary:  &primary,
+		IPRanges: []string{"10.0.0.0/24"},
+	}
+	response := linode.ConfigInterfaceResponse{ID: 101, Purpose: "public", Primary: true, IPRanges: wantReq.IPRanges}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/linode/instances/123/configs/789/interfaces/101", r.URL.Path, "request path should match")
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+
+		var got linode.UpdateConfigInterfaceRequest
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should decode")
+		assert.NotNil(t, got.Primary, "primary should be set")
+
+		if got.Primary != nil {
+			assert.True(t, *got.Primary, "primary should match")
+		}
+
+		assert.Equal(t, wantReq.IPRanges, got.IPRanges, "IP ranges should match")
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(response), "encoding response should not fail")
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	updated, err := client.UpdateInstanceConfigInterface(t.Context(), 123, 789, 101, &wantReq)
+
+	require.NoError(t, err, "UpdateInstanceConfigInterface should succeed")
+	require.NotNil(t, updated, "updated interface should be returned")
+	assert.Equal(t, 101, updated.ID, "interface ID should match")
+	assert.Equal(t, wantReq.IPRanges, updated.IPRanges, "IP ranges should match")
+}
+
+func TestClientUpdateInstanceConfigInterfaceDoesNotRetryUpdate(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		assert.Equal(t, "/linode/instances/123/configs/789/interfaces/101", r.URL.Path, "request path should match")
+		http.Error(w, `{"errors":[{"reason":"temporary failure"}]}`, http.StatusInternalServerError)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(2))
+	primary := true
+
+	_, err := client.UpdateInstanceConfigInterface(t.Context(), 123, 789, 101, &linode.UpdateConfigInterfaceRequest{Primary: &primary})
+
+	require.Error(t, err, "server failure should be returned")
+	assert.Equal(t, int32(1), calls.Load(), "PUT update should not be retried")
+}
+
+func TestClientUpdateInstanceConfigInterfaceRejectsInvalidInput(t *testing.T) {
+	t.Parallel()
+
+	var called atomic.Bool
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called.Store(true)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	primary := true
+	req := &linode.UpdateConfigInterfaceRequest{Primary: &primary}
+
+	_, err := client.UpdateInstanceConfigInterface(t.Context(), 0, 789, 101, req)
+	require.ErrorIs(t, err, linode.ErrLinodeIDPositive, "invalid linode ID should be rejected")
+
+	_, err = client.UpdateInstanceConfigInterface(t.Context(), 123, 0, 101, req)
+	require.ErrorIs(t, err, linode.ErrConfigIDPositive, "invalid config ID should be rejected")
+
+	_, err = client.UpdateInstanceConfigInterface(t.Context(), 123, 789, 0, req)
+	require.ErrorIs(t, err, linode.ErrInterfaceIDPositive, "invalid interface ID should be rejected")
+
+	_, err = client.UpdateInstanceConfigInterface(t.Context(), 123, 789, 101, nil)
+	require.ErrorIs(t, err, linode.ErrUpdateConfigInterfaceRequestRequired, "nil request should be rejected")
+
+	assert.False(t, called.Load(), "invalid input should not issue HTTP request")
+}

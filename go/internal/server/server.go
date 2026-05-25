@@ -1089,6 +1089,7 @@ func instanceDeepToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeInstanceConfigCreateTool,
 		tools.NewLinodeInstanceConfigInterfaceAddTool,
 		tools.NewLinodeInstanceConfigInterfaceGetTool,
+		tools.NewLinodeInstanceConfigInterfaceUpdateTool,
 		tools.NewLinodeInstanceConfigUpdateTool,
 		tools.NewLinodeInstanceConfigInterfacesReorderTool,
 		tools.NewLinodeInstanceConfigDeleteTool,
