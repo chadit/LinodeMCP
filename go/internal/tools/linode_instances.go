@@ -218,6 +218,66 @@ func formatAddInstanceInterfaceError(linodeID int, err error) string {
 	return "Failed to add interface to instance " + strconv.Itoa(linodeID) + ": " + err.Error()
 }
 
+// NewLinodeInstanceInterfaceGetTool creates a tool for retrieving one interface assigned to a Linode instance.
+func NewLinodeInstanceInterfaceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_instance_interface_get",
+		"Retrieves a specific interface assigned to a Linode instance.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance")),
+			mcp.WithNumber("interface_id", mcp.Required(),
+				mcp.Description("The ID of the Linode interface")),
+		},
+		handleInstanceInterfaceGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleInstanceInterfaceGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	interfaceID, validationMessage := instanceInterfaceIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	instanceInterface, err := client.GetInstanceInterface(ctx, linodeID, interfaceID)
+	if err != nil {
+		return mcp.NewToolResultError(formatGetInstanceInterfaceError(linodeID, interfaceID, err)), nil
+	}
+
+	return MarshalToolResponse(instanceInterface)
+}
+
+func instanceInterfaceIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	args := request.GetArguments()
+	if _, exists := args["interface_id"]; !exists {
+		return 0, "interface_id is required"
+	}
+
+	interfaceID, validationMessage := optionalPaginationInt(args, "interface_id", 1, 0)
+	if validationMessage != "" {
+		return 0, validationMessage
+	}
+
+	return interfaceID, ""
+}
+
+func formatGetInstanceInterfaceError(linodeID, interfaceID int, err error) string {
+	return "Failed to retrieve interface " + strconv.Itoa(interfaceID) + " for instance " + strconv.Itoa(linodeID) + ": " + err.Error()
+}
+
 // NewLinodeInstanceInterfaceSettingsGetTool creates a tool for retrieving Linode interface settings.
 func NewLinodeInstanceInterfaceSettingsGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(

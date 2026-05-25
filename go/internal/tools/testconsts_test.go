@@ -152,6 +152,7 @@ const (
 	errConfigIDInteger     = "config_id must be an integer"
 	errConfigIDMin         = "config_id must be an integer greater than or equal to 1"
 	errInterfaceIDPositive = "interface_id must be a positive integer"
+	errInterfaceIDInteger  = "interface_id must be an integer"
 
 	// Linode region IDs commonly used in fixtures.
 	regionUSEast         = "us-east"

@@ -553,6 +553,38 @@ func (c *Client) httpListInstanceInterfaces(ctx context.Context, linodeID int) (
 	return payload.Interfaces, nil
 }
 
+// GetInstanceInterface retrieves a specific interface for a Linode instance.
+func (c *Client) httpGetInstanceInterface(ctx context.Context, linodeID, interfaceID int) (*InstanceInterface, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	if interfaceID <= 0 {
+		return nil, ErrInterfaceIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	encodedInterfaceID := url.PathEscape(strconv.Itoa(interfaceID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/interfaces/%s", encodedLinodeID, encodedInterfaceID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetInstanceInterface", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var instanceInterface InstanceInterface
+	if err := c.handleResponse(resp, &instanceInterface); err != nil {
+		return nil, err
+	}
+
+	return &instanceInterface, nil
+}
+
 // ListInstanceInterfaceHistory retrieves historical interface versions for a Linode instance.
 func (c *Client) httpListInstanceInterfaceHistory(ctx context.Context, linodeID, page, pageSize int) (*PaginatedResponse[InstanceInterfaceHistory], error) {
 	if linodeID <= 0 {
