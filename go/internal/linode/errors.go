@@ -34,6 +34,9 @@ var ErrCreateConfigRequestRequired = errors.New("create config request is requir
 // ErrUpdateConfigRequestRequired is returned when UpdateInstanceConfig is called without a request body.
 var ErrUpdateConfigRequestRequired = errors.New("update config request is required")
 
+// ErrAddConfigInterfaceRequestRequired is returned when AddInstanceConfigInterface is called without a request body.
+var ErrAddConfigInterfaceRequestRequired = errors.New("add config interface request is required")
+
 // APIError represents an error returned by the Linode API.
 // RetryAfter carries the server's Retry-After hint when present so the retry
 // loop can honor it instead of computing its own backoff.

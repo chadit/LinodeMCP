@@ -160,6 +160,32 @@ func (c *Client) httpCreateInstanceConfig(ctx context.Context, linodeID int, req
 	return &config, nil
 }
 
+// AddInstanceConfigInterface appends a network interface to a configuration profile.
+func (c *Client) httpAddInstanceConfigInterface(ctx context.Context, linodeID, configID int, req *ConfigInterface) (*ConfigInterface, error) {
+	if err := validateInstanceConfigMutation(linodeID, configID, req == nil, ErrAddConfigInterfaceRequestRequired); err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := instanceConfigEndpoint(linodeID, configID) + "/interfaces"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "AddInstanceConfigInterface", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var configInterface ConfigInterface
+	if err := c.handleResponse(resp, &configInterface); err != nil {
+		return nil, err
+	}
+
+	return &configInterface, nil
+}
+
 // ListInstanceDisks retrieves all disks for a Linode instance.
 func (c *Client) httpListInstanceDisks(ctx context.Context, linodeID int) ([]InstanceDisk, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -185,24 +211,14 @@ func (c *Client) httpListInstanceDisks(ctx context.Context, linodeID int) ([]Ins
 
 // UpdateInstanceConfig updates a configuration profile for a Linode instance.
 func (c *Client) httpUpdateInstanceConfig(ctx context.Context, linodeID, configID int, req *UpdateConfigRequest) (*InstanceConfig, error) {
-	if linodeID <= 0 {
-		return nil, ErrLinodeIDPositive
-	}
-
-	if configID <= 0 {
-		return nil, ErrConfigIDPositive
-	}
-
-	if req == nil {
-		return nil, ErrUpdateConfigRequestRequired
+	if err := validateInstanceConfigMutation(linodeID, configID, req == nil, ErrUpdateConfigRequestRequired); err != nil {
+		return nil, err
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
-	encodedConfigID := url.PathEscape(strconv.Itoa(configID))
-	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/configs/%s", encodedLinodeID, encodedConfigID)
+	endpoint := instanceConfigEndpoint(linodeID, configID)
 
 	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
 	if err != nil {
@@ -217,6 +233,29 @@ func (c *Client) httpUpdateInstanceConfig(ctx context.Context, linodeID, configI
 	}
 
 	return &config, nil
+}
+
+func validateInstanceConfigMutation(linodeID, configID int, requestMissing bool, missingReqErr error) error {
+	if linodeID <= 0 {
+		return ErrLinodeIDPositive
+	}
+
+	if configID <= 0 {
+		return ErrConfigIDPositive
+	}
+
+	if requestMissing {
+		return missingReqErr
+	}
+
+	return nil
+}
+
+func instanceConfigEndpoint(linodeID, configID int) string {
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	encodedConfigID := url.PathEscape(strconv.Itoa(configID))
+
+	return fmt.Sprintf(endpointInstanceDeep+"/%s/configs/%s", encodedLinodeID, encodedConfigID)
 }
 
 // ListInstanceConfigs retrieves all configuration profiles for a Linode instance.

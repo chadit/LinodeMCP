@@ -307,6 +307,103 @@ func handleInstanceConfigCreateRequest(ctx context.Context, request *mcp.CallToo
 	return MarshalToolResponse(response)
 }
 
+// NewLinodeInstanceConfigInterfaceAddTool creates a tool for appending a network interface to a Linode configuration profile.
+func NewLinodeInstanceConfigInterfaceAddTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_instance_config_interface_add",
+		"Adds a network interface to a Linode configuration profile. WARNING: This changes instance network configuration and requires a reboot to take effect.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance")),
+			mcp.WithNumber("config_id", mcp.Required(),
+				mcp.Description("The ID of the configuration profile")),
+			mcp.WithString("interface", mcp.Required(),
+				mcp.Description("JSON object for the interface to add. Must include purpose: public, vlan, or vpc.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm configuration profile interface creation.")),
+		},
+		handleInstanceConfigInterfaceAddRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleInstanceConfigInterfaceAddRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This adds a network interface to the configuration profile. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	linodeID, linodeIDOK := getPositiveIntArgument(request, "linode_id")
+	if !linodeIDOK {
+		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
+	}
+
+	configID, configIDOK := getPositiveIntArgument(request, "config_id")
+	if !configIDOK {
+		return mcp.NewToolResultError("config_id must be a positive integer"), nil
+	}
+
+	configInterface, errText := configInterfaceFromTool(request)
+	if errText != "" {
+		return mcp.NewToolResultError(errText), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	createdInterface, err := client.AddInstanceConfigInterface(ctx, linodeID, configID, configInterface)
+	if err != nil {
+		return mcp.NewToolResultError(formatAddConfigInterfaceError(linodeID, configID, err)), nil
+	}
+
+	response := struct {
+		Message   string                  `json:"message"`
+		Interface *linode.ConfigInterface `json:"interface"`
+		LinodeID  int                     `json:"linode_id"`
+		ConfigID  int                     `json:"config_id"`
+	}{
+		Message:   fmt.Sprintf("Configuration profile interface added to config %d on instance %d", configID, linodeID),
+		Interface: createdInterface,
+		LinodeID:  linodeID,
+		ConfigID:  configID,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func configInterfaceFromTool(request *mcp.CallToolRequest) (*linode.ConfigInterface, string) {
+	interfaceJSON, validationMessage := stringArgument(request, "interface", true)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	return parseConfigInterface(interfaceJSON)
+}
+
+func parseConfigInterface(interfaceJSON string) (*linode.ConfigInterface, string) {
+	var configInterface *linode.ConfigInterface
+	if err := strictDecodeJSON(interfaceJSON, &configInterface); err != nil {
+		return nil, fmt.Sprintf("invalid interface JSON: %v", err)
+	}
+
+	if configInterface == nil {
+		return nil, "interface must be a JSON object"
+	}
+
+	if !validConfigInterfacePurpose(configInterface.Purpose) {
+		return nil, "interface.purpose must be public, vlan, or vpc"
+	}
+
+	return configInterface, ""
+}
+
+func formatAddConfigInterfaceError(linodeID, configID int, err error) string {
+	return "Failed to add configuration profile interface to config " + strconv.Itoa(configID) + " for instance " + strconv.Itoa(linodeID) + ": " + err.Error()
+}
+
 // NewLinodeInstanceConfigUpdateTool creates a tool for updating a Linode configuration profile.
 func NewLinodeInstanceConfigUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(

@@ -2862,6 +2862,21 @@ func (c *Client) UpdateInstanceConfig(ctx context.Context, linodeID, configID in
 	return config, err
 }
 
+// AddInstanceConfigInterface appends an interface without retrying the POST append call.
+func (c *Client) AddInstanceConfigInterface(ctx context.Context, linodeID, configID int, req *ConfigInterface) (*ConfigInterface, error) {
+	var configInterface *ConfigInterface
+
+	err := c.executeWithoutRetry(ctx, "AddInstanceConfigInterface", func() error {
+		var retryErr error
+
+		configInterface, retryErr = c.httpAddInstanceConfigInterface(ctx, linodeID, configID, req)
+
+		return retryErr
+	})
+
+	return configInterface, err
+}
+
 // ListInstanceDisks retrieves all disks for an instance with automatic retry on transient failures.
 func (c *Client) ListInstanceDisks(ctx context.Context, linodeID int) ([]InstanceDisk, error) {
 	var disks []InstanceDisk
