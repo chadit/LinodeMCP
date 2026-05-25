@@ -58,6 +58,43 @@ func (c *Client) httpGetInstanceStats(ctx context.Context, linodeID int) (*Insta
 	return &stats, nil
 }
 
+// GetInstanceTransferByYearMonth retrieves monthly network transfer statistics for a Linode instance.
+func (c *Client) httpGetInstanceTransferByYearMonth(ctx context.Context, linodeID, year, month int) (*Transfer, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	if year <= 0 {
+		return nil, ErrTransferYearPositive
+	}
+
+	if month < 1 || month > 12 {
+		return nil, ErrTransferMonthRange
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	encodedYear := url.PathEscape(strconv.Itoa(year))
+	encodedMonth := url.PathEscape(strconv.Itoa(month))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/transfer/%s/%s", encodedLinodeID, encodedYear, encodedMonth)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetInstanceTransferByYearMonth", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var transfer Transfer
+	if err := c.handleResponse(resp, &transfer); err != nil {
+		return nil, err
+	}
+
+	return &transfer, nil
+}
+
 // GetInstanceBackup retrieves a specific backup for a Linode instance.
 func (c *Client) httpGetInstanceBackup(ctx context.Context, linodeID, backupID int) (*InstanceBackup, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

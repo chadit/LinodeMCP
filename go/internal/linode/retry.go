@@ -2826,6 +2826,21 @@ func (c *Client) GetInstanceStats(ctx context.Context, linodeID int) (*InstanceS
 	return stats, err
 }
 
+// GetInstanceTransferByYearMonth retrieves monthly network transfer statistics with automatic retry on transient failures.
+func (c *Client) GetInstanceTransferByYearMonth(ctx context.Context, linodeID, year, month int) (*Transfer, error) {
+	var transfer *Transfer
+
+	err := c.executeWithRetry(ctx, "GetInstanceTransferByYearMonth", func() error {
+		var retryErr error
+
+		transfer, retryErr = c.httpGetInstanceTransferByYearMonth(ctx, linodeID, year, month)
+
+		return retryErr
+	})
+
+	return transfer, err
+}
+
 // GetInstanceBackup retrieves a specific backup with automatic retry on transient failures.
 func (c *Client) GetInstanceBackup(ctx context.Context, linodeID, backupID int) (*InstanceBackup, error) {
 	var backup *InstanceBackup
