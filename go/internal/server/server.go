@@ -1082,6 +1082,8 @@ func instanceDeepToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeInstanceBackupRestoreTool,
 		tools.NewLinodeInstanceBackupsEnableTool,
 		tools.NewLinodeInstanceBackupsCancelTool,
+		// Firewalls
+		tools.NewLinodeInstanceFirewallsUpdateTool,
 		// Configs
 		tools.NewLinodeInstanceConfigListTool,
 		tools.NewLinodeInstanceConfigGetTool,

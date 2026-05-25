@@ -383,6 +383,37 @@ func (c *Client) httpListInstanceConfigs(ctx context.Context, linodeID, page, pa
 	return response.Data, nil
 }
 
+// UpdateInstanceFirewalls replaces firewall assignments for a Linode instance.
+func (c *Client) httpUpdateInstanceFirewalls(ctx context.Context, linodeID, page, pageSize int, req *UpdateInstanceFirewallsRequest) ([]Firewall, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	if req == nil {
+		return nil, ErrUpdateInstanceFirewallsRequestRequired
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	endpoint := withPaginationQuery(fmt.Sprintf(endpointInstanceDeep+"/%s/firewalls", encodedLinodeID), page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateInstanceFirewalls", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[Firewall]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
+}
+
 // ListInstanceConfigInterfaces retrieves all interfaces for a configuration profile on a Linode instance.
 func (c *Client) httpListInstanceConfigInterfaces(ctx context.Context, linodeID, configID int) ([]ConfigInterfaceResponse, error) {
 	if linodeID <= 0 {
