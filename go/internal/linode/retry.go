@@ -410,6 +410,13 @@ func (c *Client) CreateOAuthClient(ctx context.Context, req *CreateOAuthClientRe
 	return c.httpCreateOAuthClient(ctx, req)
 }
 
+// CreateLongviewClient creates a Longview client without retrying the
+// mutating request. Retrying can replay client creation after a transient
+// error, so this method delegates exactly once.
+func (c *Client) CreateLongviewClient(ctx context.Context, req *CreateLongviewClientRequest) (*CreatedLongviewClient, error) {
+	return c.httpCreateLongviewClient(ctx, req)
+}
+
 // UpdateOAuthClient updates an account OAuth client without retrying the
 // mutating request. Retrying can replay updates after a transient error,
 // so this method delegates exactly once.
