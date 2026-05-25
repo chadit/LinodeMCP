@@ -1100,6 +1100,7 @@ func instanceDeepToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeInstanceDiskDeleteTool,
 		tools.NewLinodeInstanceDiskCloneTool,
 		tools.NewLinodeInstanceDiskResizeTool,
+		tools.NewLinodeInstanceDiskPasswordResetTool,
 		// IPs
 		tools.NewLinodeInstanceIPListTool,
 		tools.NewLinodeInstanceIPGetTool,

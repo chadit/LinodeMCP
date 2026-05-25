@@ -599,6 +599,35 @@ func (c *Client) httpResizeInstanceDisk(ctx context.Context, linodeID, diskID in
 	return c.handleResponse(resp, nil)
 }
 
+// ResetInstanceDiskPassword resets the root password for a disk on a Linode instance.
+func (c *Client) httpResetInstanceDiskPassword(ctx context.Context, linodeID, diskID int, password string) error {
+	if linodeID <= 0 {
+		return ErrLinodeIDPositive
+	}
+
+	if diskID <= 0 {
+		return ErrDiskIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	encodedDiskID := url.PathEscape(strconv.Itoa(diskID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/disks/%s/password", encodedLinodeID, encodedDiskID)
+
+	payload := map[string]string{"password": password}
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, payload)
+	if err != nil {
+		return &NetworkError{Operation: "ResetInstanceDiskPassword", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return c.handleResponse(resp, nil)
+}
+
 // ListInstanceIPs retrieves all IP addresses for a Linode instance.
 func (c *Client) httpListInstanceIPs(ctx context.Context, linodeID int) (*InstanceIPAddresses, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
