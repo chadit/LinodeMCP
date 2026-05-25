@@ -2832,6 +2832,13 @@ func (c *Client) CancelInstanceBackups(ctx context.Context, linodeID int) error 
 	})
 }
 
+// ApplyInstanceFirewalls reapplies assigned firewalls without retrying the mutating POST call.
+func (c *Client) ApplyInstanceFirewalls(ctx context.Context, linodeID int) error {
+	return c.executeWithoutRetry(ctx, "ApplyInstanceFirewalls", func() error {
+		return c.httpApplyInstanceFirewalls(ctx, linodeID)
+	})
+}
+
 // CreateInstanceConfig creates a configuration profile without retrying the POST create call.
 func (c *Client) CreateInstanceConfig(ctx context.Context, linodeID int, req *CreateConfigRequest) (*InstanceConfig, error) {
 	var config *InstanceConfig

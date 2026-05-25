@@ -290,6 +290,7 @@ const (
 	errFirewallIDRequired          = "firewall_id is required"
 	errLinodeIDRequired            = "linode_id is required"
 	errLinodeIDInteger             = "linode_id must be an integer"
+	errLinodeIDMin                 = "linode_id must be an integer greater than or equal to 1"
 	errAddressRequired             = "address is required"
 	errAddressValidIP              = "address must be a valid IP address"
 	errDomainIDRequired            = "domain_id is required"
