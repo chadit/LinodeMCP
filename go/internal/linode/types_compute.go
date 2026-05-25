@@ -45,6 +45,16 @@ type InstanceInterface struct {
 	Version      int                    `json:"version,omitempty"`
 }
 
+// InstanceInterfaceHistory represents a historical version of a Linode interface.
+type InstanceInterfaceHistory struct {
+	InterfaceHistoryID int    `json:"interface_history_id"`
+	InterfaceID        int    `json:"interface_id"`
+	LinodeID           int    `json:"linode_id"`
+	Version            int    `json:"version"`
+	Created            string `json:"created"`
+	InterfaceData      any    `json:"interface_data"`
+}
+
 // AddInstanceInterfaceRequest represents the request body for adding a Linode
 // interface to an existing instance. Exactly one of Public, VPC, or VLAN should
 // be set.

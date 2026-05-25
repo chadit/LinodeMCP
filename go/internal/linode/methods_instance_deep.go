@@ -495,6 +495,33 @@ func (c *Client) httpListInstanceInterfaces(ctx context.Context, linodeID int) (
 	return payload.Interfaces, nil
 }
 
+// ListInstanceInterfaceHistory retrieves historical interface versions for a Linode instance.
+func (c *Client) httpListInstanceInterfaceHistory(ctx context.Context, linodeID, page, pageSize int) (*PaginatedResponse[InstanceInterfaceHistory], error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	endpoint := withPaginationQuery(fmt.Sprintf(endpointInstanceDeep+"/%s/interfaces/history", encodedLinodeID), page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListInstanceInterfaceHistory", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var history PaginatedResponse[InstanceInterfaceHistory]
+	if err := c.handleResponse(resp, &history); err != nil {
+		return nil, err
+	}
+
+	return &history, nil
+}
+
 func (c *Client) httpListInstanceConfigInterfaces(ctx context.Context, linodeID, configID int) ([]ConfigInterfaceResponse, error) {
 	if linodeID <= 0 {
 		return nil, ErrLinodeIDPositive

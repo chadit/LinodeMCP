@@ -218,6 +218,52 @@ func formatAddInstanceInterfaceError(linodeID int, err error) string {
 	return "Failed to add interface to instance " + strconv.Itoa(linodeID) + ": " + err.Error()
 }
 
+// NewLinodeInstanceInterfaceHistoryListTool creates a tool for listing historical interface versions for a Linode instance.
+func NewLinodeInstanceInterfaceHistoryListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_instance_interface_history_list",
+		"Lists historical network interface versions for a specific Linode instance with optional pagination.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance")),
+			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		},
+		handleInstanceInterfaceHistoryListRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleInstanceInterfaceHistoryListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	page, pageSize, validationMessage := instanceFirewallsPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	history, err := client.ListInstanceInterfaceHistory(ctx, linodeID, page, pageSize)
+	if err != nil {
+		return mcp.NewToolResultError(formatListInstanceInterfaceHistoryError(linodeID, err)), nil
+	}
+
+	return MarshalToolResponse(history)
+}
+
+func formatListInstanceInterfaceHistoryError(linodeID int, err error) string {
+	return "Failed to list interface history for instance " + strconv.Itoa(linodeID) + ": " + err.Error()
+}
+
 // NewLinodeInstanceInterfacesListTool creates a tool for listing interfaces assigned to a Linode instance.
 func NewLinodeInstanceInterfacesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
