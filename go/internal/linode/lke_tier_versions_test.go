@@ -15,7 +15,7 @@ import (
 func TestClientListLKETierVersionsUsesTierPath(t *testing.T) {
 	t.Parallel()
 
-	versions := []linode.LKETierVersion{{ID: "1.33", Tier: "standard"}}
+	versions := []linode.LKETierVersion{{ID: "1.33", Tier: lkeTierStandard}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodGet, r.Method, "request method should match")
@@ -29,7 +29,7 @@ func TestClientListLKETierVersionsUsesTierPath(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil)
-	got, err := client.ListLKETierVersions(t.Context(), "standard")
+	got, err := client.ListLKETierVersions(t.Context(), lkeTierStandard)
 
 	require.NoError(t, err, "listing tier versions should not fail")
 	assert.Equal(t, versions, got, "tier versions should match response")

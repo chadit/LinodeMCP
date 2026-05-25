@@ -577,3 +577,25 @@ func (c *Client) httpListLKETierVersions(ctx context.Context, tier string) ([]LK
 
 	return response.Data, nil
 }
+
+// GetLKETierVersion retrieves a specific Kubernetes version for an LKE tier.
+func (c *Client) httpGetLKETierVersion(ctx context.Context, tierID, versionID string) (*LKETierVersion, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf("%s/%s/versions/%s", endpointLKETierVersions, url.PathEscape(tierID), url.PathEscape(versionID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetLKETierVersion", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var version LKETierVersion
+	if err := c.handleResponse(resp, &version); err != nil {
+		return nil, err
+	}
+
+	return &version, nil
+}
