@@ -79,6 +79,12 @@ type UpdateFirewallRequest struct {
 	Tags   []string       `json:"tags,omitempty"`
 }
 
+// UpdateInstanceFirewallsRequest represents the request body for replacing
+// firewall assignments on a Linode instance.
+type UpdateInstanceFirewallsRequest struct {
+	FirewallIDs []int `json:"firewall_ids"`
+}
+
 // CreateNodeBalancerRequest represents the request body for creating a NodeBalancer.
 type CreateNodeBalancerRequest struct {
 	Region             string   `json:"region"`

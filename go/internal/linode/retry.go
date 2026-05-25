@@ -2966,6 +2966,21 @@ func (c *Client) ListInstanceConfigInterfaces(ctx context.Context, linodeID, con
 	return interfaces, err
 }
 
+// UpdateInstanceFirewalls replaces firewall assignments for an instance without replaying the state-changing request.
+func (c *Client) UpdateInstanceFirewalls(ctx context.Context, linodeID, page, pageSize int, req *UpdateInstanceFirewallsRequest) ([]Firewall, error) {
+	var firewalls []Firewall
+
+	err := c.executeWithoutRetry(ctx, "UpdateInstanceFirewalls", func() error {
+		var retryErr error
+
+		firewalls, retryErr = c.httpUpdateInstanceFirewalls(ctx, linodeID, page, pageSize, req)
+
+		return retryErr
+	})
+
+	return firewalls, err
+}
+
 // GetInstanceConfig retrieves a specific configuration profile with automatic retry on transient failures.
 func (c *Client) GetInstanceConfig(ctx context.Context, linodeID, configID int) (*InstanceConfig, error) {
 	var config *InstanceConfig

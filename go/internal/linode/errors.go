@@ -49,6 +49,9 @@ var ErrUpdateConfigInterfaceRequestRequired = errors.New("update config interfac
 // ErrReorderConfigInterfacesRequestRequired is returned when ReorderInstanceConfigInterfaces is called without a request body.
 var ErrReorderConfigInterfacesRequestRequired = errors.New("reorder config interfaces request is required")
 
+// ErrUpdateInstanceFirewallsRequestRequired is returned when UpdateInstanceFirewalls is called without a request body.
+var ErrUpdateInstanceFirewallsRequestRequired = errors.New("firewall_ids is required")
+
 // APIError represents an error returned by the Linode API.
 // RetryAfter carries the server's Retry-After hint when present so the retry
 // loop can honor it instead of computing its own backoff.
