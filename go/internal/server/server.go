@@ -1126,6 +1126,7 @@ func instanceDeepToolEntries(cfg *config.Config) []toolEntry {
 		// Actions
 		tools.NewLinodeInstanceCloneTool,
 		tools.NewLinodeInstanceMigrateTool,
+		tools.NewLinodeInstanceMutateTool,
 		tools.NewLinodeInstanceRebuildTool,
 		tools.NewLinodeInstanceRescueTool,
 		tools.NewLinodeInstancePasswordResetTool,

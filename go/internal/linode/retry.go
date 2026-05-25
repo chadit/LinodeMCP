@@ -3308,6 +3308,15 @@ func (c *Client) MigrateInstance(ctx context.Context, linodeID int, region strin
 	})
 }
 
+// MutateInstance upgrades an instance without retrying the mutating request.
+// Retrying can replay the upgrade after a transient error, so this method
+// delegates exactly once.
+func (c *Client) MutateInstance(ctx context.Context, linodeID int, req *MutateInstanceRequest) error {
+	return c.executeWithoutRetry(ctx, "MutateInstance", func() error {
+		return c.httpMutateInstance(ctx, linodeID, req)
+	})
+}
+
 // RebuildInstance rebuilds an instance with automatic retry on transient failures.
 func (c *Client) RebuildInstance(ctx context.Context, linodeID int, req *RebuildInstanceRequest) (*Instance, error) {
 	var instance *Instance

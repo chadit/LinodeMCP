@@ -1154,7 +1154,23 @@ func (c *Client) httpMigrateInstance(ctx context.Context, linodeID int, region s
 	return c.handleResponse(resp, nil)
 }
 
-// RebuildInstance rebuilds a Linode instance with a new image.
+// httpMutateInstance upgrades a Linode instance to the latest generation type.
+func (c *Client) httpMutateInstance(ctx context.Context, linodeID int, req *MutateInstanceRequest) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%d/mutate", linodeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return &NetworkError{Operation: "MutateInstance", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return c.handleResponse(resp, nil)
+}
+
 func (c *Client) httpRebuildInstance(ctx context.Context, linodeID int, req *RebuildInstanceRequest) (*Instance, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()

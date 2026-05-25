@@ -146,6 +146,67 @@ func handleInstanceMigrateRequest(ctx context.Context, request *mcp.CallToolRequ
 	return MarshalToolResponse(response)
 }
 
+// NewLinodeInstanceMutateTool creates a tool for upgrading a Linode instance to the latest generation type.
+func NewLinodeInstanceMutateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_instance_mutate",
+		"Upgrades a Linode instance to the latest generation type. WARNING: This changes instance state and may cause downtime.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the Linode instance to upgrade")),
+			mcp.WithBoolean("allow_auto_disk_resize",
+				mcp.Description("Automatically resize disks during the upgrade when possible (optional, API default: true)")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm the instance upgrade.")),
+		},
+		handleInstanceMutateRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleInstanceMutateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This upgrades the instance and may cause downtime. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	linodeID := request.GetInt("linode_id", 0)
+	if linodeID <= 0 {
+		return mcp.NewToolResultError("linode_id is required and must be positive"), nil
+	}
+
+	mutateReq := &linode.MutateInstanceRequest{}
+
+	if raw, exists := request.GetArguments()["allow_auto_disk_resize"]; exists {
+		allowAutoDiskResize, ok := raw.(bool)
+		if !ok {
+			return mcp.NewToolResultError("allow_auto_disk_resize must be a boolean"), nil
+		}
+
+		mutateReq.AllowAutoDiskResize = &allowAutoDiskResize
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := client.MutateInstance(ctx, linodeID, mutateReq); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to upgrade instance %d: %v", linodeID, err)), nil
+	}
+
+	response := struct {
+		Message  string `json:"message"`
+		LinodeID int    `json:"linode_id"`
+	}{
+		Message:  fmt.Sprintf("Upgrade initiated for instance %d", linodeID),
+		LinodeID: linodeID,
+	}
+
+	return MarshalToolResponse(response)
+}
+
 // NewLinodeInstanceRebuildTool creates a tool for rebuilding a Linode instance with a new image.
 func NewLinodeInstanceRebuildTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(

@@ -266,6 +266,11 @@ type CloneInstanceRequest struct {
 	Configs        []int  `json:"configs,omitempty"`
 }
 
+// MutateInstanceRequest represents the request body for upgrading a Linode instance.
+type MutateInstanceRequest struct {
+	AllowAutoDiskResize *bool `json:"allow_auto_disk_resize,omitempty"`
+}
+
 // RebuildInstanceRequest represents the request body for rebuilding a Linode instance.
 type RebuildInstanceRequest struct {
 	Image           string   `json:"image"`
