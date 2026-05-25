@@ -2958,6 +2958,21 @@ func (c *Client) ListInstanceConfigs(ctx context.Context, linodeID, page, pageSi
 	return configs, err
 }
 
+// ListInstanceNodeBalancers retrieves NodeBalancers assigned to an instance with automatic retry on transient failures.
+func (c *Client) ListInstanceNodeBalancers(ctx context.Context, linodeID int) ([]NodeBalancer, error) {
+	var nodeBalancers []NodeBalancer
+
+	err := c.executeWithRetry(ctx, "ListInstanceNodeBalancers", func() error {
+		var retryErr error
+
+		nodeBalancers, retryErr = c.httpListInstanceNodeBalancers(ctx, linodeID)
+
+		return retryErr
+	})
+
+	return nodeBalancers, err
+}
+
 // ListInstanceInterfaces retrieves Linode interfaces with automatic retry on transient failures.
 func (c *Client) ListInstanceInterfaces(ctx context.Context, linodeID int) ([]InstanceInterface, error) {
 	var interfaces []InstanceInterface

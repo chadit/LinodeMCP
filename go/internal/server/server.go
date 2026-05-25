@@ -1078,6 +1078,7 @@ func instanceDeepToolEntries(cfg *config.Config) []toolEntry {
 	factories = append(factories, instanceFirewallToolFactories()...)
 	factories = append(factories, instanceInterfaceToolFactories()...)
 	factories = append(factories, instanceConfigToolFactories()...)
+	factories = append(factories, instanceNodeBalancerToolFactories()...)
 	factories = append(factories, instanceDiskToolFactories()...)
 	factories = append(factories, instanceIPToolFactories()...)
 	factories = append(factories, instanceActionToolFactories()...)
@@ -1131,6 +1132,12 @@ func instanceConfigToolFactories() []toolFactory {
 		tools.NewLinodeInstanceConfigUpdateTool,
 		tools.NewLinodeInstanceConfigInterfacesReorderTool,
 		tools.NewLinodeInstanceConfigDeleteTool,
+	}
+}
+
+func instanceNodeBalancerToolFactories() []toolFactory {
+	return []toolFactory{
+		tools.NewLinodeInstanceNodeBalancerListTool,
 	}
 }
 
