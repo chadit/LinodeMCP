@@ -5,7 +5,13 @@ from typing import TYPE_CHECKING, Any
 from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import execute_tool
+from linodemcp.tools.helpers import (
+    DRY_RUN_PROP,
+    PARAM_DRY_RUN,
+    execute_dry_run,
+    execute_tool,
+    is_dry_run,
+)
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -435,7 +441,8 @@ def create_linode_instance_delete_tool() -> tuple[Tool, Capability]:
         name="linode_instance_delete",
         description=(
             "Deletes a Linode instance. WARNING: This is destructive and cannot "
-            "be undone. All data will be lost."
+            "be undone. All data will be lost. Pass dry_run=true to preview "
+            "without deleting."
         ),
         inputSchema={
             "type": "object",
@@ -452,8 +459,11 @@ def create_linode_instance_delete_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Must be true to confirm deletion.",
+                    "description": (
+                        "Must be true to confirm deletion. Ignored when dry_run=true."
+                    ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["instance_id", "confirm"],
         },
@@ -465,8 +475,24 @@ async def handle_linode_instance_delete(
 ) -> list[TextContent]:
     """Handle linode_instance_delete tool request."""
     instance_id = arguments.get("instance_id", 0)
-    confirm = arguments.get("confirm", False)
 
+    if is_dry_run(arguments):
+        if not instance_id:
+            return _error_response("instance_id is required")
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_instance(int(instance_id))
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_instance_delete",
+            "DELETE",
+            f"/linode/instances/{int(instance_id)}",
+            _fetch,
+        )
+
+    confirm = arguments.get("confirm", False)
     if not confirm:
         return [
             TextContent(

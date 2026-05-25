@@ -36,6 +36,60 @@ ENV_PARAM_SCHEMA = {
     },
 }
 
+# dry_run parameter name and JSON-schema fragment for mutating tools.
+# Mirrors the Go-side `paramDryRun` constant. Tools that opt into
+# dry-run merge ``DRY_RUN_PROP`` into their input schema's properties
+# under the key ``PARAM_DRY_RUN`` (no need to add it to ``required``;
+# the param defaults to False when omitted).
+PARAM_DRY_RUN = "dry_run"
+DRY_RUN_PROP: dict[str, Any] = {
+    "type": "boolean",
+    "description": (
+        "Preview the call without making it: returns the would-be "
+        "request and current resource state. Default false."
+    ),
+}
+
+
+def is_dry_run(arguments: dict[str, Any]) -> bool:
+    """Report whether ``arguments[PARAM_DRY_RUN]`` is the literal True.
+
+    Mirrors the Go-side ``IsDryRun`` helper. Non-bool values degrade
+    to False; MCP schema validation enforces the type upstream, so a
+    wrong-type value reaching the handler implies a bug elsewhere.
+    Keeping the strict-bool path avoids string-truthiness surprises.
+    """
+    value = arguments.get(PARAM_DRY_RUN, False)
+    return value is True
+
+
+def build_dry_run_response(
+    tool_name: str,
+    environment: str,
+    method: str,
+    path: str,
+    current_state: Any,
+) -> list[TextContent]:
+    """Build the v0 dry-run wire shape and wrap it as MCP text content.
+
+    Tool handlers call this from their dry_run branch after fetching
+    current_state. The wire shape mirrors the Go-side
+    ``BuildDryRunResponse``; cross-language parity is asserted by
+    test_tools_dryrun. Phase 2 per-tool dependency walks elevate the
+    response with ``dependencies``, ``billing_delta``, and
+    ``warnings`` fields.
+    """
+    body: dict[str, Any] = {
+        "dry_run": True,
+        "tool": tool_name,
+        "would_execute": {"method": method, "path": path},
+        "current_state": current_state,
+    }
+    if environment:
+        body["environment"] = environment
+
+    return [TextContent(type="text", text=json.dumps(body, indent=2))]
+
 
 def truncate_string(value: str, limit: int) -> str:
     """Truncate a string with ellipsis if it exceeds the limit."""
@@ -132,6 +186,56 @@ async def execute_tool(
             return [TextContent(type="text", text=f"Failed to {error_action}: {e}")]
         logger.exception("Unexpected error in tool handler")
         return [TextContent(type="text", text=f"Failed to {error_action}: {e}")]
+
+
+async def execute_dry_run(
+    cfg: Config,
+    arguments: dict[str, Any],
+    tool_name: str,
+    method: str,
+    path: str,
+    fetch_state: Callable[[RetryableClient], Awaitable[Any]],
+) -> list[TextContent]:
+    """Run the dry-run code path: fetch current state, return the v0
+    preview wire shape, never mutate.
+
+    Parallel to ``execute_tool`` for tools opted into Phase 1 dry-run.
+    The caller is responsible for validating tool-specific input
+    (e.g. instance_id non-zero) before calling this; this helper only
+    handles environment selection, client setup, error handling, and
+    response shaping. ``fetch_state`` performs the GET that supplies
+    ``current_state`` in the response.
+    """
+    environment = arguments.get("environment", "")
+    try:
+        selected_env = _select_environment(cfg, environment)
+        _validate_linode_config(selected_env)
+        async with RetryableClient(
+            selected_env.linode.api_url,
+            selected_env.linode.token,
+            _retry_config_from(cfg),
+        ) as client:
+            current_state = await fetch_state(client)
+            return build_dry_run_response(
+                tool_name, environment, method, path, current_state
+            )
+    except Exception as e:
+        if isinstance(e, (EnvironmentNotFoundError, ValueError)):
+            return [TextContent(type="text", text=f"Error: {e}")]
+        if isinstance(e, (APIError, NetworkError, httpx.HTTPError)):
+            return [
+                TextContent(
+                    type="text",
+                    text=f"Failed to fetch state for dry-run: {e}",
+                )
+            ]
+        logger.exception("Unexpected error in dry-run handler")
+        return [
+            TextContent(
+                type="text",
+                text=f"Failed to fetch state for dry-run: {e}",
+            )
+        ]
 
 
 async def execute_tool_list(

@@ -352,7 +352,7 @@ func buildDefaultRoute(ipv4, ipv6 bool) *linode.InterfaceDefaultRoute {
 func NewLinodeInstanceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_instance_delete",
-		mcp.WithDescription("Deletes a Linode instance. WARNING: This action is irreversible and all data will be permanently lost."),
+		mcp.WithDescription("Deletes a Linode instance. WARNING: This action is irreversible and all data will be permanently lost. Pass dry_run=true to preview without deleting."),
 		mcp.WithString(
 			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
@@ -365,7 +365,11 @@ func NewLinodeInstanceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 		mcp.WithBoolean(
 			paramConfirm,
 			mcp.Required(),
-			mcp.Description("Must be set to true to confirm deletion. This action is irreversible."),
+			mcp.Description("Must be set to true to confirm deletion. This action is irreversible. Ignored when dry_run=true."),
+		),
+		mcp.WithBoolean(
+			paramDryRun,
+			mcp.Description(paramDryRunDesc),
 		),
 	)
 
@@ -378,6 +382,10 @@ func NewLinodeInstanceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 
 func handleLinodeInstanceDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	instanceID := request.GetInt("instance_id", 0)
+
+	if IsDryRun(request) {
+		return handleLinodeInstanceDeleteDryRun(ctx, request, cfg, instanceID)
+	}
 
 	if result := RequireConfirm(request, "This operation is destructive and irreversible. Set confirm=true to proceed."); result != nil {
 		return result, nil
@@ -405,6 +413,35 @@ func handleLinodeInstanceDeleteRequest(ctx context.Context, request *mcp.CallToo
 	}
 
 	return MarshalToolResponse(response)
+}
+
+// handleLinodeInstanceDeleteDryRun fetches the current instance state
+// and returns the dry-run preview without making the DELETE call.
+// instance_id validation runs here too so a malformed dry-run errors
+// out the same way the real call would (the spec is explicit that
+// dry-run should not produce a fake preview for an invalid request).
+func handleLinodeInstanceDeleteDryRun(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config, instanceID int) (*mcp.CallToolResult, error) {
+	if instanceID == 0 {
+		return mcp.NewToolResultError("instance_id is required"), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	instance, err := client.GetInstance(ctx, instanceID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch instance %d for dry-run: %v", instanceID, err)), nil
+	}
+
+	return BuildDryRunResponse(
+		"linode_instance_delete",
+		request.GetString(paramEnvironment, ""),
+		"DELETE",
+		fmt.Sprintf("/linode/instances/%d", instanceID),
+		instance,
+	)
 }
 
 // NewLinodeInstanceResizeTool creates a tool for resizing a Linode instance.
