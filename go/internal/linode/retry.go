@@ -2613,9 +2613,9 @@ func (c *Client) UpdateLKEControlPlaneACL(ctx context.Context, clusterID int, re
 	return acl, err
 }
 
-// DeleteLKEControlPlaneACL deletes the control plane ACL with automatic retry on transient failures.
+// DeleteLKEControlPlaneACL deletes the control plane ACL without retrying the destructive request.
 func (c *Client) DeleteLKEControlPlaneACL(ctx context.Context, clusterID int) error {
-	return c.executeWithRetry(ctx, "DeleteLKEControlPlaneACL", func() error {
+	return c.executeWithoutRetry(ctx, "DeleteLKEControlPlaneACL", func() error {
 		return c.httpDeleteLKEControlPlaneACL(ctx, clusterID)
 	})
 }
