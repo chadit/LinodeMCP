@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # hadolint ignore=DL3007
-FROM python:3.13 AS builder
+FROM python:3.14 AS builder
 
 # hadolint ignore=DL3008
 RUN apt-get update && \
@@ -18,7 +18,7 @@ COPY src/ src/
 RUN echo "# LinodeMCP" > /parent/README.md && \
     pip wheel --no-cache-dir --wheel-dir=/wheels .
 
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 RUN --mount=type=bind,from=builder,source=/wheels,target=/tmp/wheels \
     pip install --no-cache-dir --no-index --find-links=/tmp/wheels linodemcp
