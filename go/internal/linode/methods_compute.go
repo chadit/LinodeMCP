@@ -903,6 +903,23 @@ func (c *Client) httpCreateStackScript(ctx context.Context, req *CreateStackScri
 	return &script, nil
 }
 
+// DeleteStackScript deletes a StackScript.
+func (c *Client) httpDeleteStackScript(ctx context.Context, stackScriptID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointStackScripts+"/%d", stackScriptID)
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteStackScript", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return c.handleResponse(resp, nil)
+}
+
 // BootInstance boots a Linode instance.
 func (c *Client) httpBootInstance(ctx context.Context, instanceID int, configID *int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

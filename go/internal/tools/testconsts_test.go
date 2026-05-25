@@ -148,20 +148,21 @@ const (
 	labelWebFirewall             = "web-firewall"
 
 	// Pagination response keys.
-	keyData                = "data"
-	keyPage                = "page"
-	keyPageSize            = "page_size"
-	keyPages               = "pages"
-	keyResults             = "results"
-	errPageInteger         = "page must be an integer"
-	errPageSizeRange       = "page_size must be"
-	errPageSizeInteger     = "page_size must be an integer"
-	errConfigIDRequired    = "config_id is required"
-	errConfigIDInteger     = "config_id must be an integer"
-	errConfigIDMin         = "config_id must be an integer greater than or equal to 1"
-	errInterfaceIDPositive = "interface_id must be a positive integer"
-	errInterfaceIDInteger  = "interface_id must be an integer"
-	errInterfaceIDMinOne   = "interface_id must be an integer greater than or equal to 1"
+	keyData                 = "data"
+	keyPage                 = "page"
+	keyPageSize             = "page_size"
+	keyPages                = "pages"
+	keyResults              = "results"
+	errPageInteger          = "page must be an integer"
+	errPageSizeRange        = "page_size must be"
+	errPageSizeInteger      = "page_size must be an integer"
+	errConfigIDRequired     = "config_id is required"
+	errConfigIDInteger      = "config_id must be an integer"
+	errConfigIDMin          = "config_id must be an integer greater than or equal to 1"
+	errInterfaceIDPositive  = "interface_id must be a positive integer"
+	errInterfaceIDInteger   = "interface_id must be an integer"
+	errInterfaceIDMinOne    = "interface_id must be an integer greater than or equal to 1"
+	errStackScriptIDInteger = "stackscript_id must be an integer"
 
 	// Linode region IDs commonly used in fixtures.
 	regionUSEast         = "us-east"
@@ -415,6 +416,7 @@ const (
 	caseInvalidPageSizeLow        = "invalid page size low"
 	caseInvalidPageSizeHigh       = "invalid page size high"
 	testStackScript               = "#!/bin/bash"
+	testStackScriptID             = float64(456)
 	keyImages                     = "images"
 	imagePrivate15Fixture         = "private/15"
 	imagePrivate15JSON            = `[{"id":"private/15"}]`
