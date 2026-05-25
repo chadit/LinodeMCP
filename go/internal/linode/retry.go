@@ -173,6 +173,21 @@ func (c *Client) GetAccountSettings(ctx context.Context) (*AccountSettings, erro
 	return settings, err
 }
 
+// GetLongviewClient retrieves one Longview client with automatic retry on transient failures.
+func (c *Client) GetLongviewClient(ctx context.Context, clientID string) (*LongviewClient, error) {
+	var client *LongviewClient
+
+	err := c.executeWithRetry(ctx, "GetLongviewClient", func() error {
+		var err error
+
+		client, err = c.httpGetLongviewClient(ctx, clientID)
+
+		return err
+	})
+
+	return client, err
+}
+
 // UpdateAccountSettings updates account-wide settings without retrying the
 // mutating request. Retrying can replay account state changes after a transient
 // error, so this method delegates exactly once.

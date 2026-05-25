@@ -13,11 +13,6 @@ import (
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
-const (
-	longviewClientCreated = "2018-01-01T00:01:01"
-	longviewClientUpdated = "2018-01-02T00:01:01"
-)
-
 func TestClientCreateLongviewClientSuccess(t *testing.T) {
 	t.Parallel()
 

@@ -15,6 +15,8 @@ const (
 	keyReason      = "reason"
 
 	errTemporaryFailure         = "temporary failure"
+	longviewClientCreated       = "2018-01-01T00:01:01"
+	longviewClientUpdated       = "2018-01-02T00:01:01"
 	errNotFound                 = "not found"
 	imageShareGroupTokenCreated = "2025-08-04T10:09:09"
 
@@ -70,6 +72,7 @@ const (
 	imageStatusAvailableFixture  = "available"
 	typeManualImage              = "manual"
 	keyCreated                   = "created"
+	keyUpdated                   = "updated"
 	labelBootConfig              = "boot-config"
 	configDeviceSlotSDA          = "sda"
 	configKernelLatest           = "linode/latest-64bit"

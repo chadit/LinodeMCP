@@ -587,6 +587,22 @@ func NewLinodeLongviewClientDeleteTool(cfg *config.Config) (mcp.Tool, profiles.C
 	return tool, profiles.CapDestroy, handler
 }
 
+// NewLinodeLongviewClientGetTool creates a tool for retrieving one Longview client.
+func NewLinodeLongviewClientGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_longview_client_get",
+		"Gets one Longview client. Secret-bearing Longview install fields are not included in the tool response.",
+		[]mcp.ToolOption{
+			mcp.WithString("longview_client_id", mcp.Required(),
+				mcp.Description("Longview client ID.")),
+		},
+		handleLinodeLongviewClientGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeAccountPaymentMethodsTool creates a tool for listing payment methods for the account.
 func NewLinodeAccountPaymentMethodsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -1531,6 +1547,70 @@ func accountPaymentMethodsPaginationFromTool(request *mcp.CallToolRequest) (int,
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeLongviewClientGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	clientID, validationMessage := longviewClientGetIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	longviewClient, getFailure := client.GetLongviewClient(ctx, clientID)
+	if getFailure == nil {
+		return MarshalToolResponse(longviewClientGetToolResponse(longviewClient))
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_longview_client_get: " + getFailure.Error()), nil
+}
+
+func longviewClientGetIDFromTool(request *mcp.CallToolRequest) (string, string) {
+	raw, exists := request.GetArguments()["longview_client_id"]
+	if !exists {
+		return "", "longview_client_id is required"
+	}
+
+	clientID, ok := raw.(string)
+	if !ok || strings.TrimSpace(clientID) == "" {
+		return "", "longview_client_id must be a non-empty string"
+	}
+
+	if clientID != strings.TrimSpace(clientID) || strings.Contains(clientID, "/") || strings.Contains(clientID, "?") || strings.Contains(clientID, "..") {
+		return "", "longview_client_id must not contain path separators, query separators, or traversal segments"
+	}
+
+	id, err := strconv.Atoi(clientID)
+	if err != nil || id <= 0 {
+		return "", "longview_client_id must be a positive integer"
+	}
+
+	return clientID, ""
+}
+
+type longviewClientGetResponse struct {
+	Apps    linode.LongviewApps `json:"apps"`
+	Created string              `json:"created"`
+	ID      int                 `json:"id"`
+	Label   string              `json:"label"`
+	Updated string              `json:"updated"`
+}
+
+func longviewClientGetToolResponse(client *linode.LongviewClient) *longviewClientGetResponse {
+	if client == nil {
+		return nil
+	}
+
+	return &longviewClientGetResponse{
+		Apps:    client.Apps,
+		Created: client.Created,
+		ID:      client.ID,
+		Label:   client.Label,
+		Updated: client.Updated,
+	}
 }
 
 func handleLinodeAccountPaymentMethodGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
