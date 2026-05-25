@@ -909,6 +909,21 @@ func (c *Client) ListTypes(ctx context.Context) ([]InstanceType, error) {
 	return types, err
 }
 
+// GetType retrieves one Linode type with automatic retry on transient failures.
+func (c *Client) GetType(ctx context.Context, typeID string) (*InstanceType, error) {
+	var instanceType *InstanceType
+
+	err := c.executeWithRetry(ctx, "GetType", func() error {
+		var err error
+
+		instanceType, err = c.httpGetType(ctx, typeID)
+
+		return err
+	})
+
+	return instanceType, err
+}
+
 // ReplicateImage replicates an image without retrying the mutating request.
 // Retrying can replay image replication after a transient error, so this method
 // delegates exactly once.
