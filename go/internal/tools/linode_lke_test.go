@@ -583,7 +583,7 @@ func TestLinodeLKEACLGetTool(t *testing.T) {
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/lke/clusters/123/control-plane-acl", r.URL.Path, "request path should match")
+			assert.Equal(t, "/lke/clusters/123/control_plane_acl", r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(acl), "encoding response should not fail")
 		}))
@@ -1737,14 +1737,59 @@ func TestLinodeLKEACLUpdateTool(t *testing.T) {
 		assert.Contains(t, props, "confirm", "schema should include confirm")
 	})
 
-	t.Run(caseMissingConfirm, func(t *testing.T) {
+	t.Run("rejects non-true confirm before client call", func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), statusEnabled: true})
-		result, err := handler(t.Context(), req)
-		require.NoError(t, err, "handler should not return Go error")
-		require.NotNil(t, result, "handler should return a result")
-		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, errConfirmEqualsTrue)
+
+		tests := []struct {
+			name    string
+			confirm any
+			include bool
+		}{
+			{name: caseMissingConfirm},
+			{name: caseFalseConfirm, confirm: false, include: true},
+			{name: caseStringConfirm, confirm: boolStringTrue, include: true},
+			{name: caseNumericConfirm, confirm: 1, include: true},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				called := make(chan struct{}, 1)
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					called <- struct{}{}
+
+					w.WriteHeader(http.StatusTeapot)
+				}))
+				t.Cleanup(srv.Close)
+
+				srvCfg := &config.Config{
+					Environments: map[string]config.EnvironmentConfig{
+						envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+					},
+				}
+				_, _, srvHandler := tools.NewLinodeLKEACLUpdateTool(srvCfg)
+
+				args := map[string]any{keyClusterID: float64(123), statusEnabled: true}
+				if tt.include {
+					args[keyConfirm] = tt.confirm
+				}
+
+				req := createRequestWithArgs(t, args)
+				result, err := srvHandler(t.Context(), req)
+				require.NoError(t, err, "handler should not return Go error")
+				require.NotNil(t, result, "handler should return a result")
+				assert.True(t, result.IsError, "result should be a tool error")
+
+				select {
+				case <-called:
+					assert.Fail(t, "handler should reject confirm before client call")
+				default:
+				}
+
+				assertErrorContains(t, result, errConfirmEqualsTrue)
+			})
+		}
 	})
 
 	t.Run("successful update", func(t *testing.T) {
@@ -1759,12 +1804,17 @@ func TestLinodeLKEACLUpdateTool(t *testing.T) {
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/lke/clusters/123/control-plane-acl", r.URL.Path, "request path should match")
+			assert.Equal(t, "/lke/clusters/123/control_plane_acl", r.URL.Path, "request path should match")
 			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+
+			var got linode.UpdateLKEControlPlaneACLRequest
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should decode")
+			assert.Equal(t, acl, got.ACL, "request body should match ACL payload")
+
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(acl), "encoding response should not fail")
 		}))
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		srvCfg := &config.Config{
 			Environments: map[string]config.EnvironmentConfig{
@@ -1822,7 +1872,7 @@ func TestLinodeLKEACLDeleteTool(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/lke/clusters/123/control-plane-acl", r.URL.Path, "request path should match")
+			assert.Equal(t, "/lke/clusters/123/control_plane_acl", r.URL.Path, "request path should match")
 			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
 			w.WriteHeader(http.StatusOK)
 		}))
