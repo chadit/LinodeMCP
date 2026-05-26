@@ -55,7 +55,7 @@ func TestLinodeManagedLinodeSettingsUpdateTool(t *testing.T) {
 		settings := linode.ManagedLinodeSettings{
 			ID:    123,
 			Label: managedLinodeSettingsLabel,
-			Group: "linodes",
+			Group: managedLinodeSettingsGroup,
 			SSH:   linode.ManagedLinodeSettingsSSH{Access: true, IP: ip203_0_113_1, Port: &port, User: &user},
 		}
 
@@ -154,9 +154,9 @@ func TestLinodeManagedLinodeSettingsUpdateTool(t *testing.T) {
 		}{
 			{name: caseMissingLinodeID, args: map[string]any{managedLinodeSettingsUpdateAccessKey: true, keyConfirm: true}, wantMessage: errLinodeIDPositive},
 			{name: "zero linode id", args: map[string]any{managedLinodeSettingsUpdateIDKey: 0, managedLinodeSettingsUpdateAccessKey: true, keyConfirm: true}, wantMessage: errLinodeIDPositive},
-			{name: "slash linode id", args: map[string]any{managedLinodeSettingsUpdateIDKey: pathSeparatorValue, managedLinodeSettingsUpdateAccessKey: true, keyConfirm: true}, wantMessage: errLinodeIDPositive},
+			{name: caseSlashLinodeID, args: map[string]any{managedLinodeSettingsUpdateIDKey: pathSeparatorValue, managedLinodeSettingsUpdateAccessKey: true, keyConfirm: true}, wantMessage: errLinodeIDPositive},
 			{name: caseQueryLinodeID, args: map[string]any{managedLinodeSettingsUpdateIDKey: "123?x=1", managedLinodeSettingsUpdateAccessKey: true, keyConfirm: true}, wantMessage: errLinodeIDPositive},
-			{name: "traversal linode id", args: map[string]any{managedLinodeSettingsUpdateIDKey: pathTraversalValue, managedLinodeSettingsUpdateAccessKey: true, keyConfirm: true}, wantMessage: errLinodeIDPositive},
+			{name: caseTraversalLinodeID, args: map[string]any{managedLinodeSettingsUpdateIDKey: pathTraversalValue, managedLinodeSettingsUpdateAccessKey: true, keyConfirm: true}, wantMessage: errLinodeIDPositive},
 			{name: managedContactUpdateEmptyCase, args: map[string]any{managedLinodeSettingsUpdateIDKey: 123, keyConfirm: true}, wantMessage: "at least one mutable SSH setting is required"},
 			{name: "numeric ssh ip", args: map[string]any{managedLinodeSettingsUpdateIDKey: 123, managedLinodeSettingsUpdateIPKey: 123, keyConfirm: true}, wantMessage: "ssh_ip must be a string"},
 			{name: "string ssh access", args: map[string]any{managedLinodeSettingsUpdateIDKey: 123, managedLinodeSettingsUpdateAccessKey: boolStringTrue, keyConfirm: true}, wantMessage: "ssh_access must be a boolean"},

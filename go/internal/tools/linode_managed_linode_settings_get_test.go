@@ -59,9 +59,9 @@ func TestLinodeManagedLinodeSettingsGetTool(t *testing.T) {
 			{name: "string linode id", args: map[string]any{keyManagedLinodeSettingsLinodeID: "234"}},
 			{name: "fractional linode id", args: map[string]any{keyManagedLinodeSettingsLinodeID: 234.5}},
 			{name: "oversized linode id", args: map[string]any{keyManagedLinodeSettingsLinodeID: managedLinodeSettingsOversizedID}},
-			{name: "slash linode id", args: map[string]any{keyManagedLinodeSettingsLinodeID: "234/235"}},
+			{name: caseSlashLinodeID, args: map[string]any{keyManagedLinodeSettingsLinodeID: "234/235"}},
 			{name: "query linode id", args: map[string]any{keyManagedLinodeSettingsLinodeID: "234?x=1"}},
-			{name: "traversal linode id", args: map[string]any{keyManagedLinodeSettingsLinodeID: pathTraversalValue}},
+			{name: caseTraversalLinodeID, args: map[string]any{keyManagedLinodeSettingsLinodeID: pathTraversalValue}},
 		}
 
 		for _, testCase := range cases {
@@ -106,7 +106,7 @@ func TestLinodeManagedLinodeSettingsGetTool(t *testing.T) {
 			assert.NoError(t, json.NewEncoder(w).Encode(linode.ManagedLinodeSettings{
 				ID:    managedLinodeSettingsToolIDValue,
 				Label: managedLinodeSettingsToolLabelValue,
-				Group: "linodes",
+				Group: managedLinodeSettingsGroup,
 				SSH: linode.ManagedLinodeSettingsSSH{
 					Access: true,
 					IP:     "203.0.113.1",

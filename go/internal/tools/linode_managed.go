@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"fmt"
-	"math"
 	"strconv"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -417,9 +416,9 @@ func handleLinodeManagedLinodeSettingsUpdateRequest(ctx context.Context, request
 		return result, nil
 	}
 
-	linodeID, ok := getPositiveIntArgument(request, managedLinodeSettingsUpdateIDParam)
-	if !ok {
-		return mcp.NewToolResultError(managedLinodeSettingsUpdateIDMessage), nil
+	linodeID, validationMessage := managedLinodeSettingsUpdateIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	updateReq, validationMessage := managedLinodeSettingsUpdateFromTool(request)
@@ -441,9 +440,33 @@ func handleLinodeManagedLinodeSettingsUpdateRequest(ctx context.Context, request
 		Message  string                        `json:"message"`
 		Settings *linode.ManagedLinodeSettings `json:"settings"`
 	}{
-		Message:  fmt.Sprintf("Managed Linode settings %d updated successfully", linodeID),
+		Message:  fmt.Sprintf("Managed Linode settings for Linode %d updated successfully", linodeID),
 		Settings: settings,
 	})
+}
+
+func managedLinodeSettingsUpdateIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	raw, exists := request.GetArguments()[managedLinodeSettingsUpdateIDParam]
+	if !exists {
+		return 0, managedLinodeSettingsUpdateIDMessage
+	}
+
+	switch value := raw.(type) {
+	case int:
+		if value <= 0 || value > maxManagedLinodeSettingsIDFromJSON {
+			return 0, errManagedLinodeSettingsIDPositive
+		}
+
+		return value, ""
+	case float64:
+		if value <= 0 || value > maxManagedLinodeSettingsIDFromJSON || value != float64(int64(value)) {
+			return 0, errManagedLinodeSettingsIDPositive
+		}
+
+		return int(value), ""
+	default:
+		return 0, errManagedLinodeSettingsIDPositive
+	}
 }
 
 func managedLinodeSettingsUpdateFromTool(request *mcp.CallToolRequest) (*linode.UpdateManagedLinodeSettingsRequest, string) {
@@ -452,25 +475,25 @@ func managedLinodeSettingsUpdateFromTool(request *mcp.CallToolRequest) (*linode.
 
 	var fields int
 
-	access, validationMessage := optionalBoolArg(args, managedLinodeSettingsUpdateAccessParam)
-	if validationMessage != "" {
-		return nil, validationMessage
-	}
+	if raw, exists := args[managedLinodeSettingsUpdateAccessParam]; exists {
+		value, ok := raw.(bool)
+		if !ok {
+			return nil, managedLinodeSettingsUpdateAccessParam + " must be a boolean"
+		}
 
-	if access != nil {
-		ssh.Access = access
+		ssh.Access = &value
 		fields++
 	}
 
-	if validationMessage := managedLinodeSettingsOptionalString(request, managedLinodeSettingsUpdateIPParam, &ssh.IP, &fields); validationMessage != "" {
+	if validationMessage := managedLinodeSettingsUpdateOptionalString(args, managedLinodeSettingsUpdateIPParam, &ssh.IP, &fields); validationMessage != "" {
 		return nil, validationMessage
 	}
 
-	if validationMessage := managedLinodeSettingsOptionalPort(args, &ssh.Port, &fields); validationMessage != "" {
+	if validationMessage := managedLinodeSettingsUpdateOptionalPort(args, &ssh.Port, &fields); validationMessage != "" {
 		return nil, validationMessage
 	}
 
-	if validationMessage := managedLinodeSettingsOptionalString(request, managedLinodeSettingsUpdateUserParam, &ssh.User, &fields); validationMessage != "" {
+	if validationMessage := managedLinodeSettingsUpdateOptionalString(args, managedLinodeSettingsUpdateUserParam, &ssh.User, &fields); validationMessage != "" {
 		return nil, validationMessage
 	}
 
@@ -481,14 +504,15 @@ func managedLinodeSettingsUpdateFromTool(request *mcp.CallToolRequest) (*linode.
 	return &linode.UpdateManagedLinodeSettingsRequest{SSH: ssh}, ""
 }
 
-func managedLinodeSettingsOptionalString(request *mcp.CallToolRequest, name string, target **string, fields *int) string {
-	value, validationMessage := stringArgument(request, name, false)
-	if validationMessage != "" {
-		return validationMessage
+func managedLinodeSettingsUpdateOptionalString(args map[string]any, name string, target **string, fields *int) string {
+	raw, exists := args[name]
+	if !exists {
+		return ""
 	}
 
-	if _, exists := request.GetArguments()[name]; !exists {
-		return ""
+	value, ok := raw.(string)
+	if !ok {
+		return name + " must be a string"
 	}
 
 	*target = &value
@@ -497,7 +521,7 @@ func managedLinodeSettingsOptionalString(request *mcp.CallToolRequest, name stri
 	return ""
 }
 
-func managedLinodeSettingsOptionalPort(args map[string]any, target **int, fields *int) string {
+func managedLinodeSettingsUpdateOptionalPort(args map[string]any, target **int, fields *int) string {
 	raw, exists := args[managedLinodeSettingsUpdatePortParam]
 	if !exists {
 		return ""
@@ -509,13 +533,13 @@ func managedLinodeSettingsOptionalPort(args map[string]any, target **int, fields
 	case int:
 		port = value
 	case int64:
-		if value > int64(^uint(0)>>1) {
+		if value < 1 || value > 65535 {
 			return managedLinodeSettingsUpdatePortMessage
 		}
 
 		port = int(value)
 	case float64:
-		if math.IsNaN(value) || math.IsInf(value, 0) || value < 1 || value > 65535 || value != math.Trunc(value) {
+		if value < 1 || value > 65535 || value != float64(int64(value)) {
 			return managedLinodeSettingsUpdatePortMessage
 		}
 

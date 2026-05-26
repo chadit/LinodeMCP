@@ -50,7 +50,7 @@ func TestLinodeManagedLinodeSettingsTool(t *testing.T) {
 			Data: []linode.ManagedLinodeSettings{{
 				ID:    123,
 				Label: managedLinodeSettingsLabel,
-				Group: "linodes",
+				Group: managedLinodeSettingsGroup,
 				SSH: linode.ManagedLinodeSettingsSSH{
 					Access: true,
 					IP:     "203.0.113.1",

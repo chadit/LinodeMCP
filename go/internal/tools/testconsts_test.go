@@ -114,6 +114,7 @@ const (
 	keyGlobal                    = "global"
 	keyAccountAccess             = "account_access"
 	keyGrantLinode               = "linode"
+	managedLinodeSettingsGroup   = "linodes"
 	keyGrantLKECluster           = "lkecluster"
 	keyRemoteNameserver          = "remote_nameserver"
 	keyValidForShareGroupUUID    = "valid_for_sharegroup_uuid"
