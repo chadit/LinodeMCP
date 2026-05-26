@@ -232,6 +232,21 @@ func (c *Client) ListAccountMaintenance(ctx context.Context, page, pageSize int)
 	return maintenance, err
 }
 
+// ListMaintenancePolicies retrieves available Linode maintenance policies with automatic retry on transient failures.
+func (c *Client) ListMaintenancePolicies(ctx context.Context, page, pageSize int) (*PaginatedResponse[MaintenancePolicy], error) {
+	var policies *PaginatedResponse[MaintenancePolicy]
+
+	err := c.executeWithRetry(ctx, "ListMaintenancePolicies", func() error {
+		var err error
+
+		policies, err = c.httpListMaintenancePolicies(ctx, page, pageSize)
+
+		return err
+	})
+
+	return policies, err
+}
+
 // ListAccountNotifications retrieves account notifications with automatic retry on transient failures.
 func (c *Client) ListAccountNotifications(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountNotification], error) {
 	var notifications *PaginatedResponse[AccountNotification]

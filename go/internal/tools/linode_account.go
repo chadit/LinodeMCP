@@ -198,6 +198,22 @@ func NewLinodeAccountMaintenanceTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeMaintenancePoliciesTool creates a tool for listing available Linode maintenance policies.
+func NewLinodeMaintenancePoliciesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_maintenance_policies",
+		"Lists available Linode maintenance policies.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		},
+		handleLinodeMaintenancePoliciesRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeAccountNotificationsTool creates a tool for listing account notifications.
 func NewLinodeAccountNotificationsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -3787,6 +3803,25 @@ func accountMaintenancePaginationFromTool(request *mcp.CallToolRequest) (int, in
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeMaintenancePoliciesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	page, pageSize, validationMessage := accountMaintenancePaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	policies, listFailure := client.ListMaintenancePolicies(ctx, page, pageSize)
+	if listFailure == nil {
+		return MarshalToolResponse(policies)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_maintenance_policies: " + listFailure.Error()), nil
 }
 
 func handleLinodeAccountAvailabilityGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
