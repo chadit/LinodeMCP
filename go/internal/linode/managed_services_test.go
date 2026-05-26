@@ -20,6 +20,7 @@ const (
 	managedServiceID          = 9944
 	managedServicePath        = "/managed/services/9944"
 	managedServiceDisablePath = "/managed/services/9944/disable"
+	managedServiceEnablePath  = "/managed/services/9944/enable"
 	managedServiceLabel       = "prod-1"
 	managedServiceType        = "url"
 	managedServiceStatus      = "ok"
@@ -261,6 +262,72 @@ func TestClientDisableManagedServiceDoesNotRetryTransientError(t *testing.T) {
 	err := client.DisableManagedService(t.Context(), managedServiceID)
 
 	require.Error(t, err, "DisableManagedService should return the transient failure")
+	assert.Equal(t, int32(1), calls.Load(), "mutating POST should not be retried")
+}
+
+func TestClientEnableManagedServiceSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, managedServiceEnablePath, r.URL.Path, "request path should include service ID and enable action")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+
+		body, err := io.ReadAll(r.Body)
+		assert.NoError(t, err)
+		assert.Empty(t, body, "enable request should not include a body")
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+	err := client.EnableManagedService(t.Context(), managedServiceID)
+
+	require.NoError(t, err, "EnableManagedService should succeed on 200 response")
+}
+
+func TestClientEnableManagedServiceAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, managedServiceEnablePath, r.URL.Path, "request path should include service ID and enable action")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: managedServicesForbidden}}}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+	err := client.EnableManagedService(t.Context(), managedServiceID)
+
+	require.Error(t, err, "EnableManagedService should fail on API errors")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+}
+
+func TestClientEnableManagedServiceDoesNotRetryTransientError(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, managedServiceEnablePath, r.URL.Path, "request path should include service ID and enable action")
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(2), linode.WithBaseDelay(time.Millisecond), linode.WithJitter(false))
+	err := client.EnableManagedService(t.Context(), managedServiceID)
+
+	require.Error(t, err, "EnableManagedService should return the transient failure")
 	assert.Equal(t, int32(1), calls.Load(), "mutating POST should not be retried")
 }
 

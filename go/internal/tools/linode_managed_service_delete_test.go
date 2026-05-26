@@ -90,7 +90,7 @@ func TestLinodeManagedServiceDeleteTool(t *testing.T) {
 			args        map[string]any
 			wantMessage string
 		}{
-			{name: caseMissingServiceID, args: map[string]any{keyConfirm: true}, wantMessage: "service_id is required"},
+			{name: caseMissingServiceID, args: map[string]any{keyConfirm: true}, wantMessage: errManagedServiceIDRequired},
 			{name: caseZeroServiceID, args: map[string]any{keyManagedServiceID: 0, keyConfirm: true}, wantMessage: errManagedServiceIDPositive},
 			{name: caseNegativeServiceID, args: map[string]any{keyManagedServiceID: -1, keyConfirm: true}, wantMessage: errManagedServiceIDPositive},
 			{name: caseStringServiceID, args: map[string]any{keyManagedServiceID: "9944", keyConfirm: true}, wantMessage: errManagedServiceIDPositive},

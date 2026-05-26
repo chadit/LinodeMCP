@@ -117,6 +117,7 @@ const (
 	managedLinodeSettingsGroup   = "linodes"
 	managedServiceTypeURL        = "url"
 	errManagedServiceIDPositive  = "service_id must be a positive integer"
+	errManagedServiceIDRequired  = "service_id is required"
 	caseMissingServiceID         = "missing service id"
 	caseZeroServiceID            = "zero service id"
 	caseNegativeServiceID        = "negative service id"
