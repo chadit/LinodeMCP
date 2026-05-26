@@ -217,6 +217,21 @@ func (c *Client) ListManagedCredentials(ctx context.Context, page, pageSize int)
 	return credentials, err
 }
 
+// GetManagedSSHKey retrieves the account Managed SSH public key with automatic retry on transient failures.
+func (c *Client) GetManagedSSHKey(ctx context.Context) (*ManagedSSHKey, error) {
+	var sshKey *ManagedSSHKey
+
+	err := c.executeWithRetry(ctx, "GetManagedSSHKey", func() error {
+		var err error
+
+		sshKey, err = c.httpGetManagedSSHKey(ctx)
+
+		return err
+	})
+
+	return sshKey, err
+}
+
 // GetManagedContact retrieves one managed contact with automatic retry on transient failures.
 func (c *Client) GetManagedContact(ctx context.Context, contactID int) (*ManagedContact, error) {
 	var contact *ManagedContact
