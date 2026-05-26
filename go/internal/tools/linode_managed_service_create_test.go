@@ -205,7 +205,7 @@ func TestLinodeManagedServiceCreateTool(t *testing.T) {
 func validManagedServiceArgs() map[string]any {
 	return map[string]any{
 		managedServiceLabelParam:       managedServiceLabelFixture,
-		managedServiceTypeParam:        "url",
+		managedServiceTypeParam:        managedServiceTypeURL,
 		managedServiceAddressParam:     managedServiceAddressFixture,
 		managedServiceTimeoutParam:     30,
 		managedServiceBodyParam:        managedServiceBodyFixture,

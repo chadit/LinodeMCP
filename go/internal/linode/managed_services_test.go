@@ -16,6 +16,8 @@ import (
 
 const (
 	managedServicesPath      = "/managed/services"
+	managedServiceID         = 9944
+	managedServicePath       = "/managed/services/9944"
 	managedServiceLabel      = "prod-1"
 	managedServiceType       = "url"
 	managedServiceStatus     = "ok"
@@ -29,6 +31,110 @@ const (
 	managedServicesForbidden = "Forbidden"
 )
 
+func TestClientGetManagedServiceSuccess(t *testing.T) {
+	t.Parallel()
+
+	body := managedServiceBody
+	notes := managedServiceNotes
+	region := managedServiceRegion
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, managedServicePath, r.URL.Path, "request path should include service ID")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, managedIssueAuthHeader, r.Header.Get("Authorization"), "authorization header should use bearer token")
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.ManagedService{
+			ID:                managedServiceID,
+			Label:             managedServiceLabel,
+			ServiceType:       managedServiceType,
+			Status:            managedServiceStatus,
+			Address:           managedServiceAddress,
+			Body:              &body,
+			ConsultationGroup: managedServiceGroup,
+			Created:           managedServiceCreated,
+			Credentials:       []int{9991},
+			Notes:             &notes,
+			Region:            &region,
+			Timeout:           30,
+			Updated:           managedServiceUpdated,
+		}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+	result, err := client.GetManagedService(t.Context(), managedServiceID)
+
+	require.NoError(t, err, "GetManagedService should succeed on 200 response")
+	require.NotNil(t, result)
+	assert.Equal(t, managedServiceID, result.ID)
+	assert.Equal(t, managedServiceLabel, result.Label)
+	assert.Equal(t, managedServiceType, result.ServiceType)
+	assert.Equal(t, managedServiceStatus, result.Status)
+	assert.Equal(t, managedServiceAddress, result.Address)
+	require.NotNil(t, result.Body)
+	assert.Equal(t, managedServiceBody, *result.Body)
+	assert.Equal(t, managedServiceGroup, result.ConsultationGroup)
+	assert.Equal(t, managedServiceCreated, result.Created)
+	assert.Equal(t, []int{9991}, result.Credentials)
+	require.NotNil(t, result.Notes)
+	assert.Equal(t, managedServiceNotes, *result.Notes)
+	require.NotNil(t, result.Region)
+	assert.Equal(t, managedServiceRegion, *result.Region)
+	assert.Equal(t, 30, result.Timeout)
+	assert.Equal(t, managedServiceUpdated, result.Updated)
+}
+
+func TestClientGetManagedServiceRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, managedServicePath, r.URL.Path, "request path should include service ID")
+
+		if calls.Add(1) == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.ManagedService{ID: managedServiceID}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(1), linode.WithBaseDelay(time.Millisecond), linode.WithJitter(false))
+	result, err := client.GetManagedService(t.Context(), managedServiceID)
+
+	require.NoError(t, err, "read-only Managed service get should retry transient failures")
+	require.NotNil(t, result)
+	assert.Equal(t, int32(2), calls.Load(), "client should retry once")
+}
+
+func TestClientGetManagedServiceAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, managedServicePath, r.URL.Path, "request path should include service ID")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: managedServicesForbidden}}}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+	_, err := client.GetManagedService(t.Context(), managedServiceID)
+
+	require.Error(t, err, "GetManagedService should fail on API errors")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+}
+
 func TestClientListManagedServicesSuccess(t *testing.T) {
 	t.Parallel()
 
@@ -38,7 +144,7 @@ func TestClientListManagedServicesSuccess(t *testing.T) {
 
 	services := linode.PaginatedResponse[linode.ManagedService]{
 		Data: []linode.ManagedService{{
-			ID:                9944,
+			ID:                managedServiceID,
 			Label:             managedServiceLabel,
 			ServiceType:       managedServiceType,
 			Status:            managedServiceStatus,
@@ -74,7 +180,7 @@ func TestClientListManagedServicesSuccess(t *testing.T) {
 	require.NoError(t, err, "ListManagedServices should succeed on 200 response")
 	require.NotNil(t, result)
 	require.Len(t, result.Data, 1)
-	assert.Equal(t, 9944, result.Data[0].ID)
+	assert.Equal(t, managedServiceID, result.Data[0].ID)
 	assert.Equal(t, managedServiceLabel, result.Data[0].Label)
 	assert.Equal(t, managedServiceType, result.Data[0].ServiceType)
 	assert.Equal(t, managedServiceStatus, result.Data[0].Status)

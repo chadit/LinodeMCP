@@ -141,6 +141,28 @@ func (c *Client) httpUpdateManagedLinodeSettings(ctx context.Context, linodeID i
 	return &settings, nil
 }
 
+// httpGetManagedService retrieves one Managed service by ID.
+func (c *Client) httpGetManagedService(ctx context.Context, serviceID int) (*ManagedService, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointManagedServices + "/" + url.PathEscape(strconv.Itoa(serviceID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetManagedService", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+
+	var service ManagedService
+	if err := c.handleResponse(resp, &service); err != nil {
+		return nil, err
+	}
+
+	return &service, nil
+}
+
 // httpListManagedServices retrieves Managed services.
 func (c *Client) httpListManagedServices(ctx context.Context, page, pageSize int) (*PaginatedResponse[ManagedService], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
