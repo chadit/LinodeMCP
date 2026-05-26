@@ -2564,7 +2564,7 @@ func TestLinodeAccountLoginGetTool(t *testing.T) {
 			{name: "above safe integer", args: map[string]any{keyLoginID: 9007199254740992.0}},
 			{name: "path separator string", args: map[string]any{keyLoginID: "12/34"}},
 			{name: "query separator string", args: map[string]any{keyLoginID: "12?debug=true"}},
-			{name: "traversal string", args: map[string]any{keyLoginID: ".."}},
+			{name: "traversal string", args: map[string]any{keyLoginID: pathTraversalValue}},
 		}
 
 		for _, testCase := range cases {
@@ -4813,8 +4813,8 @@ func TestLinodeAccountPaymentGetTool(t *testing.T) {
 			{name: "payment_id zero", args: map[string]any{keyPaymentID: 0}, want: errPaymentIDPositive},
 			{name: "payment_id fractional", args: map[string]any{keyPaymentID: 1.5}, want: errPaymentIDPositive},
 			{name: "payment_id oversized", args: map[string]any{keyPaymentID: 9007199254740992.0}, want: errPaymentIDPositive},
-			{name: "payment_id string slash", args: map[string]any{keyPaymentID: "1/2"}, want: errPaymentIDPositive},
-			{name: "payment_id string query", args: map[string]any{keyPaymentID: "1?x=2"}, want: errPaymentIDPositive},
+			{name: "payment_id string slash", args: map[string]any{keyPaymentID: pathSeparatorValue}, want: errPaymentIDPositive},
+			{name: "payment_id string query", args: map[string]any{keyPaymentID: querySeparatorValue}, want: errPaymentIDPositive},
 			{name: caseDotTraversal, args: map[string]any{keyPaymentID: pathTraversalValue}, want: errPaymentIDPositive},
 		}
 
