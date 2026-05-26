@@ -372,6 +372,21 @@ func (c *Client) GetManagedIssue(ctx context.Context, issueID int) (*ManagedIssu
 	return issue, err
 }
 
+// ListManagedLinodeSettings retrieves Managed Linode settings with automatic retry on transient failures.
+func (c *Client) ListManagedLinodeSettings(ctx context.Context, page, pageSize int) (*PaginatedResponse[ManagedLinodeSettings], error) {
+	var settings *PaginatedResponse[ManagedLinodeSettings]
+
+	err := c.executeWithRetry(ctx, "ListManagedLinodeSettings", func() error {
+		var err error
+
+		settings, err = c.httpListManagedLinodeSettings(ctx, page, pageSize)
+
+		return err
+	})
+
+	return settings, err
+}
+
 // ListManagedIssues retrieves Managed issues with automatic retry on transient failures.
 func (c *Client) ListManagedIssues(ctx context.Context, page, pageSize int) (*PaginatedResponse[ManagedIssue], error) {
 	var issues *PaginatedResponse[ManagedIssue]

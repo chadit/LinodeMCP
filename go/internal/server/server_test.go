@@ -187,6 +187,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_maintenance_policies":                           profiles.CapRead,
 		"linode_managed_contact_delete":                         profiles.CapDestroy,
 		"linode_managed_contacts":                               profiles.CapRead,
+		"linode_managed_linode_settings":                        profiles.CapRead,
 		"linode_managed_issue_get":                              profiles.CapRead,
 		"linode_managed_issues":                                 profiles.CapRead,
 		"linode_managed_contact_update":                         profiles.CapAdmin,
