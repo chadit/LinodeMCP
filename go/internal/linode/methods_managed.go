@@ -73,6 +73,28 @@ func (c *Client) httpListManagedContacts(ctx context.Context, page, pageSize int
 	return &contacts, nil
 }
 
+// httpGetManagedIssue retrieves one Managed issue by ID.
+func (c *Client) httpGetManagedIssue(ctx context.Context, issueID int) (*ManagedIssue, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointManagedIssues + "/" + url.PathEscape(strconv.Itoa(issueID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetManagedIssue", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+
+	var issue ManagedIssue
+	if err := c.handleResponse(resp, &issue); err != nil {
+		return nil, err
+	}
+
+	return &issue, nil
+}
+
 // httpListManagedIssues retrieves Managed issues.
 func (c *Client) httpListManagedIssues(ctx context.Context, page, pageSize int) (*PaginatedResponse[ManagedIssue], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
