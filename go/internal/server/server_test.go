@@ -175,6 +175,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_account_settings":                               profiles.CapRead,
 		"linode_account_settings_managed_enable":                profiles.CapAdmin,
 		"linode_managed_credentials":                            profiles.CapRead,
+		"linode_managed_credential_update":                      profiles.CapAdmin,
 		"linode_managed_ssh_key":                                profiles.CapRead,
 		"linode_managed_credential_create":                      profiles.CapAdmin,
 		"linode_managed_credential_get":                         profiles.CapAdmin,

@@ -176,6 +176,12 @@ type ManagedCredential struct {
 	LastDecrypted string `json:"last_decrypted"`
 }
 
+// UpdateManagedCredentialRequest contains mutable fields for PUT /managed/credentials/{credentialID}.
+// Pointer fields distinguish omitted values from explicit empty strings.
+type UpdateManagedCredentialRequest struct {
+	Label *string `json:"label,omitempty"`
+}
+
 // ManagedSSHKey represents the Managed SSH public key assigned to an account.
 type ManagedSSHKey struct {
 	SSHKey string `json:"ssh_key"`

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -294,4 +295,98 @@ func TestClientCreateManagedCredentialDoesNotRetry(t *testing.T) {
 
 	require.Error(t, err, "CreateManagedCredential should fail on 500 response")
 	assert.Equal(t, int32(1), attempts.Load(), "CreateManagedCredential must not retry and replay a mutating request")
+}
+
+func TestClientUpdateManagedCredentialSuccess(t *testing.T) {
+	t.Parallel()
+
+	label := "prod-password-2"
+	updated := linode.ManagedCredential{ID: 9991, Label: label, LastDecrypted: managedCredentialsLastDecrypted}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, managedCredentialsPath+"/9991", r.URL.Path, "request path should include credential ID")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+
+		var got linode.UpdateManagedCredentialRequest
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should decode")
+
+		if assert.NotNil(t, got.Label) {
+			assert.Equal(t, label, *got.Label)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(updated))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.UpdateManagedCredential(t.Context(), 9991, linode.UpdateManagedCredentialRequest{Label: &label})
+
+	require.NoError(t, err, "UpdateManagedCredential should succeed on 200 response")
+	require.NotNil(t, got)
+	assert.Equal(t, 9991, got.ID)
+	assert.Equal(t, label, got.Label)
+}
+
+func TestClientUpdateManagedCredentialAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, managedCredentialsPath+"/9991", r.URL.Path, "request path should include credential ID")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: "restricted users cannot update managed credentials"}},
+		}))
+	}))
+	t.Cleanup(srv.Close)
+
+	label := managedCredentialsLabel
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	_, err := client.UpdateManagedCredential(t.Context(), 9991, linode.UpdateManagedCredentialRequest{Label: &label})
+
+	require.Error(t, err)
+
+	var apiErr *linode.APIError
+	assert.ErrorAs(t, err, &apiErr)
+}
+
+func TestClientUpdateManagedCredentialNetworkError(t *testing.T) {
+	t.Parallel()
+
+	label := managedCredentialsLabel
+	client := linode.NewClient("http://127.0.0.1:1", "test-token", nil, linode.WithMaxRetries(0))
+	_, err := client.UpdateManagedCredential(t.Context(), 9991, linode.UpdateManagedCredentialRequest{Label: &label})
+
+	require.Error(t, err)
+
+	var netErr *linode.NetworkError
+	require.ErrorAs(t, err, &netErr)
+	assert.Equal(t, "UpdateManagedCredential", netErr.Operation)
+}
+
+func TestClientUpdateManagedCredentialDoesNotRetry(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		assert.Equal(t, managedCredentialsPath+"/9991", r.URL.Path, "request path should include credential ID")
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
+		}))
+	}))
+	t.Cleanup(srv.Close)
+
+	label := managedCredentialsLabel
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1), linode.WithBaseDelay(time.Millisecond), linode.WithJitter(false))
+	_, err := client.UpdateManagedCredential(t.Context(), 9991, linode.UpdateManagedCredentialRequest{Label: &label})
+
+	require.Error(t, err, "mutating Managed credential update should not retry transient failures")
+	assert.Equal(t, int32(1), calls.Load(), "client should call update exactly once")
 }
