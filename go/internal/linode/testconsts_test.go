@@ -21,6 +21,7 @@ const (
 	errTemporaryFailure         = "temporary failure"
 	longviewClientCreated       = "2018-01-01T00:01:01"
 	longviewClientUpdated       = "2018-01-02T00:01:01"
+	longviewPlan10              = "longview-10"
 	errNotFound                 = "not found"
 	imageShareGroupTokenCreated = "2025-08-04T10:09:09"
 
@@ -34,7 +35,6 @@ const (
 	keyDomain    = "domain"
 	keyIsDefault = "is_default"
 	keyLastFour  = "last_four"
-
 	// Account settings fixture values.
 	maintenancePolicyMigrate = "linode/migrate"
 

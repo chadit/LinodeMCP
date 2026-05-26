@@ -94,6 +94,7 @@ const (
 	longviewClientLabelFixture   = "client789"
 	longviewClientCreatedFixture = "2018-01-01T00:01:01"
 	longviewClientUpdatedFixture = "2018-01-02T00:01:01"
+	longviewPlan10               = "longview-10"
 	keyEUUID                     = "euuid"
 	keyInvoiceID                 = "invoice_id"
 	keyLinodeIDs                 = "linode_ids"
