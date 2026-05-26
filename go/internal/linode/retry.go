@@ -661,6 +661,21 @@ func (c *Client) ListLongviewTypes(ctx context.Context) (*PaginatedResponse[Long
 	return types, err
 }
 
+// ListMonitorAlertDefinitions retrieves monitoring alert definitions with automatic retry on transient failures.
+func (c *Client) ListMonitorAlertDefinitions(ctx context.Context, page, pageSize int) (*PaginatedResponse[AlertDefinition], error) {
+	var definitions *PaginatedResponse[AlertDefinition]
+
+	err := c.executeWithRetry(ctx, "ListMonitorAlertDefinitions", func() error {
+		var err error
+
+		definitions, err = c.httpListMonitorAlertDefinitions(ctx, page, pageSize)
+
+		return err
+	})
+
+	return definitions, err
+}
+
 // ListMonitorAlertChannels retrieves monitoring alert channels with automatic retry on transient failures.
 func (c *Client) ListMonitorAlertChannels(ctx context.Context, page, pageSize int) (*PaginatedResponse[AlertChannel], error) {
 	var channels *PaginatedResponse[AlertChannel]

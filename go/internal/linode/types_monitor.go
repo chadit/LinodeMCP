@@ -1,5 +1,16 @@
 package linode
 
+// AlertDefinition describes a monitoring alert definition.
+type AlertDefinition struct {
+	ID          int            `json:"id"`
+	Label       string         `json:"label"`
+	Type        string         `json:"type"`
+	ServiceType string         `json:"service_type"`
+	Description string         `json:"description"`
+	Severity    int            `json:"severity"`
+	Criteria    map[string]any `json:"criteria"`
+}
+
 // AlertChannel describes a monitoring alert channel.
 type AlertChannel struct {
 	ID          int                 `json:"id"`
