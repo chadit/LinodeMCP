@@ -51,7 +51,7 @@ func TestLinodeManagedServicesTool(t *testing.T) {
 			Data: []linode.ManagedService{{
 				ID:          9944,
 				Label:       managedServicesToolLabel,
-				ServiceType: "url",
+				ServiceType: managedServiceTypeURL,
 				Status:      "ok",
 				Address:     managedServicesToolAddress,
 				Timeout:     30,

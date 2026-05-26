@@ -417,6 +417,21 @@ func (c *Client) UpdateManagedLinodeSettings(ctx context.Context, linodeID int, 
 	return settings, err
 }
 
+// GetManagedService retrieves one Managed service with automatic retry on transient failures.
+func (c *Client) GetManagedService(ctx context.Context, serviceID int) (*ManagedService, error) {
+	var service *ManagedService
+
+	err := c.executeWithRetry(ctx, "GetManagedService", func() error {
+		var err error
+
+		service, err = c.httpGetManagedService(ctx, serviceID)
+
+		return err
+	})
+
+	return service, err
+}
+
 // ListManagedServices retrieves Managed services with automatic retry on transient failures.
 func (c *Client) ListManagedServices(ctx context.Context, page, pageSize int) (*PaginatedResponse[ManagedService], error) {
 	var services *PaginatedResponse[ManagedService]

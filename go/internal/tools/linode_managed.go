@@ -47,6 +47,9 @@ const (
 	maxManagedIssueGetIDFromJSON           = 9007199254740991
 	managedIssuesPageSizeMin               = 25
 	managedIssuesPageSizeMax               = 500
+	managedServiceGetIDParam               = "service_id"
+	errManagedServiceGetIDPositive         = "service_id must be a positive integer"
+	maxManagedServiceGetIDFromJSON         = 9007199254740991
 	managedServicesPageSizeMin             = 25
 	managedServicesPageSizeMax             = 500
 	managedLinodeSettingsPageSizeMin       = 25
@@ -183,6 +186,22 @@ func NewLinodeManagedLinodeSettingsUpdateTool(cfg *config.Config) (mcp.Tool, pro
 	)
 
 	return tool, profiles.CapAdmin, handler
+}
+
+// NewLinodeManagedServiceGetTool creates a tool for retrieving one Managed service.
+func NewLinodeManagedServiceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_managed_service_get",
+		"Gets one service monitored by Linode Managed by ID.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(managedServiceGetIDParam, mcp.Required(),
+				mcp.Description("Managed service monitor ID to retrieve.")),
+		},
+		handleLinodeManagedServiceGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
 }
 
 // NewLinodeManagedServicesTool creates a tool for listing Managed services.
@@ -597,6 +616,49 @@ func managedLinodeSettingsUpdateOptionalPort(args map[string]any, target **int, 
 
 func managedLinodeSettingsUpdateFailureMessage(linodeID int, err error) string {
 	return "Failed to update linode_managed_linode_settings_update " + strconv.Itoa(linodeID) + ": " + err.Error()
+}
+
+func handleLinodeManagedServiceGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	serviceID, validationMessage := managedServiceIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	service, getFailure := client.GetManagedService(ctx, serviceID)
+	if getFailure == nil {
+		return MarshalToolResponse(service)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_managed_service_get: " + getFailure.Error()), nil
+}
+
+func managedServiceIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	raw, exists := request.GetArguments()[managedServiceGetIDParam]
+	if !exists {
+		return 0, "service_id is required"
+	}
+
+	switch value := raw.(type) {
+	case int:
+		if value <= 0 || value > maxManagedServiceGetIDFromJSON {
+			return 0, errManagedServiceGetIDPositive
+		}
+
+		return value, ""
+	case float64:
+		if value <= 0 || value > maxManagedServiceGetIDFromJSON || value != float64(int64(value)) {
+			return 0, errManagedServiceGetIDPositive
+		}
+
+		return int(value), ""
+	default:
+		return 0, errManagedServiceGetIDPositive
+	}
 }
 
 func handleLinodeManagedServicesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
