@@ -49,7 +49,7 @@ func TestLinodeLongviewSubscriptionGetTool(t *testing.T) {
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyClientsIncluded: 10,
 				keyID:              longviewSubscriptionID,
-				keyLabel:           "Longview Pro 10 pack",
+				keyLabel:           longviewSubscriptionLabel,
 				keyPrice:           map[string]float64{keyHourly: 0.06, keyMonthly: 40},
 			}))
 		}))
@@ -67,7 +67,7 @@ func TestLinodeLongviewSubscriptionGetTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, longviewSubscriptionID, "response should contain subscription ID")
-		assert.Contains(t, textContent.Text, "Longview Pro 10 pack", "response should contain subscription label")
+		assert.Contains(t, textContent.Text, longviewSubscriptionLabel, "response should contain subscription label")
 	})
 
 	t.Run("api error", func(t *testing.T) {

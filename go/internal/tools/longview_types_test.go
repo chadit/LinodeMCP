@@ -44,7 +44,7 @@ func TestLinodeLongviewTypesTool(t *testing.T) {
 				keyData: []map[string]any{{
 					keyClientsIncluded: 10,
 					keyID:              longviewPlan10,
-					keyLabel:           "Longview Pro 10 pack",
+					keyLabel:           longviewSubscriptionLabel,
 					keyPrice:           map[string]float64{keyHourly: 0.06, keyMonthly: 40},
 				}},
 				keyPage:    1,
@@ -65,7 +65,7 @@ func TestLinodeLongviewTypesTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, longviewPlan10, "response should contain type id")
-		assert.Contains(t, textContent.Text, "Longview Pro 10 pack", "response should contain type label")
+		assert.Contains(t, textContent.Text, longviewSubscriptionLabel, "response should contain type label")
 	})
 
 	t.Run("api error", func(t *testing.T) {

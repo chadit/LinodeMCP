@@ -30,7 +30,7 @@ func TestClientGetLongviewSubscriptionSuccess(t *testing.T) {
 		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyClientsIncluded: 10,
 			keyID:              longviewSubscriptionID,
-			keyLabel:           "Longview Pro 10 pack",
+			keyLabel:           longviewPlan10Label,
 			keyPrice:           map[string]float64{keyHourly: 0.06, keyMonthly: 40},
 		}))
 	}))
@@ -42,7 +42,7 @@ func TestClientGetLongviewSubscriptionSuccess(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	assert.Equal(t, longviewSubscriptionID, got.ID)
-	assert.Equal(t, "Longview Pro 10 pack", got.Label)
+	assert.Equal(t, longviewPlan10Label, got.Label)
 	assert.Equal(t, 10, got.ClientsIncluded)
 	assert.InEpsilon(t, 0.06, got.Price.Hourly, 0.001)
 	assert.InEpsilon(t, 40.0, got.Price.Monthly, 0.001)
