@@ -176,6 +176,11 @@ type ManagedCredential struct {
 	LastDecrypted string `json:"last_decrypted"`
 }
 
+// ManagedSSHKey represents the Managed SSH public key assigned to an account.
+type ManagedSSHKey struct {
+	SSHKey string `json:"ssh_key"`
+}
+
 // AccountMaintenance represents one account maintenance record.
 type AccountMaintenance struct {
 	Entity AccountMaintenanceEntity `json:"entity"`

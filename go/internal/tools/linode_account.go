@@ -209,6 +209,19 @@ func NewLinodeManagedCredentialsTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeManagedSSHKeyTool creates a tool for retrieving the account Managed SSH public key.
+func NewLinodeManagedSSHKeyTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_managed_ssh_key",
+		"Retrieves the Managed SSH public key assigned to the authenticated account.",
+		nil,
+		handleLinodeManagedSSHKeyRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeAccountMaintenanceTool creates a tool for listing account maintenance records.
 func NewLinodeAccountMaintenanceTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -3933,6 +3946,20 @@ func handleLinodeManagedCredentialsRequest(ctx context.Context, request *mcp.Cal
 	}
 
 	return mcp.NewToolResultError("Failed to retrieve linode_managed_credentials: " + listFailure.Error()), nil
+}
+
+func handleLinodeManagedSSHKeyRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	sshKey, getFailure := client.GetManagedSSHKey(ctx)
+	if getFailure == nil {
+		return MarshalToolResponse(sshKey)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_managed_ssh_key: " + getFailure.Error()), nil
 }
 
 func managedCredentialsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
