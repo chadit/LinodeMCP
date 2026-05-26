@@ -13,27 +13,46 @@ import (
 )
 
 const (
-	managedContactsPageSizeMin       = 25
-	managedContactsPageSizeMax       = 500
-	managedContactGetIDParam         = "contact_id"
-	errManagedContactGetIDPositive   = "contact_id must be a positive integer"
-	maxManagedContactGetIDFromJSON   = 9007199254740991
-	managedContactUpdateIDParam      = "contact_id"
-	managedContactUpdateNameParam    = "name"
-	managedContactUpdateEmailParam   = "email"
-	managedContactUpdateGroupParam   = "group"
-	managedContactUpdatePhone1Param  = "phone_primary"
-	managedContactUpdatePhone2Param  = "phone_secondary"
-	managedContactDeleteIDParam      = "contact_id"
-	managedContactDeleteIDMessage    = "contact_id must be a positive integer"
-	managedIssueGetIDParam           = "issue_id"
-	errManagedIssueGetIDPositive     = "issue_id must be a positive integer"
-	maxManagedIssueGetIDFromJSON     = 9007199254740991
-	managedIssuesPageSizeMin         = 25
-	managedIssuesPageSizeMax         = 500
-	managedLinodeSettingsPageSizeMin = 25
-	managedLinodeSettingsPageSizeMax = 500
+	managedContactsPageSizeMin         = 25
+	managedContactsPageSizeMax         = 500
+	managedLinodeSettingsIDParam       = "linode_id"
+	errManagedLinodeSettingsIDPositive = "linode_id must be a positive integer"
+	maxManagedLinodeSettingsIDFromJSON = 9007199254740991
+	managedContactGetIDParam           = "contact_id"
+	errManagedContactGetIDPositive     = "contact_id must be a positive integer"
+	maxManagedContactGetIDFromJSON     = 9007199254740991
+	managedContactUpdateIDParam        = "contact_id"
+	managedContactUpdateNameParam      = "name"
+	managedContactUpdateEmailParam     = "email"
+	managedContactUpdateGroupParam     = "group"
+	managedContactUpdatePhone1Param    = "phone_primary"
+	managedContactUpdatePhone2Param    = "phone_secondary"
+	managedContactDeleteIDParam        = "contact_id"
+	managedContactDeleteIDMessage      = "contact_id must be a positive integer"
+	managedIssueGetIDParam             = "issue_id"
+	errManagedIssueGetIDPositive       = "issue_id must be a positive integer"
+	maxManagedIssueGetIDFromJSON       = 9007199254740991
+	managedIssuesPageSizeMin           = 25
+	managedIssuesPageSizeMax           = 500
+	managedLinodeSettingsPageSizeMin   = 25
+	managedLinodeSettingsPageSizeMax   = 500
 )
+
+// NewLinodeManagedLinodeSettingsGetTool creates a tool for retrieving one Linode's Managed settings.
+func NewLinodeManagedLinodeSettingsGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_managed_linode_settings_get",
+		"Gets Managed service settings for one Linode by ID.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(managedLinodeSettingsIDParam, mcp.Required(),
+				mcp.Description("Linode ID whose Managed settings should be retrieved.")),
+		},
+		handleLinodeManagedLinodeSettingsGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
 
 // NewLinodeManagedContactGetTool creates a tool for retrieving one managed contact.
 func NewLinodeManagedContactGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
@@ -150,6 +169,49 @@ func NewLinodeManagedContactUpdateTool(cfg *config.Config) (mcp.Tool, profiles.C
 	)
 
 	return tool, profiles.CapAdmin, handler
+}
+
+func handleLinodeManagedLinodeSettingsGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	linodeID, validationMessage := managedLinodeSettingsIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	settings, getFailure := client.GetManagedLinodeSettings(ctx, linodeID)
+	if getFailure == nil {
+		return MarshalToolResponse(settings)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_managed_linode_settings_get: " + getFailure.Error()), nil
+}
+
+func managedLinodeSettingsIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	raw, exists := request.GetArguments()[managedLinodeSettingsIDParam]
+	if !exists {
+		return 0, "linode_id is required"
+	}
+
+	switch value := raw.(type) {
+	case int:
+		if value <= 0 || value > maxManagedLinodeSettingsIDFromJSON {
+			return 0, errManagedLinodeSettingsIDPositive
+		}
+
+		return value, ""
+	case float64:
+		if value <= 0 || value > maxManagedLinodeSettingsIDFromJSON || value != float64(int64(value)) {
+			return 0, errManagedLinodeSettingsIDPositive
+		}
+
+		return int(value), ""
+	default:
+		return 0, errManagedLinodeSettingsIDPositive
+	}
 }
 
 func handleLinodeManagedContactGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
