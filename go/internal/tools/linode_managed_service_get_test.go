@@ -54,15 +54,15 @@ func TestLinodeManagedServiceGetTool(t *testing.T) {
 			name string
 			args map[string]any
 		}{
-			{name: "missing service id", args: map[string]any{}},
-			{name: "zero service id", args: map[string]any{keyManagedServiceID: 0}},
+			{name: caseMissingServiceID, args: map[string]any{}},
+			{name: caseZeroServiceID, args: map[string]any{keyManagedServiceID: 0}},
 			{name: "negative service id", args: map[string]any{keyManagedServiceID: -1}},
 			{name: "string service id", args: map[string]any{keyManagedServiceID: "9944"}},
 			{name: "fractional service id", args: map[string]any{keyManagedServiceID: 9944.5}},
 			{name: "oversized service id", args: map[string]any{keyManagedServiceID: managedServiceOversizedID}},
-			{name: "slash service id", args: map[string]any{keyManagedServiceID: "9944/9955"}},
-			{name: "query service id", args: map[string]any{keyManagedServiceID: "9944?x=1"}},
-			{name: "traversal service id", args: map[string]any{keyManagedServiceID: pathTraversalValue}},
+			{name: caseSlashServiceID, args: map[string]any{keyManagedServiceID: invalidManagedServiceSlashID}},
+			{name: caseQueryServiceID, args: map[string]any{keyManagedServiceID: invalidManagedServiceQueryID}},
+			{name: caseTraversalServiceID, args: map[string]any{keyManagedServiceID: pathTraversalValue}},
 		}
 
 		for _, testCase := range cases {

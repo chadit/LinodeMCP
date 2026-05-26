@@ -48,6 +48,7 @@ const (
 	managedIssuesPageSizeMin               = 25
 	managedIssuesPageSizeMax               = 500
 	managedServiceGetIDParam               = "service_id"
+	managedServiceDeleteIDParam            = "service_id"
 	errManagedServiceGetIDPositive         = "service_id must be a positive integer"
 	errManagedServiceUpdateFields          = "at least one managed service field is required"
 	maxManagedServiceGetIDFromJSON         = 9007199254740991
@@ -187,6 +188,22 @@ func NewLinodeManagedLinodeSettingsUpdateTool(cfg *config.Config) (mcp.Tool, pro
 	)
 
 	return tool, profiles.CapAdmin, handler
+}
+
+// NewLinodeManagedServiceDeleteTool creates a tool for deleting one Managed service monitor.
+func NewLinodeManagedServiceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_managed_service_delete",
+		"Deletes a service monitored by Linode Managed.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(managedServiceDeleteIDParam, mcp.Required(), mcp.Description("The Managed service monitor ID to delete.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm Managed service deletion.")),
+		},
+		handleLinodeManagedServiceDeleteRequest,
+	)
+
+	return tool, profiles.CapDestroy, handler
 }
 
 // NewLinodeManagedServiceGetTool creates a tool for retrieving one Managed service.
@@ -685,6 +702,40 @@ func managedServiceIDFromTool(request *mcp.CallToolRequest) (int, string) {
 	default:
 		return 0, errManagedServiceGetIDPositive
 	}
+}
+
+func handleLinodeManagedServiceDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This deletes a Managed service monitor. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	serviceID, validationMessage := managedServiceDeleteIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if failureMessage := deleteManagedServiceErrorMessage(ctx, client, serviceID); failureMessage != "" {
+		return mcp.NewToolResultError(failureMessage), nil
+	}
+
+	return mcp.NewToolResultText("Managed service deleted successfully"), nil
+}
+
+func deleteManagedServiceErrorMessage(ctx context.Context, client *linode.Client, serviceID int) string {
+	if err := client.DeleteManagedService(ctx, serviceID); err != nil {
+		return "Failed to delete linode_managed_service_delete: " + err.Error()
+	}
+
+	return ""
+}
+
+func managedServiceDeleteIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	return managedServiceIDFromTool(request)
 }
 
 func handleLinodeManagedServiceUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
