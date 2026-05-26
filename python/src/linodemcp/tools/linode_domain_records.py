@@ -5,7 +5,15 @@ from typing import TYPE_CHECKING, Any
 from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
+from linodemcp.tools.helpers import (
+    DRY_RUN_PROP,
+    ENV_PARAM_SCHEMA,
+    PARAM_DRY_RUN,
+    error_response,
+    execute_dry_run,
+    execute_tool,
+    is_dry_run,
+)
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -345,7 +353,9 @@ def create_linode_domain_record_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_domain_record_delete tool."""
     return Tool(
         name="linode_domain_record_delete",
-        description="Deletes a DNS record.",
+        description=(
+            "Deletes a DNS record. Pass dry_run=true to preview without deleting."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -360,8 +370,12 @@ def create_linode_domain_record_delete_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Must be true to confirm this operation.",
+                    "description": (
+                        "Must be true to confirm this operation. Ignored when "
+                        "dry_run=true."
+                    ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["domain_id", "record_id", "confirm"],
         },
@@ -372,19 +386,36 @@ async def handle_linode_domain_record_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_domain_record_delete tool request."""
+    domain_id = arguments.get("domain_id", 0)
+    record_id = arguments.get("record_id", 0)
+
+    # ID validation runs before both branches: dry-run and real call both
+    # need both IDs, and the spec is explicit that dry-run errors out on
+    # missing required args the same way the real call would.
+    if not domain_id:
+        return error_response("domain_id is required")
+    if not record_id:
+        return error_response("record_id is required")
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_domain_record(int(domain_id), int(record_id))
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_domain_record_delete",
+            "DELETE",
+            f"/domains/{int(domain_id)}/records/{int(record_id)}",
+            _fetch,
+        )
+
     if not arguments.get("confirm"):
         return error_response(
             "This deletes a DNS record and is irreversible. "
             "Set confirm=true to proceed."
         )
-
-    domain_id = arguments.get("domain_id", 0)
-    record_id = arguments.get("record_id", 0)
-
-    if not domain_id:
-        return error_response("domain_id is required")
-    if not record_id:
-        return error_response("record_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_domain_record(int(domain_id), int(record_id))

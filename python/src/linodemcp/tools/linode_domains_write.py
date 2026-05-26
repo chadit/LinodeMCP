@@ -188,7 +188,8 @@ def create_linode_domain_delete_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_domain_delete",
         description=(
-            "Deletes a DNS domain. WARNING: This also deletes all associated records."
+            "Deletes a DNS domain. WARNING: This also deletes all associated "
+            "records. Pass dry_run=true to preview without deleting."
         ),
         inputSchema={
             "type": "object",
@@ -200,8 +201,11 @@ def create_linode_domain_delete_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Must be true to confirm deletion.",
+                    "description": (
+                        "Must be true to confirm deletion. Ignored when dry_run=true."
+                    ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["domain_id", "confirm"],
         },
@@ -213,15 +217,25 @@ async def handle_linode_domain_delete(
 ) -> list[TextContent]:
     """Handle linode_domain_delete tool request."""
     domain_id = arguments.get("domain_id", 0)
-    confirm = arguments.get("confirm", False)
 
-    if not confirm:
-        return [
-            TextContent(
-                type="text",
-                text="Error: This is destructive. Set confirm=true to proceed.",
-            )
-        ]
+    if is_dry_run(arguments):
+        if not domain_id:
+            return error_response("domain_id is required")
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_domain(int(domain_id))
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_domain_delete",
+            "DELETE",
+            f"/domains/{int(domain_id)}",
+            _fetch,
+        )
+
+    if not arguments.get("confirm"):
+        return error_response("This is destructive. Set confirm=true to proceed.")
 
     if not domain_id:
         return error_response("domain_id is required")

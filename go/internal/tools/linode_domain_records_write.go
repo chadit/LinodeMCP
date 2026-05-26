@@ -265,7 +265,7 @@ func handleLinodeDomainRecordUpdateRequest(ctx context.Context, request *mcp.Cal
 func NewLinodeDomainRecordDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_domain_record_delete",
-		mcp.WithDescription("Deletes a DNS record from a domain."),
+		mcp.WithDescription("Deletes a DNS record from a domain. Pass dry_run=true to preview without deleting."),
 		mcp.WithString(
 			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
@@ -283,8 +283,9 @@ func NewLinodeDomainRecordDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		mcp.WithBoolean(
 			paramConfirm,
 			mcp.Required(),
-			mcp.Description("Must be set to true to confirm DNS record deletion. This action is irreversible."),
+			mcp.Description("Must be set to true to confirm DNS record deletion. This action is irreversible. Ignored when dry_run=true."),
 		),
+		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -298,10 +299,6 @@ func handleLinodeDomainRecordDeleteRequest(ctx context.Context, request *mcp.Cal
 	domainID := request.GetInt("domain_id", 0)
 	recordID := request.GetInt("record_id", 0)
 
-	if result := RequireConfirm(request, "This deletes a DNS record and is irreversible. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	if domainID == 0 {
 		return mcp.NewToolResultError("domain_id is required"), nil
 	}
@@ -310,24 +307,23 @@ func handleLinodeDomainRecordDeleteRequest(ctx context.Context, request *mcp.Cal
 		return mcp.NewToolResultError("record_id is required"), nil
 	}
 
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := client.DeleteDomainRecord(ctx, domainID, recordID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove record %d: %v", recordID, err)), nil
-	}
-
-	response := struct {
-		Message  string `json:"message"`
-		DomainID int    `json:"domain_id"`
-		RecordID int    `json:"record_id"`
-	}{
-		Message:  fmt.Sprintf("Record %d removed successfully from domain %d", recordID, domainID),
-		DomainID: domainID,
-		RecordID: recordID,
-	}
-
-	return MarshalToolResponse(response)
+	return RunDestructiveAction(ctx, request, cfg, &DestructiveAction{
+		ToolName:       "linode_domain_record_delete",
+		Method:         httpMethodDelete,
+		Path:           fmt.Sprintf("/domains/%d/records/%d", domainID, recordID),
+		ConfirmMessage: "This deletes a DNS record and is irreversible. Set confirm=true to proceed.",
+		FetchState: func(ctx context.Context, c *linode.Client) (any, error) {
+			return c.GetDomainRecord(ctx, domainID, recordID)
+		},
+		Execute: func(ctx context.Context, c *linode.Client) error {
+			return c.DeleteDomainRecord(ctx, domainID, recordID)
+		},
+		Success: func() any {
+			return map[string]any{
+				responseKeyMessage: fmt.Sprintf("Record %d removed successfully from domain %d", recordID, domainID),
+				"domain_id":        domainID,
+				"record_id":        recordID,
+			}
+		},
+	})
 }

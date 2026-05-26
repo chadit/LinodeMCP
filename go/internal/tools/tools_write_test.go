@@ -1822,6 +1822,109 @@ func TestLinodeDomainDeleteTool(t *testing.T) {
 		require.True(t, ok, "content should be TextContent type")
 		assert.Contains(t, textContent.Text, "removed successfully", "response should confirm deletion")
 	})
+
+	t.Run("dry_run schema property", func(t *testing.T) {
+		t.Parallel()
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run",
+			"schema must advertise the dry_run boolean to the model")
+	})
+
+	t.Run("dry_run returns preview without mutating", func(t *testing.T) {
+		t.Parallel()
+
+		var methodsSeen []string
+
+		domainBody := `{"id":222,"domain":"dry-delete.example.com","type":"master","status":"active"}`
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsSeen = append(methodsSeen, r.Method)
+			assert.Equal(t, "/domains/222", r.URL.Path)
+
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(domainBody))
+
+				return
+			}
+
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, dryRunHandler := tools.NewLinodeDomainDeleteTool(dryRunCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyDomainID: float64(222),
+			keyDryRun:   true,
+		})
+		result, err := dryRunHandler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError, "dry_run with valid args should not be a tool error")
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, true, body[keyDryRun])
+		assert.Equal(t, "linode_domain_delete", body["tool"])
+
+		would, isWouldObject := body["would_execute"].(map[string]any)
+		require.True(t, isWouldObject)
+		assert.Equal(t, "DELETE", would["method"])
+		assert.Equal(t, "/domains/222", would["path"])
+
+		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+			"dry_run must only issue a single GET request, never DELETE")
+	})
+
+	t.Run("dry_run does not require confirm", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "dry_run path must only issue GET")
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":333,"domain":"no-confirm-delete.example.com","status":"active"}`))
+		}))
+		defer srv.Close()
+
+		dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, dryRunHandler := tools.NewLinodeDomainDeleteTool(dryRunCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyDomainID: float64(333),
+			keyDryRun:   true,
+		})
+		result, err := dryRunHandler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.False(t, result.IsError,
+			"dry_run without confirm must succeed; confirm only gates real execution")
+	})
+
+	t.Run("dry_run still validates domain_id", func(t *testing.T) {
+		t.Parallel()
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyDryRun: true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError,
+			"dry_run with missing domain_id must error out the same way the real call would")
+		assertErrorContains(t, result, errDomainIDRequired)
+	})
 }
 
 // End-to-end verification of the domain record creation workflow.
@@ -2088,6 +2191,129 @@ func TestLinodeDomainRecordDeleteTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent type")
 		assert.Contains(t, textContent.Text, "removed successfully", "response should confirm deletion")
+	})
+
+	t.Run("dry_run schema property", func(t *testing.T) {
+		t.Parallel()
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run",
+			"schema must advertise the dry_run boolean to the model")
+	})
+
+	t.Run("dry_run returns preview without mutating", func(t *testing.T) {
+		t.Parallel()
+
+		var methodsSeen []string
+
+		recordBody := `{"id":444,"type":"A","name":"www","target":"192.0.2.1","ttl_sec":3600}`
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsSeen = append(methodsSeen, r.Method)
+			assert.Equal(t, "/domains/333/records/444", r.URL.Path)
+
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(recordBody))
+
+				return
+			}
+
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, dryRunHandler := tools.NewLinodeDomainRecordDeleteTool(dryRunCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyDomainID: float64(333),
+			keyRecordID: float64(444),
+			keyDryRun:   true,
+		})
+		result, err := dryRunHandler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError, "dry_run with valid args should not be a tool error")
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, true, body[keyDryRun])
+		assert.Equal(t, "linode_domain_record_delete", body["tool"])
+
+		would, isWouldObject := body["would_execute"].(map[string]any)
+		require.True(t, isWouldObject)
+		assert.Equal(t, "DELETE", would["method"])
+		assert.Equal(t, "/domains/333/records/444", would["path"],
+			"path must include both parent domain ID and record ID")
+
+		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+			"dry_run must only issue a single GET request, never DELETE")
+	})
+
+	t.Run("dry_run does not require confirm", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "dry_run path must only issue GET")
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":555,"type":"CNAME","name":"alias","target":"www.example.com"}`))
+		}))
+		defer srv.Close()
+
+		dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, dryRunHandler := tools.NewLinodeDomainRecordDeleteTool(dryRunCfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyDomainID: float64(333),
+			keyRecordID: float64(555),
+			keyDryRun:   true,
+		})
+		result, err := dryRunHandler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.False(t, result.IsError,
+			"dry_run without confirm must succeed; confirm only gates real execution")
+	})
+
+	t.Run("dry_run still validates both IDs", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("missing domain_id", func(t *testing.T) {
+			t.Parallel()
+
+			req := createRequestWithArgs(t, map[string]any{
+				keyRecordID: float64(444),
+				keyDryRun:   true,
+			})
+			result, err := handler(t.Context(), req)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			assert.True(t, result.IsError)
+			assertErrorContains(t, result, "domain_id is required")
+		})
+
+		t.Run("missing record_id", func(t *testing.T) {
+			t.Parallel()
+
+			req := createRequestWithArgs(t, map[string]any{
+				keyDomainID: float64(333),
+				keyDryRun:   true,
+			})
+			result, err := handler(t.Context(), req)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			assert.True(t, result.IsError)
+			assertErrorContains(t, result, "record_id is required")
+		})
 	})
 }
 
