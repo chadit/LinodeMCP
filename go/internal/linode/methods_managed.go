@@ -7,7 +7,10 @@ import (
 	"strconv"
 )
 
-const endpointManagedContacts = "/managed/contacts"
+const (
+	endpointManagedContacts = "/managed/contacts"
+	endpointManagedIssues   = "/managed/issues"
+)
 
 // httpGetManagedContact retrieves one managed contact by ID.
 func (c *Client) httpGetManagedContact(ctx context.Context, contactID int) (*ManagedContact, error) {
@@ -68,6 +71,28 @@ func (c *Client) httpListManagedContacts(ctx context.Context, page, pageSize int
 	}
 
 	return &contacts, nil
+}
+
+// httpListManagedIssues retrieves Managed issues.
+func (c *Client) httpListManagedIssues(ctx context.Context, page, pageSize int) (*PaginatedResponse[ManagedIssue], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointManagedIssues, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListManagedIssues", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+
+	var issues PaginatedResponse[ManagedIssue]
+	if err := c.handleResponse(resp, &issues); err != nil {
+		return nil, err
+	}
+
+	return &issues, nil
 }
 
 // httpCreateManagedContact creates a managed contact.

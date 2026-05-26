@@ -32,6 +32,22 @@ type ManagedContactPhone struct {
 	Secondary *string `json:"secondary"`
 }
 
+// ManagedIssue represents an issue detected by Linode Managed service monitors.
+type ManagedIssue struct {
+	ID       int                `json:"id"`
+	Created  string             `json:"created"`
+	Services []int              `json:"services"`
+	Entity   ManagedIssueEntity `json:"entity"`
+}
+
+// ManagedIssueEntity identifies the support ticket opened for a Managed issue.
+type ManagedIssueEntity struct {
+	ID    int    `json:"id"`
+	Label string `json:"label"`
+	Type  string `json:"type"`
+	URL   string `json:"url"`
+}
+
 // UpdateManagedContactRequest contains mutable Managed contact fields.
 type UpdateManagedContactRequest struct {
 	Name  *string                    `json:"name,omitempty"`
