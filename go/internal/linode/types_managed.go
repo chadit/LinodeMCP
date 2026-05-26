@@ -48,6 +48,22 @@ type ManagedIssueEntity struct {
 	URL   string `json:"url"`
 }
 
+// ManagedLinodeSettings represents Managed service settings for one Linode.
+type ManagedLinodeSettings struct {
+	ID    int                      `json:"id"`
+	Label string                   `json:"label"`
+	Group string                   `json:"group"`
+	SSH   ManagedLinodeSettingsSSH `json:"ssh"`
+}
+
+// ManagedLinodeSettingsSSH contains SSH access settings for a Managed Linode.
+type ManagedLinodeSettingsSSH struct {
+	Access bool    `json:"access"`
+	IP     string  `json:"ip"`
+	Port   *int    `json:"port"`
+	User   *string `json:"user"`
+}
+
 // UpdateManagedContactRequest contains mutable Managed contact fields.
 type UpdateManagedContactRequest struct {
 	Name  *string                    `json:"name,omitempty"`

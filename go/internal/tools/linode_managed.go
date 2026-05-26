@@ -13,24 +13,26 @@ import (
 )
 
 const (
-	managedContactsPageSizeMin      = 25
-	managedContactsPageSizeMax      = 500
-	managedContactGetIDParam        = "contact_id"
-	errManagedContactGetIDPositive  = "contact_id must be a positive integer"
-	maxManagedContactGetIDFromJSON  = 9007199254740991
-	managedContactUpdateIDParam     = "contact_id"
-	managedContactUpdateNameParam   = "name"
-	managedContactUpdateEmailParam  = "email"
-	managedContactUpdateGroupParam  = "group"
-	managedContactUpdatePhone1Param = "phone_primary"
-	managedContactUpdatePhone2Param = "phone_secondary"
-	managedContactDeleteIDParam     = "contact_id"
-	managedContactDeleteIDMessage   = "contact_id must be a positive integer"
-	managedIssueGetIDParam          = "issue_id"
-	errManagedIssueGetIDPositive    = "issue_id must be a positive integer"
-	maxManagedIssueGetIDFromJSON    = 9007199254740991
-	managedIssuesPageSizeMin        = 25
-	managedIssuesPageSizeMax        = 500
+	managedContactsPageSizeMin       = 25
+	managedContactsPageSizeMax       = 500
+	managedContactGetIDParam         = "contact_id"
+	errManagedContactGetIDPositive   = "contact_id must be a positive integer"
+	maxManagedContactGetIDFromJSON   = 9007199254740991
+	managedContactUpdateIDParam      = "contact_id"
+	managedContactUpdateNameParam    = "name"
+	managedContactUpdateEmailParam   = "email"
+	managedContactUpdateGroupParam   = "group"
+	managedContactUpdatePhone1Param  = "phone_primary"
+	managedContactUpdatePhone2Param  = "phone_secondary"
+	managedContactDeleteIDParam      = "contact_id"
+	managedContactDeleteIDMessage    = "contact_id must be a positive integer"
+	managedIssueGetIDParam           = "issue_id"
+	errManagedIssueGetIDPositive     = "issue_id must be a positive integer"
+	maxManagedIssueGetIDFromJSON     = 9007199254740991
+	managedIssuesPageSizeMin         = 25
+	managedIssuesPageSizeMax         = 500
+	managedLinodeSettingsPageSizeMin = 25
+	managedLinodeSettingsPageSizeMax = 500
 )
 
 // NewLinodeManagedContactGetTool creates a tool for retrieving one managed contact.
@@ -76,6 +78,22 @@ func NewLinodeManagedContactsTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
 		},
 		handleLinodeManagedContactsRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeManagedLinodeSettingsTool creates a tool for listing Managed Linode settings.
+func NewLinodeManagedLinodeSettingsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_managed_linode_settings",
+		"Lists Managed service settings for Linodes on the account.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		},
+		handleLinodeManagedLinodeSettingsRequest,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -243,6 +261,41 @@ func managedContactsPaginationFromTool(request *mcp.CallToolRequest) (int, int, 
 	}
 
 	pageSize, validationMessage := optionalPaginationInt(args, "page_size", managedContactsPageSizeMin, managedContactsPageSizeMax)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	return page, pageSize, ""
+}
+
+func handleLinodeManagedLinodeSettingsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	page, pageSize, validationMessage := managedLinodeSettingsPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	settings, listFailure := client.ListManagedLinodeSettings(ctx, page, pageSize)
+	if listFailure == nil {
+		return MarshalToolResponse(settings)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_managed_linode_settings: " + listFailure.Error()), nil
+}
+
+func managedLinodeSettingsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
+	args := request.GetArguments()
+
+	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	pageSize, validationMessage := optionalPaginationInt(args, "page_size", managedLinodeSettingsPageSizeMin, managedLinodeSettingsPageSizeMax)
 	if validationMessage != "" {
 		return 0, 0, validationMessage
 	}
