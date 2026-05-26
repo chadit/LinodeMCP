@@ -271,6 +271,27 @@ func (c *Client) httpGetManagedCredential(ctx context.Context, credentialID int)
 	return &credential, nil
 }
 
+// httpRevokeManagedCredential revokes one stored managed credential.
+func (c *Client) httpRevokeManagedCredential(ctx context.Context, credentialID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointManagedCredentials + "/" + url.PathEscape(strconv.Itoa(credentialID)) + "/revoke"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "RevokeManagedCredential", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	if err := c.handleResponse(resp, nil); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // httpGetAccountAgreements retrieves account agreement acknowledgment status.
 func (c *Client) httpGetAccountAgreements(ctx context.Context) (*AccountAgreements, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

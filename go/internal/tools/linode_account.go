@@ -265,6 +265,23 @@ func NewLinodeManagedCredentialGetTool(cfg *config.Config) (mcp.Tool, profiles.C
 	return tool, profiles.CapAdmin, handler
 }
 
+// NewLinodeManagedCredentialRevokeTool creates a tool for revoking one managed credential.
+func NewLinodeManagedCredentialRevokeTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_managed_credential_revoke",
+		"Revokes one stored managed credential by ID. This credential-affecting action requires admin capability and confirm=true.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(managedIDParam, mcp.Required(), mcp.Description("Managed credential ID to revoke.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm revoking the stored Managed credential.")),
+		},
+		handleLinodeManagedCredentialRevokeRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
 // NewLinodeAccountMaintenanceTool creates a tool for listing account maintenance records.
 func NewLinodeAccountMaintenanceTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -4022,6 +4039,29 @@ func handleLinodeManagedCredentialGetRequest(ctx context.Context, request *mcp.C
 	}
 
 	return mcp.NewToolResultError("Failed to retrieve linode_managed_credential_get: " + getFailure.Error()), nil
+}
+
+func handleLinodeManagedCredentialRevokeRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This revokes a stored Managed credential. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	credentialID, validationMessage := managedCredentialIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	revokeFailure := client.RevokeManagedCredential(ctx, credentialID)
+	if revokeFailure == nil {
+		return MarshalToolResponse(map[string]string{"status": "revoked"})
+	}
+
+	return mcp.NewToolResultError("Failed to revoke linode_managed_credential_revoke: " + revokeFailure.Error()), nil
 }
 
 func managedCredentialIDFromTool(request *mcp.CallToolRequest) (int, string) {

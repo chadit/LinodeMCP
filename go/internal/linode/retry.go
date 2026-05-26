@@ -254,6 +254,13 @@ func (c *Client) GetManagedCredential(ctx context.Context, credentialID int) (*M
 	return credential, err
 }
 
+// RevokeManagedCredential revokes one stored managed credential without retrying
+// the mutating request. Retrying can replay credential revocation after a
+// transient error, so this method delegates exactly once.
+func (c *Client) RevokeManagedCredential(ctx context.Context, credentialID int) error {
+	return c.httpRevokeManagedCredential(ctx, credentialID)
+}
+
 // GetManagedContact retrieves one managed contact with automatic retry on transient failures.
 func (c *Client) GetManagedContact(ctx context.Context, contactID int) (*ManagedContact, error) {
 	var contact *ManagedContact
