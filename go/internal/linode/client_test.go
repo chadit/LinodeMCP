@@ -35,6 +35,9 @@ const (
 	accountMaintenanceLabel      = "web-1"
 	accountMaintenanceEntityType = "linode"
 	accountMaintenanceURL        = "/v4/linode/instances/123"
+	maintenancePoliciesPath      = "/maintenance/policies"
+	maintenancePolicySlug        = "linode/migrate"
+	maintenancePolicyLabel       = "Migrate"
 	errForbidden                 = "forbidden"
 	oauthClientID                = "client-123"
 	oauthClientIDWithSeparators  = "client/123?query"
@@ -267,7 +270,7 @@ func TestClientListAccountMaintenanceRetriesTransientError(t *testing.T) {
 
 		if calls.Add(1) == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "temporary"}}}))
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
 
 			return
 		}
@@ -305,6 +308,99 @@ func TestClientListAccountMaintenanceAPIError(t *testing.T) {
 	_, err := client.ListAccountMaintenance(t.Context(), 0, 0)
 
 	require.Error(t, err, "ListAccountMaintenance should fail on API errors")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+}
+
+func TestClientListMaintenancePoliciesSuccess(t *testing.T) {
+	t.Parallel()
+
+	policies := linode.PaginatedResponse[linode.MaintenancePolicy]{
+		Data: []linode.MaintenancePolicy{{
+			Slug:                  maintenancePolicySlug,
+			Label:                 maintenancePolicyLabel,
+			Description:           "Migrates the Linode during maintenance.",
+			Type:                  "migrate",
+			NotificationPeriodSec: 86400,
+			IsDefault:             true,
+		}},
+		Page:    1,
+		Pages:   1,
+		Results: 1,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, maintenancePoliciesPath, r.URL.Path, "request path should be /maintenance/policies")
+		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		assert.Equal(t, http.NoBody, r.Body, "request body should be empty")
+		assert.Equal(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(policies))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+	result, err := client.ListMaintenancePolicies(t.Context(), 2, 25)
+
+	require.NoError(t, err, "ListMaintenancePolicies should succeed on 200 response")
+	require.NotNil(t, result)
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, maintenancePolicySlug, result.Data[0].Slug)
+	assert.Equal(t, maintenancePolicyLabel, result.Data[0].Label)
+	assert.True(t, result.Data[0].IsDefault)
+}
+
+func TestClientListMaintenancePoliciesRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, maintenancePoliciesPath, r.URL.Path, "request path should be /maintenance/policies")
+
+		if calls.Add(1) == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.MaintenancePolicy]{
+			Data:    []linode.MaintenancePolicy{{Slug: maintenancePolicySlug}},
+			Page:    1,
+			Pages:   1,
+			Results: 1,
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(1), linode.WithBaseDelay(time.Millisecond), linode.WithJitter(false))
+	result, err := client.ListMaintenancePolicies(t.Context(), 0, 0)
+
+	require.NoError(t, err, "read-only maintenance policies list should retry transient failures")
+	require.NotNil(t, result)
+	assert.Equal(t, int32(2), calls.Load(), "client should retry once")
+}
+
+func TestClientListMaintenancePoliciesAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, maintenancePoliciesPath, r.URL.Path, "request path should be /maintenance/policies")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "Forbidden"}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+	_, err := client.ListMaintenancePolicies(t.Context(), 0, 0)
+
+	require.Error(t, err, "ListMaintenancePolicies should fail on API errors")
 
 	var apiErr *linode.APIError
 	require.ErrorAs(t, err, &apiErr, "error should be an APIError")

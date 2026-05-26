@@ -186,6 +186,16 @@ type AccountMaintenanceEntity struct {
 	URL   string `json:"url"`
 }
 
+// MaintenancePolicy represents one available Linode maintenance policy.
+type MaintenancePolicy struct {
+	Slug                  string `json:"slug"`
+	Label                 string `json:"label"`
+	Description           string `json:"description"`
+	Type                  string `json:"type"`
+	NotificationPeriodSec int    `json:"notification_period_sec"`
+	IsDefault             bool   `json:"is_default"`
+}
+
 // AccountNotification represents one account notification returned by GET /account/notifications.
 type AccountNotification struct {
 	Entity   *AccountNotificationEntity `json:"entity"`

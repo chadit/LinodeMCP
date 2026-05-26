@@ -20,6 +20,7 @@ const (
 	endpointAccountCancel                = "/account/cancel"
 	endpointAccountAgreements            = "/account/agreements"
 	endpointAccountMaintenance           = "/account/maintenance"
+	endpointMaintenancePolicies          = "/maintenance/policies"
 	endpointAccountNotifications         = "/account/notifications"
 	endpointAccountAvailability          = "/account/availability"
 	endpointBetas                        = "/betas"
@@ -223,6 +224,28 @@ func (c *Client) httpListAccountMaintenance(ctx context.Context, page, pageSize 
 	}
 
 	return &maintenance, nil
+}
+
+// httpListMaintenancePolicies retrieves available Linode maintenance policies.
+func (c *Client) httpListMaintenancePolicies(ctx context.Context, page, pageSize int) (*PaginatedResponse[MaintenancePolicy], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointMaintenancePolicies, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListMaintenancePolicies", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var policies PaginatedResponse[MaintenancePolicy]
+	if err := c.handleResponse(resp, &policies); err != nil {
+		return nil, err
+	}
+
+	return &policies, nil
 }
 
 // httpListAccountNotifications retrieves account notifications.
