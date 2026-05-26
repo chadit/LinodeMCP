@@ -243,3 +243,117 @@ func TestClientCreateManagedContactDoesNotRetry(t *testing.T) {
 	require.Error(t, err, "CreateManagedContact should fail on 500 response")
 	assert.Equal(t, int32(1), calls.Load(), "CreateManagedContact must not retry and replay a mutating request")
 }
+
+func TestClientUpdateManagedContactSuccess(t *testing.T) {
+	t.Parallel()
+
+	group := managedContactGroup
+	primaryPhone := managedContactPhone
+	updatedContact := linode.ManagedContact{
+		ID:      567,
+		Name:    managedContactName,
+		Email:   managedContactEmail,
+		Group:   &group,
+		Phone:   linode.ManagedContactPhone{Primary: &primaryPhone},
+		Updated: managedContactUpdated,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, managedContactsPath+"/567", r.URL.Path, "request path should include contact ID")
+		assert.Equal(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+
+		var got linode.UpdateManagedContactRequest
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should decode")
+
+		if assert.NotNil(t, got.Name) {
+			assert.Equal(t, managedContactName, *got.Name)
+		}
+
+		if assert.NotNil(t, got.Email) {
+			assert.Equal(t, managedContactEmail, *got.Email)
+		}
+
+		if assert.NotNil(t, got.Group) {
+			assert.Equal(t, managedContactGroup, *got.Group)
+		}
+
+		if assert.NotNil(t, got.Phone) && assert.NotNil(t, got.Phone.Primary) {
+			assert.Equal(t, managedContactPhone, *got.Phone.Primary)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(updatedContact))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+	result, err := client.UpdateManagedContact(t.Context(), 567, linode.UpdateManagedContactRequest{
+		Name:  &updatedContact.Name,
+		Email: &updatedContact.Email,
+		Group: updatedContact.Group,
+		Phone: &linode.UpdateManagedContactPhone{Primary: &primaryPhone},
+	})
+
+	require.NoError(t, err, "UpdateManagedContact should succeed on 200 response")
+	require.NotNil(t, result)
+	assert.Equal(t, managedContactName, result.Name)
+	assert.Equal(t, managedContactEmail, result.Email)
+}
+
+func TestClientUpdateManagedContactAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, managedContactsPath+"/567", r.URL.Path, "request path should include contact ID")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: managedContactsForbidden}}}))
+	}))
+	t.Cleanup(srv.Close)
+
+	name := managedContactName
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+	_, err := client.UpdateManagedContact(t.Context(), 567, linode.UpdateManagedContactRequest{Name: &name})
+
+	require.Error(t, err, "UpdateManagedContact should fail on API errors")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+}
+
+func TestClientUpdateManagedContactNetworkError(t *testing.T) {
+	t.Parallel()
+
+	name := managedContactName
+	client := linode.NewClient("http://127.0.0.1:1", "token", nil, linode.WithMaxRetries(0))
+	_, err := client.UpdateManagedContact(t.Context(), 567, linode.UpdateManagedContactRequest{Name: &name})
+
+	require.Error(t, err, "UpdateManagedContact should fail when the server is unreachable")
+
+	var netErr *linode.NetworkError
+	require.ErrorAs(t, err, &netErr, "error should be a NetworkError")
+	assert.Equal(t, "UpdateManagedContact", netErr.Operation)
+}
+
+func TestClientUpdateManagedContactDoesNotRetry(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		assert.Equal(t, managedContactsPath+"/567", r.URL.Path, "request path should include contact ID")
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
+	}))
+	t.Cleanup(srv.Close)
+
+	name := managedContactName
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(1), linode.WithBaseDelay(time.Millisecond), linode.WithJitter(false))
+	_, err := client.UpdateManagedContact(t.Context(), 567, linode.UpdateManagedContactRequest{Name: &name})
+
+	require.Error(t, err, "mutating Managed contact update should not retry transient failures")
+	assert.Equal(t, int32(1), calls.Load(), "client should call update exactly once")
+}

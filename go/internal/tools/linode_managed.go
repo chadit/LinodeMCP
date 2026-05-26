@@ -2,19 +2,28 @@ package tools
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/internal/config"
+	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
 const (
-	managedContactsPageSizeMin     = 25
-	managedContactsPageSizeMax     = 500
-	managedContactGetIDParam       = "contact_id"
-	errManagedContactGetIDPositive = "contact_id must be a positive integer"
-	maxManagedContactGetIDFromJSON = 9007199254740991
+	managedContactsPageSizeMin      = 25
+	managedContactsPageSizeMax      = 500
+	managedContactGetIDParam        = "contact_id"
+	errManagedContactGetIDPositive  = "contact_id must be a positive integer"
+	maxManagedContactGetIDFromJSON  = 9007199254740991
+	managedContactUpdateIDParam     = "contact_id"
+	managedContactUpdateNameParam   = "name"
+	managedContactUpdateEmailParam  = "email"
+	managedContactUpdateGroupParam  = "group"
+	managedContactUpdatePhone1Param = "phone_primary"
+	managedContactUpdatePhone2Param = "phone_secondary"
 )
 
 // NewLinodeManagedContactGetTool creates a tool for retrieving one managed contact.
@@ -47,6 +56,27 @@ func NewLinodeManagedContactsTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeManagedContactUpdateTool creates a tool for updating a Managed contact.
+func NewLinodeManagedContactUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_managed_contact_update",
+		"Updates a contact configured for Linode Managed service alerts.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(managedContactUpdateIDParam, mcp.Required(), mcp.Description("The numeric Managed contact ID to update.")),
+			mcp.WithString(managedContactUpdateNameParam, mcp.Description("Updated contact name.")),
+			mcp.WithString(managedContactUpdateEmailParam, mcp.Description("Updated contact email address.")),
+			mcp.WithString(managedContactUpdateGroupParam, mcp.Description("Updated contact group.")),
+			mcp.WithString(managedContactUpdatePhone1Param, mcp.Description("Updated primary phone number.")),
+			mcp.WithString(managedContactUpdatePhone2Param, mcp.Description("Updated secondary phone number.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm updating the Managed contact.")),
+		},
+		handleLinodeManagedContactUpdateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
 }
 
 func handleLinodeManagedContactGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -125,4 +155,99 @@ func managedContactsPaginationFromTool(request *mcp.CallToolRequest) (int, int, 
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeManagedContactUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This updates a Managed contact. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	contactID, ok := getPositiveIntArgument(request, managedContactUpdateIDParam)
+	if !ok {
+		return mcp.NewToolResultError("contact_id must be a positive integer"), nil
+	}
+
+	updateReq, validationMessage := managedContactUpdateFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	contact, updateFailure := client.UpdateManagedContact(ctx, contactID, *updateReq)
+	if updateFailure != nil {
+		return mcp.NewToolResultError(managedContactUpdateFailureMessage(contactID, updateFailure)), nil
+	}
+
+	return MarshalToolResponse(struct {
+		Message string                 `json:"message"`
+		Contact *linode.ManagedContact `json:"contact"`
+	}{
+		Message: fmt.Sprintf("Managed contact %d updated successfully", contactID),
+		Contact: contact,
+	})
+}
+
+func managedContactUpdateFromTool(request *mcp.CallToolRequest) (*linode.UpdateManagedContactRequest, string) {
+	req := &linode.UpdateManagedContactRequest{}
+
+	var fields int
+
+	if validationMessage := managedContactOptionalString(request, managedContactUpdateNameParam, &req.Name, &fields); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if validationMessage := managedContactOptionalString(request, managedContactUpdateEmailParam, &req.Email, &fields); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if validationMessage := managedContactOptionalString(request, managedContactUpdateGroupParam, &req.Group, &fields); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	phone := &linode.UpdateManagedContactPhone{}
+
+	var phoneFields int
+
+	if validationMessage := managedContactOptionalString(request, managedContactUpdatePhone1Param, &phone.Primary, &phoneFields); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if validationMessage := managedContactOptionalString(request, managedContactUpdatePhone2Param, &phone.Secondary, &phoneFields); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if phoneFields > 0 {
+		req.Phone = phone
+		fields++
+	}
+
+	if fields == 0 {
+		return nil, "at least one mutable contact field is required"
+	}
+
+	return req, ""
+}
+
+func managedContactOptionalString(request *mcp.CallToolRequest, name string, target **string, fields *int) string {
+	value, validationMessage := stringArgument(request, name, false)
+	if validationMessage != "" {
+		return validationMessage
+	}
+
+	if _, exists := request.GetArguments()[name]; !exists {
+		return ""
+	}
+
+	*target = &value
+	(*fields)++
+
+	return ""
+}
+
+func managedContactUpdateFailureMessage(contactID int, err error) string {
+	return "Failed to update linode_managed_contact " + strconv.Itoa(contactID) + ": " + err.Error()
 }
