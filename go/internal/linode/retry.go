@@ -449,6 +449,15 @@ func (c *Client) UpdateManagedService(ctx context.Context, serviceID int, reques
 	return service, err
 }
 
+// DeleteManagedService deletes a Managed service monitor without retrying the
+// destructive request. Managed service deletion is not replay-safe after a
+// transient error, so this method delegates exactly once.
+func (c *Client) DeleteManagedService(ctx context.Context, serviceID int) error {
+	return c.executeWithoutRetry(ctx, "DeleteManagedService", func() error {
+		return c.httpDeleteManagedService(ctx, serviceID)
+	})
+}
+
 // ListManagedServices retrieves Managed services with automatic retry on transient failures.
 func (c *Client) ListManagedServices(ctx context.Context, page, pageSize int) (*PaginatedResponse[ManagedService], error) {
 	var services *PaginatedResponse[ManagedService]

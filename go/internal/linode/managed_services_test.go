@@ -135,6 +135,67 @@ func TestClientGetManagedServiceAPIError(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
 }
 
+func TestClientDeleteManagedServiceSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, managedServicePath, r.URL.Path, "request path should include service ID")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+	err := client.DeleteManagedService(t.Context(), managedServiceID)
+
+	require.NoError(t, err, "DeleteManagedService should succeed on 200 response")
+}
+
+func TestClientDeleteManagedServiceAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, managedServicePath, r.URL.Path, "request path should include service ID")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: managedServicesForbidden}}}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+	err := client.DeleteManagedService(t.Context(), managedServiceID)
+
+	require.Error(t, err, "DeleteManagedService should fail on API errors")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+}
+
+func TestClientDeleteManagedServiceDoesNotRetryTransientError(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, managedServicePath, r.URL.Path, "request path should include service ID")
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(2), linode.WithBaseDelay(time.Millisecond), linode.WithJitter(false))
+	err := client.DeleteManagedService(t.Context(), managedServiceID)
+
+	require.Error(t, err, "DeleteManagedService should return the transient failure")
+	assert.Equal(t, int32(1), calls.Load(), "destructive DELETE should not be retried")
+}
+
 func TestClientListManagedServicesSuccess(t *testing.T) {
 	t.Parallel()
 

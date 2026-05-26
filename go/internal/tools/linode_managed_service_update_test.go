@@ -100,11 +100,11 @@ func TestLinodeManagedServiceUpdateTool(t *testing.T) {
 			mutate      func(map[string]any)
 			wantMessage string
 		}{
-			{name: "missing service id", mutate: func(args map[string]any) { delete(args, keyManagedServiceID) }, wantMessage: keyManagedServiceID},
-			{name: "zero service id", mutate: func(args map[string]any) { args[keyManagedServiceID] = 0 }, wantMessage: keyManagedServiceID},
-			{name: "slash service id", mutate: func(args map[string]any) { args[keyManagedServiceID] = "9944/9955" }, wantMessage: keyManagedServiceID},
-			{name: "query service id", mutate: func(args map[string]any) { args[keyManagedServiceID] = "9944?x=1" }, wantMessage: keyManagedServiceID},
-			{name: "traversal service id", mutate: func(args map[string]any) { args[keyManagedServiceID] = pathTraversalValue }, wantMessage: keyManagedServiceID},
+			{name: caseMissingServiceID, mutate: func(args map[string]any) { delete(args, keyManagedServiceID) }, wantMessage: keyManagedServiceID},
+			{name: caseZeroServiceID, mutate: func(args map[string]any) { args[keyManagedServiceID] = 0 }, wantMessage: keyManagedServiceID},
+			{name: caseSlashServiceID, mutate: func(args map[string]any) { args[keyManagedServiceID] = invalidManagedServiceSlashID }, wantMessage: keyManagedServiceID},
+			{name: caseQueryServiceID, mutate: func(args map[string]any) { args[keyManagedServiceID] = invalidManagedServiceQueryID }, wantMessage: keyManagedServiceID},
+			{name: caseTraversalServiceID, mutate: func(args map[string]any) { args[keyManagedServiceID] = pathTraversalValue }, wantMessage: keyManagedServiceID},
 			{name: caseNoUpdateFields, mutate: func(args map[string]any) { keepOnlyServiceIDAndConfirm(args) }, wantMessage: "at least one managed service field is required"},
 			{name: "bad label type", mutate: func(args map[string]any) { args[managedServiceLabelParam] = 42 }, wantMessage: errLabelString},
 			{name: "invalid type", mutate: func(args map[string]any) { args[managedServiceTypeParam] = "udp" }, wantMessage: errManagedServiceTypeInvalid},
