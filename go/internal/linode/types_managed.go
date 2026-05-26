@@ -48,6 +48,23 @@ type ManagedLinodeSettingsSSH struct {
 	User   *string `json:"user"`
 }
 
+// ManagedService represents a service monitored by Linode Managed.
+type ManagedService struct {
+	ID                int     `json:"id"`
+	Label             string  `json:"label"`
+	ServiceType       string  `json:"service_type"`
+	Status            string  `json:"status"`
+	Address           string  `json:"address"`
+	Body              *string `json:"body"`
+	ConsultationGroup string  `json:"consultation_group"`
+	Created           string  `json:"created"`
+	Credentials       []int   `json:"credentials"`
+	Notes             *string `json:"notes"`
+	Region            *string `json:"region"`
+	Timeout           int     `json:"timeout"`
+	Updated           string  `json:"updated"`
+}
+
 // ManagedIssue represents an issue detected by Linode Managed service monitors.
 type ManagedIssue struct {
 	ID       int                `json:"id"`
