@@ -16,6 +16,7 @@ const (
 	monitorServiceGetToolName                    = "linode_monitor_service_get"
 	monitorServiceAlertDefinitionsToolName       = "linode_monitor_service_alert_definitions"
 	monitorServiceAlertDefinitionCreateToolName  = "linode_monitor_service_alert_definition_create"
+	monitorServiceAlertDefinitionGetToolName     = "linode_monitor_service_alert_definition_get"
 	monitorServiceTypeParam                      = "service_type"
 	monitorAlertDefinitionLabelParam             = "label"
 	monitorAlertDefinitionSeverityParam          = "severity"
@@ -25,6 +26,9 @@ const (
 	monitorAlertDefinitionDescriptionParam       = "description"
 	monitorAlertDefinitionEntityIDsParam         = "entity_ids"
 	errMonitorServiceTypeInvalid                 = "service_type must be a single non-empty service type slug"
+	monitorAlertIDParam                          = "alert_id"
+	errMonitorAlertIDMissing                     = "alert_id is required"
+	errMonitorAlertIDPositive                    = "alert_id must be a positive integer"
 	errMonitorAlertDefinitionRequired            = "label, severity, rule_criteria, trigger_conditions, and channel_ids are required"
 	errMonitorAlertDefinitionSeverity            = "severity must be an integer from 0 through 3"
 	errMonitorAlertDefinitionChannels            = "channel_ids must be a non-empty array of positive integers"
@@ -184,6 +188,55 @@ func listMonitorServiceAlertDefinitions(ctx context.Context, client *linode.Clie
 	}
 
 	return definitions, ""
+}
+
+// NewLinodeMonitorServiceAlertDefinitionGetTool creates a tool for retrieving one alert definition for one monitoring service type.
+func NewLinodeMonitorServiceAlertDefinitionGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		monitorServiceAlertDefinitionGetToolName,
+		"Gets one alert definition for one supported monitoring service type by service_type and alert_id.",
+		[]mcp.ToolOption{
+			mcp.WithString(monitorServiceTypeParam, mcp.Required(), mcp.Description("Supported monitoring service type slug whose alert definition should be retrieved.")),
+			mcp.WithNumber(monitorAlertIDParam, mcp.Required(), mcp.Description("Alert definition ID to retrieve.")),
+		},
+		handleLinodeMonitorServiceAlertDefinitionGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleLinodeMonitorServiceAlertDefinitionGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	serviceType, validationMessage := monitorServiceTypeFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	alertID, validationMessage := requiredPositiveIntArgument(request, monitorAlertIDParam, errMonitorAlertIDMissing, errMonitorAlertIDPositive)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	definition, getFailureMessage := getMonitorServiceAlertDefinition(ctx, client, serviceType, alertID)
+	if getFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to retrieve " + monitorServiceAlertDefinitionGetToolName + ": " + getFailureMessage), nil
+	}
+
+	return MarshalToolResponse(definition)
+}
+
+func getMonitorServiceAlertDefinition(ctx context.Context, client *linode.Client, serviceType string, alertID int) (linode.AlertDefinition, string) {
+	definition, err := client.GetMonitorServiceAlertDefinition(ctx, serviceType, alertID)
+	if err != nil {
+		return linode.AlertDefinition{}, err.Error()
+	}
+
+	return definition, ""
 }
 
 // NewLinodeMonitorServiceAlertDefinitionCreateTool creates a tool for creating one monitoring alert definition.

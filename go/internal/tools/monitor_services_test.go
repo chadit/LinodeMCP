@@ -110,7 +110,7 @@ func TestLinodeMonitorServiceGetTool(t *testing.T) {
 			args        map[string]any
 			wantMessage string
 		}{
-			{name: "missing service type", args: map[string]any{}, wantMessage: monitorServiceTypeRequiredError},
+			{name: caseMissingServiceType, args: map[string]any{}, wantMessage: monitorServiceTypeRequiredError},
 			{name: "empty service type", args: map[string]any{monitorServiceTypeParam: ""}, wantMessage: monitorServiceTypeInvalidError},
 			{name: "numeric service type", args: map[string]any{monitorServiceTypeParam: 123}, wantMessage: monitorServiceTypeNonStringError},
 			{name: caseSeparatorServiceType, args: map[string]any{monitorServiceTypeParam: invalidServiceTypeSlash}, wantMessage: monitorServiceTypeInvalidError},
@@ -226,7 +226,7 @@ func TestLinodeMonitorServiceAlertDefinitionsTool(t *testing.T) {
 			args        map[string]any
 			wantMessage string
 		}{
-			{name: "missing service type", args: map[string]any{}, wantMessage: monitorServiceTypeRequiredError},
+			{name: caseMissingServiceType, args: map[string]any{}, wantMessage: monitorServiceTypeRequiredError},
 			{name: "numeric service type", args: map[string]any{monitorServiceTypeParam: 123}, wantMessage: monitorServiceTypeNonStringError},
 			{name: caseSeparatorServiceType, args: map[string]any{monitorServiceTypeParam: invalidServiceTypeSlash}, wantMessage: monitorServiceTypeInvalidError},
 			{name: caseQueryServiceType, args: map[string]any{monitorServiceTypeParam: invalidServiceTypeQuery}, wantMessage: monitorServiceTypeInvalidError},

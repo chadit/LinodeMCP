@@ -44,6 +44,7 @@ const (
 	caseTraversalServiceType   = "traversal service type"
 	caseSeparatorServiceType   = "separator service type"
 	caseQueryServiceType       = "query service type"
+	caseMissingServiceType     = "missing service type"
 
 	// Common JSON request/response keys.
 	keyConfirm                   = "confirm"
