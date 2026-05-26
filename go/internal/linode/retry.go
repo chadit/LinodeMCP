@@ -232,6 +232,13 @@ func (c *Client) GetManagedSSHKey(ctx context.Context) (*ManagedSSHKey, error) {
 	return sshKey, err
 }
 
+// CreateManagedCredential creates a stored Managed credential without retrying
+// the mutating request. Retrying can replay credential creation after a
+// transient error, so this method delegates exactly once.
+func (c *Client) CreateManagedCredential(ctx context.Context, request *CreateManagedCredentialRequest) (*ManagedCredential, error) {
+	return c.httpCreateManagedCredential(ctx, request)
+}
+
 // GetManagedContact retrieves one managed contact with automatic retry on transient failures.
 func (c *Client) GetManagedContact(ctx context.Context, contactID int) (*ManagedContact, error) {
 	var contact *ManagedContact

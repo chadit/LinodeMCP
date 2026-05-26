@@ -44,6 +44,9 @@ const (
 	accountNotificationsPageSizeMax    = 500
 	managedCredentialsPageSizeMin      = 25
 	managedCredentialsPageSizeMax      = 500
+	managedCredentialCreateLabelParam  = "label"
+	managedCredentialCreatePassParam   = "password"
+	managedCredentialCreateUserParam   = "username"
 	accountEventsPageSizeMin           = 25
 	accountEventsPageSizeMax           = 500
 	accountUsersPageSizeMin            = 25
@@ -220,6 +223,28 @@ func NewLinodeManagedSSHKeyTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeManagedCredentialCreateTool creates a tool for creating a Managed credential.
+func NewLinodeManagedCredentialCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_managed_credential_create",
+		"Creates a stored Managed credential for the authenticated account.",
+		[]mcp.ToolOption{
+			mcp.WithString(managedCredentialCreateLabelParam, mcp.Required(),
+				mcp.Description("Label for the Managed credential.")),
+			mcp.WithString(managedCredentialCreatePassParam, mcp.Required(),
+				mcp.Description("Password to store for the Managed credential.")),
+			mcp.WithString(managedCredentialCreateUserParam,
+				mcp.Description("Username to store for the Managed credential.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm creating a stored Managed credential.")),
+		},
+		handleLinodeManagedCredentialCreateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountMaintenanceTool creates a tool for listing account maintenance records.
@@ -3976,6 +4001,74 @@ func managedCredentialsPaginationFromTool(request *mcp.CallToolRequest) (int, in
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeManagedCredentialCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This creates a stored Managed credential. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	createReq, validationMessage := managedCredentialCreateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	credential, createFailure := client.CreateManagedCredential(ctx, createReq)
+	if createFailure == nil {
+		return MarshalToolResponse(credential)
+	}
+
+	return mcp.NewToolResultError("Failed to create linode_managed_credential_create: " + createFailure.Error()), nil
+}
+
+func managedCredentialCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateManagedCredentialRequest, string) {
+	label, validationMessage := stringArgument(request, managedCredentialCreateLabelParam, true)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if strings.TrimSpace(label) == "" {
+		return nil, managedCredentialCreateLabelParam + " is required"
+	}
+
+	password, validationMessage := stringArgument(request, managedCredentialCreatePassParam, true)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if strings.TrimSpace(password) == "" {
+		return nil, managedCredentialCreatePassParam + " is required"
+	}
+
+	username, validationMessage := stringArgument(request, managedCredentialCreateUserParam, false)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	var usernameSet bool
+
+	if _, exists := request.GetArguments()[managedCredentialCreateUserParam]; exists {
+		if strings.TrimSpace(username) == "" {
+			return nil, managedCredentialCreateUserParam + " must be a non-empty string"
+		}
+
+		usernameSet = true
+	}
+
+	req := &linode.CreateManagedCredentialRequest{
+		Label:    label,
+		Password: password,
+	}
+	if usernameSet {
+		req.Username = &username
+	}
+
+	return req, ""
 }
 
 func handleLinodeAccountMaintenanceRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

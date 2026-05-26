@@ -181,6 +181,13 @@ type ManagedSSHKey struct {
 	SSHKey string `json:"ssh_key"`
 }
 
+// CreateManagedCredentialRequest contains the fields for POST /managed/credentials.
+type CreateManagedCredentialRequest struct {
+	Label    string  `json:"label"`
+	Password string  `json:"password"`
+	Username *string `json:"username,omitempty"`
+}
+
 // AccountMaintenance represents one account maintenance record.
 type AccountMaintenance struct {
 	Entity AccountMaintenanceEntity `json:"entity"`
