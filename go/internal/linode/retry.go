@@ -458,6 +458,15 @@ func (c *Client) DeleteManagedService(ctx context.Context, serviceID int) error 
 	})
 }
 
+// DisableManagedService disables one Managed service monitor without retrying the
+// mutating request. Disabling a monitor is not replay-safe after a transient
+// error, so this method delegates exactly once.
+func (c *Client) DisableManagedService(ctx context.Context, serviceID int) error {
+	return c.executeWithoutRetry(ctx, "DisableManagedService", func() error {
+		return c.httpDisableManagedService(ctx, serviceID)
+	})
+}
+
 // ListManagedServices retrieves Managed services with automatic retry on transient failures.
 func (c *Client) ListManagedServices(ctx context.Context, page, pageSize int) (*PaginatedResponse[ManagedService], error) {
 	var services *PaginatedResponse[ManagedService]

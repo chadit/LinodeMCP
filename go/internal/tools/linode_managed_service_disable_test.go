@@ -2,6 +2,7 @@ package tools_test
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -16,19 +17,22 @@ import (
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-const managedServiceDeleteToolName = "linode_managed_service_delete"
+const (
+	managedServiceDisableToolName = "linode_managed_service_disable"
+	managedServiceDisableToolPath = "/managed/services/9944/disable"
+)
 
-func TestLinodeManagedServiceDeleteTool(t *testing.T) {
+func TestLinodeManagedServiceDisableTool(t *testing.T) {
 	t.Parallel()
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
 
 		cfg := &config.Config{}
-		tool, capability, handler := tools.NewLinodeManagedServiceDeleteTool(cfg)
+		tool, capability, handler := tools.NewLinodeManagedServiceDisableTool(cfg)
 
-		assert.Equal(t, managedServiceDeleteToolName, tool.Name, "tool name should match")
-		assert.Equal(t, profiles.CapDestroy, capability, "managed service delete should be destructive")
+		assert.Equal(t, managedServiceDisableToolName, tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapAdmin, capability, "managed service disable should be administrative")
 		require.NotNil(t, handler, "handler should not be nil")
 
 		props := tool.InputSchema.Properties
@@ -64,7 +68,7 @@ func TestLinodeManagedServiceDeleteTool(t *testing.T) {
 				}))
 				t.Cleanup(srv.Close)
 
-				_, _, handler := tools.NewLinodeManagedServiceDeleteTool(managedServiceConfig(srv.URL))
+				_, _, handler := tools.NewLinodeManagedServiceDisableTool(managedServiceConfig(srv.URL))
 
 				args := map[string]any{keyManagedServiceID: managedServiceToolIDValue}
 				if testCase.set {
@@ -113,7 +117,7 @@ func TestLinodeManagedServiceDeleteTool(t *testing.T) {
 				}))
 				t.Cleanup(srv.Close)
 
-				_, _, handler := tools.NewLinodeManagedServiceDeleteTool(managedServiceConfig(srv.URL))
+				_, _, handler := tools.NewLinodeManagedServiceDisableTool(managedServiceConfig(srv.URL))
 
 				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
 
@@ -130,16 +134,21 @@ func TestLinodeManagedServiceDeleteTool(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			assert.Equal(t, managedServiceToolPathValue, r.URL.Path, "request path should include service ID")
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, managedServiceDisableToolPath, r.URL.Path, "request path should include service ID and disable action")
 			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
 			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+
+			body, err := io.ReadAll(r.Body)
+			assert.NoError(t, err)
+			assert.Empty(t, body, "disable request should not include a body")
+
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
 		}))
 		t.Cleanup(srv.Close)
 
-		_, _, handler := tools.NewLinodeManagedServiceDeleteTool(managedServiceConfig(srv.URL))
+		_, _, handler := tools.NewLinodeManagedServiceDisableTool(managedServiceConfig(srv.URL))
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyManagedServiceID: managedServiceToolIDValue, keyConfirm: true}))
 
@@ -148,29 +157,29 @@ func TestLinodeManagedServiceDeleteTool(t *testing.T) {
 		assert.False(t, result.IsError, "should not be an error result")
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "deleted successfully", "response should confirm deletion")
+		assert.Contains(t, textContent.Text, "disabled successfully", "response should confirm disable")
 	})
 
 	t.Run("api error", func(t *testing.T) {
 		t.Parallel()
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
-			assert.Equal(t, managedServiceToolPathValue, r.URL.Path, "request path should include service ID")
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, managedServiceDisableToolPath, r.URL.Path, "request path should include service ID and disable action")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
 		}))
 		t.Cleanup(srv.Close)
 
-		_, _, handler := tools.NewLinodeManagedServiceDeleteTool(managedServiceConfig(srv.URL))
+		_, _, handler := tools.NewLinodeManagedServiceDisableTool(managedServiceConfig(srv.URL))
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyManagedServiceID: managedServiceToolIDValue, keyConfirm: true}))
 
 		require.NoError(t, err, "handler should return API failures as tool errors")
 		require.NotNil(t, result, "result should not be nil")
 		assert.True(t, result.IsError, "API failure should be an error result")
-		assertErrorContains(t, result, "Failed to delete linode_managed_service_delete")
+		assertErrorContains(t, result, "Failed to disable linode_managed_service_disable")
 		assertErrorContains(t, result, errForbidden)
 	})
 }
