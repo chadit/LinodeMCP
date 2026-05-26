@@ -34,6 +34,7 @@ const (
 	endpointLongviewSubscriptions        = "/longview/subscriptions"
 	endpointMonitorAlertChannels         = "/monitor/alert-channels"
 	endpointMonitorAlertDefinitions      = "/monitor/alert-definitions"
+	endpointMonitorDashboards            = "/monitor/dashboards"
 	endpointAccountPaymentMethods        = "/account/payment-methods"
 	endpointAccountEvents                = "/account/events"
 	endpointAccountUsers                 = "/account/users"
