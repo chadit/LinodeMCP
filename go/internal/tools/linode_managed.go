@@ -10,9 +10,28 @@ import (
 )
 
 const (
-	managedContactsPageSizeMin = 25
-	managedContactsPageSizeMax = 500
+	managedContactsPageSizeMin     = 25
+	managedContactsPageSizeMax     = 500
+	managedContactGetIDParam       = "contact_id"
+	errManagedContactGetIDPositive = "contact_id must be a positive integer"
+	maxManagedContactGetIDFromJSON = 9007199254740991
 )
+
+// NewLinodeManagedContactGetTool creates a tool for retrieving one managed contact.
+func NewLinodeManagedContactGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_managed_contact_get",
+		"Gets one Linode Managed contact by ID.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(managedContactGetIDParam, mcp.Required(),
+				mcp.Description("Managed contact ID to retrieve.")),
+		},
+		handleLinodeManagedContactGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
 
 // NewLinodeManagedContactsTool creates a tool for listing Managed contacts.
 func NewLinodeManagedContactsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
@@ -28,6 +47,49 @@ func NewLinodeManagedContactsTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+func handleLinodeManagedContactGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	contactID, validationMessage := managedContactIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	contact, getFailure := client.GetManagedContact(ctx, contactID)
+	if getFailure == nil {
+		return MarshalToolResponse(contact)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_managed_contact_get: " + getFailure.Error()), nil
+}
+
+func managedContactIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	raw, exists := request.GetArguments()[managedContactGetIDParam]
+	if !exists {
+		return 0, "contact_id is required"
+	}
+
+	switch value := raw.(type) {
+	case int:
+		if value <= 0 || value > maxManagedContactGetIDFromJSON {
+			return 0, errManagedContactGetIDPositive
+		}
+
+		return value, ""
+	case float64:
+		if value <= 0 || value > maxManagedContactGetIDFromJSON || value != float64(int64(value)) {
+			return 0, errManagedContactGetIDPositive
+		}
+
+		return int(value), ""
+	default:
+		return 0, errManagedContactGetIDPositive
+	}
 }
 
 func handleLinodeManagedContactsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
