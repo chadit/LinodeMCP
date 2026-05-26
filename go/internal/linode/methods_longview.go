@@ -90,6 +90,28 @@ func (c *Client) httpGetLongviewClient(ctx context.Context, clientID string) (*L
 	return &client, nil
 }
 
+// httpGetLongviewSubscription retrieves one Longview subscription by ID.
+func (c *Client) httpGetLongviewSubscription(ctx context.Context, subscriptionID string) (*LongviewSubscription, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointLongviewSubscriptions + "/" + url.PathEscape(subscriptionID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetLongviewSubscription", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var subscription LongviewSubscription
+	if err := c.handleResponse(resp, &subscription); err != nil {
+		return nil, err
+	}
+
+	return &subscription, nil
+}
+
 // httpUpdateLongviewPlan updates the account Longview subscription plan.
 func (c *Client) httpUpdateLongviewPlan(ctx context.Context, req *UpdateLongviewPlanRequest) (*LongviewSubscription, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
