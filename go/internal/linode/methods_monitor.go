@@ -5,6 +5,28 @@ import (
 	"net/http"
 )
 
+// httpListMonitorAlertDefinitions retrieves monitoring alert definitions.
+func (c *Client) httpListMonitorAlertDefinitions(ctx context.Context, page, pageSize int) (*PaginatedResponse[AlertDefinition], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointMonitorAlertDefinitions, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListMonitorAlertDefinitions", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var definitions PaginatedResponse[AlertDefinition]
+	if err := c.handleResponse(resp, &definitions); err != nil {
+		return nil, err
+	}
+
+	return &definitions, nil
+}
+
 // httpListMonitorAlertChannels retrieves monitoring alert channels.
 func (c *Client) httpListMonitorAlertChannels(ctx context.Context, page, pageSize int) (*PaginatedResponse[AlertChannel], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
