@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -12,6 +13,9 @@ import (
 
 const (
 	monitorServicesToolName       = "linode_monitor_services"
+	monitorServiceGetToolName     = "linode_monitor_service_get"
+	monitorServiceTypeParam       = "service_type"
+	errMonitorServiceTypeInvalid  = "service_type must be a single non-empty service type slug"
 	monitorDashboardIDParam       = "dashboard_id"
 	errMonitorDashboardIDMissing  = "dashboard_id is required"
 	errMonitorDashboardIDPositive = "dashboard_id must be a positive integer"
@@ -51,6 +55,79 @@ func listMonitorServices(ctx context.Context, client *linode.Client) (*linode.Pa
 	}
 
 	return services, ""
+}
+
+// NewLinodeMonitorServiceGetTool creates a tool for retrieving one supported monitoring service type.
+func NewLinodeMonitorServiceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		monitorServiceGetToolName,
+		"Gets details for one supported monitoring service type by service_type.",
+		[]mcp.ToolOption{
+			mcp.WithString(monitorServiceTypeParam, mcp.Required(), mcp.Description("Supported monitoring service type slug to retrieve.")),
+		},
+		handleLinodeMonitorServiceGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleLinodeMonitorServiceGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	serviceType, validationMessage := monitorServiceTypeFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	service, getFailureMessage := getMonitorService(ctx, client, serviceType)
+	if getFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to retrieve " + monitorServiceGetToolName + ": " + getFailureMessage), nil
+	}
+
+	return MarshalToolResponse(service)
+}
+
+func monitorServiceTypeFromTool(request *mcp.CallToolRequest) (string, string) {
+	raw, validationMessage := stringArgument(request, monitorServiceTypeParam, true)
+	if validationMessage != "" {
+		return "", validationMessage
+	}
+
+	value := strings.TrimSpace(raw)
+	if value == "" || value != raw || !isMonitorServiceTypeSlug(value) {
+		return "", errMonitorServiceTypeInvalid
+	}
+
+	return value, ""
+}
+
+func isMonitorServiceTypeSlug(value string) bool {
+	for index, char := range value {
+		if char >= 'a' && char <= 'z' || char >= '0' && char <= '9' {
+			continue
+		}
+
+		if char == '-' && index != 0 && index != len(value)-1 {
+			continue
+		}
+
+		return false
+	}
+
+	return true
+}
+
+func getMonitorService(ctx context.Context, client *linode.Client, serviceType string) (linode.MonitorService, string) {
+	service, err := client.GetMonitorService(ctx, serviceType)
+	if err != nil {
+		return linode.MonitorService{}, err.Error()
+	}
+
+	return service, ""
 }
 
 // NewLinodeMonitorDashboardsTool creates a tool for listing monitoring dashboards.
