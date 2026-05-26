@@ -277,6 +277,13 @@ func (c *Client) ListMaintenancePolicies(ctx context.Context, page, pageSize int
 	return policies, err
 }
 
+// DeleteManagedContact deletes a Managed contact without retrying the destructive request.
+func (c *Client) DeleteManagedContact(ctx context.Context, contactID int) error {
+	return c.executeWithoutRetry(ctx, "DeleteManagedContact", func() error {
+		return c.httpDeleteManagedContact(ctx, contactID)
+	})
+}
+
 // ListManagedContacts retrieves Managed contacts with automatic retry on transient failures.
 func (c *Client) ListManagedContacts(ctx context.Context, page, pageSize int) (*PaginatedResponse[ManagedContact], error) {
 	var contacts *PaginatedResponse[ManagedContact]

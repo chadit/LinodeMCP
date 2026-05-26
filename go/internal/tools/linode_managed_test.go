@@ -21,6 +21,8 @@ const (
 	managedContactsToolPath              = "/managed/contacts"
 	managedContactsToolName              = "John Doe"
 	managedContactsToolEmail             = "john.doe@example.org"
+	managedContactDeleteIDKey            = "contact_id"
+	managedContactDeleteID               = float64(567)
 	managedContactUpdateIDKey            = "contact_id"
 	managedContactUpdateIDMessage        = "contact_id must be a positive integer"
 	managedContactUpdateEmptyCase        = "empty update"
@@ -28,6 +30,164 @@ const (
 	managedContactUpdateGroupKey         = "group"
 	managedContactUpdateCaseNumericEmail = "numeric email"
 )
+
+func TestLinodeManagedContactDeleteTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeManagedContactDeleteTool(cfg)
+
+		assert.Equal(t, "linode_managed_contact_delete", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapDestroy, capability, "tool should be destructive")
+		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "delete tool must require confirm")
+		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be required")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			assert.Equal(t, managedContactsToolPath+"/567", r.URL.Path, "request path should include contact ID")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		}))
+		t.Cleanup(srv.Close)
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeManagedContactDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{managedContactDeleteIDKey: managedContactDeleteID, keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "deleted successfully", "response should confirm deletion")
+	})
+
+	t.Run("confirm required before client", func(t *testing.T) {
+		t.Parallel()
+
+		var calls atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			calls.Add(1)
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(srv.Close)
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		cases := map[string]any{
+			caseMissingConfirm:         nil,
+			caseFalseConfirmRejected:   false,
+			caseStringConfirmRejected:  boolStringTrue,
+			caseNumericConfirmRejected: float64(1),
+		}
+
+		t.Cleanup(func() {
+			assert.Equal(t, int32(0), calls.Load(), "confirm rejection must happen before client call")
+		})
+
+		for name, confirm := range cases {
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+
+				_, _, handler := tools.NewLinodeManagedContactDeleteTool(cfg)
+
+				args := map[string]any{managedContactDeleteIDKey: managedContactDeleteID}
+				if confirm != nil {
+					args[keyConfirm] = confirm
+				}
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, args))
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				assert.True(t, result.IsError, "missing or invalid confirm should be an error result")
+				assertErrorContains(t, result, errConfirmEqualsTrue)
+			})
+		}
+	})
+
+	t.Run("invalid contact id rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		var calls atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			calls.Add(1)
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(srv.Close)
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		cases := map[string]any{
+			caseMissing:             nil,
+			caseSlash:               "56/7",
+			caseQuery:               "567?x=1",
+			caseDotTraversal:        pathTraversalValue,
+			"oversized contact id":  float64(9007199254740992),
+			caseZeroContactID:       float64(0),
+			"negative contact id":   float64(-1),
+			"fractional contact id": float64(567.5),
+		}
+
+		t.Cleanup(func() {
+			assert.Equal(t, int32(0), calls.Load(), "contact ID rejection must happen before client call")
+		})
+
+		for name, contactID := range cases {
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+
+				_, _, handler := tools.NewLinodeManagedContactDeleteTool(cfg)
+
+				args := map[string]any{keyConfirm: true}
+				if contactID != nil {
+					args[managedContactDeleteIDKey] = contactID
+				}
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, args))
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				assert.True(t, result.IsError, "invalid contact ID should be an error result")
+				assertErrorContains(t, result, "contact_id must be a positive integer")
+			})
+		}
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			assert.Equal(t, managedContactsToolPath+"/567", r.URL.Path, "request path should include contact ID")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		t.Cleanup(srv.Close)
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeManagedContactDeleteTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{managedContactDeleteIDKey: managedContactDeleteID, keyConfirm: true}))
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		assertErrorContains(t, result, "Failed to delete linode_managed_contact_delete")
+		assertErrorContains(t, result, errForbidden)
+	})
+}
 
 func TestLinodeManagedContactsTool(t *testing.T) {
 	t.Parallel()
