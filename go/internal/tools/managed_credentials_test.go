@@ -546,11 +546,11 @@ func TestLinodeManagedCredentialUpdateTool(t *testing.T) {
 			args        map[string]any
 			wantMessage string
 		}{
-			{name: "missing credential id", args: map[string]any{keyLabel: managedCredentialsToolLabel, keyConfirm: true}, wantMessage: errCredentialIDPositive},
-			{name: "zero credential id", args: map[string]any{keyCredentialID: 0, keyLabel: managedCredentialsToolLabel, keyConfirm: true}, wantMessage: errCredentialIDPositive},
+			{name: caseMissingCredentialID, args: map[string]any{keyLabel: managedCredentialsToolLabel, keyConfirm: true}, wantMessage: errCredentialIDPositive},
+			{name: caseZeroCredentialID, args: map[string]any{keyCredentialID: 0, keyLabel: managedCredentialsToolLabel, keyConfirm: true}, wantMessage: errCredentialIDPositive},
 			{name: "slash credential id", args: map[string]any{keyCredentialID: "9991/2", keyLabel: managedCredentialsToolLabel, keyConfirm: true}, wantMessage: errCredentialIDPositive},
 			{name: "query credential id", args: map[string]any{keyCredentialID: "9991?x=1", keyLabel: managedCredentialsToolLabel, keyConfirm: true}, wantMessage: errCredentialIDPositive},
-			{name: "traversal credential id", args: map[string]any{keyCredentialID: pathTraversalValue, keyLabel: managedCredentialsToolLabel, keyConfirm: true}, wantMessage: errCredentialIDPositive},
+			{name: caseTraversalCredentialID, args: map[string]any{keyCredentialID: pathTraversalValue, keyLabel: managedCredentialsToolLabel, keyConfirm: true}, wantMessage: errCredentialIDPositive},
 			{name: caseMissingLabel, args: map[string]any{keyCredentialID: 9991, keyConfirm: true}, wantMessage: errLabelRequired},
 			{name: caseNonStringLabel, args: map[string]any{keyCredentialID: 9991, keyLabel: 42, keyConfirm: true}, wantMessage: errLabelString},
 		}
