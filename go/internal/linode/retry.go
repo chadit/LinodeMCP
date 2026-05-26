@@ -247,6 +247,21 @@ func (c *Client) ListMaintenancePolicies(ctx context.Context, page, pageSize int
 	return policies, err
 }
 
+// ListManagedContacts retrieves Managed contacts with automatic retry on transient failures.
+func (c *Client) ListManagedContacts(ctx context.Context, page, pageSize int) (*PaginatedResponse[ManagedContact], error) {
+	var contacts *PaginatedResponse[ManagedContact]
+
+	err := c.executeWithRetry(ctx, "ListManagedContacts", func() error {
+		var err error
+
+		contacts, err = c.httpListManagedContacts(ctx, page, pageSize)
+
+		return err
+	})
+
+	return contacts, err
+}
+
 // ListAccountNotifications retrieves account notifications with automatic retry on transient failures.
 func (c *Client) ListAccountNotifications(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountNotification], error) {
 	var notifications *PaginatedResponse[AccountNotification]

@@ -28,7 +28,7 @@ func TestClientListLongviewTypesSuccess(t *testing.T) {
 			keyData: []map[string]any{{
 				keyClientsIncluded: 10,
 				keyID:              longviewPlan10,
-				keyLabel:           "Longview Pro 10 pack",
+				keyLabel:           longviewPlan10Label,
 				keyPrice:           map[string]float64{keyHourly: 0.06, keyMonthly: 40},
 			}},
 			keyPage:    1,
@@ -45,7 +45,7 @@ func TestClientListLongviewTypesSuccess(t *testing.T) {
 	require.NotNil(t, got)
 	require.Len(t, got.Data, 1)
 	assert.Equal(t, longviewPlan10, got.Data[0].ID)
-	assert.Equal(t, "Longview Pro 10 pack", got.Data[0].Label)
+	assert.Equal(t, longviewPlan10Label, got.Data[0].Label)
 	assert.Equal(t, 10, got.Data[0].ClientsIncluded)
 	assert.InEpsilon(t, 0.06, got.Data[0].Price.Hourly, 0.001)
 	assert.InEpsilon(t, 40.0, got.Data[0].Price.Monthly, 0.001)

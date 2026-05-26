@@ -835,6 +835,7 @@ func coreToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeAccountAgreementsTool,
 		tools.NewLinodeAccountMaintenanceTool,
 		tools.NewLinodeMaintenancePoliciesTool,
+		tools.NewLinodeManagedContactsTool,
 		tools.NewLinodeAccountNotificationsTool,
 		tools.NewLinodeLongviewPlanTool,
 		tools.NewLinodeLongviewTypesTool,
