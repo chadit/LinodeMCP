@@ -48,6 +48,19 @@ type ManagedLinodeSettingsSSH struct {
 	User   *string `json:"user"`
 }
 
+// UpdateManagedLinodeSettingsRequest contains mutable Managed Linode settings fields.
+type UpdateManagedLinodeSettingsRequest struct {
+	SSH *UpdateManagedLinodeSettingsSSH `json:"ssh,omitempty"`
+}
+
+// UpdateManagedLinodeSettingsSSH contains mutable SSH settings for a Managed Linode.
+type UpdateManagedLinodeSettingsSSH struct {
+	Access *bool   `json:"access,omitempty"`
+	IP     *string `json:"ip,omitempty"`
+	Port   *int    `json:"port,omitempty"`
+	User   *string `json:"user,omitempty"`
+}
+
 // ManagedService represents a service monitored by Linode Managed.
 type ManagedService struct {
 	ID                int     `json:"id"`

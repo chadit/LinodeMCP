@@ -402,6 +402,21 @@ func (c *Client) ListManagedLinodeSettings(ctx context.Context, page, pageSize i
 	return settings, err
 }
 
+// UpdateManagedLinodeSettings updates Managed Linode settings without retrying the mutating request.
+func (c *Client) UpdateManagedLinodeSettings(ctx context.Context, linodeID int, req UpdateManagedLinodeSettingsRequest) (*ManagedLinodeSettings, error) {
+	var settings *ManagedLinodeSettings
+
+	err := c.executeWithoutRetry(ctx, "UpdateManagedLinodeSettings", func() error {
+		var err error
+
+		settings, err = c.httpUpdateManagedLinodeSettings(ctx, linodeID, req)
+
+		return err
+	})
+
+	return settings, err
+}
+
 // ListManagedServices retrieves Managed services with automatic retry on transient failures.
 func (c *Client) ListManagedServices(ctx context.Context, page, pageSize int) (*PaginatedResponse[ManagedService], error) {
 	var services *PaginatedResponse[ManagedService]
