@@ -27,6 +27,7 @@ const (
 	endpointAccountOAuthClients          = "/account/oauth-clients"
 	endpointLongviewClients              = "/longview/clients"
 	endpointLongviewPlan                 = "/longview/plan"
+	endpointLongviewSubscriptions        = "/longview/subscriptions"
 	endpointAccountPaymentMethods        = "/account/payment-methods"
 	endpointAccountEvents                = "/account/events"
 	endpointAccountUsers                 = "/account/users"

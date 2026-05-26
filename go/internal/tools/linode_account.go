@@ -28,6 +28,8 @@ const (
 	accountOAuthClientsPageSizeMax     = 500
 	longviewClientsPageSizeMin         = 25
 	longviewClientsPageSizeMax         = 500
+	longviewSubscriptionsPageSizeMin   = 25
+	longviewSubscriptionsPageSizeMax   = 500
 	longviewClientIDParam              = "client_id"
 	maxLongviewClientIDFromJSON        = 9007199254740991
 	errLongviewClientIDPositive        = "client_id must be a positive integer"

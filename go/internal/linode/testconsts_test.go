@@ -5,14 +5,18 @@ package linode_test
 // retry_test.go, and retry_wrappers_test.go.
 const (
 	// JSON pagination keys returned by the Linode API.
-	keyData        = "data"
-	keyDescription = "description"
-	keyExample     = "example"
-	keyPage        = "page"
-	keyPages       = "pages"
-	keyResults     = "results"
-	keyErrors      = "errors"
-	keyReason      = "reason"
+	keyData            = "data"
+	keyDescription     = "description"
+	keyExample         = "example"
+	keyPage            = "page"
+	keyPages           = "pages"
+	keyResults         = "results"
+	keyErrors          = "errors"
+	keyReason          = "reason"
+	keyClientsIncluded = "clients_included"
+	keyPrice           = "price"
+	keyHourly          = "hourly"
+	keyMonthly         = "monthly"
 
 	errTemporaryFailure         = "temporary failure"
 	longviewClientCreated       = "2018-01-01T00:01:01"

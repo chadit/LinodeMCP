@@ -27,6 +27,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_account_user_delete", Capability: profiles.CapDestroy},
 		{Name: "linode_account_oauth_clients", Capability: profiles.CapRead},
 		{Name: "linode_longview_plan", Capability: profiles.CapRead},
+		{Name: "linode_longview_subscriptions", Capability: profiles.CapRead},
 		{Name: "linode_longview_clients", Capability: profiles.CapRead},
 		{Name: "linode_longview_client_update", Capability: profiles.CapAdmin},
 		{Name: "linode_longview_client_delete", Capability: profiles.CapDestroy},
@@ -546,6 +547,12 @@ func TestCategoriesIncludesLongviewClientsInMonitor(t *testing.T) {
 	t.Parallel()
 
 	assert.Contains(t, profiles.Categories("linode_longview_clients"), "monitor")
+}
+
+func TestCategoriesIncludesLongviewSubscriptionsInMonitor(t *testing.T) {
+	t.Parallel()
+
+	assert.Contains(t, profiles.Categories("linode_longview_subscriptions"), "monitor")
 }
 
 func TestCategoriesDatabasesTools(t *testing.T) {
