@@ -169,6 +169,13 @@ type AccountAgreements struct {
 	PrivacyPolicy          bool `json:"privacy_policy"`
 }
 
+// ManagedCredential represents one stored credential returned by GET /managed/credentials.
+type ManagedCredential struct {
+	ID            int    `json:"id"`
+	Label         string `json:"label"`
+	LastDecrypted string `json:"last_decrypted"`
+}
+
 // AccountMaintenance represents one account maintenance record.
 type AccountMaintenance struct {
 	Entity AccountMaintenanceEntity `json:"entity"`
