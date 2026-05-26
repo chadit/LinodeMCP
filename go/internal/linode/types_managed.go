@@ -16,6 +16,19 @@ type CreateManagedContactPhoneRequest struct {
 	Secondary *string `json:"secondary,omitempty"`
 }
 
+// CreateManagedServiceRequest contains fields for POST /managed/services.
+type CreateManagedServiceRequest struct {
+	Label             string  `json:"label"`
+	ServiceType       string  `json:"service_type"`
+	Address           string  `json:"address"`
+	Timeout           int     `json:"timeout"`
+	Body              *string `json:"body,omitempty"`
+	ConsultationGroup *string `json:"consultation_group,omitempty"`
+	Credentials       []int   `json:"credentials,omitempty"`
+	Notes             *string `json:"notes,omitempty"`
+	Region            *string `json:"region,omitempty"`
+}
+
 // ManagedContact represents a contact for Linode Managed service alerts.
 type ManagedContact struct {
 	ID      int                 `json:"id"`
