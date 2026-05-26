@@ -672,6 +672,13 @@ func (c *Client) CreateAccountUser(ctx context.Context, request *CreateAccountUs
 	return c.httpCreateAccountUser(ctx, request)
 }
 
+// CreateManagedContact creates a managed contact without retrying the mutating
+// request. Managed contact creation is not guaranteed idempotent after a transient
+// error, so this method delegates exactly once.
+func (c *Client) CreateManagedContact(ctx context.Context, request *CreateManagedContactRequest) (*ManagedContact, error) {
+	return c.httpCreateManagedContact(ctx, request)
+}
+
 // ListAccountLogins retrieves account user logins with automatic retry on transient failures.
 func (c *Client) ListAccountLogins(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountLogin], error) {
 	var logins *PaginatedResponse[AccountLogin]

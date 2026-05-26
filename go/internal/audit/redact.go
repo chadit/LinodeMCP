@@ -63,7 +63,8 @@ func RedactionFieldSet() map[string]struct{} {
 // equivalent at `python/src/linodemcp/audit/redact.py`.
 //
 // Names deliberately left out so login identifiers stay readable in
-// audit reports: email, first_name, last_name, company. Names dropped
+// audit reports: email, first_name, last_name, company. Contact-specific
+// name/email tool args use contact_name/contact_email and are redacted. Names dropped
 // after source review because they collide with non-PII tool args:
 // country (linode_regions_list filter), address (network/IP address
 // in linode_instance_ips, linode_networking, linode_nodebalancers).
@@ -72,8 +73,12 @@ func RedactionFieldsPII() []string {
 		"address_1",
 		"address_2",
 		"city",
+		"contact_email",
+		"contact_name",
 		"phone",
 		"phone_number",
+		"phone_primary",
+		"phone_secondary",
 		"state",
 		"tax_id",
 		"zip",

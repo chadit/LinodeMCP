@@ -65,6 +65,15 @@ const (
 	accountUserGrantsVPCParam          = "vpc"
 	accountUserGrantsLKEClusterParam   = "lkecluster"
 	accountUserEmailParam              = "email"
+	managedContactNameParam            = "contact_name"
+	managedContactEmailParam           = "contact_email"
+	managedContactGroupParam           = "group"
+	managedContactIDParam              = "id"
+	managedContactUpdatedParam         = "updated"
+	managedContactPhonePrimaryParam    = "phone_primary"
+	managedContactPhoneSecondaryParam  = "phone_secondary"
+	errManagedContactFieldRequired     = "at least one managed contact field is required"
+	errManagedContactReadOnlyField     = "id and updated are read-only and cannot be set when creating a managed contact"
 	accountLoginsPageSizeMin           = 25
 	accountLoginsPageSizeMax           = 500
 	maxAccountLoginIDFromJSON          = 9007199254740991
@@ -384,6 +393,26 @@ func NewLinodeAccountUserCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm account user creation.")),
 		},
 		handleLinodeAccountUserCreateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
+// NewLinodeManagedContactCreateTool creates a tool for creating managed contacts.
+func NewLinodeManagedContactCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_managed_contact_create",
+		"Creates a managed contact for service monitor issue handling.",
+		[]mcp.ToolOption{
+			mcp.WithString(managedContactNameParam, mcp.Description("Name for the managed contact.")),
+			mcp.WithString(managedContactEmailParam, mcp.Description("Email address for the managed contact.")),
+			mcp.WithString(managedContactGroupParam, mcp.Description("Display grouping for the managed contact.")),
+			mcp.WithString(managedContactPhonePrimaryParam, mcp.Description("Primary phone number for the managed contact.")),
+			mcp.WithString(managedContactPhoneSecondaryParam, mcp.Description("Secondary phone number for the managed contact.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm managed contact creation.")),
+		},
+		handleLinodeManagedContactCreateRequest,
 	)
 
 	return tool, profiles.CapAdmin, handler
@@ -2646,6 +2675,105 @@ func accountUserCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.Cre
 	}
 
 	return &linode.CreateAccountUserRequest{Username: username, Email: email}, ""
+}
+
+func handleLinodeManagedContactCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This creates a managed contact. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	createRequest, validationMessage := managedContactCreateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	contact, createFailure := client.CreateManagedContact(ctx, createRequest)
+	if createFailure == nil {
+		return MarshalToolResponse(contact)
+	}
+
+	return mcp.NewToolResultError("Failed to create linode_managed_contact_create: " + createFailure.Error()), nil
+}
+
+func managedContactCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateManagedContactRequest, string) {
+	args := request.GetArguments()
+	if _, exists := args[managedContactIDParam]; exists {
+		return nil, errManagedContactReadOnlyField
+	}
+
+	if _, exists := args[managedContactUpdatedParam]; exists {
+		return nil, errManagedContactReadOnlyField
+	}
+
+	var (
+		createRequest linode.CreateManagedContactRequest
+		fieldSet      bool
+	)
+
+	if validationMessage := optionalManagedContactString(args, managedContactNameParam, &createRequest.Name); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if createRequest.Name != nil {
+		fieldSet = true
+	}
+
+	if validationMessage := optionalManagedContactString(args, managedContactEmailParam, &createRequest.Email); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if createRequest.Email != nil {
+		fieldSet = true
+	}
+
+	if validationMessage := optionalManagedContactString(args, managedContactGroupParam, &createRequest.Group); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if createRequest.Group != nil {
+		fieldSet = true
+	}
+
+	var phone linode.CreateManagedContactPhoneRequest
+	if validationMessage := optionalManagedContactString(args, managedContactPhonePrimaryParam, &phone.Primary); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if validationMessage := optionalManagedContactString(args, managedContactPhoneSecondaryParam, &phone.Secondary); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if phone.Primary != nil || phone.Secondary != nil {
+		createRequest.Phone = &phone
+		fieldSet = true
+	}
+
+	if !fieldSet {
+		return nil, errManagedContactFieldRequired
+	}
+
+	return &createRequest, ""
+}
+
+func optionalManagedContactString(args map[string]any, name string, target **string) string {
+	raw, exists := args[name]
+	if !exists {
+		return ""
+	}
+
+	value, isString := raw.(string)
+	if !isString || strings.TrimSpace(value) == "" {
+		return name + " must be a non-empty string"
+	}
+
+	*target = &value
+
+	return ""
 }
 
 func requiredAccountUserString(args map[string]any, name string) (string, string) {

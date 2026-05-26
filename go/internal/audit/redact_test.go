@@ -9,6 +9,11 @@ import (
 	"github.com/chadit/LinodeMCP/internal/audit"
 )
 
+const (
+	argContactEmail = "contact_email"
+	argContactName  = "contact_name"
+)
+
 // TestRedactionListNoDuplicates guards against an accidental
 // duplicate entry. A duplicate doesn't break behavior but would
 // surface as a flaky parity test on the Python side.
@@ -168,8 +173,12 @@ func TestRedactionFieldsPIIList(t *testing.T) {
 		"address_1",
 		"address_2",
 		"city",
+		argContactEmail,
+		argContactName,
 		"phone",
 		"phone_number",
+		"phone_primary",
+		"phone_secondary",
 		"state",
 		"tax_id",
 		"zip",
@@ -219,14 +228,16 @@ func TestRedactWithPIIScrubsPIIFields(t *testing.T) {
 	t.Parallel()
 
 	args := map[string]any{
-		argLinodeID: 42,
-		argKeyLabel: "primary",
-		argKeyToken: valFakeToken,
-		argTaxID:    "TX-99",
-		argPhone:    "+1-555-0100",
-		argAddress1: "123 Main St",
-		argCity:     "Springfield",
-		"country":   "us", // not in PII list, must pass through
+		argLinodeID:     42,
+		argKeyLabel:     "primary",
+		argKeyToken:     valFakeToken,
+		argTaxID:        "TX-99",
+		argPhone:        "+1-555-0100",
+		argAddress1:     "123 Main St",
+		argCity:         "Springfield",
+		argContactName:  "Jane Doe",
+		argContactEmail: "jane@example.org",
+		"country":       "us", // not in PII list, must pass through
 	}
 
 	redacted, keys := audit.RedactWithPII(args)
@@ -240,8 +251,10 @@ func TestRedactWithPIIScrubsPIIFields(t *testing.T) {
 	assert.True(t, audit.IsRedacted(redacted[argPhone]))
 	assert.True(t, audit.IsRedacted(redacted[argAddress1]))
 	assert.True(t, audit.IsRedacted(redacted[argCity]))
+	assert.True(t, audit.IsRedacted(redacted[argContactName]))
+	assert.True(t, audit.IsRedacted(redacted[argContactEmail]))
 	assert.ElementsMatch(t,
-		[]string{argKeyToken, argTaxID, argPhone, argAddress1, argCity},
+		[]string{argKeyToken, argTaxID, argPhone, argAddress1, argCity, argContactName, argContactEmail},
 		keys,
 		"redacted-key list must report each scrubbed name once")
 }
