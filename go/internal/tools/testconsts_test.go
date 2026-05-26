@@ -39,6 +39,11 @@ const (
 	interfacePrimaryJSON       = `{"primary":true}`
 	memberLabelFixture         = "Engineering"
 	memberTokenFixture         = "member-token"
+	invalidServiceTypeSlash    = "dbaas/postgres"
+	invalidServiceTypeQuery    = "dbaas?x=1"
+	caseTraversalServiceType   = "traversal service type"
+	caseSeparatorServiceType   = "separator service type"
+	caseQueryServiceType       = "query service type"
 
 	// Common JSON request/response keys.
 	keyConfirm                   = "confirm"

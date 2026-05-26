@@ -11,13 +11,28 @@ type MonitorDashboard map[string]any
 
 // AlertDefinition describes a monitoring alert definition.
 type AlertDefinition struct {
-	ID          int            `json:"id"`
-	Label       string         `json:"label"`
-	Type        string         `json:"type"`
-	ServiceType string         `json:"service_type"`
-	Description string         `json:"description"`
-	Severity    int            `json:"severity"`
-	Criteria    map[string]any `json:"criteria"`
+	ID                int            `json:"id"`
+	Label             string         `json:"label"`
+	Type              string         `json:"type"`
+	ServiceType       string         `json:"service_type"`
+	Description       string         `json:"description"`
+	Severity          int            `json:"severity"`
+	Criteria          map[string]any `json:"criteria"`
+	RuleCriteria      map[string]any `json:"rule_criteria,omitempty"`
+	TriggerConditions map[string]any `json:"trigger_conditions,omitempty"`
+	ChannelIDs        []int          `json:"channel_ids,omitempty"`
+	EntityIDs         []string       `json:"entity_ids,omitempty"`
+}
+
+// CreateAlertDefinitionRequest describes a monitoring alert definition create request.
+type CreateAlertDefinitionRequest struct {
+	ChannelIDs        []int          `json:"channel_ids"`
+	Description       *string        `json:"description,omitempty"`
+	EntityIDs         []string       `json:"entity_ids,omitempty"`
+	Label             string         `json:"label"`
+	RuleCriteria      map[string]any `json:"rule_criteria"`
+	Severity          int            `json:"severity"`
+	TriggerConditions map[string]any `json:"trigger_conditions"`
 }
 
 // AlertChannel describes a monitoring alert channel.
