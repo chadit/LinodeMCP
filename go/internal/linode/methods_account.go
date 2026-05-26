@@ -35,6 +35,7 @@ const (
 	endpointMonitorAlertChannels         = "/monitor/alert-channels"
 	endpointMonitorAlertDefinitions      = "/monitor/alert-definitions"
 	endpointMonitorDashboards            = "/monitor/dashboards"
+	endpointMonitorServices              = "/monitor/services"
 	endpointAccountPaymentMethods        = "/account/payment-methods"
 	endpointAccountEvents                = "/account/events"
 	endpointAccountUsers                 = "/account/users"

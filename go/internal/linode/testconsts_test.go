@@ -27,15 +27,16 @@ const (
 	imageShareGroupTokenCreated = "2025-08-04T10:09:09"
 
 	// Common JSON field names used in test fixtures.
-	keyID        = "id"
-	keyLabel     = "label"
-	keyStatus    = "status"
-	keySSHKey    = "ssh_key"
-	keyType      = "type"
-	keyToken     = "token"
-	keyDomain    = "domain"
-	keyIsDefault = "is_default"
-	keyLastFour  = "last_four"
+	keyID          = "id"
+	keyLabel       = "label"
+	keyStatus      = "status"
+	keySSHKey      = "ssh_key"
+	keyType        = "type"
+	keyServiceType = "service_type"
+	keyToken       = "token"
+	keyDomain      = "domain"
+	keyIsDefault   = "is_default"
+	keyLastFour    = "last_four"
 	// Account settings fixture values.
 	maintenancePolicyMigrate = "linode/migrate"
 

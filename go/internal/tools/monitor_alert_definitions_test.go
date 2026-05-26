@@ -58,7 +58,7 @@ func TestLinodeMonitorAlertDefinitionsTool(t *testing.T) {
 					keyID:          monitorAlertDefinitionToolID,
 					keyLabel:       monitorAlertDefinitionToolLabel,
 					keyType:        monitorAlertDefinitionToolType,
-					"service_type": monitorAlertDefinitionToolServiceType,
+					keyServiceType: monitorAlertDefinitionToolServiceType,
 				}},
 				keyPage:    1,
 				keyPages:   1,

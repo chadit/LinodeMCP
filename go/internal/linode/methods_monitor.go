@@ -7,6 +7,26 @@ import (
 	"strconv"
 )
 
+// httpListMonitorServices retrieves supported monitoring service types.
+func (c *Client) httpListMonitorServices(ctx context.Context) (*PaginatedResponse[MonitorService], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointMonitorServices, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListMonitorServices", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var services PaginatedResponse[MonitorService]
+	if err := c.handleResponse(resp, &services); err != nil {
+		return nil, err
+	}
+
+	return &services, nil
+}
+
 // httpListMonitorDashboards retrieves monitoring dashboards.
 func (c *Client) httpListMonitorDashboards(ctx context.Context, page, pageSize int) (*PaginatedResponse[MonitorDashboard], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

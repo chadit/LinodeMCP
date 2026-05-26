@@ -563,6 +563,12 @@ func TestCategoriesIncludesLongviewSubscriptionsInMonitor(t *testing.T) {
 	assert.Contains(t, profiles.Categories("linode_longview_subscriptions"), "monitor")
 }
 
+func TestCategoriesIncludesMonitorServicesInMonitor(t *testing.T) {
+	t.Parallel()
+
+	assert.Contains(t, profiles.Categories("linode_monitor_services"), "monitor")
+}
+
 func TestCategoriesIncludesMonitorAlertDefinitionsInMonitor(t *testing.T) {
 	t.Parallel()
 

@@ -661,6 +661,21 @@ func (c *Client) ListLongviewTypes(ctx context.Context) (*PaginatedResponse[Long
 	return types, err
 }
 
+// ListMonitorServices retrieves supported monitoring service types with automatic retry on transient failures.
+func (c *Client) ListMonitorServices(ctx context.Context) (*PaginatedResponse[MonitorService], error) {
+	var services *PaginatedResponse[MonitorService]
+
+	err := c.executeWithRetry(ctx, "ListMonitorServices", func() error {
+		var err error
+
+		services, err = c.httpListMonitorServices(ctx)
+
+		return err
+	})
+
+	return services, err
+}
+
 // ListMonitorDashboards retrieves monitoring dashboards with automatic retry on transient failures.
 func (c *Client) ListMonitorDashboards(ctx context.Context, page, pageSize int) (*PaginatedResponse[MonitorDashboard], error) {
 	var dashboards *PaginatedResponse[MonitorDashboard]
