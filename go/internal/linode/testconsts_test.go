@@ -12,6 +12,7 @@ const (
 	keyPages           = "pages"
 	keyResults         = "results"
 	keyErrors          = "errors"
+	linode123Label     = "linode123"
 	keyReason          = "reason"
 	keyClientsIncluded = "clients_included"
 	keyPrice           = "price"

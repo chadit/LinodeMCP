@@ -13,31 +13,39 @@ import (
 )
 
 const (
-	managedContactsPageSizeMin         = 25
-	managedContactsPageSizeMax         = 500
-	managedLinodeSettingsIDParam       = "linode_id"
-	errManagedLinodeSettingsIDPositive = "linode_id must be a positive integer"
-	maxManagedLinodeSettingsIDFromJSON = 9007199254740991
-	managedContactGetIDParam           = "contact_id"
-	errManagedContactGetIDPositive     = "contact_id must be a positive integer"
-	maxManagedContactGetIDFromJSON     = 9007199254740991
-	managedContactUpdateIDParam        = "contact_id"
-	managedContactUpdateNameParam      = "name"
-	managedContactUpdateEmailParam     = "email"
-	managedContactUpdateGroupParam     = "group"
-	managedContactUpdatePhone1Param    = "phone_primary"
-	managedContactUpdatePhone2Param    = "phone_secondary"
-	managedContactDeleteIDParam        = "contact_id"
-	managedContactDeleteIDMessage      = "contact_id must be a positive integer"
-	managedIssueGetIDParam             = "issue_id"
-	errManagedIssueGetIDPositive       = "issue_id must be a positive integer"
-	maxManagedIssueGetIDFromJSON       = 9007199254740991
-	managedIssuesPageSizeMin           = 25
-	managedIssuesPageSizeMax           = 500
-	managedServicesPageSizeMin         = 25
-	managedServicesPageSizeMax         = 500
-	managedLinodeSettingsPageSizeMin   = 25
-	managedLinodeSettingsPageSizeMax   = 500
+	managedContactsPageSizeMin             = 25
+	managedContactsPageSizeMax             = 500
+	managedLinodeSettingsIDParam           = "linode_id"
+	errManagedLinodeSettingsIDPositive     = "linode_id must be a positive integer"
+	maxManagedLinodeSettingsIDFromJSON     = 9007199254740991
+	managedContactGetIDParam               = "contact_id"
+	errManagedContactGetIDPositive         = "contact_id must be a positive integer"
+	maxManagedContactGetIDFromJSON         = 9007199254740991
+	managedContactUpdateIDParam            = "contact_id"
+	managedContactUpdateNameParam          = "name"
+	managedContactUpdateEmailParam         = "email"
+	managedContactUpdateGroupParam         = "group"
+	managedContactUpdatePhone1Param        = "phone_primary"
+	managedContactUpdatePhone2Param        = "phone_secondary"
+	managedContactDeleteIDParam            = "contact_id"
+	managedContactDeleteIDMessage          = "contact_id must be a positive integer"
+	managedIssueGetIDParam                 = "issue_id"
+	errManagedIssueGetIDPositive           = "issue_id must be a positive integer"
+	maxManagedIssueGetIDFromJSON           = 9007199254740991
+	managedIssuesPageSizeMin               = 25
+	managedIssuesPageSizeMax               = 500
+	managedServicesPageSizeMin             = 25
+	managedServicesPageSizeMax             = 500
+	managedLinodeSettingsPageSizeMin       = 25
+	managedLinodeSettingsPageSizeMax       = 500
+	managedLinodeSettingsUpdateIDParam     = "linode_id"
+	managedLinodeSettingsUpdateAccessParam = "ssh_access"
+	managedLinodeSettingsUpdateIPParam     = "ssh_ip"
+	managedLinodeSettingsUpdatePortParam   = "ssh_port"
+	managedLinodeSettingsUpdateUserParam   = "ssh_user"
+	managedLinodeSettingsUpdateIDMessage   = "linode_id must be a positive integer"
+	managedLinodeSettingsUpdateSSHMessage  = "at least one mutable SSH setting is required"
+	managedLinodeSettingsUpdatePortMessage = "ssh_port must be an integer between 1 and 65535"
 )
 
 // NewLinodeManagedLinodeSettingsGetTool creates a tool for retrieving one Linode's Managed settings.
@@ -118,6 +126,26 @@ func NewLinodeManagedLinodeSettingsTool(cfg *config.Config) (mcp.Tool, profiles.
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeManagedLinodeSettingsUpdateTool creates a tool for updating Managed settings for one Linode.
+func NewLinodeManagedLinodeSettingsUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_managed_linode_settings_update",
+		"Updates Managed service SSH settings for one Linode.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(managedLinodeSettingsUpdateIDParam, mcp.Required(), mcp.Description("The numeric Linode ID whose Managed settings should be updated.")),
+			mcp.WithBoolean(managedLinodeSettingsUpdateAccessParam, mcp.Description("Whether Managed service responders may access the Linode over SSH.")),
+			mcp.WithString(managedLinodeSettingsUpdateIPParam, mcp.Description("The IP address Managed service responders should use for SSH access.")),
+			mcp.WithNumber(managedLinodeSettingsUpdatePortParam, mcp.Description("The SSH port Managed service responders should use, between 1 and 65535.")),
+			mcp.WithString(managedLinodeSettingsUpdateUserParam, mcp.Description("The SSH username Managed service responders should use.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm updating Managed Linode settings.")),
+		},
+		handleLinodeManagedLinodeSettingsUpdateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeManagedServicesTool creates a tool for listing Managed services.
@@ -381,6 +409,157 @@ func managedLinodeSettingsPaginationFromTool(request *mcp.CallToolRequest) (int,
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeManagedLinodeSettingsUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This updates Managed Linode settings. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	linodeID, validationMessage := managedLinodeSettingsUpdateIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	updateReq, validationMessage := managedLinodeSettingsUpdateFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	settings, updateFailure := client.UpdateManagedLinodeSettings(ctx, linodeID, *updateReq)
+	if updateFailure != nil {
+		return mcp.NewToolResultError(managedLinodeSettingsUpdateFailureMessage(linodeID, updateFailure)), nil
+	}
+
+	return MarshalToolResponse(struct {
+		Message  string                        `json:"message"`
+		Settings *linode.ManagedLinodeSettings `json:"settings"`
+	}{
+		Message:  fmt.Sprintf("Managed Linode settings for Linode %d updated successfully", linodeID),
+		Settings: settings,
+	})
+}
+
+func managedLinodeSettingsUpdateIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	raw, exists := request.GetArguments()[managedLinodeSettingsUpdateIDParam]
+	if !exists {
+		return 0, managedLinodeSettingsUpdateIDMessage
+	}
+
+	switch value := raw.(type) {
+	case int:
+		if value <= 0 || value > maxManagedLinodeSettingsIDFromJSON {
+			return 0, errManagedLinodeSettingsIDPositive
+		}
+
+		return value, ""
+	case float64:
+		if value <= 0 || value > maxManagedLinodeSettingsIDFromJSON || value != float64(int64(value)) {
+			return 0, errManagedLinodeSettingsIDPositive
+		}
+
+		return int(value), ""
+	default:
+		return 0, errManagedLinodeSettingsIDPositive
+	}
+}
+
+func managedLinodeSettingsUpdateFromTool(request *mcp.CallToolRequest) (*linode.UpdateManagedLinodeSettingsRequest, string) {
+	args := request.GetArguments()
+	ssh := &linode.UpdateManagedLinodeSettingsSSH{}
+
+	var fields int
+
+	if raw, exists := args[managedLinodeSettingsUpdateAccessParam]; exists {
+		value, ok := raw.(bool)
+		if !ok {
+			return nil, managedLinodeSettingsUpdateAccessParam + " must be a boolean"
+		}
+
+		ssh.Access = &value
+		fields++
+	}
+
+	if validationMessage := managedLinodeSettingsUpdateOptionalString(args, managedLinodeSettingsUpdateIPParam, &ssh.IP, &fields); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if validationMessage := managedLinodeSettingsUpdateOptionalPort(args, &ssh.Port, &fields); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if validationMessage := managedLinodeSettingsUpdateOptionalString(args, managedLinodeSettingsUpdateUserParam, &ssh.User, &fields); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if fields == 0 {
+		return nil, managedLinodeSettingsUpdateSSHMessage
+	}
+
+	return &linode.UpdateManagedLinodeSettingsRequest{SSH: ssh}, ""
+}
+
+func managedLinodeSettingsUpdateOptionalString(args map[string]any, name string, target **string, fields *int) string {
+	raw, exists := args[name]
+	if !exists {
+		return ""
+	}
+
+	value, ok := raw.(string)
+	if !ok {
+		return name + " must be a string"
+	}
+
+	*target = &value
+	(*fields)++
+
+	return ""
+}
+
+func managedLinodeSettingsUpdateOptionalPort(args map[string]any, target **int, fields *int) string {
+	raw, exists := args[managedLinodeSettingsUpdatePortParam]
+	if !exists {
+		return ""
+	}
+
+	var port int
+
+	switch value := raw.(type) {
+	case int:
+		port = value
+	case int64:
+		if value < 1 || value > 65535 {
+			return managedLinodeSettingsUpdatePortMessage
+		}
+
+		port = int(value)
+	case float64:
+		if value < 1 || value > 65535 || value != float64(int64(value)) {
+			return managedLinodeSettingsUpdatePortMessage
+		}
+
+		port = int(value)
+	default:
+		return managedLinodeSettingsUpdatePortMessage
+	}
+
+	if port < 1 || port > 65535 {
+		return managedLinodeSettingsUpdatePortMessage
+	}
+
+	*target = &port
+	(*fields)++
+
+	return ""
+}
+
+func managedLinodeSettingsUpdateFailureMessage(linodeID int, err error) string {
+	return "Failed to update linode_managed_linode_settings_update " + strconv.Itoa(linodeID) + ": " + err.Error()
 }
 
 func handleLinodeManagedServicesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
