@@ -101,7 +101,7 @@ func TestLinodeManagedCredentialUsernamePasswordUpdateTool(t *testing.T) {
 			{name: caseZeroCredentialID, args: map[string]any{keyConfirm: true, managedCredentialIDParam: 0, keyDiskPassword: managedCredentialUsernamePasswordToolPassword}, wantMessage: errManagedCredentialIDPositive},
 			{name: "slash credential id", args: map[string]any{keyConfirm: true, managedCredentialIDParam: "9991/2", keyDiskPassword: managedCredentialUsernamePasswordToolPassword}, wantMessage: errManagedCredentialIDPositive},
 			{name: "query credential id", args: map[string]any{keyConfirm: true, managedCredentialIDParam: "9991?x=1", keyDiskPassword: managedCredentialUsernamePasswordToolPassword}, wantMessage: errManagedCredentialIDPositive},
-			{name: caseTraversalCredentialID, args: map[string]any{keyConfirm: true, managedCredentialIDParam: "..", keyDiskPassword: managedCredentialUsernamePasswordToolPassword}, wantMessage: errManagedCredentialIDPositive},
+			{name: caseTraversalCredentialID, args: map[string]any{keyConfirm: true, managedCredentialIDParam: pathTraversalValue, keyDiskPassword: managedCredentialUsernamePasswordToolPassword}, wantMessage: errManagedCredentialIDPositive},
 			{name: "missing username password", args: map[string]any{keyConfirm: true, managedCredentialIDParam: 9991}, wantMessage: managedCredentialsToolPasswordReq},
 			{name: "blank username password", args: map[string]any{keyConfirm: true, managedCredentialIDParam: 9991, keyDiskPassword: blankString}, wantMessage: managedCredentialsToolPasswordReq},
 			{name: "numeric password", args: map[string]any{keyConfirm: true, managedCredentialIDParam: 9991, keyDiskPassword: 12}, wantMessage: "password must be a string"},

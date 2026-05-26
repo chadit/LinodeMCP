@@ -3,6 +3,8 @@ package linode
 import (
 	"context"
 	"net/http"
+	"net/url"
+	"strconv"
 )
 
 // httpListMonitorDashboards retrieves monitoring dashboards.
@@ -25,6 +27,28 @@ func (c *Client) httpListMonitorDashboards(ctx context.Context, page, pageSize i
 	}
 
 	return &dashboards, nil
+}
+
+// httpGetMonitorDashboard retrieves one monitoring dashboard.
+func (c *Client) httpGetMonitorDashboard(ctx context.Context, dashboardID int) (MonitorDashboard, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointMonitorDashboards + "/" + url.PathEscape(strconv.Itoa(dashboardID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetMonitorDashboard", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var dashboard MonitorDashboard
+	if err := c.handleResponse(resp, &dashboard); err != nil {
+		return nil, err
+	}
+
+	return dashboard, nil
 }
 
 // httpListMonitorAlertDefinitions retrieves monitoring alert definitions.

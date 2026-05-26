@@ -10,6 +10,12 @@ import (
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
+const (
+	monitorDashboardIDParam       = "dashboard_id"
+	errMonitorDashboardIDMissing  = "dashboard_id is required"
+	errMonitorDashboardIDPositive = "dashboard_id must be a positive integer"
+)
+
 // NewLinodeMonitorDashboardsTool creates a tool for listing monitoring dashboards.
 func NewLinodeMonitorDashboardsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -68,6 +74,49 @@ func monitorDashboardsPaginationFromTool(request *mcp.CallToolRequest) (int, int
 	}
 
 	return page, pageSize, ""
+}
+
+// NewLinodeMonitorDashboardGetTool creates a tool for retrieving one monitoring dashboard.
+func NewLinodeMonitorDashboardGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_monitor_dashboard_get",
+		"Gets one monitoring dashboard by dashboard_id.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(monitorDashboardIDParam, mcp.Required(), mcp.Description("Monitoring dashboard ID to retrieve.")),
+		},
+		handleLinodeMonitorDashboardGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleLinodeMonitorDashboardGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	dashboardID, validationMessage := requiredPositiveIntArgument(request, monitorDashboardIDParam, errMonitorDashboardIDMissing, errMonitorDashboardIDPositive)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	dashboard, getFailureMessage := getMonitorDashboard(ctx, client, dashboardID)
+	if getFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to retrieve linode_monitor_dashboard_get: " + getFailureMessage), nil
+	}
+
+	return MarshalToolResponse(dashboard)
+}
+
+func getMonitorDashboard(ctx context.Context, client *linode.Client, dashboardID int) (linode.MonitorDashboard, string) {
+	dashboard, err := client.GetMonitorDashboard(ctx, dashboardID)
+	if err != nil {
+		return nil, err.Error()
+	}
+
+	return dashboard, ""
 }
 
 // NewLinodeMonitorAlertDefinitionsTool creates a tool for listing monitoring alert definitions.
