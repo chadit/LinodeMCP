@@ -26,6 +26,9 @@ const (
 	managedContactUpdatePhone2Param = "phone_secondary"
 	managedContactDeleteIDParam     = "contact_id"
 	managedContactDeleteIDMessage   = "contact_id must be a positive integer"
+	managedIssueGetIDParam          = "issue_id"
+	errManagedIssueGetIDPositive    = "issue_id must be a positive integer"
+	maxManagedIssueGetIDFromJSON    = 9007199254740991
 	managedIssuesPageSizeMin        = 25
 	managedIssuesPageSizeMax        = 500
 )
@@ -73,6 +76,22 @@ func NewLinodeManagedContactsTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
 		},
 		handleLinodeManagedContactsRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeManagedIssueGetTool creates a tool for retrieving one Managed issue.
+func NewLinodeManagedIssueGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_managed_issue_get",
+		"Gets one issue detected by Linode Managed service monitors.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(managedIssueGetIDParam, mcp.Required(),
+				mcp.Description("Managed issue ID to retrieve.")),
+		},
+		handleLinodeManagedIssueGetRequest,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -229,6 +248,49 @@ func managedContactsPaginationFromTool(request *mcp.CallToolRequest) (int, int, 
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeManagedIssueGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	issueID, validationMessage := managedIssueIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	issue, getFailure := client.GetManagedIssue(ctx, issueID)
+	if getFailure == nil {
+		return MarshalToolResponse(issue)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_managed_issue_get: " + getFailure.Error()), nil
+}
+
+func managedIssueIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	raw, exists := request.GetArguments()[managedIssueGetIDParam]
+	if !exists {
+		return 0, "issue_id is required"
+	}
+
+	switch value := raw.(type) {
+	case int:
+		if value <= 0 || value > maxManagedIssueGetIDFromJSON {
+			return 0, errManagedIssueGetIDPositive
+		}
+
+		return value, ""
+	case float64:
+		if value <= 0 || value > maxManagedIssueGetIDFromJSON || value != float64(int64(value)) {
+			return 0, errManagedIssueGetIDPositive
+		}
+
+		return int(value), ""
+	default:
+		return 0, errManagedIssueGetIDPositive
+	}
 }
 
 func handleLinodeManagedIssuesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

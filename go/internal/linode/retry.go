@@ -357,6 +357,21 @@ func (c *Client) ListManagedContacts(ctx context.Context, page, pageSize int) (*
 	return contacts, err
 }
 
+// GetManagedIssue retrieves one Managed issue with automatic retry on transient failures.
+func (c *Client) GetManagedIssue(ctx context.Context, issueID int) (*ManagedIssue, error) {
+	var issue *ManagedIssue
+
+	err := c.executeWithRetry(ctx, "GetManagedIssue", func() error {
+		var err error
+
+		issue, err = c.httpGetManagedIssue(ctx, issueID)
+
+		return err
+	})
+
+	return issue, err
+}
+
 // ListManagedIssues retrieves Managed issues with automatic retry on transient failures.
 func (c *Client) ListManagedIssues(ctx context.Context, page, pageSize int) (*PaginatedResponse[ManagedIssue], error) {
 	var issues *PaginatedResponse[ManagedIssue]
