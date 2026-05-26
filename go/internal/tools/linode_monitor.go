@@ -12,14 +12,26 @@ import (
 )
 
 const (
-	monitorServicesToolName                = "linode_monitor_services"
-	monitorServiceGetToolName              = "linode_monitor_service_get"
-	monitorServiceAlertDefinitionsToolName = "linode_monitor_service_alert_definitions"
-	monitorServiceTypeParam                = "service_type"
-	errMonitorServiceTypeInvalid           = "service_type must be a single non-empty service type slug"
-	monitorDashboardIDParam                = "dashboard_id"
-	errMonitorDashboardIDMissing           = "dashboard_id is required"
-	errMonitorDashboardIDPositive          = "dashboard_id must be a positive integer"
+	monitorServicesToolName                      = "linode_monitor_services"
+	monitorServiceGetToolName                    = "linode_monitor_service_get"
+	monitorServiceAlertDefinitionsToolName       = "linode_monitor_service_alert_definitions"
+	monitorServiceAlertDefinitionCreateToolName  = "linode_monitor_service_alert_definition_create"
+	monitorServiceTypeParam                      = "service_type"
+	monitorAlertDefinitionLabelParam             = "label"
+	monitorAlertDefinitionSeverityParam          = "severity"
+	monitorAlertDefinitionRuleCriteriaParam      = "rule_criteria"
+	monitorAlertDefinitionTriggerConditionsParam = "trigger_conditions"
+	monitorAlertDefinitionChannelIDsParam        = "channel_ids"
+	monitorAlertDefinitionDescriptionParam       = "description"
+	monitorAlertDefinitionEntityIDsParam         = "entity_ids"
+	errMonitorServiceTypeInvalid                 = "service_type must be a single non-empty service type slug"
+	errMonitorAlertDefinitionRequired            = "label, severity, rule_criteria, trigger_conditions, and channel_ids are required"
+	errMonitorAlertDefinitionSeverity            = "severity must be an integer from 0 through 3"
+	errMonitorAlertDefinitionChannels            = "channel_ids must be a non-empty array of positive integers"
+	errMonitorAlertDefinitionEntityIDs           = "entity_ids must be an array of non-empty strings"
+	monitorDashboardIDParam                      = "dashboard_id"
+	errMonitorDashboardIDMissing                 = "dashboard_id is required"
+	errMonitorDashboardIDPositive                = "dashboard_id must be a positive integer"
 )
 
 // NewLinodeMonitorServicesTool creates a tool for listing supported monitoring service types.
@@ -172,6 +184,232 @@ func listMonitorServiceAlertDefinitions(ctx context.Context, client *linode.Clie
 	}
 
 	return definitions, ""
+}
+
+// NewLinodeMonitorServiceAlertDefinitionCreateTool creates a tool for creating one monitoring alert definition.
+func NewLinodeMonitorServiceAlertDefinitionCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		monitorServiceAlertDefinitionCreateToolName,
+		"Creates an alert definition for one supported monitoring service type. Requires confirm=true.",
+		[]mcp.ToolOption{
+			mcp.WithString(monitorServiceTypeParam, mcp.Required(), mcp.Description("Supported monitoring service type slug for the alert definition.")),
+			mcp.WithString(monitorAlertDefinitionLabelParam, mcp.Required(), mcp.Description("Alert definition label.")),
+			mcp.WithNumber(monitorAlertDefinitionSeverityParam, mcp.Required(), mcp.Description("Alert severity: 0 severe, 1 medium, 2 low, or 3 info.")),
+			mcp.WithObject(monitorAlertDefinitionRuleCriteriaParam, mcp.Required(), mcp.Description("Alert rule criteria object.")),
+			mcp.WithObject(monitorAlertDefinitionTriggerConditionsParam, mcp.Required(), mcp.Description("Alert trigger conditions object.")),
+			mcp.WithArray(monitorAlertDefinitionChannelIDsParam, mcp.Required(), mcp.Description("Alert channel IDs.")),
+			mcp.WithString(monitorAlertDefinitionDescriptionParam, mcp.Description("Optional alert definition description.")),
+			mcp.WithArray(monitorAlertDefinitionEntityIDsParam, mcp.Description("Optional service entity IDs.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm creating an alert definition.")),
+		},
+		handleLinodeMonitorServiceAlertDefinitionCreateRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleLinodeMonitorServiceAlertDefinitionCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This creates a monitor alert definition. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	serviceType, validationMessage := monitorServiceTypeFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	createRequest, validationMessage := monitorServiceAlertDefinitionCreateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	definition, createFailureMessage := createMonitorServiceAlertDefinition(ctx, client, serviceType, createRequest)
+	if createFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to create " + monitorServiceAlertDefinitionCreateToolName + ": " + createFailureMessage), nil
+	}
+
+	return MarshalToolResponse(definition)
+}
+
+func monitorServiceAlertDefinitionCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateAlertDefinitionRequest, string) {
+	args := request.GetArguments()
+
+	label, validationMessage := stringArgument(request, monitorAlertDefinitionLabelParam, true)
+	if validationMessage != "" {
+		return nil, errMonitorAlertDefinitionRequired
+	}
+
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return nil, errMonitorAlertDefinitionRequired
+	}
+
+	severity, validationMessage := monitorAlertDefinitionSeverityFromArgs(args)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	ruleCriteria, validationMessage := objectArgument(args, monitorAlertDefinitionRuleCriteriaParam)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	triggerConditions, validationMessage := objectArgument(args, monitorAlertDefinitionTriggerConditionsParam)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	channelIDs, validationMessage := intArrayArgument(args, monitorAlertDefinitionChannelIDsParam)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	entityIDs, validationMessage := optionalStringArrayArgument(args, monitorAlertDefinitionEntityIDsParam)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	var description *string
+
+	if rawDescription, exists := args[monitorAlertDefinitionDescriptionParam]; exists {
+		descriptionString, ok := rawDescription.(string)
+		if !ok {
+			return nil, monitorAlertDefinitionDescriptionParam + " must be a string"
+		}
+
+		description = &descriptionString
+	}
+
+	return &linode.CreateAlertDefinitionRequest{
+		ChannelIDs:        channelIDs,
+		Description:       description,
+		EntityIDs:         entityIDs,
+		Label:             label,
+		RuleCriteria:      ruleCriteria,
+		Severity:          severity,
+		TriggerConditions: triggerConditions,
+	}, ""
+}
+
+func monitorAlertDefinitionSeverityFromArgs(args map[string]any) (int, string) {
+	raw, exists := args[monitorAlertDefinitionSeverityParam]
+	if !exists {
+		return 0, errMonitorAlertDefinitionRequired
+	}
+
+	var severity int
+
+	switch typed := raw.(type) {
+	case int:
+		severity = typed
+	case int64:
+		severity = int(typed)
+	case float64:
+		severity = int(typed)
+		if typed != float64(severity) {
+			return 0, errMonitorAlertDefinitionSeverity
+		}
+	default:
+		return 0, errMonitorAlertDefinitionSeverity
+	}
+
+	if severity < 0 || severity > 3 {
+		return 0, errMonitorAlertDefinitionSeverity
+	}
+
+	return severity, ""
+}
+
+func objectArgument(args map[string]any, name string) (map[string]any, string) {
+	raw, exists := args[name]
+	if !exists {
+		return nil, errMonitorAlertDefinitionRequired
+	}
+
+	objectValue, ok := raw.(map[string]any)
+	if !ok || len(objectValue) == 0 {
+		return nil, name + " must be a non-empty object"
+	}
+
+	return objectValue, ""
+}
+
+func intArrayArgument(args map[string]any, name string) ([]int, string) {
+	raw, exists := args[name]
+	if !exists {
+		return nil, errMonitorAlertDefinitionRequired
+	}
+
+	rawItems, ok := raw.([]any)
+	if !ok || len(rawItems) == 0 {
+		return nil, errMonitorAlertDefinitionChannels
+	}
+
+	items := make([]int, 0, len(rawItems))
+	for _, rawItem := range rawItems {
+		value, ok := intFromAny(rawItem)
+		if !ok || value <= 0 {
+			return nil, errMonitorAlertDefinitionChannels
+		}
+
+		items = append(items, value)
+	}
+
+	return items, ""
+}
+
+func optionalStringArrayArgument(args map[string]any, name string) ([]string, string) {
+	raw, exists := args[name]
+	if !exists {
+		return nil, ""
+	}
+
+	rawItems, ok := raw.([]any)
+	if !ok {
+		return nil, errMonitorAlertDefinitionEntityIDs
+	}
+
+	items := make([]string, 0, len(rawItems))
+	for _, rawItem := range rawItems {
+		value, ok := rawItem.(string)
+		if !ok || strings.TrimSpace(value) == "" {
+			return nil, errMonitorAlertDefinitionEntityIDs
+		}
+
+		items = append(items, value)
+	}
+
+	return items, ""
+}
+
+func intFromAny(raw any) (int, bool) {
+	switch typed := raw.(type) {
+	case int:
+		return typed, true
+	case int64:
+		return int(typed), true
+	case float64:
+		value := int(typed)
+
+		return value, typed == float64(value)
+	default:
+		return 0, false
+	}
+}
+
+func createMonitorServiceAlertDefinition(ctx context.Context, client *linode.Client, serviceType string, request *linode.CreateAlertDefinitionRequest) (*linode.AlertDefinition, string) {
+	definition, err := client.CreateMonitorServiceAlertDefinition(ctx, serviceType, request)
+	if err != nil {
+		return nil, err.Error()
+	}
+
+	return definition, ""
 }
 
 // NewLinodeMonitorDashboardsTool creates a tool for listing monitoring dashboards.

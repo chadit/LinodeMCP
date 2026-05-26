@@ -113,9 +113,9 @@ func TestLinodeMonitorServiceGetTool(t *testing.T) {
 			{name: "missing service type", args: map[string]any{}, wantMessage: monitorServiceTypeRequiredError},
 			{name: "empty service type", args: map[string]any{monitorServiceTypeParam: ""}, wantMessage: monitorServiceTypeInvalidError},
 			{name: "numeric service type", args: map[string]any{monitorServiceTypeParam: 123}, wantMessage: monitorServiceTypeNonStringError},
-			{name: "separator service type", args: map[string]any{monitorServiceTypeParam: "dbaas/postgres"}, wantMessage: monitorServiceTypeInvalidError},
-			{name: "query service type", args: map[string]any{monitorServiceTypeParam: "dbaas?x=1"}, wantMessage: monitorServiceTypeInvalidError},
-			{name: "traversal service type", args: map[string]any{monitorServiceTypeParam: pathTraversalValue}, wantMessage: monitorServiceTypeInvalidError},
+			{name: caseSeparatorServiceType, args: map[string]any{monitorServiceTypeParam: invalidServiceTypeSlash}, wantMessage: monitorServiceTypeInvalidError},
+			{name: caseQueryServiceType, args: map[string]any{monitorServiceTypeParam: invalidServiceTypeQuery}, wantMessage: monitorServiceTypeInvalidError},
+			{name: caseTraversalServiceType, args: map[string]any{monitorServiceTypeParam: pathTraversalValue}, wantMessage: monitorServiceTypeInvalidError},
 			{name: "dot service type", args: map[string]any{monitorServiceTypeParam: "."}, wantMessage: monitorServiceTypeInvalidError},
 			{name: "leading whitespace service type", args: map[string]any{monitorServiceTypeParam: " dbaas"}, wantMessage: monitorServiceTypeInvalidError},
 			{name: "embedded whitespace service type", args: map[string]any{monitorServiceTypeParam: "db aas"}, wantMessage: monitorServiceTypeInvalidError},
@@ -171,7 +171,7 @@ func TestLinodeMonitorServiceAlertDefinitionsTool(t *testing.T) {
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyData: []map[string]any{{
 					keyID:          20000,
-					keyLabel:       "High CPU Usage",
+					keyLabel:       monitorAlertDefinitionToolLabel,
 					keyServiceType: monitorServiceToolTypeDatabase,
 				}},
 			}))
@@ -188,7 +188,7 @@ func TestLinodeMonitorServiceAlertDefinitionsTool(t *testing.T) {
 		assert.False(t, result.IsError, "should not be an error result")
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "High CPU Usage", "response should contain alert label")
+		assert.Contains(t, textContent.Text, monitorAlertDefinitionToolLabel, "response should contain alert label")
 		assert.Contains(t, textContent.Text, monitorServiceToolTypeDatabase, "response should contain service type")
 	})
 
@@ -228,9 +228,9 @@ func TestLinodeMonitorServiceAlertDefinitionsTool(t *testing.T) {
 		}{
 			{name: "missing service type", args: map[string]any{}, wantMessage: monitorServiceTypeRequiredError},
 			{name: "numeric service type", args: map[string]any{monitorServiceTypeParam: 123}, wantMessage: monitorServiceTypeNonStringError},
-			{name: "separator service type", args: map[string]any{monitorServiceTypeParam: "dbaas/postgres"}, wantMessage: monitorServiceTypeInvalidError},
-			{name: "query service type", args: map[string]any{monitorServiceTypeParam: "dbaas?x=1"}, wantMessage: monitorServiceTypeInvalidError},
-			{name: "traversal service type", args: map[string]any{monitorServiceTypeParam: pathTraversalValue}, wantMessage: monitorServiceTypeInvalidError},
+			{name: caseSeparatorServiceType, args: map[string]any{monitorServiceTypeParam: invalidServiceTypeSlash}, wantMessage: monitorServiceTypeInvalidError},
+			{name: caseQueryServiceType, args: map[string]any{monitorServiceTypeParam: invalidServiceTypeQuery}, wantMessage: monitorServiceTypeInvalidError},
+			{name: caseTraversalServiceType, args: map[string]any{monitorServiceTypeParam: pathTraversalValue}, wantMessage: monitorServiceTypeInvalidError},
 		}
 
 		for _, testCase := range cases {
