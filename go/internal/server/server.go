@@ -850,6 +850,7 @@ func coreToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeManagedLinodeSettingsTool,
 		tools.NewLinodeManagedLinodeSettingsUpdateTool,
 		tools.NewLinodeManagedServiceDeleteTool,
+		tools.NewLinodeManagedServiceDisableTool,
 		tools.NewLinodeManagedServiceGetTool,
 		tools.NewLinodeManagedServiceUpdateTool,
 		tools.NewLinodeManagedServicesTool,

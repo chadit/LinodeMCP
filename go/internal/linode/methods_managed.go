@@ -202,6 +202,23 @@ func (c *Client) httpDeleteManagedService(ctx context.Context, serviceID int) er
 	return c.handleResponse(resp, nil)
 }
 
+// httpDisableManagedService disables one Managed service monitor.
+func (c *Client) httpDisableManagedService(ctx context.Context, serviceID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointManagedServices + "/" + url.PathEscape(strconv.Itoa(serviceID)) + "/disable"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DisableManagedService", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+
+	return c.handleResponse(resp, nil)
+}
+
 // httpListManagedServices retrieves Managed services.
 func (c *Client) httpListManagedServices(ctx context.Context, page, pageSize int) (*PaginatedResponse[ManagedService], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

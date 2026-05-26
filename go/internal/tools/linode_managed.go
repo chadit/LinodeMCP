@@ -206,6 +206,22 @@ func NewLinodeManagedServiceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.C
 	return tool, profiles.CapDestroy, handler
 }
 
+// NewLinodeManagedServiceDisableTool creates a tool for disabling one Managed service monitor.
+func NewLinodeManagedServiceDisableTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_managed_service_disable",
+		"Disables monitoring for a Linode Managed service.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(managedServiceGetIDParam, mcp.Required(), mcp.Description("The Managed service monitor ID to disable.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm disabling Managed service monitoring.")),
+		},
+		handleLinodeManagedServiceDisableRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
 // NewLinodeManagedServiceGetTool creates a tool for retrieving one Managed service.
 func NewLinodeManagedServiceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -736,6 +752,36 @@ func deleteManagedServiceErrorMessage(ctx context.Context, client *linode.Client
 
 func managedServiceDeleteIDFromTool(request *mcp.CallToolRequest) (int, string) {
 	return managedServiceIDFromTool(request)
+}
+
+func handleLinodeManagedServiceDisableRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This disables a Managed service monitor. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	serviceID, validationMessage := managedServiceIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if failureMessage := disableManagedServiceErrorMessage(ctx, client, serviceID); failureMessage != "" {
+		return mcp.NewToolResultError(failureMessage), nil
+	}
+
+	return mcp.NewToolResultText("Managed service disabled successfully"), nil
+}
+
+func disableManagedServiceErrorMessage(ctx context.Context, client *linode.Client, serviceID int) string {
+	if err := client.DisableManagedService(ctx, serviceID); err != nil {
+		return "Failed to disable linode_managed_service_disable: " + err.Error()
+	}
+
+	return ""
 }
 
 func handleLinodeManagedServiceUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
