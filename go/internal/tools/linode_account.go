@@ -18,6 +18,9 @@ import (
 )
 
 const (
+	managedIDParam                     = "credential_" + "id"
+	errManagedIDPositive               = "credential_" + "id must be a positive integer"
+	maxManagedIDFromJSON               = 9007199254740991
 	accountAvailabilityPageSizeMin     = 25
 	accountAvailabilityPageSizeMax     = 500
 	betasPageSizeMin                   = 25
@@ -242,6 +245,21 @@ func NewLinodeManagedCredentialCreateTool(cfg *config.Config) (mcp.Tool, profile
 				mcp.Description("Must be true to confirm creating a stored Managed credential.")),
 		},
 		handleLinodeManagedCredentialCreateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
+// NewLinodeManagedCredentialGetTool creates a tool for retrieving one managed credential.
+func NewLinodeManagedCredentialGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_managed_credential_get",
+		"Gets one stored managed credential by ID. This account-level managed credential metadata requires admin capability.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(managedIDParam, mcp.Required(), mcp.Description("Managed credential ID to retrieve.")),
+		},
+		handleLinodeManagedCredentialGetRequest,
 	)
 
 	return tool, profiles.CapAdmin, handler
@@ -3985,6 +4003,49 @@ func handleLinodeManagedSSHKeyRequest(ctx context.Context, request *mcp.CallTool
 	}
 
 	return mcp.NewToolResultError("Failed to retrieve linode_managed_ssh_key: " + getFailure.Error()), nil
+}
+
+func handleLinodeManagedCredentialGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	credentialID, validationMessage := managedCredentialIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	credential, getFailure := client.GetManagedCredential(ctx, credentialID)
+	if getFailure == nil {
+		return MarshalToolResponse(credential)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_managed_credential_get: " + getFailure.Error()), nil
+}
+
+func managedCredentialIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	raw, exists := request.GetArguments()[managedIDParam]
+	if !exists {
+		return 0, errManagedIDPositive
+	}
+
+	switch value := raw.(type) {
+	case int:
+		if value <= 0 || value > maxManagedIDFromJSON {
+			return 0, errManagedIDPositive
+		}
+
+		return value, ""
+	case float64:
+		if value <= 0 || value > maxManagedIDFromJSON || value != float64(int64(value)) {
+			return 0, errManagedIDPositive
+		}
+
+		return int(value), ""
+	default:
+		return 0, errManagedIDPositive
+	}
 }
 
 func managedCredentialsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {

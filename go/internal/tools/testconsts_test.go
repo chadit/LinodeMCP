@@ -292,6 +292,7 @@ const (
 	pathTraversalValue              = ".."
 	macAddressFixture               = "22:00:AB:CD:EF:01"
 	pathSeparatorValue              = "1/2"
+	querySeparatorValue             = "1?x=2"
 	errShareGroupIDPositive         = "sharegroup_id must be a positive integer"
 	errEUUIDNonEmpty                = "euuid must be a non-empty string"
 	errEUUIDNoSeparators            = "euuid must not contain path separators"

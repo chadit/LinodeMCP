@@ -239,6 +239,21 @@ func (c *Client) CreateManagedCredential(ctx context.Context, request *CreateMan
 	return c.httpCreateManagedCredential(ctx, request)
 }
 
+// GetManagedCredential retrieves one stored managed credential with automatic retry on transient failures.
+func (c *Client) GetManagedCredential(ctx context.Context, credentialID int) (*ManagedCredential, error) {
+	var credential *ManagedCredential
+
+	err := c.executeWithRetry(ctx, "GetManagedCredential", func() error {
+		var err error
+
+		credential, err = c.httpGetManagedCredential(ctx, credentialID)
+
+		return err
+	})
+
+	return credential, err
+}
+
 // GetManagedContact retrieves one managed contact with automatic retry on transient failures.
 func (c *Client) GetManagedContact(ctx context.Context, contactID int) (*ManagedContact, error) {
 	var contact *ManagedContact
