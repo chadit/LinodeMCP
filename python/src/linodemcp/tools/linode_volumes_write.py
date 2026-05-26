@@ -5,7 +5,14 @@ from typing import TYPE_CHECKING, Any
 from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import error_response, execute_tool
+from linodemcp.tools.helpers import (
+    DRY_RUN_PROP,
+    PARAM_DRY_RUN,
+    error_response,
+    execute_dry_run,
+    execute_tool,
+    is_dry_run,
+)
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -452,7 +459,8 @@ def create_linode_volume_delete_tool() -> tuple[Tool, Capability]:
         name="linode_volume_delete",
         description=(
             "Deletes a block storage volume. WARNING: This is destructive "
-            "and all data will be lost. Volume must be detached first."
+            "and all data will be lost. Volume must be detached first. "
+            "Pass dry_run=true to preview without deleting."
         ),
         inputSchema={
             "type": "object",
@@ -469,8 +477,11 @@ def create_linode_volume_delete_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Must be true to confirm deletion.",
+                    "description": (
+                        "Must be true to confirm deletion. Ignored when dry_run=true."
+                    ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["volume_id", "confirm"],
         },
@@ -482,6 +493,23 @@ async def handle_linode_volume_delete(
 ) -> list[TextContent]:
     """Handle linode_volume_delete tool request."""
     volume_id = arguments.get("volume_id", 0)
+
+    if is_dry_run(arguments):
+        if not volume_id:
+            return error_response("volume_id is required")
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_volume(int(volume_id))
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_volume_delete",
+            "DELETE",
+            f"/volumes/{int(volume_id)}",
+            _fetch,
+        )
+
     confirm = arguments.get("confirm", False)
 
     if not confirm:

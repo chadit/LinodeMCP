@@ -507,7 +507,7 @@ func handleObjectStorageKeyUpdateRequest(ctx context.Context, request *mcp.CallT
 func NewLinodeObjectStorageKeyDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_object_storage_key_delete",
-		mcp.WithDescription("Revokes an Object Storage access key permanently."),
+		mcp.WithDescription("Revokes an Object Storage access key permanently. Pass dry_run=true to preview without revoking."),
 		mcp.WithString(
 			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
@@ -520,8 +520,9 @@ func NewLinodeObjectStorageKeyDeleteTool(cfg *config.Config) (mcp.Tool, profiles
 		mcp.WithBoolean(
 			paramConfirm,
 			mcp.Required(),
-			mcp.Description("Must be set to true to confirm key revocation. This action is permanent."),
+			mcp.Description("Must be set to true to confirm key revocation. This action is permanent. Ignored when dry_run=true."),
 		),
+		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -532,34 +533,26 @@ func NewLinodeObjectStorageKeyDeleteTool(cfg *config.Config) (mcp.Tool, profiles
 }
 
 func handleObjectStorageKeyDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This revokes the access key permanently. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	keyID := request.GetInt("key_id", 0)
-
-	if keyID <= 0 {
+	// Pre-validate negatives: the helper's default `id == 0` check
+	// would let a negative ID through to the API. ErrKeyIDRequired's
+	// "must be a positive integer" message is locked by the existing
+	// invalid_key_id test in linode_object_storage_test.go.
+	if request.GetInt("key_id", 0) < 0 {
 		return mcp.NewToolResultError(ErrKeyIDRequired.Error()), nil
 	}
 
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := client.DeleteObjectStorageKey(ctx, keyID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to revoke access key %d: %v", keyID, err)), nil
-	}
-
-	response := struct {
-		Message string `json:"message"`
-		KeyID   int    `json:"key_id"`
-	}{
-		Message: fmt.Sprintf("Access key %d revoked successfully", keyID),
-		KeyID:   keyID,
-	}
-
-	return MarshalToolResponse(response)
+	return RunDestructiveActionWithID(ctx, request, cfg, &DestructiveActionByID{
+		ToolName:       "linode_object_storage_key_delete",
+		IDParam:        "key_id",
+		Method:         httpMethodDelete,
+		PathPattern:    "/object-storage/keys/%d",
+		ConfirmMessage: "This revokes the access key permanently. Set confirm=true to proceed.",
+		SuccessFormat:  "Access key %d revoked successfully",
+		FetchState: func(ctx context.Context, c *linode.Client, id int) (any, error) {
+			return c.GetObjectStorageKey(ctx, id)
+		},
+		Execute: func(ctx context.Context, c *linode.Client, id int) error { return c.DeleteObjectStorageKey(ctx, id) },
+	})
 }
 
 // NewLinodeObjectStorageObjectACLUpdateTool creates a tool for updating an object's ACL.

@@ -9,7 +9,13 @@ from typing import TYPE_CHECKING, Any
 from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import execute_tool
+from linodemcp.tools.helpers import (
+    DRY_RUN_PROP,
+    PARAM_DRY_RUN,
+    execute_dry_run,
+    execute_tool,
+    is_dry_run,
+)
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -581,7 +587,10 @@ def create_linode_object_storage_key_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_key_delete tool."""
     return Tool(
         name="linode_object_storage_key_delete",
-        description=("Revokes an Object Storage access key permanently."),
+        description=(
+            "Revokes an Object Storage access key permanently. Pass "
+            "dry_run=true to preview without revoking."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -598,10 +607,11 @@ def create_linode_object_storage_key_delete_tool() -> tuple[Tool, Capability]:
                 "confirm": {
                     "type": "boolean",
                     "description": (
-                        "Must be set to true to confirm"
-                        " key revocation. This action is permanent."
+                        "Must be set to true to confirm key revocation. This "
+                        "action is permanent. Ignored when dry_run=true."
                     ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["key_id", "confirm"],
         },
@@ -729,7 +739,30 @@ async def handle_linode_object_storage_key_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle the linode_object_storage_key_delete tool."""
-    key_id = arguments.get("key_id", 0)
+    key_id_raw = arguments.get("key_id", 0)
+
+    # ID validation runs before both branches: dry-run and the real call
+    # both need a positive integer, and the spec is explicit that dry-run
+    # errors out on missing required args the same way the real call would.
+    if not key_id_raw or int(key_id_raw) <= 0:
+        return _error_response("key_id is required and must be a positive integer")
+
+    key_id = int(key_id_raw)
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_object_storage_key(key_id=key_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_object_storage_key_delete",
+            "DELETE",
+            f"/object-storage/keys/{key_id}",
+            _fetch,
+        )
+
     confirm = arguments.get("confirm", False)
 
     if not confirm:
@@ -743,11 +776,6 @@ async def handle_linode_object_storage_key_delete(
                 ),
             )
         ]
-
-    if not key_id or int(key_id) <= 0:
-        return _error_response("key_id is required and must be a positive integer")
-
-    key_id = int(key_id)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_object_storage_key(key_id=key_id)

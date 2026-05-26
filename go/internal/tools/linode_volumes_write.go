@@ -420,7 +420,7 @@ func handleLinodeVolumeUpdateRequest(ctx context.Context, request *mcp.CallToolR
 func NewLinodeVolumeDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_volume_delete",
-		mcp.WithDescription("Deletes a block storage volume. WARNING: This action is irreversible and all data will be permanently lost. The volume must be detached first."),
+		mcp.WithDescription("Deletes a block storage volume. WARNING: This action is irreversible and all data will be permanently lost. The volume must be detached first. Pass dry_run=true to preview without deleting."),
 		mcp.WithString(
 			paramEnvironment,
 			mcp.Description(paramEnvironmentDesc),
@@ -433,8 +433,9 @@ func NewLinodeVolumeDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		mcp.WithBoolean(
 			paramConfirm,
 			mcp.Required(),
-			mcp.Description("Must be set to true to confirm deletion. This action is irreversible."),
+			mcp.Description("Must be set to true to confirm deletion. This action is irreversible. Ignored when dry_run=true."),
 		),
+		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -445,32 +446,14 @@ func NewLinodeVolumeDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 }
 
 func handleLinodeVolumeDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This operation is destructive and irreversible. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	volumeID := request.GetInt("volume_id", 0)
-
-	if volumeID == 0 {
-		return mcp.NewToolResultError("volume_id is required"), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := client.DeleteVolume(ctx, volumeID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove volume %d: %v", volumeID, err)), nil
-	}
-
-	response := struct {
-		Message  string `json:"message"`
-		VolumeID int    `json:"volume_id"`
-	}{
-		Message:  fmt.Sprintf("Volume %d removed successfully", volumeID),
-		VolumeID: volumeID,
-	}
-
-	return MarshalToolResponse(response)
+	return RunDestructiveActionWithID(ctx, request, cfg, &DestructiveActionByID{
+		ToolName:       "linode_volume_delete",
+		IDParam:        "volume_id",
+		Method:         httpMethodDelete,
+		PathPattern:    "/volumes/%d",
+		ConfirmMessage: "This operation is destructive and irreversible. Set confirm=true to proceed.",
+		SuccessFormat:  "Volume %d removed successfully",
+		FetchState:     func(ctx context.Context, c *linode.Client, id int) (any, error) { return c.GetVolume(ctx, id) },
+		Execute:        func(ctx context.Context, c *linode.Client, id int) error { return c.DeleteVolume(ctx, id) },
+	})
 }
