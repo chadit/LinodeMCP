@@ -202,6 +202,21 @@ func (c *Client) EnableAccountManaged(ctx context.Context) error {
 	return c.httpEnableAccountManaged(ctx)
 }
 
+// GetManagedContact retrieves one managed contact with automatic retry on transient failures.
+func (c *Client) GetManagedContact(ctx context.Context, contactID int) (*ManagedContact, error) {
+	var contact *ManagedContact
+
+	err := c.executeWithRetry(ctx, "GetManagedContact", func() error {
+		var err error
+
+		contact, err = c.httpGetManagedContact(ctx, contactID)
+
+		return err
+	})
+
+	return contact, err
+}
+
 // GetAccountAgreements retrieves account agreement acknowledgment status with automatic retry on transient failures.
 func (c *Client) GetAccountAgreements(ctx context.Context) (*AccountAgreements, error) {
 	var agreements *AccountAgreements

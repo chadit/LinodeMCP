@@ -3,9 +3,33 @@ package linode
 import (
 	"context"
 	"net/http"
+	"net/url"
+	"strconv"
 )
 
 const endpointManagedContacts = "/managed/contacts"
+
+// httpGetManagedContact retrieves one managed contact by ID.
+func (c *Client) httpGetManagedContact(ctx context.Context, contactID int) (*ManagedContact, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointManagedContacts + "/" + url.PathEscape(strconv.Itoa(contactID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetManagedContact", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+
+	var contact ManagedContact
+	if err := c.handleResponse(resp, &contact); err != nil {
+		return nil, err
+	}
+
+	return &contact, nil
+}
 
 // httpListManagedContacts retrieves Managed contacts.
 func (c *Client) httpListManagedContacts(ctx context.Context, page, pageSize int) (*PaginatedResponse[ManagedContact], error) {
