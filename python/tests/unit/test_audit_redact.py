@@ -164,8 +164,12 @@ def test_redaction_fields_pii_locks_conservative_scope() -> None:
         "address_1",
         "address_2",
         "city",
+        "contact_email",
+        "contact_name",
         "phone",
         "phone_number",
+        "phone_primary",
+        "phone_secondary",
         "state",
         "tax_id",
         "zip",
@@ -208,6 +212,8 @@ def test_redact_with_pii_scrubs_pii_fields() -> None:
         "phone": "+1-555-0100",
         "address_1": "123 Main St",
         "city": "Springfield",
+        "contact_name": "Jane Doe",
+        "contact_email": "jane@example.org",
         "country": "us",  # not in PII list, must pass through
     }
 
@@ -224,8 +230,18 @@ def test_redact_with_pii_scrubs_pii_fields() -> None:
     assert is_redacted(redacted["phone"])
     assert is_redacted(redacted["address_1"])
     assert is_redacted(redacted["city"])
+    assert is_redacted(redacted["contact_name"])
+    assert is_redacted(redacted["contact_email"])
     assert sorted(keys) == sorted(
-        ["token", "tax_id", "phone", "address_1", "city"],
+        [
+            "token",
+            "tax_id",
+            "phone",
+            "address_1",
+            "city",
+            "contact_name",
+            "contact_email",
+        ],
     )
 
 

@@ -1,5 +1,21 @@
 package linode
 
+// CreateManagedContactRequest contains editable fields for POST /managed/contacts.
+// Pointer fields distinguish omitted values from explicit contact attributes.
+type CreateManagedContactRequest struct {
+	Name  *string                           `json:"name,omitempty"`
+	Email *string                           `json:"email,omitempty"`
+	Group *string                           `json:"group,omitempty"`
+	Phone *CreateManagedContactPhoneRequest `json:"phone,omitempty"`
+}
+
+// CreateManagedContactPhoneRequest contains editable phone fields for a managed contact create request.
+// Pointer fields distinguish omitted numbers from explicit values.
+type CreateManagedContactPhoneRequest struct {
+	Primary   *string `json:"primary,omitempty"`
+	Secondary *string `json:"secondary,omitempty"`
+}
+
 // ManagedContact represents a contact for Linode Managed service alerts.
 type ManagedContact struct {
 	ID      int                 `json:"id"`
