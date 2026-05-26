@@ -11,6 +11,7 @@ const (
 	endpointManagedContacts       = "/managed/contacts"
 	endpointManagedIssues         = "/managed/issues"
 	endpointManagedLinodeSettings = "/managed/linode-settings"
+	endpointManagedServices       = "/managed/services"
 )
 
 // httpGetManagedLinodeSettings retrieves Managed settings for one Linode.
@@ -116,6 +117,28 @@ func (c *Client) httpListManagedLinodeSettings(ctx context.Context, page, pageSi
 	}
 
 	return &settings, nil
+}
+
+// httpListManagedServices retrieves Managed services.
+func (c *Client) httpListManagedServices(ctx context.Context, page, pageSize int) (*PaginatedResponse[ManagedService], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointManagedServices, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListManagedServices", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+
+	var services PaginatedResponse[ManagedService]
+	if err := c.handleResponse(resp, &services); err != nil {
+		return nil, err
+	}
+
+	return &services, nil
 }
 
 // httpGetManagedIssue retrieves one Managed issue by ID.
