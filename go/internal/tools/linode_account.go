@@ -34,6 +34,8 @@ const (
 	longviewClientsPageSizeMax         = 500
 	longviewSubscriptionsPageSizeMin   = 25
 	longviewSubscriptionsPageSizeMax   = 500
+	monitorAlertChannelsPageSizeMin    = 25
+	monitorAlertChannelsPageSizeMax    = 500
 	longviewClientIDParam              = "client_id"
 	longviewSubscriptionIDParam        = "longview_subscription_id"
 	maxLongviewClientIDFromJSON        = 9007199254740991

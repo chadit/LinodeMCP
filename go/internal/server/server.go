@@ -863,6 +863,7 @@ func coreToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeLongviewPlanTool,
 		tools.NewLinodeLongviewTypesTool,
 		tools.NewLinodeLongviewSubscriptionsTool,
+		tools.NewLinodeMonitorAlertChannelsTool,
 		tools.NewLinodeLongviewClientCreateTool,
 		tools.NewLinodeLongviewPlanUpdateTool,
 		tools.NewLinodeBetasTool,
