@@ -31,6 +31,7 @@ const (
 	longviewSubscriptionsPageSizeMin   = 25
 	longviewSubscriptionsPageSizeMax   = 500
 	longviewClientIDParam              = "client_id"
+	longviewSubscriptionIDParam        = "longview_subscription_id"
 	maxLongviewClientIDFromJSON        = 9007199254740991
 	errLongviewClientIDPositive        = "client_id must be a positive integer"
 	errLongviewClientLabelRequired     = "label is required"
@@ -600,6 +601,22 @@ func NewLinodeLongviewClientGetTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 				mcp.Description("Longview client ID.")),
 		},
 		handleLinodeLongviewClientGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeLongviewSubscriptionGetTool creates a tool for retrieving one Longview subscription.
+func NewLinodeLongviewSubscriptionGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_longview_subscription_get",
+		"Gets one Longview subscription by ID.",
+		[]mcp.ToolOption{
+			mcp.WithString(longviewSubscriptionIDParam, mcp.Required(),
+				mcp.Description("Longview subscription ID.")),
+		},
+		handleLinodeLongviewSubscriptionGetRequest,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -1549,6 +1566,43 @@ func accountPaymentMethodsPaginationFromTool(request *mcp.CallToolRequest) (int,
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeLongviewSubscriptionGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	subscriptionID, validationMessage := longviewSubscriptionIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	subscription, getFailure := client.GetLongviewSubscription(ctx, subscriptionID)
+	if getFailure == nil {
+		return MarshalToolResponse(subscription)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_longview_subscription_get: " + getFailure.Error()), nil
+}
+
+func longviewSubscriptionIDFromTool(request *mcp.CallToolRequest) (string, string) {
+	raw, exists := request.GetArguments()[longviewSubscriptionIDParam]
+	if !exists {
+		return "", "longview_subscription_id is required"
+	}
+
+	subscriptionID, ok := raw.(string)
+	if !ok || strings.TrimSpace(subscriptionID) == "" {
+		return "", "longview_subscription_id must be a non-empty string"
+	}
+
+	if subscriptionID != strings.TrimSpace(subscriptionID) || strings.Contains(subscriptionID, "/") || strings.Contains(subscriptionID, "?") || strings.Contains(subscriptionID, "#") || strings.Contains(subscriptionID, "..") {
+		return "", "longview_subscription_id must not contain path separators, query separators, or traversal segments"
+	}
+
+	return subscriptionID, ""
 }
 
 func handleLinodeLongviewClientGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
