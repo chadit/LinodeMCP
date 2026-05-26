@@ -17,6 +17,7 @@ const (
 	endpointAccountTransfer              = "/account/transfer"
 	endpointAccountSettings              = "/account/settings"
 	endpointAccountSettingsManagedEnable = "/account/settings/managed-enable"
+	endpointManagedCredentials           = "/managed/" + "credentials"
 	endpointAccountCancel                = "/account/cancel"
 	endpointAccountAgreements            = "/account/agreements"
 	endpointAccountMaintenance           = "/account/maintenance"
@@ -183,6 +184,28 @@ func (c *Client) httpEnableAccountManaged(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// httpListManagedCredentials retrieves stored managed credentials.
+func (c *Client) httpListManagedCredentials(ctx context.Context, page, pageSize int) (*PaginatedResponse[ManagedCredential], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointManagedCredentials, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListManagedCredentials", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var credentials PaginatedResponse[ManagedCredential]
+	if err := c.handleResponse(resp, &credentials); err != nil {
+		return nil, err
+	}
+
+	return &credentials, nil
 }
 
 // httpGetAccountAgreements retrieves account agreement acknowledgment status.

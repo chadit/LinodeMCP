@@ -42,6 +42,8 @@ const (
 	accountMaintenancePageSizeMax      = 500
 	accountNotificationsPageSizeMin    = 25
 	accountNotificationsPageSizeMax    = 500
+	managedCredentialsPageSizeMin      = 25
+	managedCredentialsPageSizeMax      = 500
 	accountEventsPageSizeMin           = 25
 	accountEventsPageSizeMax           = 500
 	accountUsersPageSizeMin            = 25
@@ -186,6 +188,22 @@ func NewLinodeAccountAgreementsTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 		func(ctx context.Context, client *linode.Client) (any, error) {
 			return client.GetAccountAgreements(ctx)
 		},
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeManagedCredentialsTool creates a tool for listing managed credentials.
+func NewLinodeManagedCredentialsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_managed_credentials",
+		"Lists stored managed credentials for the authenticated account.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		},
+		handleLinodeManagedCredentialsRequest,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -3896,6 +3914,41 @@ func isAccountBetaID(id string) bool {
 	}
 
 	return true
+}
+
+func handleLinodeManagedCredentialsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	page, pageSize, validationMessage := managedCredentialsPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	credentials, listFailure := client.ListManagedCredentials(ctx, page, pageSize)
+	if listFailure == nil {
+		return MarshalToolResponse(credentials)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_managed_credentials: " + listFailure.Error()), nil
+}
+
+func managedCredentialsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
+	args := request.GetArguments()
+
+	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	pageSize, validationMessage := optionalPaginationInt(args, "page_size", managedCredentialsPageSizeMin, managedCredentialsPageSizeMax)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	return page, pageSize, ""
 }
 
 func handleLinodeAccountMaintenanceRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

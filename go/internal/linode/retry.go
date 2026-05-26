@@ -202,6 +202,21 @@ func (c *Client) EnableAccountManaged(ctx context.Context) error {
 	return c.httpEnableAccountManaged(ctx)
 }
 
+// ListManagedCredentials retrieves stored managed credentials with automatic retry on transient failures.
+func (c *Client) ListManagedCredentials(ctx context.Context, page, pageSize int) (*PaginatedResponse[ManagedCredential], error) {
+	var credentials *PaginatedResponse[ManagedCredential]
+
+	err := c.executeWithRetry(ctx, "ListManagedCredentials", func() error {
+		var err error
+
+		credentials, err = c.httpListManagedCredentials(ctx, page, pageSize)
+
+		return err
+	})
+
+	return credentials, err
+}
+
 // GetManagedContact retrieves one managed contact with automatic retry on transient failures.
 func (c *Client) GetManagedContact(ctx context.Context, contactID int) (*ManagedContact, error) {
 	var contact *ManagedContact
