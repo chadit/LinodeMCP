@@ -229,6 +229,26 @@ func (c *Client) httpGetManagedSSHKey(ctx context.Context) (*ManagedSSHKey, erro
 	return &sshKey, nil
 }
 
+// httpCreateManagedCredential creates a stored Managed credential.
+func (c *Client) httpCreateManagedCredential(ctx context.Context, request *CreateManagedCredentialRequest) (*ManagedCredential, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointManagedCredentials, request)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateManagedCredential", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var credential ManagedCredential
+	if err := c.handleResponse(resp, &credential); err != nil {
+		return nil, err
+	}
+
+	return &credential, nil
+}
+
 // httpGetAccountAgreements retrieves account agreement acknowledgment status.
 func (c *Client) httpGetAccountAgreements(ctx context.Context) (*AccountAgreements, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
