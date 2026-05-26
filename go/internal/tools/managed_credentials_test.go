@@ -444,3 +444,169 @@ func TestLinodeManagedCredentialCreateTool(t *testing.T) {
 		assertErrorContains(t, result, errForbidden)
 	})
 }
+
+func TestLinodeManagedCredentialUpdateTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeManagedCredentialUpdateTool(cfg)
+
+		assert.Equal(t, "linode_managed_credential_update", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapAdmin, capability, "tool should be admin-capable")
+		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "schema should include confirm")
+		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm should be required")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		label := "prod-password-2"
+		updated := linode.ManagedCredential{ID: 9991, Label: label, LastDecrypted: managedCredentialsToolLastDecrypted}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+			assert.Equal(t, managedCredentialsToolPath+"/9991", r.URL.Path, "request path should include credential ID")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+
+			var got map[string]any
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should decode")
+			assert.Equal(t, label, got[keyLabel], "request body should include label")
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(updated))
+		}))
+		t.Cleanup(srv.Close)
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeManagedCredentialUpdateTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyCredentialID: 9991, keyLabel: label, keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, label, "response should include updated credential label")
+		assert.Contains(t, textContent.Text, "updated successfully", "response should include success message")
+	})
+
+	t.Run("confirm rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := map[string]any{
+			caseMissingConfirm: nil,
+			caseFalseConfirm:   false,
+			caseStringConfirm:  boolStringTrue,
+			caseNumericConfirm: float64(1),
+		}
+
+		for name, confirm := range cases {
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls atomic.Int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					calls.Add(1)
+					w.WriteHeader(http.StatusNoContent)
+				}))
+				t.Cleanup(srv.Close)
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeManagedCredentialUpdateTool(cfg)
+
+				args := map[string]any{keyCredentialID: 9991, keyLabel: managedCredentialsToolLabel}
+				if confirm != nil {
+					args[keyConfirm] = confirm
+				}
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, args))
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "missing or invalid confirm should be an error result")
+				assert.Equal(t, int32(0), calls.Load(), "confirm rejection must happen before client call")
+			})
+		}
+	})
+
+	t.Run("validation rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name        string
+			args        map[string]any
+			wantMessage string
+		}{
+			{name: "missing credential id", args: map[string]any{keyLabel: managedCredentialsToolLabel, keyConfirm: true}, wantMessage: errCredentialIDPositive},
+			{name: "zero credential id", args: map[string]any{keyCredentialID: 0, keyLabel: managedCredentialsToolLabel, keyConfirm: true}, wantMessage: errCredentialIDPositive},
+			{name: "slash credential id", args: map[string]any{keyCredentialID: "9991/2", keyLabel: managedCredentialsToolLabel, keyConfirm: true}, wantMessage: errCredentialIDPositive},
+			{name: "query credential id", args: map[string]any{keyCredentialID: "9991?x=1", keyLabel: managedCredentialsToolLabel, keyConfirm: true}, wantMessage: errCredentialIDPositive},
+			{name: "traversal credential id", args: map[string]any{keyCredentialID: pathTraversalValue, keyLabel: managedCredentialsToolLabel, keyConfirm: true}, wantMessage: errCredentialIDPositive},
+			{name: caseMissingLabel, args: map[string]any{keyCredentialID: 9991, keyConfirm: true}, wantMessage: errLabelRequired},
+			{name: caseNonStringLabel, args: map[string]any{keyCredentialID: 9991, keyLabel: 42, keyConfirm: true}, wantMessage: errLabelString},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls atomic.Int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					calls.Add(1)
+					w.WriteHeader(http.StatusNoContent)
+				}))
+				t.Cleanup(srv.Close)
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeManagedCredentialUpdateTool(cfg)
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid input should be an error result")
+				assert.Equal(t, int32(0), calls.Load(), "validation rejection must happen before client call")
+
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, testCase.wantMessage, "validation message should explain the bad argument")
+			})
+		}
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+			assert.Equal(t, managedCredentialsToolPath+"/9991", r.URL.Path, "request path should include credential ID")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		t.Cleanup(srv.Close)
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeManagedCredentialUpdateTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyCredentialID: 9991, keyLabel: managedCredentialsToolLabel, keyConfirm: true}))
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to update linode_managed_credential_update", "response should identify failed tool")
+		assert.Contains(t, textContent.Text, errForbidden, "response should include API error detail")
+	})
+}

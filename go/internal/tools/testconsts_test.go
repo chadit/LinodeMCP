@@ -83,6 +83,7 @@ const (
 	keyReason                    = "reason"
 	keyBetaID                    = "id"
 	keyLongviewClientID          = "longview_client_id"
+	keyCredentialID              = "credential_id"
 	keyLongviewAPIKey            = "api_key"
 	keyLongviewInstallCode       = "install_code"
 	keyLongviewApps              = "apps"
@@ -330,6 +331,9 @@ const (
 
 	// Validation error message values.
 	errLabelRequired               = "label is required"
+	errLabelString                 = "label must be a string"
+	errCredentialIDPositive        = "credential_id must be a positive integer"
+	caseNonStringLabel             = "non-string label"
 	errSSHKeyIDPositive            = "sshkey_id must be a positive integer"
 	errRegionRequired              = "region is required"
 	errTypeRequired                = "type is required"

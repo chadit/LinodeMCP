@@ -19,7 +19,8 @@ import (
 
 const (
 	managedIDParam                     = "credential_" + "id"
-	errManagedIDPositive               = "credential_" + "id must be a positive integer"
+	managedUpdateIDParam               = managedIDParam
+	errManagedIDPositive               = managedIDParam + " must be a positive integer"
 	maxManagedIDFromJSON               = 9007199254740991
 	accountAvailabilityPageSizeMin     = 25
 	accountAvailabilityPageSizeMax     = 500
@@ -213,6 +214,23 @@ func NewLinodeManagedCredentialsTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeManagedCredentialUpdateTool creates a tool for updating one managed credential.
+func NewLinodeManagedCredentialUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_managed_credential_update",
+		"Updates one stored managed credential by ID.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(managedUpdateIDParam, mcp.Required(), mcp.Description("The numeric Managed credential ID to update.")),
+			mcp.WithString("label", mcp.Description("Updated credential label.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm updating the Managed credential.")),
+		},
+		handleLinodeManagedCredentialUpdateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeManagedSSHKeyTool creates a tool for retrieving the account Managed SSH public key.
@@ -3989,6 +4007,53 @@ func handleLinodeManagedCredentialsRequest(ctx context.Context, request *mcp.Cal
 	}
 
 	return mcp.NewToolResultError("Failed to retrieve linode_managed_credentials: " + listFailure.Error()), nil
+}
+
+func handleLinodeManagedCredentialUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This updates a Managed credential. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	credentialID, ok := getPositiveIntArgument(request, managedUpdateIDParam)
+	if !ok {
+		return mcp.NewToolResultError(errManagedIDPositive), nil
+	}
+
+	label, validationMessage := stringArgument(request, "label", false)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if _, exists := request.GetArguments()["label"]; !exists {
+		return mcp.NewToolResultError("label is required"), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	credential, failureMessage := updateManagedCredentialResponse(ctx, client, credentialID, label)
+	if failureMessage != "" {
+		return mcp.NewToolResultError(failureMessage), nil
+	}
+
+	return MarshalToolResponse(struct {
+		Message    string                    `json:"message"`
+		Credential *linode.ManagedCredential `json:"credential"`
+	}{
+		Message:    fmt.Sprintf("Managed credential %d updated successfully", credentialID),
+		Credential: credential,
+	})
+}
+
+func updateManagedCredentialResponse(ctx context.Context, client *linode.Client, credentialID int, label string) (*linode.ManagedCredential, string) {
+	credential, err := client.UpdateManagedCredential(ctx, credentialID, linode.UpdateManagedCredentialRequest{Label: &label})
+	if err != nil {
+		return nil, "Failed to update linode_managed_credential_update " + strconv.Itoa(credentialID) + ": " + err.Error()
+	}
+
+	return credential, ""
 }
 
 func handleLinodeManagedSSHKeyRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

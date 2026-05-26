@@ -209,6 +209,28 @@ func (c *Client) httpListManagedCredentials(ctx context.Context, page, pageSize 
 	return &credentials, nil
 }
 
+// httpUpdateManagedCredential updates one stored Managed credential.
+func (c *Client) httpUpdateManagedCredential(ctx context.Context, credentialID int, req UpdateManagedCredentialRequest) (*ManagedCredential, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointManagedCredentials + "/" + url.PathEscape(strconv.Itoa(credentialID))
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateManagedCredential", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var credential ManagedCredential
+	if err := c.handleResponse(resp, &credential); err != nil {
+		return nil, err
+	}
+
+	return &credential, nil
+}
+
 // httpGetManagedSSHKey retrieves the Managed SSH public key assigned to the account.
 func (c *Client) httpGetManagedSSHKey(ctx context.Context) (*ManagedSSHKey, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
