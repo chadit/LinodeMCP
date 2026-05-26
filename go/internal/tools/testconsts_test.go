@@ -32,6 +32,7 @@ const (
 	caseMissingInterface       = "missing interface"
 	caseNonStringInterface     = "non-string interface"
 	caseNullInterface          = "null interface"
+	caseZeroContactID          = "zero contact id"
 	interfacePrimaryJSON       = `{"primary":true}`
 	memberLabelFixture         = "Engineering"
 	memberTokenFixture         = "member-token"

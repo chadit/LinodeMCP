@@ -26,6 +26,80 @@ const (
 	managedContactCreateError = "managed contact could not be created"
 )
 
+func TestClientDeleteManagedContactSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, managedContactsPath+"/567", r.URL.Path, "request path should include contact ID")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+	err := client.DeleteManagedContact(t.Context(), 567)
+
+	require.NoError(t, err, "DeleteManagedContact should succeed on 200 response")
+}
+
+func TestClientDeleteManagedContactAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, managedContactsPath+"/567", r.URL.Path, "request path should include contact ID")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: managedContactsForbidden}}}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+	err := client.DeleteManagedContact(t.Context(), 567)
+
+	require.Error(t, err, "DeleteManagedContact should fail on API errors")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+}
+
+func TestClientDeleteManagedContactNetworkError(t *testing.T) {
+	t.Parallel()
+
+	client := linode.NewClient("http://127.0.0.1:1", "token", nil, linode.WithMaxRetries(0))
+	err := client.DeleteManagedContact(t.Context(), 567)
+
+	require.Error(t, err, "DeleteManagedContact should fail when the server is unreachable")
+
+	var netErr *linode.NetworkError
+	require.ErrorAs(t, err, &netErr, "error should be a NetworkError")
+	assert.Equal(t, "DeleteManagedContact", netErr.Operation)
+}
+
+func TestClientDeleteManagedContactDoesNotRetryTransientError(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, managedContactsPath+"/567", r.URL.Path, "request path should include contact ID")
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryPaymentError}}}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(2), linode.WithBaseDelay(time.Millisecond), linode.WithJitter(false))
+	err := client.DeleteManagedContact(t.Context(), 567)
+
+	require.Error(t, err, "DeleteManagedContact should return the transient failure")
+	assert.Equal(t, int32(1), calls.Load(), "destructive DELETE should not be retried")
+}
+
 func TestClientListManagedContactsSuccess(t *testing.T) {
 	t.Parallel()
 

@@ -54,7 +54,7 @@ func TestLinodeManagedContactGetTool(t *testing.T) {
 			args map[string]any
 		}{
 			{name: "missing contact id", args: map[string]any{}},
-			{name: "zero contact id", args: map[string]any{keyContactID: 0}},
+			{name: caseZeroContactID, args: map[string]any{keyContactID: 0}},
 			{name: "negative contact id", args: map[string]any{keyContactID: -1}},
 			{name: "string contact id", args: map[string]any{keyContactID: "174"}},
 			{name: "fractional contact id", args: map[string]any{keyContactID: 174.5}},

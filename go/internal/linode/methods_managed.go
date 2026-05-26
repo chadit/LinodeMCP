@@ -31,6 +31,23 @@ func (c *Client) httpGetManagedContact(ctx context.Context, contactID int) (*Man
 	return &contact, nil
 }
 
+// httpDeleteManagedContact deletes one Managed contact.
+func (c *Client) httpDeleteManagedContact(ctx context.Context, contactID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointManagedContacts + "/" + url.PathEscape(strconv.Itoa(contactID))
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteManagedContact", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+
+	return c.handleResponse(resp, nil)
+}
+
 // httpListManagedContacts retrieves Managed contacts.
 func (c *Client) httpListManagedContacts(ctx context.Context, page, pageSize int) (*PaginatedResponse[ManagedContact], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

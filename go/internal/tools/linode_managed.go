@@ -24,6 +24,8 @@ const (
 	managedContactUpdateGroupParam  = "group"
 	managedContactUpdatePhone1Param = "phone_primary"
 	managedContactUpdatePhone2Param = "phone_secondary"
+	managedContactDeleteIDParam     = "contact_id"
+	managedContactDeleteIDMessage   = "contact_id must be a positive integer"
 )
 
 // NewLinodeManagedContactGetTool creates a tool for retrieving one managed contact.
@@ -40,6 +42,22 @@ func NewLinodeManagedContactGetTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeManagedContactDeleteTool creates a tool for deleting one Managed contact.
+func NewLinodeManagedContactDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_managed_contact_delete",
+		"Deletes a contact configured for Linode Managed service alerts.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(managedContactDeleteIDParam, mcp.Required(), mcp.Description("The Managed contact ID to delete.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm Managed contact deletion.")),
+		},
+		handleLinodeManagedContactDeleteRequest,
+	)
+
+	return tool, profiles.CapDestroy, handler
 }
 
 // NewLinodeManagedContactsTool creates a tool for listing Managed contacts.
@@ -98,10 +116,48 @@ func handleLinodeManagedContactGetRequest(ctx context.Context, request *mcp.Call
 	return mcp.NewToolResultError("Failed to retrieve linode_managed_contact_get: " + getFailure.Error()), nil
 }
 
+func handleLinodeManagedContactDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This deletes a Managed contact. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	contactID, validationMessage := managedContactDeleteIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if failureMessage := deleteManagedContactErrorMessage(ctx, client, contactID); failureMessage != "" {
+		return mcp.NewToolResultError(failureMessage), nil
+	}
+
+	return mcp.NewToolResultText("Managed contact deleted successfully"), nil
+}
+
+func deleteManagedContactErrorMessage(ctx context.Context, client *linode.Client, contactID int) string {
+	if err := client.DeleteManagedContact(ctx, contactID); err != nil {
+		return "Failed to delete linode_managed_contact_delete: " + err.Error()
+	}
+
+	return ""
+}
+
+func managedContactDeleteIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	return managedContactIDFromToolWithMissingMessage(request, managedContactDeleteIDMessage)
+}
+
 func managedContactIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	return managedContactIDFromToolWithMissingMessage(request, "contact_id is required")
+}
+
+func managedContactIDFromToolWithMissingMessage(request *mcp.CallToolRequest, missingMessage string) (int, string) {
 	raw, exists := request.GetArguments()[managedContactGetIDParam]
 	if !exists {
-		return 0, "contact_id is required"
+		return 0, missingMessage
 	}
 
 	switch value := raw.(type) {
