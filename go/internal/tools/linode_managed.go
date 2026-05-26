@@ -49,6 +49,7 @@ const (
 	managedIssuesPageSizeMax               = 500
 	managedServiceGetIDParam               = "service_id"
 	errManagedServiceGetIDPositive         = "service_id must be a positive integer"
+	errManagedServiceUpdateFields          = "at least one managed service field is required"
 	maxManagedServiceGetIDFromJSON         = 9007199254740991
 	managedServicesPageSizeMin             = 25
 	managedServicesPageSizeMax             = 500
@@ -202,6 +203,31 @@ func NewLinodeManagedServiceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeManagedServiceUpdateTool creates a tool for updating one Managed service.
+func NewLinodeManagedServiceUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_managed_service_update",
+		"Updates a service monitored by Linode Managed.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(managedServiceGetIDParam, mcp.Required(), mcp.Description("The numeric Managed service monitor ID to update.")),
+			mcp.WithString(managedServiceLabelParam, mcp.Description("Updated label for the Managed service.")),
+			mcp.WithString(managedServiceTypeParam, mcp.Description("Updated monitor type: url or tcp.")),
+			mcp.WithString(managedServiceAddressParam, mcp.Description("Updated URL or address monitored by the service.")),
+			mcp.WithNumber(managedServiceTimeoutParam, mcp.Description("Updated timeout in seconds, 1-255.")),
+			mcp.WithString(managedServiceBodyParam, mcp.Description("Updated expected response body text for URL monitors.")),
+			mcp.WithString(managedServiceConsultationParam, mcp.Description("Updated Managed contact group to consult when an issue is detected.")),
+			mcp.WithArray(managedServiceCredentialsParam, mcp.Description("Updated Managed credential IDs used when resolving service issues.")),
+			mcp.WithString(managedServiceNotesParam, mcp.Description("Updated notes for responders.")),
+			mcp.WithString(managedServiceRegionParam, mcp.Description("Updated region for private IP services.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm Managed service update.")),
+		},
+		handleLinodeManagedServiceUpdateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeManagedServicesTool creates a tool for listing Managed services.
@@ -659,6 +685,143 @@ func managedServiceIDFromTool(request *mcp.CallToolRequest) (int, string) {
 	default:
 		return 0, errManagedServiceGetIDPositive
 	}
+}
+
+func handleLinodeManagedServiceUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This updates a Managed service monitor. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	serviceID, validationMessage := managedServiceIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	updateRequest, validationMessage := managedServiceUpdateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	service, updateFailure := updateManagedServiceForTool(ctx, client, serviceID, updateRequest)
+	if updateFailure != "" {
+		return mcp.NewToolResultError(updateFailure), nil
+	}
+
+	return MarshalToolResponse(service)
+}
+
+func updateManagedServiceForTool(ctx context.Context, client *linode.Client, serviceID int, request *linode.UpdateManagedServiceRequest) (*linode.ManagedService, string) {
+	service, err := client.UpdateManagedService(ctx, serviceID, request)
+	if err != nil {
+		return nil, "Failed to update linode_managed_service_update: " + err.Error()
+	}
+
+	return service, ""
+}
+
+func managedServiceUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateManagedServiceRequest, string) {
+	args := request.GetArguments()
+	updateRequest := &linode.UpdateManagedServiceRequest{}
+
+	var fields int
+
+	if validationMessage := managedServiceOptionalStringWithCount(request, managedServiceLabelParam, &updateRequest.Label, &fields); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if _, exists := args[managedServiceTypeParam]; exists {
+		serviceType, validationMessage := managedServiceOptionalNonEmptyString(request, managedServiceTypeParam)
+		if validationMessage != "" {
+			return nil, validationMessage
+		}
+
+		if serviceType != "url" && serviceType != "tcp" {
+			return nil, errManagedServiceType
+		}
+
+		updateRequest.ServiceType = &serviceType
+		fields++
+	}
+
+	if validationMessage := managedServiceOptionalStringWithCount(request, managedServiceAddressParam, &updateRequest.Address, &fields); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if _, exists := args[managedServiceTimeoutParam]; exists {
+		timeout, validationMessage := boundedIntArgument(request, managedServiceTimeoutParam, managedServiceTimeoutMin, managedServiceTimeoutMax, errManagedServiceTimeout)
+		if validationMessage != "" {
+			return nil, validationMessage
+		}
+
+		updateRequest.Timeout = &timeout
+		fields++
+	}
+
+	if validationMessage := managedServiceOptionalStringWithCount(request, managedServiceBodyParam, &updateRequest.Body, &fields); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if validationMessage := managedServiceOptionalStringWithCount(request, managedServiceConsultationParam, &updateRequest.ConsultationGroup, &fields); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if raw, exists := args[managedServiceCredentialsParam]; exists {
+		credentials, validationMessage := intSliceFromToolArg(raw, managedServiceCredentialsParam)
+		if validationMessage != "" {
+			return nil, validationMessage
+		}
+
+		updateRequest.Credentials = &credentials
+		fields++
+	}
+
+	if validationMessage := managedServiceOptionalStringWithCount(request, managedServiceNotesParam, &updateRequest.Notes, &fields); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if validationMessage := managedServiceOptionalStringWithCount(request, managedServiceRegionParam, &updateRequest.Region, &fields); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if fields == 0 {
+		return nil, errManagedServiceUpdateFields
+	}
+
+	return updateRequest, ""
+}
+
+func managedServiceOptionalNonEmptyString(request *mcp.CallToolRequest, name string) (string, string) {
+	value, validationMessage := stringArgument(request, name, false)
+	if validationMessage != "" {
+		return "", validationMessage
+	}
+
+	if value == "" {
+		return "", name + " must be a non-empty string"
+	}
+
+	return value, ""
+}
+
+func managedServiceOptionalStringWithCount(request *mcp.CallToolRequest, name string, target **string, fields *int) string {
+	if _, exists := request.GetArguments()[name]; !exists {
+		return ""
+	}
+
+	value, validationMessage := stringArgument(request, name, false)
+	if validationMessage != "" {
+		return validationMessage
+	}
+
+	*target = &value
+	(*fields)++
+
+	return ""
 }
 
 func handleLinodeManagedServicesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

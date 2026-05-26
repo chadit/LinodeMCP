@@ -163,6 +163,28 @@ func (c *Client) httpGetManagedService(ctx context.Context, serviceID int) (*Man
 	return &service, nil
 }
 
+// httpUpdateManagedService updates one Managed service monitor.
+func (c *Client) httpUpdateManagedService(ctx context.Context, serviceID int, req *UpdateManagedServiceRequest) (*ManagedService, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointManagedServices + "/" + url.PathEscape(strconv.Itoa(serviceID))
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateManagedService", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+
+	var service ManagedService
+	if err := c.handleResponse(resp, &service); err != nil {
+		return nil, err
+	}
+
+	return &service, nil
+}
+
 // httpListManagedServices retrieves Managed services.
 func (c *Client) httpListManagedServices(ctx context.Context, page, pageSize int) (*PaginatedResponse[ManagedService], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
