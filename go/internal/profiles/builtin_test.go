@@ -567,6 +567,7 @@ func TestCategoriesIncludesMonitorServicesInMonitor(t *testing.T) {
 	t.Parallel()
 
 	assert.Contains(t, profiles.Categories("linode_monitor_services"), "monitor")
+	assert.Contains(t, profiles.Categories("linode_monitor_service_get"), "monitor")
 }
 
 func TestCategoriesIncludesMonitorAlertDefinitionsInMonitor(t *testing.T) {

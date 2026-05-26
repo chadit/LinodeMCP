@@ -676,6 +676,21 @@ func (c *Client) ListMonitorServices(ctx context.Context) (*PaginatedResponse[Mo
 	return services, err
 }
 
+// GetMonitorService retrieves details for one supported monitoring service type with automatic retry on transient failures.
+func (c *Client) GetMonitorService(ctx context.Context, serviceType string) (MonitorService, error) {
+	var service MonitorService
+
+	err := c.executeWithRetry(ctx, "GetMonitorService", func() error {
+		var err error
+
+		service, err = c.httpGetMonitorService(ctx, serviceType)
+
+		return err
+	})
+
+	return service, err
+}
+
 // ListMonitorDashboards retrieves monitoring dashboards with automatic retry on transient failures.
 func (c *Client) ListMonitorDashboards(ctx context.Context, page, pageSize int) (*PaginatedResponse[MonitorDashboard], error) {
 	var dashboards *PaginatedResponse[MonitorDashboard]

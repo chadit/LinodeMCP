@@ -27,6 +27,28 @@ func (c *Client) httpListMonitorServices(ctx context.Context) (*PaginatedRespons
 	return &services, nil
 }
 
+// httpGetMonitorService retrieves details for one supported monitoring service type.
+func (c *Client) httpGetMonitorService(ctx context.Context, serviceType string) (MonitorService, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return MonitorService{}, &NetworkError{Operation: "GetMonitorService", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var service MonitorService
+	if err := c.handleResponse(resp, &service); err != nil {
+		return MonitorService{}, err
+	}
+
+	return service, nil
+}
+
 // httpListMonitorDashboards retrieves monitoring dashboards.
 func (c *Client) httpListMonitorDashboards(ctx context.Context, page, pageSize int) (*PaginatedResponse[MonitorDashboard], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
