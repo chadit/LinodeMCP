@@ -277,6 +277,11 @@ func (c *Client) ListManagedContacts(ctx context.Context, page, pageSize int) (*
 	return contacts, err
 }
 
+// UpdateManagedContact updates one Managed contact without retrying the mutating request.
+func (c *Client) UpdateManagedContact(ctx context.Context, contactID int, req UpdateManagedContactRequest) (*ManagedContact, error) {
+	return c.httpUpdateManagedContact(ctx, contactID, req)
+}
+
 // ListAccountNotifications retrieves account notifications with automatic retry on transient failures.
 func (c *Client) ListAccountNotifications(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountNotification], error) {
 	var notifications *PaginatedResponse[AccountNotification]

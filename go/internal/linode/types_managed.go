@@ -31,3 +31,17 @@ type ManagedContactPhone struct {
 	Primary   *string `json:"primary"`
 	Secondary *string `json:"secondary"`
 }
+
+// UpdateManagedContactRequest contains mutable Managed contact fields.
+type UpdateManagedContactRequest struct {
+	Name  *string                    `json:"name,omitempty"`
+	Email *string                    `json:"email,omitempty"`
+	Group *string                    `json:"group,omitempty"`
+	Phone *UpdateManagedContactPhone `json:"phone,omitempty"`
+}
+
+// UpdateManagedContactPhone contains mutable phone fields for a Managed contact.
+type UpdateManagedContactPhone struct {
+	Primary   *string `json:"primary,omitempty"`
+	Secondary *string `json:"secondary,omitempty"`
+}

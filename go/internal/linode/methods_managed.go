@@ -72,3 +72,25 @@ func (c *Client) httpCreateManagedContact(ctx context.Context, request *CreateMa
 
 	return &contact, nil
 }
+
+// httpUpdateManagedContact updates one Managed contact.
+func (c *Client) httpUpdateManagedContact(ctx context.Context, contactID int, req UpdateManagedContactRequest) (*ManagedContact, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointManagedContacts + "/" + url.PathEscape(strconv.Itoa(contactID))
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateManagedContact", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+
+	var contact ManagedContact
+	if err := c.handleResponse(resp, &contact); err != nil {
+		return nil, err
+	}
+
+	return &contact, nil
+}
