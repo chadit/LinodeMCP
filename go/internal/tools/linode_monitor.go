@@ -12,13 +12,14 @@ import (
 )
 
 const (
-	monitorServicesToolName       = "linode_monitor_services"
-	monitorServiceGetToolName     = "linode_monitor_service_get"
-	monitorServiceTypeParam       = "service_type"
-	errMonitorServiceTypeInvalid  = "service_type must be a single non-empty service type slug"
-	monitorDashboardIDParam       = "dashboard_id"
-	errMonitorDashboardIDMissing  = "dashboard_id is required"
-	errMonitorDashboardIDPositive = "dashboard_id must be a positive integer"
+	monitorServicesToolName                = "linode_monitor_services"
+	monitorServiceGetToolName              = "linode_monitor_service_get"
+	monitorServiceAlertDefinitionsToolName = "linode_monitor_service_alert_definitions"
+	monitorServiceTypeParam                = "service_type"
+	errMonitorServiceTypeInvalid           = "service_type must be a single non-empty service type slug"
+	monitorDashboardIDParam                = "dashboard_id"
+	errMonitorDashboardIDMissing           = "dashboard_id is required"
+	errMonitorDashboardIDPositive          = "dashboard_id must be a positive integer"
 )
 
 // NewLinodeMonitorServicesTool creates a tool for listing supported monitoring service types.
@@ -128,6 +129,49 @@ func getMonitorService(ctx context.Context, client *linode.Client, serviceType s
 	}
 
 	return service, ""
+}
+
+// NewLinodeMonitorServiceAlertDefinitionsTool creates a tool for listing alert definitions for one monitoring service type.
+func NewLinodeMonitorServiceAlertDefinitionsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		monitorServiceAlertDefinitionsToolName,
+		"Lists alert definitions for one supported monitoring service type by service_type.",
+		[]mcp.ToolOption{
+			mcp.WithString(monitorServiceTypeParam, mcp.Required(), mcp.Description("Supported monitoring service type slug whose alert definitions should be listed.")),
+		},
+		handleLinodeMonitorServiceAlertDefinitionsRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleLinodeMonitorServiceAlertDefinitionsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	serviceType, validationMessage := monitorServiceTypeFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	definitions, listFailureMessage := listMonitorServiceAlertDefinitions(ctx, client, serviceType)
+	if listFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to retrieve " + monitorServiceAlertDefinitionsToolName + ": " + listFailureMessage), nil
+	}
+
+	return MarshalToolResponse(definitions)
+}
+
+func listMonitorServiceAlertDefinitions(ctx context.Context, client *linode.Client, serviceType string) (*linode.PaginatedResponse[linode.AlertDefinition], string) {
+	definitions, err := client.ListMonitorServiceAlertDefinitions(ctx, serviceType)
+	if err != nil {
+		return nil, err.Error()
+	}
+
+	return definitions, ""
 }
 
 // NewLinodeMonitorDashboardsTool creates a tool for listing monitoring dashboards.

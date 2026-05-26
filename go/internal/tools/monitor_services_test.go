@@ -16,16 +16,18 @@ import (
 )
 
 const (
-	monitorServicesToolPath          = "/monitor/services"
-	monitorServiceGetToolPath        = "/monitor/services/dbaas"
-	monitorServicesToolName          = "linode_monitor_services"
-	monitorServiceGetToolName        = "linode_monitor_service_get"
-	monitorServiceToolLabel          = "Databases"
-	monitorServiceToolTypeDatabase   = "dbaas"
-	monitorServiceTypeParam          = "service_type"
-	monitorServiceTypeInvalidError   = "service_type must be a single non-empty service type slug"
-	monitorServiceTypeNonStringError = "service_type must be a string"
-	monitorServiceTypeRequiredError  = "service_type is required"
+	monitorServicesToolPath                = "/monitor/services"
+	monitorServiceGetToolPath              = "/monitor/services/dbaas"
+	monitorServiceAlertDefinitionsToolPath = "/monitor/services/dbaas/alert-definitions"
+	monitorServicesToolName                = "linode_monitor_services"
+	monitorServiceGetToolName              = "linode_monitor_service_get"
+	monitorServiceAlertDefinitionsToolName = "linode_monitor_service_alert_definitions"
+	monitorServiceToolLabel                = "Databases"
+	monitorServiceToolTypeDatabase         = "dbaas"
+	monitorServiceTypeParam                = "service_type"
+	monitorServiceTypeInvalidError         = "service_type must be a single non-empty service type slug"
+	monitorServiceTypeNonStringError       = "service_type must be a string"
+	monitorServiceTypeRequiredError        = "service_type is required"
 )
 
 func TestLinodeMonitorServiceGetTool(t *testing.T) {
@@ -127,6 +129,116 @@ func TestLinodeMonitorServiceGetTool(t *testing.T) {
 
 				cfg := &config.Config{}
 				_, _, handler := tools.NewLinodeMonitorServiceGetTool(cfg)
+
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid service type should be an error result")
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, testCase.wantMessage, "response should describe validation error")
+			})
+		}
+	})
+}
+
+func TestLinodeMonitorServiceAlertDefinitionsTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+
+		tool, capability, handler := tools.NewLinodeMonitorServiceAlertDefinitionsTool(cfg)
+		assert.Equal(t, monitorServiceAlertDefinitionsToolName, tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Contains(t, tool.InputSchema.Required, monitorServiceTypeParam, "service type should be required")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, monitorServiceAlertDefinitionsToolPath, r.URL.Path, "request path should match")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyData: []map[string]any{{
+					keyID:          20000,
+					keyLabel:       "High CPU Usage",
+					keyServiceType: monitorServiceToolTypeDatabase,
+				}},
+			}))
+		}))
+		t.Cleanup(srv.Close)
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeMonitorServiceAlertDefinitionsTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase})
+		result, err := handler(t.Context(), req)
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "High CPU Usage", "response should contain alert label")
+		assert.Contains(t, textContent.Text, monitorServiceToolTypeDatabase, "response should contain service type")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, monitorServiceAlertDefinitionsToolPath, r.URL.Path, "request path should match")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		t.Cleanup(srv.Close)
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeMonitorServiceAlertDefinitionsTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase})
+		result, err := handler(t.Context(), req)
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to retrieve "+monitorServiceAlertDefinitionsToolName, "response should identify failed tool")
+		assert.Contains(t, textContent.Text, errForbidden, "response should include API error detail")
+	})
+
+	t.Run("invalid service type rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name        string
+			args        map[string]any
+			wantMessage string
+		}{
+			{name: "missing service type", args: map[string]any{}, wantMessage: monitorServiceTypeRequiredError},
+			{name: "numeric service type", args: map[string]any{monitorServiceTypeParam: 123}, wantMessage: monitorServiceTypeNonStringError},
+			{name: "separator service type", args: map[string]any{monitorServiceTypeParam: "dbaas/postgres"}, wantMessage: monitorServiceTypeInvalidError},
+			{name: "query service type", args: map[string]any{monitorServiceTypeParam: "dbaas?x=1"}, wantMessage: monitorServiceTypeInvalidError},
+			{name: "traversal service type", args: map[string]any{monitorServiceTypeParam: pathTraversalValue}, wantMessage: monitorServiceTypeInvalidError},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeMonitorServiceAlertDefinitionsTool(cfg)
 
 				req := createRequestWithArgs(t, testCase.args)
 				result, err := handler(t.Context(), req)
