@@ -26,6 +26,8 @@ const (
 	managedContactUpdatePhone2Param = "phone_secondary"
 	managedContactDeleteIDParam     = "contact_id"
 	managedContactDeleteIDMessage   = "contact_id must be a positive integer"
+	managedIssuesPageSizeMin        = 25
+	managedIssuesPageSizeMax        = 500
 )
 
 // NewLinodeManagedContactGetTool creates a tool for retrieving one managed contact.
@@ -71,6 +73,22 @@ func NewLinodeManagedContactsTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
 		},
 		handleLinodeManagedContactsRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeManagedIssuesTool creates a tool for listing Managed issues.
+func NewLinodeManagedIssuesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_managed_issues",
+		"Lists recent and ongoing issues detected by Linode Managed service monitors.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		},
+		handleLinodeManagedIssuesRequest,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -206,6 +224,41 @@ func managedContactsPaginationFromTool(request *mcp.CallToolRequest) (int, int, 
 	}
 
 	pageSize, validationMessage := optionalPaginationInt(args, "page_size", managedContactsPageSizeMin, managedContactsPageSizeMax)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	return page, pageSize, ""
+}
+
+func handleLinodeManagedIssuesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	page, pageSize, validationMessage := managedIssuesPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	issues, listFailure := client.ListManagedIssues(ctx, page, pageSize)
+	if listFailure == nil {
+		return MarshalToolResponse(issues)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_managed_issues: " + listFailure.Error()), nil
+}
+
+func managedIssuesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
+	args := request.GetArguments()
+
+	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	pageSize, validationMessage := optionalPaginationInt(args, "page_size", managedIssuesPageSizeMin, managedIssuesPageSizeMax)
 	if validationMessage != "" {
 		return 0, 0, validationMessage
 	}
