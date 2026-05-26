@@ -365,3 +365,111 @@ func TestClientCreateManagedServiceDoesNotRetry(t *testing.T) {
 	require.Error(t, err, "CreateManagedService should fail on 500 response")
 	assert.Equal(t, int32(1), calls.Load(), "CreateManagedService must not retry and replay a mutating request")
 }
+
+func TestClientUpdateManagedServiceSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, managedServicePath, r.URL.Path, "request path should include service ID")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		var got linode.UpdateManagedServiceRequest
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got))
+
+		if got.Label == nil || got.ServiceType == nil || got.Address == nil || got.Timeout == nil || got.Credentials == nil {
+			t.Errorf("request body missing managed service update fields: %#v", got)
+
+			return
+		}
+
+		assert.Equal(t, managedServiceLabel, *got.Label)
+		assert.Equal(t, managedServiceType, *got.ServiceType)
+		assert.Equal(t, managedServiceAddress, *got.Address)
+		assert.Equal(t, 30, *got.Timeout)
+		assert.Equal(t, []int{9991}, *got.Credentials)
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.ManagedService{
+			ID:          managedServiceID,
+			Label:       *got.Label,
+			ServiceType: *got.ServiceType,
+			Address:     *got.Address,
+			Timeout:     *got.Timeout,
+			Credentials: *got.Credentials,
+			Status:      managedServiceStatus,
+		}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
+	label := managedServiceLabel
+	serviceType := managedServiceType
+	address := managedServiceAddress
+	timeout := 30
+	req := linode.UpdateManagedServiceRequest{
+		Label:       &label,
+		ServiceType: &serviceType,
+		Address:     &address,
+		Timeout:     &timeout,
+		Credentials: &[]int{9991},
+	}
+
+	service, err := client.UpdateManagedService(t.Context(), managedServiceID, &req)
+
+	require.NoError(t, err, "UpdateManagedService should succeed on 200 response")
+	require.NotNil(t, service)
+	assert.Equal(t, managedServiceID, service.ID)
+	assert.Equal(t, managedServiceLabel, service.Label)
+	assert.Equal(t, managedServiceStatus, service.Status)
+}
+
+func TestClientUpdateManagedServiceAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, managedServicePath, r.URL.Path, "request path should include service ID")
+		w.WriteHeader(http.StatusBadRequest)
+		_, err := w.Write([]byte(`{"errors":[{"reason":"managed service could not be updated"}]}`))
+		assert.NoError(t, err)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
+	label := managedServiceLabel
+
+	_, err := client.UpdateManagedService(t.Context(), managedServiceID, &linode.UpdateManagedServiceRequest{Label: &label})
+
+	require.Error(t, err, "UpdateManagedService should fail on API errors")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
+	assert.Equal(t, http.StatusBadRequest, apiErr.StatusCode)
+}
+
+func TestClientUpdateManagedServiceDoesNotRetry(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, managedServicePath, r.URL.Path, "request path should include service ID")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
+		assert.NoError(t, err)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
+	label := managedServiceLabel
+
+	_, err := client.UpdateManagedService(t.Context(), managedServiceID, &linode.UpdateManagedServiceRequest{Label: &label})
+
+	require.Error(t, err, "UpdateManagedService should fail on 500 response")
+	assert.Equal(t, int32(1), calls.Load(), "UpdateManagedService must not retry and replay a mutating request")
+}

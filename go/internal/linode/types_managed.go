@@ -29,6 +29,20 @@ type CreateManagedServiceRequest struct {
 	Region            *string `json:"region,omitempty"`
 }
 
+// UpdateManagedServiceRequest contains mutable fields for PUT /managed/services/{serviceID}.
+// Pointer fields distinguish omitted values from explicit updates.
+type UpdateManagedServiceRequest struct {
+	Label             *string `json:"label,omitempty"`
+	ServiceType       *string `json:"service_type,omitempty"`
+	Address           *string `json:"address,omitempty"`
+	Timeout           *int    `json:"timeout,omitempty"`
+	Body              *string `json:"body,omitempty"`
+	ConsultationGroup *string `json:"consultation_group,omitempty"`
+	Credentials       *[]int  `json:"credentials,omitempty"`
+	Notes             *string `json:"notes,omitempty"`
+	Region            *string `json:"region,omitempty"`
+}
+
 // ManagedContact represents a contact for Linode Managed service alerts.
 type ManagedContact struct {
 	ID      int                 `json:"id"`

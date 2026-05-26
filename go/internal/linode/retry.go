@@ -432,6 +432,23 @@ func (c *Client) GetManagedService(ctx context.Context, serviceID int) (*Managed
 	return service, err
 }
 
+// UpdateManagedService updates one Managed service monitor without retrying the
+// mutating request. Managed service updates are not guaranteed idempotent after a
+// transient error, so this method delegates exactly once.
+func (c *Client) UpdateManagedService(ctx context.Context, serviceID int, request *UpdateManagedServiceRequest) (*ManagedService, error) {
+	var service *ManagedService
+
+	err := c.executeWithoutRetry(ctx, "UpdateManagedService", func() error {
+		var retryErr error
+
+		service, retryErr = c.httpUpdateManagedService(ctx, serviceID, request)
+
+		return retryErr
+	})
+
+	return service, err
+}
+
 // ListManagedServices retrieves Managed services with automatic retry on transient failures.
 func (c *Client) ListManagedServices(ctx context.Context, page, pageSize int) (*PaginatedResponse[ManagedService], error) {
 	var services *PaginatedResponse[ManagedService]
