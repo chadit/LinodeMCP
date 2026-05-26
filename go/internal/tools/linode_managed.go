@@ -15,6 +15,19 @@ import (
 const (
 	managedContactsPageSizeMin             = 25
 	managedContactsPageSizeMax             = 500
+	managedServiceLabelParam               = "label"
+	managedServiceTypeParam                = "service_type"
+	managedServiceAddressParam             = "address"
+	managedServiceTimeoutParam             = "timeout"
+	managedServiceBodyParam                = "body"
+	managedServiceConsultationParam        = "consultation_group"
+	managedServiceCredentialsParam         = "credentials"
+	managedServiceNotesParam               = "notes"
+	managedServiceRegionParam              = "region"
+	managedServiceTimeoutMin               = 1
+	managedServiceTimeoutMax               = 255
+	errManagedServiceType                  = "service_type must be url or tcp"
+	errManagedServiceTimeout               = "timeout must be an integer between 1 and 255"
 	managedLinodeSettingsIDParam           = "linode_id"
 	errManagedLinodeSettingsIDPositive     = "linode_id must be a positive integer"
 	maxManagedLinodeSettingsIDFromJSON     = 9007199254740991
@@ -47,6 +60,30 @@ const (
 	managedLinodeSettingsUpdateSSHMessage  = "at least one mutable SSH setting is required"
 	managedLinodeSettingsUpdatePortMessage = "ssh_port must be an integer between 1 and 65535"
 )
+
+// NewLinodeManagedServiceCreateTool creates a tool for creating a Managed service monitor.
+func NewLinodeManagedServiceCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_managed_service_create",
+		"Creates a Managed service monitor.",
+		[]mcp.ToolOption{
+			mcp.WithString(managedServiceLabelParam, mcp.Required(), mcp.Description("Label for the Managed service.")),
+			mcp.WithString(managedServiceTypeParam, mcp.Required(), mcp.Description("Monitor type: url or tcp.")),
+			mcp.WithString(managedServiceAddressParam, mcp.Required(), mcp.Description("URL or address monitored by the service.")),
+			mcp.WithNumber(managedServiceTimeoutParam, mcp.Required(), mcp.Description("Timeout in seconds, 1-255.")),
+			mcp.WithString(managedServiceBodyParam, mcp.Description("Expected response body text for URL monitors.")),
+			mcp.WithString(managedServiceConsultationParam, mcp.Description("Managed contact group to consult when an issue is detected.")),
+			mcp.WithArray(managedServiceCredentialsParam, mcp.Description("Managed credential IDs used when resolving service issues.")),
+			mcp.WithString(managedServiceNotesParam, mcp.Description("Notes for responders.")),
+			mcp.WithString(managedServiceRegionParam, mcp.Description("Region for private IP services.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm Managed service creation.")),
+		},
+		handleLinodeManagedServiceCreateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
 
 // NewLinodeManagedLinodeSettingsGetTool creates a tool for retrieving one Linode's Managed settings.
 func NewLinodeManagedLinodeSettingsGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
@@ -673,6 +710,126 @@ func managedIssuesPaginationFromTool(request *mcp.CallToolRequest) (int, int, st
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeManagedServiceCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This creates a Managed service monitor. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	createRequest, validationMessage := managedServiceCreateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	service, createFailureMessage := createManagedServiceForTool(ctx, client, createRequest)
+	if createFailureMessage != "" {
+		return mcp.NewToolResultError(createFailureMessage), nil
+	}
+
+	return MarshalToolResponse(service)
+}
+
+func createManagedServiceForTool(ctx context.Context, client *linode.Client, request *linode.CreateManagedServiceRequest) (*linode.ManagedService, string) {
+	service, err := client.CreateManagedService(ctx, request)
+	if err != nil {
+		return nil, "Failed to create linode_managed_service_create: " + err.Error()
+	}
+
+	return service, ""
+}
+
+func managedServiceCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateManagedServiceRequest, string) {
+	label, validationMessage := managedServiceRequiredString(request, managedServiceLabelParam)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	serviceType, validationMessage := managedServiceRequiredString(request, managedServiceTypeParam)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if serviceType != "url" && serviceType != "tcp" {
+		return nil, errManagedServiceType
+	}
+
+	address, validationMessage := managedServiceRequiredString(request, managedServiceAddressParam)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	timeout, validationMessage := boundedIntArgument(request, managedServiceTimeoutParam, managedServiceTimeoutMin, managedServiceTimeoutMax, errManagedServiceTimeout)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	createRequest := &linode.CreateManagedServiceRequest{
+		Label:       label,
+		ServiceType: serviceType,
+		Address:     address,
+		Timeout:     timeout,
+	}
+
+	if validationMessage := managedServiceOptionalString(request, managedServiceBodyParam, &createRequest.Body); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if validationMessage := managedServiceOptionalString(request, managedServiceConsultationParam, &createRequest.ConsultationGroup); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if validationMessage := managedServiceOptionalString(request, managedServiceNotesParam, &createRequest.Notes); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if validationMessage := managedServiceOptionalString(request, managedServiceRegionParam, &createRequest.Region); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if raw, exists := request.GetArguments()[managedServiceCredentialsParam]; exists {
+		credentials, validationMessage := intSliceFromToolArg(raw, managedServiceCredentialsParam)
+		if validationMessage != "" {
+			return nil, validationMessage
+		}
+
+		createRequest.Credentials = credentials
+	}
+
+	return createRequest, ""
+}
+
+func managedServiceRequiredString(request *mcp.CallToolRequest, name string) (string, string) {
+	value, validationMessage := stringArgument(request, name, true)
+	if validationMessage != "" {
+		return "", validationMessage
+	}
+
+	if value == "" {
+		return "", name + " must be a non-empty string"
+	}
+
+	return value, ""
+}
+
+func managedServiceOptionalString(request *mcp.CallToolRequest, name string, target **string) string {
+	value, validationMessage := stringArgument(request, name, false)
+	if validationMessage != "" {
+		return validationMessage
+	}
+
+	if _, exists := request.GetArguments()[name]; !exists {
+		return ""
+	}
+
+	*target = &value
+
+	return ""
 }
 
 func handleLinodeManagedContactUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

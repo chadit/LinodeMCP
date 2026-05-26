@@ -866,7 +866,34 @@ func (c *Client) CreateAccountUser(ctx context.Context, request *CreateAccountUs
 // request. Managed contact creation is not guaranteed idempotent after a transient
 // error, so this method delegates exactly once.
 func (c *Client) CreateManagedContact(ctx context.Context, request *CreateManagedContactRequest) (*ManagedContact, error) {
-	return c.httpCreateManagedContact(ctx, request)
+	var contact *ManagedContact
+
+	err := c.executeWithoutRetry(ctx, "CreateManagedContact", func() error {
+		var retryErr error
+
+		contact, retryErr = c.httpCreateManagedContact(ctx, request)
+
+		return retryErr
+	})
+
+	return contact, err
+}
+
+// CreateManagedService creates a Managed service monitor without retrying the
+// mutating request. Managed service creation is not guaranteed idempotent after a
+// transient error, so this method delegates exactly once.
+func (c *Client) CreateManagedService(ctx context.Context, request *CreateManagedServiceRequest) (*ManagedService, error) {
+	var service *ManagedService
+
+	err := c.executeWithoutRetry(ctx, "CreateManagedService", func() error {
+		var retryErr error
+
+		service, retryErr = c.httpCreateManagedService(ctx, request)
+
+		return retryErr
+	})
+
+	return service, err
 }
 
 // ListAccountLogins retrieves account user logins with automatic retry on transient failures.

@@ -9,9 +9,9 @@ import (
 
 const (
 	endpointManagedContacts       = "/managed/contacts"
+	endpointManagedServices       = "/managed/services"
 	endpointManagedIssues         = "/managed/issues"
 	endpointManagedLinodeSettings = "/managed/linode-settings"
-	endpointManagedServices       = "/managed/services"
 )
 
 // httpGetManagedLinodeSettings retrieves Managed settings for one Linode.
@@ -205,6 +205,26 @@ func (c *Client) httpListManagedIssues(ctx context.Context, page, pageSize int) 
 	}
 
 	return &issues, nil
+}
+
+// httpCreateManagedService creates a Managed service monitor.
+func (c *Client) httpCreateManagedService(ctx context.Context, request *CreateManagedServiceRequest) (*ManagedService, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointManagedServices, request)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateManagedService", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+
+	var service ManagedService
+	if err := c.handleResponse(resp, &service); err != nil {
+		return nil, err
+	}
+
+	return &service, nil
 }
 
 // httpCreateManagedContact creates a managed contact.
