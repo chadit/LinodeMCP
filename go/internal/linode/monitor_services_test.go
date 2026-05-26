@@ -14,33 +14,24 @@ import (
 )
 
 const (
-	monitorAlertDefinitionsPath       = "/monitor/alert-definitions"
-	monitorAlertDefinitionsQuery      = "page=2&page_size=25"
-	monitorAlertDefinitionID          = 20000
-	monitorAlertDefinitionLabel       = "High CPU Usage"
-	monitorAlertDefinitionType        = "alerts-definitions"
-	monitorAlertDefinitionServiceType = "linode"
-	monitorAlertDefinitionDescription = "CPU usage is high"
+	monitorServicesPath        = "/monitor/services"
+	monitorServiceLabel        = "Databases"
+	monitorServiceTypeDatabase = "dbaas"
 )
 
-func TestClientListMonitorAlertDefinitionsSuccess(t *testing.T) {
+func TestClientListMonitorServicesSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, monitorAlertDefinitionsPath, r.URL.Path, "request path should match")
-		assert.Equal(t, monitorAlertDefinitionsQuery, r.URL.RawQuery, "request query should include pagination")
+		assert.Equal(t, monitorServicesPath, r.URL.Path, "request path should match")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
 		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
 		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData: []map[string]any{{
-				keyID:          monitorAlertDefinitionID,
-				keyLabel:       monitorAlertDefinitionLabel,
-				keyType:        monitorAlertDefinitionType,
-				keyServiceType: monitorAlertDefinitionServiceType,
-				"description":  monitorAlertDefinitionDescription,
-				"severity":     2,
-				"criteria":     map[string]any{"threshold": 90},
+				keyLabel:       monitorServiceLabel,
+				keyServiceType: monitorServiceTypeDatabase,
 			}},
 			keyPage:    1,
 			keyPages:   1,
@@ -50,7 +41,7 @@ func TestClientListMonitorAlertDefinitionsSuccess(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.ListMonitorAlertDefinitions(t.Context(), 2, 25)
+	got, err := client.ListMonitorServices(t.Context())
 
 	require.NoError(t, err)
 	require.NotNil(t, got)
@@ -58,21 +49,16 @@ func TestClientListMonitorAlertDefinitionsSuccess(t *testing.T) {
 	assert.Equal(t, 1, got.Pages)
 	assert.Equal(t, 1, got.Results)
 	require.Len(t, got.Data, 1)
-	assert.Equal(t, monitorAlertDefinitionID, got.Data[0].ID)
-	assert.Equal(t, monitorAlertDefinitionLabel, got.Data[0].Label)
-	assert.Equal(t, monitorAlertDefinitionType, got.Data[0].Type)
-	assert.Equal(t, monitorAlertDefinitionServiceType, got.Data[0].ServiceType)
-	assert.Equal(t, monitorAlertDefinitionDescription, got.Data[0].Description)
-	assert.Equal(t, 2, got.Data[0].Severity)
-	assert.InEpsilon(t, 90, got.Data[0].Criteria["threshold"], 0.001)
+	assert.Equal(t, monitorServiceLabel, got.Data[0].Label)
+	assert.Equal(t, monitorServiceTypeDatabase, got.Data[0].ServiceType)
 }
 
-func TestClientListMonitorAlertDefinitionsAPIError(t *testing.T) {
+func TestClientListMonitorServicesAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, monitorAlertDefinitionsPath, r.URL.Path, "request path should match")
+		assert.Equal(t, monitorServicesPath, r.URL.Path, "request path should match")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
@@ -80,7 +66,7 @@ func TestClientListMonitorAlertDefinitionsAPIError(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	got, err := client.ListMonitorAlertDefinitions(t.Context(), 0, 0)
+	got, err := client.ListMonitorServices(t.Context())
 
 	require.Error(t, err)
 	assert.Nil(t, got)
@@ -91,14 +77,14 @@ func TestClientListMonitorAlertDefinitionsAPIError(t *testing.T) {
 	assert.Equal(t, errForbidden, apiErr.Message)
 }
 
-func TestClientListMonitorAlertDefinitionsRetriesTransientError(t *testing.T) {
+func TestClientListMonitorServicesRetriesTransientError(t *testing.T) {
 	t.Parallel()
 
 	var calls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
-		assert.Equal(t, monitorAlertDefinitionsPath, r.URL.Path, "request path should match")
+		assert.Equal(t, monitorServicesPath, r.URL.Path, "request path should match")
 
 		if calls.Add(1) == 1 {
 			http.Error(w, "temporary", http.StatusServiceUnavailable)
@@ -108,17 +94,20 @@ func TestClientListMonitorAlertDefinitionsRetriesTransientError(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-			keyData: []map[string]any{{keyID: monitorAlertDefinitionID, keyLabel: monitorAlertDefinitionLabel}},
+			keyData: []map[string]any{{
+				keyLabel:       monitorServiceLabel,
+				keyServiceType: monitorServiceTypeDatabase,
+			}},
 		}))
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-	got, err := client.ListMonitorAlertDefinitions(t.Context(), 0, 0)
+	got, err := client.ListMonitorServices(t.Context())
 
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	assert.Equal(t, int32(2), calls.Load(), "read route should retry once after transient failure")
 	require.Len(t, got.Data, 1)
-	assert.Equal(t, monitorAlertDefinitionID, got.Data[0].ID)
+	assert.Equal(t, monitorServiceTypeDatabase, got.Data[0].ServiceType)
 }

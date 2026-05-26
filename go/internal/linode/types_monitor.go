@@ -1,5 +1,11 @@
 package linode
 
+// MonitorService describes a supported monitoring service type.
+type MonitorService struct {
+	Label       string `json:"label"`
+	ServiceType string `json:"service_type"`
+}
+
 // MonitorDashboard describes a monitoring dashboard.
 type MonitorDashboard map[string]any
 

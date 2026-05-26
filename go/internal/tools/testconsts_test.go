@@ -53,6 +53,7 @@ const (
 	keyRegion                    = "region"
 	keyRegions                   = "regions"
 	keyType                      = "type"
+	keyServiceType               = "service_type"
 	keyDomain                    = "domain"
 	keyName                      = "name"
 	keySize                      = "size"

@@ -11,10 +11,47 @@ import (
 )
 
 const (
+	monitorServicesToolName       = "linode_monitor_services"
 	monitorDashboardIDParam       = "dashboard_id"
 	errMonitorDashboardIDMissing  = "dashboard_id is required"
 	errMonitorDashboardIDPositive = "dashboard_id must be a positive integer"
 )
+
+// NewLinodeMonitorServicesTool creates a tool for listing supported monitoring service types.
+func NewLinodeMonitorServicesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		monitorServicesToolName,
+		"Lists supported monitoring service types.",
+		nil,
+		handleLinodeMonitorServicesRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleLinodeMonitorServicesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	services, listFailureMessage := listMonitorServices(ctx, client)
+	if listFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to retrieve " + monitorServicesToolName + ": " + listFailureMessage), nil
+	}
+
+	return MarshalToolResponse(services)
+}
+
+func listMonitorServices(ctx context.Context, client *linode.Client) (*linode.PaginatedResponse[linode.MonitorService], string) {
+	services, err := client.ListMonitorServices(ctx)
+	if err != nil {
+		return nil, err.Error()
+	}
+
+	return services, ""
+}
 
 // NewLinodeMonitorDashboardsTool creates a tool for listing monitoring dashboards.
 func NewLinodeMonitorDashboardsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
