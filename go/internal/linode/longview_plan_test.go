@@ -28,10 +28,10 @@ func TestClientGetLongviewPlanSuccess(t *testing.T) {
 		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
 		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-			"clients_included": 10,
+			keyClientsIncluded: 10,
 			keyID:              "longview-10",
 			keyLabel:           "Longview Pro 10 pack",
-			"price":            map[string]float64{"hourly": 0.06, "monthly": 40},
+			keyPrice:           map[string]float64{keyHourly: 0.06, keyMonthly: 40},
 		}))
 	}))
 	t.Cleanup(srv.Close)
@@ -136,10 +136,10 @@ func TestClientUpdateLongviewPlanSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-			"clients_included": 40,
+			keyClientsIncluded: 40,
 			keyID:              longviewSubscriptionPlan,
 			keyLabel:           "Longview Pro 40 pack",
-			"price":            map[string]float64{"hourly": 0.12, "monthly": 80},
+			keyPrice:           map[string]float64{keyHourly: 0.12, keyMonthly: 80},
 		}))
 	}))
 	t.Cleanup(srv.Close)

@@ -26,6 +26,28 @@ func (c *Client) httpGetLongviewPlan(ctx context.Context) (*LongviewSubscription
 	return &plan, nil
 }
 
+// httpListLongviewSubscriptions retrieves available Longview subscription plans.
+func (c *Client) httpListLongviewSubscriptions(ctx context.Context, page, pageSize int) (*PaginatedResponse[LongviewSubscription], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointLongviewSubscriptions, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListLongviewSubscriptions", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var subscriptions PaginatedResponse[LongviewSubscription]
+	if err := c.handleResponse(resp, &subscriptions); err != nil {
+		return nil, err
+	}
+
+	return &subscriptions, nil
+}
+
 // httpCreateLongviewClient creates a Longview client.
 func (c *Client) httpCreateLongviewClient(ctx context.Context, req *CreateLongviewClientRequest) (*CreatedLongviewClient, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

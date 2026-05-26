@@ -47,6 +47,66 @@ func getLongviewPlan(ctx context.Context, client *linode.Client) (*linode.Longvi
 	return plan, ""
 }
 
+// NewLinodeLongviewSubscriptionsTool creates a tool for listing available Longview subscriptions.
+func NewLinodeLongviewSubscriptionsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_longview_subscriptions",
+		"Lists available Longview subscription plans.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		},
+		handleLinodeLongviewSubscriptionsRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleLinodeLongviewSubscriptionsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	page, pageSize, validationMessage := longviewSubscriptionsPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	subscriptions, listFailureMessage := listLongviewSubscriptions(ctx, client, page, pageSize)
+	if listFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to retrieve linode_longview_subscriptions: " + listFailureMessage), nil
+	}
+
+	return MarshalToolResponse(subscriptions)
+}
+
+func listLongviewSubscriptions(ctx context.Context, client *linode.Client, page, pageSize int) (*linode.PaginatedResponse[linode.LongviewSubscription], string) {
+	subscriptions, err := client.ListLongviewSubscriptions(ctx, page, pageSize)
+	if err != nil {
+		return nil, err.Error()
+	}
+
+	return subscriptions, ""
+}
+
+func longviewSubscriptionsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
+	args := request.GetArguments()
+
+	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	pageSize, validationMessage := optionalPaginationInt(args, "page_size", longviewSubscriptionsPageSizeMin, longviewSubscriptionsPageSizeMax)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	return page, pageSize, ""
+}
+
 // NewLinodeLongviewClientCreateTool creates a tool for creating a Longview client.
 func NewLinodeLongviewClientCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
