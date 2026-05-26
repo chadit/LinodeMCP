@@ -275,6 +275,21 @@ func (c *Client) RevokeManagedCredential(ctx context.Context, credentialID int) 
 	return c.httpRevokeManagedCredential(ctx, credentialID)
 }
 
+// GetManagedLinodeSettings retrieves Managed settings for one Linode with automatic retry on transient failures.
+func (c *Client) GetManagedLinodeSettings(ctx context.Context, linodeID int) (*ManagedLinodeSettings, error) {
+	var settings *ManagedLinodeSettings
+
+	err := c.executeWithRetry(ctx, "GetManagedLinodeSettings", func() error {
+		var err error
+
+		settings, err = c.httpGetManagedLinodeSettings(ctx, linodeID)
+
+		return err
+	})
+
+	return settings, err
+}
+
 // GetManagedContact retrieves one managed contact with automatic retry on transient failures.
 func (c *Client) GetManagedContact(ctx context.Context, contactID int) (*ManagedContact, error) {
 	var contact *ManagedContact

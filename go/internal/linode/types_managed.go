@@ -32,6 +32,22 @@ type ManagedContactPhone struct {
 	Secondary *string `json:"secondary"`
 }
 
+// ManagedLinodeSettings represents Managed service settings for a Linode.
+type ManagedLinodeSettings struct {
+	ID    int                      `json:"id"`
+	Label string                   `json:"label"`
+	Group string                   `json:"group"`
+	SSH   ManagedLinodeSettingsSSH `json:"ssh"`
+}
+
+// ManagedLinodeSettingsSSH contains SSH access settings for Managed service responders.
+type ManagedLinodeSettingsSSH struct {
+	Access bool    `json:"access"`
+	IP     string  `json:"ip"`
+	Port   *int    `json:"port"`
+	User   *string `json:"user"`
+}
+
 // ManagedIssue represents an issue detected by Linode Managed service monitors.
 type ManagedIssue struct {
 	ID       int                `json:"id"`
@@ -46,22 +62,6 @@ type ManagedIssueEntity struct {
 	Label string `json:"label"`
 	Type  string `json:"type"`
 	URL   string `json:"url"`
-}
-
-// ManagedLinodeSettings represents Managed service settings for one Linode.
-type ManagedLinodeSettings struct {
-	ID    int                      `json:"id"`
-	Label string                   `json:"label"`
-	Group string                   `json:"group"`
-	SSH   ManagedLinodeSettingsSSH `json:"ssh"`
-}
-
-// ManagedLinodeSettingsSSH contains SSH access settings for a Managed Linode.
-type ManagedLinodeSettingsSSH struct {
-	Access bool    `json:"access"`
-	IP     string  `json:"ip"`
-	Port   *int    `json:"port"`
-	User   *string `json:"user"`
 }
 
 // UpdateManagedContactRequest contains mutable Managed contact fields.

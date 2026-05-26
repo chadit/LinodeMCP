@@ -13,6 +13,28 @@ const (
 	endpointManagedLinodeSettings = "/managed/linode-settings"
 )
 
+// httpGetManagedLinodeSettings retrieves Managed settings for one Linode.
+func (c *Client) httpGetManagedLinodeSettings(ctx context.Context, linodeID int) (*ManagedLinodeSettings, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointManagedLinodeSettings + "/" + url.PathEscape(strconv.Itoa(linodeID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetManagedLinodeSettings", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+
+	var settings ManagedLinodeSettings
+	if err := c.handleResponse(resp, &settings); err != nil {
+		return nil, err
+	}
+
+	return &settings, nil
+}
+
 // httpGetManagedContact retrieves one managed contact by ID.
 func (c *Client) httpGetManagedContact(ctx context.Context, contactID int) (*ManagedContact, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
