@@ -12,6 +12,7 @@ const (
 	endpointManagedServices       = "/managed/services"
 	endpointManagedIssues         = "/managed/issues"
 	endpointManagedLinodeSettings = "/managed/linode-settings"
+	endpointManagedStats          = "/managed/stats"
 )
 
 // httpGetManagedLinodeSettings retrieves Managed settings for one Linode.
@@ -117,6 +118,26 @@ func (c *Client) httpListManagedLinodeSettings(ctx context.Context, page, pageSi
 	}
 
 	return &settings, nil
+}
+
+// httpGetManagedStats retrieves Managed statistics from the last 24 hours.
+func (c *Client) httpGetManagedStats(ctx context.Context) (map[string]any, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointManagedStats, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetManagedStats", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+
+	var stats map[string]any
+	if err := c.handleResponse(resp, &stats); err != nil {
+		return nil, err
+	}
+
+	return stats, nil
 }
 
 // httpUpdateManagedLinodeSettings updates Managed settings for one Linode.

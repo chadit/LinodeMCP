@@ -170,6 +170,19 @@ func NewLinodeManagedLinodeSettingsTool(cfg *config.Config) (mcp.Tool, profiles.
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeManagedStatsTool creates a tool for retrieving Managed statistics.
+func NewLinodeManagedStatsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_managed_stats",
+		"Lists Linode Managed statistics from the last 24 hours.",
+		nil,
+		handleLinodeManagedStatsRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeManagedLinodeSettingsUpdateTool creates a tool for updating Managed settings for one Linode.
 func NewLinodeManagedLinodeSettingsUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -540,6 +553,20 @@ func managedLinodeSettingsPaginationFromTool(request *mcp.CallToolRequest) (int,
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeManagedStatsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	stats, getFailure := client.GetManagedStats(ctx)
+	if getFailure == nil {
+		return MarshalToolResponse(stats)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_managed_stats: " + getFailure.Error()), nil
 }
 
 func handleLinodeManagedLinodeSettingsUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
