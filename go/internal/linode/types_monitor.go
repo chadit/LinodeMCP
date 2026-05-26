@@ -1,5 +1,8 @@
 package linode
 
+// MonitorDashboard describes a monitoring dashboard.
+type MonitorDashboard map[string]any
+
 // AlertDefinition describes a monitoring alert definition.
 type AlertDefinition struct {
 	ID          int            `json:"id"`
