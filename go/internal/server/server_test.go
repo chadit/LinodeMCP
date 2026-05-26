@@ -191,6 +191,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_managed_linode_settings_update":                 profiles.CapAdmin,
 		"linode_managed_service_delete":                         profiles.CapDestroy,
 		"linode_managed_service_disable":                        profiles.CapAdmin,
+		"linode_managed_service_enable":                         profiles.CapAdmin,
 		"linode_managed_service_get":                            profiles.CapRead,
 		"linode_managed_service_update":                         profiles.CapAdmin,
 		"linode_managed_services":                               profiles.CapRead,

@@ -222,6 +222,22 @@ func NewLinodeManagedServiceDisableTool(cfg *config.Config) (mcp.Tool, profiles.
 	return tool, profiles.CapAdmin, handler
 }
 
+// NewLinodeManagedServiceEnableTool creates a tool for enabling one Managed service monitor.
+func NewLinodeManagedServiceEnableTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_managed_service_enable",
+		"Enables monitoring for a Linode Managed service.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(managedServiceGetIDParam, mcp.Required(), mcp.Description("The Managed service monitor ID to enable.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm enabling Managed service monitoring.")),
+		},
+		handleLinodeManagedServiceEnableRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
 // NewLinodeManagedServiceGetTool creates a tool for retrieving one Managed service.
 func NewLinodeManagedServiceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -779,6 +795,36 @@ func handleLinodeManagedServiceDisableRequest(ctx context.Context, request *mcp.
 func disableManagedServiceErrorMessage(ctx context.Context, client *linode.Client, serviceID int) string {
 	if err := client.DisableManagedService(ctx, serviceID); err != nil {
 		return "Failed to disable linode_managed_service_disable: " + err.Error()
+	}
+
+	return ""
+}
+
+func handleLinodeManagedServiceEnableRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This enables a Managed service monitor. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	serviceID, validationMessage := managedServiceIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if failureMessage := enableManagedServiceErrorMessage(ctx, client, serviceID); failureMessage != "" {
+		return mcp.NewToolResultError(failureMessage), nil
+	}
+
+	return mcp.NewToolResultText("Managed service enabled successfully"), nil
+}
+
+func enableManagedServiceErrorMessage(ctx context.Context, client *linode.Client, serviceID int) string {
+	if err := client.EnableManagedService(ctx, serviceID); err != nil {
+		return "Failed to enable linode_managed_service_enable: " + err.Error()
 	}
 
 	return ""
