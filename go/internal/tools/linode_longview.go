@@ -47,6 +47,42 @@ func getLongviewPlan(ctx context.Context, client *linode.Client) (*linode.Longvi
 	return plan, ""
 }
 
+// NewLinodeLongviewTypesTool creates a tool for listing available Longview subscription types.
+func NewLinodeLongviewTypesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_longview_types",
+		"Lists available Longview subscription types.",
+		nil,
+		handleLinodeLongviewTypesRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleLinodeLongviewTypesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	types, listFailureMessage := listLongviewTypes(ctx, client)
+	if listFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to retrieve linode_longview_types: " + listFailureMessage), nil
+	}
+
+	return MarshalToolResponse(types)
+}
+
+func listLongviewTypes(ctx context.Context, client *linode.Client) (*linode.PaginatedResponse[linode.LongviewType], string) {
+	types, err := client.ListLongviewTypes(ctx)
+	if err != nil {
+		return nil, err.Error()
+	}
+
+	return types, ""
+}
+
 // NewLinodeLongviewSubscriptionsTool creates a tool for listing available Longview subscriptions.
 func NewLinodeLongviewSubscriptionsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
