@@ -51,6 +51,7 @@ const (
 	managedCredentialCreateLabelParam  = "label"
 	managedCredentialCreatePassParam   = "password"
 	managedCredentialCreateUserParam   = "username"
+	errManagedCredentialPasswordReq    = "password is required"
 	accountEventsPageSizeMin           = 25
 	accountEventsPageSizeMax           = 500
 	accountUsersPageSizeMin            = 25
@@ -228,6 +229,27 @@ func NewLinodeManagedCredentialUpdateTool(cfg *config.Config) (mcp.Tool, profile
 			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm updating the Managed credential.")),
 		},
 		handleLinodeManagedCredentialUpdateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
+// NewLinodeManagedCredentialUsernamePasswordUpdateTool creates a tool for updating a Managed credential's username and password.
+func NewLinodeManagedCredentialUsernamePasswordUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_managed_credential_username_password_update",
+		"Updates a stored Managed credential's username and password by ID.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(managedIDParam, mcp.Required(), mcp.Description("Managed credential ID to update.")),
+			mcp.WithString(managedCredentialCreatePassParam, mcp.Required(),
+				mcp.Description("Updated password to store for the Managed credential.")),
+			mcp.WithString(managedCredentialCreateUserParam,
+				mcp.Description("Updated username to store for the Managed credential.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm updating a stored Managed credential's username and password.")),
+		},
+		handleLinodeManagedCredentialUsernamePasswordUpdateRequest,
 	)
 
 	return tool, profiles.CapAdmin, handler
@@ -4071,6 +4093,71 @@ func updateManagedCredentialResponse(ctx context.Context, client *linode.Client,
 	}
 
 	return credential, ""
+}
+
+func handleLinodeManagedCredentialUsernamePasswordUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This updates a stored Managed credential's username and password. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	credentialID, updateReq, validationMessage := managedCredentialUsernamePasswordUpdateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	credential, failureMessage := updateManagedCredentialUsernamePasswordResponse(ctx, client, credentialID, updateReq)
+	if failureMessage != "" {
+		return mcp.NewToolResultError(failureMessage), nil
+	}
+
+	return MarshalToolResponse(credential)
+}
+
+func updateManagedCredentialUsernamePasswordResponse(ctx context.Context, client *linode.Client, credentialID int, req *linode.UpdateManagedCredentialUsernamePasswordRequest) (*linode.ManagedCredential, string) {
+	credential, err := client.UpdateManagedCredentialUsernamePassword(ctx, credentialID, req)
+	if err != nil {
+		return nil, "Failed to update linode_managed_credential_username_password_update " + strconv.Itoa(credentialID) + ": " + err.Error()
+	}
+
+	return credential, ""
+}
+
+func managedCredentialUsernamePasswordUpdateRequestFromTool(request *mcp.CallToolRequest) (int, *linode.UpdateManagedCredentialUsernamePasswordRequest, string) {
+	credentialID, validationMessage := managedCredentialIDFromTool(request)
+	if validationMessage != "" {
+		return 0, nil, validationMessage
+	}
+
+	password, validationMessage := stringArgument(request, managedCredentialCreatePassParam, true)
+	if validationMessage != "" {
+		return 0, nil, validationMessage
+	}
+
+	if strings.TrimSpace(password) == "" {
+		return 0, nil, errManagedCredentialPasswordReq
+	}
+
+	username, validationMessage := stringArgument(request, managedCredentialCreateUserParam, false)
+	if validationMessage != "" {
+		return 0, nil, validationMessage
+	}
+
+	req := &linode.UpdateManagedCredentialUsernamePasswordRequest{Password: password}
+
+	if _, exists := request.GetArguments()[managedCredentialCreateUserParam]; exists {
+		if strings.TrimSpace(username) == "" {
+			return 0, nil, managedCredentialCreateUserParam + " must be a non-empty string"
+		}
+
+		req.Username = &username
+	}
+
+	return credentialID, req, ""
 }
 
 func handleLinodeManagedSSHKeyRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

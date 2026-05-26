@@ -224,6 +224,13 @@ func (c *Client) UpdateManagedCredential(ctx context.Context, credentialID int, 
 	return c.httpUpdateManagedCredential(ctx, credentialID, req)
 }
 
+// UpdateManagedCredentialUsernamePassword updates one stored Managed credential without retrying
+// the mutating username/password request. Retrying can replay side effects after
+// a transient error, so this method delegates exactly once.
+func (c *Client) UpdateManagedCredentialUsernamePassword(ctx context.Context, credentialID int, req *UpdateManagedCredentialUsernamePasswordRequest) (*ManagedCredential, error) {
+	return c.httpUpdateManagedCredentialUsernamePassword(ctx, credentialID, req)
+}
+
 // GetManagedSSHKey retrieves the account Managed SSH public key with automatic retry on transient failures.
 func (c *Client) GetManagedSSHKey(ctx context.Context) (*ManagedSSHKey, error) {
 	var sshKey *ManagedSSHKey

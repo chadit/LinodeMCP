@@ -60,7 +60,7 @@ func TestLinodeInstanceDiskPasswordResetTool(t *testing.T) {
 		{name: caseSlash, args: map[string]any{keyLinodeID: float64(123), keyDiskID: pathSeparatorValue, keyDiskPassword: rootPassStrong, keyConfirm: true}, wantContains: tools.ErrDiskIDRequired.Error()},
 		{name: caseQuery, args: map[string]any{keyLinodeID: float64(123), keyDiskID: pathQueryValue, keyDiskPassword: rootPassStrong, keyConfirm: true}, wantContains: tools.ErrDiskIDRequired.Error()},
 		{name: caseDotTraversal, args: map[string]any{keyLinodeID: float64(123), keyDiskID: pathTraversalValue, keyDiskPassword: rootPassStrong, keyConfirm: true}, wantContains: tools.ErrDiskIDRequired.Error()},
-		{name: "missing password", args: map[string]any{keyLinodeID: float64(123), keyDiskID: float64(10), keyConfirm: true}, wantContains: "password is required"},
+		{name: "missing password", args: map[string]any{keyLinodeID: float64(123), keyDiskID: float64(10), keyConfirm: true}, wantContains: managedCredentialsToolPasswordReq},
 		{name: "weak password", args: map[string]any{keyLinodeID: float64(123), keyDiskID: float64(10), keyDiskPassword: "weak", keyConfirm: true}, wantContains: "root_pass must be at least 12 characters"},
 	}
 	for _, tt := range validationTests {

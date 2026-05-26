@@ -122,12 +122,12 @@ func TestLinodeManagedCredentialGetTool(t *testing.T) {
 			name string
 			args map[string]any
 		}{
-			{name: "missing credential id", args: map[string]any{}},
-			{name: "zero credential id", args: map[string]any{managedCredentialIDParam: 0}},
+			{name: caseMissingCredentialID, args: map[string]any{}},
+			{name: caseZeroCredentialID, args: map[string]any{managedCredentialIDParam: 0}},
 			{name: "fractional credential id", args: map[string]any{managedCredentialIDParam: 1.5}},
 			{name: "string separator credential id", args: map[string]any{managedCredentialIDParam: pathSeparatorValue}},
 			{name: "query separator credential id", args: map[string]any{managedCredentialIDParam: querySeparatorValue}},
-			{name: "traversal credential id", args: map[string]any{managedCredentialIDParam: pathTraversalValue}},
+			{name: caseTraversalCredentialID, args: map[string]any{managedCredentialIDParam: pathTraversalValue}},
 		}
 
 		for _, testCase := range cases {

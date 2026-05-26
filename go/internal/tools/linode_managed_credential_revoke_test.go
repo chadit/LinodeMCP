@@ -119,12 +119,12 @@ func TestLinodeManagedCredentialRevokeTool(t *testing.T) {
 			name string
 			args map[string]any
 		}{
-			{name: "missing credential id", args: map[string]any{keyConfirm: true}},
-			{name: "zero credential id", args: map[string]any{managedCredentialIDParam: 0, keyConfirm: true}},
+			{name: caseMissingCredentialID, args: map[string]any{keyConfirm: true}},
+			{name: caseZeroCredentialID, args: map[string]any{managedCredentialIDParam: 0, keyConfirm: true}},
 			{name: "fractional credential id", args: map[string]any{managedCredentialIDParam: 1.5, keyConfirm: true}},
 			{name: "string separator credential id", args: map[string]any{managedCredentialIDParam: pathSeparatorValue, keyConfirm: true}},
 			{name: "query separator credential id", args: map[string]any{managedCredentialIDParam: querySeparatorValue, keyConfirm: true}},
-			{name: "traversal credential id", args: map[string]any{managedCredentialIDParam: pathTraversalValue, keyConfirm: true}},
+			{name: caseTraversalCredentialID, args: map[string]any{managedCredentialIDParam: pathTraversalValue, keyConfirm: true}},
 		}
 
 		for _, testCase := range cases {
