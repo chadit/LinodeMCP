@@ -676,6 +676,21 @@ func (c *Client) ListMonitorDashboards(ctx context.Context, page, pageSize int) 
 	return dashboards, err
 }
 
+// GetMonitorDashboard retrieves one monitoring dashboard with automatic retry on transient failures.
+func (c *Client) GetMonitorDashboard(ctx context.Context, dashboardID int) (MonitorDashboard, error) {
+	var dashboard MonitorDashboard
+
+	err := c.executeWithRetry(ctx, "GetMonitorDashboard", func() error {
+		var err error
+
+		dashboard, err = c.httpGetMonitorDashboard(ctx, dashboardID)
+
+		return err
+	})
+
+	return dashboard, err
+}
+
 // ListMonitorAlertDefinitions retrieves monitoring alert definitions with automatic retry on transient failures.
 func (c *Client) ListMonitorAlertDefinitions(ctx context.Context, page, pageSize int) (*PaginatedResponse[AlertDefinition], error) {
 	var definitions *PaginatedResponse[AlertDefinition]

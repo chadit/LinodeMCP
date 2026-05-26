@@ -3859,7 +3859,7 @@ func TestLinodeAccountInvoiceItemsTool(t *testing.T) {
 			{name: "invoice id fraction", args: map[string]any{keyInvoiceID: 12345.5}, wantMessage: messageInvoiceIDPositive},
 			{name: "invoice id separator", args: map[string]any{keyInvoiceID: "12345/items"}, wantMessage: messageInvoiceIDPositive},
 			{name: "invoice id query delimiter", args: map[string]any{keyInvoiceID: "12345?items"}, wantMessage: messageInvoiceIDPositive},
-			{name: "invoice id traversal", args: map[string]any{keyInvoiceID: ".."}, wantMessage: messageInvoiceIDPositive},
+			{name: "invoice id traversal", args: map[string]any{keyInvoiceID: pathTraversalValue}, wantMessage: messageInvoiceIDPositive},
 			{name: paginationCasePageZero, args: map[string]any{keyInvoiceID: accountInvoiceID, keyPage: 0}, wantMessage: paginationMessagePageMustBe},
 			{name: paginationCasePageSizeTooLarge, args: map[string]any{keyInvoiceID: accountInvoiceID, keyPageSize: 501}, wantMessage: errPageSizeRange},
 		}

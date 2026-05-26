@@ -15,6 +15,7 @@ import (
 
 const (
 	monitorDashboardsPath  = "/monitor/dashboards"
+	monitorDashboardPath   = "/monitor/dashboards/30000"
 	monitorDashboardsQuery = "page=2&page_size=25"
 	monitorDashboardID     = 30000
 	monitorDashboardLabel  = "Resource Usage"
@@ -57,6 +58,87 @@ func TestClientListMonitorDashboardsSuccess(t *testing.T) {
 	assert.InEpsilon(t, monitorDashboardID, got.Data[0][keyID], 0.001)
 	assert.Equal(t, monitorDashboardLabel, got.Data[0][keyLabel])
 	assert.Equal(t, monitorDashboardType, got.Data[0][keyType])
+}
+
+func TestClientGetMonitorDashboardSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, monitorDashboardPath, r.URL.Path, "request path should match")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyID:     monitorDashboardID,
+			keyLabel:  monitorDashboardLabel,
+			keyType:   monitorDashboardType,
+			"widgets": []map[string]any{{keyLabel: monitorDashboardWidget}},
+		}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.GetMonitorDashboard(t.Context(), monitorDashboardID)
+
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.InEpsilon(t, monitorDashboardID, got[keyID], 0.001)
+	assert.Equal(t, monitorDashboardLabel, got[keyLabel])
+	assert.Equal(t, monitorDashboardType, got[keyType])
+}
+
+func TestClientGetMonitorDashboardAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, monitorDashboardPath, r.URL.Path, "request path should match")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.GetMonitorDashboard(t.Context(), monitorDashboardID)
+
+	require.Error(t, err)
+	assert.Nil(t, got)
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+func TestClientGetMonitorDashboardRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, monitorDashboardPath, r.URL.Path, "request path should match")
+
+		if calls.Add(1) == 1 {
+			http.Error(w, "temporary", http.StatusServiceUnavailable)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyID: monitorDashboardID, keyLabel: monitorDashboardLabel}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
+	got, err := client.GetMonitorDashboard(t.Context(), monitorDashboardID)
+
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, int32(2), calls.Load(), "read route should retry once after transient failure")
+	assert.InEpsilon(t, monitorDashboardID, got[keyID], 0.001)
 }
 
 func TestClientListMonitorDashboardsAPIError(t *testing.T) {
