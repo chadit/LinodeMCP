@@ -2616,6 +2616,13 @@ func (c *Client) GetIPv6Range(ctx context.Context, ipv6Range string) (*IPv6Range
 	return result, err
 }
 
+// DeleteIPv6Range deletes one IPv6 range without retrying the destructive DELETE.
+func (c *Client) DeleteIPv6Range(ctx context.Context, ipv6Range string) error {
+	return c.executeWithoutRetry(ctx, "DeleteIPv6Range", func() error {
+		return c.httpDeleteIPv6Range(ctx, ipv6Range)
+	})
+}
+
 // ListNodeBalancers retrieves all node balancers with automatic retry on transient failures.
 func (c *Client) ListNodeBalancers(ctx context.Context) ([]NodeBalancer, error) {
 	var nodeBalancers []NodeBalancer

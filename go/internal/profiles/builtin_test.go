@@ -166,6 +166,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_ipv6_ranges_list", Capability: profiles.CapRead},
 		{Name: "linode_ipv6_range_get", Capability: profiles.CapRead},
 		{Name: "linode_ipv6_range_create", Capability: profiles.CapWrite},
+		{Name: "linode_ipv6_range_delete", Capability: profiles.CapDestroy},
 
 		// DNS
 		{Name: "linode_domain_list", Capability: profiles.CapRead},
