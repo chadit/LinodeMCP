@@ -2436,6 +2436,21 @@ func (c *Client) UpdateFirewallSettings(ctx context.Context, req *UpdateFirewall
 	return settings, err
 }
 
+// ListNetworkingIPs retrieves all account IP addresses with automatic retry on transient failures.
+func (c *Client) ListNetworkingIPs(ctx context.Context, skipIPv6RDNS bool) (*PaginatedResponse[IPAddress], error) {
+	var ips *PaginatedResponse[IPAddress]
+
+	err := c.executeWithRetry(ctx, "ListNetworkingIPs", func() error {
+		var retryErr error
+
+		ips, retryErr = c.httpListNetworkingIPs(ctx, skipIPv6RDNS)
+
+		return retryErr
+	})
+
+	return ips, err
+}
+
 // ListNetworkTransferPrices retrieves network transfer prices with automatic retry on transient failures.
 func (c *Client) ListNetworkTransferPrices(ctx context.Context) (*PaginatedResponse[NetworkTransferPrice], error) {
 	var prices *PaginatedResponse[NetworkTransferPrice]
