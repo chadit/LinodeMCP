@@ -19,6 +19,7 @@ const (
 	endpointNetworkingIPsShare    = endpointNetworkingIPs + "/share"
 	networkingIPv4Type            = "ipv4"
 	networkingIPAddressFixture    = "198.51.100.5"
+	networkingRDNSFixture         = "host.example.test"
 	networkingIPv6AddressFixture  = "2001:db8::1"
 	networkingScopedIPv6Fixture   = "fe80::1%eth0"
 	networkingZoneTraversalValue  = "fe80::1%../../x?y=1"
@@ -276,6 +277,143 @@ func TestClientGetNetworkingIPRetriesTransientError(t *testing.T) {
 	require.NotNil(t, result, "result should not be nil")
 	assert.Equal(t, networkingIPAddressFixture, result.Address)
 	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+}
+
+func TestClientUpdateNetworkingIPSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, endpointNetworkingIPAddress, r.URL.Path, "request path should match")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+
+		var body linode.UpdateNetworkingIPRequest
+		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
+			return
+		}
+
+		assert.Equal(t, networkingRDNSFixture, body.RDNS)
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.IPAddress{
+			Address: networkingIPAddressFixture,
+			RDNS:    networkingRDNSFixture,
+			Type:    networkingIPv4Type,
+			Public:  true,
+			Region:  regionUSEast,
+		}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.UpdateNetworkingIP(t.Context(), networkingIPAddressFixture, linode.UpdateNetworkingIPRequest{RDNS: networkingRDNSFixture})
+
+	require.NoError(t, err, "UpdateNetworkingIP should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, networkingIPAddressFixture, result.Address)
+	assert.Equal(t, networkingRDNSFixture, result.RDNS)
+}
+
+func TestClientUpdateNetworkingIPAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, endpointNetworkingIPAddress, r.URL.Path, "request path should match")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"invalid rdns"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.UpdateNetworkingIP(t.Context(), networkingIPAddressFixture, linode.UpdateNetworkingIPRequest{RDNS: networkingRDNSFixture})
+
+	require.Error(t, err, "UpdateNetworkingIP should fail on 400 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	assert.Equal(t, http.StatusBadRequest, apiErr.StatusCode)
+}
+
+func TestClientUpdateNetworkingIPEncodesIPv6Address(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, endpointNetworkingIPv6Escaped, r.URL.EscapedPath(), "request path should preserve valid IPv6 segment")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.IPAddress{Address: networkingIPv6AddressFixture}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.UpdateNetworkingIP(t.Context(), networkingIPv6AddressFixture, linode.UpdateNetworkingIPRequest{RDNS: networkingRDNSFixture})
+
+	require.NoError(t, err, "UpdateNetworkingIP should succeed for IPv6 address")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, networkingIPv6AddressFixture, result.Address)
+}
+
+func TestClientUpdateNetworkingIPDoesNotRetryTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+
+		hj, ok := w.(http.Hijacker)
+		if !assert.True(t, ok, "response writer should support hijacking") {
+			return
+		}
+
+		conn, _, err := hj.Hijack()
+		if !assert.NoError(t, err) {
+			return
+		}
+
+		assert.NoError(t, conn.Close())
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	_, err := client.UpdateNetworkingIP(t.Context(), networkingIPAddressFixture, linode.UpdateNetworkingIPRequest{RDNS: networkingRDNSFixture})
+
+	require.Error(t, err, "UpdateNetworkingIP should return the transient error")
+	assert.Equal(t, int32(1), requestCount.Load(), "mutating PUT must not be replayed")
+}
+
+func TestClientUpdateNetworkingIPRejectsInvalidRequest(t *testing.T) {
+	t.Parallel()
+
+	client := linode.NewClient("https://api.linode.test", "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.UpdateNetworkingIP(t.Context(), "", linode.UpdateNetworkingIPRequest{RDNS: networkingRDNSFixture})
+	require.Error(t, err, "blank address should be rejected")
+
+	_, err = client.UpdateNetworkingIP(t.Context(), "198.51.100.5/24", linode.UpdateNetworkingIPRequest{RDNS: networkingRDNSFixture})
+	require.Error(t, err, "slash address should be rejected")
+
+	_, err = client.UpdateNetworkingIP(t.Context(), "198.51.100.5?bad=1", linode.UpdateNetworkingIPRequest{RDNS: networkingRDNSFixture})
+	require.Error(t, err, "query separator address should be rejected")
+
+	_, err = client.UpdateNetworkingIP(t.Context(), "..", linode.UpdateNetworkingIPRequest{RDNS: networkingRDNSFixture})
+	require.Error(t, err, "dot traversal address should be rejected")
+
+	_, err = client.UpdateNetworkingIP(t.Context(), networkingScopedIPv6Fixture, linode.UpdateNetworkingIPRequest{RDNS: networkingRDNSFixture})
+	require.Error(t, err, "scoped IPv6 address should be rejected")
+
+	_, err = client.UpdateNetworkingIP(t.Context(), networkingZoneTraversalValue, linode.UpdateNetworkingIPRequest{RDNS: networkingRDNSFixture})
+	require.Error(t, err, "zone traversal address should be rejected")
+
+	_, err = client.UpdateNetworkingIP(t.Context(), networkingIPAddressFixture, linode.UpdateNetworkingIPRequest{})
+	require.ErrorIs(t, err, linode.ErrRDNSRequired)
 }
 
 func TestClientAllocateNetworkingIPSuccess(t *testing.T) {

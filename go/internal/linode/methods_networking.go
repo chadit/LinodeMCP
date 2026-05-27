@@ -547,6 +547,36 @@ func (c *Client) httpGetNetworkingIP(ctx context.Context, address string) (*IPAd
 	return &ip, nil
 }
 
+// UpdateNetworkingIP updates reverse DNS for an account-level IP address.
+func (c *Client) httpUpdateNetworkingIP(ctx context.Context, address string, req UpdateNetworkingIPRequest) (*IPAddress, error) {
+	if err := validateNetworkingIPAddress(address); err != nil {
+		return nil, err
+	}
+
+	if req.RDNS == "" {
+		return nil, ErrRDNSRequired
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointNetworkingIPs + "/" + url.PathEscape(address)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateNetworkingIP", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var ip IPAddress
+	if err := c.handleResponse(resp, &ip); err != nil {
+		return nil, err
+	}
+
+	return &ip, nil
+}
+
 // AllocateNetworkingIP allocates an account-level IP address.
 func (c *Client) httpAllocateNetworkingIP(ctx context.Context, req AllocateNetworkingIPRequest) (*IPAddress, error) {
 	if req.LinodeID <= 0 {

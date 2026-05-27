@@ -109,6 +109,11 @@ type AllocateNetworkingIPRequest struct {
 	Type     string `json:"type"`
 }
 
+// UpdateNetworkingIPRequest represents the request body for updating account-level IP reverse DNS.
+type UpdateNetworkingIPRequest struct {
+	RDNS string `json:"rdns"`
+}
+
 // IPAssignment represents one IP-to-Linode assignment.
 type IPAssignment struct {
 	Address  string `json:"address"`

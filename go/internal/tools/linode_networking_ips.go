@@ -17,6 +17,7 @@ import (
 const (
 	paramSkipIPv6RDNS = "skip_ipv6_rdns"
 	paramAddress      = "address"
+	paramRDNS         = "rdns"
 	paramIPs          = "ips"
 )
 
@@ -89,6 +90,69 @@ func handleLinodeNetworkingIPGetRequest(ctx context.Context, request *mcp.CallTo
 	}
 
 	return MarshalToolResponse(ipAddr)
+}
+
+// NewLinodeNetworkingIPUpdateRDNSTool creates a tool for updating account-level IP reverse DNS.
+func NewLinodeNetworkingIPUpdateRDNSTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_networking_ip_update_rdns",
+		"Updates reverse DNS for one account-level IP address.",
+		[]mcp.ToolOption{
+			mcp.WithString(paramAddress, mcp.Required(),
+				mcp.Description("The IPv4 or IPv6 address to update.")),
+			mcp.WithString(paramRDNS, mcp.Required(),
+				mcp.Description("The reverse DNS value to set.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm changing reverse DNS.")),
+		},
+		handleLinodeNetworkingIPUpdateRDNSRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleLinodeNetworkingIPUpdateRDNSRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This updates reverse DNS for an IP address. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	address, validationMessage := requiredNetworkingIPAddressArg(request.GetArguments(), paramAddress)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	rdns, validationMessage := requiredStringArg(request.GetArguments(), paramRDNS)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	ipAddr, failureMessage := updateNetworkingIPRDNS(ctx, client, address, rdns)
+	if failureMessage != "" {
+		return mcp.NewToolResultError(failureMessage), nil
+	}
+
+	return MarshalToolResponse(struct {
+		Message string            `json:"message"`
+		IP      *linode.IPAddress `json:"ip"`
+	}{
+		Message: fmt.Sprintf("Networking IP %s RDNS updated", address),
+		IP:      ipAddr,
+	})
+}
+
+func updateNetworkingIPRDNS(ctx context.Context, client *linode.Client, address, rdns string) (*linode.IPAddress, string) {
+	ipAddr, err := client.UpdateNetworkingIP(ctx, address, linode.UpdateNetworkingIPRequest{RDNS: rdns})
+	if err != nil {
+		return nil, "Failed to update networking IP " + address + " RDNS: " + err.Error()
+	}
+
+	return ipAddr, ""
 }
 
 // NewLinodeNetworkingIPAllocateTool creates a tool for allocating an account-level IP address.

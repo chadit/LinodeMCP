@@ -31,6 +31,9 @@ var ErrRegionRequired = errors.New("region is required")
 // ErrIPAddressRequired is returned when an IP address argument is empty.
 var ErrIPAddressRequired = errors.New("IP address is required")
 
+// ErrRDNSRequired is returned when a reverse DNS update has no rdns value.
+var ErrRDNSRequired = errors.New("rdns is required")
+
 // ErrIPAddressInvalid is returned when an IP address argument is not a valid IPv4 or IPv6 address.
 var ErrIPAddressInvalid = errors.New("IP address must be a valid IPv4 or IPv6 address")
 

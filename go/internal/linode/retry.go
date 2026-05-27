@@ -2466,6 +2466,21 @@ func (c *Client) GetNetworkingIP(ctx context.Context, address string) (*IPAddres
 	return networkingIPAddr, err
 }
 
+// UpdateNetworkingIP updates reverse DNS for an account-level IP address without retrying the mutating PUT.
+func (c *Client) UpdateNetworkingIP(ctx context.Context, address string, req UpdateNetworkingIPRequest) (*IPAddress, error) {
+	var ipAddr *IPAddress
+
+	err := c.executeWithoutRetry(ctx, "UpdateNetworkingIP", func() error {
+		var err error
+
+		ipAddr, err = c.httpUpdateNetworkingIP(ctx, address, req)
+
+		return err
+	})
+
+	return ipAddr, err
+}
+
 // AllocateNetworkingIP allocates an account-level IP address without retrying the non-idempotent POST.
 func (c *Client) AllocateNetworkingIP(ctx context.Context, req AllocateNetworkingIPRequest) (*IPAddress, error) {
 	var ipAddr *IPAddress
