@@ -2294,6 +2294,21 @@ func (c *Client) ListFirewallTemplates(ctx context.Context, page, pageSize int) 
 	return templates, err
 }
 
+// GetFirewallTemplate retrieves a reusable Cloud Firewall template by slug with automatic retry on transient failures.
+func (c *Client) GetFirewallTemplate(ctx context.Context, slug string, page, pageSize int) (*PaginatedResponse[FirewallTemplate], error) {
+	var template *PaginatedResponse[FirewallTemplate]
+
+	err := c.executeWithRetry(ctx, "GetFirewallTemplate", func() error {
+		var err error
+
+		template, err = c.httpGetFirewallTemplate(ctx, slug, page, pageSize)
+
+		return err
+	})
+
+	return template, err
+}
+
 // UpdateFirewallSettings updates default firewall assignments without retrying the mutating request.
 func (c *Client) UpdateFirewallSettings(ctx context.Context, req *UpdateFirewallSettingsRequest) (*FirewallSettings, error) {
 	var settings *FirewallSettings
