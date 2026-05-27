@@ -102,6 +102,13 @@ type NetworkTransferRegionPrice struct {
 	Monthly float64 `json:"monthly"`
 }
 
+// AllocateNetworkingIPRequest represents the request body for allocating an account-level IP address.
+type AllocateNetworkingIPRequest struct {
+	LinodeID int    `json:"linode_id"`
+	Public   bool   `json:"public"`
+	Type     string `json:"type"`
+}
+
 // NodeBalancer represents a Linode NodeBalancer (load balancer).
 type NodeBalancer struct {
 	ID                 int      `json:"id"`

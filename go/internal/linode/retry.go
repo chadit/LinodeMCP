@@ -2451,6 +2451,21 @@ func (c *Client) ListNetworkingIPs(ctx context.Context, skipIPv6RDNS bool) (*Pag
 	return ips, err
 }
 
+// AllocateNetworkingIP allocates an account-level IP address without retrying the non-idempotent POST.
+func (c *Client) AllocateNetworkingIP(ctx context.Context, req AllocateNetworkingIPRequest) (*IPAddress, error) {
+	var ipAddr *IPAddress
+
+	err := c.executeWithoutRetry(ctx, "AllocateNetworkingIP", func() error {
+		var err error
+
+		ipAddr, err = c.httpAllocateNetworkingIP(ctx, req)
+
+		return err
+	})
+
+	return ipAddr, err
+}
+
 // ListNetworkTransferPrices retrieves network transfer prices with automatic retry on transient failures.
 func (c *Client) ListNetworkTransferPrices(ctx context.Context) (*PaginatedResponse[NetworkTransferPrice], error) {
 	var prices *PaginatedResponse[NetworkTransferPrice]
