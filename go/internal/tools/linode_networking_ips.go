@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/netip"
 	"slices"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -15,6 +16,7 @@ import (
 
 const (
 	paramSkipIPv6RDNS = "skip_ipv6_rdns"
+	paramAddress      = "address"
 	paramIPs          = "ips"
 )
 
@@ -52,6 +54,41 @@ func handleLinodeNetworkingIPListRequest(ctx context.Context, request *mcp.CallT
 	}
 
 	return MarshalToolResponse(ips)
+}
+
+// NewLinodeNetworkingIPGetTool creates a tool for retrieving one account-level IP address.
+func NewLinodeNetworkingIPGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_networking_ip_get",
+		"Gets details for one account-level IP address.",
+		[]mcp.ToolOption{
+			mcp.WithString(paramAddress, mcp.Required(),
+				mcp.Description("The IPv4 or IPv6 address to retrieve.")),
+		},
+		handleLinodeNetworkingIPGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleLinodeNetworkingIPGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	address, validationMessage := requiredNetworkingIPAddressArg(request.GetArguments(), paramAddress)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	ipAddr, err := client.GetNetworkingIP(ctx, address)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve networking IP %s: %v", address, err)), nil
+	}
+
+	return MarshalToolResponse(ipAddr)
 }
 
 // NewLinodeNetworkingIPAllocateTool creates a tool for allocating an account-level IP address.
@@ -278,6 +315,20 @@ func networkingIPAllocateRequestFromTool(args map[string]any) (linode.AllocateNe
 	}
 
 	return linode.AllocateNetworkingIPRequest{LinodeID: linodeID, Public: public, Type: ipType}, ""
+}
+
+func requiredNetworkingIPAddressArg(args map[string]any, key string) (string, string) {
+	address, validationMessage := requiredStringArg(args, key)
+	if validationMessage != "" {
+		return "", validationMessage
+	}
+
+	addr, err := netip.ParseAddr(address)
+	if err != nil || addr.Zone() != "" {
+		return "", key + " must be a valid IP address"
+	}
+
+	return address, ""
 }
 
 func optionalNetworkingBoolArg(args map[string]any, key string) (bool, string) {

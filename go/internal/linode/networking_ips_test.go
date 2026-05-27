@@ -14,11 +14,16 @@ import (
 )
 
 const (
-	endpointNetworkingIPs       = "/networking/ips"
-	endpointNetworkingIPsAssign = endpointNetworkingIPs + "/assign"
-	endpointNetworkingIPsShare  = endpointNetworkingIPs + "/share"
-	networkingIPv4Type          = "ipv4"
-	networkingIPAddressFixture  = "198.51.100.5"
+	endpointNetworkingIPs         = "/networking/ips"
+	endpointNetworkingIPsAssign   = endpointNetworkingIPs + "/assign"
+	endpointNetworkingIPsShare    = endpointNetworkingIPs + "/share"
+	networkingIPv4Type            = "ipv4"
+	networkingIPAddressFixture    = "198.51.100.5"
+	networkingIPv6AddressFixture  = "2001:db8::1"
+	networkingScopedIPv6Fixture   = "fe80::1%eth0"
+	networkingZoneTraversalValue  = "fe80::1%../../x?y=1"
+	endpointNetworkingIPAddress   = endpointNetworkingIPs + "/" + networkingIPAddressFixture
+	endpointNetworkingIPv6Escaped = endpointNetworkingIPs + "/2001:db8::1"
 )
 
 func TestClientListNetworkingIPsSuccess(t *testing.T) {
@@ -144,6 +149,132 @@ func TestClientListNetworkingIPsRetriesTransientError(t *testing.T) {
 	require.NotNil(t, result, "result should not be nil")
 	require.Len(t, result.Data, 1)
 	assert.Equal(t, networkingIPAddressFixture, result.Data[0].Address)
+	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+}
+
+func TestClientGetNetworkingIPSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, endpointNetworkingIPAddress, r.URL.Path, "request path should match")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.IPAddress{
+			Address:  networkingIPAddressFixture,
+			Gateway:  "198.51.100.1",
+			Type:     networkingIPv4Type,
+			Public:   true,
+			Region:   regionUSEast,
+			LinodeID: 123,
+		}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.GetNetworkingIP(t.Context(), networkingIPAddressFixture)
+
+	require.NoError(t, err, "GetNetworkingIP should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, networkingIPAddressFixture, result.Address)
+	assert.Equal(t, regionUSEast, result.Region)
+}
+
+func TestClientGetNetworkingIPEncodesIPv6Address(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, endpointNetworkingIPv6Escaped, r.URL.EscapedPath(), "request path should preserve valid IPv6 segment")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.IPAddress{Address: networkingIPv6AddressFixture}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.GetNetworkingIP(t.Context(), networkingIPv6AddressFixture)
+
+	require.NoError(t, err, "GetNetworkingIP should succeed for IPv6 address")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, networkingIPv6AddressFixture, result.Address)
+}
+
+func TestClientGetNetworkingIPAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, endpointNetworkingIPAddress, r.URL.Path, "request path should match")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"not found"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetNetworkingIP(t.Context(), networkingIPAddressFixture)
+
+	require.Error(t, err, "GetNetworkingIP should fail on 404 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	assert.Equal(t, http.StatusNotFound, apiErr.StatusCode)
+}
+
+func TestClientGetNetworkingIPRejectsInvalidAddress(t *testing.T) {
+	t.Parallel()
+
+	client := linode.NewClient("https://api.linode.test", "my-token", nil, linode.WithMaxRetries(0))
+
+	for _, address := range []string{"", "198.51.100.5/24", "198.51.100.5?bad=1", "..", networkingScopedIPv6Fixture, networkingZoneTraversalValue} {
+		_, err := client.GetNetworkingIP(t.Context(), address)
+		require.Error(t, err, "invalid address should be rejected")
+	}
+}
+
+func TestClientGetNetworkingIPRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
+			hj, ok := w.(http.Hijacker)
+			if !assert.True(t, ok, "response writer should support hijacking") {
+				return
+			}
+
+			conn, _, err := hj.Hijack()
+			if !assert.NoError(t, err) {
+				return
+			}
+
+			assert.NoError(t, conn.Close())
+
+			return
+		}
+
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, endpointNetworkingIPAddress, r.URL.Path, "request path should match")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.IPAddress{Address: networkingIPAddressFixture}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	result, err := client.GetNetworkingIP(t.Context(), networkingIPAddressFixture)
+
+	require.NoError(t, err, "GetNetworkingIP should succeed after retry")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, networkingIPAddressFixture, result.Address)
 	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 

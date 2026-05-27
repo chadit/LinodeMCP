@@ -18,10 +18,13 @@ import (
 )
 
 const (
-	networkingIPAddressFixture = "198.51.100.5"
-	networkingIPAssignmentJSON = `[{"address":"198.51.100.5","linode_id":123}]`
-	networkingIPShareJSON      = `["198.51.100.5"]`
-	keyIPs                     = "ips"
+	networkingIPAddressFixture   = "198.51.100.5"
+	networkingIPv6AddressFixture = "2001:db8::1"
+	networkingScopedIPv6Fixture  = "fe80::1%eth0"
+	networkingZoneTraversalValue = "fe80::1%../../x?y=1"
+	networkingIPAssignmentJSON   = `[{"address":"198.51.100.5","linode_id":123}]`
+	networkingIPShareJSON        = `["198.51.100.5"]`
+	keyIPs                       = "ips"
 )
 
 func TestLinodeNetworkingIPsListTool(t *testing.T) {
@@ -93,6 +96,141 @@ func TestLinodeNetworkingIPsListTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, "skip_ipv6_rdns must be a boolean")
+	})
+}
+
+func TestLinodeNetworkingIPGetTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		tool, capability, handler := tools.NewLinodeNetworkingIPGetTool(&config.Config{})
+
+		assert.Equal(t, "linode_networking_ip_get", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read capability")
+		assert.Contains(t, tool.InputSchema.Properties, keyAddress, "tool should declare address")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/networking/ips/"+networkingIPAddressFixture, r.URL.Path, "request path should match")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(linode.IPAddress{
+				Address: networkingIPAddressFixture,
+				Type:    keyIPv4,
+				Public:  true,
+				Region:  regionUSEast,
+			}))
+		}))
+		t.Cleanup(srv.Close)
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeNetworkingIPGetTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyAddress: networkingIPAddressFixture}))
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, networkingIPAddressFixture, "response should include IP address")
+		assert.Contains(t, textContent.Text, regionUSEast, "response should include region")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"not found"}]}`))
+			assert.NoError(t, writeErr)
+		}))
+		t.Cleanup(srv.Close)
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeNetworkingIPGetTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyAddress: networkingIPAddressFixture}))
+
+		require.NoError(t, err, "handler should return MCP error result, not Go error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be a tool error")
+		assertErrorContains(t, result, "Failed to retrieve networking IP")
+		assertErrorContains(t, result, "not found")
+	})
+
+	for name, address := range map[string]any{
+		caseMissingAddress:        nil,
+		"non-string address":      123,
+		"slash address":           "198.51.100.5/24",
+		"query separator address": "198.51.100.5?bad=1",
+		"traversal address":       pathTraversalValue,
+		"scoped IPv6 address":     networkingScopedIPv6Fixture,
+		"zone traversal address":  networkingZoneTraversalValue,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls atomic.Int32
+
+			srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+				calls.Add(1)
+			}))
+			t.Cleanup(srv.Close)
+
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			}}
+			_, _, handler := tools.NewLinodeNetworkingIPGetTool(cfg)
+
+			args := map[string]any{}
+			if address != nil {
+				args[keyAddress] = address
+			}
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+
+			require.NoError(t, err, "handler should return MCP error result, not Go error")
+			require.NotNil(t, result, "result should not be nil")
+			assert.True(t, result.IsError, "invalid address should be a tool error")
+			assert.Equal(t, int32(0), calls.Load(), "address rejection must happen before client call")
+		})
+	}
+
+	t.Run("IPv6 success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/networking/ips/2001:db8::1", r.URL.EscapedPath(), "request path should preserve valid IPv6 segment")
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(linode.IPAddress{Address: networkingIPv6AddressFixture}))
+		}))
+		t.Cleanup(srv.Close)
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeNetworkingIPGetTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyAddress: networkingIPv6AddressFixture}))
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "IPv6 lookup should be valid")
 	})
 }
 

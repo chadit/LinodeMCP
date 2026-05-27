@@ -31,6 +31,9 @@ var ErrRegionRequired = errors.New("region is required")
 // ErrIPAddressRequired is returned when an IP address argument is empty.
 var ErrIPAddressRequired = errors.New("IP address is required")
 
+// ErrIPAddressInvalid is returned when an IP address argument is not a valid IPv4 or IPv6 address.
+var ErrIPAddressInvalid = errors.New("IP address must be a valid IPv4 or IPv6 address")
+
 // ErrIPAssignmentsRequired is returned when an IP assignment request has no assignments.
 var ErrIPAssignmentsRequired = errors.New("at least one IP assignment is required")
 
