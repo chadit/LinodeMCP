@@ -67,6 +67,36 @@ func handleLinodeFirewallSettingsListRequest(ctx context.Context, request *mcp.C
 	return MarshalToolResponse(settings)
 }
 
+// NewLinodeFirewallTemplatesListTool creates a tool for listing reusable firewall templates.
+func NewLinodeFirewallTemplatesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_firewall_templates_list",
+		"Lists reusable Cloud Firewall templates for VPC and public interfaces.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		},
+		handleLinodeFirewallTemplatesListRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleLinodeFirewallTemplatesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	templates, err := client.ListFirewallTemplates(ctx, request.GetInt("page", 0), request.GetInt("page_size", 0))
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve linode_firewall_templates_list: %v", err)), nil
+	}
+
+	return MarshalToolResponse(templates)
+}
+
 // NewLinodeFirewallSettingsUpdateTool creates a tool for updating default firewall assignments.
 func NewLinodeFirewallSettingsUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(

@@ -9,6 +9,7 @@ import (
 const (
 	endpointFirewalls             = "/networking/firewalls"
 	endpointFirewallSettings      = endpointFirewalls + "/settings"
+	endpointFirewallTemplates     = endpointFirewalls + "/templates"
 	endpointNetworkTransferPrices = "/network-transfer/prices"
 	endpointNodeBalancers         = "/nodebalancers"
 )
@@ -74,6 +75,28 @@ func (c *Client) httpUpdateFirewallSettings(ctx context.Context, req *UpdateFire
 	}
 
 	return &settings, nil
+}
+
+// ListFirewallTemplates retrieves reusable Cloud Firewall templates.
+func (c *Client) httpListFirewallTemplates(ctx context.Context, page, pageSize int) (*PaginatedResponse[FirewallTemplate], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointFirewallTemplates, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListFirewallTemplates", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[FirewallTemplate]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
 }
 
 // GetFirewall retrieves a single firewall by its ID.

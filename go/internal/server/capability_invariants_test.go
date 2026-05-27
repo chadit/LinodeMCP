@@ -153,3 +153,23 @@ func TestLinodeInstanceStatsToolRegistered(t *testing.T) {
 
 	assert.True(t, found, "server should register the instance stats tool")
 }
+
+func TestLinodeFirewallTemplatesToolRegistered(t *testing.T) {
+	t.Parallel()
+
+	srv := newCapabilityTestServer(t)
+
+	var found bool
+
+	for _, info := range srv.ToolInfos() {
+		if info.Name == "linode_firewall_templates_list" {
+			found = true
+
+			assert.Equal(t, profiles.CapRead, info.Capability, "firewall templates tool should be read-only")
+			assert.Contains(t, info.InputSchema.Properties, "page", "firewall templates tool should declare page")
+			assert.Contains(t, info.InputSchema.Properties, "page_size", "firewall templates tool should declare page_size")
+		}
+	}
+
+	assert.True(t, found, "server should register the firewall templates tool")
+}
