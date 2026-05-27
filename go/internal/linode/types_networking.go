@@ -48,6 +48,19 @@ type FirewallDefaultIDs struct {
 	VPCInterface    int `json:"vpc_interface"`
 }
 
+// UpdateFirewallSettingsRequest updates default firewall assignments for resource types.
+type UpdateFirewallSettingsRequest struct {
+	DefaultFirewallIDs UpdateFirewallDefaultIDs `json:"default_firewall_ids"`
+}
+
+// UpdateFirewallDefaultIDs contains optional default firewall IDs by resource type.
+type UpdateFirewallDefaultIDs struct {
+	Linode          *int `json:"linode,omitempty"`
+	NodeBalancer    *int `json:"nodebalancer,omitempty"`
+	PublicInterface *int `json:"public_interface,omitempty"`
+	VPCInterface    *int `json:"vpc_interface,omitempty"`
+}
+
 // NetworkTransferPrice represents a network transfer price entry.
 type NetworkTransferPrice struct {
 	ID           string                       `json:"id"`

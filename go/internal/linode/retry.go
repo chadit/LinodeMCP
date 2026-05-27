@@ -2279,6 +2279,21 @@ func (c *Client) ListFirewallSettings(ctx context.Context, page, pageSize int) (
 	return settings, err
 }
 
+// UpdateFirewallSettings updates default firewall assignments without retrying the mutating request.
+func (c *Client) UpdateFirewallSettings(ctx context.Context, req *UpdateFirewallSettingsRequest) (*FirewallSettings, error) {
+	var settings *FirewallSettings
+
+	err := c.executeWithoutRetry(ctx, "UpdateFirewallSettings", func() error {
+		var err error
+
+		settings, err = c.httpUpdateFirewallSettings(ctx, req)
+
+		return err
+	})
+
+	return settings, err
+}
+
 // ListNetworkTransferPrices retrieves network transfer prices with automatic retry on transient failures.
 func (c *Client) ListNetworkTransferPrices(ctx context.Context) (*PaginatedResponse[NetworkTransferPrice], error) {
 	var prices *PaginatedResponse[NetworkTransferPrice]
