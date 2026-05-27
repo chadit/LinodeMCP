@@ -43,6 +43,9 @@ var ErrRDNSRequired = errors.New("rdns is required")
 // ErrIPAddressInvalid is returned when an IP address argument is not a valid IPv4 or IPv6 address.
 var ErrIPAddressInvalid = errors.New("IP address must be a valid IPv4 or IPv6 address")
 
+// ErrIPv6RangeInvalid is returned when an IPv6 range argument is not a valid IPv6 prefix.
+var ErrIPv6RangeInvalid = errors.New("ipv6_range must be a valid IPv6 prefix")
+
 // ErrIPv4AddressInvalid is returned when an IPv4-only route receives a non-IPv4 address.
 var ErrIPv4AddressInvalid = errors.New("IP address must be a valid IPv4 address")
 

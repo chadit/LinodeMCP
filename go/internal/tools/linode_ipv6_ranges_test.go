@@ -272,3 +272,119 @@ func TestLinodeIPv6RangeCreateTool(t *testing.T) {
 		}
 	})
 }
+
+func TestLinodeIPv6RangeGetTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		tool, capability, handler := tools.NewLinodeIPv6RangeGetTool(&config.Config{})
+
+		assert.Equal(t, "linode_ipv6_range_get", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Contains(t, tool.InputSchema.Properties, keyIPv6Range, "schema should include ipv6_range")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read capability")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		rangeResult := linode.IPv6Range{
+			Range:       ipv6RangeCIDR,
+			Region:      regionUSEast,
+			Prefix:      64,
+			RouteTarget: ipv6RangeRouteTarget,
+		}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/networking/ipv6/ranges/2001:0db8::%2F64", r.URL.EscapedPath(), "request path should match")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(rangeResult))
+		}))
+		t.Cleanup(srv.Close)
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeIPv6RangeGetTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyIPv6Range: ipv6RangeCIDR}))
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, ipv6RangeCIDR, "response should include range value")
+		assert.Contains(t, textContent.Text, regionUSEast, "response should include region")
+	})
+
+	t.Run("api error returns tool error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/networking/ipv6/ranges/2001:0db8::%2F64", r.URL.EscapedPath(), "request path should match")
+			http.Error(w, `{"errors":[{"reason":"forbidden"}]}`, http.StatusForbidden)
+		}))
+		t.Cleanup(srv.Close)
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeIPv6RangeGetTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyIPv6Range: ipv6RangeCIDR}))
+
+		require.NoError(t, err, "handler should return tool errors without Go errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to retrieve IPv6 range", "error should name the failing tool")
+	})
+
+	t.Run("invalid range rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeIPv6RangeGetTool(cfg)
+
+		cases := []struct {
+			name string
+			args map[string]any
+		}{
+			{name: "missing range", args: map[string]any{}},
+			{name: "non-string range", args: map[string]any{keyIPv6Range: 123}},
+			{name: "slash only", args: map[string]any{keyIPv6Range: "/"}},
+			{name: "query separator", args: map[string]any{keyIPv6Range: "2001:0db8::/64?x=1"}},
+			{name: "traversal", args: map[string]any{keyIPv6Range: pathTraversalValue}},
+			{name: "ipv4 prefix", args: map[string]any{keyIPv6Range: "192.0.2.0/24"}},
+			{name: "host bits set", args: map[string]any{keyIPv6Range: "2001:0db8::1/64"}},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+
+				require.NoError(t, err, "handler should return tool errors without Go errors")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid range should be an error result")
+
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, keyIPv6Range, "error should explain invalid range")
+			})
+		}
+	})
+}

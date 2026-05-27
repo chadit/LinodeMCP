@@ -146,3 +146,78 @@ func TestClientCreateIPv6RangeDoesNotRetryPost(t *testing.T) {
 	require.Error(t, err, "server error should propagate")
 	assert.Equal(t, 1, calls, "non-idempotent POST must not be replayed")
 }
+
+func TestClientGetIPv6RangeSuccess(t *testing.T) {
+	t.Parallel()
+
+	rangeResult := linode.IPv6Range{
+		Range:       ipv6RangeCIDR,
+		Region:      regionUSEast,
+		Prefix:      64,
+		RouteTarget: ipv6RouteTarget,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, endpointNetworkingIPv6Ranges+"/2001:0db8::%2F64", r.URL.EscapedPath(), "request path should encode the IPv6 range slash")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(rangeResult))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	result, err := client.GetIPv6Range(t.Context(), ipv6RangeCIDR)
+
+	require.NoError(t, err, "GetIPv6Range should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, rangeResult, *result, "response should decode IPv6 range")
+}
+
+func TestClientGetIPv6RangeRejectsMalformedRange(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Fatalf("client should reject malformed ranges before request")
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
+	cases := []struct {
+		name      string
+		ipv6Range string
+	}{
+		{name: "missing prefix", ipv6Range: ipv6RangeFixture},
+		{name: "slash only", ipv6Range: "/"},
+		{name: "query separator", ipv6Range: "2001:0db8::/64?x=1"},
+		{name: "traversal", ipv6Range: pathTraversalDotDot},
+		{name: "ipv4 prefix", ipv6Range: "192.0.2.0/24"},
+		{name: "host bits set", ipv6Range: "2001:0db8::1/64"},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := client.GetIPv6Range(t.Context(), testCase.ipv6Range)
+
+			require.ErrorIs(t, err, linode.ErrIPv6RangeInvalid, "malformed range should be rejected before request")
+		})
+	}
+}
+
+func TestClientGetIPv6RangeAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, endpointNetworkingIPv6Ranges+"/2001:0db8::%2F64", r.URL.EscapedPath(), "request path should match")
+		http.Error(w, `{"errors":[{"reason":"forbidden"}]}`, http.StatusForbidden)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	_, err := client.GetIPv6Range(t.Context(), ipv6RangeCIDR)
+
+	require.Error(t, err, "GetIPv6Range should fail on non-200 response")
+}
