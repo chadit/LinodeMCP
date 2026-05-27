@@ -46,6 +46,23 @@ func NewLinodeFirewallListTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeVLANsListTool creates a tool for listing VLANs.
+func NewLinodeVLANsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	return newLinodeIPv6ListTool(
+		cfg,
+		"linode_vlans_list",
+		"Lists VLANs on the account with optional pagination.",
+		func(ctx context.Context, client *linode.Client, page, pageSize int) (*linode.PaginatedResponse[linode.VLAN], string) {
+			vlans, err := client.ListVLANs(ctx, page, pageSize)
+			if err != nil {
+				return nil, err.Error()
+			}
+
+			return vlans, ""
+		},
+	)
+}
+
 // NewLinodeFirewallRulesListTool creates a tool for listing rules for a Cloud Firewall.
 func NewLinodeFirewallRulesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(

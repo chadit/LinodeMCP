@@ -2264,6 +2264,21 @@ func (c *Client) ListFirewalls(ctx context.Context) ([]Firewall, error) {
 	return firewalls, err
 }
 
+// ListVLANs retrieves all VLANs with automatic retry on transient failures.
+func (c *Client) ListVLANs(ctx context.Context, page, pageSize int) (*PaginatedResponse[VLAN], error) {
+	var vlans *PaginatedResponse[VLAN]
+
+	err := c.executeWithRetry(ctx, "ListVLANs", func() error {
+		var err error
+
+		vlans, err = c.httpListVLANs(ctx, page, pageSize)
+
+		return err
+	})
+
+	return vlans, err
+}
+
 // ListFirewallRules retrieves firewall rules with automatic retry on transient failures.
 func (c *Client) ListFirewallRules(ctx context.Context, firewallID int) (*FirewallRules, error) {
 	var rules *FirewallRules
