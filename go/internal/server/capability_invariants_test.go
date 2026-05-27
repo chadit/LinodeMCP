@@ -159,17 +159,31 @@ func TestLinodeFirewallTemplatesToolRegistered(t *testing.T) {
 
 	srv := newCapabilityTestServer(t)
 
-	var found bool
+	var (
+		foundList bool
+		foundGet  bool
+	)
 
 	for _, info := range srv.ToolInfos() {
 		if info.Name == "linode_firewall_templates_list" {
-			found = true
+			foundList = true
 
 			assert.Equal(t, profiles.CapRead, info.Capability, "firewall templates tool should be read-only")
 			assert.Contains(t, info.InputSchema.Properties, "page", "firewall templates tool should declare page")
 			assert.Contains(t, info.InputSchema.Properties, "page_size", "firewall templates tool should declare page_size")
 		}
+
+		if info.Name == "linode_firewall_template_get" {
+			foundGet = true
+
+			assert.Equal(t, profiles.CapRead, info.Capability, "firewall template get tool should be read-only")
+			assert.Contains(t, info.InputSchema.Properties, "slug", "firewall template get tool should declare slug")
+			assert.Contains(t, info.InputSchema.Required, "slug", "firewall template get tool should require slug")
+			assert.Contains(t, info.InputSchema.Properties, "page", "firewall template get tool should declare page")
+			assert.Contains(t, info.InputSchema.Properties, "page_size", "firewall template get tool should declare page_size")
+		}
 	}
 
-	assert.True(t, found, "server should register the firewall templates tool")
+	assert.True(t, foundList, "server should register the firewall templates list tool")
+	assert.True(t, foundGet, "server should register the firewall template get tool")
 }

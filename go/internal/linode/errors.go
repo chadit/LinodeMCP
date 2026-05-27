@@ -79,6 +79,9 @@ var ErrReorderConfigInterfacesRequestRequired = errors.New("reorder config inter
 // ErrUpdateInstanceFirewallsRequestRequired is returned when UpdateInstanceFirewalls is called without a request body.
 var ErrUpdateInstanceFirewallsRequestRequired = errors.New("firewall_ids is required")
 
+// ErrInvalidFirewallTemplateSlug is returned when a firewall template slug is not documented.
+var ErrInvalidFirewallTemplateSlug = errors.New("firewall template slug must be one of public or vpc")
+
 // APIError represents an error returned by the Linode API.
 // RetryAfter carries the server's Retry-After hint when present so the retry
 // loop can honor it instead of computing its own backoff.

@@ -431,7 +431,10 @@ const (
 	errValidForShareGroupUUID      = "valid_for_sharegroup_uuid is required"
 	imageShareGroupCreated         = "2025-04-14T22:44:02"
 	configInterfacePublicJSON      = `{"purpose":"public"}`
+	purposePublic                  = "public"
 	purposeVPC                     = "vpc"
+	policyDrop                     = "DROP"
+	keySlug                        = "slug"
 	errEventIDRequired             = "event_id is required"
 	errEventIDPositive             = "event_id must be a positive integer"
 	keyComments                    = "comments"

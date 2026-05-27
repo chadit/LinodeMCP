@@ -14,6 +14,7 @@ import (
 const (
 	firewallDefaultLinodeKey = "linode"
 	paramDefaultFirewallIDs  = "default_firewall_ids"
+	paramSlug                = "slug"
 )
 
 // NewLinodeFirewallListTool creates a tool for listing firewalls.
@@ -95,6 +96,54 @@ func handleLinodeFirewallTemplatesListRequest(ctx context.Context, request *mcp.
 	}
 
 	return MarshalToolResponse(templates)
+}
+
+// NewLinodeFirewallTemplateGetTool creates a tool for retrieving a reusable firewall template by slug.
+func NewLinodeFirewallTemplateGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_firewall_template_get",
+		"Gets a reusable Cloud Firewall template for VPC or public interfaces.",
+		[]mcp.ToolOption{
+			mcp.WithString(paramSlug, mcp.Required(),
+				mcp.Description("Firewall template slug to retrieve. Must be public or vpc.")),
+			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		},
+		handleLinodeFirewallTemplateGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleLinodeFirewallTemplateGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	slug := request.GetString(paramSlug, "")
+	if validationMessage := validateFirewallTemplateSlug(slug); validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	template, err := client.GetFirewallTemplate(ctx, slug, request.GetInt("page", 0), request.GetInt("page_size", 0))
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve linode_firewall_template_get: %v", err)), nil
+	}
+
+	return MarshalToolResponse(template)
+}
+
+func validateFirewallTemplateSlug(slug string) string {
+	switch slug {
+	case "public", "vpc":
+		return ""
+	case "":
+		return "slug is required"
+	default:
+		return "slug must be one of public or vpc"
+	}
 }
 
 // NewLinodeFirewallSettingsUpdateTool creates a tool for updating default firewall assignments.

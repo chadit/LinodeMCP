@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 )
 
 const (
@@ -87,6 +88,41 @@ func (c *Client) httpListFirewallTemplates(ctx context.Context, page, pageSize i
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, &NetworkError{Operation: "ListFirewallTemplates", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[FirewallTemplate]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
+}
+
+func isFirewallTemplateSlug(slug string) bool {
+	switch slug {
+	case "public", "vpc":
+		return true
+	default:
+		return false
+	}
+}
+
+// GetFirewallTemplate retrieves a reusable Cloud Firewall template by slug.
+func (c *Client) httpGetFirewallTemplate(ctx context.Context, slug string, page, pageSize int) (*PaginatedResponse[FirewallTemplate], error) {
+	if !isFirewallTemplateSlug(slug) {
+		return nil, ErrInvalidFirewallTemplateSlug
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointFirewallTemplates+"/"+url.PathEscape(slug), page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetFirewallTemplate", Err: err}
 	}
 
 	defer drainClose(resp)
