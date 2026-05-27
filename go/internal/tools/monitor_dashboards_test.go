@@ -53,9 +53,9 @@ func TestLinodeMonitorDashboardGetTool(t *testing.T) {
 			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyID:     monitorDashboardToolID,
-				keyLabel:  monitorDashboardToolLabel,
-				"widgets": []map[string]any{{keyLabel: monitorDashboardToolWidget}},
+				keyID:      monitorDashboardToolID,
+				keyLabel:   monitorDashboardToolLabel,
+				keyWidgets: []map[string]any{{keyLabel: monitorDashboardToolWidget}},
 			}))
 		}))
 		t.Cleanup(srv.Close)
@@ -162,9 +162,9 @@ func TestLinodeMonitorDashboardsTool(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyData: []map[string]any{{
-					keyID:     monitorDashboardToolID,
-					keyLabel:  monitorDashboardToolLabel,
-					"widgets": []map[string]any{{keyLabel: monitorDashboardToolWidget}},
+					keyID:      monitorDashboardToolID,
+					keyLabel:   monitorDashboardToolLabel,
+					keyWidgets: []map[string]any{{keyLabel: monitorDashboardToolWidget}},
 				}},
 				keyPage:    1,
 				keyPages:   1,

@@ -33,6 +33,7 @@ const (
 	keySSHKey      = "ssh_key"
 	keyType        = "type"
 	keyServiceType = "service_type"
+	keyWidgets     = "widgets"
 	keyToken       = "token"
 	keyDomain      = "domain"
 	keyIsDefault   = "is_default"

@@ -45,6 +45,7 @@ const (
 	caseSeparatorServiceType   = "separator service type"
 	caseQueryServiceType       = "query service type"
 	caseMissingServiceType     = "missing service type"
+	caseNumericServiceType     = "numeric service type"
 
 	// Common JSON request/response keys.
 	keyConfirm                   = "confirm"
@@ -60,6 +61,7 @@ const (
 	keyRegions                   = "regions"
 	keyType                      = "type"
 	keyServiceType               = "service_type"
+	keyWidgets                   = "widgets"
 	keyDomain                    = "domain"
 	keyName                      = "name"
 	keySize                      = "size"
