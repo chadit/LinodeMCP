@@ -25,7 +25,7 @@ func TestClientListFirewallRuleVersionsSuccess(t *testing.T) {
 		Rules: linode.FirewallRules{
 			Version:        2,
 			Fingerprint:    "997dd135",
-			InboundPolicy:  "DROP",
+			InboundPolicy:  policyDrop,
 			OutboundPolicy: policyAccept,
 		},
 	}
