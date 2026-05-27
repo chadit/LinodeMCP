@@ -234,6 +234,169 @@ func TestLinodeNetworkingIPGetTool(t *testing.T) {
 	})
 }
 
+func TestLinodeNetworkingIPUpdateRDNSTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		tool, capability, handler := tools.NewLinodeNetworkingIPUpdateRDNSTool(&config.Config{})
+
+		assert.Equal(t, "linode_networking_ip_update_rdns", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Equal(t, profiles.CapWrite, capability, "tool should be write capability")
+		assert.Contains(t, tool.InputSchema.Properties, keyAddress, "tool should declare address")
+		assert.Contains(t, tool.InputSchema.Properties, keyRDNS, "tool should declare rdns")
+		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "tool should declare confirm")
+		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm should be required")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+			assert.Equal(t, "/networking/ips/"+networkingIPAddressFixture, r.URL.Path, "request path should match")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+
+			var body linode.UpdateNetworkingIPRequest
+			if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
+				return
+			}
+
+			assert.Equal(t, rdnsTestExampleOrg, body.RDNS)
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(linode.IPAddress{
+				Address: networkingIPAddressFixture,
+				RDNS:    rdnsTestExampleOrg,
+				Type:    keyIPv4,
+				Public:  true,
+				Region:  regionUSEast,
+			}))
+		}))
+		t.Cleanup(srv.Close)
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeNetworkingIPUpdateRDNSTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+			keyAddress: networkingIPAddressFixture,
+			keyRDNS:    rdnsTestExampleOrg,
+			keyConfirm: true,
+		}))
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, networkingIPAddressFixture, "response should include IP address")
+		assert.Contains(t, textContent.Text, rdnsTestExampleOrg, "response should include rdns")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"not found"}]}`))
+			assert.NoError(t, writeErr)
+		}))
+		t.Cleanup(srv.Close)
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeNetworkingIPUpdateRDNSTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+			keyAddress: networkingIPAddressFixture,
+			keyRDNS:    rdnsTestExampleOrg,
+			keyConfirm: true,
+		}))
+
+		require.NoError(t, err, "handler should return MCP error result, not Go error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be a tool error")
+		assertErrorContains(t, result, "Failed to update networking IP")
+		assertErrorContains(t, result, "not found")
+	})
+
+	for name, confirm := range map[string]any{
+		caseMissingConfirm: nil,
+		caseFalseConfirm:   false,
+		caseStringConfirm:  boolStringTrue,
+		caseNumericConfirm: float64(1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls atomic.Int32
+
+			srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+				calls.Add(1)
+			}))
+			t.Cleanup(srv.Close)
+
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			}}
+			_, _, handler := tools.NewLinodeNetworkingIPUpdateRDNSTool(cfg)
+
+			args := map[string]any{keyAddress: networkingIPAddressFixture, keyRDNS: rdnsTestExampleOrg}
+			if confirm != nil {
+				args[keyConfirm] = confirm
+			}
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+
+			require.NoError(t, err, "handler should return MCP error result, not Go error")
+			require.NotNil(t, result, "result should not be nil")
+			assert.True(t, result.IsError, "invalid confirm should be a tool error")
+			assert.Equal(t, int32(0), calls.Load(), "confirm rejection must happen before client call")
+		})
+	}
+
+	for name, args := range map[string]map[string]any{
+		caseMissingAddress:        {keyRDNS: rdnsTestExampleOrg, keyConfirm: true},
+		"slash address":           {keyAddress: "198.51.100.5/24", keyRDNS: rdnsTestExampleOrg, keyConfirm: true},
+		"query separator address": {keyAddress: "198.51.100.5?bad=1", keyRDNS: rdnsTestExampleOrg, keyConfirm: true},
+		"traversal address":       {keyAddress: pathTraversalValue, keyRDNS: rdnsTestExampleOrg, keyConfirm: true},
+		"scoped IPv6 address":     {keyAddress: networkingScopedIPv6Fixture, keyRDNS: rdnsTestExampleOrg, keyConfirm: true},
+		"zone traversal address":  {keyAddress: networkingZoneTraversalValue, keyRDNS: rdnsTestExampleOrg, keyConfirm: true},
+		"missing rdns":            {keyAddress: networkingIPAddressFixture, keyConfirm: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls atomic.Int32
+
+			srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+				calls.Add(1)
+			}))
+			t.Cleanup(srv.Close)
+
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			}}
+			_, _, handler := tools.NewLinodeNetworkingIPUpdateRDNSTool(cfg)
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+
+			require.NoError(t, err, "handler should return MCP error result, not Go error")
+			require.NotNil(t, result, "result should not be nil")
+			assert.True(t, result.IsError, "invalid arguments should be a tool error")
+			assert.Equal(t, int32(0), calls.Load(), "argument rejection must happen before client call")
+		})
+	}
+}
+
 func TestLinodeNetworkingIPAllocateTool(t *testing.T) {
 	t.Parallel()
 

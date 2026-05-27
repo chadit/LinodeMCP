@@ -1674,9 +1674,9 @@ func TestLinodeInstanceIPUpdateRDNSTool(t *testing.T) {
 		wantContains string
 	}{
 		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyRDNS: rdnsTestExampleOrg}, wantContains: errConfirmEqualsTrue},
-		{name: "false confirm", args: map[string]any{keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyRDNS: rdnsTestExampleOrg, keyConfirm: false}, wantContains: errConfirmEqualsTrue},
-		{name: "string confirm", args: map[string]any{keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyRDNS: rdnsTestExampleOrg, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
-		{name: "numeric confirm", args: map[string]any{keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyRDNS: rdnsTestExampleOrg, keyConfirm: float64(1)}, wantContains: errConfirmEqualsTrue},
+		{name: caseFalseConfirm, args: map[string]any{keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyRDNS: rdnsTestExampleOrg, keyConfirm: false}, wantContains: errConfirmEqualsTrue},
+		{name: caseStringConfirm, args: map[string]any{keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyRDNS: rdnsTestExampleOrg, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
+		{name: caseNumericConfirm, args: map[string]any{keyLinodeID: float64(123), keyAddress: ip203_0_113_1, keyRDNS: rdnsTestExampleOrg, keyConfirm: float64(1)}, wantContains: errConfirmEqualsTrue},
 		{name: caseMissingLinodeID, args: map[string]any{keyAddress: ip203_0_113_1, keyRDNS: rdnsTestExampleOrg, keyConfirm: true}, wantContains: errLinodeIDRequired},
 		{name: caseMissingAddress, args: map[string]any{keyLinodeID: float64(123), keyRDNS: rdnsTestExampleOrg, keyConfirm: true}, wantContains: errAddressRequired},
 		{name: "address with slash", args: map[string]any{keyLinodeID: float64(123), keyAddress: "203.0.113.1/24", keyRDNS: rdnsTestExampleOrg, keyConfirm: true}, wantContains: errAddressValidIP},
