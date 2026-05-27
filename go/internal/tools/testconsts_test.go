@@ -14,6 +14,7 @@ const (
 	tokenTest                  = "test-token"
 	imageShareGroupLabel       = "DevOps Base Images"
 	errTemporaryFailure        = "temporary failure"
+	errPositiveInteger         = "positive integer"
 	errNotFound                = "not found"
 	errImageIDPositive         = "image_id must be a positive integer"
 	errImageIDNonEmpty         = "image_id must be a non-empty string"
@@ -54,6 +55,8 @@ const (
 
 	// Common JSON request/response keys.
 	keyConfirm                   = "confirm"
+	keyDefaultFirewallIDs        = "default_firewall_ids"
+	keyDefaultFirewallLinode     = "linode"
 	keyDescription               = "description"
 	keyCertificate               = "certificate"
 	keyPrivateKey                = "private_key"

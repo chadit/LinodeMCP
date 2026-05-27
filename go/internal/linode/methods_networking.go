@@ -56,6 +56,26 @@ func (c *Client) httpListFirewallSettings(ctx context.Context, page, pageSize in
 	return &settings, nil
 }
 
+// httpUpdateFirewallSettings updates default firewall assignments.
+func (c *Client) httpUpdateFirewallSettings(ctx context.Context, req *UpdateFirewallSettingsRequest) (*FirewallSettings, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpointFirewallSettings, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateFirewallSettings", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var settings FirewallSettings
+	if err := c.handleResponse(resp, &settings); err != nil {
+		return nil, err
+	}
+
+	return &settings, nil
+}
+
 // GetFirewall retrieves a single firewall by its ID.
 func (c *Client) httpGetFirewall(ctx context.Context, firewallID int) (*Firewall, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

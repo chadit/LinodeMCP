@@ -181,6 +181,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_account_update", Capability: profiles.CapAdmin},
 		{Name: "linode_account_settings_update", Capability: profiles.CapAdmin},
 		{Name: "linode_account_settings_managed_enable", Capability: profiles.CapAdmin},
+		{Name: "linode_firewall_settings_update", Capability: profiles.CapAdmin},
 		{Name: "linode_account_beta_enroll", Capability: profiles.CapAdmin},
 		{Name: "linode_account_cancel", Capability: profiles.CapAdmin},
 	}
