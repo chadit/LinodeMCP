@@ -504,6 +504,30 @@ func (c *Client) httpListNetworkingIPs(ctx context.Context, skipIPv6RDNS bool) (
 	return &response, nil
 }
 
+// AllocateNetworkingIP allocates an account-level IP address.
+func (c *Client) httpAllocateNetworkingIP(ctx context.Context, req AllocateNetworkingIPRequest) (*IPAddress, error) {
+	if req.LinodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointNetworkingIPs, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "AllocateNetworkingIP", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var ip IPAddress
+	if err := c.handleResponse(resp, &ip); err != nil {
+		return nil, err
+	}
+
+	return &ip, nil
+}
+
 // ListNetworkTransferPrices retrieves network transfer prices.
 func (c *Client) httpListNetworkTransferPrices(ctx context.Context) (*PaginatedResponse[NetworkTransferPrice], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

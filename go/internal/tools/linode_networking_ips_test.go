@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -88,4 +89,131 @@ func TestLinodeNetworkingIPsListTool(t *testing.T) {
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, "skip_ipv6_rdns must be a boolean")
 	})
+}
+
+func TestLinodeNetworkingIPAllocateTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		tool, capability, handler := tools.NewLinodeNetworkingIPAllocateTool(&config.Config{})
+
+		assert.Equal(t, "linode_networking_ip_allocate", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Equal(t, profiles.CapWrite, capability, "tool should be write capability")
+		assert.Contains(t, tool.InputSchema.Properties, "linode_id", "tool should declare linode_id")
+		assert.Contains(t, tool.InputSchema.Properties, "type", "tool should declare type")
+		assert.Contains(t, tool.InputSchema.Properties, "public", "tool should declare public")
+		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "tool should declare confirm")
+		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm should be required")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/networking/ips", r.URL.Path, "request path should match")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+
+			var body linode.AllocateNetworkingIPRequest
+			if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
+				return
+			}
+
+			assert.Equal(t, 123, body.LinodeID)
+			assert.True(t, body.Public)
+			assert.Equal(t, keyIPv4, body.Type)
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(linode.IPAddress{
+				Address:  networkingIPAddressFixture,
+				Type:     keyIPv4,
+				Public:   true,
+				Region:   regionUSEast,
+				LinodeID: 123,
+			}))
+		}))
+		t.Cleanup(srv.Close)
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeNetworkingIPAllocateTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+			keyLinodeID:   123,
+			keyType:       keyIPv4,
+			purposePublic: true,
+			keyConfirm:    true,
+		}))
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, networkingIPAddressFixture, "response should include IP address")
+		assert.Contains(t, textContent.Text, "allocated", "response should describe allocation")
+	})
+
+	for name, confirm := range map[string]any{
+		caseRequiresConfirm:        nil,
+		caseFalseConfirmRejected:   false,
+		caseStringConfirmRejected:  boolStringTrue,
+		caseNumericConfirmRejected: 1,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls atomic.Int32
+
+			srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+				calls.Add(1)
+			}))
+			t.Cleanup(srv.Close)
+
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			}}
+			_, _, handler := tools.NewLinodeNetworkingIPAllocateTool(cfg)
+
+			args := map[string]any{keyLinodeID: 123, keyType: keyIPv4, purposePublic: true}
+			if confirm != nil {
+				args[keyConfirm] = confirm
+			}
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+
+			require.NoError(t, err, "handler should return MCP error result, not Go error")
+			require.NotNil(t, result, "result should not be nil")
+			assert.True(t, result.IsError, "invalid confirm should be a tool error")
+			assert.Equal(t, int32(0), calls.Load(), "confirm rejection must happen before client call")
+		})
+	}
+
+	for name, args := range map[string]map[string]any{
+		"missing linode_id": {keyType: keyIPv4, purposePublic: true, keyConfirm: true},
+		"zero linode_id":    {keyLinodeID: 0, keyType: keyIPv4, purposePublic: true, keyConfirm: true},
+		"decimal linode_id": {keyLinodeID: 12.5, keyType: keyIPv4, purposePublic: true, keyConfirm: true},
+		"missing type":      {keyLinodeID: 123, purposePublic: true, keyConfirm: true},
+		"blank type":        {keyLinodeID: 123, keyType: blankString, purposePublic: true, keyConfirm: true},
+		"missing public":    {keyLinodeID: 123, keyType: keyIPv4, keyConfirm: true},
+		"invalid public":    {keyLinodeID: 123, keyType: keyIPv4, purposePublic: boolStringTrue, keyConfirm: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, _, handler := tools.NewLinodeNetworkingIPAllocateTool(&config.Config{})
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+
+			require.NoError(t, err, "handler should return MCP error result, not Go error")
+			require.NotNil(t, result, "result should not be nil")
+			assert.True(t, result.IsError, "invalid arguments should be a tool error")
+		})
+	}
 }

@@ -156,6 +156,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_firewall_delete", Capability: profiles.CapDestroy},
 		{Name: "linode_nodebalancer_list", Capability: profiles.CapRead},
 		{Name: "linode_nodebalancer_create", Capability: profiles.CapWrite},
+		{Name: "linode_networking_ip_allocate", Capability: profiles.CapWrite},
 
 		// DNS
 		{Name: "linode_domain_list", Capability: profiles.CapRead},
@@ -294,6 +295,7 @@ func TestNetworkAdminExcludesComputeWrites(t *testing.T) {
 	assert.NotContains(t, allowed, "linode_instance_create", "network-admin must not include compute writes")
 	assert.NotContains(t, allowed, toolVolumeCreate, "network-admin must not include block-storage writes")
 	assert.Contains(t, allowed, "linode_firewall_create", "network-admin must include firewall writes")
+	assert.Contains(t, allowed, "linode_networking_ip_allocate", "network-admin must include networking IP writes")
 	assert.Contains(t, allowed, "linode_domain_create", "network-admin must include DNS writes")
 	assert.Contains(t, allowed, "linode_vpc_create", "network-admin must include VPC writes")
 }

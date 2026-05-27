@@ -1595,7 +1595,7 @@ func TestLinodeInstanceIPAllocateTool(t *testing.T) {
 
 	t.Run(caseMissingConfirm, func(t *testing.T) {
 		t.Parallel()
-		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyType: keyIPv4, "public": true})
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyType: keyIPv4, purposePublic: true})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
@@ -1627,7 +1627,7 @@ func TestLinodeInstanceIPAllocateTool(t *testing.T) {
 		_, _, srvHandler := tools.NewLinodeInstanceIPAllocateTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{
-			keyLinodeID: float64(123), keyType: keyIPv4, "public": true, keyConfirm: true,
+			keyLinodeID: float64(123), keyType: keyIPv4, purposePublic: true, keyConfirm: true,
 		})
 		result, err := srvHandler(t.Context(), req)
 
