@@ -82,6 +82,9 @@ var ErrUpdateInstanceFirewallsRequestRequired = errors.New("firewall_ids is requ
 // ErrInvalidFirewallTemplateSlug is returned when a firewall template slug is not documented.
 var ErrInvalidFirewallTemplateSlug = errors.New("firewall template slug must be one of public or vpc")
 
+// ErrFirewallIDPositive is returned when a firewall ID argument is not positive.
+var ErrFirewallIDPositive = errors.New("firewall_id must be a positive integer")
+
 // APIError represents an error returned by the Linode API.
 // RetryAfter carries the server's Retry-After hint when present so the retry
 // loop can honor it instead of computing its own backoff.

@@ -198,6 +198,7 @@ const (
 	keySubnetID                  = "subnet_id"
 	keyBackupID                  = "backup_id"
 	keyFirewallID                = "firewall_id"
+	firewallDeviceLabelFixture   = "web-01"
 	keyNodeBalancerID            = "nodebalancer_id"
 	caseFractionalLinodeID       = "fractional linode id"
 	caseNegativeInterfaceID      = "negative interface id"

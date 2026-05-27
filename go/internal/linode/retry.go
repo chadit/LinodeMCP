@@ -2264,6 +2264,21 @@ func (c *Client) ListFirewalls(ctx context.Context) ([]Firewall, error) {
 	return firewalls, err
 }
 
+// ListFirewallDevices retrieves devices assigned to a Cloud Firewall with automatic retry on transient failures.
+func (c *Client) ListFirewallDevices(ctx context.Context, firewallID, page, pageSize int) (*PaginatedResponse[FirewallDevice], error) {
+	var devices *PaginatedResponse[FirewallDevice]
+
+	err := c.executeWithRetry(ctx, "ListFirewallDevices", func() error {
+		var err error
+
+		devices, err = c.httpListFirewallDevices(ctx, firewallID, page, pageSize)
+
+		return err
+	})
+
+	return devices, err
+}
+
 // ListFirewallSettings retrieves default firewall assignments with automatic retry on transient failures.
 func (c *Client) ListFirewallSettings(ctx context.Context, page, pageSize int) (*FirewallSettings, error) {
 	var settings *FirewallSettings

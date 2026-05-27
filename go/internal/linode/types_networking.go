@@ -35,6 +35,23 @@ type FirewallAddresses struct {
 	IPv6 []string `json:"ipv6"`
 }
 
+// FirewallDevice represents a device attached to a Cloud Firewall.
+type FirewallDevice struct {
+	ID      int                  `json:"id"`
+	Entity  FirewallDeviceEntity `json:"entity"`
+	Created string               `json:"created"`
+	Updated string               `json:"updated"`
+}
+
+// FirewallDeviceEntity represents the Linode, Linode interface, or NodeBalancer attached to a firewall.
+type FirewallDeviceEntity struct {
+	ID           int                   `json:"id"`
+	Label        string                `json:"label"`
+	Type         string                `json:"type"`
+	URL          string                `json:"url"`
+	ParentEntity *FirewallDeviceEntity `json:"parent_entity"`
+}
+
 // FirewallSettings represents the default firewall assignments for resource types.
 type FirewallSettings struct {
 	DefaultFirewallIDs FirewallDefaultIDs `json:"default_firewall_ids"`
