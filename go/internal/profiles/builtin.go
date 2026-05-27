@@ -113,6 +113,7 @@ func Categories(toolName string) []string {
 		"linode_nodebalancer_",
 		"linode_vlan_",
 		"linode_ipv6_range_",
+		"linode_ipv6_pools_",
 	) {
 		cats = append(cats, "networking")
 	}

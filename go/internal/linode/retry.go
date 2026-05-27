@@ -2556,6 +2556,21 @@ func (c *Client) ListNetworkTransferPrices(ctx context.Context) (*PaginatedRespo
 	return prices, err
 }
 
+// ListIPv6Pools retrieves IPv6 pools with automatic retry on transient failures.
+func (c *Client) ListIPv6Pools(ctx context.Context, page, pageSize int) (*PaginatedResponse[IPv6Pool], error) {
+	var pools *PaginatedResponse[IPv6Pool]
+
+	err := c.executeWithRetry(ctx, "ListIPv6Pools", func() error {
+		var err error
+
+		pools, err = c.httpListIPv6Pools(ctx, page, pageSize)
+
+		return err
+	})
+
+	return pools, err
+}
+
 // ListNodeBalancers retrieves all node balancers with automatic retry on transient failures.
 func (c *Client) ListNodeBalancers(ctx context.Context) ([]NodeBalancer, error) {
 	var nodeBalancers []NodeBalancer
