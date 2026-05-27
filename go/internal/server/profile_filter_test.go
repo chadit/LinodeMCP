@@ -19,6 +19,7 @@ const (
 	toolBucketAccessAllow  = "linode_object_storage_bucket_access_allow"
 	toolAccountPaymentGet  = "linode_account_payment_get"
 	toolMonitorAlertCreate = "linode_monitor_service_alert_definition_create"
+	toolMonitorTokenCreate = "linode_monitor_service_token_create"
 	toolMonitorAlertDelete = "linode_monitor_service_alert_definition_delete"
 	toolMonitorAlertUpdate = "linode_monitor_service_alert_definition_update"
 )
@@ -65,6 +66,8 @@ func TestNewDefaultProfileFiltersToReadAndMeta(t *testing.T) {
 		"default profile must not expose write tools like %s", toolBucketAccessAllow)
 	assert.NotContains(t, names, toolMonitorAlertCreate,
 		"default profile must not expose write tools like %s", toolMonitorAlertCreate)
+	assert.NotContains(t, names, toolMonitorTokenCreate,
+		"default profile must not expose write tools like %s", toolMonitorTokenCreate)
 	assert.NotContains(t, names, toolMonitorAlertDelete,
 		"default profile must not expose destructive tools like %s", toolMonitorAlertDelete)
 	assert.NotContains(t, names, toolMonitorAlertUpdate,
@@ -114,6 +117,8 @@ func TestNewFullAccessRegistersEverything(t *testing.T) {
 		"full-access must expose write tools like %s", toolBucketAccessAllow)
 	assert.Contains(t, names, toolMonitorAlertCreate,
 		"full-access must expose write tools like %s", toolMonitorAlertCreate)
+	assert.Contains(t, names, toolMonitorTokenCreate,
+		"full-access must expose write tools like %s", toolMonitorTokenCreate)
 	assert.Contains(t, names, toolMonitorAlertDelete,
 		"full-access must expose destructive tools like %s", toolMonitorAlertDelete)
 	assert.Contains(t, names, toolMonitorAlertUpdate,

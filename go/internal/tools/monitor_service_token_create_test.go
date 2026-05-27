@@ -16,29 +16,20 @@ import (
 )
 
 const (
-	monitorServiceAlertDefinitionCreateToolName = "linode_monitor_service_alert_definition_create"
-	monitorAlertDefinitionLabelParam            = "label"
-	monitorAlertDefinitionSeverityParam         = "severity"
-	monitorAlertDefinitionRuleCriteriaParam     = "rule_criteria"
-	monitorAlertDefinitionTriggerParam          = "trigger_conditions"
-	monitorAlertDefinitionChannelIDsParam       = "channel_ids"
+	monitorServiceTokenCreateToolName = "linode_monitor_service_token_create"
+	monitorServiceTokenToolPath       = "/monitor/services/dbaas/token"
+	errMonitorServiceTokenEntityIDs   = "entity_ids must be a non-empty array of positive integers"
 )
 
-func monitorAlertDefinitionCreateArgs() map[string]any {
+func monitorServiceTokenCreateArgs() map[string]any {
 	return map[string]any{
-		monitorServiceTypeParam:                 monitorServiceToolTypeDatabase,
-		monitorAlertDefinitionLabelParam:        monitorAlertDefinitionToolLabel,
-		monitorAlertDefinitionSeverityParam:     2,
-		monitorAlertDefinitionRuleCriteriaParam: map[string]any{"rules": []any{map[string]any{keyMetric: "cpu_usage", "operator": "gt", "threshold": 80}}},
-		monitorAlertDefinitionTriggerParam:      map[string]any{"criteria_condition": monitorCriteriaAll, "evaluation_period_seconds": 300, "polling_interval_seconds": 300, "trigger_occurrences": 3},
-		monitorAlertDefinitionChannelIDsParam:   []any{546, 392},
-		keyDescription:                          "Alert when CPU usage is high",
-		keyEntityIDs:                            []any{"13116"},
-		keyConfirm:                              true,
+		monitorServiceTypeParam: monitorServiceToolTypeDatabase,
+		keyEntityIDs:            []any{10, 20},
+		keyConfirm:              true,
 	}
 }
 
-func TestLinodeMonitorServiceAlertDefinitionCreateTool(t *testing.T) {
+func TestLinodeMonitorServiceTokenCreateTool(t *testing.T) {
 	t.Parallel()
 
 	t.Run("definition", func(t *testing.T) {
@@ -46,11 +37,12 @@ func TestLinodeMonitorServiceAlertDefinitionCreateTool(t *testing.T) {
 
 		cfg := &config.Config{}
 
-		tool, capability, handler := tools.NewLinodeMonitorServiceAlertDefinitionCreateTool(cfg)
-		assert.Equal(t, monitorServiceAlertDefinitionCreateToolName, tool.Name, "tool name should match")
+		tool, capability, handler := tools.NewLinodeMonitorServiceTokenCreateTool(cfg)
+		assert.Equal(t, monitorServiceTokenCreateToolName, tool.Name, "tool name should match")
 		assert.Equal(t, profiles.CapWrite, capability, "tool should be write-capable")
 		assert.NotEmpty(t, tool.Description, "tool should have a description")
 		assert.Contains(t, tool.InputSchema.Required, monitorServiceTypeParam, "service type should be required")
+		assert.Contains(t, tool.InputSchema.Required, keyEntityIDs, "entity IDs should be required")
 		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm should be required")
 		require.NotNil(t, handler, "handler should not be nil")
 	})
@@ -60,7 +52,7 @@ func TestLinodeMonitorServiceAlertDefinitionCreateTool(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, monitorServiceAlertDefinitionsToolPath, r.URL.Path, "request path should match")
+			assert.Equal(t, monitorServiceTokenToolPath, r.URL.Path, "request path should match")
 			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
 			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
 
@@ -69,33 +61,24 @@ func TestLinodeMonitorServiceAlertDefinitionCreateTool(t *testing.T) {
 				return
 			}
 
-			assert.Equal(t, monitorAlertDefinitionToolLabel, body[keyLabel])
-			assert.InEpsilon(t, float64(2), body["severity"], 0)
-			assert.Equal(t, []any{float64(546), float64(392)}, body["channel_ids"])
-			assert.Equal(t, "Alert when CPU usage is high", body[keyDescription])
-			assert.Equal(t, []any{"13116"}, body[keyEntityIDs])
+			assert.Equal(t, []any{float64(10), float64(20)}, body[keyEntityIDs])
 
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyID:          20000,
-				keyLabel:       monitorAlertDefinitionToolLabel,
-				keyServiceType: monitorServiceToolTypeDatabase,
-			}))
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyToken: "monitor-token"}))
 		}))
 		t.Cleanup(srv.Close)
 
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeMonitorServiceAlertDefinitionCreateTool(cfg)
+		_, _, handler := tools.NewLinodeMonitorServiceTokenCreateTool(cfg)
 
-		req := createRequestWithArgs(t, monitorAlertDefinitionCreateArgs())
+		req := createRequestWithArgs(t, monitorServiceTokenCreateArgs())
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return an error")
 		require.NotNil(t, result, "result should not be nil")
 		assert.False(t, result.IsError, "should not be an error result")
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, monitorAlertDefinitionToolLabel, "response should contain alert label")
-		assert.Contains(t, textContent.Text, monitorServiceToolTypeDatabase, "response should contain service type")
+		assert.Contains(t, textContent.Text, "monitor-token", "response should contain token")
 	})
 
 	t.Run("api error", func(t *testing.T) {
@@ -103,7 +86,7 @@ func TestLinodeMonitorServiceAlertDefinitionCreateTool(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, monitorServiceAlertDefinitionsToolPath, r.URL.Path, "request path should match")
+			assert.Equal(t, monitorServiceTokenToolPath, r.URL.Path, "request path should match")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
@@ -111,16 +94,16 @@ func TestLinodeMonitorServiceAlertDefinitionCreateTool(t *testing.T) {
 		t.Cleanup(srv.Close)
 
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodeMonitorServiceAlertDefinitionCreateTool(cfg)
+		_, _, handler := tools.NewLinodeMonitorServiceTokenCreateTool(cfg)
 
-		req := createRequestWithArgs(t, monitorAlertDefinitionCreateArgs())
+		req := createRequestWithArgs(t, monitorServiceTokenCreateArgs())
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should return API failures as tool errors")
 		require.NotNil(t, result, "result should not be nil")
 		assert.True(t, result.IsError, "API failure should be an error result")
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Failed to create "+monitorServiceAlertDefinitionCreateToolName, "response should identify failed tool")
+		assert.Contains(t, textContent.Text, "Failed to create "+monitorServiceTokenCreateToolName, "response should identify failed tool")
 		assert.Contains(t, textContent.Text, errForbidden, "response should include API error detail")
 	})
 
@@ -142,7 +125,7 @@ func TestLinodeMonitorServiceAlertDefinitionCreateTool(t *testing.T) {
 			t.Run(testCase.name, func(t *testing.T) {
 				t.Parallel()
 
-				args := monitorAlertDefinitionCreateArgs()
+				args := monitorServiceTokenCreateArgs()
 				if !testCase.set {
 					delete(args, keyConfirm)
 				}
@@ -152,7 +135,7 @@ func TestLinodeMonitorServiceAlertDefinitionCreateTool(t *testing.T) {
 				}
 
 				cfg := &config.Config{}
-				_, _, handler := tools.NewLinodeMonitorServiceAlertDefinitionCreateTool(cfg)
+				_, _, handler := tools.NewLinodeMonitorServiceTokenCreateTool(cfg)
 
 				req := createRequestWithArgs(t, args)
 				result, err := handler(t.Context(), req)
@@ -177,25 +160,22 @@ func TestLinodeMonitorServiceAlertDefinitionCreateTool(t *testing.T) {
 			{name: caseSeparatorServiceType, mutate: func(args map[string]any) { args[monitorServiceTypeParam] = invalidServiceTypeSlash }, wantMessage: monitorServiceTypeInvalidError},
 			{name: caseQueryServiceType, mutate: func(args map[string]any) { args[monitorServiceTypeParam] = invalidServiceTypeQuery }, wantMessage: monitorServiceTypeInvalidError},
 			{name: caseTraversalServiceType, mutate: func(args map[string]any) { args[monitorServiceTypeParam] = pathTraversalValue }, wantMessage: monitorServiceTypeInvalidError},
-			{name: caseMissingLabel, mutate: func(args map[string]any) { delete(args, monitorAlertDefinitionLabelParam) }, wantMessage: "label, severity, rule_criteria, trigger_conditions, and channel_ids are required"},
-			{name: "invalid severity", mutate: func(args map[string]any) { args[monitorAlertDefinitionSeverityParam] = 5 }, wantMessage: errAlertDefinitionSeverity},
-			{name: "fractional severity", mutate: func(args map[string]any) { args[monitorAlertDefinitionSeverityParam] = 1.5 }, wantMessage: errAlertDefinitionSeverity},
-			{name: "empty rule criteria", mutate: func(args map[string]any) { args[monitorAlertDefinitionRuleCriteriaParam] = map[string]any{} }, wantMessage: "rule_criteria must be a non-empty object"},
-			{name: "string trigger conditions", mutate: func(args map[string]any) { args[monitorAlertDefinitionTriggerParam] = monitorCriteriaAll }, wantMessage: "trigger_conditions must be a non-empty object"},
-			{name: "empty channel ids", mutate: func(args map[string]any) { args[monitorAlertDefinitionChannelIDsParam] = []any{} }, wantMessage: errAlertDefinitionChannels},
-			{name: "zero channel id", mutate: func(args map[string]any) { args[monitorAlertDefinitionChannelIDsParam] = []any{0} }, wantMessage: errAlertDefinitionChannels},
-			{name: caseStringEntityID, mutate: func(args map[string]any) { args[keyEntityIDs] = []any{123} }, wantMessage: errAlertDefinitionEntityIDs},
+			{name: caseMissingEntityIDs, mutate: func(args map[string]any) { delete(args, keyEntityIDs) }, wantMessage: errMonitorServiceTokenEntityIDs},
+			{name: "empty entity ids", mutate: func(args map[string]any) { args[keyEntityIDs] = []any{} }, wantMessage: errMonitorServiceTokenEntityIDs},
+			{name: "zero entity id", mutate: func(args map[string]any) { args[keyEntityIDs] = []any{0} }, wantMessage: errMonitorServiceTokenEntityIDs},
+			{name: caseStringEntityID, mutate: func(args map[string]any) { args[keyEntityIDs] = []any{"10"} }, wantMessage: errMonitorServiceTokenEntityIDs},
+			{name: "fractional entity id", mutate: func(args map[string]any) { args[keyEntityIDs] = []any{10.5} }, wantMessage: errMonitorServiceTokenEntityIDs},
 		}
 
 		for _, testCase := range cases {
 			t.Run(testCase.name, func(t *testing.T) {
 				t.Parallel()
 
-				args := monitorAlertDefinitionCreateArgs()
+				args := monitorServiceTokenCreateArgs()
 				testCase.mutate(args)
 
 				cfg := &config.Config{}
-				_, _, handler := tools.NewLinodeMonitorServiceAlertDefinitionCreateTool(cfg)
+				_, _, handler := tools.NewLinodeMonitorServiceTokenCreateTool(cfg)
 
 				req := createRequestWithArgs(t, args)
 				result, err := handler(t.Context(), req)
