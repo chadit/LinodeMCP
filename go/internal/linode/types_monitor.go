@@ -19,6 +19,16 @@ type MonitorDashboard map[string]any
 // MonitorMetrics describes metric data returned for a monitoring service entity.
 type MonitorMetrics map[string]any
 
+// MonitorServiceToken describes a token returned for a monitoring service entity.
+type MonitorServiceToken struct {
+	Token string `json:"token"`
+}
+
+// CreateMonitorServiceTokenRequest describes a monitor service token create request.
+type CreateMonitorServiceTokenRequest struct {
+	EntityIDs []int `json:"entity_ids"`
+}
+
 // AlertDefinition describes a monitoring alert definition.
 type AlertDefinition struct {
 	ID                int            `json:"id"`

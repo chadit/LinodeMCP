@@ -40,7 +40,7 @@ func TestLinodeMonitorServiceAlertDefinitionUpdateToolInvalidInput(t *testing.T)
 				delete(args, monitorAlertDefinitionTriggerParam)
 				delete(args, monitorAlertDefinitionChannelIDsParam)
 				delete(args, keyDescription)
-				delete(args, "entity_ids")
+				delete(args, keyEntityIDs)
 			}, wantMessage: "at least one alert definition field must be provided"},
 			{name: caseEmptyLabel, mutate: func(args map[string]any) { args[monitorAlertDefinitionLabelParam] = "" }, wantMessage: errLabelNonEmpty},
 			{name: "invalid severity", mutate: func(args map[string]any) { args[monitorAlertDefinitionSeverityParam] = 5 }, wantMessage: errAlertDefinitionSeverity},
@@ -49,8 +49,8 @@ func TestLinodeMonitorServiceAlertDefinitionUpdateToolInvalidInput(t *testing.T)
 			{name: "string trigger conditions", mutate: func(args map[string]any) { args[monitorAlertDefinitionTriggerParam] = monitorCriteriaAll }, wantMessage: "trigger_conditions must be a non-empty object"},
 			{name: "empty channel ids", mutate: func(args map[string]any) { args[monitorAlertDefinitionChannelIDsParam] = []any{} }, wantMessage: errAlertDefinitionChannels},
 			{name: "zero channel id", mutate: func(args map[string]any) { args[monitorAlertDefinitionChannelIDsParam] = []any{0} }, wantMessage: errAlertDefinitionChannels},
-			{name: "empty entity ids", mutate: func(args map[string]any) { args["entity_ids"] = []any{} }, wantMessage: errAlertDefinitionEntityIDs},
-			{name: "string entity id", mutate: func(args map[string]any) { args["entity_ids"] = []any{123} }, wantMessage: errAlertDefinitionEntityIDs},
+			{name: "empty entity ids", mutate: func(args map[string]any) { args[keyEntityIDs] = []any{} }, wantMessage: errAlertDefinitionEntityIDs},
+			{name: caseStringEntityID, mutate: func(args map[string]any) { args[keyEntityIDs] = []any{123} }, wantMessage: errAlertDefinitionEntityIDs},
 		}
 
 		for _, testCase := range cases {

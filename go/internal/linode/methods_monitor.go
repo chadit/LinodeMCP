@@ -137,6 +137,28 @@ func (c *Client) httpGetMonitorServiceMetrics(ctx context.Context, serviceType s
 	return metrics, nil
 }
 
+// httpCreateMonitorServiceToken creates a token for one monitoring service type.
+func (c *Client) httpCreateMonitorServiceToken(ctx context.Context, serviceType string, request *CreateMonitorServiceTokenRequest) (*MonitorServiceToken, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType) + "/token"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, request)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateMonitorServiceToken", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var token MonitorServiceToken
+	if err := c.handleResponse(resp, &token); err != nil {
+		return nil, err
+	}
+
+	return &token, nil
+}
+
 // httpCreateMonitorServiceAlertDefinition creates an alert definition for one monitoring service type.
 func (c *Client) httpCreateMonitorServiceAlertDefinition(ctx context.Context, serviceType string, request *CreateAlertDefinitionRequest) (*AlertDefinition, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

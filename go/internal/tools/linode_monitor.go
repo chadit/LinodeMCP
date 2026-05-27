@@ -18,6 +18,7 @@ const (
 	monitorServiceAlertDefinitionsToolName      = "linode_monitor_service_alert_definitions"
 	monitorServiceDashboardsToolName            = "linode_monitor_service_dashboards"
 	monitorServiceMetricsToolName               = "linode_monitor_service_metrics"
+	monitorServiceCreateToolName                = "linode_monitor_service_" + "token_create"
 	monitorServiceAlertDefinitionCreateToolName = "linode_monitor_service_alert_definition_create"
 	monitorServiceAlertDefinitionGetToolName    = "linode_monitor_service_alert_definition_get"
 	monitorServiceAlertDefinitionDeleteToolName = "linode_monitor_service_alert_definition_delete"
@@ -35,6 +36,7 @@ const (
 	monitorAlertDefinitionStatusEnabled          = "enabled"
 	monitorAlertDefinitionStatusDisabled         = "disabled"
 	errMonitorServiceTypeInvalid                 = "service_type must be a single non-empty service type slug"
+	errMonitorServiceCreateEntityIDs             = "entity_ids must be a non-empty array of positive integers"
 	monitorAlertIDParam                          = "alert_id"
 	errMonitorAlertIDMissing                     = "alert_id is required"
 	errMonitorAlertIDPositive                    = "alert_id must be a positive integer"
@@ -328,6 +330,95 @@ func getMonitorServiceMetrics(ctx context.Context, client *linode.Client, servic
 	}
 
 	return metrics, ""
+}
+
+// NewLinodeMonitorServiceTokenCreateTool creates a tool for creating a token for one monitoring service type.
+func NewLinodeMonitorServiceTokenCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		monitorServiceCreateToolName,
+		"Creates a token for one supported monitoring service type. Requires confirm=true.",
+		[]mcp.ToolOption{
+			mcp.WithString(monitorServiceTypeParam, mcp.Required(), mcp.Description("Supported monitoring service type slug for the token.")),
+			mcp.WithArray(monitorAlertDefinitionEntityIDsParam, mcp.Required(), mcp.Description("Service entity IDs to include in the token.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm creating a monitor service token.")),
+		},
+		handleLinodeMonitorServiceTokenCreateRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleLinodeMonitorServiceTokenCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This creates a monitor service token. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	serviceType, validationMessage := monitorServiceTypeFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	createRequest, validationMessage := monitorServiceTokenCreateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	token, createFailureMessage := createMonitorServiceToken(ctx, client, serviceType, createRequest)
+	if createFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to create " + monitorServiceCreateToolName + ": " + createFailureMessage), nil
+	}
+
+	return MarshalToolResponse(token)
+}
+
+func monitorServiceTokenCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateMonitorServiceTokenRequest, string) {
+	entityIDs, validationMessage := monitorServiceTokenEntityIDsFromTool(request)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	return &linode.CreateMonitorServiceTokenRequest{EntityIDs: entityIDs}, ""
+}
+
+func monitorServiceTokenEntityIDsFromTool(request *mcp.CallToolRequest) ([]int, string) {
+	args := request.GetArguments()
+
+	raw, exists := args[monitorAlertDefinitionEntityIDsParam]
+	if !exists {
+		return nil, errMonitorServiceCreateEntityIDs
+	}
+
+	rawItems, ok := raw.([]any)
+	if !ok || len(rawItems) == 0 {
+		return nil, errMonitorServiceCreateEntityIDs
+	}
+
+	items := make([]int, 0, len(rawItems))
+	for _, rawItem := range rawItems {
+		value, ok := intFromAny(rawItem)
+		if !ok || value <= 0 {
+			return nil, errMonitorServiceCreateEntityIDs
+		}
+
+		items = append(items, value)
+	}
+
+	return items, ""
+}
+
+func createMonitorServiceToken(ctx context.Context, client *linode.Client, serviceType string, request *linode.CreateMonitorServiceTokenRequest) (*linode.MonitorServiceToken, string) {
+	token, err := client.CreateMonitorServiceToken(ctx, serviceType, request)
+	if err != nil {
+		return nil, err.Error()
+	}
+
+	return token, ""
 }
 
 // NewLinodeMonitorServiceAlertDefinitionGetTool creates a tool for retrieving one alert definition for one monitoring service type.

@@ -753,6 +753,23 @@ func (c *Client) GetMonitorServiceMetrics(ctx context.Context, serviceType strin
 	return metrics, err
 }
 
+// CreateMonitorServiceToken creates a service token without retrying
+// the token-creating request. Token creation is not guaranteed idempotent
+// after a transient error, so this method delegates exactly once.
+func (c *Client) CreateMonitorServiceToken(ctx context.Context, serviceType string, request *CreateMonitorServiceTokenRequest) (*MonitorServiceToken, error) {
+	var token *MonitorServiceToken
+
+	err := c.executeWithoutRetry(ctx, "CreateMonitorServiceToken", func() error {
+		var retryErr error
+
+		token, retryErr = c.httpCreateMonitorServiceToken(ctx, serviceType, request)
+
+		return retryErr
+	})
+
+	return token, err
+}
+
 // CreateMonitorServiceAlertDefinition creates an alert definition without retrying
 // the mutating request. Alert definition creation is not guaranteed idempotent
 // after a transient error, so this method delegates exactly once.

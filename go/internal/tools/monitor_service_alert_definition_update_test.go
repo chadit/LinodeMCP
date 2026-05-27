@@ -28,7 +28,7 @@ func monitorAlertDefinitionUpdateArgs() map[string]any {
 		monitorAlertDefinitionTriggerParam:      map[string]any{"criteria_condition": monitorCriteriaAll, "evaluation_period_seconds": 300, "polling_interval_seconds": 300, "trigger_occurrences": 3},
 		monitorAlertDefinitionChannelIDsParam:   []any{546, 392},
 		keyDescription:                          "Updated alert when CPU usage is high",
-		"entity_ids":                            []any{"13116"},
+		keyEntityIDs:                            []any{"13116"},
 		keyConfirm:                              true,
 	}
 }
@@ -109,7 +109,7 @@ func TestLinodeMonitorServiceAlertDefinitionUpdateTool(t *testing.T) {
 			assert.Equal(t, statusEnabled, body[keyStatus])
 			assert.Equal(t, []any{float64(546), float64(392)}, body["channel_ids"])
 			assert.Equal(t, "Updated alert when CPU usage is high", body[keyDescription])
-			assert.Equal(t, []any{"13116"}, body["entity_ids"])
+			assert.Equal(t, []any{"13116"}, body[keyEntityIDs])
 
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
