@@ -10,6 +10,7 @@ import (
 
 const (
 	endpointNetworkingIPs         = "/networking/ips"
+	endpointNetworkingIPsAssign   = endpointNetworkingIPs + "/assign"
 	endpointFirewalls             = "/networking/firewalls"
 	endpointFirewallSettings      = endpointFirewalls + "/settings"
 	endpointFirewallTemplates     = endpointFirewalls + "/templates"
@@ -526,6 +527,44 @@ func (c *Client) httpAllocateNetworkingIP(ctx context.Context, req AllocateNetwo
 	}
 
 	return &ip, nil
+}
+
+// AssignNetworkingIPs assigns IP addresses to Linodes in a region.
+func (c *Client) httpAssignNetworkingIPs(ctx context.Context, req AssignNetworkingIPsRequest) (map[string]any, error) {
+	if req.Region == "" {
+		return nil, ErrRegionRequired
+	}
+
+	if len(req.Assignments) == 0 {
+		return nil, ErrIPAssignmentsRequired
+	}
+
+	for _, assignment := range req.Assignments {
+		if assignment.Address == "" {
+			return nil, ErrIPAddressRequired
+		}
+
+		if assignment.LinodeID <= 0 {
+			return nil, ErrLinodeIDPositive
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointNetworkingIPsAssign, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "AssignNetworkingIPs", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	response := map[string]any{}
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response, nil
 }
 
 // ListNetworkTransferPrices retrieves network transfer prices.
