@@ -34,3 +34,26 @@ func (c *Client) httpGetIPv6Range(ctx context.Context, ipv6Range string) (*IPv6R
 
 	return &response, nil
 }
+
+// httpDeleteIPv6Range deletes one IPv6 range for the authenticated user.
+func (c *Client) httpDeleteIPv6Range(ctx context.Context, ipv6Range string) error {
+	prefix, err := netip.ParsePrefix(ipv6Range)
+	if err != nil || !prefix.Addr().Is6() || prefix != prefix.Masked() {
+		return ErrIPv6RangeInvalid
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedRange := url.PathEscape(ipv6Range)
+	endpoint := endpointNetworkingIPv6Ranges + "/" + encodedRange
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteIPv6Range", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return c.handleResponse(resp, nil)
+}

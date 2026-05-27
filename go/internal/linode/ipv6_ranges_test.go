@@ -207,6 +207,81 @@ func TestClientGetIPv6RangeRejectsMalformedRange(t *testing.T) {
 	}
 }
 
+func TestClientDeleteIPv6RangeSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, endpointNetworkingIPv6Ranges+"/2001:0db8::%2F64", r.URL.EscapedPath(), "request path should encode the IPv6 range slash")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	err := client.DeleteIPv6Range(t.Context(), ipv6RangeCIDR)
+
+	require.NoError(t, err, "DeleteIPv6Range should succeed on 200 response")
+}
+
+func TestClientDeleteIPv6RangeRejectsMalformedRange(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Fatalf("client should reject malformed ranges before request")
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
+	for _, ipv6Range := range []string{ipv6RangeFixture, "/", "2001:0db8::/64?x=1", pathTraversalDotDot, "192.0.2.0/24", "2001:0db8::1/64"} {
+		t.Run(ipv6Range, func(t *testing.T) {
+			t.Parallel()
+
+			err := client.DeleteIPv6Range(t.Context(), ipv6Range)
+
+			require.ErrorIs(t, err, linode.ErrIPv6RangeInvalid, "malformed range should be rejected before request")
+		})
+	}
+}
+
+func TestClientDeleteIPv6RangeAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, endpointNetworkingIPv6Ranges+"/2001:0db8::%2F64", r.URL.EscapedPath(), "request path should match")
+		http.Error(w, `{"errors":[{"reason":"forbidden"}]}`, http.StatusForbidden)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	err := client.DeleteIPv6Range(t.Context(), ipv6RangeCIDR)
+
+	require.Error(t, err, "DeleteIPv6Range should fail on non-200 response")
+}
+
+func TestClientDeleteIPv6RangeDoesNotRetryDelete(t *testing.T) {
+	t.Parallel()
+
+	var calls int
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		http.Error(w, `{"errors":[{"reason":"temporary"}]}`, http.StatusInternalServerError)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
+	err := client.DeleteIPv6Range(t.Context(), ipv6RangeCIDR)
+
+	require.Error(t, err, "server error should propagate")
+	assert.Equal(t, 1, calls, "destructive DELETE must not be replayed")
+}
+
 func TestClientGetIPv6RangeAPIError(t *testing.T) {
 	t.Parallel()
 
