@@ -1034,6 +1034,7 @@ func networkingToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeNetworkingIPv4AssignTool,
 		tools.NewLinodeNetworkingIPShareTool,
 		tools.NewLinodeIPv6PoolsListTool,
+		tools.NewLinodeIPv6RangesListTool,
 		tools.NewLinodeNodeBalancerListTool,
 		tools.NewLinodeNodeBalancerGetTool,
 		tools.NewLinodeFirewallCreateTool,

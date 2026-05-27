@@ -2571,6 +2571,21 @@ func (c *Client) ListIPv6Pools(ctx context.Context, page, pageSize int) (*Pagina
 	return pools, err
 }
 
+// ListIPv6Ranges retrieves IPv6 ranges with automatic retry on transient failures.
+func (c *Client) ListIPv6Ranges(ctx context.Context, page, pageSize int) (*PaginatedResponse[IPv6Range], error) {
+	var ranges *PaginatedResponse[IPv6Range]
+
+	err := c.executeWithRetry(ctx, "ListIPv6Ranges", func() error {
+		var err error
+
+		ranges, err = c.httpListIPv6Ranges(ctx, page, pageSize)
+
+		return err
+	})
+
+	return ranges, err
+}
+
 // ListNodeBalancers retrieves all node balancers with automatic retry on transient failures.
 func (c *Client) ListNodeBalancers(ctx context.Context) ([]NodeBalancer, error) {
 	var nodeBalancers []NodeBalancer

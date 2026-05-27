@@ -20,6 +20,7 @@ const (
 	endpointFirewallTemplates     = endpointFirewalls + "/templates"
 	endpointNetworkTransferPrices = "/network-transfer/prices"
 	endpointNetworkingIPv6Pools   = "/networking/ipv6/pools"
+	endpointNetworkingIPv6Ranges  = "/networking/ipv6/ranges"
 	endpointNodeBalancers         = "/nodebalancers"
 )
 
@@ -741,6 +742,28 @@ func (c *Client) httpListIPv6Pools(ctx context.Context, page, pageSize int) (*Pa
 	defer drainClose(resp)
 
 	var response PaginatedResponse[IPv6Pool]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
+}
+
+// ListIPv6Ranges retrieves IPv6 ranges for the authenticated user.
+func (c *Client) httpListIPv6Ranges(ctx context.Context, page, pageSize int) (*PaginatedResponse[IPv6Range], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointNetworkingIPv6Ranges, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListIPv6Ranges", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[IPv6Range]
 	if err := c.handleResponse(resp, &response); err != nil {
 		return nil, err
 	}
