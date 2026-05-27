@@ -14,6 +14,7 @@ const (
 	endpointNetworkingIPs         = "/networking/ips"
 	endpointNetworkingIPsAssign   = endpointNetworkingIPs + "/assign"
 	endpointNetworkingIPsShare    = endpointNetworkingIPs + "/share"
+	endpointNetworkingIPv4Assign  = "/networking/ipv4/assign"
 	endpointFirewalls             = "/networking/firewalls"
 	endpointFirewallSettings      = endpointFirewalls + "/settings"
 	endpointFirewallTemplates     = endpointFirewalls + "/templates"
@@ -603,6 +604,39 @@ func (c *Client) httpAllocateNetworkingIP(ctx context.Context, req AllocateNetwo
 
 // AssignNetworkingIPs assigns IP addresses to Linodes in a region.
 func (c *Client) httpAssignNetworkingIPs(ctx context.Context, req AssignNetworkingIPsRequest) (map[string]any, error) {
+	return c.httpAssignNetworkingIPsAtEndpoint(ctx, endpointNetworkingIPsAssign, "AssignNetworkingIPs", req)
+}
+
+// AssignNetworkingIPv4s assigns IPv4 addresses to Linodes in a region.
+func (c *Client) httpAssignNetworkingIPv4s(ctx context.Context, req AssignNetworkingIPsRequest) (map[string]any, error) {
+	if err := validateIPv4Assignments(req.Assignments); err != nil {
+		return nil, err
+	}
+
+	return c.httpAssignNetworkingIPsAtEndpoint(ctx, endpointNetworkingIPv4Assign, "AssignNetworkingIPv4s", req)
+}
+
+func validateIPv4Assignments(assignments []IPAssignment) error {
+	for _, assignment := range assignments {
+		if assignment.Address == "" {
+			continue
+		}
+
+		address, err := netip.ParseAddr(assignment.Address)
+		if err != nil || !address.Is4() {
+			return ErrIPv4AddressInvalid
+		}
+	}
+
+	return nil
+}
+
+func (c *Client) httpAssignNetworkingIPsAtEndpoint(
+	ctx context.Context,
+	endpoint string,
+	operation string,
+	req AssignNetworkingIPsRequest,
+) (map[string]any, error) {
 	if req.Region == "" {
 		return nil, ErrRegionRequired
 	}
@@ -624,9 +658,9 @@ func (c *Client) httpAssignNetworkingIPs(ctx context.Context, req AssignNetworki
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointNetworkingIPsAssign, req)
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "AssignNetworkingIPs", Err: err}
+		return nil, &NetworkError{Operation: operation, Err: err}
 	}
 
 	defer drainClose(resp)

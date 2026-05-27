@@ -169,6 +169,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_networking_ip_update_rdns":   profiles.CapWrite,
 		"linode_networking_ip_allocate":      profiles.CapWrite,
 		"linode_networking_ips_assign":       profiles.CapWrite,
+		"linode_networking_ipv4_assign":      profiles.CapWrite,
 		"linode_networking_ips_share":        profiles.CapWrite,
 		"linode_image_create":                profiles.CapWrite,
 		"linode_image_replicate":             profiles.CapWrite,

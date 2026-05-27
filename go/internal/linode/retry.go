@@ -2511,6 +2511,21 @@ func (c *Client) AssignNetworkingIPs(ctx context.Context, req AssignNetworkingIP
 	return response, err
 }
 
+// AssignNetworkingIPv4s assigns IPv4 addresses without retrying the non-idempotent POST.
+func (c *Client) AssignNetworkingIPv4s(ctx context.Context, req AssignNetworkingIPsRequest) (map[string]any, error) {
+	var response map[string]any
+
+	err := c.executeWithoutRetry(ctx, "AssignNetworkingIPv4s", func() error {
+		var err error
+
+		response, err = c.httpAssignNetworkingIPv4s(ctx, req)
+
+		return err
+	})
+
+	return response, err
+}
+
 // ShareNetworkingIPs shares IP addresses without retrying the non-idempotent POST.
 func (c *Client) ShareNetworkingIPs(ctx context.Context, req ShareNetworkingIPsRequest) (map[string]any, error) {
 	var response map[string]any
