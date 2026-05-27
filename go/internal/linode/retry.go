@@ -2264,6 +2264,21 @@ func (c *Client) ListFirewalls(ctx context.Context) ([]Firewall, error) {
 	return firewalls, err
 }
 
+// ListNetworkTransferPrices retrieves network transfer prices with automatic retry on transient failures.
+func (c *Client) ListNetworkTransferPrices(ctx context.Context) (*PaginatedResponse[NetworkTransferPrice], error) {
+	var prices *PaginatedResponse[NetworkTransferPrice]
+
+	err := c.executeWithRetry(ctx, "ListNetworkTransferPrices", func() error {
+		var err error
+
+		prices, err = c.httpListNetworkTransferPrices(ctx)
+
+		return err
+	})
+
+	return prices, err
+}
+
 // ListNodeBalancers retrieves all node balancers with automatic retry on transient failures.
 func (c *Client) ListNodeBalancers(ctx context.Context) ([]NodeBalancer, error) {
 	var nodeBalancers []NodeBalancer

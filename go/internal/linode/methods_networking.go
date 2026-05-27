@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	endpointFirewalls     = "/networking/firewalls"
-	endpointNodeBalancers = "/nodebalancers"
+	endpointFirewalls             = "/networking/firewalls"
+	endpointNetworkTransferPrices = "/network-transfer/prices"
+	endpointNodeBalancers         = "/nodebalancers"
 )
 
 // ListFirewalls retrieves all Cloud Firewalls for the authenticated user.
@@ -111,6 +112,26 @@ func (c *Client) httpDeleteFirewall(ctx context.Context, firewallID int) error {
 	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
+}
+
+// ListNetworkTransferPrices retrieves network transfer prices.
+func (c *Client) httpListNetworkTransferPrices(ctx context.Context) (*PaginatedResponse[NetworkTransferPrice], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointNetworkTransferPrices, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListNetworkTransferPrices", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[NetworkTransferPrice]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
 }
 
 // ListNodeBalancers retrieves all NodeBalancers for the authenticated user.
