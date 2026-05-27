@@ -2601,6 +2601,21 @@ func (c *Client) CreateIPv6Range(ctx context.Context, req CreateIPv6RangeRequest
 	return ipv6Range, err
 }
 
+// GetIPv6Range retrieves one IPv6 range with automatic retry on transient failures.
+func (c *Client) GetIPv6Range(ctx context.Context, ipv6Range string) (*IPv6Range, error) {
+	var result *IPv6Range
+
+	err := c.executeWithRetry(ctx, "GetIPv6Range", func() error {
+		var err error
+
+		result, err = c.httpGetIPv6Range(ctx, ipv6Range)
+
+		return err
+	})
+
+	return result, err
+}
+
 // ListNodeBalancers retrieves all node balancers with automatic retry on transient failures.
 func (c *Client) ListNodeBalancers(ctx context.Context) ([]NodeBalancer, error) {
 	var nodeBalancers []NodeBalancer

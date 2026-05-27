@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"net/netip"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -12,6 +13,7 @@ import (
 )
 
 const (
+	paramIPv6Range           = "ipv6_range"
 	keyIPv6RangePrefixLength = "prefix_length"
 	keyIPv6RangeLinodeID     = "linode_id"
 	keyIPv6RangeRouteTarget  = "route_target"
@@ -32,6 +34,55 @@ func NewLinodeIPv6RangesListTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 			return items, ""
 		},
 	)
+}
+
+// NewLinodeIPv6RangeGetTool creates a tool for retrieving one IPv6 range.
+func NewLinodeIPv6RangeGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_ipv6_range_get",
+		mcp.WithDescription("Gets one IPv6 range by CIDR prefix."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithString(paramIPv6Range, mcp.Required(), mcp.Description("IPv6 range prefix, for example 2001:0db8::/64.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleIPv6RangeGetRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleIPv6RangeGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	ipv6Range, validationMessage := ipv6RangeFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	rangeResult, err := client.GetIPv6Range(ctx, ipv6Range)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve IPv6 range: %v", err)), nil
+	}
+
+	return MarshalToolResponse(rangeResult)
+}
+
+func ipv6RangeFromTool(request *mcp.CallToolRequest) (string, string) {
+	ipv6Range, validationMessage := requiredStringArg(request.GetArguments(), paramIPv6Range)
+	if validationMessage != "" {
+		return "", validationMessage
+	}
+
+	prefix, err := netip.ParsePrefix(ipv6Range)
+	if err != nil || !prefix.Addr().Is6() || prefix != prefix.Masked() {
+		return "", "ipv6_range must be a valid IPv6 prefix"
+	}
+
+	return ipv6Range, ""
 }
 
 // NewLinodeIPv6RangeCreateTool creates a tool for creating an IPv6 range.
