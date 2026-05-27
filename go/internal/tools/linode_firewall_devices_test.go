@@ -284,3 +284,172 @@ func TestLinodeFirewallDeviceGetTool(t *testing.T) {
 		assertErrorContains(t, result, "Failed to retrieve linode_firewall_device_get")
 	})
 }
+
+func TestLinodeFirewallDeviceDeleteTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		tool, capability, handler := tools.NewLinodeFirewallDeviceDeleteTool(&config.Config{})
+
+		assert.Equal(t, "linode_firewall_device_delete", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Equal(t, profiles.CapDestroy, capability, "tool should be destroy capability")
+		require.NotNil(t, handler, "handler should not be nil")
+		assert.Contains(t, tool.InputSchema.Properties, keyFirewallID, "schema should include firewall_id property")
+		assert.Contains(t, tool.InputSchema.Properties, keyFirewallDeviceID, "schema should include device_id property")
+		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "schema should include confirm property")
+		assert.Contains(t, tool.InputSchema.Required, keyFirewallID, "schema should require firewall_id")
+		assert.Contains(t, tool.InputSchema.Required, keyFirewallDeviceID, "schema should require device_id")
+		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "schema should require confirm")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			assert.Equal(t, "/networking/firewalls/123/devices/456", r.URL.Path, "request path should match")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query params")
+			w.Header().Set("Content-Type", "application/json")
+			_, writeErr := w.Write([]byte(`{}`))
+			assert.NoError(t, writeErr)
+		}))
+		t.Cleanup(srv.Close)
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(456), keyConfirm: true}))
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.False(t, result.IsError, "delete should succeed")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Firewall device removed successfully", "response should include message")
+		assert.Contains(t, textContent.Text, keyFirewallID, "response should include firewall ID field")
+		assert.Contains(t, textContent.Text, keyFirewallDeviceID, "response should include device ID field")
+	})
+
+	t.Run("rejects invalid confirm before client call", func(t *testing.T) {
+		t.Parallel()
+
+		cases := map[string]any{
+			caseMissingConfirm:         nil,
+			caseConfirmFalse:           false,
+			caseStringConfirmRejected:  boolStringTrue,
+			caseNumericConfirmRejected: float64(1),
+		}
+
+		for name, rawConfirm := range cases {
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+
+				var called atomic.Bool
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					called.Store(true)
+					w.WriteHeader(http.StatusOK)
+				}))
+				t.Cleanup(srv.Close)
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+					envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+				}}
+				_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(cfg)
+
+				args := map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(456)}
+				if rawConfirm != nil {
+					args[keyConfirm] = rawConfirm
+				}
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, args))
+
+				require.NoError(t, err, "handler should not return Go error")
+				require.NotNil(t, result, "handler should return a result")
+				assert.True(t, result.IsError, "invalid confirm should be rejected")
+				assertErrorContains(t, result, "confirm=true")
+				assert.False(t, called.Load(), "client should not be called without confirm")
+			})
+		}
+	})
+
+	t.Run("rejects invalid ids before client call", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name string
+			args map[string]any
+			want string
+		}{
+			{name: caseMissingFirewallPathID, args: map[string]any{keyFirewallDeviceID: float64(456), keyConfirm: true}, want: errFirewallIDPositive},
+			{name: caseZeroFirewallPathID, args: map[string]any{keyFirewallID: float64(0), keyFirewallDeviceID: float64(456), keyConfirm: true}, want: errFirewallIDPositive},
+			{name: caseSlashFirewallPathID, args: map[string]any{keyFirewallID: paymentMethodIDSlash, keyFirewallDeviceID: float64(456), keyConfirm: true}, want: errFirewallIDPositive},
+			{name: caseQueryFirewallPathID, args: map[string]any{keyFirewallID: databaseInvalidInstanceIDQuery, keyFirewallDeviceID: float64(456), keyConfirm: true}, want: errFirewallIDPositive},
+			{name: caseTraversalFirewallPathID, args: map[string]any{keyFirewallID: pathTraversalValue, keyFirewallDeviceID: float64(456), keyConfirm: true}, want: errFirewallIDPositive},
+			{name: caseMissingFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyConfirm: true}, want: errFirewallDeviceIDPositive},
+			{name: caseZeroFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(0), keyConfirm: true}, want: errFirewallDeviceIDPositive},
+			{name: caseSlashFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: paymentMethodIDSlash, keyConfirm: true}, want: errFirewallDeviceIDPositive},
+			{name: caseQueryFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: databaseInvalidInstanceIDQuery, keyConfirm: true}, want: errFirewallDeviceIDPositive},
+			{name: caseTraversalFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: pathTraversalValue, keyConfirm: true}, want: errFirewallDeviceIDPositive},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				var called atomic.Bool
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					called.Store(true)
+					w.WriteHeader(http.StatusOK)
+				}))
+				t.Cleanup(srv.Close)
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+					envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+				}}
+				_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(cfg)
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+
+				require.NoError(t, err, "handler should not return Go error")
+				require.NotNil(t, result, "handler should return a result")
+				assert.True(t, result.IsError, "invalid IDs should be rejected")
+				assertErrorContains(t, result, testCase.want)
+				assert.False(t, called.Load(), "client should not be called for invalid IDs")
+			})
+		}
+	})
+
+	t.Run("client error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			assert.Equal(t, "/networking/firewalls/123/devices/456", r.URL.Path, "request path should match")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+			assert.NoError(t, writeErr)
+		}))
+		t.Cleanup(srv.Close)
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(456), keyConfirm: true}))
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "Failed to delete linode_firewall_device_delete")
+	})
+}

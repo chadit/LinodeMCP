@@ -2309,6 +2309,13 @@ func (c *Client) GetFirewallDevice(ctx context.Context, firewallID, deviceID int
 	return device, err
 }
 
+// DeleteFirewallDevice removes one device assignment from a Cloud Firewall without retrying the mutating request.
+func (c *Client) DeleteFirewallDevice(ctx context.Context, firewallID, deviceID int) error {
+	return c.executeWithoutRetry(ctx, "DeleteFirewallDevice", func() error {
+		return c.httpDeleteFirewallDevice(ctx, firewallID, deviceID)
+	})
+}
+
 // ListFirewallSettings retrieves default firewall assignments with automatic retry on transient failures.
 func (c *Client) ListFirewallSettings(ctx context.Context, page, pageSize int) (*FirewallSettings, error) {
 	var settings *FirewallSettings
