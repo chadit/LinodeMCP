@@ -206,6 +206,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_monitor_services":                            profiles.CapRead,
 		"linode_monitor_service_get":                         profiles.CapRead,
 		"linode_monitor_service_dashboards":                  profiles.CapRead,
+		"linode_monitor_service_metrics":                     profiles.CapRead,
 		"linode_monitor_service_metric_definitions":          profiles.CapRead,
 		"linode_monitor_service_alert_definition_get":        profiles.CapRead,
 		"linode_monitor_service_alert_definition_delete":     profiles.CapDestroy,
