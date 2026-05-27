@@ -136,7 +136,7 @@ func TestClientListFirewallRuleVersionsRetriesTransientFailure(t *testing.T) {
 func TestClientGetFirewallRuleVersionSuccess(t *testing.T) {
 	t.Parallel()
 
-	firewall := linode.Firewall{ID: 123, Label: "web-firewall", Rules: linode.FirewallRules{Version: 2, Fingerprint: "997dd135", Inbound: []linode.FirewallRule{{Action: policyAccept, Protocol: "TCP", Ports: "443", Label: "allow-https"}}}}
+	firewall := linode.Firewall{ID: 123, Label: "web-firewall", Rules: linode.FirewallRules{Version: 2, Fingerprint: "997dd135", Inbound: []linode.FirewallRule{{Action: policyAccept, Protocol: protocolTCP, Ports: "443", Label: "allow-https"}}}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")

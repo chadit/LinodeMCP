@@ -23,9 +23,9 @@ func TestClientListFirewallRulesSuccess(t *testing.T) {
 		OutboundPolicy: policyAccept,
 		Inbound: []linode.FirewallRule{{
 			Action:   policyAccept,
-			Protocol: "TCP",
+			Protocol: protocolTCP,
 			Ports:    "443",
-			Label:    "allow-https",
+			Label:    firewallRuleLabelAllowHTTPS,
 		}},
 	}
 
@@ -49,7 +49,7 @@ func TestClientListFirewallRulesSuccess(t *testing.T) {
 	assert.Equal(t, policyDrop, result.InboundPolicy)
 	assert.Equal(t, policyAccept, result.OutboundPolicy)
 	require.Len(t, result.Inbound, 1)
-	assert.Equal(t, "allow-https", result.Inbound[0].Label)
+	assert.Equal(t, firewallRuleLabelAllowHTTPS, result.Inbound[0].Label)
 }
 
 func TestClientListFirewallRulesRejectsInvalidFirewallID(t *testing.T) {
@@ -131,4 +131,129 @@ func TestClientListFirewallRulesRetriesTransientFailure(t *testing.T) {
 	require.NotNil(t, result, "result should not be nil")
 	assert.Equal(t, policyDrop, result.InboundPolicy)
 	assert.Equal(t, int32(2), requestCount.Load(), "read-only GET should retry once then succeed")
+}
+
+func TestClientUpdateFirewallRulesSuccess(t *testing.T) {
+	t.Parallel()
+
+	request := linode.FirewallRules{
+		Inbound: []linode.FirewallRule{{
+			Action:   policyAccept,
+			Protocol: protocolTCP,
+			Ports:    "443",
+			Label:    firewallRuleLabelAllowHTTPS,
+		}},
+		Outbound: []linode.FirewallRule{},
+	}
+	response := linode.FirewallRules{InboundPolicy: policyDrop, OutboundPolicy: policyAccept, Inbound: request.Inbound}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, endpointFirewallRules, r.URL.Path, "request path should match")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		var got linode.FirewallRules
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should be valid JSON")
+		assert.Equal(t, request.Inbound, got.Inbound)
+		assert.Empty(t, got.Outbound)
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(response))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.UpdateFirewallRules(t.Context(), 123, &request)
+
+	require.NoError(t, err, "UpdateFirewallRules should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, policyDrop, result.InboundPolicy)
+	require.Len(t, result.Inbound, 1)
+	assert.Equal(t, firewallRuleLabelAllowHTTPS, result.Inbound[0].Label)
+}
+
+func TestClientUpdateFirewallRulesRejectsInvalidFirewallID(t *testing.T) {
+	t.Parallel()
+
+	var called atomic.Bool
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called.Store(true)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.UpdateFirewallRules(t.Context(), 0, &linode.FirewallRules{})
+
+	require.ErrorIs(t, err, linode.ErrFirewallIDPositive, "invalid input should be rejected")
+	assert.Nil(t, result, "no rules should be returned")
+	assert.False(t, called.Load(), "client should not call API for invalid input")
+}
+
+func TestClientUpdateFirewallRulesRejectsNilRequest(t *testing.T) {
+	t.Parallel()
+
+	var called atomic.Bool
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called.Store(true)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.UpdateFirewallRules(t.Context(), 123, nil)
+
+	require.ErrorIs(t, err, linode.ErrFirewallRulesRequired, "nil rules request should be rejected")
+	assert.Nil(t, result, "no rules should be returned")
+	assert.False(t, called.Load(), "client should not call API for nil rules request")
+}
+
+func TestClientUpdateFirewallRulesHTTPError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, endpointFirewallRules, r.URL.Path, "request path should match")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.UpdateFirewallRules(t.Context(), 123, &linode.FirewallRules{})
+
+	require.Error(t, err, "UpdateFirewallRules should fail on HTTP error")
+	assert.Nil(t, result, "no rules should be returned")
+}
+
+func TestClientUpdateFirewallRulesDoesNotRetryTransientFailure(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyErrors: []map[string]string{{keyReason: errTemporaryFailure}},
+		}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	result, err := client.UpdateFirewallRules(t.Context(), 123, &linode.FirewallRules{})
+
+	require.Error(t, err, "UpdateFirewallRules should fail on 500 response")
+	assert.Nil(t, result, "no rules should be returned")
+	assert.Equal(t, int32(1), requestCount.Load(), "mutating PUT must not retry and replay firewall rule replacement")
 }

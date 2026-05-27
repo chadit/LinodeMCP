@@ -92,6 +92,8 @@ const (
 	purposeVPC                   = "vpc"
 	policyDrop                   = "DROP"
 	policyAccept                 = "ACCEPT"
+	protocolTCP                  = "TCP"
+	firewallRuleLabelAllowHTTPS  = "allow-https"
 	macAddressFixture            = "22:00:AB:CD:EF:01"
 	pathTraversalDotDot          = ".."
 	lkeTierStandard              = "standard"

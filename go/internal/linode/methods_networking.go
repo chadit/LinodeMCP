@@ -64,6 +64,37 @@ func (c *Client) httpListFirewallRules(ctx context.Context, firewallID int) (*Fi
 	return &rules, nil
 }
 
+// UpdateFirewallRules replaces the rules for a Cloud Firewall.
+func (c *Client) httpUpdateFirewallRules(ctx context.Context, firewallID int, req *FirewallRules) (*FirewallRules, error) {
+	if firewallID <= 0 {
+		return nil, ErrFirewallIDPositive
+	}
+
+	if req == nil {
+		return nil, ErrFirewallRulesRequired
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedFirewallID := url.PathEscape(strconv.Itoa(firewallID))
+	endpoint := endpointFirewalls + "/" + encodedFirewallID + "/rules"
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateFirewallRules", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var rules FirewallRules
+	if err := c.handleResponse(resp, &rules); err != nil {
+		return nil, err
+	}
+
+	return &rules, nil
+}
+
 // ListFirewallRuleVersions retrieves the rule-version history payload for a Cloud Firewall.
 // The upstream OpenAPI schema for GET /networking/firewalls/{firewallId}/history
 // is a firewall object, not a paginated collection; the rule version metadata is

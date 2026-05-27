@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -12,14 +13,16 @@ import (
 )
 
 const (
-	firewallDefaultLinodeKey = "linode"
-	paramDefaultFirewallIDs  = "default_firewall_ids"
-	paramDeviceID            = "id"
-	paramDeviceType          = "type"
-	paramFirewallDeviceID    = "device_id"
-	paramFirewallID          = "firewall_id"
-	paramFirewallRuleVersion = "version"
-	paramSlug                = "slug"
+	firewallDefaultLinodeKey  = "linode"
+	paramDefaultFirewallIDs   = "default_firewall_ids"
+	paramDeviceID             = "id"
+	paramDeviceType           = "type"
+	paramFirewallDeviceID     = "device_id"
+	paramFirewallID           = "firewall_id"
+	paramFirewallRuleInbound  = "inbound"
+	paramFirewallRuleOutbound = "outbound"
+	paramFirewallRuleVersion  = "version"
+	paramSlug                 = "slug"
 )
 
 // NewLinodeFirewallListTool creates a tool for listing firewalls.
@@ -81,6 +84,99 @@ func handleLinodeFirewallRulesListRequest(ctx context.Context, request *mcp.Call
 	}
 
 	return MarshalToolResponse(rules)
+}
+
+// NewLinodeFirewallRulesUpdateTool creates a tool for replacing rules for a Cloud Firewall.
+func NewLinodeFirewallRulesUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_firewall_rules_update",
+		"Replaces inbound and outbound rules for a Cloud Firewall.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(paramFirewallID, mcp.Required(),
+				mcp.Description("The ID of the firewall whose rules should be replaced.")),
+			mcp.WithString(paramFirewallRuleInbound, mcp.Required(),
+				mcp.Description("JSON array of inbound firewall rules.")),
+			mcp.WithString(paramFirewallRuleOutbound, mcp.Required(),
+				mcp.Description("JSON array of outbound firewall rules.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be set to true to confirm replacing firewall rules.")),
+		},
+		handleLinodeFirewallRulesUpdateRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleLinodeFirewallRulesUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This replaces Cloud Firewall rules. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	firewallID, validationMessage := requiredPositiveIntArgument(
+		request,
+		paramFirewallID,
+		linode.ErrFirewallIDPositive.Error(),
+		linode.ErrFirewallIDPositive.Error(),
+	)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	inbound, validationMessage := parseFirewallRuleSet(request.GetString(paramFirewallRuleInbound, ""), paramFirewallRuleInbound)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	outbound, validationMessage := parseFirewallRuleSet(request.GetString(paramFirewallRuleOutbound, ""), paramFirewallRuleOutbound)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	req := linode.FirewallRules{Inbound: inbound, Outbound: outbound}
+
+	rules, err := client.UpdateFirewallRules(ctx, firewallID, &req)
+	if err != nil {
+		return mcp.NewToolResultError(formatFirewallRulesUpdateError(err)), nil
+	}
+
+	response := struct {
+		Message    string                `json:"message"`
+		FirewallID int                   `json:"firewall_id"`
+		Rules      *linode.FirewallRules `json:"rules"`
+	}{
+		Message:    fmt.Sprintf("Firewall %d rules updated successfully", firewallID),
+		FirewallID: firewallID,
+		Rules:      rules,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func formatFirewallRulesUpdateError(err error) string {
+	return "Failed to update linode_firewall_rules_update: " + err.Error()
+}
+
+func parseFirewallRuleSet(raw, name string) ([]linode.FirewallRule, string) {
+	if raw == "" {
+		return nil, name + " is required"
+	}
+
+	var rules []linode.FirewallRule
+	if err := json.Unmarshal([]byte(raw), &rules); err != nil {
+		return nil, fmt.Sprintf("%s must be a JSON array of firewall rules: %v", name, err)
+	}
+
+	if rules == nil {
+		return nil, name + " must be a JSON array of firewall rules"
+	}
+
+	return rules, ""
 }
 
 // NewLinodeFirewallRuleVersionsListTool creates a tool for retrieving rule-version history for a Cloud Firewall.

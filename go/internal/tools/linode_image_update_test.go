@@ -113,7 +113,7 @@ func TestLinodeImageUpdateRejectsInvalidRequest(t *testing.T) {
 		{name: "malformed tags", args: map[string]any{imageIDParam: imageIDFixture, keyTags: `[`, keyConfirm: true}, wantContains: errTagsMust},
 		{name: "null tags", args: map[string]any{imageIDParam: imageIDFixture, keyTags: `null`, keyConfirm: true}, wantContains: errTagsMust},
 		{name: "padded null tags", args: map[string]any{imageIDParam: imageIDFixture, keyTags: ` null `, keyConfirm: true}, wantContains: errTagsMust},
-		{name: "object tags", args: map[string]any{imageIDParam: imageIDFixture, keyTags: `{}`, keyConfirm: true}, wantContains: errTagsMust},
+		{name: "object tags", args: map[string]any{imageIDParam: imageIDFixture, keyTags: jsonObjectEmpty, keyConfirm: true}, wantContains: errTagsMust},
 		{name: "numeric tags", args: map[string]any{imageIDParam: imageIDFixture, keyTags: `123`, keyConfirm: true}, wantContains: errTagsMust},
 		{name: "boolean tags", args: map[string]any{imageIDParam: imageIDFixture, keyTags: boolStringTrue, keyConfirm: true}, wantContains: errTagsMust},
 		{name: "quoted string tags", args: map[string]any{imageIDParam: imageIDFixture, keyTags: `"tag"`, keyConfirm: true}, wantContains: errTagsMust},

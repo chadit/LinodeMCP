@@ -138,7 +138,7 @@ func TestLinodeImageShareGroupImagesAddToolValidation(t *testing.T) {
 	for name, images := range map[string]any{
 		"missing images":        nil,
 		"non-string images":     []any{map[string]any{keyBetaID: imagePrivate15Fixture}},
-		"empty images":          `[]`,
+		"empty images":          databaseJSONArray,
 		"blank images":          `   `,
 		"image missing id":      `[{"label":"missing id"}]`,
 		"malformed images JSON": `[{`,
