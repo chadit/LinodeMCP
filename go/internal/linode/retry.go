@@ -2586,6 +2586,21 @@ func (c *Client) ListIPv6Ranges(ctx context.Context, page, pageSize int) (*Pagin
 	return ranges, err
 }
 
+// CreateIPv6Range creates an IPv6 range without retrying the non-idempotent POST.
+func (c *Client) CreateIPv6Range(ctx context.Context, req CreateIPv6RangeRequest) (*IPv6Range, error) {
+	var ipv6Range *IPv6Range
+
+	err := c.executeWithoutRetry(ctx, "CreateIPv6Range", func() error {
+		var err error
+
+		ipv6Range, err = c.httpCreateIPv6Range(ctx, req)
+
+		return err
+	})
+
+	return ipv6Range, err
+}
+
 // ListNodeBalancers retrieves all node balancers with automatic retry on transient failures.
 func (c *Client) ListNodeBalancers(ctx context.Context) ([]NodeBalancer, error) {
 	var nodeBalancers []NodeBalancer

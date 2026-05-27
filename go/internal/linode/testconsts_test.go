@@ -56,6 +56,8 @@ const (
 
 	// Common region IDs used in API response fixtures.
 	regionUSEast         = "us-east"
+	ipv6RangeFixture     = "2001:0db8::"
+	ipv6RouteTarget      = "2001:db8::1"
 	serviceLinodes       = "Linodes"
 	serviceNodeBalancers = "NodeBalancers"
 

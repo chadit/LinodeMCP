@@ -771,6 +771,41 @@ func (c *Client) httpListIPv6Ranges(ctx context.Context, page, pageSize int) (*P
 	return &response, nil
 }
 
+// CreateIPv6Range creates an IPv6 range for the authenticated user.
+func (c *Client) httpCreateIPv6Range(ctx context.Context, req CreateIPv6RangeRequest) (*IPv6Range, error) {
+	if req.PrefixLength < 1 || req.PrefixLength > 128 {
+		return nil, ErrIPv6RangePrefixRange
+	}
+
+	if req.LinodeID != nil && *req.LinodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	if req.RouteTarget != "" {
+		routeTarget, err := netip.ParseAddr(req.RouteTarget)
+		if err != nil || !routeTarget.Is6() || routeTarget.Zone() != "" {
+			return nil, ErrIPv6RangeRouteTargetInvalid
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointNetworkingIPv6Ranges, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateIPv6Range", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var ipv6Range IPv6Range
+	if err := c.handleResponse(resp, &ipv6Range); err != nil {
+		return nil, err
+	}
+
+	return &ipv6Range, nil
+}
+
 // ListNodeBalancers retrieves all NodeBalancers for the authenticated user.
 func (c *Client) httpListNodeBalancers(ctx context.Context) ([]NodeBalancer, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
