@@ -883,7 +883,7 @@ func TestLinodeNetworkingIPShareTool(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/networking/ips/share", r.URL.Path, "request path should match")
+			assert.Equal(t, "/networking/ipv4/share", r.URL.Path, "request path should match")
 			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
 
 			var body linode.ShareNetworkingIPsRequest
@@ -930,7 +930,7 @@ func TestLinodeNetworkingIPShareTool(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
-			assert.Equal(t, "/networking/ips/share", r.URL.Path, "request path should match")
+			assert.Equal(t, "/networking/ipv4/share", r.URL.Path, "request path should match")
 
 			var body linode.ShareNetworkingIPsRequest
 			if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {

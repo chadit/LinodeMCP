@@ -13,7 +13,7 @@ import (
 const (
 	endpointNetworkingIPs         = "/networking/ips"
 	endpointNetworkingIPsAssign   = endpointNetworkingIPs + "/assign"
-	endpointNetworkingIPsShare    = endpointNetworkingIPs + "/share"
+	endpointNetworkingIPsShare    = "/networking/ipv4/share"
 	endpointNetworkingIPv4Assign  = "/networking/ipv4/assign"
 	endpointFirewalls             = "/networking/firewalls"
 	endpointFirewallSettings      = endpointFirewalls + "/settings"
