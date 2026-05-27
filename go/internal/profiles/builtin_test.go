@@ -64,6 +64,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_image_sharegroup_token_images_list", Capability: profiles.CapRead},
 		{Name: "linode_image_sharegroup_token_update", Capability: profiles.CapAdmin},
 		{Name: "linode_image_sharegroup_by_token_get", Capability: profiles.CapRead},
+		{Name: "linode_network_transfer_prices", Capability: profiles.CapRead},
 		{Name: "linode_stackscript_get", Capability: profiles.CapRead},
 		{Name: "linode_stackscript_list", Capability: profiles.CapRead},
 

@@ -35,6 +35,22 @@ type FirewallAddresses struct {
 	IPv6 []string `json:"ipv6"`
 }
 
+// NetworkTransferPrice represents a network transfer price entry.
+type NetworkTransferPrice struct {
+	ID           string                       `json:"id"`
+	Label        string                       `json:"label"`
+	Price        Price                        `json:"price"`
+	RegionPrices []NetworkTransferRegionPrice `json:"region_prices"`
+	Transfer     int                          `json:"transfer"`
+}
+
+// NetworkTransferRegionPrice represents a region-specific network transfer price.
+type NetworkTransferRegionPrice struct {
+	ID      string  `json:"id"`
+	Hourly  float64 `json:"hourly"`
+	Monthly float64 `json:"monthly"`
+}
+
 // NodeBalancer represents a Linode NodeBalancer (load balancer).
 type NodeBalancer struct {
 	ID                 int      `json:"id"`

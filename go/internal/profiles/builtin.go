@@ -106,6 +106,7 @@ func Categories(toolName string) []string {
 	if hasAnyPrefix(
 		toolName,
 		"linode_firewall_",
+		"linode_network_transfer_",
 		"linode_nodebalancer_",
 		"linode_vlan_",
 		"linode_ipv6_range_",
