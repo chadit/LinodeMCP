@@ -29,6 +29,7 @@ const (
 	errInterfaceJSONObject     = "interface must be a JSON object"
 	errInterfaceTypeExactlyOne = "interface must define exactly one of public, vpc, or vlan"
 	caseInvalidInterface       = "invalid interface"
+	caseInvalidType            = "invalid type"
 	caseExtraSeparator         = "extra separator"
 	caseMissingInterface       = "missing interface"
 	caseMissingCredentialID    = "missing credential id"

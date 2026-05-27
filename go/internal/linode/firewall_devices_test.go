@@ -60,6 +60,118 @@ func TestClientListFirewallDevicesSuccess(t *testing.T) {
 	assert.Equal(t, 2, result.Page)
 }
 
+func TestClientCreateFirewallDeviceSuccess(t *testing.T) {
+	t.Parallel()
+
+	device := linode.FirewallDevice{
+		ID: 789,
+		Entity: linode.FirewallDeviceEntity{
+			ID:    456,
+			Label: "web-02",
+			Type:  managedLinodeSettingsSSHUser,
+			URL:   "/v4/linode/instances/456",
+		},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, endpointFirewallDevices, r.URL.Path, "request path should match")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		var got linode.CreateFirewallDeviceRequest
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should be JSON")
+		assert.Equal(t, linode.CreateFirewallDeviceRequest{ID: 456, Type: managedLinodeSettingsSSHUser}, got)
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(device))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.CreateFirewallDevice(t.Context(), 123, &linode.CreateFirewallDeviceRequest{ID: 456, Type: managedLinodeSettingsSSHUser})
+
+	require.NoError(t, err, "CreateFirewallDevice should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, 789, result.ID)
+	assert.Equal(t, managedLinodeSettingsSSHUser, result.Entity.Type)
+}
+
+func TestClientCreateFirewallDeviceRejectsInvalidInput(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name       string
+		firewallID int
+		req        *linode.CreateFirewallDeviceRequest
+		wantErr    error
+	}{
+		{name: "zero firewall id", firewallID: 0, req: &linode.CreateFirewallDeviceRequest{ID: 456, Type: managedLinodeSettingsSSHUser}, wantErr: linode.ErrFirewallIDPositive},
+		{name: "nil request", firewallID: 123, req: nil, wantErr: linode.ErrFirewallDeviceIDPositive},
+		{name: "zero device id", firewallID: 123, req: &linode.CreateFirewallDeviceRequest{Type: managedLinodeSettingsSSHUser}, wantErr: linode.ErrFirewallDeviceIDPositive},
+		{name: "missing type", firewallID: 123, req: &linode.CreateFirewallDeviceRequest{ID: 456}, wantErr: linode.ErrFirewallDeviceTypeRequired},
+		{name: "slash type", firewallID: 123, req: &linode.CreateFirewallDeviceRequest{ID: 456, Type: "linode/123"}, wantErr: linode.ErrInvalidFirewallDeviceType},
+		{name: "query type", firewallID: 123, req: &linode.CreateFirewallDeviceRequest{ID: 456, Type: "linode?x=1"}, wantErr: linode.ErrInvalidFirewallDeviceType},
+		{name: "traversal type", firewallID: 123, req: &linode.CreateFirewallDeviceRequest{ID: 456, Type: ".."}, wantErr: linode.ErrInvalidFirewallDeviceType},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var called atomic.Bool
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				called.Store(true)
+				w.WriteHeader(http.StatusOK)
+			}))
+			t.Cleanup(srv.Close)
+
+			client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+			result, err := client.CreateFirewallDevice(t.Context(), testCase.firewallID, testCase.req)
+
+			require.ErrorIs(t, err, testCase.wantErr, "invalid input should be rejected")
+			assert.Nil(t, result, "no device should be returned")
+			assert.False(t, called.Load(), "client should not call API for invalid input")
+		})
+	}
+}
+
+func TestClientCreateFirewallDeviceDoesNotReplayTransientFailure(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, endpointFirewallDevices, r.URL.Path, "request path should match")
+
+		hj, ok := w.(http.Hijacker)
+		if !assert.True(t, ok, "response writer should support hijacking") {
+			return
+		}
+
+		conn, _, err := hj.Hijack()
+		if !assert.NoError(t, err) {
+			return
+		}
+
+		assert.NoError(t, conn.Close())
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	result, err := client.CreateFirewallDevice(t.Context(), 123, &linode.CreateFirewallDeviceRequest{ID: 456, Type: managedLinodeSettingsSSHUser})
+
+	require.Error(t, err, "transient error should be returned")
+	assert.Nil(t, result, "no device should be returned")
+	assert.Equal(t, int32(1), requestCount.Load(), "mutating POST should not be replayed")
+}
+
 func TestClientListFirewallDevicesRejectsInvalidFirewallID(t *testing.T) {
 	t.Parallel()
 

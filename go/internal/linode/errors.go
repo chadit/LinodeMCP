@@ -82,6 +82,15 @@ var ErrUpdateInstanceFirewallsRequestRequired = errors.New("firewall_ids is requ
 // ErrInvalidFirewallTemplateSlug is returned when a firewall template slug is not documented.
 var ErrInvalidFirewallTemplateSlug = errors.New("firewall template slug must be one of public or vpc")
 
+// ErrFirewallDeviceIDPositive is returned when a firewall device ID is not positive.
+var ErrFirewallDeviceIDPositive = errors.New("device id must be a positive integer")
+
+// ErrFirewallDeviceTypeRequired is returned when a firewall device type is missing.
+var ErrFirewallDeviceTypeRequired = errors.New("device type is required")
+
+// ErrInvalidFirewallDeviceType is returned when a firewall device type is not documented.
+var ErrInvalidFirewallDeviceType = errors.New("device type must be one of linode, nodebalancer, or linode_interface")
+
 // ErrFirewallIDPositive is returned when a firewall ID argument is not positive.
 var ErrFirewallIDPositive = errors.New("firewall_id must be a positive integer")
 
