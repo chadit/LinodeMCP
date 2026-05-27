@@ -107,6 +107,38 @@ func (c *Client) httpCreateFirewallDevice(ctx context.Context, firewallID int, r
 	return &device, nil
 }
 
+// GetFirewallDevice retrieves one device assigned to a Cloud Firewall.
+func (c *Client) httpGetFirewallDevice(ctx context.Context, firewallID, deviceID int) (*FirewallDevice, error) {
+	if firewallID <= 0 {
+		return nil, ErrFirewallIDPositive
+	}
+
+	if deviceID <= 0 {
+		return nil, ErrFirewallDeviceIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedFirewallID := url.PathEscape(strconv.Itoa(firewallID))
+	encodedDeviceID := url.PathEscape(strconv.Itoa(deviceID))
+	endpoint := endpointFirewalls + "/" + encodedFirewallID + "/devices/" + encodedDeviceID
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetFirewallDevice", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var device FirewallDevice
+	if err := c.handleResponse(resp, &device); err != nil {
+		return nil, err
+	}
+
+	return &device, nil
+}
+
 func isFirewallDeviceType(deviceType string) bool {
 	switch deviceType {
 	case "linode", "nodebalancer", "linode_interface":

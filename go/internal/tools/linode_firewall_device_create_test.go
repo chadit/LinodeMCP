@@ -131,16 +131,16 @@ func TestLinodeFirewallDeviceCreateTool(t *testing.T) {
 		t.Parallel()
 
 		cases := map[string]map[string]any{
-			"missing firewall id":   {keyBetaID: float64(456), keyType: monitorAlertDefinitionToolServiceType, keyConfirm: true},
-			"zero firewall id":      {keyFirewallID: float64(0), keyBetaID: float64(456), keyType: monitorAlertDefinitionToolServiceType, keyConfirm: true},
-			"slash firewall id":     {keyFirewallID: paymentMethodIDSlash, keyBetaID: float64(456), keyType: monitorAlertDefinitionToolServiceType, keyConfirm: true},
-			"query firewall id":     {keyFirewallID: databaseInvalidInstanceIDQuery, keyBetaID: float64(456), keyType: monitorAlertDefinitionToolServiceType, keyConfirm: true},
-			"traversal firewall id": {keyFirewallID: pathTraversalValue, keyBetaID: float64(456), keyType: monitorAlertDefinitionToolServiceType, keyConfirm: true},
-			"missing device id":     {keyFirewallID: float64(123), keyType: monitorAlertDefinitionToolServiceType, keyConfirm: true},
-			"zero device id":        {keyFirewallID: float64(123), keyBetaID: float64(0), keyType: monitorAlertDefinitionToolServiceType, keyConfirm: true},
-			caseInvalidType:         {keyFirewallID: float64(123), keyBetaID: float64(456), keyType: "linode/123", keyConfirm: true},
-			"query type":            {keyFirewallID: float64(123), keyBetaID: float64(456), keyType: "linode?x=1", keyConfirm: true},
-			"traversal type":        {keyFirewallID: float64(123), keyBetaID: float64(456), keyType: pathTraversalValue, keyConfirm: true},
+			caseMissingFirewallPathID:   {keyBetaID: float64(456), keyType: monitorAlertDefinitionToolServiceType, keyConfirm: true},
+			caseZeroFirewallPathID:      {keyFirewallID: float64(0), keyBetaID: float64(456), keyType: monitorAlertDefinitionToolServiceType, keyConfirm: true},
+			caseSlashFirewallPathID:     {keyFirewallID: paymentMethodIDSlash, keyBetaID: float64(456), keyType: monitorAlertDefinitionToolServiceType, keyConfirm: true},
+			caseQueryFirewallPathID:     {keyFirewallID: databaseInvalidInstanceIDQuery, keyBetaID: float64(456), keyType: monitorAlertDefinitionToolServiceType, keyConfirm: true},
+			caseTraversalFirewallPathID: {keyFirewallID: pathTraversalValue, keyBetaID: float64(456), keyType: monitorAlertDefinitionToolServiceType, keyConfirm: true},
+			"missing device id":         {keyFirewallID: float64(123), keyType: monitorAlertDefinitionToolServiceType, keyConfirm: true},
+			"zero device id":            {keyFirewallID: float64(123), keyBetaID: float64(0), keyType: monitorAlertDefinitionToolServiceType, keyConfirm: true},
+			caseInvalidType:             {keyFirewallID: float64(123), keyBetaID: float64(456), keyType: "linode/123", keyConfirm: true},
+			"query type":                {keyFirewallID: float64(123), keyBetaID: float64(456), keyType: "linode?x=1", keyConfirm: true},
+			"traversal type":            {keyFirewallID: float64(123), keyBetaID: float64(456), keyType: pathTraversalValue, keyConfirm: true},
 		}
 
 		for name, args := range cases {

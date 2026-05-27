@@ -16,6 +16,7 @@ const (
 	paramDefaultFirewallIDs  = "default_firewall_ids"
 	paramDeviceID            = "id"
 	paramDeviceType          = "type"
+	paramFirewallDeviceID    = "device_id"
 	paramFirewallID          = "firewall_id"
 	paramSlug                = "slug"
 )
@@ -76,6 +77,48 @@ func handleLinodeFirewallDevicesListRequest(ctx context.Context, request *mcp.Ca
 	}
 
 	return MarshalToolResponse(devices)
+}
+
+// NewLinodeFirewallDeviceGetTool creates a tool for retrieving one device assigned to a Cloud Firewall.
+func NewLinodeFirewallDeviceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_firewall_device_get",
+		"Gets one device assigned to a Cloud Firewall.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(paramFirewallID, mcp.Required(),
+				mcp.Description("The ID of the firewall whose assigned device should be retrieved.")),
+			mcp.WithNumber(paramFirewallDeviceID, mcp.Required(),
+				mcp.Description("The ID of the firewall device assignment to retrieve.")),
+		},
+		handleLinodeFirewallDeviceGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleLinodeFirewallDeviceGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	firewallID := request.GetInt(paramFirewallID, 0)
+	if firewallID <= 0 {
+		return mcp.NewToolResultError(linode.ErrFirewallIDPositive.Error()), nil
+	}
+
+	deviceID := request.GetInt(paramFirewallDeviceID, 0)
+	if deviceID <= 0 {
+		return mcp.NewToolResultError(linode.ErrFirewallDeviceIDPositive.Error()), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	device, err := client.GetFirewallDevice(ctx, firewallID, deviceID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve linode_firewall_device_get: %v", err)), nil
+	}
+
+	return MarshalToolResponse(device)
 }
 
 // NewLinodeFirewallDeviceCreateTool creates a tool for assigning a device to a Cloud Firewall.
