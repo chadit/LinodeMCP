@@ -162,6 +162,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_networking_ips_assign", Capability: profiles.CapWrite},
 		{Name: "linode_networking_ipv4_assign", Capability: profiles.CapWrite},
 		{Name: "linode_networking_ips_share", Capability: profiles.CapWrite},
+		{Name: "linode_ipv6_pools_list", Capability: profiles.CapRead},
 
 		// DNS
 		{Name: "linode_domain_list", Capability: profiles.CapRead},

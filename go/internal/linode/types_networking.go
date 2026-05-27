@@ -102,6 +102,13 @@ type NetworkTransferRegionPrice struct {
 	Monthly float64 `json:"monthly"`
 }
 
+// IPv6Pool represents an IPv6 pool on the account.
+type IPv6Pool struct {
+	Range  string `json:"range"`
+	Region string `json:"region"`
+	Prefix int    `json:"prefix"`
+}
+
 // AllocateNetworkingIPRequest represents the request body for allocating an account-level IP address.
 type AllocateNetworkingIPRequest struct {
 	LinodeID int    `json:"linode_id"`
