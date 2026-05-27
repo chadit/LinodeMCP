@@ -25,6 +25,15 @@ var ErrUpdateImageRequestRequired = errors.New("update image request is required
 // ErrLinodeIDPositive is returned when a Linode ID argument is not positive.
 var ErrLinodeIDPositive = errors.New("linode_id must be a positive integer")
 
+// ErrRegionRequired is returned when a region argument is empty.
+var ErrRegionRequired = errors.New("region is required")
+
+// ErrIPAddressRequired is returned when an IP address argument is empty.
+var ErrIPAddressRequired = errors.New("IP address is required")
+
+// ErrIPAssignmentsRequired is returned when an IP assignment request has no assignments.
+var ErrIPAssignmentsRequired = errors.New("at least one IP assignment is required")
+
 // ErrStackScriptIDPositive is returned when a StackScript ID argument is not positive.
 var ErrStackScriptIDPositive = errors.New("stackscript_id must be a positive integer")
 

@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -100,6 +101,88 @@ func handleLinodeNetworkingIPAllocateRequest(ctx context.Context, request *mcp.C
 	}
 
 	return MarshalToolResponse(response)
+}
+
+// NewLinodeNetworkingIPAssignTool creates a tool for assigning IP addresses to Linodes.
+func NewLinodeNetworkingIPAssignTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_networking_ips_assign",
+		"Assigns IP addresses to Linodes in a region. WARNING: This changes IP ownership assignments.",
+		[]mcp.ToolOption{
+			mcp.WithString("region", mcp.Required(),
+				mcp.Description("The region for the IP assignments.")),
+			mcp.WithString("assignments", mcp.Required(),
+				mcp.Description("JSON array of assignments, each with address and linode_id.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm IP reassignment.")),
+		},
+		handleLinodeNetworkingIPAssignRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleLinodeNetworkingIPAssignRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This assigns IP addresses to Linodes. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	req, validationMessage := networkingIPAssignRequestFromTool(request.GetArguments())
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	response, err := client.AssignNetworkingIPs(ctx, req)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to assign networking IPs: %v", err)), nil
+	}
+
+	return MarshalToolResponse(struct {
+		Message  string         `json:"message"`
+		Response map[string]any `json:"response"`
+	}{
+		Message:  "Networking IP assignments updated",
+		Response: response,
+	})
+}
+
+func networkingIPAssignRequestFromTool(args map[string]any) (linode.AssignNetworkingIPsRequest, string) {
+	region, validationMessage := requiredStringArg(args, "region")
+	if validationMessage != "" {
+		return linode.AssignNetworkingIPsRequest{}, validationMessage
+	}
+
+	assignmentsJSON, validationMessage := requiredStringArg(args, "assignments")
+	if validationMessage != "" {
+		return linode.AssignNetworkingIPsRequest{}, validationMessage
+	}
+
+	var assignments []linode.IPAssignment
+	if err := json.Unmarshal([]byte(assignmentsJSON), &assignments); err != nil {
+		return linode.AssignNetworkingIPsRequest{}, "assignments must be a JSON array of objects with address and linode_id"
+	}
+
+	if len(assignments) == 0 {
+		return linode.AssignNetworkingIPsRequest{}, "assignments must include at least one assignment"
+	}
+
+	for _, assignment := range assignments {
+		if assignment.Address == "" {
+			return linode.AssignNetworkingIPsRequest{}, "assignment address is required"
+		}
+
+		if assignment.LinodeID <= 0 {
+			return linode.AssignNetworkingIPsRequest{}, "assignment linode_id must be a positive integer"
+		}
+	}
+
+	return linode.AssignNetworkingIPsRequest{Region: region, Assignments: assignments}, ""
 }
 
 func networkingIPAllocateRequestFromTool(args map[string]any) (linode.AllocateNetworkingIPRequest, string) {

@@ -109,6 +109,18 @@ type AllocateNetworkingIPRequest struct {
 	Type     string `json:"type"`
 }
 
+// IPAssignment represents one IP-to-Linode assignment.
+type IPAssignment struct {
+	Address  string `json:"address"`
+	LinodeID int    `json:"linode_id"`
+}
+
+// AssignNetworkingIPsRequest represents the request body for assigning IP addresses.
+type AssignNetworkingIPsRequest struct {
+	Region      string         `json:"region"`
+	Assignments []IPAssignment `json:"assignments"`
+}
+
 // NodeBalancer represents a Linode NodeBalancer (load balancer).
 type NodeBalancer struct {
 	ID                 int      `json:"id"`

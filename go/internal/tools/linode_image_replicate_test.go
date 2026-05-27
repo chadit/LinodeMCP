@@ -133,7 +133,7 @@ func TestLinodeImageReplicateToolValidation(t *testing.T) {
 		{name: "non-string regions", args: map[string]any{keyImageID: privateImage123Fixture, keyRegions: []any{regionUSEast}, keyConfirm: true}, want: "regions must be a JSON string array"},
 		{name: "malformed regions", args: map[string]any{keyImageID: privateImage123Fixture, keyRegions: `[`, keyConfirm: true}, want: "regions must be a JSON string array"},
 		{name: "empty regions", args: map[string]any{keyImageID: privateImage123Fixture, keyRegions: databaseJSONArray, keyConfirm: true}, want: "regions must contain at least one region"},
-		{name: "blank region", args: map[string]any{keyImageID: privateImage123Fixture, keyRegions: `["us-east",""]`, keyConfirm: true}, want: "regions entries must be non-empty strings"},
+		{name: caseBlankRegion, args: map[string]any{keyImageID: privateImage123Fixture, keyRegions: `["us-east",""]`, keyConfirm: true}, want: "regions entries must be non-empty strings"},
 		{name: "slash region", args: map[string]any{keyImageID: privateImage123Fixture, keyRegions: `["us/east"]`, keyConfirm: true}, want: errRegionsLowercaseSlug},
 		{name: "query region", args: map[string]any{keyImageID: privateImage123Fixture, keyRegions: `["us-east?x=1"]`, keyConfirm: true}, want: errRegionsLowercaseSlug},
 		{name: "fragment region", args: map[string]any{keyImageID: privateImage123Fixture, keyRegions: `["us-east#frag"]`, keyConfirm: true}, want: errRegionsLowercaseSlug},
