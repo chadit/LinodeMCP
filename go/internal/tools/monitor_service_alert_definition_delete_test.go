@@ -153,9 +153,9 @@ func TestLinodeMonitorServiceAlertDefinitionDeleteTool(t *testing.T) {
 			{name: caseSeparatorServiceType, args: map[string]any{monitorServiceTypeParam: invalidServiceTypeSlash, monitorAlertIDParam: 20000, keyConfirm: true}, wantMessage: monitorServiceTypeInvalidError},
 			{name: caseQueryServiceType, args: map[string]any{monitorServiceTypeParam: invalidServiceTypeQuery, monitorAlertIDParam: 20000, keyConfirm: true}, wantMessage: monitorServiceTypeInvalidError},
 			{name: caseTraversalServiceType, args: map[string]any{monitorServiceTypeParam: pathTraversalValue, monitorAlertIDParam: 20000, keyConfirm: true}, wantMessage: monitorServiceTypeInvalidError},
-			{name: "missing alert id", args: map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase, keyConfirm: true}, wantMessage: monitorAlertIDRequiredError},
-			{name: "zero alert id", args: map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase, monitorAlertIDParam: 0, keyConfirm: true}, wantMessage: monitorAlertIDPositiveError},
-			{name: "string alert id", args: map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase, monitorAlertIDParam: "20000", keyConfirm: true}, wantMessage: monitorAlertIDPositiveError},
+			{name: caseMissingAlertID, args: map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase, keyConfirm: true}, wantMessage: monitorAlertIDRequiredError},
+			{name: caseZeroAlertID, args: map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase, monitorAlertIDParam: 0, keyConfirm: true}, wantMessage: monitorAlertIDPositiveError},
+			{name: caseStringAlertID, args: map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase, monitorAlertIDParam: "20000", keyConfirm: true}, wantMessage: monitorAlertIDPositiveError},
 		}
 
 		for _, testCase := range cases {

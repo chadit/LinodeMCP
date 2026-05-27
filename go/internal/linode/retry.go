@@ -777,6 +777,23 @@ func (c *Client) DeleteMonitorServiceAlertDefinition(ctx context.Context, servic
 	})
 }
 
+// UpdateMonitorServiceAlertDefinition updates an alert definition without retrying
+// the mutating request. Alert definition updates can change notification state,
+// so this method delegates exactly once after transient failures.
+func (c *Client) UpdateMonitorServiceAlertDefinition(ctx context.Context, serviceType string, alertID int, request *UpdateAlertDefinitionRequest) (*AlertDefinition, error) {
+	var definition *AlertDefinition
+
+	err := c.executeWithoutRetry(ctx, "UpdateMonitorServiceAlertDefinition", func() error {
+		var retryErr error
+
+		definition, retryErr = c.httpUpdateMonitorServiceAlertDefinition(ctx, serviceType, alertID, request)
+
+		return retryErr
+	})
+
+	return definition, err
+}
+
 // ListMonitorDashboards retrieves monitoring dashboards with automatic retry on transient failures.
 func (c *Client) ListMonitorDashboards(ctx context.Context, page, pageSize int) (*PaginatedResponse[MonitorDashboard], error) {
 	var dashboards *PaginatedResponse[MonitorDashboard]

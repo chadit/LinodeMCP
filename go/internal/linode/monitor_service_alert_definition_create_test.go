@@ -25,7 +25,7 @@ func monitorAlertDefinitionCreateRequest() *linode.CreateAlertDefinitionRequest 
 			"rules": []any{map[string]any{
 				keyMetric:            "cpu_usage",
 				"operator":           "gt",
-				"threshold":          float64(80),
+				keyThreshold:         float64(80),
 				"aggregate_function": "avg",
 			}},
 		},
@@ -54,7 +54,7 @@ func TestClientCreateMonitorServiceAlertDefinitionSuccess(t *testing.T) {
 		}
 
 		assert.Equal(t, monitorAlertDefinitionLabel, body[keyLabel])
-		assert.InEpsilon(t, float64(2), body["severity"], 0)
+		assert.InEpsilon(t, float64(2), body[keySeverity], 0)
 		assert.Equal(t, []any{float64(546), float64(392)}, body["channel_ids"])
 		assert.Contains(t, body, "rule_criteria")
 		assert.Contains(t, body, "trigger_conditions")
@@ -64,7 +64,7 @@ func TestClientCreateMonitorServiceAlertDefinitionSuccess(t *testing.T) {
 			keyID:          monitorAlertDefinitionID,
 			keyLabel:       monitorAlertDefinitionLabel,
 			keyServiceType: monitorServiceTypeDatabase,
-			"severity":     2,
+			keySeverity:    2,
 		}))
 	}))
 	t.Cleanup(srv.Close)

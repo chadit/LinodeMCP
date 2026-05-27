@@ -30,7 +30,7 @@ func monitorAlertDefinitionCreateArgs() map[string]any {
 		monitorAlertDefinitionLabelParam:        monitorAlertDefinitionToolLabel,
 		monitorAlertDefinitionSeverityParam:     2,
 		monitorAlertDefinitionRuleCriteriaParam: map[string]any{"rules": []any{map[string]any{keyMetric: "cpu_usage", "operator": "gt", "threshold": 80}}},
-		monitorAlertDefinitionTriggerParam:      map[string]any{"criteria_condition": "ALL", "evaluation_period_seconds": 300, "polling_interval_seconds": 300, "trigger_occurrences": 3},
+		monitorAlertDefinitionTriggerParam:      map[string]any{"criteria_condition": monitorCriteriaAll, "evaluation_period_seconds": 300, "polling_interval_seconds": 300, "trigger_occurrences": 3},
 		monitorAlertDefinitionChannelIDsParam:   []any{546, 392},
 		keyDescription:                          "Alert when CPU usage is high",
 		"entity_ids":                            []any{"13116"},
@@ -178,13 +178,13 @@ func TestLinodeMonitorServiceAlertDefinitionCreateTool(t *testing.T) {
 			{name: caseQueryServiceType, mutate: func(args map[string]any) { args[monitorServiceTypeParam] = invalidServiceTypeQuery }, wantMessage: monitorServiceTypeInvalidError},
 			{name: caseTraversalServiceType, mutate: func(args map[string]any) { args[monitorServiceTypeParam] = pathTraversalValue }, wantMessage: monitorServiceTypeInvalidError},
 			{name: caseMissingLabel, mutate: func(args map[string]any) { delete(args, monitorAlertDefinitionLabelParam) }, wantMessage: "label, severity, rule_criteria, trigger_conditions, and channel_ids are required"},
-			{name: "invalid severity", mutate: func(args map[string]any) { args[monitorAlertDefinitionSeverityParam] = 5 }, wantMessage: "severity must be an integer from 0 through 3"},
-			{name: "fractional severity", mutate: func(args map[string]any) { args[monitorAlertDefinitionSeverityParam] = 1.5 }, wantMessage: "severity must be an integer from 0 through 3"},
+			{name: "invalid severity", mutate: func(args map[string]any) { args[monitorAlertDefinitionSeverityParam] = 5 }, wantMessage: errAlertDefinitionSeverity},
+			{name: "fractional severity", mutate: func(args map[string]any) { args[monitorAlertDefinitionSeverityParam] = 1.5 }, wantMessage: errAlertDefinitionSeverity},
 			{name: "empty rule criteria", mutate: func(args map[string]any) { args[monitorAlertDefinitionRuleCriteriaParam] = map[string]any{} }, wantMessage: "rule_criteria must be a non-empty object"},
-			{name: "string trigger conditions", mutate: func(args map[string]any) { args[monitorAlertDefinitionTriggerParam] = "ALL" }, wantMessage: "trigger_conditions must be a non-empty object"},
-			{name: "empty channel ids", mutate: func(args map[string]any) { args[monitorAlertDefinitionChannelIDsParam] = []any{} }, wantMessage: "channel_ids must be a non-empty array of positive integers"},
-			{name: "zero channel id", mutate: func(args map[string]any) { args[monitorAlertDefinitionChannelIDsParam] = []any{0} }, wantMessage: "channel_ids must be a non-empty array of positive integers"},
-			{name: "string entity id", mutate: func(args map[string]any) { args["entity_ids"] = []any{123} }, wantMessage: "entity_ids must be an array of non-empty strings"},
+			{name: "string trigger conditions", mutate: func(args map[string]any) { args[monitorAlertDefinitionTriggerParam] = monitorCriteriaAll }, wantMessage: "trigger_conditions must be a non-empty object"},
+			{name: "empty channel ids", mutate: func(args map[string]any) { args[monitorAlertDefinitionChannelIDsParam] = []any{} }, wantMessage: errAlertDefinitionChannels},
+			{name: "zero channel id", mutate: func(args map[string]any) { args[monitorAlertDefinitionChannelIDsParam] = []any{0} }, wantMessage: errAlertDefinitionChannels},
+			{name: "string entity id", mutate: func(args map[string]any) { args["entity_ids"] = []any{123} }, wantMessage: errAlertDefinitionEntityIDs},
 		}
 
 		for _, testCase := range cases {

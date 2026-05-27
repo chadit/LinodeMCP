@@ -109,9 +109,9 @@ func TestLinodeMonitorServiceAlertDefinitionGetTool(t *testing.T) {
 			{name: "separator service type", args: map[string]any{monitorServiceTypeParam: "dbaas/postgres", monitorAlertIDParam: 20000}, wantMessage: monitorServiceTypeInvalidError},
 			{name: "query service type", args: map[string]any{monitorServiceTypeParam: "dbaas?x=1", monitorAlertIDParam: 20000}, wantMessage: monitorServiceTypeInvalidError},
 			{name: "traversal service type", args: map[string]any{monitorServiceTypeParam: pathTraversalValue, monitorAlertIDParam: 20000}, wantMessage: monitorServiceTypeInvalidError},
-			{name: "missing alert id", args: map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase}, wantMessage: monitorAlertIDRequiredError},
-			{name: "zero alert id", args: map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase, monitorAlertIDParam: 0}, wantMessage: monitorAlertIDPositiveError},
-			{name: "string alert id", args: map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase, monitorAlertIDParam: "20000"}, wantMessage: monitorAlertIDPositiveError},
+			{name: caseMissingAlertID, args: map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase}, wantMessage: monitorAlertIDRequiredError},
+			{name: caseZeroAlertID, args: map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase, monitorAlertIDParam: 0}, wantMessage: monitorAlertIDPositiveError},
+			{name: caseStringAlertID, args: map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase, monitorAlertIDParam: "20000"}, wantMessage: monitorAlertIDPositiveError},
 		}
 
 		for _, testCase := range cases {

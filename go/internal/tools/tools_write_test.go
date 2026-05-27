@@ -146,8 +146,8 @@ func TestLinodeSSHKeyUpdateTool(t *testing.T) {
 		}{
 			{name: "missing"},
 			{name: "false", confirm: false, set: true},
-			{name: "string true", confirm: boolStringTrue, set: true},
-			{name: "numeric one", confirm: 1, set: true},
+			{name: caseStringConfirmRejected, confirm: boolStringTrue, set: true},
+			{name: caseNumericConfirmRejected, confirm: 1, set: true},
 		}
 
 		for _, tt := range tests {
@@ -1104,7 +1104,7 @@ func TestLinodeFirewallUpdateTool(t *testing.T) {
 		props := tool.InputSchema.Properties
 		assert.Contains(t, props, "firewall_id", "schema should include firewall_id property")
 		assert.Contains(t, props, "label", "schema should include label property")
-		assert.Contains(t, props, "status", "schema should include status property")
+		assert.Contains(t, props, keyStatus, "schema should include status property")
 	})
 
 	t.Run("missing firewall id", func(t *testing.T) {
@@ -1598,7 +1598,7 @@ func TestLinodeDomainUpdateTool(t *testing.T) {
 		props := tool.InputSchema.Properties
 		assert.Contains(t, props, "domain_id", "schema should include domain_id property")
 		assert.Contains(t, props, "soa_email", "schema should include soa_email property")
-		assert.Contains(t, props, "status", "schema should include status property")
+		assert.Contains(t, props, keyStatus, "schema should include status property")
 	})
 
 	t.Run(caseMissingDomainID, func(t *testing.T) {

@@ -24,6 +24,7 @@ type AlertDefinition struct {
 	ServiceType       string         `json:"service_type"`
 	Description       string         `json:"description"`
 	Severity          int            `json:"severity"`
+	Status            string         `json:"status,omitempty"`
 	Criteria          map[string]any `json:"criteria"`
 	RuleCriteria      map[string]any `json:"rule_criteria,omitempty"`
 	TriggerConditions map[string]any `json:"trigger_conditions,omitempty"`
@@ -40,6 +41,18 @@ type CreateAlertDefinitionRequest struct {
 	RuleCriteria      map[string]any `json:"rule_criteria"`
 	Severity          int            `json:"severity"`
 	TriggerConditions map[string]any `json:"trigger_conditions"`
+}
+
+// UpdateAlertDefinitionRequest describes a monitoring alert definition update request.
+type UpdateAlertDefinitionRequest struct {
+	ChannelIDs        []int          `json:"channel_ids,omitempty"`
+	Description       *string        `json:"description,omitempty"`
+	EntityIDs         []string       `json:"entity_ids,omitempty"`
+	Label             *string        `json:"label,omitempty"`
+	RuleCriteria      map[string]any `json:"rule_criteria,omitempty"`
+	Severity          *int           `json:"severity,omitempty"`
+	Status            *string        `json:"status,omitempty"`
+	TriggerConditions map[string]any `json:"trigger_conditions,omitempty"`
 }
 
 // AlertChannel describes a monitoring alert channel.

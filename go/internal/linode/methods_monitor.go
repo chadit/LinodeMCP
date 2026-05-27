@@ -176,6 +176,28 @@ func (c *Client) httpDeleteMonitorServiceAlertDefinition(ctx context.Context, se
 	return c.handleResponse(resp, nil)
 }
 
+// httpUpdateMonitorServiceAlertDefinition updates one alert definition for one monitoring service type.
+func (c *Client) httpUpdateMonitorServiceAlertDefinition(ctx context.Context, serviceType string, alertID int, request *UpdateAlertDefinitionRequest) (*AlertDefinition, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType) + "/alert-definitions/" + url.PathEscape(strconv.Itoa(alertID))
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, request)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateMonitorServiceAlertDefinition", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var definition AlertDefinition
+	if err := c.handleResponse(resp, &definition); err != nil {
+		return nil, err
+	}
+
+	return &definition, nil
+}
+
 // httpListMonitorDashboards retrieves monitoring dashboards.
 func (c *Client) httpListMonitorDashboards(ctx context.Context, page, pageSize int) (*PaginatedResponse[MonitorDashboard], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

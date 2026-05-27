@@ -871,6 +871,8 @@ func coreToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeMonitorServiceAlertDefinitionGetTool,
 		tools.NewLinodeMonitorServiceAlertDefinitionCreateTool,
 		tools.NewLinodeMonitorServiceAlertDefinitionDeleteTool,
+
+		tools.NewLinodeMonitorServiceAlertDefinitionUpdateTool,
 		tools.NewLinodeMonitorDashboardsTool,
 		tools.NewLinodeMonitorDashboardGetTool,
 		tools.NewLinodeMonitorAlertDefinitionsTool,
