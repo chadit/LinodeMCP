@@ -136,6 +136,12 @@ type Device struct {
 	Type string `json:"type"` // linode, nodebalancer
 }
 
+// CreateFirewallDeviceRequest represents the request body for assigning a device to a firewall.
+type CreateFirewallDeviceRequest struct {
+	ID   int    `json:"id"`
+	Type string `json:"type"`
+}
+
 // UpdateFirewallRequest represents the request body for updating a firewall.
 type UpdateFirewallRequest struct {
 	Label  string         `json:"label,omitempty"`

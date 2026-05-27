@@ -14,6 +14,8 @@ import (
 const (
 	firewallDefaultLinodeKey = "linode"
 	paramDefaultFirewallIDs  = "default_firewall_ids"
+	paramDeviceID            = "id"
+	paramDeviceType          = "type"
 	paramFirewallID          = "firewall_id"
 	paramSlug                = "slug"
 )
@@ -74,6 +76,103 @@ func handleLinodeFirewallDevicesListRequest(ctx context.Context, request *mcp.Ca
 	}
 
 	return MarshalToolResponse(devices)
+}
+
+// NewLinodeFirewallDeviceCreateTool creates a tool for assigning a device to a Cloud Firewall.
+func NewLinodeFirewallDeviceCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_firewall_device_create",
+		"Assigns a Linode, Linode interface, or NodeBalancer device to a Cloud Firewall.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(paramFirewallID, mcp.Required(),
+				mcp.Description("The ID of the firewall to assign the device to.")),
+			mcp.WithNumber(paramDeviceID, mcp.Required(),
+				mcp.Description("The positive ID of the Linode, Linode interface, or NodeBalancer to assign.")),
+			mcp.WithString(paramDeviceType, mcp.Required(),
+				mcp.Description("Device type. Must be linode, nodebalancer, or linode_interface.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm firewall device assignment.")),
+		},
+		handleLinodeFirewallDeviceCreateRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleLinodeFirewallDeviceCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This assigns a device to a Cloud Firewall. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	firewallID := request.GetInt(paramFirewallID, 0)
+	if firewallID <= 0 {
+		return mcp.NewToolResultError(linode.ErrFirewallIDPositive.Error()), nil
+	}
+
+	req, validationMessage := firewallDeviceCreateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	device, failureMessage := createFirewallDevice(ctx, client, firewallID, req)
+	if failureMessage != "" {
+		return mcp.NewToolResultError(failureMessage), nil
+	}
+
+	return MarshalToolResponse(struct {
+		Message string                 `json:"message"`
+		Device  *linode.FirewallDevice `json:"device"`
+	}{
+		Message: "Firewall device assigned successfully",
+		Device:  device,
+	})
+}
+
+func firewallDeviceCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateFirewallDeviceRequest, string) {
+	deviceID := request.GetInt(paramDeviceID, 0)
+	if deviceID <= 0 {
+		return nil, linode.ErrFirewallDeviceIDPositive.Error()
+	}
+
+	deviceType := request.GetString(paramDeviceType, "")
+	if deviceType == "" {
+		return nil, linode.ErrFirewallDeviceTypeRequired.Error()
+	}
+
+	if validationMessage := validateFirewallDeviceType(deviceType); validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	return &linode.CreateFirewallDeviceRequest{ID: deviceID, Type: deviceType}, ""
+}
+
+func validateFirewallDeviceType(deviceType string) string {
+	switch deviceType {
+	case firewallDefaultLinodeKey, "nodebalancer", "linode_interface":
+		return ""
+	default:
+		return linode.ErrInvalidFirewallDeviceType.Error()
+	}
+}
+
+func createFirewallDevice(
+	ctx context.Context,
+	client *linode.Client,
+	firewallID int,
+	req *linode.CreateFirewallDeviceRequest,
+) (*linode.FirewallDevice, string) {
+	device, err := client.CreateFirewallDevice(ctx, firewallID, req)
+	if err != nil {
+		return nil, "Failed to create linode_firewall_device_create: " + err.Error()
+	}
+
+	return device, ""
 }
 
 // NewLinodeFirewallSettingsListTool creates a tool for listing default firewall assignments.

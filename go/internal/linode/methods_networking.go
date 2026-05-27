@@ -64,6 +64,58 @@ func (c *Client) httpListFirewallDevices(ctx context.Context, firewallID, page, 
 	return &response, nil
 }
 
+// CreateFirewallDevice assigns a device to a Cloud Firewall.
+func (c *Client) httpCreateFirewallDevice(ctx context.Context, firewallID int, req *CreateFirewallDeviceRequest) (*FirewallDevice, error) {
+	if firewallID <= 0 {
+		return nil, ErrFirewallIDPositive
+	}
+
+	if req == nil {
+		return nil, ErrFirewallDeviceIDPositive
+	}
+
+	if req.ID <= 0 {
+		return nil, ErrFirewallDeviceIDPositive
+	}
+
+	if req.Type == "" {
+		return nil, ErrFirewallDeviceTypeRequired
+	}
+
+	if !isFirewallDeviceType(req.Type) {
+		return nil, ErrInvalidFirewallDeviceType
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedFirewallID := url.PathEscape(strconv.Itoa(firewallID))
+	endpoint := endpointFirewalls + "/" + encodedFirewallID + "/devices"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateFirewallDevice", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var device FirewallDevice
+	if err := c.handleResponse(resp, &device); err != nil {
+		return nil, err
+	}
+
+	return &device, nil
+}
+
+func isFirewallDeviceType(deviceType string) bool {
+	switch deviceType {
+	case "linode", "nodebalancer", "linode_interface":
+		return true
+	default:
+		return false
+	}
+}
+
 // ListFirewallSettings retrieves default firewall assignments.
 func (c *Client) httpListFirewallSettings(ctx context.Context, page, pageSize int) (*FirewallSettings, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
