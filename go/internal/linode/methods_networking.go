@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"slices"
 	"strconv"
@@ -363,6 +364,19 @@ func (c *Client) httpListFirewallTemplates(ctx context.Context, page, pageSize i
 	return &response, nil
 }
 
+func validateNetworkingIPAddress(address string) error {
+	if address == "" {
+		return ErrIPAddressRequired
+	}
+
+	addr, err := netip.ParseAddr(address)
+	if err != nil || addr.Zone() != "" {
+		return ErrIPAddressInvalid
+	}
+
+	return nil
+}
+
 func isFirewallTemplateSlug(slug string) bool {
 	switch slug {
 	case "public", "vpc":
@@ -505,6 +519,32 @@ func (c *Client) httpListNetworkingIPs(ctx context.Context, skipIPv6RDNS bool) (
 	}
 
 	return &response, nil
+}
+
+// GetNetworkingIP retrieves one account-level IP address.
+func (c *Client) httpGetNetworkingIP(ctx context.Context, address string) (*IPAddress, error) {
+	if err := validateNetworkingIPAddress(address); err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointNetworkingIPs + "/" + url.PathEscape(address)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetNetworkingIP", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var ip IPAddress
+	if err := c.handleResponse(resp, &ip); err != nil {
+		return nil, err
+	}
+
+	return &ip, nil
 }
 
 // AllocateNetworkingIP allocates an account-level IP address.

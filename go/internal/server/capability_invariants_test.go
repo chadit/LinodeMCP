@@ -158,19 +158,26 @@ func TestLinodeNetworkingIPsToolRegistered(t *testing.T) {
 	t.Parallel()
 
 	srv := newCapabilityTestServer(t)
+	infos := srv.ToolInfos()
+	found := make(map[string]bool, len(infos))
 
-	var found bool
-
-	for _, info := range srv.ToolInfos() {
-		if info.Name == "linode_networking_ips_list" {
-			found = true
+	for _, info := range infos {
+		switch info.Name {
+		case "linode_networking_ips_list":
+			found[info.Name] = true
 
 			assert.Equal(t, profiles.CapRead, info.Capability, "networking IPs list tool should be read-only")
 			assert.Contains(t, info.InputSchema.Properties, "skip_ipv6_rdns", "networking IPs list tool should declare skip_ipv6_rdns")
+		case "linode_networking_ip_get":
+			found[info.Name] = true
+
+			assert.Equal(t, profiles.CapRead, info.Capability, "networking IP get tool should be read-only")
+			assert.Contains(t, info.InputSchema.Properties, "address", "networking IP get tool should declare address")
 		}
 	}
 
-	assert.True(t, found, "server should register the networking IPs list tool")
+	assert.True(t, found["linode_networking_ips_list"], "server should register the networking IPs list tool")
+	assert.True(t, found["linode_networking_ip_get"], "server should register the networking IP get tool")
 }
 
 func TestLinodeFirewallTemplatesToolRegistered(t *testing.T) {

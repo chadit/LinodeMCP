@@ -2451,6 +2451,21 @@ func (c *Client) ListNetworkingIPs(ctx context.Context, skipIPv6RDNS bool) (*Pag
 	return ips, err
 }
 
+// GetNetworkingIP retrieves an account-level IP address with automatic retry on transient failures.
+func (c *Client) GetNetworkingIP(ctx context.Context, address string) (*IPAddress, error) {
+	var networkingIPAddr *IPAddress
+
+	err := c.executeWithRetry(ctx, "GetNetworkingIP", func() error {
+		var retryErr error
+
+		networkingIPAddr, retryErr = c.httpGetNetworkingIP(ctx, address)
+
+		return retryErr
+	})
+
+	return networkingIPAddr, err
+}
+
 // AllocateNetworkingIP allocates an account-level IP address without retrying the non-idempotent POST.
 func (c *Client) AllocateNetworkingIP(ctx context.Context, req AllocateNetworkingIPRequest) (*IPAddress, error) {
 	var ipAddr *IPAddress
