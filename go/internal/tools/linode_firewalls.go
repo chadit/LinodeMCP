@@ -42,6 +42,41 @@ func NewLinodeFirewallListTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeFirewallRuleVersionsListTool creates a tool for retrieving rule-version history for a Cloud Firewall.
+func NewLinodeFirewallRuleVersionsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_firewall_rule_versions_list",
+		"Retrieves the rule-version history payload for a Cloud Firewall.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(paramFirewallID, mcp.Required(),
+				mcp.Description("The ID of the firewall whose rule versions should be listed.")),
+		},
+		handleLinodeFirewallRuleVersionsListRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleLinodeFirewallRuleVersionsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	firewallID := request.GetInt(paramFirewallID, 0)
+	if firewallID <= 0 {
+		return mcp.NewToolResultError(linode.ErrFirewallIDPositive.Error()), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	firewall, err := client.ListFirewallRuleVersions(ctx, firewallID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve linode_firewall_rule_versions_list: %v", err)), nil
+	}
+
+	return MarshalToolResponse(firewall)
+}
+
 // NewLinodeFirewallDevicesListTool creates a tool for listing devices assigned to a Cloud Firewall.
 func NewLinodeFirewallDevicesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(

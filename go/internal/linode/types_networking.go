@@ -17,6 +17,8 @@ type FirewallRules struct {
 	InboundPolicy  string         `json:"inbound_policy"`
 	Outbound       []FirewallRule `json:"outbound"`
 	OutboundPolicy string         `json:"outbound_policy"`
+	Fingerprint    string         `json:"fingerprint,omitempty"`
+	Version        int            `json:"version,omitempty"`
 }
 
 // FirewallRule represents a single firewall rule.
