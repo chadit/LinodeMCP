@@ -71,6 +71,28 @@ func (c *Client) httpListMonitorServiceAlertDefinitions(ctx context.Context, ser
 	return &definitions, nil
 }
 
+// httpListMonitorServiceDashboards retrieves dashboards for one monitoring service type.
+func (c *Client) httpListMonitorServiceDashboards(ctx context.Context, serviceType string) (*PaginatedResponse[MonitorDashboard], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType) + "/dashboards"
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListMonitorServiceDashboards", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var dashboards PaginatedResponse[MonitorDashboard]
+	if err := c.handleResponse(resp, &dashboards); err != nil {
+		return nil, err
+	}
+
+	return &dashboards, nil
+}
+
 // httpCreateMonitorServiceAlertDefinition creates an alert definition for one monitoring service type.
 func (c *Client) httpCreateMonitorServiceAlertDefinition(ctx context.Context, serviceType string, request *CreateAlertDefinitionRequest) (*AlertDefinition, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

@@ -34,10 +34,10 @@ func TestClientListMonitorDashboardsSuccess(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData: []map[string]any{{
-				keyID:     monitorDashboardID,
-				keyLabel:  monitorDashboardLabel,
-				keyType:   monitorDashboardType,
-				"widgets": []map[string]any{{keyLabel: monitorDashboardWidget}},
+				keyID:      monitorDashboardID,
+				keyLabel:   monitorDashboardLabel,
+				keyType:    monitorDashboardType,
+				keyWidgets: []map[string]any{{keyLabel: monitorDashboardWidget}},
 			}},
 			keyPage:    2,
 			keyPages:   3,
@@ -70,10 +70,10 @@ func TestClientGetMonitorDashboardSuccess(t *testing.T) {
 		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
 		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-			keyID:     monitorDashboardID,
-			keyLabel:  monitorDashboardLabel,
-			keyType:   monitorDashboardType,
-			"widgets": []map[string]any{{keyLabel: monitorDashboardWidget}},
+			keyID:      monitorDashboardID,
+			keyLabel:   monitorDashboardLabel,
+			keyType:    monitorDashboardType,
+			keyWidgets: []map[string]any{{keyLabel: monitorDashboardWidget}},
 		}))
 	}))
 	t.Cleanup(srv.Close)

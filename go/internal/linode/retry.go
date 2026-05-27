@@ -706,6 +706,21 @@ func (c *Client) ListMonitorServiceAlertDefinitions(ctx context.Context, service
 	return definitions, err
 }
 
+// ListMonitorServiceDashboards retrieves dashboards for one monitoring service type with automatic retry on transient failures.
+func (c *Client) ListMonitorServiceDashboards(ctx context.Context, serviceType string) (*PaginatedResponse[MonitorDashboard], error) {
+	var dashboards *PaginatedResponse[MonitorDashboard]
+
+	err := c.executeWithRetry(ctx, "ListMonitorServiceDashboards", func() error {
+		var err error
+
+		dashboards, err = c.httpListMonitorServiceDashboards(ctx, serviceType)
+
+		return err
+	})
+
+	return dashboards, err
+}
+
 // CreateMonitorServiceAlertDefinition creates an alert definition without retrying
 // the mutating request. Alert definition creation is not guaranteed idempotent
 // after a transient error, so this method delegates exactly once.
