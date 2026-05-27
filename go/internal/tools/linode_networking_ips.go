@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -12,7 +13,10 @@ import (
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
-const paramSkipIPv6RDNS = "skip_ipv6_rdns"
+const (
+	paramSkipIPv6RDNS = "skip_ipv6_rdns"
+	paramIPs          = "ips"
+)
 
 // NewLinodeNetworkingIPListTool creates a tool for listing account IP addresses.
 func NewLinodeNetworkingIPListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
@@ -152,6 +156,55 @@ func handleLinodeNetworkingIPAssignRequest(ctx context.Context, request *mcp.Cal
 	})
 }
 
+// NewLinodeNetworkingIPShareTool creates a tool for sharing IP addresses with a primary Linode.
+func NewLinodeNetworkingIPShareTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_networking_ips_share",
+		"Shares IP addresses with a primary Linode. Set ips to a JSON string array; an empty array removes all shared IP addresses.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("linode_id", mcp.Required(),
+				mcp.Description("The ID of the primary Linode that receives the shared IP addresses.")),
+			mcp.WithString(paramIPs, mcp.Required(),
+				mcp.Description("JSON array of IP addresses or IPv6 ranges to share. Use [] to remove all shared IP addresses.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm changing shared IP assignments.")),
+		},
+		handleLinodeNetworkingIPShareRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleLinodeNetworkingIPShareRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This changes shared IP assignments. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	req, validationMessage := networkingIPShareRequestFromTool(request.GetArguments())
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	response, err := client.ShareNetworkingIPs(ctx, req)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to share networking IPs: %v", err)), nil
+	}
+
+	return MarshalToolResponse(struct {
+		Message  string         `json:"message"`
+		Response map[string]any `json:"response"`
+	}{
+		Message:  "Networking IP sharing updated",
+		Response: response,
+	})
+}
+
 func networkingIPAssignRequestFromTool(args map[string]any) (linode.AssignNetworkingIPsRequest, string) {
 	region, validationMessage := requiredStringArg(args, "region")
 	if validationMessage != "" {
@@ -183,6 +236,29 @@ func networkingIPAssignRequestFromTool(args map[string]any) (linode.AssignNetwor
 	}
 
 	return linode.AssignNetworkingIPsRequest{Region: region, Assignments: assignments}, ""
+}
+
+func networkingIPShareRequestFromTool(args map[string]any) (linode.ShareNetworkingIPsRequest, string) {
+	linodeID, ok := numberArgToInt(args["linode_id"])
+	if !ok || linodeID <= 0 {
+		return linode.ShareNetworkingIPsRequest{}, "linode_id must be a positive integer"
+	}
+
+	ipsJSON, validationMessage := requiredStringArg(args, paramIPs)
+	if validationMessage != "" {
+		return linode.ShareNetworkingIPsRequest{}, validationMessage
+	}
+
+	var ips []string
+	if err := json.Unmarshal([]byte(ipsJSON), &ips); err != nil || ips == nil {
+		return linode.ShareNetworkingIPsRequest{}, "ips must be a JSON array of strings"
+	}
+
+	if slices.Contains(ips, "") {
+		return linode.ShareNetworkingIPsRequest{}, "ips must not include blank IP addresses"
+	}
+
+	return linode.ShareNetworkingIPsRequest{LinodeID: linodeID, IPs: ips}, ""
 }
 
 func networkingIPAllocateRequestFromTool(args map[string]any) (linode.AllocateNetworkingIPRequest, string) {

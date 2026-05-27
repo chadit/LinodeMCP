@@ -16,6 +16,7 @@ import (
 const (
 	endpointNetworkingIPs       = "/networking/ips"
 	endpointNetworkingIPsAssign = endpointNetworkingIPs + "/assign"
+	endpointNetworkingIPsShare  = endpointNetworkingIPs + "/share"
 	networkingIPv4Type          = "ipv4"
 	networkingIPAddressFixture  = "198.51.100.5"
 )
@@ -351,6 +352,154 @@ func TestClientAssignNetworkingIPsDoesNotRetryTransientError(t *testing.T) {
 
 	require.Error(t, err, "AssignNetworkingIPs should return the transient error")
 	assert.Equal(t, int32(1), requestCount.Load(), "non-idempotent POST must not be replayed")
+}
+
+func TestClientShareNetworkingIPsSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, endpointNetworkingIPsShare, r.URL.Path, "request path should match")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+
+		var body linode.ShareNetworkingIPsRequest
+		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
+			return
+		}
+
+		assert.Equal(t, 123, body.LinodeID)
+
+		if !assert.Len(t, body.IPs, 1) {
+			return
+		}
+
+		assert.Equal(t, networkingIPAddressFixture, body.IPs[0])
+
+		w.Header().Set("Content-Type", "application/json")
+		_, writeErr := w.Write([]byte(`{}`))
+		assert.NoError(t, writeErr)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.ShareNetworkingIPs(t.Context(), linode.ShareNetworkingIPsRequest{
+		LinodeID: 123,
+		IPs:      []string{networkingIPAddressFixture},
+	})
+
+	require.NoError(t, err, "ShareNetworkingIPs should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+}
+
+func TestClientShareNetworkingIPsAcceptsEmptyList(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, endpointNetworkingIPsShare, r.URL.Path, "request path should match")
+
+		var body linode.ShareNetworkingIPsRequest
+		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
+			return
+		}
+
+		assert.Equal(t, 123, body.LinodeID)
+		assert.Empty(t, body.IPs, "empty ips array removes all shared addresses and should pass through")
+
+		w.Header().Set("Content-Type", "application/json")
+		_, writeErr := w.Write([]byte(`{}`))
+		assert.NoError(t, writeErr)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.ShareNetworkingIPs(t.Context(), linode.ShareNetworkingIPsRequest{
+		LinodeID: 123,
+		IPs:      []string{},
+	})
+
+	require.NoError(t, err, "ShareNetworkingIPs should accept an empty ips array")
+	require.NotNil(t, result, "result should not be nil")
+}
+
+func TestClientShareNetworkingIPsAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, endpointNetworkingIPsShare, r.URL.Path, "request path should match")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.ShareNetworkingIPs(t.Context(), linode.ShareNetworkingIPsRequest{
+		LinodeID: 123,
+		IPs:      []string{networkingIPAddressFixture},
+	})
+
+	require.Error(t, err, "ShareNetworkingIPs should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+}
+
+func TestClientShareNetworkingIPsDoesNotRetryTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+
+		hj, ok := w.(http.Hijacker)
+		if !assert.True(t, ok, "response writer should support hijacking") {
+			return
+		}
+
+		conn, _, err := hj.Hijack()
+		if !assert.NoError(t, err) {
+			return
+		}
+
+		assert.NoError(t, conn.Close())
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	_, err := client.ShareNetworkingIPs(t.Context(), linode.ShareNetworkingIPsRequest{
+		LinodeID: 123,
+		IPs:      []string{networkingIPAddressFixture},
+	})
+
+	require.Error(t, err, "ShareNetworkingIPs should return the transient error")
+	assert.Equal(t, int32(1), requestCount.Load(), "non-idempotent POST must not be replayed")
+}
+
+func TestClientShareNetworkingIPsRejectsInvalidRequest(t *testing.T) {
+	t.Parallel()
+
+	client := linode.NewClient("https://api.linode.test", "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.ShareNetworkingIPs(t.Context(), linode.ShareNetworkingIPsRequest{})
+	require.ErrorIs(t, err, linode.ErrLinodeIDPositive)
+
+	_, err = client.ShareNetworkingIPs(t.Context(), linode.ShareNetworkingIPsRequest{LinodeID: 123})
+	require.ErrorIs(t, err, linode.ErrIPAddressRequired)
+
+	_, err = client.ShareNetworkingIPs(t.Context(), linode.ShareNetworkingIPsRequest{
+		LinodeID: 123,
+		IPs:      []string{""},
+	})
+	require.ErrorIs(t, err, linode.ErrIPAddressRequired)
 }
 
 func TestClientAssignNetworkingIPsRejectsInvalidRequest(t *testing.T) {

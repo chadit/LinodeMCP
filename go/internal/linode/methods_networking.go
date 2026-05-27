@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 )
 
 const (
 	endpointNetworkingIPs         = "/networking/ips"
 	endpointNetworkingIPsAssign   = endpointNetworkingIPs + "/assign"
+	endpointNetworkingIPsShare    = endpointNetworkingIPs + "/share"
 	endpointFirewalls             = "/networking/firewalls"
 	endpointFirewallSettings      = endpointFirewalls + "/settings"
 	endpointFirewallTemplates     = endpointFirewalls + "/templates"
@@ -555,6 +557,38 @@ func (c *Client) httpAssignNetworkingIPs(ctx context.Context, req AssignNetworki
 	resp, err := c.makeRequest(ctx, http.MethodPost, endpointNetworkingIPsAssign, req)
 	if err != nil {
 		return nil, &NetworkError{Operation: "AssignNetworkingIPs", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	response := map[string]any{}
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
+// ShareNetworkingIPs shares IP addresses with a primary Linode.
+func (c *Client) httpShareNetworkingIPs(ctx context.Context, req ShareNetworkingIPsRequest) (map[string]any, error) {
+	if req.LinodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	if req.IPs == nil {
+		return nil, ErrIPAddressRequired
+	}
+
+	if slices.Contains(req.IPs, "") {
+		return nil, ErrIPAddressRequired
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointNetworkingIPsShare, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ShareNetworkingIPs", Err: err}
 	}
 
 	defer drainClose(resp)

@@ -2481,6 +2481,21 @@ func (c *Client) AssignNetworkingIPs(ctx context.Context, req AssignNetworkingIP
 	return response, err
 }
 
+// ShareNetworkingIPs shares IP addresses without retrying the non-idempotent POST.
+func (c *Client) ShareNetworkingIPs(ctx context.Context, req ShareNetworkingIPsRequest) (map[string]any, error) {
+	var response map[string]any
+
+	err := c.executeWithoutRetry(ctx, "ShareNetworkingIPs", func() error {
+		var err error
+
+		response, err = c.httpShareNetworkingIPs(ctx, req)
+
+		return err
+	})
+
+	return response, err
+}
+
 // ListNetworkTransferPrices retrieves network transfer prices with automatic retry on transient failures.
 func (c *Client) ListNetworkTransferPrices(ctx context.Context) (*PaginatedResponse[NetworkTransferPrice], error) {
 	var prices *PaginatedResponse[NetworkTransferPrice]
