@@ -61,6 +61,12 @@ type UpdateFirewallDefaultIDs struct {
 	VPCInterface    *int `json:"vpc_interface,omitempty"`
 }
 
+// FirewallTemplate represents a reusable Cloud Firewall rule template.
+type FirewallTemplate struct {
+	Slug  string        `json:"slug"`
+	Rules FirewallRules `json:"rules"`
+}
+
 // NetworkTransferPrice represents a network transfer price entry.
 type NetworkTransferPrice struct {
 	ID           string                       `json:"id"`
