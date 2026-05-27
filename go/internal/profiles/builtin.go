@@ -112,6 +112,7 @@ func Categories(toolName string) []string {
 		"linode_networking_ipv4_",
 		"linode_nodebalancer_",
 		"linode_vlan_",
+		"linode_vlans_",
 		"linode_ipv6_range_",
 		"linode_ipv6_pools_",
 	) {

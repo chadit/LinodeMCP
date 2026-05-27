@@ -21,6 +21,7 @@ const (
 	endpointNetworkTransferPrices = "/network-transfer/prices"
 	endpointNetworkingIPv6Pools   = "/networking/ipv6/pools"
 	endpointNetworkingIPv6Ranges  = "/networking/ipv6/ranges"
+	endpointNetworkingVLANs       = "/networking/vlans"
 	endpointNodeBalancers         = "/nodebalancers"
 )
 
@@ -43,6 +44,28 @@ func (c *Client) httpListFirewalls(ctx context.Context) ([]Firewall, error) {
 	}
 
 	return response.Data, nil
+}
+
+// ListVLANs retrieves all VLANs for the authenticated user.
+func (c *Client) httpListVLANs(ctx context.Context, page, pageSize int) (*PaginatedResponse[VLAN], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointNetworkingVLANs, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListVLANs", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[VLAN]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
 }
 
 // ListFirewallRules retrieves the rules for a Cloud Firewall.

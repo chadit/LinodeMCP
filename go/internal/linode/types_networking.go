@@ -37,6 +37,13 @@ type FirewallAddresses struct {
 	IPv6 []string `json:"ipv6"`
 }
 
+// VLAN represents a Linode VLAN.
+type VLAN struct {
+	Label   string `json:"label"`
+	Region  string `json:"region"`
+	Linodes []int  `json:"linodes"`
+}
+
 // FirewallDevice represents a device attached to a Cloud Firewall.
 type FirewallDevice struct {
 	ID      int                  `json:"id"`
