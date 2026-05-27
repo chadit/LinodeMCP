@@ -654,8 +654,8 @@ func TestLinodeNetworkingIPAssignTool(t *testing.T) {
 		caseMissingRegion:     {keyAssignments: networkingIPAssignmentJSON, keyConfirm: true},
 		caseBlankRegion:       {keyRegion: blankString, keyAssignments: networkingIPAssignmentJSON, keyConfirm: true},
 		"missing assignments": {keyRegion: regionUSEast, keyConfirm: true},
-		"invalid assignments": {keyRegion: regionUSEast, keyAssignments: "not-json", keyConfirm: true},
-		"empty assignments":   {keyRegion: regionUSEast, keyAssignments: `[]`, keyConfirm: true},
+		"invalid assignments": {keyRegion: regionUSEast, keyAssignments: invalidJSON, keyConfirm: true},
+		"empty assignments":   {keyRegion: regionUSEast, keyAssignments: databaseJSONArray, keyConfirm: true},
 		"missing address":     {keyRegion: regionUSEast, keyAssignments: `[{"linode_id":123}]`, keyConfirm: true},
 		"invalid linode_id":   {keyRegion: regionUSEast, keyAssignments: `[{"address":"198.51.100.5","linode_id":0}]`, keyConfirm: true},
 	} {
@@ -663,6 +663,193 @@ func TestLinodeNetworkingIPAssignTool(t *testing.T) {
 			t.Parallel()
 
 			_, _, handler := tools.NewLinodeNetworkingIPAssignTool(&config.Config{})
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+
+			require.NoError(t, err, "handler should return MCP error result, not Go error")
+			require.NotNil(t, result, "result should not be nil")
+			assert.True(t, result.IsError, "invalid arguments should be a tool error")
+		})
+	}
+}
+
+func TestLinodeNetworkingIPv4AssignTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		tool, capability, handler := tools.NewLinodeNetworkingIPv4AssignTool(&config.Config{})
+
+		assert.Equal(t, "linode_networking_ipv4_assign", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Equal(t, profiles.CapWrite, capability, "tool should be write capability")
+		assert.Contains(t, tool.InputSchema.Properties, keyRegion, "tool should declare region")
+		assert.Contains(t, tool.InputSchema.Properties, keyAssignments, "tool should declare assignments")
+		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "tool should declare confirm")
+		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm should be required")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/networking/ipv4/assign", r.URL.Path, "request path should match")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+
+			var body linode.AssignNetworkingIPsRequest
+			if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body)) {
+				return
+			}
+
+			assert.Equal(t, regionUSEast, body.Region)
+			assert.Len(t, body.Assignments, 1)
+			assert.Equal(t, networkingIPAddressFixture, body.Assignments[0].Address)
+			assert.Equal(t, 123, body.Assignments[0].LinodeID)
+
+			w.Header().Set("Content-Type", "application/json")
+			_, writeErr := w.Write([]byte(`{}`))
+			assert.NoError(t, writeErr)
+		}))
+		t.Cleanup(srv.Close)
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeNetworkingIPv4AssignTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+			keyRegion:      regionUSEast,
+			keyAssignments: networkingIPAssignmentJSON,
+			keyConfirm:     true,
+		}))
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "updated", "response should describe assignment update")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+			assert.NoError(t, writeErr)
+		}))
+		t.Cleanup(srv.Close)
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeNetworkingIPv4AssignTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+			keyRegion:      regionUSEast,
+			keyAssignments: networkingIPAssignmentJSON,
+			keyConfirm:     true,
+		}))
+
+		require.NoError(t, err, "handler should return MCP error result, not Go error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be a tool error")
+		assertErrorContains(t, result, "Failed to assign networking IPv4s")
+		assertErrorContains(t, result, "forbidden")
+	})
+
+	for name, confirm := range map[string]any{
+		caseRequiresConfirm:        nil,
+		caseFalseConfirmRejected:   false,
+		caseStringConfirmRejected:  boolStringTrue,
+		caseNumericConfirmRejected: 1,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls atomic.Int32
+
+			srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+				calls.Add(1)
+			}))
+			t.Cleanup(srv.Close)
+
+			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			}}
+			_, _, handler := tools.NewLinodeNetworkingIPv4AssignTool(cfg)
+
+			args := map[string]any{keyRegion: regionUSEast, keyAssignments: networkingIPAssignmentJSON}
+			if confirm != nil {
+				args[keyConfirm] = confirm
+			}
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, args))
+
+			require.NoError(t, err, "handler should return MCP error result, not Go error")
+			require.NotNil(t, result, "result should not be nil")
+			assert.True(t, result.IsError, "invalid confirm should be a tool error")
+			assert.Equal(t, int32(0), calls.Load(), "confirm rejection must happen before client call")
+		})
+	}
+
+	t.Run("rejects non-ipv4 assignments before client call", func(t *testing.T) {
+		t.Parallel()
+
+		var calls atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+			calls.Add(1)
+		}))
+		t.Cleanup(srv.Close)
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeNetworkingIPv4AssignTool(cfg)
+
+		for name, assignments := range map[string]string{
+			"ipv6 assignment":   `[{"address":"2001:db8::1","linode_id":123}]`,
+			"malformed address": `[{"address":"not-an-ip","linode_id":123}]`,
+		} {
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+					keyRegion:      regionUSEast,
+					keyAssignments: assignments,
+					keyConfirm:     true,
+				}))
+
+				require.NoError(t, err, "handler should return MCP error result, not Go error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid IPv4 assignment should be a tool error")
+				assertErrorContains(t, result, "IP address must be a valid IPv4 address")
+			})
+		}
+
+		assert.Equal(t, int32(0), calls.Load(), "IPv4 validation must happen before client call")
+	})
+
+	for name, args := range map[string]map[string]any{
+		caseMissingRegion:     {keyAssignments: networkingIPAssignmentJSON, keyConfirm: true},
+		caseBlankRegion:       {keyRegion: blankString, keyAssignments: networkingIPAssignmentJSON, keyConfirm: true},
+		"missing assignments": {keyRegion: regionUSEast, keyConfirm: true},
+		"invalid assignments": {keyRegion: regionUSEast, keyAssignments: invalidJSON, keyConfirm: true},
+		"empty assignments":   {keyRegion: regionUSEast, keyAssignments: databaseJSONArray, keyConfirm: true},
+		"missing address":     {keyRegion: regionUSEast, keyAssignments: `[{"linode_id":123}]`, keyConfirm: true},
+		"invalid linode_id":   {keyRegion: regionUSEast, keyAssignments: `[{"address":"198.51.100.5","linode_id":0}]`, keyConfirm: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, _, handler := tools.NewLinodeNetworkingIPv4AssignTool(&config.Config{})
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
 

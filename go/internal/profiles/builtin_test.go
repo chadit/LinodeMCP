@@ -160,6 +160,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_networking_ip_update_rdns", Capability: profiles.CapWrite},
 		{Name: "linode_networking_ip_allocate", Capability: profiles.CapWrite},
 		{Name: "linode_networking_ips_assign", Capability: profiles.CapWrite},
+		{Name: "linode_networking_ipv4_assign", Capability: profiles.CapWrite},
 		{Name: "linode_networking_ips_share", Capability: profiles.CapWrite},
 
 		// DNS
@@ -303,6 +304,7 @@ func TestNetworkAdminExcludesComputeWrites(t *testing.T) {
 	assert.Contains(t, allowed, "linode_networking_ip_update_rdns", "network-admin must include networking IP RDNS writes")
 	assert.Contains(t, allowed, "linode_networking_ip_allocate", "network-admin must include networking IP writes")
 	assert.Contains(t, allowed, "linode_networking_ips_assign", "network-admin must include networking IP assignment writes")
+	assert.Contains(t, allowed, "linode_networking_ipv4_assign", "network-admin must include networking IPv4 assignment writes")
 	assert.Contains(t, allowed, "linode_networking_ips_share", "network-admin must include networking IP share writes")
 	assert.Contains(t, allowed, "linode_domain_create", "network-admin must include DNS writes")
 	assert.Contains(t, allowed, "linode_vpc_create", "network-admin must include VPC writes")

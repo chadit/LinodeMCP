@@ -257,6 +257,64 @@ func handleLinodeNetworkingIPAssignRequest(ctx context.Context, request *mcp.Cal
 	})
 }
 
+// NewLinodeNetworkingIPv4AssignTool creates a tool for assigning IPv4 addresses to Linodes.
+func NewLinodeNetworkingIPv4AssignTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_networking_ipv4_assign",
+		"Assigns IPv4 addresses to Linodes in a region. WARNING: This changes IP ownership assignments.",
+		[]mcp.ToolOption{
+			mcp.WithString("region", mcp.Required(),
+				mcp.Description("The region for the IPv4 assignments.")),
+			mcp.WithString("assignments", mcp.Required(),
+				mcp.Description("JSON array of assignments, each with address and linode_id.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm IPv4 reassignment.")),
+		},
+		handleLinodeNetworkingIPv4AssignRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleLinodeNetworkingIPv4AssignRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This assigns IPv4 addresses to Linodes. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	req, validationMessage := networkingIPAssignRequestFromTool(request.GetArguments())
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	response, failure := assignNetworkingIPv4s(ctx, client, req)
+	if failure != "" {
+		return mcp.NewToolResultError(failure), nil
+	}
+
+	return MarshalToolResponse(struct {
+		Message  string         `json:"message"`
+		Response map[string]any `json:"response"`
+	}{
+		Message:  "Networking IPv4 assignments updated",
+		Response: response,
+	})
+}
+
+func assignNetworkingIPv4s(ctx context.Context, client *linode.Client, req linode.AssignNetworkingIPsRequest) (map[string]any, string) {
+	response, err := client.AssignNetworkingIPv4s(ctx, req)
+	if err != nil {
+		return nil, "Failed to assign networking IPv4s: " + err.Error()
+	}
+
+	return response, ""
+}
+
 // NewLinodeNetworkingIPShareTool creates a tool for sharing IP addresses with a primary Linode.
 func NewLinodeNetworkingIPShareTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
