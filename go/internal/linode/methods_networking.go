@@ -37,6 +37,36 @@ func (c *Client) httpListFirewalls(ctx context.Context) ([]Firewall, error) {
 	return response.Data, nil
 }
 
+// ListFirewallRuleVersions retrieves the rule-version history payload for a Cloud Firewall.
+// The upstream OpenAPI schema for GET /networking/firewalls/{firewallId}/history
+// is a firewall object, not a paginated collection; the rule version metadata is
+// carried under the rules object.
+func (c *Client) httpListFirewallRuleVersions(ctx context.Context, firewallID int) (*Firewall, error) {
+	if firewallID <= 0 {
+		return nil, ErrFirewallIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedFirewallID := url.PathEscape(strconv.Itoa(firewallID))
+	endpoint := endpointFirewalls + "/" + encodedFirewallID + "/history"
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListFirewallRuleVersions", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var firewall Firewall
+	if err := c.handleResponse(resp, &firewall); err != nil {
+		return nil, err
+	}
+
+	return &firewall, nil
+}
+
 // ListFirewallDevices retrieves devices assigned to a Cloud Firewall.
 func (c *Client) httpListFirewallDevices(ctx context.Context, firewallID, page, pageSize int) (*PaginatedResponse[FirewallDevice], error) {
 	if firewallID <= 0 {

@@ -91,6 +91,7 @@ const (
 	purposePublic                = "public"
 	purposeVPC                   = "vpc"
 	policyDrop                   = "DROP"
+	policyAccept                 = "ACCEPT"
 	macAddressFixture            = "22:00:AB:CD:EF:01"
 	pathTraversalDotDot          = ".."
 	lkeTierStandard              = "standard"
