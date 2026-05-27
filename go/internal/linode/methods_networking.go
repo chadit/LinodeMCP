@@ -67,6 +67,38 @@ func (c *Client) httpListFirewallRuleVersions(ctx context.Context, firewallID in
 	return &firewall, nil
 }
 
+// GetFirewallRuleVersion retrieves one version of a Cloud Firewall rule set.
+func (c *Client) httpGetFirewallRuleVersion(ctx context.Context, firewallID, version int) (*Firewall, error) {
+	if firewallID <= 0 {
+		return nil, ErrFirewallIDPositive
+	}
+
+	if version <= 0 {
+		return nil, ErrFirewallRuleVersionPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedFirewallID := url.PathEscape(strconv.Itoa(firewallID))
+	encodedVersion := url.PathEscape(strconv.Itoa(version))
+	endpoint := endpointFirewalls + "/" + encodedFirewallID + "/history/rules/" + encodedVersion
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetFirewallRuleVersion", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var firewall Firewall
+	if err := c.handleResponse(resp, &firewall); err != nil {
+		return nil, err
+	}
+
+	return &firewall, nil
+}
+
 // ListFirewallDevices retrieves devices assigned to a Cloud Firewall.
 func (c *Client) httpListFirewallDevices(ctx context.Context, firewallID, page, pageSize int) (*PaginatedResponse[FirewallDevice], error) {
 	if firewallID <= 0 {

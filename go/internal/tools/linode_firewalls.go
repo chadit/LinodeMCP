@@ -18,6 +18,7 @@ const (
 	paramDeviceType          = "type"
 	paramFirewallDeviceID    = "device_id"
 	paramFirewallID          = "firewall_id"
+	paramFirewallRuleVersion = "version"
 	paramSlug                = "slug"
 )
 
@@ -75,6 +76,58 @@ func handleLinodeFirewallRuleVersionsListRequest(ctx context.Context, request *m
 	}
 
 	return MarshalToolResponse(firewall)
+}
+
+// NewLinodeFirewallRuleVersionGetTool creates a tool for retrieving one Cloud Firewall rule version.
+func NewLinodeFirewallRuleVersionGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_firewall_rule_version_get",
+		"Retrieves one rule version for a Cloud Firewall.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(paramFirewallID, mcp.Required(),
+				mcp.Description("The ID of the firewall whose rule version should be retrieved.")),
+			mcp.WithNumber(paramFirewallRuleVersion, mcp.Required(),
+				mcp.Description("The firewall rule version number to retrieve.")),
+		},
+		handleLinodeFirewallRuleVersionGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleLinodeFirewallRuleVersionGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	firewallID, validationMessage := requiredPositiveIntArgument(
+		request,
+		paramFirewallID,
+		linode.ErrFirewallIDPositive.Error(),
+		linode.ErrFirewallIDPositive.Error(),
+	)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	version, validationMessage := requiredPositiveIntArgument(
+		request,
+		paramFirewallRuleVersion,
+		linode.ErrFirewallRuleVersionPositive.Error(),
+		linode.ErrFirewallRuleVersionPositive.Error(),
+	)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	rule, err := client.GetFirewallRuleVersion(ctx, firewallID, version)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve linode_firewall_rule_version_get: %v", err)), nil
+	}
+
+	return MarshalToolResponse(rule)
 }
 
 // NewLinodeFirewallDevicesListTool creates a tool for listing devices assigned to a Cloud Firewall.

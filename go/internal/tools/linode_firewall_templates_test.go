@@ -41,7 +41,7 @@ func TestLinodeFirewallTemplatesListTool(t *testing.T) {
 				Slug: purposeVPC,
 				Rules: linode.FirewallRules{
 					InboundPolicy:  policyDrop,
-					OutboundPolicy: "ACCEPT",
+					OutboundPolicy: policyAccept,
 				},
 			}},
 			Page:    2,
@@ -130,7 +130,7 @@ func TestLinodeFirewallTemplateGetTool(t *testing.T) {
 				Slug: purposePublic,
 				Rules: linode.FirewallRules{
 					InboundPolicy:  policyDrop,
-					OutboundPolicy: "ACCEPT",
+					OutboundPolicy: policyAccept,
 				},
 			}},
 			Page:    1,

@@ -94,6 +94,9 @@ var ErrInvalidFirewallDeviceType = errors.New("device type must be one of linode
 // ErrFirewallIDPositive is returned when a firewall ID argument is not positive.
 var ErrFirewallIDPositive = errors.New("firewall_id must be a positive integer")
 
+// ErrFirewallRuleVersionPositive is returned when a firewall rule version is not positive.
+var ErrFirewallRuleVersionPositive = errors.New("version must be a positive integer")
+
 // APIError represents an error returned by the Linode API.
 // RetryAfter carries the server's Retry-After hint when present so the retry
 // loop can honor it instead of computing its own backoff.
