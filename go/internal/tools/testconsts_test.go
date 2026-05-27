@@ -181,6 +181,8 @@ const (
 
 	// Tool-specific resource ID keys.
 	keyLinodeID                   = "linode_id"
+	keyPrefixLength               = "prefix_length"
+	keyRouteTarget                = "route_target"
 	keyDevices                    = "devices"
 	keyInterfaces                 = "interfaces"
 	keyInterface                  = "interface"
@@ -246,6 +248,9 @@ const (
 
 	// Linode region IDs commonly used in fixtures.
 	regionUSEast         = "us-east"
+	ipv6RangeFixture     = "2001:0db8::"
+	ipv6RouteTarget      = "2001:db8::1"
+	apiURLLoopbackClosed = "http://127.0.0.1:1"
 	singleRegionJSON     = `["us-east"]`
 	regionUSEast1        = "us-east-1"
 	serviceLinodes       = "Linodes"
@@ -399,6 +404,7 @@ const (
 	errLinodeIDRequired            = "linode_id is required"
 	errLinodeIDInteger             = "linode_id must be an integer"
 	errLinodeIDPositive            = "linode_id must be a positive integer"
+	errIPv6RangePrefixRange        = "prefix_length must be an integer between 1 and 128"
 	errLinodeIDMin                 = "linode_id must be an integer greater than or equal to 1"
 	errAddressRequired             = "address is required"
 	errAddressValidIP              = "address must be a valid IP address"
@@ -506,6 +512,7 @@ const (
 	caseMissingType               = "missing type"
 	caseMissingFirewallID         = "missing firewall_id"
 	caseMissingLinodeID           = "missing linode id"
+	caseZeroLinodeID              = "zero linode id"
 	caseNegativeLinodeID          = "negative linode id"
 	caseMissingInstanceID         = "missing instance id"
 	caseMissingVPCID              = "missing vpc id"

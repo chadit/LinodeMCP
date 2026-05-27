@@ -37,7 +37,7 @@ func TestLinodeIPv6PoolsListTool(t *testing.T) {
 
 		pools := linode.PaginatedResponse[linode.IPv6Pool]{
 			Data: []linode.IPv6Pool{{
-				Range:  "2001:0db8::",
+				Range:  ipv6RangeFixture,
 				Region: regionUSEast,
 				Prefix: 124,
 			}},
@@ -68,7 +68,7 @@ func TestLinodeIPv6PoolsListTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "2001:0db8::", "response should include pool range")
+		assert.Contains(t, textContent.Text, ipv6RangeFixture, "response should include pool range")
 		assert.Contains(t, textContent.Text, regionUSEast, "response should include region")
 	})
 
@@ -76,7 +76,7 @@ func TestLinodeIPv6PoolsListTool(t *testing.T) {
 		t.Parallel()
 
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: "http://127.0.0.1:1", Token: tokenTest}},
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLoopbackClosed, Token: tokenTest}},
 		}}
 		_, _, handler := tools.NewLinodeIPv6PoolsListTool(cfg)
 

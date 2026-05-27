@@ -25,6 +25,12 @@ var ErrUpdateImageRequestRequired = errors.New("update image request is required
 // ErrLinodeIDPositive is returned when a Linode ID argument is not positive.
 var ErrLinodeIDPositive = errors.New("linode_id must be a positive integer")
 
+// ErrIPv6RangePrefixRange is returned when an IPv6 range prefix length is outside the IPv6 CIDR range.
+var ErrIPv6RangePrefixRange = errors.New("prefix_length must be an integer between 1 and 128")
+
+// ErrIPv6RangeRouteTargetInvalid is returned when an IPv6 range route target is not a valid IPv6 address.
+var ErrIPv6RangeRouteTargetInvalid = errors.New("route_target must be a valid IPv6 address")
+
 // ErrRegionRequired is returned when a region argument is empty.
 var ErrRegionRequired = errors.New("region is required")
 

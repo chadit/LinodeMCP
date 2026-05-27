@@ -109,6 +109,13 @@ type IPv6Pool struct {
 	Prefix int    `json:"prefix"`
 }
 
+// CreateIPv6RangeRequest represents the request body for creating an IPv6 range.
+type CreateIPv6RangeRequest struct {
+	LinodeID     *int   `json:"linode_id,omitempty"`
+	PrefixLength int    `json:"prefix_length"`
+	RouteTarget  string `json:"route_target,omitempty"`
+}
+
 // AllocateNetworkingIPRequest represents the request body for allocating an account-level IP address.
 type AllocateNetworkingIPRequest struct {
 	LinodeID int    `json:"linode_id"`

@@ -19,7 +19,7 @@ func TestClientListIPv6PoolsSuccess(t *testing.T) {
 
 	pools := linode.PaginatedResponse[linode.IPv6Pool]{
 		Data: []linode.IPv6Pool{{
-			Range:  "2001:0db8::",
+			Range:  ipv6RangeFixture,
 			Region: regionUSEast,
 			Prefix: 124,
 		}},
