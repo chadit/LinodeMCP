@@ -34,22 +34,23 @@ type DestructiveAction struct {
 	Success        func() any
 }
 
-// RunDestructiveAction runs the shared destroy-tool flow: prepare the
-// client, branch on dry-run vs real execution. On dry-run: fetch state
-// and emit the v0 preview. On real: confirm gate, execute, build
-// success response. Per-tool validation happens in the caller.
+// RunDestructiveAction runs the shared destroy-tool flow. On dry-run:
+// prepare client, fetch state, emit the v0 preview. On real execution:
+// gate on confirm first (so an unconfirmed call short-circuits before
+// touching the API client), then prepare client and execute. Per-tool
+// validation happens in the caller.
 func RunDestructiveAction(
 	ctx context.Context,
 	request *mcp.CallToolRequest,
 	cfg *config.Config,
 	action *DestructiveAction,
 ) (*mcp.CallToolResult, error) {
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
 	if IsDryRun(request) {
+		client, err := prepareClient(request, cfg)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
 		state, fetchErr := action.FetchState(ctx, client)
 		if fetchErr != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch state for dry-run: %v", fetchErr)), nil
@@ -66,6 +67,11 @@ func RunDestructiveAction(
 
 	if result := RequireConfirm(request, action.ConfirmMessage); result != nil {
 		return result, nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	if execErr := action.Execute(ctx, client); execErr != nil {
@@ -125,6 +131,66 @@ func RunDestructiveActionWithID(
 			return map[string]any{
 				responseKeyMessage: fmt.Sprintf(params.SuccessFormat, id),
 				params.IDParam:     id,
+			}
+		},
+	})
+}
+
+// DestructiveActionByRegionLabel configures a destroy tool keyed by
+// the (region, label) pair, the canonical Object Storage path shape.
+// PathPattern takes two %s slots: region first, then label. The success
+// response always carries "region", plus a label value keyed by
+// SuccessKey ("label" or "bucket", per legacy response shapes).
+// SuccessFormat takes two %s slots: label first, then region.
+type DestructiveActionByRegionLabel struct {
+	ToolName       string
+	Method         string
+	PathPattern    string
+	ConfirmMessage string
+	SuccessKey     string
+	SuccessFormat  string
+	FetchState     func(ctx context.Context, client *linode.Client, region, label string) (any, error)
+	Execute        func(ctx context.Context, client *linode.Client, region, label string) error
+}
+
+// RunDestructiveActionByRegionLabel is the (region, label) convenience
+// wrapper over RunDestructiveAction. It parses and validates both args
+// against the bucket sentinels, then delegates to the underlying flow
+// with closures that capture region/label. Per-tool handlers reduce to
+// a single struct literal, below dupl's threshold.
+func RunDestructiveActionByRegionLabel(
+	ctx context.Context,
+	request *mcp.CallToolRequest,
+	cfg *config.Config,
+	params *DestructiveActionByRegionLabel,
+) (*mcp.CallToolResult, error) {
+	region := request.GetString("region", "")
+	label := request.GetString("label", "")
+
+	if region == "" {
+		return mcp.NewToolResultError(ErrBucketRegionRequired.Error()), nil
+	}
+
+	if label == "" {
+		return mcp.NewToolResultError(ErrBucketLabelRequired.Error()), nil
+	}
+
+	return RunDestructiveAction(ctx, request, cfg, &DestructiveAction{
+		ToolName:       params.ToolName,
+		Method:         params.Method,
+		Path:           fmt.Sprintf(params.PathPattern, region, label),
+		ConfirmMessage: params.ConfirmMessage,
+		FetchState: func(ctx context.Context, client *linode.Client) (any, error) {
+			return params.FetchState(ctx, client, region, label)
+		},
+		Execute: func(ctx context.Context, client *linode.Client) error {
+			return params.Execute(ctx, client, region, label)
+		},
+		Success: func() any {
+			return map[string]any{
+				responseKeyMessage: fmt.Sprintf(params.SuccessFormat, label, region),
+				"region":           region,
+				params.SuccessKey:  label,
 			}
 		},
 	})

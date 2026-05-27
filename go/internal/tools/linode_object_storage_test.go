@@ -2252,6 +2252,274 @@ func TestLinodeObjectStorageSSLDeleteTool(t *testing.T) {
 	})
 }
 
+// Dry-run coverage for bucket delete. Kept in a sibling function so
+// the main test's subtest count stays under maintidx's threshold.
+func TestLinodeObjectStorageBucketDeleteToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	t.Run("schema advertises dry_run", func(t *testing.T) {
+		t.Parallel()
+
+		tool, _, _ := tools.NewLinodeObjectStorageBucketDeleteTool(&config.Config{})
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run",
+			"schema must advertise the dry_run boolean to the model")
+	})
+
+	t.Run("preview without mutating", func(t *testing.T) {
+		t.Parallel()
+
+		var methodsSeen []string
+
+		bucketBody := `{"label":"my-bucket","region":"us-east-1","size":1024,"objects":3}`
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsSeen = append(methodsSeen, r.Method)
+			assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket", r.URL.Path)
+
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(bucketBody))
+
+				return
+			}
+
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeObjectStorageBucketDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyRegion: regionUSEast1,
+			keyLabel:  bucketTest,
+			keyDryRun: true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError, "dry_run with valid args should not be a tool error")
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, true, body[keyDryRun])
+		assert.Equal(t, "linode_object_storage_bucket_delete", body["tool"])
+
+		would, isWouldObject := body["would_execute"].(map[string]any)
+		require.True(t, isWouldObject)
+		assert.Equal(t, "DELETE", would["method"])
+		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket", would["path"])
+
+		state, stateIsObject := body["current_state"].(map[string]any)
+		require.True(t, stateIsObject)
+		assert.Equal(t, "my-bucket", state[keyLabel])
+
+		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+			"dry_run must only issue a single GET, never DELETE")
+	})
+
+	t.Run("does not require confirm", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "dry_run path must only issue GET")
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"label":"my-bucket","region":"us-east-1"}`))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeObjectStorageBucketDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyRegion: regionUSEast1,
+			keyLabel:  bucketTest,
+			keyDryRun: true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.False(t, result.IsError,
+			"dry_run without confirm must succeed; confirm only gates real execution")
+	})
+
+	t.Run("dry_run still validates region", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, handler := tools.NewLinodeObjectStorageBucketDeleteTool(&config.Config{})
+		req := createRequestWithArgs(t, map[string]any{
+			keyLabel:  bucketTest,
+			keyDryRun: true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError,
+			"dry_run with missing region must error the same way the real call would")
+		assertErrorContains(t, result, "region is required")
+	})
+
+	t.Run("dry_run still validates label", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, handler := tools.NewLinodeObjectStorageBucketDeleteTool(&config.Config{})
+		req := createRequestWithArgs(t, map[string]any{
+			keyRegion: regionUSEast1,
+			keyDryRun: true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError,
+			"dry_run with missing label must error the same way the real call would")
+		assertErrorContains(t, result, "label is required")
+	})
+}
+
+// Dry-run coverage for SSL certificate delete. Kept in a sibling function
+// so the main test's subtest count stays under maintidx's threshold.
+func TestLinodeObjectStorageSSLDeleteToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	t.Run("schema advertises dry_run", func(t *testing.T) {
+		t.Parallel()
+
+		tool, _, _ := tools.NewLinodeObjectStorageSSLDeleteTool(&config.Config{})
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run",
+			"schema must advertise the dry_run boolean to the model")
+	})
+
+	t.Run("preview without mutating", func(t *testing.T) {
+		t.Parallel()
+
+		var methodsSeen []string
+
+		sslBody := `{"ssl":true}`
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsSeen = append(methodsSeen, r.Method)
+			assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/ssl", r.URL.Path)
+
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(sslBody))
+
+				return
+			}
+
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeObjectStorageSSLDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyRegion: regionUSEast1,
+			keyLabel:  bucketTest,
+			keyDryRun: true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError, "dry_run with valid args should not be a tool error")
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, true, body[keyDryRun])
+		assert.Equal(t, "linode_object_storage_ssl_delete", body["tool"])
+
+		would, isWouldObject := body["would_execute"].(map[string]any)
+		require.True(t, isWouldObject)
+		assert.Equal(t, "DELETE", would["method"])
+		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/ssl", would["path"])
+
+		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+			"dry_run must only issue a single GET, never DELETE")
+	})
+
+	t.Run("does not require confirm", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "dry_run path must only issue GET")
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"ssl":true}`))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeObjectStorageSSLDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyRegion: regionUSEast1,
+			keyLabel:  bucketTest,
+			keyDryRun: true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.False(t, result.IsError,
+			"dry_run without confirm must succeed; confirm only gates real execution")
+	})
+
+	t.Run("dry_run still validates region", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, handler := tools.NewLinodeObjectStorageSSLDeleteTool(&config.Config{})
+		req := createRequestWithArgs(t, map[string]any{
+			keyLabel:  bucketTest,
+			keyDryRun: true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError,
+			"dry_run with missing region must error the same way the real call would")
+		assertErrorContains(t, result, "region is required")
+	})
+
+	t.Run("dry_run still validates label", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, handler := tools.NewLinodeObjectStorageSSLDeleteTool(&config.Config{})
+		req := createRequestWithArgs(t, map[string]any{
+			keyRegion: regionUSEast1,
+			keyDryRun: true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError,
+			"dry_run with missing label must error the same way the real call would")
+		assertErrorContains(t, result, "label is required")
+	})
+}
+
 // End-to-end verification of bucket SSL certificate upload.
 func TestLinodeObjectStorageSSLUploadTool(t *testing.T) {
 	t.Parallel()

@@ -7911,6 +7911,109 @@ async def test_handle_object_storage_bucket_delete_success(
         assert "deleted successfully" in result[0].text
 
 
+async def test_bucket_delete_dry_run_returns_preview_without_mutating(
+    sample_config: Config,
+) -> None:
+    """dry_run=true must fetch state via GET and never call delete.
+
+    Decodes the JSON body so a future renaming of the v0 wire shape or
+    a regression where Execute fires anyway gets caught.
+    """
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_object_storage_bucket.return_value = {
+            "label": "my-bucket",
+            "region": "us-east-1",
+            "size": 1024,
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_object_storage_bucket_delete(
+            {
+                "region": "us-east-1",
+                "label": "my-bucket",
+                "dry_run": True,
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["dry_run"] is True
+        assert body["tool"] == "linode_object_storage_bucket_delete"
+        assert body["would_execute"]["method"] == "DELETE"
+        assert (
+            body["would_execute"]["path"]
+            == "/object-storage/buckets/us-east-1/my-bucket"
+        )
+        assert body["current_state"]["label"] == "my-bucket"
+        mock_client.get_object_storage_bucket.assert_awaited_once_with(
+            "us-east-1", "my-bucket"
+        )
+        mock_client.delete_object_storage_bucket.assert_not_called()
+
+
+async def test_bucket_delete_dry_run_does_not_require_confirm(
+    sample_config: Config,
+) -> None:
+    """dry_run path must bypass the confirm gate.
+
+    Catches a regression where the confirm check accidentally fires
+    before the dry-run branch.
+    """
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_object_storage_bucket.return_value = {"label": "my-bucket"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_object_storage_bucket_delete(
+            {
+                "region": "us-east-1",
+                "label": "my-bucket",
+                "dry_run": True,
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "confirm=true" not in result[0].text
+
+
+async def test_bucket_delete_dry_run_still_validates_region(
+    sample_config: Config,
+) -> None:
+    """Missing region must error out regardless of dry_run.
+
+    The spec says dry-run errors on missing required args the same way
+    the real call would, so a regression that skips validation on
+    dry-run gets caught here.
+    """
+    result = await handle_linode_object_storage_bucket_delete(
+        {"label": "my-bucket", "dry_run": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "region is required" in result[0].text
+
+
+async def test_bucket_delete_dry_run_still_validates_label(
+    sample_config: Config,
+) -> None:
+    """Missing label must error out regardless of dry_run."""
+    result = await handle_linode_object_storage_bucket_delete(
+        {"region": "us-east-1", "dry_run": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "label is required" in result[0].text
+
+
 async def test_handle_object_storage_bucket_access_allow_requires_confirm(
     sample_config: Config,
 ) -> None:
@@ -8680,6 +8783,111 @@ async def test_ssl_delete_success(
 
         assert len(result) == 1
         assert "SSL certificate deleted" in result[0].text
+
+
+async def test_ssl_delete_dry_run_returns_preview_without_mutating(
+    sample_config: Config,
+) -> None:
+    """dry_run=true must fetch SSL state via GET and never call delete.
+
+    Decodes the JSON body so a future renaming of the v0 wire shape or
+    a regression where Execute fires anyway gets caught.
+    """
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_bucket_ssl.return_value = {"ssl": True}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_object_storage_ssl_delete(
+                {
+                    "region": "us-east-1",
+                    "label": "my-bucket",
+                    "dry_run": True,
+                },
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["dry_run"] is True
+        assert body["tool"] == "linode_object_storage_ssl_delete"
+        assert body["would_execute"]["method"] == "DELETE"
+        assert (
+            body["would_execute"]["path"]
+            == "/object-storage/buckets/us-east-1/my-bucket/ssl"
+        )
+        assert body["current_state"] == {"ssl": True}
+        mock_client.get_bucket_ssl.assert_awaited_once_with("us-east-1", "my-bucket")
+        mock_client.delete_bucket_ssl.assert_not_called()
+
+
+async def test_ssl_delete_dry_run_does_not_require_confirm(
+    sample_config: Config,
+) -> None:
+    """dry_run path must bypass the confirm gate.
+
+    Catches a regression where the confirm check accidentally fires
+    before the dry-run branch.
+    """
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_bucket_ssl.return_value = {"ssl": True}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_object_storage_ssl_delete(
+                {
+                    "region": "us-east-1",
+                    "label": "my-bucket",
+                    "dry_run": True,
+                },
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "confirm=true" not in result[0].text
+
+
+async def test_ssl_delete_dry_run_still_validates_region(
+    sample_config: Config,
+) -> None:
+    """Missing region must error out regardless of dry_run.
+
+    The spec says dry-run errors on missing required args the same way
+    the real call would, so a regression that skips validation on
+    dry-run gets caught here.
+    """
+    result = list(
+        await handle_linode_object_storage_ssl_delete(
+            {"label": "my-bucket", "dry_run": True},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "region is required" in result[0].text
+
+
+async def test_ssl_delete_dry_run_still_validates_label(
+    sample_config: Config,
+) -> None:
+    """Missing label must error out regardless of dry_run."""
+    result = list(
+        await handle_linode_object_storage_ssl_delete(
+            {"region": "us-east-1", "dry_run": True},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "label is required" in result[0].text
 
 
 async def test_ssl_delete_missing_env() -> None:

@@ -205,6 +205,7 @@ def create_linode_object_storage_bucket_delete_tool() -> tuple[Tool, Capability]
             "Deletes an Object Storage bucket."
             " WARNING: This is irreversible."
             " All objects must be removed first."
+            " Pass dry_run=true to preview without deleting."
         ),
         inputSchema={
             "type": "object",
@@ -227,8 +228,10 @@ def create_linode_object_storage_bucket_delete_tool() -> tuple[Tool, Capability]
                     "type": "boolean",
                     "description": (
                         "Must be true to confirm deletion. This is irreversible."
+                        " Ignored when dry_run=true."
                     ),
                 },
+                **DRY_RUN_PROP,
             },
             "required": ["region", "label", "confirm"],
         },
@@ -239,6 +242,31 @@ async def handle_linode_object_storage_bucket_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_object_storage_bucket_delete tool request."""
+    region = arguments.get("region", "")
+    label = arguments.get("label", "")
+
+    # Both branches need region and label, and the spec is explicit that
+    # dry-run errors out on missing required args the same way the real
+    # call would.
+    if not region:
+        return _error_response("region is required")
+    if not label:
+        return _error_response("label is required")
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_object_storage_bucket(region, label)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_object_storage_bucket_delete",
+            "DELETE",
+            f"/object-storage/buckets/{region}/{label}",
+            _fetch,
+        )
+
     confirm = arguments.get("confirm", False)
 
     if not confirm:
@@ -252,14 +280,6 @@ async def handle_linode_object_storage_bucket_delete(
                 ),
             )
         ]
-
-    region = arguments.get("region", "")
-    label = arguments.get("label", "")
-
-    if not region:
-        return _error_response("region is required")
-    if not label:
-        return _error_response("label is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_object_storage_bucket(region, label)
@@ -1206,6 +1226,7 @@ def create_linode_object_storage_ssl_delete_tool() -> tuple[Tool, Capability]:
             "Deletes the SSL/TLS certificate from an Object"
             " Storage bucket."
             " Requires confirm=true to proceed."
+            " Pass dry_run=true to preview without deleting."
         ),
         inputSchema={
             "type": "object",
@@ -1230,8 +1251,10 @@ def create_linode_object_storage_ssl_delete_tool() -> tuple[Tool, Capability]:
                         "Must be true to proceed."
                         " This removes the SSL certificate"
                         " from the bucket."
+                        " Ignored when dry_run=true."
                     ),
                 },
+                **DRY_RUN_PROP,
             },
             "required": ["region", "label", "confirm"],
         },
@@ -1242,6 +1265,31 @@ async def handle_linode_object_storage_ssl_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_object_storage_ssl_delete tool request."""
+    region = arguments.get("region", "")
+    label = arguments.get("label", "")
+
+    # Both branches need region and label, and the spec is explicit that
+    # dry-run errors out on missing required args the same way the real
+    # call would.
+    if not region:
+        return _error_response("region is required")
+    if not label:
+        return _error_response("label is required")
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_bucket_ssl(region, label)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_object_storage_ssl_delete",
+            "DELETE",
+            f"/object-storage/buckets/{region}/{label}/ssl",
+            _fetch,
+        )
+
     confirm = arguments.get("confirm", False)
     if not confirm:
         return [
@@ -1252,14 +1300,6 @@ async def handle_linode_object_storage_ssl_delete(
                 " Set confirm=true to proceed.",
             )
         ]
-
-    region = arguments.get("region", "")
-    label = arguments.get("label", "")
-
-    if not region:
-        return _error_response("region is required")
-    if not label:
-        return _error_response("label is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_bucket_ssl(region, label)

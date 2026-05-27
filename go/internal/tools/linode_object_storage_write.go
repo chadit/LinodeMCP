@@ -94,73 +94,38 @@ func handleObjectStorageBucketCreateRequest(ctx context.Context, request *mcp.Ca
 
 // NewLinodeObjectStorageBucketDeleteTool creates a tool for deleting an Object Storage bucket.
 func NewLinodeObjectStorageBucketDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newToolWithHandler(
+		cfg,
 		"linode_object_storage_bucket_delete",
-		mcp.WithDescription("Deletes an Object Storage bucket. WARNING: This is irreversible. All objects must be removed first."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithString(
-			"region",
-			mcp.Required(),
-			mcp.Description("Region of the bucket to delete"),
-		),
-		mcp.WithString(
-			"label",
-			mcp.Required(),
-			mcp.Description("Label of the bucket to delete"),
-		),
-		mcp.WithBoolean(
-			paramConfirm,
-			mcp.Required(),
-			mcp.Description("Must be set to true to confirm deletion. This action is irreversible."),
-		),
+		"Deletes an Object Storage bucket. WARNING: This is irreversible. All objects must be removed first. Pass dry_run=true to preview without deleting.",
+		[]mcp.ToolOption{
+			mcp.WithString("region", mcp.Required(), mcp.Description("Region of the bucket to delete")),
+			mcp.WithString("label", mcp.Required(), mcp.Description("Label of the bucket to delete")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be set to true to confirm deletion. This action is irreversible. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleObjectStorageBucketDeleteRequest,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleObjectStorageBucketDeleteRequest(ctx, &request, cfg)
-	}
 
 	return tool, profiles.CapDestroy, handler
 }
 
 func handleObjectStorageBucketDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This operation is destructive and irreversible. All objects must be removed first. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	region := request.GetString("region", "")
-	label := request.GetString("label", "")
-
-	if region == "" {
-		return mcp.NewToolResultError(ErrBucketRegionRequired.Error()), nil
-	}
-
-	if label == "" {
-		return mcp.NewToolResultError(ErrBucketLabelRequired.Error()), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := client.DeleteObjectStorageBucket(ctx, region, label); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove bucket '%s' in %s: %v", label, region, err)), nil
-	}
-
-	response := struct {
-		Message string `json:"message"`
-		Region  string `json:"region"`
-		Label   string `json:"label"`
-	}{
-		Message: fmt.Sprintf("Bucket '%s' in %s removed successfully", label, region),
-		Region:  region,
-		Label:   label,
-	}
-
-	return MarshalToolResponse(response)
+	return RunDestructiveActionByRegionLabel(ctx, request, cfg, &DestructiveActionByRegionLabel{
+		ToolName:       "linode_object_storage_bucket_delete",
+		Method:         httpMethodDelete,
+		PathPattern:    "/object-storage/buckets/%s/%s",
+		ConfirmMessage: "This operation is destructive and irreversible. All objects must be removed first. Set confirm=true to proceed.",
+		SuccessKey:     "label",
+		SuccessFormat:  "Bucket '%s' in %s removed successfully",
+		FetchState: func(ctx context.Context, c *linode.Client, region, label string) (any, error) {
+			return c.GetObjectStorageBucket(ctx, region, label)
+		},
+		Execute: func(ctx context.Context, c *linode.Client, region, label string) error {
+			return c.DeleteObjectStorageBucket(ctx, region, label)
+		},
+	})
 }
 
 // NewLinodeObjectStorageBucketAccessAllowTool creates a tool for applying bucket access controls.
@@ -647,74 +612,40 @@ func handleObjectStorageObjectACLUpdateRequest(ctx context.Context, request *mcp
 
 // NewLinodeObjectStorageSSLDeleteTool creates a tool for deleting a bucket's SSL certificate.
 func NewLinodeObjectStorageSSLDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newToolWithHandler(
+		cfg,
 		"linode_object_storage_ssl_delete",
-		mcp.WithDescription("Deletes the SSL/TLS certificate from an Object Storage bucket. "+
-			"Requires confirm=true to proceed."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithString(
-			"region",
-			mcp.Required(),
-			mcp.Description("Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1')"),
-		),
-		mcp.WithString(
-			"label",
-			mcp.Required(),
-			mcp.Description("The bucket label (name)"),
-		),
-		mcp.WithBoolean(
-			paramConfirm,
-			mcp.Required(),
-			mcp.Description("Must be true to proceed. This removes the SSL certificate from the bucket."),
-		),
+		"Deletes the SSL/TLS certificate from an Object Storage bucket. "+
+			"Requires confirm=true to proceed. Pass dry_run=true to preview without deleting.",
+		[]mcp.ToolOption{
+			mcp.WithString("region", mcp.Required(),
+				mcp.Description("Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1')")),
+			mcp.WithString("label", mcp.Required(), mcp.Description("The bucket label (name)")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to proceed. This removes the SSL certificate from the bucket. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleObjectStorageSSLDeleteRequest,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleObjectStorageSSLDeleteRequest(ctx, &request, cfg)
-	}
 
 	return tool, profiles.CapDestroy, handler
 }
 
 func handleObjectStorageSSLDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This removes the SSL certificate from the bucket. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	region := request.GetString("region", "")
-	label := request.GetString("label", "")
-
-	if region == "" {
-		return mcp.NewToolResultError("region is required"), nil
-	}
-
-	if label == "" {
-		return mcp.NewToolResultError("label is required"), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := client.DeleteBucketSSL(ctx, region, label); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove SSL certificate for bucket '%s' in region '%s': %v", label, region, err)), nil
-	}
-
-	response := struct {
-		Message string `json:"message"`
-		Region  string `json:"region"`
-		Bucket  string `json:"bucket"`
-	}{
-		Message: fmt.Sprintf("SSL certificate deleted from bucket '%s' in region '%s'", label, region),
-		Region:  region,
-		Bucket:  label,
-	}
-
-	return MarshalToolResponse(response)
+	return RunDestructiveActionByRegionLabel(ctx, request, cfg, &DestructiveActionByRegionLabel{
+		ToolName:       "linode_object_storage_ssl_delete",
+		Method:         httpMethodDelete,
+		PathPattern:    "/object-storage/buckets/%s/%s/ssl",
+		ConfirmMessage: "This removes the SSL certificate from the bucket. Set confirm=true to proceed.",
+		SuccessKey:     "bucket",
+		SuccessFormat:  "SSL certificate deleted from bucket '%s' in region '%s'",
+		FetchState: func(ctx context.Context, c *linode.Client, region, label string) (any, error) {
+			return c.GetBucketSSL(ctx, region, label)
+		},
+		Execute: func(ctx context.Context, c *linode.Client, region, label string) error {
+			return c.DeleteBucketSSL(ctx, region, label)
+		},
+	})
 }
 
 // NewLinodeObjectStorageSSLUploadTool creates a tool for uploading an SSL certificate to a bucket.
