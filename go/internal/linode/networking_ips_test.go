@@ -16,7 +16,7 @@ import (
 const (
 	endpointNetworkingIPs         = "/networking/ips"
 	endpointNetworkingIPsAssign   = endpointNetworkingIPs + "/assign"
-	endpointNetworkingIPsShare    = endpointNetworkingIPs + "/share"
+	endpointNetworkingIPsShare    = "/networking/ipv4/share"
 	endpointNetworkingIPv4Assign  = "/networking/ipv4/assign"
 	networkingIPv4Type            = "ipv4"
 	networkingIPAddressFixture    = "198.51.100.5"
