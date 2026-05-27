@@ -201,6 +201,7 @@ const (
 	keyFirewallID                 = "firewall_id"
 	keyFirewallDeviceID           = "device_id"
 	firewallDeviceLabelFixture    = "web-01"
+	policyAccept                  = "ACCEPT"
 	caseMissingFirewallPathID     = "missing firewall id"
 	caseZeroFirewallPathID        = "zero firewall id"
 	caseSlashFirewallPathID       = "slash firewall id"
