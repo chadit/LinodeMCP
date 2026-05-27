@@ -159,6 +159,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_instance_stats_month_get":    profiles.CapRead,
 		"linode_instance_transfer_month_get": profiles.CapRead,
 		"linode_firewall_rules_list":         profiles.CapRead,
+		"linode_firewall_rules_update":       profiles.CapWrite,
 		"linode_firewall_rule_version_get":   profiles.CapRead,
 		"linode_firewall_devices_list":       profiles.CapRead,
 		"linode_firewall_device_get":         profiles.CapRead,

@@ -2279,6 +2279,21 @@ func (c *Client) ListFirewallRules(ctx context.Context, firewallID int) (*Firewa
 	return rules, err
 }
 
+// UpdateFirewallRules replaces firewall rules without retrying the mutating PUT request.
+func (c *Client) UpdateFirewallRules(ctx context.Context, firewallID int, req *FirewallRules) (*FirewallRules, error) {
+	var rules *FirewallRules
+
+	err := c.executeWithoutRetry(ctx, "UpdateFirewallRules", func() error {
+		var err error
+
+		rules, err = c.httpUpdateFirewallRules(ctx, firewallID, req)
+
+		return err
+	})
+
+	return rules, err
+}
+
 // ListFirewallRuleVersions retrieves all rule versions for a Cloud Firewall with automatic retry on transient failures.
 func (c *Client) ListFirewallRuleVersions(ctx context.Context, firewallID int) (*Firewall, error) {
 	var firewall *Firewall

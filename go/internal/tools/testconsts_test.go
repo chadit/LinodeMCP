@@ -199,6 +199,8 @@ const (
 	keySubnetID                   = "subnet_id"
 	keyBackupID                   = "backup_id"
 	keyFirewallID                 = "firewall_id"
+	keyInbound                    = "inbound"
+	keyOutbound                   = "outbound"
 	keyFirewallDeviceID           = "device_id"
 	firewallDeviceLabelFixture    = "web-01"
 	policyAccept                  = "ACCEPT"
@@ -450,6 +452,8 @@ const (
 	purposePublic                  = "public"
 	purposeVPC                     = "vpc"
 	policyDrop                     = "DROP"
+	firewallRuleAllowHTTPSJSON     = `[{"action":"ACCEPT","protocol":"TCP","ports":"443","label":"allow-https"}]`
+	firewallRuleLabelAllowHTTPS    = "allow-https"
 	keySlug                        = "slug"
 	errEventIDRequired             = "event_id is required"
 	errEventIDPositive             = "event_id must be a positive integer"

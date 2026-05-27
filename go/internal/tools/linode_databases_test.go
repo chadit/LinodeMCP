@@ -2356,7 +2356,7 @@ func TestLinodeDatabaseInstanceUpdateTool(t *testing.T) {
 			{name: "invalid updates", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseUpdatesParam: invalidJSON, keyConfirm: true}, wantMessage: databaseInvalidUpdatesJSON},
 			{name: "numeric version", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseVersionParam: 8, keyConfirm: true}, wantMessage: "version must be a non-empty string"},
 			{name: "null allow list", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseAllowListParam: databaseJSONNull, keyConfirm: true}, wantMessage: "allow_list must be a JSON array"},
-			{name: "object allow list", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseAllowListParam: "{}", keyConfirm: true}, wantMessage: databaseInvalidAllowListJSON},
+			{name: "object allow list", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseAllowListParam: jsonObjectEmpty, keyConfirm: true}, wantMessage: databaseInvalidAllowListJSON},
 			{name: "null engine config", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseEngineConfigParam: databaseJSONNull, keyConfirm: true}, wantMessage: "engine_config must be a JSON object"},
 			{name: "array engine config", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseEngineConfigParam: databaseJSONArray, keyConfirm: true}, wantMessage: databaseInvalidEngineConfigJSON},
 			{name: "null private network", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databasePrivateNetworkParam: databaseJSONNull, keyConfirm: true}, wantMessage: "private_network must be a JSON object"},

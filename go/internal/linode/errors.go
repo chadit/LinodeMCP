@@ -94,6 +94,9 @@ var ErrInvalidFirewallDeviceType = errors.New("device type must be one of linode
 // ErrFirewallIDPositive is returned when a firewall ID argument is not positive.
 var ErrFirewallIDPositive = errors.New("firewall_id must be a positive integer")
 
+// ErrFirewallRulesRequired is returned when a firewall rules update request is missing.
+var ErrFirewallRulesRequired = errors.New("firewall rules request is required")
+
 // ErrFirewallRuleVersionPositive is returned when a firewall rule version is not positive.
 var ErrFirewallRuleVersionPositive = errors.New("version must be a positive integer")
 
