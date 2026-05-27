@@ -85,11 +85,11 @@ func TestLinodeFirewallDevicesListTool(t *testing.T) {
 		t.Parallel()
 
 		cases := map[string]any{
-			"missing firewall id":   nil,
-			"zero firewall id":      float64(0),
-			"slash firewall id":     paymentMethodIDSlash,
-			"query firewall id":     databaseInvalidInstanceIDQuery,
-			"traversal firewall id": pathTraversalValue,
+			caseMissingFirewallPathID:   nil,
+			caseZeroFirewallPathID:      float64(0),
+			caseSlashFirewallPathID:     paymentMethodIDSlash,
+			caseQueryFirewallPathID:     databaseInvalidInstanceIDQuery,
+			caseTraversalFirewallPathID: pathTraversalValue,
 		}
 
 		for name, rawID := range cases {
@@ -119,7 +119,7 @@ func TestLinodeFirewallDevicesListTool(t *testing.T) {
 				require.NoError(t, err, "handler should not return Go error")
 				require.NotNil(t, result, "handler should return a result")
 				assert.True(t, result.IsError, "invalid firewall_id should be rejected")
-				assertErrorContains(t, result, "firewall_id must be a positive integer")
+				assertErrorContains(t, result, errFirewallIDPositive)
 				assert.False(t, called.Load(), "client should not be called for invalid firewall_id")
 			})
 		}
@@ -149,5 +149,138 @@ func TestLinodeFirewallDevicesListTool(t *testing.T) {
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
 		assertErrorContains(t, result, "Failed to retrieve linode_firewall_devices_list")
+	})
+}
+
+func TestLinodeFirewallDeviceGetTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		tool, capability, handler := tools.NewLinodeFirewallDeviceGetTool(&config.Config{})
+
+		assert.Equal(t, "linode_firewall_device_get", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read capability")
+		require.NotNil(t, handler, "handler should not be nil")
+		assert.Contains(t, tool.InputSchema.Properties, keyFirewallID, "schema should include firewall_id property")
+		assert.Contains(t, tool.InputSchema.Required, keyFirewallID, "schema should require firewall_id")
+		assert.Contains(t, tool.InputSchema.Properties, keyFirewallDeviceID, "schema should include device_id property")
+		assert.Contains(t, tool.InputSchema.Required, keyFirewallDeviceID, "schema should require device_id")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		device := linode.FirewallDevice{
+			ID: 456,
+			Entity: linode.FirewallDeviceEntity{
+				ID:    123,
+				Label: firewallDeviceLabelFixture,
+				Type:  monitorAlertDefinitionToolServiceType,
+				URL:   "/v4/linode/instances/123",
+			},
+		}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/networking/firewalls/123/devices/456", r.URL.Path, "request path should match")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(device))
+		}))
+		t.Cleanup(srv.Close)
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeFirewallDeviceGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(456)})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, firewallDeviceLabelFixture, "response should include device entity label")
+		assert.Contains(t, textContent.Text, monitorAlertDefinitionToolServiceType, "response should include entity type")
+	})
+
+	t.Run("rejects invalid ids before client call", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name string
+			args map[string]any
+			want string
+		}{
+			{name: caseMissingFirewallPathID, args: map[string]any{keyFirewallDeviceID: float64(456)}, want: errFirewallIDPositive},
+			{name: caseZeroFirewallPathID, args: map[string]any{keyFirewallID: float64(0), keyFirewallDeviceID: float64(456)}, want: errFirewallIDPositive},
+			{name: caseSlashFirewallPathID, args: map[string]any{keyFirewallID: paymentMethodIDSlash, keyFirewallDeviceID: float64(456)}, want: errFirewallIDPositive},
+			{name: caseQueryFirewallPathID, args: map[string]any{keyFirewallID: databaseInvalidInstanceIDQuery, keyFirewallDeviceID: float64(456)}, want: errFirewallIDPositive},
+			{name: caseTraversalFirewallPathID, args: map[string]any{keyFirewallID: pathTraversalValue, keyFirewallDeviceID: float64(456)}, want: errFirewallIDPositive},
+			{name: caseMissingFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123)}, want: errFirewallDeviceIDPositive},
+			{name: caseZeroFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(0)}, want: errFirewallDeviceIDPositive},
+			{name: caseSlashFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: paymentMethodIDSlash}, want: errFirewallDeviceIDPositive},
+			{name: caseQueryFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: databaseInvalidInstanceIDQuery}, want: errFirewallDeviceIDPositive},
+			{name: caseTraversalFirewallDeviceID, args: map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: pathTraversalValue}, want: errFirewallDeviceIDPositive},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				var called atomic.Bool
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					called.Store(true)
+					w.WriteHeader(http.StatusOK)
+				}))
+				t.Cleanup(srv.Close)
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+					envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+				}}
+				_, _, handler := tools.NewLinodeFirewallDeviceGetTool(cfg)
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+
+				require.NoError(t, err, "handler should not return Go error")
+				require.NotNil(t, result, "handler should return a result")
+				assert.True(t, result.IsError, "invalid IDs should be rejected")
+				assertErrorContains(t, result, testCase.want)
+				assert.False(t, called.Load(), "client should not be called for invalid IDs")
+			})
+		}
+	})
+
+	t.Run("client error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/networking/firewalls/123/devices/456", r.URL.Path, "request path should match")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+			assert.NoError(t, writeErr)
+		}))
+		t.Cleanup(srv.Close)
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeFirewallDeviceGetTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123), keyFirewallDeviceID: float64(456)}))
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "Failed to retrieve linode_firewall_device_get")
 	})
 }

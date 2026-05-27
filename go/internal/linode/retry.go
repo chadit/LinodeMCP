@@ -2294,6 +2294,21 @@ func (c *Client) CreateFirewallDevice(ctx context.Context, firewallID int, req *
 	return device, err
 }
 
+// GetFirewallDevice retrieves one device assigned to a Cloud Firewall with automatic retry on transient failures.
+func (c *Client) GetFirewallDevice(ctx context.Context, firewallID, deviceID int) (*FirewallDevice, error) {
+	var device *FirewallDevice
+
+	err := c.executeWithRetry(ctx, "GetFirewallDevice", func() error {
+		var err error
+
+		device, err = c.httpGetFirewallDevice(ctx, firewallID, deviceID)
+
+		return err
+	})
+
+	return device, err
+}
+
 // ListFirewallSettings retrieves default firewall assignments with automatic retry on transient failures.
 func (c *Client) ListFirewallSettings(ctx context.Context, page, pageSize int) (*FirewallSettings, error) {
 	var settings *FirewallSettings

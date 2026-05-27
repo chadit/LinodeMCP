@@ -13,7 +13,10 @@ import (
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
-const endpointFirewallDevices = "/networking/firewalls/123/devices"
+const (
+	endpointFirewallDevices    = "/networking/firewalls/123/devices"
+	endpointFirewallDeviceByID = "/networking/firewalls/123/devices/456"
+)
 
 func TestClientListFirewallDevicesSuccess(t *testing.T) {
 	t.Parallel()
@@ -25,7 +28,7 @@ func TestClientListFirewallDevicesSuccess(t *testing.T) {
 				ID:    123,
 				Label: "web-01",
 				Type:  managedLinodeSettingsSSHUser,
-				URL:   "/v4/linode/instances/123",
+				URL:   accountMaintenanceURL,
 			},
 			Created: "2025-01-01T00:01:01",
 			Updated: "2025-01-02T00:01:01",
@@ -58,6 +61,118 @@ func TestClientListFirewallDevicesSuccess(t *testing.T) {
 	assert.Equal(t, 456, result.Data[0].ID)
 	assert.Equal(t, managedLinodeSettingsSSHUser, result.Data[0].Entity.Type)
 	assert.Equal(t, 2, result.Page)
+}
+
+func TestClientGetFirewallDeviceSuccess(t *testing.T) {
+	t.Parallel()
+
+	device := linode.FirewallDevice{
+		ID: 456,
+		Entity: linode.FirewallDeviceEntity{
+			ID:    123,
+			Label: "web-01",
+			Type:  managedLinodeSettingsSSHUser,
+			URL:   accountMaintenanceURL,
+		},
+		Created: "2025-01-01T00:01:01",
+		Updated: "2025-01-02T00:01:01",
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, endpointFirewallDeviceByID, r.URL.Path, "request path should match")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(device))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.GetFirewallDevice(t.Context(), 123, 456)
+
+	require.NoError(t, err, "GetFirewallDevice should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, 456, result.ID)
+	assert.Equal(t, managedLinodeSettingsSSHUser, result.Entity.Type)
+}
+
+func TestClientGetFirewallDeviceRejectsInvalidInput(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name       string
+		firewallID int
+		deviceID   int
+		wantErr    error
+	}{
+		{name: "zero firewall id", firewallID: 0, deviceID: 456, wantErr: linode.ErrFirewallIDPositive},
+		{name: "zero device id", firewallID: 123, deviceID: 0, wantErr: linode.ErrFirewallDeviceIDPositive},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var called atomic.Bool
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				called.Store(true)
+				w.WriteHeader(http.StatusOK)
+			}))
+			t.Cleanup(srv.Close)
+
+			client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+			result, err := client.GetFirewallDevice(t.Context(), testCase.firewallID, testCase.deviceID)
+
+			require.ErrorIs(t, err, testCase.wantErr, "invalid input should be rejected")
+			assert.Nil(t, result, "no device should be returned")
+			assert.False(t, called.Load(), "client should not call API for invalid input")
+		})
+	}
+}
+
+func TestClientGetFirewallDeviceRetriesTransientFailure(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
+			hj, ok := w.(http.Hijacker)
+			if !assert.True(t, ok, "response writer should support hijacking") {
+				return
+			}
+
+			conn, _, err := hj.Hijack()
+			if !assert.NoError(t, err) {
+				return
+			}
+
+			assert.NoError(t, conn.Close())
+
+			return
+		}
+
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, endpointFirewallDeviceByID, r.URL.Path, "request path should match")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.FirewallDevice{ID: 456}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	result, err := client.GetFirewallDevice(t.Context(), 123, 456)
+
+	require.NoError(t, err, "GetFirewallDevice should succeed after retry")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, 456, result.ID)
+	assert.Equal(t, int32(2), requestCount.Load(), "read-only GET should retry once then succeed")
 }
 
 func TestClientCreateFirewallDeviceSuccess(t *testing.T) {
