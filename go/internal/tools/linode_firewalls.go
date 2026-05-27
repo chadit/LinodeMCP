@@ -14,6 +14,7 @@ import (
 const (
 	firewallDefaultLinodeKey = "linode"
 	paramDefaultFirewallIDs  = "default_firewall_ids"
+	paramFirewallID          = "firewall_id"
 	paramSlug                = "slug"
 )
 
@@ -36,6 +37,43 @@ func NewLinodeFirewallListTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeFirewallDevicesListTool creates a tool for listing devices assigned to a Cloud Firewall.
+func NewLinodeFirewallDevicesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_firewall_devices_list",
+		"Lists devices assigned to a Cloud Firewall.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(paramFirewallID, mcp.Required(),
+				mcp.Description("The ID of the firewall whose assigned devices should be listed.")),
+			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		},
+		handleLinodeFirewallDevicesListRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleLinodeFirewallDevicesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	firewallID := request.GetInt(paramFirewallID, 0)
+	if firewallID <= 0 {
+		return mcp.NewToolResultError(linode.ErrFirewallIDPositive.Error()), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	devices, err := client.ListFirewallDevices(ctx, firewallID, request.GetInt("page", 0), request.GetInt("page_size", 0))
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve linode_firewall_devices_list: %v", err)), nil
+	}
+
+	return MarshalToolResponse(devices)
 }
 
 // NewLinodeFirewallSettingsListTool creates a tool for listing default firewall assignments.

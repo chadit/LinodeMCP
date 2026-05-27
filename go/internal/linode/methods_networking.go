@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 )
 
 const (
@@ -34,6 +35,33 @@ func (c *Client) httpListFirewalls(ctx context.Context) ([]Firewall, error) {
 	}
 
 	return response.Data, nil
+}
+
+// ListFirewallDevices retrieves devices assigned to a Cloud Firewall.
+func (c *Client) httpListFirewallDevices(ctx context.Context, firewallID, page, pageSize int) (*PaginatedResponse[FirewallDevice], error) {
+	if firewallID <= 0 {
+		return nil, ErrFirewallIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedFirewallID := url.PathEscape(strconv.Itoa(firewallID))
+	endpoint := withPaginationQuery(endpointFirewalls+"/"+encodedFirewallID+"/devices", page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListFirewallDevices", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[FirewallDevice]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
 }
 
 // ListFirewallSettings retrieves default firewall assignments.
