@@ -8,6 +8,7 @@ import (
 
 const (
 	endpointFirewalls             = "/networking/firewalls"
+	endpointFirewallSettings      = endpointFirewalls + "/settings"
 	endpointNetworkTransferPrices = "/network-transfer/prices"
 	endpointNodeBalancers         = "/nodebalancers"
 )
@@ -31,6 +32,28 @@ func (c *Client) httpListFirewalls(ctx context.Context) ([]Firewall, error) {
 	}
 
 	return response.Data, nil
+}
+
+// ListFirewallSettings retrieves default firewall assignments.
+func (c *Client) httpListFirewallSettings(ctx context.Context, page, pageSize int) (*FirewallSettings, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointFirewallSettings, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListFirewallSettings", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var settings FirewallSettings
+	if err := c.handleResponse(resp, &settings); err != nil {
+		return nil, err
+	}
+
+	return &settings, nil
 }
 
 // GetFirewall retrieves a single firewall by its ID.

@@ -2264,6 +2264,21 @@ func (c *Client) ListFirewalls(ctx context.Context) ([]Firewall, error) {
 	return firewalls, err
 }
 
+// ListFirewallSettings retrieves default firewall assignments with automatic retry on transient failures.
+func (c *Client) ListFirewallSettings(ctx context.Context, page, pageSize int) (*FirewallSettings, error) {
+	var settings *FirewallSettings
+
+	err := c.executeWithRetry(ctx, "ListFirewallSettings", func() error {
+		var err error
+
+		settings, err = c.httpListFirewallSettings(ctx, page, pageSize)
+
+		return err
+	})
+
+	return settings, err
+}
+
 // ListNetworkTransferPrices retrieves network transfer prices with automatic retry on transient failures.
 func (c *Client) ListNetworkTransferPrices(ctx context.Context) (*PaginatedResponse[NetworkTransferPrice], error) {
 	var prices *PaginatedResponse[NetworkTransferPrice]

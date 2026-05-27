@@ -1013,6 +1013,7 @@ func computeToolEntries(cfg *config.Config) []toolEntry {
 func networkingToolEntries(cfg *config.Config) []toolEntry {
 	return entriesFromFactories(cfg, []toolFactory{
 		tools.NewLinodeFirewallListTool,
+		tools.NewLinodeFirewallSettingsListTool,
 		tools.NewLinodeNetworkTransferPricesTool,
 		tools.NewLinodeNodeBalancerListTool,
 		tools.NewLinodeNodeBalancerGetTool,

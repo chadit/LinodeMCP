@@ -35,6 +35,19 @@ type FirewallAddresses struct {
 	IPv6 []string `json:"ipv6"`
 }
 
+// FirewallSettings represents the default firewall assignments for resource types.
+type FirewallSettings struct {
+	DefaultFirewallIDs FirewallDefaultIDs `json:"default_firewall_ids"`
+}
+
+// FirewallDefaultIDs contains default firewall IDs by resource type.
+type FirewallDefaultIDs struct {
+	Linode          int `json:"linode"`
+	NodeBalancer    int `json:"nodebalancer"`
+	PublicInterface int `json:"public_interface"`
+	VPCInterface    int `json:"vpc_interface"`
+}
+
 // NetworkTransferPrice represents a network transfer price entry.
 type NetworkTransferPrice struct {
 	ID           string                       `json:"id"`
