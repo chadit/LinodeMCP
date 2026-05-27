@@ -753,6 +753,15 @@ func (c *Client) GetMonitorServiceAlertDefinition(ctx context.Context, serviceTy
 	return definition, err
 }
 
+// DeleteMonitorServiceAlertDefinition deletes one alert definition without retrying
+// the destructive request. Alert definition deletion is not guaranteed idempotent
+// after a transient error, so this method delegates exactly once.
+func (c *Client) DeleteMonitorServiceAlertDefinition(ctx context.Context, serviceType string, alertID int) error {
+	return c.executeWithoutRetry(ctx, "DeleteMonitorServiceAlertDefinition", func() error {
+		return c.httpDeleteMonitorServiceAlertDefinition(ctx, serviceType, alertID)
+	})
+}
+
 // ListMonitorDashboards retrieves monitoring dashboards with automatic retry on transient failures.
 func (c *Client) ListMonitorDashboards(ctx context.Context, page, pageSize int) (*PaginatedResponse[MonitorDashboard], error) {
 	var dashboards *PaginatedResponse[MonitorDashboard]

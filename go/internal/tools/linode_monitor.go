@@ -18,6 +18,7 @@ const (
 	monitorServiceDashboardsToolName             = "linode_monitor_service_dashboards"
 	monitorServiceAlertDefinitionCreateToolName  = "linode_monitor_service_alert_definition_create"
 	monitorServiceAlertDefinitionGetToolName     = "linode_monitor_service_alert_definition_get"
+	monitorServiceAlertDefinitionDeleteToolName  = "linode_monitor_service_alert_definition_delete"
 	monitorServiceTypeParam                      = "service_type"
 	monitorAlertDefinitionLabelParam             = "label"
 	monitorAlertDefinitionSeverityParam          = "severity"
@@ -281,6 +282,59 @@ func getMonitorServiceAlertDefinition(ctx context.Context, client *linode.Client
 	}
 
 	return definition, ""
+}
+
+// NewLinodeMonitorServiceAlertDefinitionDeleteTool creates a tool for deleting one monitoring alert definition.
+func NewLinodeMonitorServiceAlertDefinitionDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		monitorServiceAlertDefinitionDeleteToolName,
+		"Deletes one alert definition for a supported monitoring service type by service_type and alert_id. Requires confirm=true.",
+		[]mcp.ToolOption{
+			mcp.WithString(monitorServiceTypeParam, mcp.Required(), mcp.Description("Supported monitoring service type slug whose alert definition should be deleted.")),
+			mcp.WithNumber(monitorAlertIDParam, mcp.Required(), mcp.Description("Alert definition ID to delete.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm deleting an alert definition.")),
+		},
+		handleLinodeMonitorServiceAlertDefinitionDeleteRequest,
+	)
+
+	return tool, profiles.CapDestroy, handler
+}
+
+func handleLinodeMonitorServiceAlertDefinitionDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This deletes a monitor alert definition. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	serviceType, validationMessage := monitorServiceTypeFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	alertID, validationMessage := requiredPositiveIntArgument(request, monitorAlertIDParam, errMonitorAlertIDMissing, errMonitorAlertIDPositive)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	deleteFailureMessage := deleteMonitorServiceAlertDefinition(ctx, client, serviceType, alertID)
+	if deleteFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to delete " + monitorServiceAlertDefinitionDeleteToolName + ": " + deleteFailureMessage), nil
+	}
+
+	return mcp.NewToolResultText("Deleted " + monitorServiceAlertDefinitionDeleteToolName + "."), nil
+}
+
+func deleteMonitorServiceAlertDefinition(ctx context.Context, client *linode.Client, serviceType string, alertID int) string {
+	if err := client.DeleteMonitorServiceAlertDefinition(ctx, serviceType, alertID); err != nil {
+		return err.Error()
+	}
+
+	return ""
 }
 
 // NewLinodeMonitorServiceAlertDefinitionCreateTool creates a tool for creating one monitoring alert definition.

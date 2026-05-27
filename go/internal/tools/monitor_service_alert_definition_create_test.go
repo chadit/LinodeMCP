@@ -133,9 +133,9 @@ func TestLinodeMonitorServiceAlertDefinitionCreateTool(t *testing.T) {
 			set   bool
 		}{
 			{name: caseMissing, set: false},
-			{name: "false boolean", value: false, set: true},
-			{name: "string true", value: boolStringTrue, set: true},
-			{name: "numeric one", value: 1, set: true},
+			{name: caseFalseConfirmRejected, value: false, set: true},
+			{name: caseStringConfirmRejected, value: boolStringTrue, set: true},
+			{name: caseNumericConfirmRejected, value: 1, set: true},
 		}
 
 		for _, testCase := range cases {
