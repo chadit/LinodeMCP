@@ -16,6 +16,13 @@ import (
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
+func writeRawTestResponse(t *testing.T, w http.ResponseWriter, body string) {
+	t.Helper()
+
+	_, err := w.Write([]byte(body))
+	assert.NoError(t, err, "writing response should not fail")
+}
+
 // dropConn hijacks the request's connection and closes it without writing a
 // response. The client observes a transport error after it has already sent
 // the request, simulating the worst case for retries: the server may have
@@ -373,9 +380,9 @@ func TestRetryWrappersDelegationPatterns(t *testing.T) {
 
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyID:    1,
-				keyLabel: "my-fw",
-				"status": "enabled",
+				keyID:     1,
+				keyLabel:  "my-fw",
+				keyStatus: statusEnabledFixture,
 			}), "encoding firewall response should not fail")
 		}))
 		defer srv.Close()
@@ -399,7 +406,7 @@ func TestRetryWrappersDelegationPatterns(t *testing.T) {
 			count := requestCount.Add(1)
 			if count == 1 {
 				w.WriteHeader(http.StatusInternalServerError)
-				_, _ = w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+				writeRawTestResponse(t, w, `{"errors":[{"reason":"server error"}]}`)
 
 				return
 			}
@@ -426,7 +433,7 @@ func TestRetryWrappersDelegationPatterns(t *testing.T) {
 			count := requestCount.Add(1)
 			if count == 1 {
 				w.WriteHeader(http.StatusTooManyRequests)
-				_, _ = w.Write([]byte(`{"errors":[{"reason":"slow down"}]}`))
+				writeRawTestResponse(t, w, `{"errors":[{"reason":"slow down"}]}`)
 
 				return
 			}
@@ -458,7 +465,7 @@ func TestRetryWrappersDelegationPatterns(t *testing.T) {
 			count := requestCount.Add(1)
 			if count == 1 {
 				w.WriteHeader(http.StatusInternalServerError)
-				_, _ = w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+				writeRawTestResponse(t, w, `{"errors":[{"reason":"server error"}]}`)
 
 				return
 			}
@@ -491,7 +498,7 @@ func TestRetryWrappersDelegationPatterns(t *testing.T) {
 			requestCount.Add(1)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(`{"errors":[{"reason":"persistent failure"}]}`))
+			writeRawTestResponse(t, w, `{"errors":[{"reason":"persistent failure"}]}`)
 		}))
 		defer srv.Close()
 
@@ -513,7 +520,7 @@ func TestRetryWrappersDelegationPatterns(t *testing.T) {
 			requestCount.Add(1)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
-			_, _ = w.Write([]byte(`{"errors":[{"reason":"Invalid Token"}]}`))
+			writeRawTestResponse(t, w, `{"errors":[{"reason":"Invalid Token"}]}`)
 		}))
 		defer srv.Close()
 
@@ -534,7 +541,7 @@ func TestRetryWrappersDelegationPatterns(t *testing.T) {
 			count := requestCount.Add(1)
 			if count == 1 {
 				w.WriteHeader(http.StatusInternalServerError)
-				_, _ = w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+				writeRawTestResponse(t, w, `{"errors":[{"reason":"server error"}]}`)
 
 				return
 			}
@@ -639,7 +646,7 @@ func TestRetryWrappersContextCancellationStopsRetry(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+		writeRawTestResponse(t, w, `{"errors":[{"reason":"server error"}]}`)
 	}))
 	defer srv.Close()
 
@@ -666,7 +673,7 @@ func TestRetryWrappersBodyForwardedOnRetry(t *testing.T) {
 			// 429 is the one transient failure a non-idempotent POST still
 			// retries, so it is what exercises body re-send on this path.
 			w.WriteHeader(http.StatusTooManyRequests)
-			_, _ = w.Write([]byte(`{"errors":[{"reason":"slow down"}]}`))
+			writeRawTestResponse(t, w, `{"errors":[{"reason":"slow down"}]}`)
 
 			return
 		}

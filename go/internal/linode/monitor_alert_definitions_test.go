@@ -39,8 +39,8 @@ func TestClientListMonitorAlertDefinitionsSuccess(t *testing.T) {
 				keyType:        monitorAlertDefinitionType,
 				keyServiceType: monitorAlertDefinitionServiceType,
 				"description":  monitorAlertDefinitionDescription,
-				"severity":     2,
-				"criteria":     map[string]any{"threshold": 90},
+				keySeverity:    2,
+				"criteria":     map[string]any{keyThreshold: 90},
 			}},
 			keyPage:    1,
 			keyPages:   1,
@@ -64,7 +64,7 @@ func TestClientListMonitorAlertDefinitionsSuccess(t *testing.T) {
 	assert.Equal(t, monitorAlertDefinitionServiceType, got.Data[0].ServiceType)
 	assert.Equal(t, monitorAlertDefinitionDescription, got.Data[0].Description)
 	assert.Equal(t, 2, got.Data[0].Severity)
-	assert.InEpsilon(t, 90, got.Data[0].Criteria["threshold"], 0.001)
+	assert.InEpsilon(t, 90, got.Data[0].Criteria[keyThreshold], 0.001)
 }
 
 func TestClientListMonitorAlertDefinitionsAPIError(t *testing.T) {
