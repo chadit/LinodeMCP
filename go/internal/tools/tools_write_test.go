@@ -1218,6 +1218,115 @@ func TestLinodeFirewallDeleteTool(t *testing.T) {
 	})
 }
 
+// Dry-run coverage for firewall delete. Kept in a sibling function so
+// the main test's subtest count stays under maintidx's threshold.
+func TestLinodeFirewallDeleteToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	t.Run("schema advertises dry_run", func(t *testing.T) {
+		t.Parallel()
+
+		tool, _, _ := tools.NewLinodeFirewallDeleteTool(&config.Config{})
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run",
+			"schema must advertise the dry_run boolean to the model")
+	})
+
+	t.Run("preview without mutating", func(t *testing.T) {
+		t.Parallel()
+
+		var methodsSeen []string
+
+		firewallBody := `{"id":789,"label":"prod-fw","status":"enabled"}`
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsSeen = append(methodsSeen, r.Method)
+			assert.Equal(t, "/networking/firewalls/789", r.URL.Path)
+
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(firewallBody))
+
+				return
+			}
+
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeFirewallDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyFirewallID: float64(789),
+			keyDryRun:     true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError)
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, true, body[keyDryRun])
+		assert.Equal(t, "linode_firewall_delete", body["tool"])
+
+		would, isWouldObject := body["would_execute"].(map[string]any)
+		require.True(t, isWouldObject)
+		assert.Equal(t, "DELETE", would["method"])
+		assert.Equal(t, "/networking/firewalls/789", would["path"])
+
+		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+			"dry_run must only issue a single GET, never DELETE")
+	})
+
+	t.Run("does not require confirm", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":789,"label":"prod-fw"}`))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeFirewallDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyFirewallID: float64(789),
+			keyDryRun:     true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.False(t, result.IsError,
+			"dry_run without confirm must succeed; confirm only gates real execution")
+	})
+
+	t.Run("still validates firewall_id", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, handler := tools.NewLinodeFirewallDeleteTool(&config.Config{})
+		req := createRequestWithArgs(t, map[string]any{keyDryRun: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError)
+		assertErrorContains(t, result, "firewall_id is required")
+	})
+}
+
 // End-to-end verification of the domain import workflow.
 func TestLinodeDomainImportTool(t *testing.T) {
 	t.Parallel()
@@ -3046,6 +3155,115 @@ func TestLinodeNodeBalancerDeleteTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent type")
 		assert.Contains(t, textContent.Text, "removed successfully", "response should confirm deletion")
+	})
+}
+
+// Dry-run coverage for NodeBalancer delete. Kept in a sibling function
+// so the main test's subtest count stays under maintidx's threshold.
+func TestLinodeNodeBalancerDeleteToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	t.Run("schema advertises dry_run", func(t *testing.T) {
+		t.Parallel()
+
+		tool, _, _ := tools.NewLinodeNodeBalancerDeleteTool(&config.Config{})
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run",
+			"schema must advertise the dry_run boolean to the model")
+	})
+
+	t.Run("preview without mutating", func(t *testing.T) {
+		t.Parallel()
+
+		var methodsSeen []string
+
+		nbBody := `{"id":444,"label":"prod-lb","region":"us-east"}`
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsSeen = append(methodsSeen, r.Method)
+			assert.Equal(t, "/nodebalancers/444", r.URL.Path)
+
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(nbBody))
+
+				return
+			}
+
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeNodeBalancerDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyNodeBalancerID: float64(444),
+			keyDryRun:         true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError)
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, true, body[keyDryRun])
+		assert.Equal(t, "linode_nodebalancer_delete", body["tool"])
+
+		would, isWouldObject := body["would_execute"].(map[string]any)
+		require.True(t, isWouldObject)
+		assert.Equal(t, "DELETE", would["method"])
+		assert.Equal(t, "/nodebalancers/444", would["path"])
+
+		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+			"dry_run must only issue a single GET, never DELETE")
+	})
+
+	t.Run("does not require confirm", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":444,"label":"prod-lb"}`))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeNodeBalancerDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyNodeBalancerID: float64(444),
+			keyDryRun:         true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.False(t, result.IsError,
+			"dry_run without confirm must succeed; confirm only gates real execution")
+	})
+
+	t.Run("still validates nodebalancer_id", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, handler := tools.NewLinodeNodeBalancerDeleteTool(&config.Config{})
+		req := createRequestWithArgs(t, map[string]any{keyDryRun: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError)
+		assertErrorContains(t, result, "nodebalancer_id is required")
 	})
 }
 

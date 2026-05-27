@@ -5,7 +5,14 @@ from typing import TYPE_CHECKING, Any, TypeGuard, cast
 from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
+from linodemcp.tools.helpers import (
+    DRY_RUN_PROP,
+    ENV_PARAM_SCHEMA,
+    error_response,
+    execute_dry_run,
+    execute_tool,
+    is_dry_run,
+)
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -195,6 +202,7 @@ def create_linode_firewall_delete_tool() -> tuple[Tool, Capability]:
         description=(
             "Deletes a Cloud Firewall. WARNING: This removes all rules "
             "and unassigns all devices."
+            " Pass dry_run=true to preview without deleting."
         ),
         inputSchema={
             "type": "object",
@@ -206,8 +214,11 @@ def create_linode_firewall_delete_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Must be true to confirm deletion.",
+                    "description": (
+                        "Must be true to confirm deletion. Ignored when dry_run=true."
+                    ),
                 },
+                **DRY_RUN_PROP,
             },
             "required": ["firewall_id", "confirm"],
         },
@@ -219,6 +230,29 @@ async def handle_linode_firewall_delete(
 ) -> list[TextContent]:
     """Handle linode_firewall_delete tool request."""
     firewall_id = arguments.get("firewall_id", 0)
+
+    # Both branches need a non-zero firewall_id, and the spec says
+    # dry-run errors on missing required args the same way the real
+    # call would.
+    if not firewall_id:
+        return error_response("firewall_id is required")
+
+    firewall_id_int = int(firewall_id)
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_firewall(firewall_id_int)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_firewall_delete",
+            "DELETE",
+            f"/networking/firewalls/{firewall_id_int}",
+            _fetch,
+        )
+
     confirm = arguments.get("confirm", False)
 
     if not confirm:
@@ -229,14 +263,11 @@ async def handle_linode_firewall_delete(
             )
         ]
 
-    if not firewall_id:
-        return error_response("firewall_id is required")
-
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        await client.delete_firewall(int(firewall_id))
+        await client.delete_firewall(firewall_id_int)
         return {
-            "message": f"Firewall {firewall_id} deleted successfully",
-            "firewall_id": firewall_id,
+            "message": f"Firewall {firewall_id_int} deleted successfully",
+            "firewall_id": firewall_id_int,
         }
 
     return await execute_tool(cfg, arguments, "delete firewall", _call)
@@ -249,6 +280,7 @@ def create_linode_firewall_device_delete_tool() -> tuple[Tool, Capability]:
         description=(
             "Deletes a device assignment from a Cloud Firewall. "
             "WARNING: This operation requires confirmation."
+            " Pass dry_run=true to preview without removing."
         ),
         inputSchema={
             "type": "object",
@@ -264,8 +296,11 @@ def create_linode_firewall_device_delete_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Must be true to confirm deletion.",
+                    "description": (
+                        "Must be true to confirm deletion. Ignored when dry_run=true."
+                    ),
                 },
+                **DRY_RUN_PROP,
             },
             "required": ["firewall_id", "device_id", "confirm"],
         },
@@ -276,12 +311,9 @@ async def handle_linode_firewall_device_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_firewall_device_delete tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This deletes a Cloud Firewall device assignment. "
-            "Set confirm=true to proceed."
-        )
-
+    # Both branches need valid positive IDs, and the spec says dry-run
+    # errors on missing/invalid required args the same way the real
+    # call would.
     firewall_id, error = _positive_int_argument(arguments, "firewall_id")
     if error is not None:
         return error_response(error)
@@ -291,6 +323,26 @@ async def handle_linode_firewall_device_delete(
 
     firewall_id_value = cast("int", firewall_id)
     device_id_value = cast("int", device_id)
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_firewall_device(firewall_id_value, device_id_value)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_firewall_device_delete",
+            "DELETE",
+            f"/networking/firewalls/{firewall_id_value}/devices/{device_id_value}",
+            _fetch,
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This deletes a Cloud Firewall device assignment. "
+            "Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_firewall_device(firewall_id_value, device_id_value)

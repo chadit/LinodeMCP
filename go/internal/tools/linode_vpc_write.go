@@ -159,12 +159,14 @@ func NewLinodeVPCDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_vpc_delete",
-		"Deletes a VPC. WARNING: This is irreversible. All subnets within the VPC will also be deleted.",
+		"Deletes a VPC. WARNING: This is irreversible. All subnets within the VPC will also be deleted."+
+			" Pass dry_run=true to preview without deleting.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("vpc_id", mcp.Required(),
 				mcp.Description("The ID of the VPC to delete")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm deletion. This action is irreversible and deletes all subnets.")),
+				mcp.Description("Must be true to confirm deletion. This action is irreversible and deletes all subnets. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleVPCDeleteRequest,
 	)
@@ -173,33 +175,20 @@ func NewLinodeVPCDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 }
 
 func handleVPCDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This is irreversible. All subnets in the VPC will also be deleted. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	vpcID := request.GetInt("vpc_id", 0)
-	if vpcID == 0 {
-		return mcp.NewToolResultError("vpc_id is required"), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := client.DeleteVPC(ctx, vpcID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove VPC %d: %v", vpcID, err)), nil
-	}
-
-	response := struct {
-		Message string `json:"message"`
-		VPCID   int    `json:"vpc_id"`
-	}{
-		Message: fmt.Sprintf("VPC %d removed successfully", vpcID),
-		VPCID:   vpcID,
-	}
-
-	return MarshalToolResponse(response)
+	return RunDestructiveActionWithID(ctx, request, cfg, &DestructiveActionByID{
+		ToolName:       "linode_vpc_delete",
+		IDParam:        "vpc_id",
+		Method:         httpMethodDelete,
+		PathPattern:    "/vpcs/%d",
+		ConfirmMessage: "This is irreversible. All subnets in the VPC will also be deleted. Set confirm=true to proceed.",
+		SuccessFormat:  "VPC %d removed successfully",
+		FetchState: func(ctx context.Context, c *linode.Client, id int) (any, error) {
+			return c.GetVPC(ctx, id)
+		},
+		Execute: func(ctx context.Context, c *linode.Client, id int) error {
+			return c.DeleteVPC(ctx, id)
+		},
+	})
 }
 
 // NewLinodeVPCSubnetCreateTool creates a tool for creating a subnet within a VPC.
@@ -342,14 +331,16 @@ func NewLinodeVPCSubnetDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_vpc_subnet_delete",
-		"Deletes a subnet from a VPC. WARNING: This is irreversible.",
+		"Deletes a subnet from a VPC. WARNING: This is irreversible."+
+			" Pass dry_run=true to preview without deleting.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("vpc_id", mcp.Required(),
 				mcp.Description("The ID of the VPC containing the subnet")),
 			mcp.WithNumber("subnet_id", mcp.Required(),
 				mcp.Description("The ID of the subnet to delete")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm subnet deletion. This action is irreversible.")),
+				mcp.Description("Must be true to confirm subnet deletion. This action is irreversible. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleVPCSubnetDeleteRequest,
 	)
@@ -358,38 +349,19 @@ func NewLinodeVPCSubnetDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 }
 
 func handleVPCSubnetDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This is irreversible. The subnet will be permanently deleted. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	vpcID := request.GetInt("vpc_id", 0)
-	if vpcID == 0 {
-		return mcp.NewToolResultError("vpc_id is required"), nil
-	}
-
-	subnetID := request.GetInt("subnet_id", 0)
-	if subnetID == 0 {
-		return mcp.NewToolResultError("subnet_id is required"), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := client.DeleteVPCSubnet(ctx, vpcID, subnetID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove subnet %d from VPC %d: %v", subnetID, vpcID, err)), nil
-	}
-
-	response := struct {
-		Message  string `json:"message"`
-		VPCID    int    `json:"vpc_id"`
-		SubnetID int    `json:"subnet_id"`
-	}{
-		Message:  fmt.Sprintf("Subnet %d deleted from VPC %d successfully", subnetID, vpcID),
-		VPCID:    vpcID,
-		SubnetID: subnetID,
-	}
-
-	return MarshalToolResponse(response)
+	return RunDestructiveActionByTwoIDs(ctx, request, cfg, &DestructiveActionByTwoIDs{
+		ToolName:       "linode_vpc_subnet_delete",
+		OuterIDParam:   "vpc_id",
+		InnerIDParam:   "subnet_id",
+		Method:         httpMethodDelete,
+		PathPattern:    "/vpcs/%d/subnets/%d",
+		ConfirmMessage: "This is irreversible. The subnet will be permanently deleted. Set confirm=true to proceed.",
+		SuccessFormat:  "Subnet %d deleted from VPC %d successfully",
+		FetchState: func(ctx context.Context, c *linode.Client, vpcID, subnetID int) (any, error) {
+			return c.GetVPCSubnet(ctx, vpcID, subnetID)
+		},
+		Execute: func(ctx context.Context, c *linode.Client, vpcID, subnetID int) error {
+			return c.DeleteVPCSubnet(ctx, vpcID, subnetID)
+		},
+	})
 }

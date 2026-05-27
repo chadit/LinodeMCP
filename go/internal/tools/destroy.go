@@ -136,6 +136,70 @@ func RunDestructiveActionWithID(
 	})
 }
 
+// DestructiveActionByTwoIDs configures a destroy tool keyed by a
+// pair of integer IDs in a parent/child path shape (e.g. `/domains/{d}/records/{r}`,
+// `/vpcs/{v}/subnets/{s}`, `/networking/firewalls/{f}/devices/{d}`).
+// PathPattern takes two %d slots: outer first, then inner.
+// SuccessFormat is fmt.Sprintf'd with (inner, outer) in that order to
+// match the legacy "Record %d removed successfully from domain %d"
+// shape; a format with no %d slots (e.g. for tools whose success
+// message is static) is also fine since fmt.Sprintf ignores extras.
+type DestructiveActionByTwoIDs struct {
+	ToolName       string
+	OuterIDParam   string
+	InnerIDParam   string
+	Method         string
+	PathPattern    string
+	ConfirmMessage string
+	SuccessFormat  string
+	FetchState     func(ctx context.Context, client *linode.Client, outerID, innerID int) (any, error)
+	Execute        func(ctx context.Context, client *linode.Client, outerID, innerID int) error
+}
+
+// RunDestructiveActionByTwoIDs is the two-int-ID convenience wrapper
+// over RunDestructiveAction. It parses and validates both ID args
+// (`== 0` rejection only; tools that need stricter checks like
+// `<= 0` for negatives should add a pre-validation guard in the
+// handler before invoking this, matching the object_storage_key_delete
+// pattern from Phase 1b.2). Per-tool handlers reduce to a single
+// struct literal.
+func RunDestructiveActionByTwoIDs(
+	ctx context.Context,
+	request *mcp.CallToolRequest,
+	cfg *config.Config,
+	params *DestructiveActionByTwoIDs,
+) (*mcp.CallToolResult, error) {
+	outerID := request.GetInt(params.OuterIDParam, 0)
+	if outerID == 0 {
+		return mcp.NewToolResultError(params.OuterIDParam + " is required"), nil
+	}
+
+	innerID := request.GetInt(params.InnerIDParam, 0)
+	if innerID == 0 {
+		return mcp.NewToolResultError(params.InnerIDParam + " is required"), nil
+	}
+
+	return RunDestructiveAction(ctx, request, cfg, &DestructiveAction{
+		ToolName:       params.ToolName,
+		Method:         params.Method,
+		Path:           fmt.Sprintf(params.PathPattern, outerID, innerID),
+		ConfirmMessage: params.ConfirmMessage,
+		FetchState: func(ctx context.Context, client *linode.Client) (any, error) {
+			return params.FetchState(ctx, client, outerID, innerID)
+		},
+		Execute: func(ctx context.Context, client *linode.Client) error {
+			return params.Execute(ctx, client, outerID, innerID)
+		},
+		Success: func() any {
+			return map[string]any{
+				responseKeyMessage:  fmt.Sprintf(params.SuccessFormat, innerID, outerID),
+				params.OuterIDParam: outerID,
+				params.InnerIDParam: innerID,
+			}
+		},
+	})
+}
+
 // DestructiveActionByRegionLabel configures a destroy tool keyed by
 // the (region, label) pair, the canonical Object Storage path shape.
 // PathPattern takes two %s slots: region first, then label. The success

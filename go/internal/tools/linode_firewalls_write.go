@@ -180,59 +180,36 @@ func handleLinodeFirewallUpdateRequest(ctx context.Context, request *mcp.CallToo
 
 // NewLinodeFirewallDeleteTool creates a tool for deleting a firewall.
 func NewLinodeFirewallDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newToolWithHandler(
+		cfg,
 		"linode_firewall_delete",
-		mcp.WithDescription("Deletes a Cloud Firewall. WARNING: This will remove all firewall rules and unassign all attached devices."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithNumber(
-			"firewall_id",
-			mcp.Required(),
-			mcp.Description("The ID of the firewall to delete"),
-		),
-		mcp.WithBoolean(
-			paramConfirm,
-			mcp.Required(),
-			mcp.Description("Must be set to true to confirm deletion."),
-		),
+		"Deletes a Cloud Firewall. WARNING: This will remove all firewall rules and unassign all attached devices."+
+			" Pass dry_run=true to preview without deleting.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("firewall_id", mcp.Required(), mcp.Description("The ID of the firewall to delete")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be set to true to confirm deletion. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeFirewallDeleteRequest,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeFirewallDeleteRequest(ctx, &request, cfg)
-	}
 
 	return tool, profiles.CapDestroy, handler
 }
 
 func handleLinodeFirewallDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	firewallID := request.GetInt("firewall_id", 0)
-
-	if result := RequireConfirm(request, "This operation is destructive. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	if firewallID == 0 {
-		return mcp.NewToolResultError("firewall_id is required"), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := client.DeleteFirewall(ctx, firewallID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove firewall %d: %v", firewallID, err)), nil
-	}
-
-	response := struct {
-		Message    string `json:"message"`
-		FirewallID int    `json:"firewall_id"`
-	}{
-		Message:    fmt.Sprintf("Firewall %d removed successfully", firewallID),
-		FirewallID: firewallID,
-	}
-
-	return MarshalToolResponse(response)
+	return RunDestructiveActionWithID(ctx, request, cfg, &DestructiveActionByID{
+		ToolName:       "linode_firewall_delete",
+		IDParam:        "firewall_id",
+		Method:         httpMethodDelete,
+		PathPattern:    "/networking/firewalls/%d",
+		ConfirmMessage: "This operation is destructive. Set confirm=true to proceed.",
+		SuccessFormat:  "Firewall %d removed successfully",
+		FetchState: func(ctx context.Context, c *linode.Client, id int) (any, error) {
+			return c.GetFirewall(ctx, id)
+		},
+		Execute: func(ctx context.Context, c *linode.Client, id int) error {
+			return c.DeleteFirewall(ctx, id)
+		},
+	})
 }

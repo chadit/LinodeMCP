@@ -5186,6 +5186,73 @@ async def test_handle_linode_firewall_delete(sample_config: Config) -> None:
         assert "deleted" in result[0].text.lower()
 
 
+async def test_firewall_delete_dry_run_returns_preview_without_mutating(
+    sample_config: Config,
+) -> None:
+    """dry_run=true must fetch state via GET and never call delete.
+
+    Decodes the JSON body so a future renaming of the v0 wire shape or
+    a regression where Execute fires anyway gets caught.
+    """
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_firewall.return_value = {
+            "id": 789,
+            "label": "prod-fw",
+            "status": "enabled",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_firewall_delete(
+            {"firewall_id": 789, "dry_run": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["dry_run"] is True
+        assert body["tool"] == "linode_firewall_delete"
+        assert body["would_execute"]["method"] == "DELETE"
+        assert body["would_execute"]["path"] == "/networking/firewalls/789"
+        mock_client.get_firewall.assert_awaited_once_with(789)
+        mock_client.delete_firewall.assert_not_called()
+
+
+async def test_firewall_delete_dry_run_does_not_require_confirm(
+    sample_config: Config,
+) -> None:
+    """dry_run path must bypass the confirm gate."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_firewall.return_value = {"id": 789, "label": "prod-fw"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_firewall_delete(
+            {"firewall_id": 789, "dry_run": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "confirm=true" not in result[0].text
+
+
+async def test_firewall_delete_dry_run_still_validates_firewall_id(
+    sample_config: Config,
+) -> None:
+    """Missing firewall_id must error out regardless of dry_run."""
+    result = await handle_linode_firewall_delete(
+        {"dry_run": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "firewall_id is required" in result[0].text
+
+
 async def test_handle_linode_firewall_rules_update(sample_config: Config) -> None:
     """Test linode_firewall_rules_update tool happy path."""
     mock_result = {
@@ -6290,6 +6357,69 @@ async def test_handle_linode_nodebalancer_delete(sample_config: Config) -> None:
         assert "deleted" in result[0].text.lower()
 
 
+async def test_nodebalancer_delete_dry_run_returns_preview_without_mutating(
+    sample_config: Config,
+) -> None:
+    """dry_run=true must fetch state via GET and never call delete."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_nodebalancer.return_value = {
+            "id": 444,
+            "label": "prod-lb",
+            "region": "us-east",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_delete(
+            {"nodebalancer_id": 444, "dry_run": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["dry_run"] is True
+        assert body["tool"] == "linode_nodebalancer_delete"
+        assert body["would_execute"]["method"] == "DELETE"
+        assert body["would_execute"]["path"] == "/nodebalancers/444"
+        mock_client.get_nodebalancer.assert_awaited_once_with(444)
+        mock_client.delete_nodebalancer.assert_not_called()
+
+
+async def test_nodebalancer_delete_dry_run_does_not_require_confirm(
+    sample_config: Config,
+) -> None:
+    """dry_run path must bypass the confirm gate."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_nodebalancer.return_value = {"id": 444, "label": "prod-lb"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_delete(
+            {"nodebalancer_id": 444, "dry_run": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "confirm=true" not in result[0].text
+
+
+async def test_nodebalancer_delete_dry_run_still_validates_nodebalancer_id(
+    sample_config: Config,
+) -> None:
+    """Missing nodebalancer_id must error out regardless of dry_run."""
+    result = await handle_linode_nodebalancer_delete(
+        {"dry_run": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "nodebalancer_id is required" in result[0].text
+
+
 async def test_linode_nodebalancer_config_node_update_tool_definition() -> None:
     """Test linode_nodebalancer_config_node_update tool definition."""
     tool, capability = create_linode_nodebalancer_config_node_update_tool()
@@ -6701,6 +6831,69 @@ async def test_handle_linode_nodebalancer_config_delete_invalid_args(
     assert len(result) == 1
     assert expected in result[0].text
     mock_client.delete_nodebalancer_config.assert_not_called()
+
+
+async def test_nodebalancer_config_delete_dry_run_returns_preview_without_mutating(
+    sample_config: Config,
+) -> None:
+    """dry_run=true must fetch state via GET and never call delete."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_nodebalancer_config.return_value = {
+            "id": 222,
+            "port": 80,
+            "protocol": "http",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_config_delete(
+            {"nodebalancer_id": 111, "config_id": 222, "dry_run": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["dry_run"] is True
+        assert body["tool"] == "linode_nodebalancer_config_delete"
+        assert body["would_execute"]["method"] == "DELETE"
+        assert body["would_execute"]["path"] == "/nodebalancers/111/configs/222"
+        mock_client.get_nodebalancer_config.assert_awaited_once_with(111, 222)
+        mock_client.delete_nodebalancer_config.assert_not_called()
+
+
+async def test_nodebalancer_config_delete_dry_run_does_not_require_confirm(
+    sample_config: Config,
+) -> None:
+    """dry_run path must bypass the confirm gate."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_nodebalancer_config.return_value = {"id": 222}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_config_delete(
+            {"nodebalancer_id": 111, "config_id": 222, "dry_run": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "confirm must be true" not in result[0].text
+
+
+async def test_nodebalancer_config_delete_dry_run_still_validates_ids(
+    sample_config: Config,
+) -> None:
+    """Missing or invalid IDs must error out regardless of dry_run."""
+    result = await handle_linode_nodebalancer_config_delete(
+        {"config_id": 222, "dry_run": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "nodebalancer_id must be a positive integer" in result[0].text
 
 
 async def test_linode_nodebalancer_config_node_delete_tool_definition() -> None:
@@ -10160,6 +10353,75 @@ async def test_vpc_delete_success(sample_config: Config) -> None:
         assert "deleted" in result[0].text.lower()
 
 
+async def test_vpc_delete_dry_run_returns_preview_without_mutating(
+    sample_config: Config,
+) -> None:
+    """dry_run=true must fetch state via GET and never call delete."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_vpc.return_value = {
+            "id": 123,
+            "label": "prod-vpc",
+            "region": "us-east",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_vpc_delete(
+                {"vpc_id": 123, "dry_run": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["dry_run"] is True
+        assert body["tool"] == "linode_vpc_delete"
+        assert body["would_execute"]["method"] == "DELETE"
+        assert body["would_execute"]["path"] == "/vpcs/123"
+        mock_client.get_vpc.assert_awaited_once_with(123)
+        mock_client.delete_vpc.assert_not_called()
+
+
+async def test_vpc_delete_dry_run_does_not_require_confirm(
+    sample_config: Config,
+) -> None:
+    """dry_run path must bypass the confirm gate."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_vpc.return_value = {"id": 123, "label": "prod-vpc"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_vpc_delete(
+                {"vpc_id": 123, "dry_run": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "confirm=true" not in result[0].text
+
+
+async def test_vpc_delete_dry_run_still_validates_vpc_id(
+    sample_config: Config,
+) -> None:
+    """Missing vpc_id must error out regardless of dry_run."""
+    result = list(
+        await handle_linode_vpc_delete(
+            {"dry_run": True},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "vpc_id is required" in result[0].text
+
+
 async def test_ipv6_range_create_validation_errors(sample_config: Config) -> None:
     """IPv6 range create should validate confirmation and documented fields."""
     cases: list[tuple[dict[str, Any], str]] = [
@@ -10556,6 +10818,75 @@ async def test_vpc_subnet_delete_success(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "deleted" in result[0].text.lower()
+
+
+async def test_vpc_subnet_delete_dry_run_returns_preview_without_mutating(
+    sample_config: Config,
+) -> None:
+    """dry_run=true must fetch state via GET and never call delete."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_vpc_subnet.return_value = {
+            "id": 10,
+            "label": "web-subnet",
+            "ipv4": "10.0.0.0/24",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_vpc_subnet_delete(
+                {"vpc_id": 123, "subnet_id": 10, "dry_run": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["dry_run"] is True
+        assert body["tool"] == "linode_vpc_subnet_delete"
+        assert body["would_execute"]["method"] == "DELETE"
+        assert body["would_execute"]["path"] == "/vpcs/123/subnets/10"
+        mock_client.get_vpc_subnet.assert_awaited_once_with(123, 10)
+        mock_client.delete_vpc_subnet.assert_not_called()
+
+
+async def test_vpc_subnet_delete_dry_run_does_not_require_confirm(
+    sample_config: Config,
+) -> None:
+    """dry_run path must bypass the confirm gate."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_vpc_subnet.return_value = {"id": 10, "label": "web-subnet"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_vpc_subnet_delete(
+                {"vpc_id": 123, "subnet_id": 10, "dry_run": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        assert "confirm=true" not in result[0].text
+
+
+async def test_vpc_subnet_delete_dry_run_still_validates_ids(
+    sample_config: Config,
+) -> None:
+    """Missing IDs must error out regardless of dry_run."""
+    result = list(
+        await handle_linode_vpc_subnet_delete(
+            {"subnet_id": 10, "dry_run": True},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "vpc_id is required" in result[0].text
 
 
 # ── Instance Backups tool definition tests ──

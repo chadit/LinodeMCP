@@ -170,59 +170,37 @@ func handleLinodeNodeBalancerUpdateRequest(ctx context.Context, request *mcp.Cal
 
 // NewLinodeNodeBalancerDeleteTool creates a tool for deleting a NodeBalancer.
 func NewLinodeNodeBalancerDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newToolWithHandler(
+		cfg,
 		"linode_nodebalancer_delete",
-		mcp.WithDescription("Deletes a NodeBalancer. WARNING: This will remove the load balancer and all its configurations."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithNumber(
-			"nodebalancer_id",
-			mcp.Required(),
-			mcp.Description("The ID of the NodeBalancer to delete"),
-		),
-		mcp.WithBoolean(
-			paramConfirm,
-			mcp.Required(),
-			mcp.Description("Must be set to true to confirm deletion."),
-		),
+		"Deletes a NodeBalancer. WARNING: This will remove the load balancer and all its configurations."+
+			" Pass dry_run=true to preview without deleting.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("nodebalancer_id", mcp.Required(),
+				mcp.Description("The ID of the NodeBalancer to delete")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be set to true to confirm deletion. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeNodeBalancerDeleteRequest,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeNodeBalancerDeleteRequest(ctx, &request, cfg)
-	}
 
 	return tool, profiles.CapDestroy, handler
 }
 
 func handleLinodeNodeBalancerDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This operation is destructive. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	nodeBalancerID := request.GetInt("nodebalancer_id", 0)
-
-	if nodeBalancerID == 0 {
-		return mcp.NewToolResultError("nodebalancer_id is required"), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := client.DeleteNodeBalancer(ctx, nodeBalancerID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove NodeBalancer %d: %v", nodeBalancerID, err)), nil
-	}
-
-	response := struct {
-		Message        string `json:"message"`
-		NodeBalancerID int    `json:"nodebalancer_id"`
-	}{
-		Message:        fmt.Sprintf("NodeBalancer %d removed successfully", nodeBalancerID),
-		NodeBalancerID: nodeBalancerID,
-	}
-
-	return MarshalToolResponse(response)
+	return RunDestructiveActionWithID(ctx, request, cfg, &DestructiveActionByID{
+		ToolName:       "linode_nodebalancer_delete",
+		IDParam:        "nodebalancer_id",
+		Method:         httpMethodDelete,
+		PathPattern:    "/nodebalancers/%d",
+		ConfirmMessage: "This operation is destructive. Set confirm=true to proceed.",
+		SuccessFormat:  "NodeBalancer %d removed successfully",
+		FetchState: func(ctx context.Context, c *linode.Client, id int) (any, error) {
+			return c.GetNodeBalancer(ctx, id)
+		},
+		Execute: func(ctx context.Context, c *linode.Client, id int) error {
+			return c.DeleteNodeBalancer(ctx, id)
+		},
+	})
 }

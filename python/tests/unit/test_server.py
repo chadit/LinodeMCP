@@ -3457,3 +3457,81 @@ async def test_firewall_device_delete_handler_success(sample_config: Config) -> 
     ]
     assert captured_call is not None
     captured_call.assert_awaited_once_with(12345, 456)
+
+
+async def test_firewall_device_delete_dry_run_returns_preview_without_mutating(
+    sample_config: Config,
+) -> None:
+    """dry_run=true must fetch state via GET and never call delete."""
+    from linodemcp.tools.linode_firewalls_write import (
+        handle_linode_firewall_device_delete,
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_firewall_device.return_value = {
+            "id": 456,
+            "entity": {"id": 789, "type": "linode", "label": "web-01"},
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_firewall_device_delete(
+            {"firewall_id": 123, "device_id": 456, "dry_run": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["dry_run"] is True
+        assert body["tool"] == "linode_firewall_device_delete"
+        assert body["would_execute"]["method"] == "DELETE"
+        assert body["would_execute"]["path"] == "/networking/firewalls/123/devices/456"
+        mock_client.get_firewall_device.assert_awaited_once_with(123, 456)
+        mock_client.delete_firewall_device.assert_not_called()
+
+
+async def test_firewall_device_delete_dry_run_does_not_require_confirm(
+    sample_config: Config,
+) -> None:
+    """dry_run path must bypass the confirm gate."""
+    from linodemcp.tools.linode_firewalls_write import (
+        handle_linode_firewall_device_delete,
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_firewall_device.return_value = {"id": 456}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_firewall_device_delete(
+            {"firewall_id": 123, "device_id": 456, "dry_run": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "confirm=true" not in result[0].text
+
+
+async def test_firewall_device_delete_dry_run_still_rejects_negative_ids(
+    sample_config: Config,
+) -> None:
+    """Pre-validation guard (positive-int) fires on dry-run too.
+
+    Catches a regression where the dry-run branch bypasses the
+    handler's pre-validation guard for negative IDs.
+    """
+    from linodemcp.tools.linode_firewalls_write import (
+        handle_linode_firewall_device_delete,
+    )
+
+    result = await handle_linode_firewall_device_delete(
+        {"firewall_id": -1, "device_id": 456, "dry_run": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "firewall_id must be a positive integer" in result[0].text

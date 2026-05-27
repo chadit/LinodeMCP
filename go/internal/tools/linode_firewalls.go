@@ -447,14 +447,16 @@ func NewLinodeFirewallDeviceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.C
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_firewall_device_delete",
-		"Removes one device assignment from a Cloud Firewall.",
+		"Removes one device assignment from a Cloud Firewall."+
+			" Pass dry_run=true to preview without removing.",
 		[]mcp.ToolOption{
 			mcp.WithNumber(paramFirewallID, mcp.Required(),
 				mcp.Description("The ID of the firewall whose device assignment should be removed.")),
 			mcp.WithNumber(paramFirewallDeviceID, mcp.Required(),
 				mcp.Description("The ID of the firewall device assignment to remove.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm firewall device removal.")),
+				mcp.Description("Must be true to confirm firewall device removal. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeFirewallDeviceDeleteRequest,
 	)
@@ -463,46 +465,34 @@ func NewLinodeFirewallDeviceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.C
 }
 
 func handleLinodeFirewallDeviceDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This removes a device assignment from a Cloud Firewall. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	firewallID := request.GetInt(paramFirewallID, 0)
-	if firewallID <= 0 {
+	// Pre-validation: existing tests assert specific sentinel error
+	// messages for non-positive IDs. The shared two-int helper only
+	// rejects `id == 0`; this guard catches negatives before either
+	// branch (dry-run or real) runs. Same pattern as the negative-ID
+	// guard on object_storage_key_delete (Phase 1b.2).
+	if firewallID := request.GetInt(paramFirewallID, 0); firewallID <= 0 {
 		return mcp.NewToolResultError(linode.ErrFirewallIDPositive.Error()), nil
 	}
 
-	deviceID := request.GetInt(paramFirewallDeviceID, 0)
-	if deviceID <= 0 {
+	if deviceID := request.GetInt(paramFirewallDeviceID, 0); deviceID <= 0 {
 		return mcp.NewToolResultError(linode.ErrFirewallDeviceIDPositive.Error()), nil
 	}
 
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if failureMessage := deleteFirewallDevice(ctx, client, firewallID, deviceID); failureMessage != "" {
-		return mcp.NewToolResultError(failureMessage), nil
-	}
-
-	return MarshalToolResponse(struct {
-		Message    string `json:"message"`
-		FirewallID int    `json:"firewall_id"`
-		DeviceID   int    `json:"device_id"`
-	}{
-		Message:    "Firewall device removed successfully",
-		FirewallID: firewallID,
-		DeviceID:   deviceID,
+	return RunDestructiveActionByTwoIDs(ctx, request, cfg, &DestructiveActionByTwoIDs{
+		ToolName:       "linode_firewall_device_delete",
+		OuterIDParam:   paramFirewallID,
+		InnerIDParam:   paramFirewallDeviceID,
+		Method:         httpMethodDelete,
+		PathPattern:    "/networking/firewalls/%d/devices/%d",
+		ConfirmMessage: "This removes a device assignment from a Cloud Firewall. Set confirm=true to proceed.",
+		SuccessFormat:  "Firewall device removed successfully",
+		FetchState: func(ctx context.Context, c *linode.Client, firewallID, deviceID int) (any, error) {
+			return c.GetFirewallDevice(ctx, firewallID, deviceID)
+		},
+		Execute: func(ctx context.Context, c *linode.Client, firewallID, deviceID int) error {
+			return c.DeleteFirewallDevice(ctx, firewallID, deviceID)
+		},
 	})
-}
-
-func deleteFirewallDevice(ctx context.Context, client *linode.Client, firewallID, deviceID int) string {
-	if err := client.DeleteFirewallDevice(ctx, firewallID, deviceID); err != nil {
-		return "Failed to delete linode_firewall_device_delete: " + err.Error()
-	}
-
-	return ""
 }
 
 // NewLinodeFirewallSettingsListTool creates a tool for listing default firewall assignments.

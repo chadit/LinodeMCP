@@ -662,6 +662,115 @@ func TestLinodeVPCDeleteTool(t *testing.T) {
 	})
 }
 
+// Dry-run coverage for VPC delete. Kept in a sibling function so the
+// main test's subtest count stays under maintidx's threshold.
+func TestLinodeVPCDeleteToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	t.Run("schema advertises dry_run", func(t *testing.T) {
+		t.Parallel()
+
+		tool, _, _ := tools.NewLinodeVPCDeleteTool(&config.Config{})
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run",
+			"schema must advertise the dry_run boolean to the model")
+	})
+
+	t.Run("preview without mutating", func(t *testing.T) {
+		t.Parallel()
+
+		var methodsSeen []string
+
+		vpcBody := `{"id":123,"label":"prod-vpc","region":"us-east","subnets":[]}`
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsSeen = append(methodsSeen, r.Method)
+			assert.Equal(t, "/vpcs/123", r.URL.Path)
+
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(vpcBody))
+
+				return
+			}
+
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeVPCDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyVPCID:  float64(123),
+			keyDryRun: true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError)
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, true, body[keyDryRun])
+		assert.Equal(t, "linode_vpc_delete", body["tool"])
+
+		would, isWouldObject := body["would_execute"].(map[string]any)
+		require.True(t, isWouldObject)
+		assert.Equal(t, "DELETE", would["method"])
+		assert.Equal(t, "/vpcs/123", would["path"])
+
+		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+			"dry_run must only issue a single GET, never DELETE")
+	})
+
+	t.Run("does not require confirm", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":123,"label":"prod-vpc"}`))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeVPCDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyVPCID:  float64(123),
+			keyDryRun: true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.False(t, result.IsError,
+			"dry_run without confirm must succeed; confirm only gates real execution")
+	})
+
+	t.Run("still validates vpc_id", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, handler := tools.NewLinodeVPCDeleteTool(&config.Config{})
+		req := createRequestWithArgs(t, map[string]any{keyDryRun: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError)
+		assertErrorContains(t, result, errVPCIDRequired)
+	})
+}
+
 // End-to-end verification of VPC subnet creation workflow.
 func TestLinodeVPCSubnetCreateTool(t *testing.T) {
 	t.Parallel()
@@ -895,5 +1004,135 @@ func TestLinodeVPCSubnetDeleteTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, "deleted", "response should confirm deletion")
+	})
+}
+
+// Dry-run coverage for VPC subnet delete. Kept in a sibling function so
+// the main test's subtest count stays under maintidx's threshold.
+func TestLinodeVPCSubnetDeleteToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	t.Run("schema advertises dry_run", func(t *testing.T) {
+		t.Parallel()
+
+		tool, _, _ := tools.NewLinodeVPCSubnetDeleteTool(&config.Config{})
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run",
+			"schema must advertise the dry_run boolean to the model")
+	})
+
+	t.Run("preview without mutating", func(t *testing.T) {
+		t.Parallel()
+
+		var methodsSeen []string
+
+		subnetBody := `{"id":10,"label":"web-subnet","ipv4":"10.0.0.0/24","linodes":[]}`
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsSeen = append(methodsSeen, r.Method)
+			assert.Equal(t, "/vpcs/123/subnets/10", r.URL.Path)
+
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(subnetBody))
+
+				return
+			}
+
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeVPCSubnetDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyVPCID:    float64(123),
+			keySubnetID: float64(10),
+			keyDryRun:   true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError)
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, true, body[keyDryRun])
+		assert.Equal(t, "linode_vpc_subnet_delete", body["tool"])
+
+		would, isWouldObject := body["would_execute"].(map[string]any)
+		require.True(t, isWouldObject)
+		assert.Equal(t, "DELETE", would["method"])
+		assert.Equal(t, "/vpcs/123/subnets/10", would["path"])
+
+		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+			"dry_run must only issue a single GET, never DELETE")
+	})
+
+	t.Run("does not require confirm", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":10,"label":"web-subnet"}`))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeVPCSubnetDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyVPCID:    float64(123),
+			keySubnetID: float64(10),
+			keyDryRun:   true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.False(t, result.IsError,
+			"dry_run without confirm must succeed; confirm only gates real execution")
+	})
+
+	t.Run("still validates vpc_id", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, handler := tools.NewLinodeVPCSubnetDeleteTool(&config.Config{})
+		req := createRequestWithArgs(t, map[string]any{
+			keySubnetID: float64(10),
+			keyDryRun:   true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError)
+		assertErrorContains(t, result, errVPCIDRequired)
+	})
+
+	t.Run("still validates subnet_id", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, handler := tools.NewLinodeVPCSubnetDeleteTool(&config.Config{})
+		req := createRequestWithArgs(t, map[string]any{
+			keyVPCID:  float64(123),
+			keyDryRun: true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError)
+		assertErrorContains(t, result, errSubnetIDRequired)
 	})
 }

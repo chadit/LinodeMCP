@@ -450,6 +450,141 @@ func TestLinodeFirewallDeviceDeleteTool(t *testing.T) {
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "Failed to delete linode_firewall_device_delete")
+		assertErrorContains(t, result, "linode_firewall_device_delete failed")
+	})
+}
+
+// Dry-run coverage for firewall device delete. Kept in a sibling
+// function so the main test's subtest count stays under maintidx's
+// threshold.
+func TestLinodeFirewallDeviceDeleteToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	t.Run("schema advertises dry_run", func(t *testing.T) {
+		t.Parallel()
+
+		tool, _, _ := tools.NewLinodeFirewallDeviceDeleteTool(&config.Config{})
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run",
+			"schema must advertise the dry_run boolean to the model")
+	})
+
+	t.Run("preview without mutating", func(t *testing.T) {
+		t.Parallel()
+
+		var methodsSeen []string
+
+		deviceBody := `{"id":456,"created":"2024-01-01T00:00:00","updated":"2024-01-01T00:00:00","entity":{"id":789,"type":"linode","label":"web-01","url":"/linode/instances/789"}}`
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsSeen = append(methodsSeen, r.Method)
+			assert.Equal(t, "/networking/firewalls/123/devices/456", r.URL.Path)
+
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(deviceBody))
+
+				return
+			}
+
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyFirewallID:       float64(123),
+			keyFirewallDeviceID: float64(456),
+			keyDryRun:           true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError)
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, true, body[keyDryRun])
+		assert.Equal(t, "linode_firewall_device_delete", body["tool"])
+
+		would, isWouldObject := body["would_execute"].(map[string]any)
+		require.True(t, isWouldObject)
+		assert.Equal(t, "DELETE", would["method"])
+		assert.Equal(t, "/networking/firewalls/123/devices/456", would["path"])
+
+		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+			"dry_run must only issue a single GET, never DELETE")
+	})
+
+	t.Run("does not require confirm", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":456,"created":"2024-01-01T00:00:00","updated":"2024-01-01T00:00:00","entity":{"id":789,"type":"linode","label":"web-01","url":"/linode/instances/789"}}`))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyFirewallID:       float64(123),
+			keyFirewallDeviceID: float64(456),
+			keyDryRun:           true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.False(t, result.IsError,
+			"dry_run without confirm must succeed; confirm only gates real execution")
+	})
+
+	t.Run("dry_run still rejects non-positive firewall_id", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(&config.Config{})
+		req := createRequestWithArgs(t, map[string]any{
+			keyFirewallID:       float64(-1),
+			keyFirewallDeviceID: float64(456),
+			keyDryRun:           true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError,
+			"dry_run with non-positive firewall_id must error the same way the real call would")
+		assertErrorContains(t, result, "firewall_id must be a positive integer")
+	})
+
+	t.Run("dry_run still rejects non-positive device_id", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, handler := tools.NewLinodeFirewallDeviceDeleteTool(&config.Config{})
+		req := createRequestWithArgs(t, map[string]any{
+			keyFirewallID:       float64(123),
+			keyFirewallDeviceID: float64(-1),
+			keyDryRun:           true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError,
+			"dry_run with non-positive device_id must error the same way the real call would")
+		assertErrorContains(t, result, "device id must be a positive integer")
 	})
 }

@@ -7,7 +7,13 @@ from typing import TYPE_CHECKING, Any
 from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import error_response, execute_tool
+from linodemcp.tools.helpers import (
+    DRY_RUN_PROP,
+    error_response,
+    execute_dry_run,
+    execute_tool,
+    is_dry_run,
+)
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -264,7 +270,7 @@ def create_linode_vpc_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_vpc_delete tool."""
     return Tool(
         name="linode_vpc_delete",
-        description="Deletes a VPC",
+        description="Deletes a VPC. Pass dry_run=true to preview without deleting.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -274,8 +280,10 @@ def create_linode_vpc_delete_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": (
                         "Must be true to confirm deletion. This is irreversible."
+                        " Ignored when dry_run=true."
                     ),
                 },
+                **DRY_RUN_PROP,
             },
             "required": ["vpc_id", "confirm"],
         },
@@ -286,17 +294,34 @@ async def handle_linode_vpc_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_vpc_delete tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return error_response("This is destructive. Set confirm=true to proceed.")
-
     vpc_id_str = arguments.get("vpc_id", "")
+
+    # Both branches need a valid vpc_id, and the spec says dry-run
+    # errors on missing required args the same way the real call would.
     if not vpc_id_str:
         return error_response("vpc_id is required")
     try:
         vpc_id = int(vpc_id_str)
     except ValueError:
         return error_response("vpc_id must be a valid integer")
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_vpc(vpc_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_vpc_delete",
+            "DELETE",
+            f"/vpcs/{vpc_id}",
+            _fetch,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return error_response("This is destructive. Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_vpc(vpc_id)
@@ -434,7 +459,9 @@ def create_linode_vpc_subnet_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_vpc_subnet_delete tool."""
     return Tool(
         name="linode_vpc_subnet_delete",
-        description="Deletes a VPC subnet",
+        description=(
+            "Deletes a VPC subnet. Pass dry_run=true to preview without deleting."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -445,8 +472,10 @@ def create_linode_vpc_subnet_delete_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": (
                         "Must be true to confirm deletion. This is irreversible."
+                        " Ignored when dry_run=true."
                     ),
                 },
+                **DRY_RUN_PROP,
             },
             "required": [
                 "vpc_id",
@@ -461,14 +490,30 @@ async def handle_linode_vpc_subnet_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_vpc_subnet_delete tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return error_response("This is destructive. Set confirm=true to proceed.")
-
+    # Both branches need valid IDs, and the spec says dry-run errors on
+    # missing required args the same way the real call would.
     ids = _parse_vpc_subnet_ids(arguments)
     if isinstance(ids, list):
         return ids
     vpc_id, subnet_id = ids
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_vpc_subnet(vpc_id, subnet_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_vpc_subnet_delete",
+            "DELETE",
+            f"/vpcs/{vpc_id}/subnets/{subnet_id}",
+            _fetch,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return error_response("This is destructive. Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_vpc_subnet(vpc_id, subnet_id)

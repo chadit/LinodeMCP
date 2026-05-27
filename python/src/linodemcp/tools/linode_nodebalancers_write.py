@@ -5,7 +5,14 @@ from typing import TYPE_CHECKING, Any, cast
 from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
+from linodemcp.tools.helpers import (
+    DRY_RUN_PROP,
+    ENV_PARAM_SCHEMA,
+    error_response,
+    execute_dry_run,
+    execute_tool,
+    is_dry_run,
+)
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -274,6 +281,7 @@ def create_linode_nodebalancer_config_delete_tool() -> tuple[Tool, Capability]:
         description=(
             "Deletes a NodeBalancer config. "
             "WARNING: This removes the config and its backend nodes."
+            " Pass dry_run=true to preview without deleting."
         ),
         inputSchema={
             "type": "object",
@@ -293,8 +301,11 @@ def create_linode_nodebalancer_config_delete_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Must be true to confirm deletion.",
+                    "description": (
+                        "Must be true to confirm deletion. Ignored when dry_run=true."
+                    ),
                 },
+                **DRY_RUN_PROP,
             },
             "required": ["nodebalancer_id", "config_id", "confirm"],
         },
@@ -305,9 +316,8 @@ async def handle_linode_nodebalancer_config_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_nodebalancer_config_delete tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
-
+    # Both branches need valid positive IDs, and the spec says dry-run
+    # errors on missing required args the same way the real call would.
     nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
     if nodebalancer_id is None:
         return error_response("nodebalancer_id must be a positive integer")
@@ -315,6 +325,23 @@ async def handle_linode_nodebalancer_config_delete(
     config_id = _positive_int_argument(arguments, "config_id")
     if config_id is None:
         return error_response("config_id must be a positive integer")
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_nodebalancer_config(nodebalancer_id, config_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_nodebalancer_config_delete",
+            "DELETE",
+            f"/nodebalancers/{nodebalancer_id}/configs/{config_id}",
+            _fetch,
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response("confirm must be true")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_nodebalancer_config(nodebalancer_id, config_id)
@@ -474,6 +501,7 @@ def create_linode_nodebalancer_delete_tool() -> tuple[Tool, Capability]:
         description=(
             "Deletes a NodeBalancer. WARNING: This removes the load balancer "
             "and all its configurations."
+            " Pass dry_run=true to preview without deleting."
         ),
         inputSchema={
             "type": "object",
@@ -485,8 +513,11 @@ def create_linode_nodebalancer_delete_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Must be true to confirm deletion.",
+                    "description": (
+                        "Must be true to confirm deletion. Ignored when dry_run=true."
+                    ),
                 },
+                **DRY_RUN_PROP,
             },
             "required": ["nodebalancer_id", "confirm"],
         },
@@ -498,6 +529,29 @@ async def handle_linode_nodebalancer_delete(
 ) -> list[TextContent]:
     """Handle linode_nodebalancer_delete tool request."""
     nodebalancer_id = arguments.get("nodebalancer_id", 0)
+
+    # Both branches need a non-zero nodebalancer_id, and the spec says
+    # dry-run errors on missing required args the same way the real
+    # call would.
+    if not nodebalancer_id:
+        return error_response("nodebalancer_id is required")
+
+    nodebalancer_id_int = int(nodebalancer_id)
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_nodebalancer(nodebalancer_id_int)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_nodebalancer_delete",
+            "DELETE",
+            f"/nodebalancers/{nodebalancer_id_int}",
+            _fetch,
+        )
+
     confirm = arguments.get("confirm", False)
 
     if not confirm:
@@ -508,14 +562,11 @@ async def handle_linode_nodebalancer_delete(
             )
         ]
 
-    if not nodebalancer_id:
-        return error_response("nodebalancer_id is required")
-
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        await client.delete_nodebalancer(int(nodebalancer_id))
+        await client.delete_nodebalancer(nodebalancer_id_int)
         return {
-            "message": f"NodeBalancer {nodebalancer_id} deleted successfully",
-            "nodebalancer_id": nodebalancer_id,
+            "message": f"NodeBalancer {nodebalancer_id_int} deleted successfully",
+            "nodebalancer_id": nodebalancer_id_int,
         }
 
     return await execute_tool(cfg, arguments, "delete NodeBalancer", _call)
