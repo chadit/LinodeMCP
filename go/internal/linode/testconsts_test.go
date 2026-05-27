@@ -34,6 +34,8 @@ const (
 	keyType        = "type"
 	keyServiceType = "service_type"
 	keyWidgets     = "widgets"
+	keyMetric      = "metric"
+	keyMetricType  = "metric_type"
 	keyToken       = "token"
 	keyDomain      = "domain"
 	keyIsDefault   = "is_default"

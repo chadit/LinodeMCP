@@ -49,6 +49,28 @@ func (c *Client) httpGetMonitorService(ctx context.Context, serviceType string) 
 	return service, nil
 }
 
+// httpListMonitorServiceMetricDefinitions retrieves metric definitions for one monitoring service type.
+func (c *Client) httpListMonitorServiceMetricDefinitions(ctx context.Context, serviceType string) (*PaginatedResponse[MonitorMetricDefinition], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType) + "/metric-definitions"
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListMonitorServiceMetricDefinitions", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var definitions PaginatedResponse[MonitorMetricDefinition]
+	if err := c.handleResponse(resp, &definitions); err != nil {
+		return nil, err
+	}
+
+	return &definitions, nil
+}
+
 // httpListMonitorServiceAlertDefinitions retrieves alert definitions for one monitoring service type.
 func (c *Client) httpListMonitorServiceAlertDefinitions(ctx context.Context, serviceType string) (*PaginatedResponse[AlertDefinition], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

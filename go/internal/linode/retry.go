@@ -691,6 +691,21 @@ func (c *Client) GetMonitorService(ctx context.Context, serviceType string) (Mon
 	return service, err
 }
 
+// ListMonitorServiceMetricDefinitions retrieves metric definitions for one monitoring service type with automatic retry on transient failures.
+func (c *Client) ListMonitorServiceMetricDefinitions(ctx context.Context, serviceType string) (*PaginatedResponse[MonitorMetricDefinition], error) {
+	var definitions *PaginatedResponse[MonitorMetricDefinition]
+
+	err := c.executeWithRetry(ctx, "ListMonitorServiceMetricDefinitions", func() error {
+		var err error
+
+		definitions, err = c.httpListMonitorServiceMetricDefinitions(ctx, serviceType)
+
+		return err
+	})
+
+	return definitions, err
+}
+
 // ListMonitorServiceAlertDefinitions retrieves alert definitions for one monitoring service type with automatic retry on transient failures.
 func (c *Client) ListMonitorServiceAlertDefinitions(ctx context.Context, serviceType string) (*PaginatedResponse[AlertDefinition], error) {
 	var definitions *PaginatedResponse[AlertDefinition]
