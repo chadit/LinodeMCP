@@ -167,6 +167,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_firewall_device_delete":      profiles.CapDestroy,
 		"linode_networking_ip_allocate":      profiles.CapWrite,
 		"linode_networking_ips_assign":       profiles.CapWrite,
+		"linode_networking_ips_share":        profiles.CapWrite,
 		"linode_image_create":                profiles.CapWrite,
 		"linode_image_replicate":             profiles.CapWrite,
 		"linode_image_update":                profiles.CapWrite,

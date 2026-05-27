@@ -121,6 +121,12 @@ type AssignNetworkingIPsRequest struct {
 	Assignments []IPAssignment `json:"assignments"`
 }
 
+// ShareNetworkingIPsRequest represents the request body for sharing IP addresses with a Linode.
+type ShareNetworkingIPsRequest struct {
+	LinodeID int      `json:"linode_id"`
+	IPs      []string `json:"ips"`
+}
+
 // NodeBalancer represents a Linode NodeBalancer (load balancer).
 type NodeBalancer struct {
 	ID                 int      `json:"id"`

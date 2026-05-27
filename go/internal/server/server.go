@@ -1029,6 +1029,7 @@ func networkingToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeNetworkingIPListTool,
 		tools.NewLinodeNetworkingIPAllocateTool,
 		tools.NewLinodeNetworkingIPAssignTool,
+		tools.NewLinodeNetworkingIPShareTool,
 		tools.NewLinodeNodeBalancerListTool,
 		tools.NewLinodeNodeBalancerGetTool,
 		tools.NewLinodeFirewallCreateTool,
