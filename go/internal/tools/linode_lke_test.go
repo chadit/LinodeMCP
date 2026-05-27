@@ -1969,3 +1969,378 @@ func TestLinodeLKEACLDeleteTool(t *testing.T) {
 		assert.Contains(t, textContent.Text, "removed successfully", "response should confirm deletion")
 	})
 }
+
+// Dry-run coverage for LKE cluster delete. Sibling function keeps the
+// main test's subtest count below maintidx's threshold.
+func TestLinodeLKEClusterDeleteToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	t.Run("schema advertises dry_run", func(t *testing.T) {
+		t.Parallel()
+
+		tool, _, _ := tools.NewLinodeLKEClusterDeleteTool(&config.Config{})
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run")
+	})
+
+	t.Run("preview without mutating", func(t *testing.T) {
+		t.Parallel()
+
+		var methodsSeen []string
+
+		clusterBody := `{"id":123,"label":"prod-cluster","region":"us-east","k8s_version":"1.29","status":"ready"}`
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsSeen = append(methodsSeen, r.Method)
+			assert.Equal(t, "/lke/clusters/123", r.URL.Path)
+
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(clusterBody))
+
+				return
+			}
+
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeLKEClusterDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyClusterID: float64(123),
+			keyDryRun:    true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError)
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, true, body[keyDryRun])
+		assert.Equal(t, "linode_lke_cluster_delete", body["tool"])
+
+		would, isWouldObject := body["would_execute"].(map[string]any)
+		require.True(t, isWouldObject)
+		assert.Equal(t, "DELETE", would["method"])
+		assert.Equal(t, "/lke/clusters/123", would["path"])
+
+		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+			"dry_run must only issue a single GET, never DELETE")
+	})
+
+	t.Run("still validates cluster_id", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, handler := tools.NewLinodeLKEClusterDeleteTool(&config.Config{})
+		req := createRequestWithArgs(t, map[string]any{keyDryRun: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError)
+		assertErrorContains(t, result, errClusterIDRequired)
+	})
+}
+
+// Dry-run coverage for LKE pool delete via the ByTwoIDs helper.
+func TestLinodeLKEPoolDeleteToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	t.Run("schema advertises dry_run", func(t *testing.T) {
+		t.Parallel()
+
+		tool, _, _ := tools.NewLinodeLKEPoolDeleteTool(&config.Config{})
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run")
+	})
+
+	t.Run("preview without mutating", func(t *testing.T) {
+		t.Parallel()
+
+		var methodsSeen []string
+
+		poolBody := `{"id":10,"count":3,"type":"g6-standard-2","nodes":[]}`
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsSeen = append(methodsSeen, r.Method)
+			assert.Equal(t, "/lke/clusters/123/pools/10", r.URL.Path)
+
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(poolBody))
+
+				return
+			}
+
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeLKEPoolDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyClusterID: float64(123),
+			keyPoolID:    float64(10),
+			keyDryRun:    true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError)
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, "linode_lke_pool_delete", body["tool"])
+		would, _ := body["would_execute"].(map[string]any)
+		assert.Equal(t, "DELETE", would["method"])
+		assert.Equal(t, "/lke/clusters/123/pools/10", would["path"])
+
+		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+			"dry_run must only issue a single GET, never DELETE")
+	})
+
+	t.Run("still validates cluster_id", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, handler := tools.NewLinodeLKEPoolDeleteTool(&config.Config{})
+		req := createRequestWithArgs(t, map[string]any{
+			keyPoolID: float64(10),
+			keyDryRun: true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		assert.True(t, result.IsError)
+		assertErrorContains(t, result, errClusterIDRequired)
+	})
+}
+
+// Dry-run coverage for LKE node delete (mixed int + string IDs).
+func TestLinodeLKENodeDeleteToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	t.Run("schema advertises dry_run", func(t *testing.T) {
+		t.Parallel()
+
+		tool, _, _ := tools.NewLinodeLKENodeDeleteTool(&config.Config{})
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run")
+	})
+
+	t.Run("preview without mutating", func(t *testing.T) {
+		t.Parallel()
+
+		var methodsSeen []string
+
+		nodeBody := `{"id":"123-abc","instance_id":456,"status":"ready"}`
+		expectedPath := "/lke/clusters/123/nodes/123-abc"
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsSeen = append(methodsSeen, r.Method)
+			assert.Equal(t, expectedPath, r.URL.Path)
+
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(nodeBody))
+
+				return
+			}
+
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeLKENodeDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyClusterID: float64(123),
+			keyNodeID:    "123-abc",
+			keyDryRun:    true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError)
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, "linode_lke_node_delete", body["tool"])
+		would, _ := body["would_execute"].(map[string]any)
+		assert.Equal(t, "DELETE", would["method"])
+		assert.Equal(t, expectedPath, would["path"])
+
+		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+			"dry_run must only issue a single GET, never DELETE")
+	})
+
+	t.Run("still validates node_id", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, handler := tools.NewLinodeLKENodeDeleteTool(&config.Config{})
+		req := createRequestWithArgs(t, map[string]any{
+			keyClusterID: float64(123),
+			keyDryRun:    true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		assert.True(t, result.IsError)
+		assertErrorContains(t, result, "node_id is required")
+	})
+}
+
+// Dry-run coverage for LKE kubeconfig delete. The fetch returns the
+// CLUSTER state (not the kubeconfig contents) so dry-run never surfaces
+// credential material to the model. Locks that design choice.
+func TestLinodeLKEKubeconfigDeleteToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	t.Run("schema advertises dry_run", func(t *testing.T) {
+		t.Parallel()
+
+		tool, _, _ := tools.NewLinodeLKEKubeconfigDeleteTool(&config.Config{})
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run")
+	})
+
+	t.Run("preview fetches cluster, never kubeconfig", func(t *testing.T) {
+		t.Parallel()
+
+		var pathsSeen []string
+
+		clusterBody := `{"id":123,"label":"prod-cluster","region":"us-east"}`
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			pathsSeen = append(pathsSeen, r.Method+" "+r.URL.Path)
+
+			if r.Method == http.MethodGet && r.URL.Path == "/lke/clusters/123" {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(clusterBody))
+
+				return
+			}
+
+			t.Errorf("dry_run must only GET cluster metadata, never touch kubeconfig; got %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeLKEKubeconfigDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyClusterID: float64(123),
+			keyDryRun:    true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError)
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, "linode_lke_kubeconfig_delete", body["tool"])
+		would, _ := body["would_execute"].(map[string]any)
+		assert.Equal(t, "DELETE", would["method"])
+		assert.Equal(t, "/lke/clusters/123/kubeconfig", would["path"],
+			"would_execute.path must point at kubeconfig sub-resource")
+
+		assert.Equal(t, []string{"GET /lke/clusters/123"}, pathsSeen,
+			"dry_run must only fetch cluster metadata, never the kubeconfig itself")
+
+		state, _ := body["current_state"].(map[string]any)
+		assert.NotContains(t, state, "kubeconfig",
+			"current_state must NOT include kubeconfig credential material")
+	})
+}
+
+// Dry-run coverage for LKE service token delete. Same safety design as
+// kubeconfig delete: fetch the cluster, not the token.
+func TestLinodeLKEServiceTokenDeleteToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	t.Run("schema advertises dry_run", func(t *testing.T) {
+		t.Parallel()
+
+		tool, _, _ := tools.NewLinodeLKEServiceTokenDeleteTool(&config.Config{})
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run")
+	})
+
+	t.Run("preview fetches cluster, never service token", func(t *testing.T) {
+		t.Parallel()
+
+		var pathsSeen []string
+
+		clusterBody := `{"id":123,"label":"prod-cluster"}`
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			pathsSeen = append(pathsSeen, r.Method+" "+r.URL.Path)
+
+			if r.Method == http.MethodGet && r.URL.Path == "/lke/clusters/123" {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(clusterBody))
+
+				return
+			}
+
+			t.Errorf("dry_run must only GET cluster metadata; got %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeLKEServiceTokenDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyClusterID: float64(123),
+			keyDryRun:    true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError)
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, "linode_lke_service_token_delete", body["tool"])
+		would, _ := body["would_execute"].(map[string]any)
+		assert.Equal(t, "/lke/clusters/123/servicetoken", would["path"])
+
+		assert.Equal(t, []string{"GET /lke/clusters/123"}, pathsSeen,
+			"dry_run must only fetch cluster metadata, never the service token itself")
+	})
+}

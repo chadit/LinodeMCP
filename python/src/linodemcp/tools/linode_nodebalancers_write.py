@@ -789,6 +789,7 @@ def create_linode_nodebalancer_config_node_delete_tool() -> tuple[Tool, Capabili
         description=(
             "Deletes a node from a NodeBalancer config. "
             "WARNING: This removes the backend node from the load balancer."
+            " Pass dry_run=true to preview without deleting."
         ),
         inputSchema={
             "type": "object",
@@ -811,8 +812,11 @@ def create_linode_nodebalancer_config_node_delete_tool() -> tuple[Tool, Capabili
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Must be true to confirm deletion.",
+                    "description": (
+                        "Must be true to confirm deletion. Ignored when dry_run=true."
+                    ),
                 },
+                **DRY_RUN_PROP,
             },
             "required": ["nodebalancer_id", "config_id", "node_id", "confirm"],
         },
@@ -826,16 +830,10 @@ async def handle_linode_nodebalancer_config_node_delete(
     nodebalancer_id = arguments.get("nodebalancer_id", 0)
     config_id = arguments.get("config_id", 0)
     node_id = arguments.get("node_id", 0)
-    confirm = arguments.get("confirm", False)
 
-    if not confirm:
-        return [
-            TextContent(
-                type="text",
-                text="Error: This is destructive. Set confirm=true to proceed.",
-            )
-        ]
-
+    # All three IDs must be present in both branches; the spec says
+    # dry-run errors on missing required args the same way the real
+    # call would.
     if not nodebalancer_id:
         return error_response("nodebalancer_id is required")
 
@@ -845,18 +843,50 @@ async def handle_linode_nodebalancer_config_node_delete(
     if not node_id:
         return error_response("node_id is required")
 
+    nodebalancer_id_int = int(nodebalancer_id)
+    config_id_int = int(config_id)
+    node_id_int = int(node_id)
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_nodebalancer_config_node(
+                nodebalancer_id_int, config_id_int, node_id_int
+            )
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_nodebalancer_config_node_delete",
+            "DELETE",
+            (
+                f"/nodebalancers/{nodebalancer_id_int}/configs/{config_id_int}"
+                f"/nodes/{node_id_int}"
+            ),
+            _fetch,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text="Error: This is destructive. Set confirm=true to proceed.",
+            )
+        ]
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_nodebalancer_config_node(
-            int(nodebalancer_id), int(config_id), int(node_id)
+            nodebalancer_id_int, config_id_int, node_id_int
         )
         return {
             "message": (
-                f"Node {node_id} deleted from NodeBalancer {nodebalancer_id} "
-                f"config {config_id}"
+                f"Node {node_id_int} deleted from NodeBalancer "
+                f"{nodebalancer_id_int} config {config_id_int}"
             ),
-            "nodebalancer_id": nodebalancer_id,
-            "config_id": config_id,
-            "node_id": node_id,
+            "nodebalancer_id": nodebalancer_id_int,
+            "config_id": config_id_int,
+            "node_id": node_id_int,
         }
 
     return await execute_tool(cfg, arguments, "delete NodeBalancer config node", _call)

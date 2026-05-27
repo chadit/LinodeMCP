@@ -7,7 +7,13 @@ from typing import TYPE_CHECKING, Any
 from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import error_response, execute_tool
+from linodemcp.tools.helpers import (
+    DRY_RUN_PROP,
+    error_response,
+    execute_dry_run,
+    execute_tool,
+    is_dry_run,
+)
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -189,7 +195,10 @@ def create_linode_lke_cluster_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_cluster_delete tool."""
     return Tool(
         name="linode_lke_cluster_delete",
-        description="Deletes an LKE cluster and all associated resources",
+        description=(
+            "Deletes an LKE cluster and all associated resources."
+            " Pass dry_run=true to preview without deleting."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -199,8 +208,10 @@ def create_linode_lke_cluster_delete_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": (
                         "Must be true to confirm deletion. This is irreversible."
+                        " Ignored when dry_run=true."
                     ),
                 },
+                **DRY_RUN_PROP,
             },
             "required": ["cluster_id", "confirm"],
         },
@@ -211,6 +222,28 @@ async def handle_linode_lke_cluster_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_lke_cluster_delete tool request."""
+    cluster_id_str = arguments.get("cluster_id", "")
+    if not cluster_id_str:
+        return error_response("cluster_id is required")
+    try:
+        cluster_id = int(cluster_id_str)
+    except ValueError:
+        return error_response("cluster_id must be a valid integer")
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_lke_cluster(cluster_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_lke_cluster_delete",
+            "DELETE",
+            f"/lke/clusters/{cluster_id}",
+            _fetch,
+        )
+
     confirm = arguments.get("confirm", False)
     if not confirm:
         return [
@@ -219,14 +252,6 @@ async def handle_linode_lke_cluster_delete(
                 text="Error: This is destructive. Set confirm=true to proceed.",
             )
         ]
-
-    cluster_id_str = arguments.get("cluster_id", "")
-    if not cluster_id_str:
-        return error_response("cluster_id is required")
-    try:
-        cluster_id = int(cluster_id_str)
-    except ValueError:
-        return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_lke_cluster(cluster_id)
@@ -480,7 +505,10 @@ def create_linode_lke_pool_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_pool_delete tool."""
     return Tool(
         name="linode_lke_pool_delete",
-        description="Deletes a node pool from an LKE cluster",
+        description=(
+            "Deletes a node pool from an LKE cluster."
+            " Pass dry_run=true to preview without deleting."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -494,31 +522,29 @@ def create_linode_lke_pool_delete_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": (
                         "Must be true to confirm deletion. This is irreversible."
+                        " Ignored when dry_run=true."
                     ),
                 },
+                **DRY_RUN_PROP,
             },
             "required": ["cluster_id", "pool_id", "confirm"],
         },
     ), Capability.Destroy
 
 
-async def handle_linode_lke_pool_delete(
-    arguments: dict[str, Any], cfg: Config
-) -> list[TextContent]:
-    """Handle linode_lke_pool_delete tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return [
-            TextContent(
-                type="text",
-                text="Error: This is destructive. Set confirm=true to proceed.",
-            )
-        ]
+def _parse_cluster_pool_ids(
+    arguments: dict[str, Any],
+) -> tuple[int, int] | list[TextContent]:
+    """Parse and validate cluster_id + pool_id from arguments.
 
+    Returns (cluster_id, pool_id) on success or an error response list
+    on failure. Extracted to keep handle_linode_lke_pool_delete under
+    PLR0911's return-count threshold.
+    """
     cluster_id_str = arguments.get("cluster_id", "")
-    pool_id_str = arguments.get("pool_id", "")
     if not cluster_id_str:
         return error_response("cluster_id is required")
+    pool_id_str = arguments.get("pool_id", "")
     if not pool_id_str:
         return error_response("pool_id is required")
     try:
@@ -529,6 +555,40 @@ async def handle_linode_lke_pool_delete(
         pool_id = int(pool_id_str)
     except ValueError:
         return error_response("pool_id must be a valid integer")
+    return cluster_id, pool_id
+
+
+async def handle_linode_lke_pool_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_lke_pool_delete tool request."""
+    parsed = _parse_cluster_pool_ids(arguments)
+    if isinstance(parsed, list):
+        return parsed
+    cluster_id, pool_id = parsed
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_lke_node_pool(cluster_id, pool_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_lke_pool_delete",
+            "DELETE",
+            f"/lke/clusters/{cluster_id}/pools/{pool_id}",
+            _fetch,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text="Error: This is destructive. Set confirm=true to proceed.",
+            )
+        ]
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_lke_node_pool(cluster_id, pool_id)
@@ -600,7 +660,10 @@ def create_linode_lke_node_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_node_delete tool."""
     return Tool(
         name="linode_lke_node_delete",
-        description="Deletes a specific node from an LKE cluster",
+        description=(
+            "Deletes a specific node from an LKE cluster."
+            " Pass dry_run=true to preview without deleting."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -614,27 +677,24 @@ def create_linode_lke_node_delete_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": (
                         "Must be true to confirm deletion. This is irreversible."
+                        " Ignored when dry_run=true."
                     ),
                 },
+                **DRY_RUN_PROP,
             },
             "required": ["cluster_id", "node_id", "confirm"],
         },
     ), Capability.Destroy
 
 
-async def handle_linode_lke_node_delete(
-    arguments: dict[str, Any], cfg: Config
-) -> list[TextContent]:
-    """Handle linode_lke_node_delete tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return [
-            TextContent(
-                type="text",
-                text="Error: This is destructive. Set confirm=true to proceed.",
-            )
-        ]
+def _parse_cluster_node_ids(
+    arguments: dict[str, Any],
+) -> tuple[int, str] | list[TextContent]:
+    """Parse and validate cluster_id (int) + node_id (string).
 
+    Extracted to keep handle_linode_lke_node_delete under PLR0911's
+    return-count threshold.
+    """
     cluster_id_str = arguments.get("cluster_id", "")
     node_id = arguments.get("node_id", "")
     if not cluster_id_str:
@@ -645,9 +705,43 @@ async def handle_linode_lke_node_delete(
         cluster_id = int(cluster_id_str)
     except ValueError:
         return error_response("cluster_id must be a valid integer")
+    return cluster_id, str(node_id)
+
+
+async def handle_linode_lke_node_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_lke_node_delete tool request."""
+    parsed = _parse_cluster_node_ids(arguments)
+    if isinstance(parsed, list):
+        return parsed
+    cluster_id, node_id = parsed
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_lke_node(cluster_id, node_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_lke_node_delete",
+            "DELETE",
+            f"/lke/clusters/{cluster_id}/nodes/{node_id}",
+            _fetch,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text="Error: This is destructive. Set confirm=true to proceed.",
+            )
+        ]
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        await client.delete_lke_node(cluster_id, str(node_id))
+        await client.delete_lke_node(cluster_id, node_id)
         return {
             "message": f"Node {node_id} deleted from cluster {cluster_id}",
             "cluster_id": cluster_id,
@@ -712,13 +806,17 @@ def create_linode_lke_kubeconfig_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_kubeconfig_delete tool."""
     return Tool(
         name="linode_lke_kubeconfig_delete",
-        description="Deletes and regenerates the kubeconfig for an LKE cluster",
+        description=(
+            "Deletes and regenerates the kubeconfig for an LKE cluster."
+            " Pass dry_run=true to preview without regenerating."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
                 "cluster_id": _CLUSTER_ID_PROP,
                 "confirm": _CONFIRM_PROP,
+                **DRY_RUN_PROP,
             },
             "required": ["cluster_id", "confirm"],
         },
@@ -729,10 +827,6 @@ async def handle_linode_lke_kubeconfig_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_lke_kubeconfig_delete tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return error_response("Set confirm=true to proceed.")
-
     cluster_id_str = arguments.get("cluster_id", "")
     if not cluster_id_str:
         return error_response("cluster_id is required")
@@ -740,6 +834,25 @@ async def handle_linode_lke_kubeconfig_delete(
         cluster_id = int(cluster_id_str)
     except ValueError:
         return error_response("cluster_id must be a valid integer")
+
+    if is_dry_run(arguments):
+        # Fetch the cluster (not the kubeconfig contents) so dry_run
+        # surfaces cluster metadata without exposing credential material.
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_lke_cluster(cluster_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_lke_kubeconfig_delete",
+            "DELETE",
+            f"/lke/clusters/{cluster_id}/kubeconfig",
+            _fetch,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_lke_kubeconfig(cluster_id)
@@ -755,13 +868,17 @@ def create_linode_lke_service_token_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_service_token_delete tool."""
     return Tool(
         name="linode_lke_service_token_delete",
-        description="Deletes the service token for an LKE cluster",
+        description=(
+            "Deletes the service token for an LKE cluster."
+            " Pass dry_run=true to preview without deleting."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
                 "cluster_id": _CLUSTER_ID_PROP,
                 "confirm": _CONFIRM_PROP,
+                **DRY_RUN_PROP,
             },
             "required": ["cluster_id", "confirm"],
         },
@@ -772,10 +889,6 @@ async def handle_linode_lke_service_token_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_lke_service_token_delete tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return error_response("Set confirm=true to proceed.")
-
     cluster_id_str = arguments.get("cluster_id", "")
     if not cluster_id_str:
         return error_response("cluster_id is required")
@@ -783,6 +896,25 @@ async def handle_linode_lke_service_token_delete(
         cluster_id = int(cluster_id_str)
     except ValueError:
         return error_response("cluster_id must be a valid integer")
+
+    if is_dry_run(arguments):
+        # Fetch the cluster (not the service token) so dry_run surfaces
+        # cluster metadata without exposing the token credential.
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_lke_cluster(cluster_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_lke_service_token_delete",
+            "DELETE",
+            f"/lke/clusters/{cluster_id}/servicetoken",
+            _fetch,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_lke_service_token(cluster_id)

@@ -6971,6 +6971,82 @@ async def test_handle_linode_nodebalancer_config_node_delete_missing_args(
         mock_client.delete_nodebalancer_config_node.assert_not_called()
 
 
+async def test_nodebalancer_config_node_delete_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true must fetch state via GET and never call delete."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_nodebalancer_config_node.return_value = {
+            "id": 333,
+            "address": "10.0.0.5:80",
+            "label": "web-01",
+            "mode": "accept",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_config_node_delete(
+            {
+                "nodebalancer_id": 111,
+                "config_id": 222,
+                "node_id": 333,
+                "dry_run": True,
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["dry_run"] is True
+        assert body["tool"] == "linode_nodebalancer_config_node_delete"
+        assert body["would_execute"]["method"] == "DELETE"
+        assert (
+            body["would_execute"]["path"] == "/nodebalancers/111/configs/222/nodes/333"
+        )
+        mock_client.get_nodebalancer_config_node.assert_awaited_once_with(111, 222, 333)
+        mock_client.delete_nodebalancer_config_node.assert_not_called()
+
+
+async def test_nodebalancer_config_node_delete_dry_run_does_not_require_confirm(
+    sample_config: Config,
+) -> None:
+    """dry_run path must bypass the confirm gate."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_nodebalancer_config_node.return_value = {"id": 333}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_config_node_delete(
+            {
+                "nodebalancer_id": 111,
+                "config_id": 222,
+                "node_id": 333,
+                "dry_run": True,
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "confirm=true" not in result[0].text
+
+
+async def test_nodebalancer_config_node_delete_dry_run_still_validates_ids(
+    sample_config: Config,
+) -> None:
+    """Missing any ID must error out regardless of dry_run."""
+    result = await handle_linode_nodebalancer_config_node_delete(
+        {"nodebalancer_id": 111, "config_id": 222, "dry_run": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "node_id is required" in result[0].text
+
+
 # Object Storage tools
 
 
@@ -9805,6 +9881,170 @@ async def test_lke_service_token_delete_success(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "deleted" in result[0].text.lower()
+
+
+async def test_lke_cluster_delete_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true must fetch state via GET and never call delete."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_lke_cluster.return_value = {
+            "id": 123,
+            "label": "prod",
+            "region": "us-east",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_lke_cluster_delete(
+            {"cluster_id": 123, "dry_run": True}, sample_config
+        )
+
+        body = json.loads(result[0].text)
+        assert body["dry_run"] is True
+        assert body["tool"] == "linode_lke_cluster_delete"
+        assert body["would_execute"]["method"] == "DELETE"
+        assert body["would_execute"]["path"] == "/lke/clusters/123"
+        mock_client.get_lke_cluster.assert_awaited_once_with(123)
+        mock_client.delete_lke_cluster.assert_not_called()
+
+
+async def test_lke_cluster_delete_dry_run_still_validates_cluster_id(
+    sample_config: Config,
+) -> None:
+    """Missing cluster_id must error regardless of dry_run."""
+    result = await handle_linode_lke_cluster_delete({"dry_run": True}, sample_config)
+    assert "cluster_id is required" in result[0].text
+
+
+async def test_lke_pool_delete_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true must fetch state via GET and never call delete."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_lke_node_pool.return_value = {"id": 10, "count": 3}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_pool_delete(
+                {"cluster_id": 123, "pool_id": 10, "dry_run": True},
+                sample_config,
+            )
+        )
+
+        body = json.loads(result[0].text)
+        assert body["dry_run"] is True
+        assert body["tool"] == "linode_lke_pool_delete"
+        assert body["would_execute"]["path"] == "/lke/clusters/123/pools/10"
+        mock_client.get_lke_node_pool.assert_awaited_once_with(123, 10)
+        mock_client.delete_lke_node_pool.assert_not_called()
+
+
+async def test_lke_pool_delete_dry_run_still_validates_ids(
+    sample_config: Config,
+) -> None:
+    """Missing cluster_id must error regardless of dry_run."""
+    result = list(
+        await handle_linode_lke_pool_delete(
+            {"pool_id": 10, "dry_run": True}, sample_config
+        )
+    )
+    assert "cluster_id is required" in result[0].text
+
+
+async def test_lke_node_delete_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true must fetch node state (mixed int+string IDs)."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_lke_node.return_value = {"id": "123-abc", "status": "ready"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_lke_node_delete(
+            {"cluster_id": 123, "node_id": "123-abc", "dry_run": True},
+            sample_config,
+        )
+
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_lke_node_delete"
+        assert body["would_execute"]["path"] == "/lke/clusters/123/nodes/123-abc"
+        mock_client.get_lke_node.assert_awaited_once_with(123, "123-abc")
+        mock_client.delete_lke_node.assert_not_called()
+
+
+async def test_lke_node_delete_dry_run_still_validates_node_id(
+    sample_config: Config,
+) -> None:
+    """Missing node_id must error regardless of dry_run."""
+    result = await handle_linode_lke_node_delete(
+        {"cluster_id": 123, "dry_run": True}, sample_config
+    )
+    assert "node_id is required" in result[0].text
+
+
+async def test_lke_kubeconfig_delete_dry_run_fetches_cluster_not_kubeconfig(
+    sample_config: Config,
+) -> None:
+    """Dry-run must fetch cluster metadata, NOT kubeconfig content.
+
+    Locks the credential-safety design choice: dry-run never surfaces
+    the kubeconfig itself to the model. A regression that swaps the
+    fetch to ``get_lke_kubeconfig`` would surface a credential.
+    """
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_lke_cluster.return_value = {"id": 123, "label": "prod"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_kubeconfig_delete(
+                {"cluster_id": 123, "dry_run": True}, sample_config
+            )
+        )
+
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_lke_kubeconfig_delete"
+        assert body["would_execute"]["path"] == "/lke/clusters/123/kubeconfig"
+        mock_client.get_lke_cluster.assert_awaited_once_with(123)
+        mock_client.get_lke_kubeconfig.assert_not_called()
+        mock_client.delete_lke_kubeconfig.assert_not_called()
+
+
+async def test_lke_service_token_delete_dry_run_fetches_cluster_not_token(
+    sample_config: Config,
+) -> None:
+    """Dry-run must fetch cluster metadata, NOT the service token.
+
+    Same credential-safety design as kubeconfig_delete.
+    """
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_lke_cluster.return_value = {"id": 123, "label": "prod"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_service_token_delete(
+                {"cluster_id": 123, "dry_run": True}, sample_config
+            )
+        )
+
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_lke_service_token_delete"
+        assert body["would_execute"]["path"] == "/lke/clusters/123/servicetoken"
+        mock_client.get_lke_cluster.assert_awaited_once_with(123)
+        mock_client.delete_lke_service_token.assert_not_called()
 
 
 async def test_lke_acl_get(sample_config: Config) -> None:

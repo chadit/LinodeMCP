@@ -13,6 +13,8 @@ import (
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
+const paramClusterID = "cluster_id"
+
 // handleLKESubResourceAction handles confirmed actions on LKE sub-resources
 // (node pools with int IDs, individual nodes with string IDs) using generics
 // to avoid code duplication across the delete/recycle handler variants.
@@ -30,7 +32,7 @@ func handleLKESubResourceAction[ID int | string](
 		return result, nil
 	}
 
-	clusterID := request.GetInt("cluster_id", 0)
+	clusterID := request.GetInt(paramClusterID, 0)
 	if clusterID == 0 {
 		return mcp.NewToolResultError("cluster_id is required"), nil
 	}
@@ -50,9 +52,9 @@ func handleLKESubResourceAction[ID int | string](
 	}
 
 	return MarshalToolResponse(map[string]any{
-		"message":    fmt.Sprintf(successFmt, subID, clusterID),
-		"cluster_id": clusterID,
-		idParam:      subID,
+		"message":      fmt.Sprintf(successFmt, subID, clusterID),
+		paramClusterID: clusterID,
+		idParam:        subID,
 	})
 }
 
@@ -165,7 +167,7 @@ func NewLinodeLKEClusterUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 		"linode_lke_cluster_update",
 		"Updates an existing LKE cluster's label, Kubernetes version, tags, or high availability setting.",
 		[]mcp.ToolOption{
-			mcp.WithNumber("cluster_id", mcp.Required(),
+			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster to update")),
 			mcp.WithString("label",
 				mcp.Description("New label for the cluster (optional)")),
@@ -189,7 +191,7 @@ func handleLKEClusterUpdateRequest(ctx context.Context, request *mcp.CallToolReq
 		return result, nil
 	}
 
-	clusterID := request.GetInt("cluster_id", 0)
+	clusterID := request.GetInt(paramClusterID, 0)
 	if clusterID == 0 {
 		return mcp.NewToolResultError("cluster_id is required"), nil
 	}
@@ -239,12 +241,14 @@ func NewLinodeLKEClusterDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_cluster_delete",
-		"Deletes an LKE cluster. WARNING: This is irreversible. All node pools, nodes, and associated resources will be deleted.",
+		"Deletes an LKE cluster. WARNING: This is irreversible. All node pools, nodes, and associated resources will be deleted."+
+			" Pass dry_run=true to preview without deleting.",
 		[]mcp.ToolOption{
-			mcp.WithNumber("cluster_id", mcp.Required(),
+			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster to delete")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm deletion. This action is irreversible.")),
+				mcp.Description("Must be true to confirm deletion. This action is irreversible. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLKEClusterDeleteRequest,
 	)
@@ -253,33 +257,20 @@ func NewLinodeLKEClusterDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 }
 
 func handleLKEClusterDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This is irreversible. All node pools, nodes, and associated resources will be deleted. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	clusterID := request.GetInt("cluster_id", 0)
-	if clusterID == 0 {
-		return mcp.NewToolResultError("cluster_id is required"), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := client.DeleteLKECluster(ctx, clusterID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove LKE cluster %d: %v", clusterID, err)), nil
-	}
-
-	response := struct {
-		Message   string `json:"message"`
-		ClusterID int    `json:"cluster_id"`
-	}{
-		Message:   fmt.Sprintf("LKE cluster %d removed successfully", clusterID),
-		ClusterID: clusterID,
-	}
-
-	return MarshalToolResponse(response)
+	return RunDestructiveActionWithID(ctx, request, cfg, &DestructiveActionByID{
+		ToolName:       "linode_lke_cluster_delete",
+		IDParam:        paramClusterID,
+		Method:         httpMethodDelete,
+		PathPattern:    "/lke/clusters/%d",
+		ConfirmMessage: "This is irreversible. All node pools, nodes, and associated resources will be deleted. Set confirm=true to proceed.",
+		SuccessFormat:  "LKE cluster %d removed successfully",
+		FetchState: func(ctx context.Context, c *linode.Client, id int) (any, error) {
+			return c.GetLKECluster(ctx, id)
+		},
+		Execute: func(ctx context.Context, c *linode.Client, id int) error {
+			return c.DeleteLKECluster(ctx, id)
+		},
+	})
 }
 
 // NewLinodeLKEClusterRecycleTool creates a tool for recycling all nodes in an LKE cluster.
@@ -289,7 +280,7 @@ func NewLinodeLKEClusterRecycleTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 		"linode_lke_cluster_recycle",
 		"Recycles all nodes in an LKE cluster. WARNING: This causes temporary disruption as all nodes are replaced.",
 		[]mcp.ToolOption{
-			mcp.WithNumber("cluster_id", mcp.Required(),
+			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster to recycle")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm recycling. This causes temporary disruption.")),
@@ -305,7 +296,7 @@ func handleLKEClusterRecycleRequest(ctx context.Context, request *mcp.CallToolRe
 		return result, nil
 	}
 
-	clusterID := request.GetInt("cluster_id", 0)
+	clusterID := request.GetInt(paramClusterID, 0)
 	if clusterID == 0 {
 		return mcp.NewToolResultError("cluster_id is required"), nil
 	}
@@ -337,7 +328,7 @@ func NewLinodeLKEClusterRegenerateTool(cfg *config.Config) (mcp.Tool, profiles.C
 		"linode_lke_cluster_regenerate",
 		"Regenerates the service token for an LKE cluster. Existing tokens will stop working.",
 		[]mcp.ToolOption{
-			mcp.WithNumber("cluster_id", mcp.Required(),
+			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm token regeneration.")),
@@ -353,7 +344,7 @@ func handleLKEClusterRegenerateRequest(ctx context.Context, request *mcp.CallToo
 		return result, nil
 	}
 
-	clusterID := request.GetInt("cluster_id", 0)
+	clusterID := request.GetInt(paramClusterID, 0)
 	if clusterID == 0 {
 		return mcp.NewToolResultError("cluster_id is required"), nil
 	}
@@ -385,7 +376,7 @@ func NewLinodeLKEPoolCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 		"linode_lke_pool_create",
 		"Creates a new node pool in an LKE cluster. WARNING: This creates billable compute resources.",
 		[]mcp.ToolOption{
-			mcp.WithNumber("cluster_id", mcp.Required(),
+			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
 			mcp.WithString("type", mcp.Required(),
 				mcp.Description("Linode type for pool nodes (e.g. g6-standard-2). Use linode_lke_type_list to find valid types.")),
@@ -413,7 +404,7 @@ func handleLKEPoolCreateRequest(ctx context.Context, request *mcp.CallToolReques
 		return result, nil
 	}
 
-	clusterID := request.GetInt("cluster_id", 0)
+	clusterID := request.GetInt(paramClusterID, 0)
 	if clusterID == 0 {
 		return mcp.NewToolResultError("cluster_id is required"), nil
 	}
@@ -474,7 +465,7 @@ func NewLinodeLKEPoolUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 		"linode_lke_pool_update",
 		"Updates a node pool in an LKE cluster. Can change node count, autoscaler settings, or tags.",
 		[]mcp.ToolOption{
-			mcp.WithNumber("cluster_id", mcp.Required(),
+			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
 			mcp.WithNumber("pool_id", mcp.Required(),
 				mcp.Description("The ID of the node pool to update")),
@@ -502,7 +493,7 @@ func handleLKEPoolUpdateRequest(ctx context.Context, request *mcp.CallToolReques
 		return result, nil
 	}
 
-	clusterID := request.GetInt("cluster_id", 0)
+	clusterID := request.GetInt(paramClusterID, 0)
 	if clusterID == 0 {
 		return mcp.NewToolResultError("cluster_id is required"), nil
 	}
@@ -558,14 +549,16 @@ func NewLinodeLKEPoolDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_pool_delete",
-		"Deletes a node pool from an LKE cluster. All nodes in the pool will be removed.",
+		"Deletes a node pool from an LKE cluster. All nodes in the pool will be removed."+
+			" Pass dry_run=true to preview without deleting.",
 		[]mcp.ToolOption{
-			mcp.WithNumber("cluster_id", mcp.Required(),
+			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
 			mcp.WithNumber("pool_id", mcp.Required(),
 				mcp.Description("The ID of the node pool to delete")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm pool deletion.")),
+				mcp.Description("Must be true to confirm pool deletion. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLKEPoolDeleteRequest,
 	)
@@ -574,21 +567,21 @@ func NewLinodeLKEPoolDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 }
 
 func handleLKEPoolDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	return handleLKESubResourceAction(
-		ctx, request, cfg,
-		"This deletes the node pool and all its nodes. Set confirm=true to proceed.",
-		"pool_id",
-		func(r *mcp.CallToolRequest) (int, bool) {
-			id := r.GetInt("pool_id", 0)
-
-			return id, id != 0
+	return RunDestructiveActionByTwoIDs(ctx, request, cfg, &DestructiveActionByTwoIDs{
+		ToolName:       "linode_lke_pool_delete",
+		OuterIDParam:   paramClusterID,
+		InnerIDParam:   "pool_id",
+		Method:         httpMethodDelete,
+		PathPattern:    "/lke/clusters/%d/pools/%d",
+		ConfirmMessage: "This deletes the node pool and all its nodes. Set confirm=true to proceed.",
+		SuccessFormat:  "Node pool %d deleted from cluster %d successfully",
+		FetchState: func(ctx context.Context, c *linode.Client, clusterID, poolID int) (any, error) {
+			return c.GetLKENodePool(ctx, clusterID, poolID)
 		},
-		func(ctx context.Context, c *linode.Client, clusterID, poolID int) error {
+		Execute: func(ctx context.Context, c *linode.Client, clusterID, poolID int) error {
 			return c.DeleteLKENodePool(ctx, clusterID, poolID)
 		},
-		"Failed to remove node pool %d from cluster %d: %v",
-		"Node pool %d deleted from cluster %d successfully",
-	)
+	})
 }
 
 // NewLinodeLKEPoolRecycleTool creates a tool for recycling all nodes in an LKE node pool.
@@ -598,7 +591,7 @@ func NewLinodeLKEPoolRecycleTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 		"linode_lke_pool_recycle",
 		"Recycles all nodes in a specific LKE node pool. Nodes will be replaced with new ones.",
 		[]mcp.ToolOption{
-			mcp.WithNumber("cluster_id", mcp.Required(),
+			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
 			mcp.WithNumber("pool_id", mcp.Required(),
 				mcp.Description("The ID of the node pool to recycle")),
@@ -634,14 +627,16 @@ func NewLinodeLKENodeDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_node_delete",
-		"Deletes a specific node from an LKE cluster. The node will be removed and may be replaced depending on pool settings.",
+		"Deletes a specific node from an LKE cluster. The node will be removed and may be replaced depending on pool settings."+
+			" Pass dry_run=true to preview without deleting.",
 		[]mcp.ToolOption{
-			mcp.WithNumber("cluster_id", mcp.Required(),
+			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
 			mcp.WithString("node_id", mcp.Required(),
 				mcp.Description("The ID of the node to delete (string format)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm node deletion.")),
+				mcp.Description("Must be true to confirm node deletion. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLKENodeDeleteRequest,
 	)
@@ -650,21 +645,35 @@ func NewLinodeLKENodeDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 }
 
 func handleLKENodeDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	return handleLKESubResourceAction(
-		ctx, request, cfg,
-		"This deletes the specified node. Set confirm=true to proceed.",
-		"node_id",
-		func(r *mcp.CallToolRequest) (string, bool) {
-			id := r.GetString("node_id", "")
+	clusterID := request.GetInt(paramClusterID, 0)
+	if clusterID == 0 {
+		return mcp.NewToolResultError("cluster_id is required"), nil
+	}
 
-			return id, id != ""
+	nodeID := request.GetString("node_id", "")
+	if nodeID == "" {
+		return mcp.NewToolResultError("node_id is required"), nil
+	}
+
+	return RunDestructiveAction(ctx, request, cfg, &DestructiveAction{
+		ToolName:       "linode_lke_node_delete",
+		Method:         httpMethodDelete,
+		Path:           fmt.Sprintf("/lke/clusters/%d/nodes/%s", clusterID, nodeID),
+		ConfirmMessage: "This deletes the specified node. Set confirm=true to proceed.",
+		FetchState: func(ctx context.Context, c *linode.Client) (any, error) {
+			return c.GetLKENode(ctx, clusterID, nodeID)
 		},
-		func(ctx context.Context, c *linode.Client, clusterID int, nodeID string) error {
+		Execute: func(ctx context.Context, c *linode.Client) error {
 			return c.DeleteLKENode(ctx, clusterID, nodeID)
 		},
-		"Failed to remove node %s from cluster %d: %v",
-		"Node %s deleted from cluster %d successfully",
-	)
+		Success: func() any {
+			return map[string]any{
+				responseKeyMessage: fmt.Sprintf("Node %s deleted from cluster %d successfully", nodeID, clusterID),
+				paramClusterID:     clusterID,
+				"node_id":          nodeID,
+			}
+		},
+	})
 }
 
 // NewLinodeLKENodeRecycleTool creates a tool for recycling a specific node in an LKE cluster.
@@ -674,7 +683,7 @@ func NewLinodeLKENodeRecycleTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 		"linode_lke_node_recycle",
 		"Recycles a specific node in an LKE cluster. The node will be drained and replaced with a new one.",
 		[]mcp.ToolOption{
-			mcp.WithNumber("cluster_id", mcp.Required(),
+			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
 			mcp.WithString("node_id", mcp.Required(),
 				mcp.Description("The ID of the node to recycle (string format)")),
@@ -710,12 +719,14 @@ func NewLinodeLKEKubeconfigDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_kubeconfig_delete",
-		"Deletes and regenerates the kubeconfig for an LKE cluster. Existing kubeconfig files will stop working.",
+		"Deletes and regenerates the kubeconfig for an LKE cluster. Existing kubeconfig files will stop working."+
+			" Pass dry_run=true to preview without regenerating.",
 		[]mcp.ToolOption{
-			mcp.WithNumber("cluster_id", mcp.Required(),
+			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm kubeconfig deletion.")),
+				mcp.Description("Must be true to confirm kubeconfig deletion. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLKEKubeconfigDeleteRequest,
 	)
@@ -724,33 +735,23 @@ func NewLinodeLKEKubeconfigDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 }
 
 func handleLKEKubeconfigDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This deletes the kubeconfig. Existing kubeconfig files will stop working. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	clusterID := request.GetInt("cluster_id", 0)
-	if clusterID == 0 {
-		return mcp.NewToolResultError("cluster_id is required"), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := client.DeleteLKEKubeconfig(ctx, clusterID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove kubeconfig for LKE cluster %d: %v", clusterID, err)), nil
-	}
-
-	response := struct {
-		Message   string `json:"message"`
-		ClusterID int    `json:"cluster_id"`
-	}{
-		Message:   fmt.Sprintf("Kubeconfig for LKE cluster %d deleted and regenerated successfully", clusterID),
-		ClusterID: clusterID,
-	}
-
-	return MarshalToolResponse(response)
+	return RunDestructiveActionWithID(ctx, request, cfg, &DestructiveActionByID{
+		ToolName:       "linode_lke_kubeconfig_delete",
+		IDParam:        paramClusterID,
+		Method:         httpMethodDelete,
+		PathPattern:    "/lke/clusters/%d/kubeconfig",
+		ConfirmMessage: "This deletes the kubeconfig. Existing kubeconfig files will stop working. Set confirm=true to proceed.",
+		SuccessFormat:  "Kubeconfig for LKE cluster %d deleted and regenerated successfully",
+		// Fetch the cluster (not the kubeconfig contents) so dry_run
+		// surfaces cluster metadata to the model without exposing the
+		// kubeconfig credential material itself.
+		FetchState: func(ctx context.Context, c *linode.Client, id int) (any, error) {
+			return c.GetLKECluster(ctx, id)
+		},
+		Execute: func(ctx context.Context, c *linode.Client, id int) error {
+			return c.DeleteLKEKubeconfig(ctx, id)
+		},
+	})
 }
 
 // NewLinodeLKEServiceTokenDeleteTool creates a tool for deleting and regenerating an LKE cluster's service token.
@@ -758,12 +759,14 @@ func NewLinodeLKEServiceTokenDeleteTool(cfg *config.Config) (mcp.Tool, profiles.
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_service_token_delete",
-		"Deletes and regenerates the service token for an LKE cluster. Existing tokens will stop working.",
+		"Deletes and regenerates the service token for an LKE cluster. Existing tokens will stop working."+
+			" Pass dry_run=true to preview without regenerating.",
 		[]mcp.ToolOption{
-			mcp.WithNumber("cluster_id", mcp.Required(),
+			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm service token deletion.")),
+				mcp.Description("Must be true to confirm service token deletion. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLKEServiceTokenDeleteRequest,
 	)
@@ -772,33 +775,22 @@ func NewLinodeLKEServiceTokenDeleteTool(cfg *config.Config) (mcp.Tool, profiles.
 }
 
 func handleLKEServiceTokenDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This deletes the service token. Existing tokens will stop working. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	clusterID := request.GetInt("cluster_id", 0)
-	if clusterID == 0 {
-		return mcp.NewToolResultError("cluster_id is required"), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := client.DeleteLKEServiceToken(ctx, clusterID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove service token for LKE cluster %d: %v", clusterID, err)), nil
-	}
-
-	response := struct {
-		Message   string `json:"message"`
-		ClusterID int    `json:"cluster_id"`
-	}{
-		Message:   fmt.Sprintf("Service token for LKE cluster %d deleted and regenerated successfully", clusterID),
-		ClusterID: clusterID,
-	}
-
-	return MarshalToolResponse(response)
+	return RunDestructiveActionWithID(ctx, request, cfg, &DestructiveActionByID{
+		ToolName:       "linode_lke_service_token_delete",
+		IDParam:        paramClusterID,
+		Method:         httpMethodDelete,
+		PathPattern:    "/lke/clusters/%d/servicetoken",
+		ConfirmMessage: "This deletes the service token. Existing tokens will stop working. Set confirm=true to proceed.",
+		SuccessFormat:  "Service token for LKE cluster %d deleted and regenerated successfully",
+		// Fetch the cluster (not the service token) so dry_run surfaces
+		// cluster metadata without exposing the token credential.
+		FetchState: func(ctx context.Context, c *linode.Client, id int) (any, error) {
+			return c.GetLKECluster(ctx, id)
+		},
+		Execute: func(ctx context.Context, c *linode.Client, id int) error {
+			return c.DeleteLKEServiceToken(ctx, id)
+		},
+	})
 }
 
 // NewLinodeLKEACLUpdateTool creates a tool for updating the control plane ACL of an LKE cluster.
@@ -808,7 +800,7 @@ func NewLinodeLKEACLUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		"linode_lke_acl_update",
 		"Updates the control plane ACL for an LKE cluster. Controls which IP addresses can access the cluster's API server.",
 		[]mcp.ToolOption{
-			mcp.WithNumber("cluster_id", mcp.Required(),
+			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
 			mcp.WithBoolean("enabled", mcp.Required(),
 				mcp.Description("Whether to enable the control plane ACL")),
@@ -830,7 +822,7 @@ func handleLKEACLUpdateRequest(ctx context.Context, request *mcp.CallToolRequest
 		return result, nil
 	}
 
-	clusterID := request.GetInt("cluster_id", 0)
+	clusterID := request.GetInt(paramClusterID, 0)
 	if clusterID == 0 {
 		return mcp.NewToolResultError("cluster_id is required"), nil
 	}
@@ -881,7 +873,7 @@ func NewLinodeLKEACLDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		"linode_lke_acl_delete",
 		"Deletes the control plane ACL for an LKE cluster. This removes all IP restrictions from the API server.",
 		[]mcp.ToolOption{
-			mcp.WithNumber("cluster_id", mcp.Required(),
+			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm ACL deletion.")),
@@ -897,7 +889,7 @@ func handleLKEACLDeleteRequest(ctx context.Context, request *mcp.CallToolRequest
 		return result, nil
 	}
 
-	clusterID := request.GetInt("cluster_id", 0)
+	clusterID := request.GetInt(paramClusterID, 0)
 	if clusterID == 0 {
 		return mcp.NewToolResultError("cluster_id is required"), nil
 	}
