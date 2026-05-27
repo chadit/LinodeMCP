@@ -9,6 +9,7 @@ import (
 )
 
 const (
+	endpointNetworkingIPs         = "/networking/ips"
 	endpointFirewalls             = "/networking/firewalls"
 	endpointFirewallSettings      = endpointFirewalls + "/settings"
 	endpointFirewallTemplates     = endpointFirewalls + "/templates"
@@ -473,6 +474,34 @@ func (c *Client) httpDeleteFirewall(ctx context.Context, firewallID int) error {
 	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
+}
+
+// ListNetworkingIPs retrieves all IP addresses on the account.
+func (c *Client) httpListNetworkingIPs(ctx context.Context, skipIPv6RDNS bool) (*PaginatedResponse[IPAddress], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointNetworkingIPs
+
+	if skipIPv6RDNS {
+		query := url.Values{}
+		query.Set("skip_ipv6_rdns", "true")
+		endpoint += "?" + query.Encode()
+	}
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListNetworkingIPs", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[IPAddress]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
 }
 
 // ListNetworkTransferPrices retrieves network transfer prices.

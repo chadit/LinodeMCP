@@ -154,6 +154,25 @@ func TestLinodeInstanceStatsToolRegistered(t *testing.T) {
 	assert.True(t, found, "server should register the instance stats tool")
 }
 
+func TestLinodeNetworkingIPsToolRegistered(t *testing.T) {
+	t.Parallel()
+
+	srv := newCapabilityTestServer(t)
+
+	var found bool
+
+	for _, info := range srv.ToolInfos() {
+		if info.Name == "linode_networking_ips_list" {
+			found = true
+
+			assert.Equal(t, profiles.CapRead, info.Capability, "networking IPs list tool should be read-only")
+			assert.Contains(t, info.InputSchema.Properties, "skip_ipv6_rdns", "networking IPs list tool should declare skip_ipv6_rdns")
+		}
+	}
+
+	assert.True(t, found, "server should register the networking IPs list tool")
+}
+
 func TestLinodeFirewallTemplatesToolRegistered(t *testing.T) {
 	t.Parallel()
 
