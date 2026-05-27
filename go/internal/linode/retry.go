@@ -2264,6 +2264,21 @@ func (c *Client) ListFirewalls(ctx context.Context) ([]Firewall, error) {
 	return firewalls, err
 }
 
+// ListFirewallRules retrieves firewall rules with automatic retry on transient failures.
+func (c *Client) ListFirewallRules(ctx context.Context, firewallID int) (*FirewallRules, error) {
+	var rules *FirewallRules
+
+	err := c.executeWithRetry(ctx, "ListFirewallRules", func() error {
+		var err error
+
+		rules, err = c.httpListFirewallRules(ctx, firewallID)
+
+		return err
+	})
+
+	return rules, err
+}
+
 // ListFirewallRuleVersions retrieves all rule versions for a Cloud Firewall with automatic retry on transient failures.
 func (c *Client) ListFirewallRuleVersions(ctx context.Context, firewallID int) (*Firewall, error) {
 	var firewall *Firewall
