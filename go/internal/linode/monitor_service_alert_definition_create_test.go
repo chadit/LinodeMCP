@@ -23,7 +23,7 @@ func monitorAlertDefinitionCreateRequest() *linode.CreateAlertDefinitionRequest 
 		Label:       monitorAlertDefinitionLabel,
 		RuleCriteria: map[string]any{
 			"rules": []any{map[string]any{
-				"metric":             "cpu_usage",
+				keyMetric:            "cpu_usage",
 				"operator":           "gt",
 				"threshold":          float64(80),
 				"aggregate_function": "avg",

@@ -6,6 +6,13 @@ type MonitorService struct {
 	ServiceType string `json:"service_type"`
 }
 
+// MonitorMetricDefinition describes one monitoring metric definition.
+type MonitorMetricDefinition struct {
+	Label      string `json:"label"`
+	Metric     string `json:"metric"`
+	MetricType string `json:"metric_type"`
+}
+
 // MonitorDashboard describes a monitoring dashboard.
 type MonitorDashboard map[string]any
 

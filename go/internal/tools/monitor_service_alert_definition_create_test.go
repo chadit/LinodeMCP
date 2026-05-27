@@ -29,7 +29,7 @@ func monitorAlertDefinitionCreateArgs() map[string]any {
 		monitorServiceTypeParam:                 monitorServiceToolTypeDatabase,
 		monitorAlertDefinitionLabelParam:        monitorAlertDefinitionToolLabel,
 		monitorAlertDefinitionSeverityParam:     2,
-		monitorAlertDefinitionRuleCriteriaParam: map[string]any{"rules": []any{map[string]any{"metric": "cpu_usage", "operator": "gt", "threshold": 80}}},
+		monitorAlertDefinitionRuleCriteriaParam: map[string]any{"rules": []any{map[string]any{keyMetric: "cpu_usage", "operator": "gt", "threshold": 80}}},
 		monitorAlertDefinitionTriggerParam:      map[string]any{"criteria_condition": "ALL", "evaluation_period_seconds": 300, "polling_interval_seconds": 300, "trigger_occurrences": 3},
 		monitorAlertDefinitionChannelIDsParam:   []any{546, 392},
 		keyDescription:                          "Alert when CPU usage is high",
