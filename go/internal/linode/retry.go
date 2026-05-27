@@ -736,6 +736,23 @@ func (c *Client) ListMonitorServiceDashboards(ctx context.Context, serviceType s
 	return dashboards, err
 }
 
+// GetMonitorServiceMetrics retrieves metrics for one monitoring service type without retrying
+// the POST request. The operation is read-style, but POST transport can carry entity
+// query bodies, so this method delegates exactly once after transient failures.
+func (c *Client) GetMonitorServiceMetrics(ctx context.Context, serviceType string) (MonitorMetrics, error) {
+	var metrics MonitorMetrics
+
+	err := c.executeWithoutRetry(ctx, "GetMonitorServiceMetrics", func() error {
+		var retryErr error
+
+		metrics, retryErr = c.httpGetMonitorServiceMetrics(ctx, serviceType)
+
+		return retryErr
+	})
+
+	return metrics, err
+}
+
 // CreateMonitorServiceAlertDefinition creates an alert definition without retrying
 // the mutating request. Alert definition creation is not guaranteed idempotent
 // after a transient error, so this method delegates exactly once.

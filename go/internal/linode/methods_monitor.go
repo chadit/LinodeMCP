@@ -115,6 +115,28 @@ func (c *Client) httpListMonitorServiceDashboards(ctx context.Context, serviceTy
 	return &dashboards, nil
 }
 
+// httpGetMonitorServiceMetrics retrieves metrics for one monitoring service type.
+func (c *Client) httpGetMonitorServiceMetrics(ctx context.Context, serviceType string) (MonitorMetrics, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType) + "/metrics"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, map[string]any{})
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetMonitorServiceMetrics", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var metrics MonitorMetrics
+	if err := c.handleResponse(resp, &metrics); err != nil {
+		return nil, err
+	}
+
+	return metrics, nil
+}
+
 // httpCreateMonitorServiceAlertDefinition creates an alert definition for one monitoring service type.
 func (c *Client) httpCreateMonitorServiceAlertDefinition(ctx context.Context, serviceType string, request *CreateAlertDefinitionRequest) (*AlertDefinition, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

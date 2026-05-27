@@ -16,6 +16,9 @@ type MonitorMetricDefinition struct {
 // MonitorDashboard describes a monitoring dashboard.
 type MonitorDashboard map[string]any
 
+// MonitorMetrics describes metric data returned for a monitoring service entity.
+type MonitorMetrics map[string]any
+
 // AlertDefinition describes a monitoring alert definition.
 type AlertDefinition struct {
 	ID                int            `json:"id"`
