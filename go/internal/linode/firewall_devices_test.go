@@ -14,8 +14,10 @@ import (
 )
 
 const (
-	endpointFirewallDevices    = "/networking/firewalls/123/devices"
-	endpointFirewallDeviceByID = "/networking/firewalls/123/devices/456"
+	endpointFirewallDevices        = "/networking/firewalls/123/devices"
+	endpointFirewallDeviceByID     = "/networking/firewalls/123/devices/456"
+	caseZeroFirewallDeviceID       = "zero device id"
+	caseZeroFirewallDeviceParentID = "zero firewall id"
 )
 
 func TestClientListFirewallDevicesSuccess(t *testing.T) {
@@ -108,8 +110,8 @@ func TestClientGetFirewallDeviceRejectsInvalidInput(t *testing.T) {
 		deviceID   int
 		wantErr    error
 	}{
-		{name: "zero firewall id", firewallID: 0, deviceID: 456, wantErr: linode.ErrFirewallIDPositive},
-		{name: "zero device id", firewallID: 123, deviceID: 0, wantErr: linode.ErrFirewallDeviceIDPositive},
+		{name: caseZeroFirewallDeviceParentID, firewallID: 0, deviceID: 456, wantErr: linode.ErrFirewallIDPositive},
+		{name: caseZeroFirewallDeviceID, firewallID: 123, deviceID: 0, wantErr: linode.ErrFirewallDeviceIDPositive},
 	}
 
 	for _, testCase := range cases {
@@ -222,9 +224,9 @@ func TestClientCreateFirewallDeviceRejectsInvalidInput(t *testing.T) {
 		req        *linode.CreateFirewallDeviceRequest
 		wantErr    error
 	}{
-		{name: "zero firewall id", firewallID: 0, req: &linode.CreateFirewallDeviceRequest{ID: 456, Type: managedLinodeSettingsSSHUser}, wantErr: linode.ErrFirewallIDPositive},
+		{name: caseZeroFirewallDeviceParentID, firewallID: 0, req: &linode.CreateFirewallDeviceRequest{ID: 456, Type: managedLinodeSettingsSSHUser}, wantErr: linode.ErrFirewallIDPositive},
 		{name: "nil request", firewallID: 123, req: nil, wantErr: linode.ErrFirewallDeviceIDPositive},
-		{name: "zero device id", firewallID: 123, req: &linode.CreateFirewallDeviceRequest{Type: managedLinodeSettingsSSHUser}, wantErr: linode.ErrFirewallDeviceIDPositive},
+		{name: caseZeroFirewallDeviceID, firewallID: 123, req: &linode.CreateFirewallDeviceRequest{Type: managedLinodeSettingsSSHUser}, wantErr: linode.ErrFirewallDeviceIDPositive},
 		{name: "missing type", firewallID: 123, req: &linode.CreateFirewallDeviceRequest{ID: 456}, wantErr: linode.ErrFirewallDeviceTypeRequired},
 		{name: "slash type", firewallID: 123, req: &linode.CreateFirewallDeviceRequest{ID: 456, Type: "linode/123"}, wantErr: linode.ErrInvalidFirewallDeviceType},
 		{name: "query type", firewallID: 123, req: &linode.CreateFirewallDeviceRequest{ID: 456, Type: "linode?x=1"}, wantErr: linode.ErrInvalidFirewallDeviceType},
@@ -252,6 +254,109 @@ func TestClientCreateFirewallDeviceRejectsInvalidInput(t *testing.T) {
 			assert.False(t, called.Load(), "client should not call API for invalid input")
 		})
 	}
+}
+
+func TestClientDeleteFirewallDeviceSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, endpointFirewallDeviceByID, r.URL.Path, "request path should match")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query params")
+		w.Header().Set("Content-Type", "application/json")
+		_, writeErr := w.Write([]byte(`{}`))
+		assert.NoError(t, writeErr)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	err := client.DeleteFirewallDevice(t.Context(), 123, 456)
+
+	require.NoError(t, err, "DeleteFirewallDevice should succeed on 200 response")
+}
+
+func TestClientDeleteFirewallDeviceRejectsInvalidInput(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name       string
+		firewallID int
+		deviceID   int
+		wantErr    error
+	}{
+		{name: caseZeroFirewallDeviceParentID, firewallID: 0, deviceID: 456, wantErr: linode.ErrFirewallIDPositive},
+		{name: caseZeroFirewallDeviceID, firewallID: 123, deviceID: 0, wantErr: linode.ErrFirewallDeviceIDPositive},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var called atomic.Bool
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				called.Store(true)
+				w.WriteHeader(http.StatusOK)
+			}))
+			t.Cleanup(srv.Close)
+
+			client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+			err := client.DeleteFirewallDevice(t.Context(), testCase.firewallID, testCase.deviceID)
+
+			require.ErrorIs(t, err, testCase.wantErr, "invalid input should return expected error")
+			assert.False(t, called.Load(), "client should not call API for invalid input")
+		})
+	}
+}
+
+func TestClientDeleteFirewallDeviceHTTPError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, endpointFirewallDeviceByID, r.URL.Path, "request path should match")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	err := client.DeleteFirewallDevice(t.Context(), 123, 456)
+
+	require.Error(t, err, "DeleteFirewallDevice should fail on HTTP error")
+}
+
+func TestClientDeleteFirewallDeviceDoesNotReplayTransientFailure(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, endpointFirewallDeviceByID, r.URL.Path, "request path should match")
+
+		hj, ok := w.(http.Hijacker)
+		if !assert.True(t, ok, "response writer should support hijacking") {
+			return
+		}
+
+		conn, _, err := hj.Hijack()
+		if !assert.NoError(t, err) {
+			return
+		}
+
+		assert.NoError(t, conn.Close())
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+	err := client.DeleteFirewallDevice(t.Context(), 123, 456)
+
+	require.Error(t, err, "DeleteFirewallDevice should return the transient error")
+	assert.Equal(t, int32(1), calls.Load(), "DELETE must not be replayed after transient failure")
 }
 
 func TestClientCreateFirewallDeviceDoesNotReplayTransientFailure(t *testing.T) {

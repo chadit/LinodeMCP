@@ -139,6 +139,33 @@ func (c *Client) httpGetFirewallDevice(ctx context.Context, firewallID, deviceID
 	return &device, nil
 }
 
+// DeleteFirewallDevice removes one device assignment from a Cloud Firewall.
+func (c *Client) httpDeleteFirewallDevice(ctx context.Context, firewallID, deviceID int) error {
+	if firewallID <= 0 {
+		return ErrFirewallIDPositive
+	}
+
+	if deviceID <= 0 {
+		return ErrFirewallDeviceIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedFirewallID := url.PathEscape(strconv.Itoa(firewallID))
+	encodedDeviceID := url.PathEscape(strconv.Itoa(deviceID))
+	endpoint := endpointFirewalls + "/" + encodedFirewallID + "/devices/" + encodedDeviceID
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteFirewallDevice", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return c.handleResponse(resp, nil)
+}
+
 func isFirewallDeviceType(deviceType string) bool {
 	switch deviceType {
 	case "linode", "nodebalancer", "linode_interface":
