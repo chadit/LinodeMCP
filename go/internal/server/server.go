@@ -1014,6 +1014,7 @@ func networkingToolEntries(cfg *config.Config) []toolEntry {
 	return entriesFromFactories(cfg, []toolFactory{
 		tools.NewLinodeFirewallListTool,
 		tools.NewLinodeVLANsListTool,
+		tools.NewLinodeVLANDeleteTool,
 		tools.NewLinodeFirewallRulesListTool,
 		tools.NewLinodeFirewallRulesUpdateTool,
 		tools.NewLinodeFirewallRuleVersionsListTool,

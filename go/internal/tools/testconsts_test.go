@@ -254,6 +254,7 @@ const (
 
 	// Linode region IDs commonly used in fixtures.
 	regionUSEast         = "us-east"
+	vlanLabelApp         = "app-vlan"
 	ipv6RangeFixture     = "2001:0db8::"
 	ipv6RouteTarget      = "2001:db8::1"
 	apiURLLoopbackClosed = "http://127.0.0.1:1"
@@ -400,11 +401,13 @@ const (
 
 	// Validation error message values.
 	errLabelRequired               = "label is required"
+	errLabelNoSeparators           = "label must not contain"
 	errLabelString                 = "label must be a string"
 	errCredentialIDPositive        = "credential_id must be a positive integer"
 	caseNonStringLabel             = "non-string label"
 	errSSHKeyIDPositive            = "sshkey_id must be a positive integer"
 	errRegionRequired              = "region is required"
+	errRegionIDRequired            = "region_id is required"
 	errTypeRequired                = "type is required"
 	errFirewallIDRequired          = "firewall_id is required"
 	errLinodeIDRequired            = "linode_id is required"

@@ -34,6 +34,12 @@ var ErrIPv6RangeRouteTargetInvalid = errors.New("route_target must be a valid IP
 // ErrRegionRequired is returned when a region argument is empty.
 var ErrRegionRequired = errors.New("region is required")
 
+// ErrRegionIDRequired is returned when a region_id argument is empty.
+var ErrRegionIDRequired = errors.New("region_id is required")
+
+// ErrLabelRequired is returned when a label argument is empty.
+var ErrLabelRequired = errors.New("label is required")
+
 // ErrIPAddressRequired is returned when an IP address argument is empty.
 var ErrIPAddressRequired = errors.New("IP address is required")
 

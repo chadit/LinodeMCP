@@ -2279,6 +2279,15 @@ func (c *Client) ListVLANs(ctx context.Context, page, pageSize int) (*PaginatedR
 	return vlans, err
 }
 
+// DeleteVLAN deletes one VLAN without retrying the destructive request.
+// Retrying can replay VLAN deletion after a transient error, so this method
+// delegates exactly once.
+func (c *Client) DeleteVLAN(ctx context.Context, regionID, label string) error {
+	return c.executeWithoutRetry(ctx, "DeleteVLAN", func() error {
+		return c.httpDeleteVLAN(ctx, regionID, label)
+	})
+}
+
 // ListFirewallRules retrieves firewall rules with automatic retry on transient failures.
 func (c *Client) ListFirewallRules(ctx context.Context, firewallID int) (*FirewallRules, error) {
 	var rules *FirewallRules

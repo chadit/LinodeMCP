@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -61,6 +62,84 @@ func NewLinodeVLANsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 			return vlans, ""
 		},
 	)
+}
+
+// NewLinodeVLANDeleteTool creates a tool for deleting one VLAN.
+func NewLinodeVLANDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_vlan_delete",
+		"Deletes one VLAN by region and label.",
+		[]mcp.ToolOption{
+			mcp.WithString("region_id", mcp.Required(),
+				mcp.Description("The region ID for the VLAN, for example us-east.")),
+			mcp.WithString("label", mcp.Required(),
+				mcp.Description("The VLAN label.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be set to true to confirm deleting the VLAN.")),
+		},
+		handleLinodeVLANDeleteRequest,
+	)
+
+	return tool, profiles.CapDestroy, handler
+}
+
+func handleLinodeVLANDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if result := RequireConfirm(request, "This deletes a VLAN. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	regionID, validationMessage := vlanRegionPathParamFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	label, validationMessage := vlanPathParamFromTool(request, "label")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	deleteErr := client.DeleteVLAN(ctx, regionID, label)
+	if deleteErr != nil {
+		return mcp.NewToolResultError(fmt.Sprint("Failed to delete linode_vlan_delete: ", deleteErr)), nil
+	}
+
+	return MarshalToolResponse(map[string]any{
+		responseKeyMessage: "VLAN " + label + " deleted successfully from region " + regionID,
+		"region_id":        regionID,
+		"label":            label,
+	})
+}
+
+func vlanRegionPathParamFromTool(request *mcp.CallToolRequest) (string, string) {
+	regionID := request.GetString("region_id", "")
+	if regionID == "" {
+		return "", "region_id is required"
+	}
+
+	if err := validateRegionSlug(regionID); err != nil {
+		return "", "region_id must be a lowercase region slug"
+	}
+
+	return regionID, ""
+}
+
+func vlanPathParamFromTool(request *mcp.CallToolRequest, name string) (string, string) {
+	value := request.GetString(name, "")
+	if value == "" {
+		return "", name + " is required"
+	}
+
+	if value != strings.TrimSpace(value) || strings.ContainsAny(value, "/?#") || strings.Contains(value, "..") {
+		return "", name + " must not contain path separators, query separators, or traversal segments"
+	}
+
+	return value, ""
 }
 
 // NewLinodeFirewallRulesListTool creates a tool for listing rules for a Cloud Firewall.
