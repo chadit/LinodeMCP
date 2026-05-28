@@ -23,6 +23,7 @@ const (
 	endpointNetworkingIPv6Ranges  = "/networking/ipv6/ranges"
 	endpointNetworkingVLANs       = "/networking/vlans"
 	endpointNodeBalancers         = "/nodebalancers"
+	endpointNodeBalancerTypes     = "/nodebalancers/types"
 )
 
 // ListFirewalls retrieves all Cloud Firewalls for the authenticated user.
@@ -852,6 +853,26 @@ func (c *Client) httpCreateIPv6Range(ctx context.Context, req CreateIPv6RangeReq
 	}
 
 	return &ipv6Range, nil
+}
+
+// ListNodeBalancerTypes retrieves available NodeBalancer types.
+func (c *Client) httpListNodeBalancerTypes(ctx context.Context) (*PaginatedResponse[NodeBalancerType], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointNodeBalancerTypes, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListNodeBalancerTypes", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[NodeBalancerType]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
 }
 
 // ListNodeBalancers retrieves all NodeBalancers for the authenticated user.
