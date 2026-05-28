@@ -197,6 +197,24 @@ type NodeBalancerConfig struct {
 	NodesStatus    NodeBalancerNodesStatus `json:"nodes_status"`
 }
 
+// CreateNodeBalancerConfigRequest represents the request body for creating a NodeBalancer config.
+type CreateNodeBalancerConfigRequest struct {
+	Port          int    `json:"port"`
+	Protocol      string `json:"protocol,omitempty"`
+	Algorithm     string `json:"algorithm,omitempty"`
+	Stickiness    string `json:"stickiness,omitempty"`
+	Check         string `json:"check,omitempty"`
+	CheckInterval int    `json:"check_interval,omitempty"`
+	CheckTimeout  int    `json:"check_timeout,omitempty"`
+	CheckAttempts int    `json:"check_attempts,omitempty"`
+	CheckPath     string `json:"check_path,omitempty"`
+	CheckBody     string `json:"check_body,omitempty"`
+	CheckPassive  *bool  `json:"check_passive,omitempty"`
+	CipherSuite   string `json:"cipher_suite,omitempty"`
+	SSLCert       string `json:"ssl_cert,omitempty"`
+	SSLKey        string `json:"ssl_key,omitempty"`
+}
+
 // NodeBalancerNodesStatus represents the health summary for nodes on a NodeBalancer config.
 type NodeBalancerNodesStatus struct {
 	Up   int `json:"up"`
