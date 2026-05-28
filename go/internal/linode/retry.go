@@ -2647,6 +2647,21 @@ func (c *Client) DeleteIPv6Range(ctx context.Context, ipv6Range string) error {
 	})
 }
 
+// ListNodeBalancerTypes retrieves available node balancer types with automatic retry on transient failures.
+func (c *Client) ListNodeBalancerTypes(ctx context.Context) (*PaginatedResponse[NodeBalancerType], error) {
+	var types *PaginatedResponse[NodeBalancerType]
+
+	err := c.executeWithRetry(ctx, "ListNodeBalancerTypes", func() error {
+		var err error
+
+		types, err = c.httpListNodeBalancerTypes(ctx)
+
+		return err
+	})
+
+	return types, err
+}
+
 // ListNodeBalancers retrieves all node balancers with automatic retry on transient failures.
 func (c *Client) ListNodeBalancers(ctx context.Context) ([]NodeBalancer, error) {
 	var nodeBalancers []NodeBalancer

@@ -11,6 +11,42 @@ import (
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
+// NewLinodeNodeBalancerTypesTool creates a tool for listing available NodeBalancer types.
+func NewLinodeNodeBalancerTypesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_nodebalancer_types",
+		"Lists available NodeBalancer types.",
+		nil,
+		handleLinodeNodeBalancerTypesRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleLinodeNodeBalancerTypesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	types, listFailureMessage := listNodeBalancerTypes(ctx, client)
+	if listFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to retrieve linode_nodebalancer_types: " + listFailureMessage), nil
+	}
+
+	return MarshalToolResponse(types)
+}
+
+func listNodeBalancerTypes(ctx context.Context, client *linode.Client) (*linode.PaginatedResponse[linode.NodeBalancerType], string) {
+	types, err := client.ListNodeBalancerTypes(ctx)
+	if err != nil {
+		return nil, err.Error()
+	}
+
+	return types, ""
+}
+
 // NewLinodeNodeBalancerListTool creates a tool for listing NodeBalancers.
 func NewLinodeNodeBalancerListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newListTool(

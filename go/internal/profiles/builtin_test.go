@@ -156,6 +156,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_firewall_rule_versions_list", Capability: profiles.CapRead},
 		{Name: "linode_firewall_create", Capability: profiles.CapWrite},
 		{Name: "linode_firewall_delete", Capability: profiles.CapDestroy},
+		{Name: "linode_nodebalancer_types", Capability: profiles.CapRead},
 		{Name: "linode_nodebalancer_list", Capability: profiles.CapRead},
 		{Name: "linode_nodebalancer_create", Capability: profiles.CapWrite},
 		{Name: "linode_networking_ip_get", Capability: profiles.CapRead},

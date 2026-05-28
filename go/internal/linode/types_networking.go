@@ -153,6 +153,14 @@ type ShareNetworkingIPsRequest struct {
 	IPs      []string `json:"ips"`
 }
 
+// NodeBalancerType represents an available NodeBalancer type.
+type NodeBalancerType struct {
+	ID       string `json:"id"`
+	Label    string `json:"label"`
+	Price    Price  `json:"price"`
+	Transfer int    `json:"transfer"`
+}
+
 // NodeBalancer represents a Linode NodeBalancer (load balancer).
 type NodeBalancer struct {
 	ID                 int      `json:"id"`
