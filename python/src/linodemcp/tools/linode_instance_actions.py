@@ -5,7 +5,12 @@ from typing import TYPE_CHECKING, Any
 from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import execute_tool
+from linodemcp.tools.helpers import (
+    DRY_RUN_PROP,
+    execute_dry_run,
+    execute_tool,
+    is_dry_run,
+)
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -164,6 +169,7 @@ def create_linode_instance_rebuild_tool() -> tuple[Tool, Capability]:
         description=(
             "Rebuilds a Linode instance with a new image."
             " All data on existing disks will be destroyed."
+            " Pass dry_run=true to preview without rebuilding."
         ),
         inputSchema={
             "type": "object",
@@ -195,8 +201,10 @@ def create_linode_instance_rebuild_tool() -> tuple[Tool, Capability]:
                     "description": (
                         "Must be true to confirm rebuild."
                         " Destroys all existing disk data."
+                        " Ignored when dry_run=true."
                     ),
                 },
+                **DRY_RUN_PROP,
             },
             "required": [
                 "instance_id",
@@ -212,10 +220,6 @@ async def handle_linode_instance_rebuild(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_instance_rebuild tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return _error_response("This is destructive. Set confirm=true to proceed.")
-
     iid = _parse_instance_id(arguments)
     if isinstance(iid, list):
         return iid
@@ -227,6 +231,24 @@ async def handle_linode_instance_rebuild(
     root_pass = arguments.get("root_pass", "")
     if not root_pass:
         return _error_response("root_pass is required")
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_instance(iid)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_instance_rebuild",
+            "POST",
+            f"/linode/instances/{iid}/rebuild",
+            _fetch,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("This is destructive. Set confirm=true to proceed.")
 
     async def _call(
         client: RetryableClient,
@@ -291,7 +313,10 @@ def create_linode_instance_password_reset_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_password_reset tool."""
     return Tool(
         name="linode_instance_password_reset",
-        description=("Resets the root password for a Linode instance"),
+        description=(
+            "Resets the root password for a Linode instance."
+            " Pass dry_run=true to preview without resetting."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -302,6 +327,7 @@ def create_linode_instance_password_reset_tool() -> tuple[Tool, Capability]:
                     "description": ("New root password (required)"),
                 },
                 "confirm": _CONFIRM_PROP,
+                **DRY_RUN_PROP,
             },
             "required": [
                 "instance_id",
@@ -316,10 +342,6 @@ async def handle_linode_instance_password_reset(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_instance_password_reset request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return _error_response("Set confirm=true to proceed.")
-
     iid = _parse_instance_id(arguments)
     if isinstance(iid, list):
         return iid
@@ -327,6 +349,24 @@ async def handle_linode_instance_password_reset(
     root_pass = arguments.get("root_pass", "")
     if not root_pass:
         return _error_response("root_pass is required")
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_instance(iid)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_instance_password_reset",
+            "POST",
+            f"/linode/instances/{iid}/password",
+            _fetch,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("Set confirm=true to proceed.")
 
     async def _call(
         client: RetryableClient,

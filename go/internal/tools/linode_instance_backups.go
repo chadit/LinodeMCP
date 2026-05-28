@@ -327,12 +327,14 @@ func NewLinodeInstanceBackupsCancelTool(cfg *config.Config) (mcp.Tool, profiles.
 		cfg,
 		"linode_instance_backups_cancel",
 		"Cancels the backup service for a Linode instance. "+
-			"WARNING: This permanently deletes all existing backups for the instance.",
+			"WARNING: This permanently deletes all existing backups for the instance."+
+			" Pass dry_run=true to preview without canceling.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm cancellation. All existing backups will be permanently deleted.")),
+				mcp.Description("Must be true to confirm cancellation. All existing backups will be permanently deleted. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceBackupsCancelRequest,
 	)
@@ -341,31 +343,18 @@ func NewLinodeInstanceBackupsCancelTool(cfg *config.Config) (mcp.Tool, profiles.
 }
 
 func handleInstanceBackupsCancelRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This permanently deletes all backups for the instance. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	linodeID := request.GetInt("linode_id", 0)
-	if linodeID == 0 {
-		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := client.CancelInstanceBackups(ctx, linodeID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to cancel backups for instance %d: %v", linodeID, err)), nil
-	}
-
-	response := struct {
-		Message  string `json:"message"`
-		LinodeID int    `json:"linode_id"`
-	}{
-		Message:  fmt.Sprintf("Backup service canceled for instance %d. All backups have been deleted.", linodeID),
-		LinodeID: linodeID,
-	}
-
-	return MarshalToolResponse(response)
+	return RunDestructiveActionWithID(ctx, request, cfg, &DestructiveActionByID{
+		ToolName:       "linode_instance_backups_cancel",
+		IDParam:        paramLinodeID,
+		Method:         httpMethodPost,
+		PathPattern:    "/linode/instances/%d/backups/cancel",
+		ConfirmMessage: "This permanently deletes all backups for the instance. Set confirm=true to proceed.",
+		SuccessFormat:  "Backup service canceled for instance %d. All backups have been deleted.",
+		FetchState: func(ctx context.Context, c *linode.Client, id int) (any, error) {
+			return c.GetInstance(ctx, id)
+		},
+		Execute: func(ctx context.Context, c *linode.Client, id int) error {
+			return c.CancelInstanceBackups(ctx, id)
+		},
+	})
 }

@@ -5,7 +5,12 @@ from typing import TYPE_CHECKING, Any
 from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import execute_tool
+from linodemcp.tools.helpers import (
+    DRY_RUN_PROP,
+    execute_dry_run,
+    execute_tool,
+    is_dry_run,
+)
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -290,6 +295,7 @@ def create_linode_instance_backups_cancel_tool() -> tuple[Tool, Capability]:
         description=(
             "Cancels backups for a Linode instance."
             " All existing backups will be deleted."
+            " Pass dry_run=true to preview without canceling."
         ),
         inputSchema={
             "type": "object",
@@ -300,8 +306,10 @@ def create_linode_instance_backups_cancel_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": (
                         "Must be true to confirm. Existing backups will be deleted."
+                        " Ignored when dry_run=true."
                     ),
                 },
+                **DRY_RUN_PROP,
             },
             "required": ["instance_id", "confirm"],
         },
@@ -312,13 +320,27 @@ async def handle_linode_instance_backups_cancel(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_instance_backups_cancel request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return _error_response("This is destructive. Set confirm=true to proceed.")
-
     iid = _parse_instance_id(arguments)
     if isinstance(iid, list):
         return iid
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_instance(iid)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_instance_backups_cancel",
+            "POST",
+            f"/linode/instances/{iid}/backups/cancel",
+            _fetch,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("This is destructive. Set confirm=true to proceed.")
 
     async def _call(
         client: RetryableClient,

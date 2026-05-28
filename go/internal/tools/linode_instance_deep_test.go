@@ -924,6 +924,85 @@ func TestLinodeInstanceBackupsCancelTool(t *testing.T) {
 	})
 }
 
+// Dry-run coverage for instance backups cancel (POST action, WithID).
+// The cancel is a POST, so would_execute.method must be POST and the
+// fetch hits the instance, never mutating.
+func TestLinodeInstanceBackupsCancelToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	t.Run("schema advertises dry_run", func(t *testing.T) {
+		t.Parallel()
+
+		tool, _, _ := tools.NewLinodeInstanceBackupsCancelTool(&config.Config{})
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run")
+	})
+
+	t.Run("preview without mutating", func(t *testing.T) {
+		t.Parallel()
+
+		var methodsSeen []string
+
+		instanceBody := `{"id":123,"label":"web-01","status":"running","backups":{"enabled":true}}`
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsSeen = append(methodsSeen, r.Method)
+			assert.Equal(t, "/linode/instances/123", r.URL.Path,
+				"dry_run must GET the instance, not the cancel endpoint")
+
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(instanceBody))
+
+				return
+			}
+
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeInstanceBackupsCancelTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyLinodeID: float64(123),
+			keyDryRun:   true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError)
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, "linode_instance_backups_cancel", body["tool"])
+		would, _ := body["would_execute"].(map[string]any)
+		assert.Equal(t, "POST", would["method"], "cancel is a POST action")
+		assert.Equal(t, "/linode/instances/123/backups/cancel", would["path"])
+
+		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+			"dry_run must only issue a single GET, never POST")
+	})
+
+	t.Run("still validates linode_id", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, handler := tools.NewLinodeInstanceBackupsCancelTool(&config.Config{})
+		req := createRequestWithArgs(t, map[string]any{keyDryRun: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		assert.True(t, result.IsError)
+		assertErrorContains(t, result, errLinodeIDRequired)
+	})
+}
+
 // TestLinodeInstanceDisksListTool verifies the instance disks list tool
 // registers correctly, validates linode_id, and returns disk data.
 func TestLinodeInstanceDisksListTool(t *testing.T) {
@@ -2226,6 +2305,92 @@ func TestLinodeInstanceRebuildTool(t *testing.T) {
 	})
 }
 
+// Dry-run coverage for instance rebuild (POST action, lower-level helper
+// with captured-var Success). Verifies the preview fetches the instance,
+// emits POST + rebuild path, and never mutates.
+func TestLinodeInstanceRebuildToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	t.Run("schema advertises dry_run", func(t *testing.T) {
+		t.Parallel()
+
+		tool, _, _ := tools.NewLinodeInstanceRebuildTool(&config.Config{})
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run")
+	})
+
+	t.Run("preview without mutating", func(t *testing.T) {
+		t.Parallel()
+
+		var methodsSeen []string
+
+		instanceBody := `{"id":123,"label":"web-01","image":"linode/debian12","status":"running"}`
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsSeen = append(methodsSeen, r.Method)
+			assert.Equal(t, "/linode/instances/123", r.URL.Path,
+				"dry_run must GET the instance, not the rebuild endpoint")
+
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(instanceBody))
+
+				return
+			}
+
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeInstanceRebuildTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyLinodeID: float64(123),
+			keyImage:    imageIDUbuntu2404,
+			keyRootPass: rootPassStrong,
+			keyDryRun:   true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError)
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, "linode_instance_rebuild", body["tool"])
+		would, _ := body["would_execute"].(map[string]any)
+		assert.Equal(t, "POST", would["method"])
+		assert.Equal(t, "/linode/instances/123/rebuild", would["path"])
+
+		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+			"dry_run must only issue a single GET, never POST")
+	})
+
+	t.Run("still validates root_pass", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, handler := tools.NewLinodeInstanceRebuildTool(&config.Config{})
+		req := createRequestWithArgs(t, map[string]any{
+			keyLinodeID: float64(123),
+			keyImage:    imageIDUbuntu2404,
+			keyDryRun:   true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		assert.True(t, result.IsError,
+			"dry_run must validate required body args the same way the real call would")
+		assertErrorContains(t, result, "root_pass is required")
+	})
+}
+
 // TestLinodeInstanceRescueTool verifies the instance rescue tool
 // registers correctly, validates confirm, and boots instances into rescue mode.
 func TestLinodeInstanceRescueTool(t *testing.T) {
@@ -2363,6 +2528,87 @@ func TestLinodeInstancePasswordResetTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, "password reset", "response should confirm password reset")
+	})
+}
+
+// Dry-run coverage for instance password reset (POST action, WithID).
+func TestLinodeInstancePasswordResetToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	t.Run("schema advertises dry_run", func(t *testing.T) {
+		t.Parallel()
+
+		tool, _, _ := tools.NewLinodeInstancePasswordResetTool(&config.Config{})
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run")
+	})
+
+	t.Run("preview without mutating", func(t *testing.T) {
+		t.Parallel()
+
+		var methodsSeen []string
+
+		instanceBody := `{"id":123,"label":"web-01","status":"offline"}`
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsSeen = append(methodsSeen, r.Method)
+			assert.Equal(t, "/linode/instances/123", r.URL.Path,
+				"dry_run must GET the instance, not the password endpoint")
+
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(instanceBody))
+
+				return
+			}
+
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeInstancePasswordResetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyLinodeID: float64(123),
+			keyRootPass: rootPassStrong,
+			keyDryRun:   true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError)
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, "linode_instance_password_reset", body["tool"])
+		would, _ := body["would_execute"].(map[string]any)
+		assert.Equal(t, "POST", would["method"])
+		assert.Equal(t, "/linode/instances/123/password", would["path"])
+
+		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+			"dry_run must only issue a single GET, never POST")
+	})
+
+	t.Run("still validates root_pass", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, handler := tools.NewLinodeInstancePasswordResetTool(&config.Config{})
+		req := createRequestWithArgs(t, map[string]any{
+			keyLinodeID: float64(123),
+			keyDryRun:   true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		assert.True(t, result.IsError)
+		assertErrorContains(t, result, "root_pass is required")
 	})
 }
 

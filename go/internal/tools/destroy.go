@@ -15,6 +15,7 @@ import (
 // goconst once enough tools accumulate the same string).
 const (
 	httpMethodDelete   = "DELETE"
+	httpMethodPost     = "POST"
 	responseKeyMessage = "message"
 )
 

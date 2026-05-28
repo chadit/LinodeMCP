@@ -12281,6 +12281,38 @@ async def test_handle_linode_instance_backups_cancel_success(
     mock_linode_client.cancel_instance_backups.assert_called_once_with(123)
 
 
+async def test_instance_backups_cancel_dry_run_returns_preview(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """dry_run=true must fetch the instance via GET and never cancel."""
+    mock_linode_client.get_instance.return_value = {
+        "id": 123,
+        "label": "my-linode",
+        "status": "running",
+    }
+    result = await handle_linode_instance_backups_cancel(
+        {"instance_id": 123, "dry_run": True}, sample_config
+    )
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_instance_backups_cancel"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/linode/instances/123/backups/cancel"
+    mock_linode_client.get_instance.assert_awaited_once_with(123)
+    mock_linode_client.cancel_instance_backups.assert_not_called()
+
+
+async def test_instance_backups_cancel_dry_run_still_validates_instance_id(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """Missing instance_id must error regardless of dry_run."""
+    result = await handle_linode_instance_backups_cancel(
+        {"dry_run": True}, sample_config
+    )
+    assert "instance_id" in result[0].text.lower()
+    mock_linode_client.cancel_instance_backups.assert_not_called()
+
+
 async def test_handle_linode_instance_disk_get_success(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
@@ -12631,6 +12663,45 @@ async def test_handle_linode_instance_rebuild_success(
     )
 
 
+async def test_instance_rebuild_dry_run_returns_preview(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """dry_run=true must fetch the instance via GET and never rebuild."""
+    mock_linode_client.get_instance.return_value = {
+        "id": 123,
+        "label": "my-linode",
+        "status": "running",
+    }
+    result = await handle_linode_instance_rebuild(
+        {
+            "instance_id": 123,
+            "image": "linode/ubuntu24.04",
+            "root_pass": "Str0ngP@ssw0rd!",
+            "dry_run": True,
+        },
+        sample_config,
+    )
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_instance_rebuild"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/linode/instances/123/rebuild"
+    mock_linode_client.get_instance.assert_awaited_once_with(123)
+    mock_linode_client.rebuild_instance.assert_not_called()
+
+
+async def test_instance_rebuild_dry_run_still_validates_root_pass(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """Missing root_pass must error regardless of dry_run."""
+    result = await handle_linode_instance_rebuild(
+        {"instance_id": 123, "image": "linode/ubuntu24.04", "dry_run": True},
+        sample_config,
+    )
+    assert "root_pass is required" in result[0].text
+    mock_linode_client.rebuild_instance.assert_not_called()
+
+
 async def test_handle_linode_instance_rescue_success(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
@@ -12662,6 +12733,39 @@ async def test_handle_linode_instance_password_reset_success(
     mock_linode_client.reset_instance_password.assert_called_once_with(
         123, "NewStr0ngP@ss!"
     )
+
+
+async def test_instance_password_reset_dry_run_returns_preview(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """dry_run=true must fetch the instance via GET and never reset."""
+    mock_linode_client.get_instance.return_value = {
+        "id": 123,
+        "label": "my-linode",
+        "status": "offline",
+    }
+    result = await handle_linode_instance_password_reset(
+        {"instance_id": 123, "root_pass": "NewStr0ngP@ss!", "dry_run": True},
+        sample_config,
+    )
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_instance_password_reset"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/linode/instances/123/password"
+    mock_linode_client.get_instance.assert_awaited_once_with(123)
+    mock_linode_client.reset_instance_password.assert_not_called()
+
+
+async def test_instance_password_reset_dry_run_still_validates_root_pass(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """Missing root_pass must error regardless of dry_run."""
+    result = await handle_linode_instance_password_reset(
+        {"instance_id": 123, "dry_run": True}, sample_config
+    )
+    assert "root_pass is required" in result[0].text
+    mock_linode_client.reset_instance_password.assert_not_called()
 
 
 async def test_handle_linode_instance_backup_get_error(

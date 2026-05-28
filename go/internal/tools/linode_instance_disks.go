@@ -290,7 +290,7 @@ func handleInstanceDiskDeleteRequest(ctx context.Context, request *mcp.CallToolR
 	// verbatim, so no per-tool pre-validation guard is needed here.
 	return RunDestructiveActionByTwoIDs(ctx, request, cfg, &DestructiveActionByTwoIDs{
 		ToolName:       "linode_instance_disk_delete",
-		OuterIDParam:   "linode_id",
+		OuterIDParam:   paramLinodeID,
 		InnerIDParam:   "disk_id",
 		Method:         httpMethodDelete,
 		PathPattern:    "/linode/instances/%d/disks/%d",

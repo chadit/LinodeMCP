@@ -268,7 +268,7 @@ func handleInstanceIPDeleteRequest(ctx context.Context, request *mcp.CallToolReq
 		Success: func() any {
 			return map[string]any{
 				responseKeyMessage: fmt.Sprintf("IP %s removed from instance %d", address, linodeID),
-				"linode_id":        linodeID,
+				paramLinodeID:      linodeID,
 				"address":          address,
 			}
 		},

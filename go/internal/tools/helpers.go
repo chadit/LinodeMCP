@@ -20,6 +20,7 @@ const (
 	paramConfirm         = "confirm"
 	paramDryRun          = "dry_run"
 	paramDryRunDesc      = "Preview the call without making it: returns the would-be request and current resource state. Default false."
+	paramLinodeID        = "linode_id"
 )
 
 // liveConfigSource is the optional hot-reload provider. When set (by

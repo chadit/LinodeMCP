@@ -212,7 +212,8 @@ func NewLinodeInstanceRebuildTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_rebuild",
-		"Rebuilds a Linode instance with a new image. WARNING: This destroys all existing data on the instance.",
+		"Rebuilds a Linode instance with a new image. WARNING: This destroys all existing data on the instance."+
+			" Pass dry_run=true to preview without rebuilding.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance to rebuild")),
@@ -227,7 +228,8 @@ func NewLinodeInstanceRebuildTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 			mcp.WithBoolean("booted",
 				mcp.Description("Whether to boot the instance after rebuild (optional, defaults to true)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm rebuild. WARNING: This destroys ALL existing data.")),
+				mcp.Description("Must be true to confirm rebuild. WARNING: This destroys ALL existing data. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceRebuildRequest,
 	)
@@ -236,11 +238,7 @@ func NewLinodeInstanceRebuildTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 }
 
 func handleInstanceRebuildRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This DESTROYS ALL DATA on the instance and rebuilds it. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	linodeID := request.GetInt("linode_id", 0)
+	linodeID := request.GetInt(paramLinodeID, 0)
 	if linodeID == 0 {
 		return mcp.NewToolResultError("linode_id is required"), nil
 	}
@@ -280,25 +278,36 @@ func handleInstanceRebuildRequest(ctx context.Context, request *mcp.CallToolRequ
 		req.Booted = &booted
 	}
 
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
+	// Captured by the Execute and Success closures: Execute assigns the
+	// rebuilt instance, Success returns it. The destroy helper's Execute
+	// returns only an error, so the result is threaded through this var.
+	var rebuilt *linode.Instance
 
-	instance, err := client.RebuildInstance(ctx, linodeID, req)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to rebuild instance %d: %v", linodeID, err)), nil
-	}
+	return RunDestructiveAction(ctx, request, cfg, &DestructiveAction{
+		ToolName:       "linode_instance_rebuild",
+		Method:         httpMethodPost,
+		Path:           fmt.Sprintf("/linode/instances/%d/rebuild", linodeID),
+		ConfirmMessage: "This DESTROYS ALL DATA on the instance and rebuilds it. Set confirm=true to proceed.",
+		FetchState: func(ctx context.Context, c *linode.Client) (any, error) {
+			return c.GetInstance(ctx, linodeID)
+		},
+		Execute: func(ctx context.Context, c *linode.Client) error {
+			instance, execErr := c.RebuildInstance(ctx, linodeID, req)
+			if execErr != nil {
+				return fmt.Errorf("rebuild instance %d: %w", linodeID, execErr)
+			}
 
-	response := struct {
-		Message  string           `json:"message"`
-		Instance *linode.Instance `json:"instance"`
-	}{
-		Message:  fmt.Sprintf("Instance %d rebuilt with image %s", linodeID, image),
-		Instance: instance,
-	}
+			rebuilt = instance
 
-	return MarshalToolResponse(response)
+			return nil
+		},
+		Success: func() any {
+			return map[string]any{
+				responseKeyMessage: fmt.Sprintf("Instance %d rebuilt with image %s", linodeID, image),
+				"instance":         rebuilt,
+			}
+		},
+	})
 }
 
 // NewLinodeInstanceRescueTool creates a tool for booting a Linode instance into rescue mode.
@@ -367,14 +376,16 @@ func NewLinodeInstancePasswordResetTool(cfg *config.Config) (mcp.Tool, profiles.
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_password_reset",
-		"Resets the root password on a Linode instance. The instance must be powered off.",
+		"Resets the root password on a Linode instance. The instance must be powered off."+
+			" Pass dry_run=true to preview without resetting.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),
 			mcp.WithString("root_pass", mcp.Required(),
 				mcp.Description("New root password (min 12 chars, must include upper, lower, and digits)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm password reset.")),
+				mcp.Description("Must be true to confirm password reset. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstancePasswordResetRequest,
 	)
@@ -383,11 +394,7 @@ func NewLinodeInstancePasswordResetTool(cfg *config.Config) (mcp.Tool, profiles.
 }
 
 func handleInstancePasswordResetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This resets the root password on the instance. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	linodeID := request.GetInt("linode_id", 0)
+	linodeID := request.GetInt(paramLinodeID, 0)
 	if linodeID == 0 {
 		return mcp.NewToolResultError("linode_id is required"), nil
 	}
@@ -401,22 +408,18 @@ func handleInstancePasswordResetRequest(ctx context.Context, request *mcp.CallTo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := client.ResetInstancePassword(ctx, linodeID, rootPass); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to reset password for instance %d: %v", linodeID, err)), nil
-	}
-
-	response := struct {
-		Message  string `json:"message"`
-		LinodeID int    `json:"linode_id"`
-	}{
-		Message:  fmt.Sprintf("Root password reset for instance %d", linodeID),
-		LinodeID: linodeID,
-	}
-
-	return MarshalToolResponse(response)
+	return RunDestructiveActionWithID(ctx, request, cfg, &DestructiveActionByID{
+		ToolName:       "linode_instance_password_reset",
+		IDParam:        paramLinodeID,
+		Method:         httpMethodPost,
+		PathPattern:    "/linode/instances/%d/password",
+		ConfirmMessage: "This resets the root password on the instance. Set confirm=true to proceed.",
+		SuccessFormat:  "Root password reset for instance %d",
+		FetchState: func(ctx context.Context, c *linode.Client, id int) (any, error) {
+			return c.GetInstance(ctx, id)
+		},
+		Execute: func(ctx context.Context, c *linode.Client, id int) error {
+			return c.ResetInstancePassword(ctx, id, rootPass)
+		},
+	})
 }
