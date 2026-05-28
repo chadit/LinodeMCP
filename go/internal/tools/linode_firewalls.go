@@ -69,14 +69,15 @@ func NewLinodeVLANDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability,
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_vlan_delete",
-		"Deletes one VLAN by region and label.",
+		"Deletes one VLAN by region and label. Pass dry_run=true to preview without deleting.",
 		[]mcp.ToolOption{
 			mcp.WithString("region_id", mcp.Required(),
 				mcp.Description("The region ID for the VLAN, for example us-east.")),
 			mcp.WithString("label", mcp.Required(),
 				mcp.Description("The VLAN label.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm deleting the VLAN.")),
+				mcp.Description("Must be set to true to confirm deleting the VLAN. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeVLANDeleteRequest,
 	)
@@ -85,10 +86,6 @@ func NewLinodeVLANDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability,
 }
 
 func handleLinodeVLANDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This deletes a VLAN. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	regionID, validationMessage := vlanRegionPathParamFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
@@ -99,21 +96,51 @@ func handleLinodeVLANDeleteRequest(ctx context.Context, request *mcp.CallToolReq
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	deleteErr := client.DeleteVLAN(ctx, regionID, label)
-	if deleteErr != nil {
-		return mcp.NewToolResultError(fmt.Sprint("Failed to delete linode_vlan_delete: ", deleteErr)), nil
-	}
-
-	return MarshalToolResponse(map[string]any{
-		responseKeyMessage: "VLAN " + label + " deleted successfully from region " + regionID,
-		"region_id":        regionID,
-		"label":            label,
+	return RunDestructiveAction(ctx, request, cfg, &DestructiveAction{
+		ToolName:       "linode_vlan_delete",
+		Method:         httpMethodDelete,
+		Path:           "/networking/vlans/" + regionID + "/" + label,
+		ConfirmMessage: "This deletes a VLAN. Set confirm=true to proceed.",
+		// VLANs have no single-GET endpoint, only a paginated list.
+		// The dry-run fetch lists and filters to the matching
+		// region+label. A VLAN paged out beyond the first 500 results
+		// (extreme edge case) would read as "not found".
+		FetchState: func(ctx context.Context, c *linode.Client) (any, error) {
+			return findVLAN(ctx, c, regionID, label)
+		},
+		Execute: func(ctx context.Context, c *linode.Client) error {
+			return c.DeleteVLAN(ctx, regionID, label)
+		},
+		Success: func() any {
+			return map[string]any{
+				responseKeyMessage: "VLAN " + label + " deleted successfully from region " + regionID,
+				"region_id":        regionID,
+				"label":            label,
+			}
+		},
 	})
+}
+
+// findVLAN resolves a single VLAN by region+label for the dry-run
+// preview. VLANs expose only a paginated list endpoint, so this filters
+// the first page (max page size) rather than issuing a single-resource
+// GET. Returns ErrVLANNotFound when no VLAN matches.
+func findVLAN(ctx context.Context, client *linode.Client, regionID, label string) (any, error) {
+	const maxVLANPageSize = 500
+
+	vlans, err := client.ListVLANs(ctx, 1, maxVLANPageSize)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list VLANs: %w", err)
+	}
+
+	for i := range vlans.Data {
+		vlan := vlans.Data[i]
+		if vlan.Region == regionID && vlan.Label == label {
+			return vlan, nil
+		}
+	}
+
+	return nil, fmt.Errorf("%w: %s in region %s", ErrVLANNotFound, label, regionID)
 }
 
 func vlanRegionPathParamFromTool(request *mcp.CallToolRequest) (string, string) {

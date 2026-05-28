@@ -61,6 +61,10 @@ var (
 	ErrVolumeSizeTooLarge = errors.New("volume size cannot exceed 10240 GB (10 TB)")
 )
 
+// ErrVLANNotFound is returned when a VLAN dry-run cannot find a matching
+// region+label in the VLAN list (VLANs have no single-resource GET).
+var ErrVLANNotFound = errors.New("VLAN not found")
+
 // Sentinel errors for bucket validation.
 var (
 	ErrBucketLabelRequired  = errors.New("label is required")

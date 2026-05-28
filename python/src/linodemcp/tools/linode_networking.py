@@ -7,7 +7,13 @@ from typing import TYPE_CHECKING, Any, cast
 from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import error_response, execute_tool
+from linodemcp.tools.helpers import (
+    DRY_RUN_PROP,
+    error_response,
+    execute_dry_run,
+    execute_tool,
+    is_dry_run,
+)
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -49,7 +55,7 @@ def create_linode_vlan_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_vlan_delete tool."""
     return Tool(
         name="linode_vlan_delete",
-        description="Deletes a VLAN",
+        description="Deletes a VLAN. Pass dry_run=true to preview without deleting.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -64,29 +70,64 @@ def create_linode_vlan_delete_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Must be true to confirm deletion.",
+                    "description": (
+                        "Must be true to confirm deletion. Ignored when dry_run=true."
+                    ),
                 },
+                **DRY_RUN_PROP,
             },
             "required": ["region_id", "label", "confirm"],
         },
     ), Capability.Destroy
 
 
+def _find_vlan(
+    vlans: list[dict[str, Any]], region_id: str, label: str
+) -> dict[str, Any] | None:
+    """Find a VLAN by region+label. VLANs have no single-GET endpoint."""
+    for vlan in vlans:
+        if vlan.get("region") == region_id and vlan.get("label") == label:
+            return vlan
+    return None
+
+
 async def handle_linode_vlan_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_vlan_delete tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return error_response("This is destructive. Set confirm=true to proceed.")
-
     region_id = arguments.get("region_id", "")
     label = arguments.get("label", "")
 
+    # Both branches need region+label, and the spec says dry-run errors
+    # on missing required args the same way the real call would.
     if not region_id:
         return error_response("region_id is required")
     if not label:
         return error_response("label is required")
+
+    if is_dry_run(arguments):
+        # VLANs expose only a list endpoint, so the dry-run fetch lists
+        # and filters to the matching region+label.
+        async def _fetch(client: RetryableClient) -> Any:
+            vlans = await client.list_vlans()
+            match = _find_vlan(vlans, region_id, label)
+            if match is None:
+                msg = f"VLAN not found: {label} in region {region_id}"
+                raise ValueError(msg)
+            return match
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_vlan_delete",
+            "DELETE",
+            f"/networking/vlans/{region_id}/{label}",
+            _fetch,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return error_response("This is destructive. Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_vlan(region_id, label)

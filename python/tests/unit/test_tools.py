@@ -10403,6 +10403,74 @@ async def test_vlan_delete_success(sample_config: Config) -> None:
         mock_client.delete_vlan.assert_called_once_with("us-east", "app-vlan")
 
 
+async def test_vlan_delete_dry_run_lists_and_filters(
+    sample_config: Config,
+) -> None:
+    """dry_run lists VLANs and filters to the match, never deleting.
+
+    VLANs have no single-GET endpoint, so the dry-run fetch lists and
+    filters. Catches a regression where delete fires on the dry-run path.
+    """
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.list_vlans.return_value = [
+            {"label": "other-vlan", "region": "us-east"},
+            {"label": "app-vlan", "region": "us-east", "linodes": [123]},
+        ]
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_vlan_delete(
+                {"region_id": "us-east", "label": "app-vlan", "dry_run": True},
+                sample_config,
+            )
+        )
+
+        body = json.loads(result[0].text)
+        assert body["dry_run"] is True
+        assert body["tool"] == "linode_vlan_delete"
+        assert body["would_execute"]["path"] == "/networking/vlans/us-east/app-vlan"
+        assert body["current_state"]["label"] == "app-vlan"
+        mock_client.list_vlans.assert_awaited_once()
+        mock_client.delete_vlan.assert_not_called()
+
+
+async def test_vlan_delete_dry_run_not_found_errors(
+    sample_config: Config,
+) -> None:
+    """dry_run on a non-existent VLAN surfaces a not-found error."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.list_vlans.return_value = []
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_vlan_delete(
+                {"region_id": "us-east", "label": "ghost-vlan", "dry_run": True},
+                sample_config,
+            )
+        )
+
+        assert "VLAN not found" in result[0].text
+        mock_client.delete_vlan.assert_not_called()
+
+
+async def test_vlan_delete_dry_run_still_validates_region(
+    sample_config: Config,
+) -> None:
+    """Missing region_id must error regardless of dry_run."""
+    result = list(
+        await handle_linode_vlan_delete(
+            {"label": "app-vlan", "dry_run": True}, sample_config
+        )
+    )
+    assert "region_id is required" in result[0].text
+
+
 async def test_vpc_get(sample_config: Config) -> None:
     """VPC get should return VPC details."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
@@ -10811,6 +10879,48 @@ async def test_ipv6_range_delete_success(sample_config: Config) -> None:
         assert len(result) == 1
         assert "deleted" in result[0].text.lower()
         mock_client.delete_ipv6_range.assert_called_once_with(ipv6_range)
+
+
+async def test_ipv6_range_delete_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true must fetch the range via GET and never call delete."""
+    ipv6_range = "2001:0db8::/64"
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_ipv6_range.return_value = {
+            "range": ipv6_range,
+            "region": "us-east",
+            "prefix": 64,
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_ipv6_range_delete(
+                {"range": ipv6_range, "dry_run": True},
+                sample_config,
+            )
+        )
+
+        body = json.loads(result[0].text)
+        assert body["dry_run"] is True
+        assert body["tool"] == "linode_ipv6_range_delete"
+        assert body["would_execute"]["method"] == "DELETE"
+        assert body["would_execute"]["path"] == f"/networking/ipv6/ranges/{ipv6_range}"
+        mock_client.get_ipv6_range.assert_awaited_once_with(ipv6_range)
+        mock_client.delete_ipv6_range.assert_not_called()
+
+
+async def test_ipv6_range_delete_dry_run_still_validates_range(
+    sample_config: Config,
+) -> None:
+    """Missing range must error regardless of dry_run."""
+    result = list(
+        await handle_linode_ipv6_range_delete({"dry_run": True}, sample_config)
+    )
+    assert "range is required" in result[0].text
 
 
 async def test_vpc_ips_list(sample_config: Config) -> None:

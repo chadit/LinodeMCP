@@ -183,53 +183,45 @@ func ipv6RangeCreateRequestFromTool(args map[string]any) (linode.CreateIPv6Range
 
 // NewLinodeIPv6RangeDeleteTool creates a tool for deleting an IPv6 range.
 func NewLinodeIPv6RangeDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newToolWithHandler(
+		cfg,
 		"linode_ipv6_range_delete",
-		mcp.WithDescription("Deletes an IPv6 range. WARNING: This changes networking configuration and may affect routing."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithString(paramIPv6Range, mcp.Required(), mcp.Description("IPv6 range prefix, for example 2001:0db8::/64.")),
-		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm IPv6 range deletion.")),
+		"Deletes an IPv6 range. WARNING: This changes networking configuration and may affect routing."+
+			" Pass dry_run=true to preview without deleting.",
+		[]mcp.ToolOption{
+			mcp.WithString(paramIPv6Range, mcp.Required(), mcp.Description("IPv6 range prefix, for example 2001:0db8::/64.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm IPv6 range deletion. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleIPv6RangeDeleteRequest,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleIPv6RangeDeleteRequest(ctx, &request, cfg)
-	}
 
 	return tool, profiles.CapDestroy, handler
 }
 
 func handleIPv6RangeDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This deletes an IPv6 range and changes networking configuration. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	ipv6Range, validationMessage := ipv6RangeFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if failureMessage := deleteIPv6Range(ctx, client, ipv6Range); failureMessage != "" {
-		return mcp.NewToolResultError(failureMessage), nil
-	}
-
-	return MarshalToolResponse(struct {
-		Message string `json:"message"`
-		Range   string `json:"range"`
-	}{
-		Message: "IPv6 range deleted",
-		Range:   ipv6Range,
+	return RunDestructiveAction(ctx, request, cfg, &DestructiveAction{
+		ToolName:       "linode_ipv6_range_delete",
+		Method:         httpMethodDelete,
+		Path:           "/networking/ipv6/ranges/" + ipv6Range,
+		ConfirmMessage: "This deletes an IPv6 range and changes networking configuration. Set confirm=true to proceed.",
+		FetchState: func(ctx context.Context, c *linode.Client) (any, error) {
+			return c.GetIPv6Range(ctx, ipv6Range)
+		},
+		Execute: func(ctx context.Context, c *linode.Client) error {
+			return c.DeleteIPv6Range(ctx, ipv6Range)
+		},
+		Success: func() any {
+			return map[string]any{
+				responseKeyMessage: "IPv6 range deleted",
+				"range":            ipv6Range,
+			}
+		},
 	})
-}
-
-func deleteIPv6Range(ctx context.Context, client *linode.Client, ipv6Range string) string {
-	if err := client.DeleteIPv6Range(ctx, ipv6Range); err != nil {
-		return "Failed to delete IPv6 range: " + err.Error()
-	}
-
-	return ""
 }

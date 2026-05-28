@@ -269,6 +269,131 @@ func TestLinodeVLANDeleteTool(t *testing.T) {
 		require.NoError(t, err, "handler should return tool errors without Go errors")
 		require.NotNil(t, result, "result should not be nil")
 		assert.True(t, result.IsError, "API failure should be an error result")
-		assertErrorContains(t, result, "Failed to delete linode_vlan_delete")
+		assertErrorContains(t, result, "linode_vlan_delete failed")
+	})
+}
+
+// Dry-run coverage for VLAN delete. VLANs have no single-GET endpoint,
+// so dry-run lists and filters to the matching region+label. Sibling
+// function keeps the main test's subtest count below maintidx.
+func TestLinodeVLANDeleteToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	t.Run("schema advertises dry_run", func(t *testing.T) {
+		t.Parallel()
+
+		tool, _, _ := tools.NewLinodeVLANDeleteTool(&config.Config{})
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run")
+	})
+
+	t.Run("preview lists and filters without mutating", func(t *testing.T) {
+		t.Parallel()
+
+		var methodsSeen []string
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsSeen = append(methodsSeen, r.Method)
+			assert.Equal(t, "/networking/vlans", r.URL.Path, "dry_run must hit the VLAN list endpoint")
+
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+					keyData: []map[string]any{
+						{keyLabel: "other-vlan", keyRegion: regionUSEast},
+						{keyLabel: vlanLabelApp, keyRegion: regionUSEast},
+					},
+					keyPage: 1, keyPages: 1, keyResults: 2,
+				}))
+
+				return
+			}
+
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeVLANDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyRegionID: regionUSEast,
+			keyLabel:    vlanLabelApp,
+			keyDryRun:   true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError)
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, true, body[keyDryRun])
+		assert.Equal(t, "linode_vlan_delete", body["tool"])
+
+		would, isWouldObject := body["would_execute"].(map[string]any)
+		require.True(t, isWouldObject)
+		assert.Equal(t, "DELETE", would["method"])
+		assert.Equal(t, "/networking/vlans/"+regionUSEast+"/"+vlanLabelApp, would["path"])
+
+		// current_state must be the matched VLAN, not the whole list.
+		state, stateIsObject := body["current_state"].(map[string]any)
+		require.True(t, stateIsObject)
+		assert.Equal(t, vlanLabelApp, state[keyLabel])
+
+		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+			"dry_run must only issue GET (list), never DELETE")
+	})
+
+	t.Run("preview errors when VLAN not found", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyData: []map[string]any{}, keyPage: 1, keyPages: 1, keyResults: 0,
+			}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeVLANDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyRegionID: regionUSEast,
+			keyLabel:    vlanLabelApp,
+			keyDryRun:   true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError,
+			"dry_run on a non-existent VLAN must surface a not-found error, like the real delete would")
+		assertErrorContains(t, result, "VLAN not found")
+	})
+
+	t.Run("dry_run still validates region and label", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, handler := tools.NewLinodeVLANDeleteTool(&config.Config{})
+		req := createRequestWithArgs(t, map[string]any{
+			keyLabel:  vlanLabelApp,
+			keyDryRun: true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError)
+		assertErrorContains(t, result, keyRegionID)
 	})
 }

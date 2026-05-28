@@ -575,7 +575,9 @@ def create_linode_ipv6_range_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_ipv6_range_delete tool."""
     return Tool(
         name="linode_ipv6_range_delete",
-        description="Deletes an IPv6 range",
+        description=(
+            "Deletes an IPv6 range. Pass dry_run=true to preview without deleting."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -585,8 +587,10 @@ def create_linode_ipv6_range_delete_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": (
                         "Must be true to confirm deletion. This is irreversible."
+                        " Ignored when dry_run=true."
                     ),
                 },
+                **DRY_RUN_PROP,
             },
             "required": [_IPV6_RANGE_KEY, "confirm"],
         },
@@ -597,14 +601,28 @@ async def handle_linode_ipv6_range_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_ipv6_range_delete tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return error_response("This is destructive. Set confirm=true to proceed.")
-
     range_value = arguments.get(_IPV6_RANGE_KEY, "")
     if not isinstance(range_value, str) or not range_value.strip():
         return error_response("range is required")
     ipv6_range = range_value.strip()
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_ipv6_range(ipv6_range)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_ipv6_range_delete",
+            "DELETE",
+            f"/networking/ipv6/ranges/{ipv6_range}",
+            _fetch,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return error_response("This is destructive. Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_ipv6_range(ipv6_range)

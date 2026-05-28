@@ -488,7 +488,7 @@ func TestLinodeIPv6RangeDeleteTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Failed to delete IPv6 range", "error should name the failing tool")
+		assert.Contains(t, textContent.Text, "linode_ipv6_range_delete failed", "error should name the failing tool")
 	})
 
 	t.Run("invalid range rejects before client", func(t *testing.T) {
@@ -527,5 +527,114 @@ func TestLinodeIPv6RangeDeleteTool(t *testing.T) {
 				assert.Contains(t, textContent.Text, keyIPv6Range, "error should explain invalid range")
 			})
 		}
+	})
+}
+
+// Dry-run coverage for IPv6 range delete. Sibling function keeps the
+// main test's subtest count below maintidx's threshold.
+func TestLinodeIPv6RangeDeleteToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	t.Run("schema advertises dry_run", func(t *testing.T) {
+		t.Parallel()
+
+		tool, _, _ := tools.NewLinodeIPv6RangeDeleteTool(&config.Config{})
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run")
+	})
+
+	t.Run("preview without mutating", func(t *testing.T) {
+		t.Parallel()
+
+		var methodsSeen []string
+
+		rangeBody := `{"range":"2001:0db8::","region":"us-east","prefix":64}`
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsSeen = append(methodsSeen, r.Method)
+			assert.Equal(t, "/networking/ipv6/ranges/2001:0db8::%2F64", r.URL.EscapedPath())
+
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(rangeBody))
+
+				return
+			}
+
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeIPv6RangeDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyIPv6Range: ipv6RangeCIDR,
+			keyDryRun:    true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError)
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, true, body[keyDryRun])
+		assert.Equal(t, "linode_ipv6_range_delete", body["tool"])
+
+		would, isWouldObject := body["would_execute"].(map[string]any)
+		require.True(t, isWouldObject)
+		assert.Equal(t, "DELETE", would["method"])
+		assert.Equal(t, "/networking/ipv6/ranges/"+ipv6RangeCIDR, would["path"])
+
+		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+			"dry_run must only issue a single GET, never DELETE")
+	})
+
+	t.Run("does not require confirm", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"range":"2001:0db8::","region":"us-east"}`))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeIPv6RangeDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyIPv6Range: ipv6RangeCIDR,
+			keyDryRun:    true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.False(t, result.IsError,
+			"dry_run without confirm must succeed; confirm only gates real execution")
+	})
+
+	t.Run("dry_run still validates range", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, handler := tools.NewLinodeIPv6RangeDeleteTool(&config.Config{})
+		req := createRequestWithArgs(t, map[string]any{keyDryRun: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, result.IsError,
+			"dry_run with missing range must error the same way the real call would")
+		assertErrorContains(t, result, keyIPv6Range)
 	})
 }
