@@ -45,7 +45,7 @@ func TestLinodeVLANsListTool(t *testing.T) {
 			assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyData: []map[string]any{{keyLabel: "app-vlan", "region": regionUSEast, "linodes": []int{123}}},
+				keyData: []map[string]any{{keyLabel: vlanLabelApp, "region": regionUSEast, "linodes": []int{123}}},
 				keyPage: 1, keyPages: 1, keyResults: 1,
 			}), "encoding response should not fail")
 		}))
@@ -66,7 +66,7 @@ func TestLinodeVLANsListTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "app-vlan", "response should contain VLAN label")
+		assert.Contains(t, textContent.Text, vlanLabelApp, "response should contain VLAN label")
 		assert.Contains(t, textContent.Text, regionUSEast, "response should contain VLAN region")
 	})
 
@@ -125,5 +125,150 @@ func TestLinodeVLANsListTool(t *testing.T) {
 				assertErrorContains(t, result, testCase.wantMessage)
 			})
 		}
+	})
+}
+
+func TestLinodeVLANDeleteTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	tool, capability, handler := tools.NewLinodeVLANDeleteTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+		assert.Equal(t, "linode_vlan_delete", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Equal(t, profiles.CapDestroy, capability, "tool should be destroy capability")
+		require.NotNil(t, handler, "handler should not be nil")
+		assert.Contains(t, tool.InputSchema.Properties, keyRegionID, "schema should include region_id")
+		assert.Contains(t, tool.InputSchema.Properties, keyLabel, "schema should include label")
+		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "mutating schema should include confirm")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			assert.Equal(t, "/networking/vlans/us-east/app-vlan", r.URL.Path, "request path should match")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}), "encoding response should not fail")
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeVLANDeleteTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyRegionID: regionUSEast, keyLabel: vlanLabelApp, keyConfirm: true}))
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.False(t, result.IsError, "result should not be a tool error")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, vlanLabelApp, "response should include VLAN label")
+	})
+
+	t.Run("confirm rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLoopbackClosed, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeVLANDeleteTool(cfg)
+
+		cases := []struct {
+			name  string
+			value any
+		}{
+			{name: caseMissing},
+			{name: caseFalseConfirmRejected, value: false},
+			{name: caseStringConfirmRejected, value: boolStringTrue},
+			{name: caseNumericConfirmRejected, value: 1},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				args := map[string]any{keyRegionID: regionUSEast, keyLabel: vlanLabelApp}
+				if testCase.value != nil {
+					args[keyConfirm] = testCase.value
+				}
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, args))
+
+				require.NoError(t, err, "handler should return tool error without Go error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "missing or invalid confirm should be an error result")
+				assertErrorContains(t, result, errConfirmEqualsTrue)
+			})
+		}
+	})
+
+	t.Run("invalid path params reject before client", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLoopbackClosed, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeVLANDeleteTool(cfg)
+
+		cases := []struct {
+			name        string
+			args        map[string]any
+			wantMessage string
+		}{
+			{name: caseMissingRegion, args: map[string]any{keyLabel: vlanLabelApp, keyConfirm: true}, wantMessage: errRegionIDRequired},
+			{name: caseMissingLabel, args: map[string]any{keyRegionID: regionUSEast, keyConfirm: true}, wantMessage: errLabelRequired},
+			{name: caseSlash, args: map[string]any{keyRegionID: "us/east", keyLabel: vlanLabelApp, keyConfirm: true}, wantMessage: errRegionIDSlug},
+			{name: caseQuery, args: map[string]any{keyRegionID: "us-east?x=1", keyLabel: vlanLabelApp, keyConfirm: true}, wantMessage: errRegionIDSlug},
+			{name: caseFragment, args: map[string]any{keyRegionID: "us-east#frag", keyLabel: vlanLabelApp, keyConfirm: true}, wantMessage: errRegionIDSlug},
+			{name: caseDotTraversal, args: map[string]any{keyRegionID: pathTraversalValue, keyLabel: vlanLabelApp, keyConfirm: true}, wantMessage: errRegionIDSlug},
+			{name: "region uppercase", args: map[string]any{keyRegionID: "US EAST", keyLabel: vlanLabelApp, keyConfirm: true}, wantMessage: errRegionIDSlug},
+			{name: "label slash", args: map[string]any{keyRegionID: regionUSEast, keyLabel: "app/vlan", keyConfirm: true}, wantMessage: errLabelNoSeparators},
+			{name: "label query", args: map[string]any{keyRegionID: regionUSEast, keyLabel: "app?vlan", keyConfirm: true}, wantMessage: errLabelNoSeparators},
+			{name: "label fragment", args: map[string]any{keyRegionID: regionUSEast, keyLabel: "app#vlan", keyConfirm: true}, wantMessage: errLabelNoSeparators},
+			{name: "label traversal", args: map[string]any{keyRegionID: regionUSEast, keyLabel: pathTraversalValue, keyConfirm: true}, wantMessage: errLabelNoSeparators},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+
+				require.NoError(t, err, "handler should return tool error without Go error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid path params should be an error result")
+				assertErrorContains(t, result, testCase.wantMessage)
+			})
+		}
+	})
+
+	t.Run("api error returns tool error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			assert.Equal(t, "/networking/vlans/us-east/app-vlan", r.URL.Path, "request path should match")
+			http.Error(w, `{\"errors\":[{\"reason\":\"forbidden\"}]}`, http.StatusForbidden)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeVLANDeleteTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyRegionID: regionUSEast, keyLabel: vlanLabelApp, keyConfirm: true}))
+
+		require.NoError(t, err, "handler should return tool errors without Go errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		assertErrorContains(t, result, "Failed to delete linode_vlan_delete")
 	})
 }

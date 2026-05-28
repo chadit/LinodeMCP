@@ -68,6 +68,31 @@ func (c *Client) httpListVLANs(ctx context.Context, page, pageSize int) (*Pagina
 	return &response, nil
 }
 
+// DeleteVLAN deletes one VLAN by region and label.
+func (c *Client) httpDeleteVLAN(ctx context.Context, regionID, label string) error {
+	if regionID == "" {
+		return ErrRegionIDRequired
+	}
+
+	if label == "" {
+		return ErrLabelRequired
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointNetworkingVLANs+"/%s/%s", url.PathEscape(regionID), url.PathEscape(label))
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteVLAN", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return c.handleResponse(resp, nil)
+}
+
 // ListFirewallRules retrieves the rules for a Cloud Firewall.
 func (c *Client) httpListFirewallRules(ctx context.Context, firewallID int) (*FirewallRules, error) {
 	if firewallID <= 0 {
