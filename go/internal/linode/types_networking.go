@@ -176,6 +176,33 @@ type NodeBalancer struct {
 	Updated            string   `json:"updated"`
 }
 
+// NodeBalancerConfig represents a NodeBalancer frontend configuration.
+type NodeBalancerConfig struct {
+	ID             int                     `json:"id"`
+	Port           int                     `json:"port"`
+	Protocol       string                  `json:"protocol"`
+	Algorithm      string                  `json:"algorithm"`
+	Stickiness     string                  `json:"stickiness"`
+	Check          string                  `json:"check"`
+	CheckInterval  int                     `json:"check_interval"`
+	CheckTimeout   int                     `json:"check_timeout"`
+	CheckAttempts  int                     `json:"check_attempts"`
+	CheckPath      string                  `json:"check_path"`
+	CheckBody      string                  `json:"check_body"`
+	CheckPassive   bool                    `json:"check_passive"`
+	CipherSuite    string                  `json:"cipher_suite"`
+	SSLCommonName  string                  `json:"ssl_commonname"`
+	SSLFingerprint string                  `json:"ssl_fingerprint"`
+	NodeBalancerID int                     `json:"nodebalancer_id"`
+	NodesStatus    NodeBalancerNodesStatus `json:"nodes_status"`
+}
+
+// NodeBalancerNodesStatus represents the health summary for nodes on a NodeBalancer config.
+type NodeBalancerNodesStatus struct {
+	Up   int `json:"up"`
+	Down int `json:"down"`
+}
+
 // Transfer represents data transfer statistics.
 type Transfer struct {
 	In    float64 `json:"in"`

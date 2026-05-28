@@ -24,6 +24,7 @@ const (
 	endpointNetworkingVLANs       = "/networking/vlans"
 	endpointNodeBalancers         = "/nodebalancers"
 	endpointNodeBalancerTypes     = "/nodebalancers/types"
+	endpointNodeBalancerConfigs   = endpointNodeBalancers + "/%d/configs"
 )
 
 // ListFirewalls retrieves all Cloud Firewalls for the authenticated user.
@@ -916,6 +917,28 @@ func (c *Client) httpGetNodeBalancer(ctx context.Context, nodeBalancerID int) (*
 	}
 
 	return &nodeBalancer, nil
+}
+
+// ListNodeBalancerConfigs retrieves configs for a NodeBalancer by its ID.
+func (c *Client) httpListNodeBalancerConfigs(ctx context.Context, nodeBalancerID int) ([]NodeBalancerConfig, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointNodeBalancerConfigs, nodeBalancerID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListNodeBalancerConfigs", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[NodeBalancerConfig]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
 }
 
 // CreateNodeBalancer creates a new NodeBalancer.
