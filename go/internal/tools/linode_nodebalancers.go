@@ -84,6 +84,22 @@ func NewLinodeInstanceNodeBalancerListTool(cfg *config.Config) (mcp.Tool, profil
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeNodeBalancerConfigListTool creates a tool for listing configs on a NodeBalancer.
+func NewLinodeNodeBalancerConfigListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_nodebalancer_config_list",
+		"Lists configs for a specific NodeBalancer by its ID.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("nodebalancer_id", mcp.Required(),
+				mcp.Description("The ID of the NodeBalancer whose configs should be listed")),
+		},
+		handleLinodeNodeBalancerConfigListRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeNodeBalancerGetTool creates a tool for getting a single NodeBalancer.
 func NewLinodeNodeBalancerGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
@@ -132,6 +148,47 @@ func handleLinodeInstanceNodeBalancerListRequest(ctx context.Context, request *m
 	}
 
 	return MarshalToolResponse(response)
+}
+
+func handleLinodeNodeBalancerConfigListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	nodeBalancerID, validationMessage := nodeBalancerIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	configs, err := client.ListNodeBalancerConfigs(ctx, nodeBalancerID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to list configs for NodeBalancer %d: %v", nodeBalancerID, err)), nil
+	}
+
+	response := struct {
+		Count   int                         `json:"count"`
+		Configs []linode.NodeBalancerConfig `json:"configs"`
+	}{
+		Count:   len(configs),
+		Configs: configs,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func nodeBalancerIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	args := request.GetArguments()
+	if _, exists := args["nodebalancer_id"]; !exists {
+		return 0, "nodebalancer_id is required"
+	}
+
+	nodeBalancerID, validationMessage := optionalPaginationInt(args, "nodebalancer_id", 1, 0)
+	if validationMessage != "" {
+		return 0, validationMessage
+	}
+
+	return nodeBalancerID, ""
 }
 
 func handleLinodeNodeBalancerGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

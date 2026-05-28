@@ -567,3 +567,10 @@ func TestHelloToolHandlerDispatch(t *testing.T) {
 	require.True(t, ok, "first content item should be TextContent")
 	assert.Contains(t, textContent.Text, "Hello, Test!", "greeting should contain the provided name")
 }
+
+func TestToolDescriptorsIncludesNodeBalancerConfigList(t *testing.T) {
+	t.Parallel()
+
+	descriptors := server.ToolDescriptors(&config.Config{})
+	assert.Contains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_list", Capability: profiles.CapRead})
+}
