@@ -1275,6 +1275,84 @@ func TestLinodeInstanceDiskDeleteTool(t *testing.T) {
 	})
 }
 
+// Dry-run coverage for instance disk delete (ByTwoIDs helper).
+func TestLinodeInstanceDiskDeleteToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	t.Run("schema advertises dry_run", func(t *testing.T) {
+		t.Parallel()
+
+		tool, _, _ := tools.NewLinodeInstanceDiskDeleteTool(&config.Config{})
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run")
+	})
+
+	t.Run("preview without mutating", func(t *testing.T) {
+		t.Parallel()
+
+		var methodsSeen []string
+
+		diskBody := `{"id":10,"label":"boot","size":25600,"filesystem":"ext4","status":"ready"}`
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsSeen = append(methodsSeen, r.Method)
+			assert.Equal(t, "/linode/instances/123/disks/10", r.URL.Path)
+
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(diskBody))
+
+				return
+			}
+
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeInstanceDiskDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyLinodeID: float64(123),
+			keyDiskID:   float64(10),
+			keyDryRun:   true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError)
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, true, body[keyDryRun])
+		assert.Equal(t, "linode_instance_disk_delete", body["tool"])
+		would, _ := body["would_execute"].(map[string]any)
+		assert.Equal(t, "DELETE", would["method"])
+		assert.Equal(t, "/linode/instances/123/disks/10", would["path"])
+
+		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+			"dry_run must only issue a single GET, never DELETE")
+	})
+
+	t.Run("still validates disk_id", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, handler := tools.NewLinodeInstanceDiskDeleteTool(&config.Config{})
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyDryRun: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		assert.True(t, result.IsError)
+		assertErrorContains(t, result, "disk_id is required")
+	})
+}
+
 // TestLinodeInstanceDiskCloneTool verifies the instance disk clone tool
 // registers correctly, validates confirm, and clones disks.
 func TestLinodeInstanceDiskCloneTool(t *testing.T) {
@@ -1846,6 +1924,84 @@ func TestLinodeInstanceIPDeleteTool(t *testing.T) {
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, "removed", "response should confirm removal")
 		assert.Contains(t, textContent.Text, ip203_0_113_1, "response should contain removed IP")
+	})
+}
+
+// Dry-run coverage for instance IP delete (mixed int+string IDs).
+func TestLinodeInstanceIPDeleteToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	t.Run("schema advertises dry_run", func(t *testing.T) {
+		t.Parallel()
+
+		tool, _, _ := tools.NewLinodeInstanceIPDeleteTool(&config.Config{})
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run")
+	})
+
+	t.Run("preview without mutating", func(t *testing.T) {
+		t.Parallel()
+
+		var methodsSeen []string
+
+		ipBody := `{"address":"203.0.113.1","type":"ipv4","public":true,"linode_id":123}`
+		expectedPath := "/linode/instances/123/ips/203.0.113.1"
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsSeen = append(methodsSeen, r.Method)
+			assert.Equal(t, expectedPath, r.URL.Path)
+
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(ipBody))
+
+				return
+			}
+
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeInstanceIPDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{
+			keyLinodeID: float64(123),
+			keyAddress:  ip203_0_113_1,
+			keyDryRun:   true,
+		})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError)
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, "linode_instance_ip_delete", body["tool"])
+		would, _ := body["would_execute"].(map[string]any)
+		assert.Equal(t, "DELETE", would["method"])
+		assert.Equal(t, expectedPath, would["path"])
+
+		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+			"dry_run must only issue a single GET, never DELETE")
+	})
+
+	t.Run("still validates address", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, handler := tools.NewLinodeInstanceIPDeleteTool(&config.Config{})
+		req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyDryRun: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err)
+		assert.True(t, result.IsError)
+		assertErrorContains(t, result, "address is required")
 	})
 }
 

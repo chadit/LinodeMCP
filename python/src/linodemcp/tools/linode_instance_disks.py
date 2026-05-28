@@ -5,7 +5,12 @@ from typing import TYPE_CHECKING, Any
 from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import execute_tool
+from linodemcp.tools.helpers import (
+    DRY_RUN_PROP,
+    execute_dry_run,
+    execute_tool,
+    is_dry_run,
+)
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -267,7 +272,10 @@ def create_linode_instance_disk_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_disk_delete tool."""
     return Tool(
         name="linode_instance_disk_delete",
-        description="Deletes a disk from a Linode instance",
+        description=(
+            "Deletes a disk from a Linode instance."
+            " Pass dry_run=true to preview without deleting."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -278,8 +286,10 @@ def create_linode_instance_disk_delete_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": (
                         "Must be true to confirm deletion. This is irreversible."
+                        " Ignored when dry_run=true."
                     ),
                 },
+                **DRY_RUN_PROP,
             },
             "required": [
                 "instance_id",
@@ -294,14 +304,28 @@ async def handle_linode_instance_disk_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_instance_disk_delete tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return _error_response("This is destructive. Set confirm=true to proceed.")
-
     ids = _parse_instance_and_disk_ids(arguments)
     if isinstance(ids, list):
         return ids
     instance_id, disk_id = ids
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_instance_disk(instance_id, disk_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_instance_disk_delete",
+            "DELETE",
+            f"/linode/instances/{instance_id}/disks/{disk_id}",
+            _fetch,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("This is destructive. Set confirm=true to proceed.")
 
     async def _call(
         client: RetryableClient,

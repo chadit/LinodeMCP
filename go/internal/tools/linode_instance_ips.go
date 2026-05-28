@@ -226,14 +226,16 @@ func NewLinodeInstanceIPDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_ip_delete",
-		"Removes an IP address from a Linode instance. WARNING: This permanently removes the IP and is irreversible.",
+		"Removes an IP address from a Linode instance. WARNING: This permanently removes the IP and is irreversible."+
+			" Pass dry_run=true to preview without deleting.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),
 			mcp.WithString("address", mcp.Required(),
 				mcp.Description("The IP address to remove (e.g. 203.0.113.1)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm IP removal. This action is irreversible.")),
+				mcp.Description("Must be true to confirm IP removal. This action is irreversible. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceIPDeleteRequest,
 	)
@@ -242,10 +244,6 @@ func NewLinodeInstanceIPDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 }
 
 func handleInstanceIPDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This permanently removes the IP address and is irreversible. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	linodeID := request.GetInt("linode_id", 0)
 	if linodeID == 0 {
 		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
@@ -256,22 +254,23 @@ func handleInstanceIPDeleteRequest(ctx context.Context, request *mcp.CallToolReq
 		return mcp.NewToolResultError("address is required"), nil
 	}
 
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := client.DeleteInstanceIP(ctx, linodeID, address); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove IP %s from instance %d: %v", address, linodeID, err)), nil
-	}
-
-	return MarshalToolResponse(struct {
-		Message  string `json:"message"`
-		LinodeID int    `json:"linode_id"`
-		Address  string `json:"address"`
-	}{
-		Message:  fmt.Sprintf("IP %s removed from instance %d", address, linodeID),
-		LinodeID: linodeID,
-		Address:  address,
+	return RunDestructiveAction(ctx, request, cfg, &DestructiveAction{
+		ToolName:       "linode_instance_ip_delete",
+		Method:         httpMethodDelete,
+		Path:           fmt.Sprintf("/linode/instances/%d/ips/%s", linodeID, address),
+		ConfirmMessage: "This permanently removes the IP address and is irreversible. Set confirm=true to proceed.",
+		FetchState: func(ctx context.Context, c *linode.Client) (any, error) {
+			return c.GetInstanceIP(ctx, linodeID, address)
+		},
+		Execute: func(ctx context.Context, c *linode.Client) error {
+			return c.DeleteInstanceIP(ctx, linodeID, address)
+		},
+		Success: func() any {
+			return map[string]any{
+				responseKeyMessage: fmt.Sprintf("IP %s removed from instance %d", address, linodeID),
+				"linode_id":        linodeID,
+				"address":          address,
+			}
+		},
 	})
 }

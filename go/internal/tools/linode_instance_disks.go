@@ -267,14 +267,16 @@ func NewLinodeInstanceDiskDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_instance_disk_delete",
-		"Deletes a disk from a Linode instance. WARNING: This is irreversible and all data on the disk will be lost.",
+		"Deletes a disk from a Linode instance. WARNING: This is irreversible and all data on the disk will be lost."+
+			" Pass dry_run=true to preview without deleting.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),
 			mcp.WithNumber("disk_id", mcp.Required(),
 				mcp.Description("The ID of the disk to delete")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm deletion. This action is irreversible and all disk data will be lost.")),
+				mcp.Description("Must be true to confirm deletion. This action is irreversible and all disk data will be lost. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceDiskDeleteRequest,
 	)
@@ -283,40 +285,24 @@ func NewLinodeInstanceDiskDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 }
 
 func handleInstanceDiskDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This is irreversible. All data on the disk will be permanently deleted. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	linodeID := request.GetInt("linode_id", 0)
-	if linodeID == 0 {
-		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
-	}
-
-	diskID := request.GetInt("disk_id", 0)
-	if diskID == 0 {
-		return mcp.NewToolResultError(ErrDiskIDRequired.Error()), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := client.DeleteInstanceDisk(ctx, linodeID, diskID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove disk %d from instance %d: %v", diskID, linodeID, err)), nil
-	}
-
-	response := struct {
-		Message  string `json:"message"`
-		LinodeID int    `json:"linode_id"`
-		DiskID   int    `json:"disk_id"`
-	}{
-		Message:  fmt.Sprintf("Disk %d deleted from instance %d successfully", diskID, linodeID),
-		LinodeID: linodeID,
-		DiskID:   diskID,
-	}
-
-	return MarshalToolResponse(response)
+	// The two-int helper emits "linode_id is required" / "disk_id is
+	// required", which matches ErrLinodeIDRequired / ErrDiskIDRequired
+	// verbatim, so no per-tool pre-validation guard is needed here.
+	return RunDestructiveActionByTwoIDs(ctx, request, cfg, &DestructiveActionByTwoIDs{
+		ToolName:       "linode_instance_disk_delete",
+		OuterIDParam:   "linode_id",
+		InnerIDParam:   "disk_id",
+		Method:         httpMethodDelete,
+		PathPattern:    "/linode/instances/%d/disks/%d",
+		ConfirmMessage: "This is irreversible. All data on the disk will be permanently deleted. Set confirm=true to proceed.",
+		SuccessFormat:  "Disk %d deleted from instance %d successfully",
+		FetchState: func(ctx context.Context, c *linode.Client, linodeID, diskID int) (any, error) {
+			return c.GetInstanceDisk(ctx, linodeID, diskID)
+		},
+		Execute: func(ctx context.Context, c *linode.Client, linodeID, diskID int) error {
+			return c.DeleteInstanceDisk(ctx, linodeID, diskID)
+		},
+	})
 }
 
 // NewLinodeInstanceDiskCloneTool creates a tool for cloning a disk on a Linode instance.

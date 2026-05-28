@@ -12369,6 +12369,38 @@ async def test_handle_linode_instance_disk_delete_success(
     mock_linode_client.delete_instance_disk.assert_called_once_with(123, 10)
 
 
+async def test_instance_disk_delete_dry_run_returns_preview(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """dry_run=true must fetch the disk via GET and never call delete."""
+    mock_linode_client.get_instance_disk.return_value = {
+        "id": 10,
+        "label": "boot",
+        "size": 25600,
+    }
+    result = await handle_linode_instance_disk_delete(
+        {"instance_id": 123, "disk_id": 10, "dry_run": True}, sample_config
+    )
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_instance_disk_delete"
+    assert body["would_execute"]["method"] == "DELETE"
+    assert body["would_execute"]["path"] == "/linode/instances/123/disks/10"
+    mock_linode_client.get_instance_disk.assert_awaited_once_with(123, 10)
+    mock_linode_client.delete_instance_disk.assert_not_called()
+
+
+async def test_instance_disk_delete_dry_run_still_validates_disk_id(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """Missing disk_id must error regardless of dry_run."""
+    result = await handle_linode_instance_disk_delete(
+        {"instance_id": 123, "dry_run": True}, sample_config
+    )
+    assert "disk_id" in result[0].text.lower()
+    mock_linode_client.delete_instance_disk.assert_not_called()
+
+
 async def test_handle_linode_instance_disk_clone_success(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
@@ -12517,6 +12549,39 @@ async def test_handle_linode_instance_ip_delete_success(
     assert data["instance_id"] == 123
     assert data["address"] == "203.0.113.1"
     mock_linode_client.delete_instance_ip.assert_called_once_with(123, "203.0.113.1")
+
+
+async def test_instance_ip_delete_dry_run_returns_preview(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """dry_run=true must fetch the IP via GET and never call delete."""
+    mock_linode_client.get_instance_ip.return_value = {
+        "address": "203.0.113.1",
+        "type": "ipv4",
+        "public": True,
+    }
+    result = await handle_linode_instance_ip_delete(
+        {"instance_id": 123, "address": "203.0.113.1", "dry_run": True},
+        sample_config,
+    )
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_instance_ip_delete"
+    assert body["would_execute"]["method"] == "DELETE"
+    assert body["would_execute"]["path"] == "/linode/instances/123/ips/203.0.113.1"
+    mock_linode_client.get_instance_ip.assert_awaited_once_with(123, "203.0.113.1")
+    mock_linode_client.delete_instance_ip.assert_not_called()
+
+
+async def test_instance_ip_delete_dry_run_still_validates_address(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """Missing address must error regardless of dry_run."""
+    result = await handle_linode_instance_ip_delete(
+        {"instance_id": 123, "dry_run": True}, sample_config
+    )
+    assert "address" in result[0].text.lower()
+    mock_linode_client.delete_instance_ip.assert_not_called()
 
 
 async def test_handle_linode_instance_migrate_success(
