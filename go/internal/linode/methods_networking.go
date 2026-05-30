@@ -1062,6 +1062,38 @@ func (c *Client) httpGetNodeBalancerConfigNode(ctx context.Context, nodeBalancer
 	return &node, nil
 }
 
+// DeleteNodeBalancerConfigNode deletes a node from a NodeBalancer config.
+func (c *Client) httpDeleteNodeBalancerConfigNode(ctx context.Context, nodeBalancerID, configID, nodeID int) error {
+	if nodeBalancerID <= 0 {
+		return ErrNodeBalancerIDPositive
+	}
+
+	if configID <= 0 {
+		return ErrConfigIDPositive
+	}
+
+	if nodeID <= 0 {
+		return ErrNodeIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedNodeBalancerID := url.PathEscape(strconv.Itoa(nodeBalancerID))
+	encodedConfigID := url.PathEscape(strconv.Itoa(configID))
+	encodedNodeID := url.PathEscape(strconv.Itoa(nodeID))
+	endpoint := endpointNodeBalancers + "/" + encodedNodeBalancerID + "/configs/" + encodedConfigID + "/nodes/" + encodedNodeID
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteNodeBalancerConfigNode", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return c.handleResponse(resp, nil)
+}
+
 // CreateNodeBalancerConfig creates a config for a NodeBalancer by its ID.
 func (c *Client) httpCreateNodeBalancerConfig(ctx context.Context, nodeBalancerID int, req *CreateNodeBalancerConfigRequest) (*NodeBalancerConfig, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

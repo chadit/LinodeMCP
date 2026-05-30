@@ -718,6 +718,102 @@ func TestClientCreateNodeBalancerNodeRejectsInvalidIDsAndNilRequest(t *testing.T
 	assert.Nil(t, got)
 }
 
+func TestClientDeleteNodeBalancerConfigNodeSuccess(t *testing.T) {
+	t.Parallel()
+
+	var sawBody atomic.Bool
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, "/nodebalancers/123/configs/456/nodes/789", r.URL.Path, "request path should match")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+
+		if r.Body != nil {
+			body, readErr := io.ReadAll(r.Body)
+			assert.NoError(t, readErr)
+			sawBody.Store(len(body) > 0)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	err := client.DeleteNodeBalancerConfigNode(t.Context(), 123, 456, 789)
+
+	require.NoError(t, err)
+	assert.False(t, sawBody.Load(), "DELETE should not send a request body")
+}
+
+func TestClientDeleteNodeBalancerConfigNodeAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, "/nodebalancers/123/configs/456/nodes/789", r.URL.Path, "request path should match")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	err := client.DeleteNodeBalancerConfigNode(t.Context(), 123, 456, 789)
+
+	require.Error(t, err)
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+func TestClientDeleteNodeBalancerConfigNodeDoesNotRetryTransientError(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, "/nodebalancers/123/configs/456/nodes/789", r.URL.Path, "request path should match")
+		calls.Add(1)
+		http.Error(w, "temporary", http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
+	err := client.DeleteNodeBalancerConfigNode(t.Context(), 123, 456, 789)
+
+	require.Error(t, err)
+	assert.Equal(t, int32(1), calls.Load(), "destructive DELETE should not be retried")
+}
+
+func TestClientDeleteNodeBalancerConfigNodeValidatesIDs(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
+	err := client.DeleteNodeBalancerConfigNode(t.Context(), 0, 456, 789)
+	require.ErrorIs(t, err, linode.ErrNodeBalancerIDPositive)
+
+	err = client.DeleteNodeBalancerConfigNode(t.Context(), 123, 0, 789)
+	require.ErrorIs(t, err, linode.ErrConfigIDPositive)
+
+	err = client.DeleteNodeBalancerConfigNode(t.Context(), 123, 456, 0)
+	require.ErrorIs(t, err, linode.ErrNodeIDPositive)
+
+	assert.Equal(t, int32(0), calls.Load(), "invalid IDs should be rejected before making an HTTP request")
+}
+
 func TestClientUpdateNodeBalancerConfigSuccess(t *testing.T) {
 	t.Parallel()
 

@@ -2752,6 +2752,14 @@ func (c *Client) GetNodeBalancerConfigNode(ctx context.Context, nodeBalancerID, 
 	return node, err
 }
 
+// DeleteNodeBalancerConfigNode deletes one node from a node balancer config without retrying the destructive request.
+// Retrying can replay node deletion after a transient error, so this method delegates exactly once.
+func (c *Client) DeleteNodeBalancerConfigNode(ctx context.Context, nodeBalancerID, configID, nodeID int) error {
+	return c.executeWithoutRetry(ctx, "DeleteNodeBalancerConfigNode", func() error {
+		return c.httpDeleteNodeBalancerConfigNode(ctx, nodeBalancerID, configID, nodeID)
+	})
+}
+
 // CreateNodeBalancerConfig creates a config for a node balancer by ID without retrying the POST create call.
 func (c *Client) CreateNodeBalancerConfig(ctx context.Context, nodeBalancerID int, req *CreateNodeBalancerConfigRequest) (*NodeBalancerConfig, error) {
 	var config *NodeBalancerConfig
