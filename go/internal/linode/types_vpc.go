@@ -51,6 +51,17 @@ type VPCIP struct {
 	SubnetMask   string  `json:"subnet_mask"`
 }
 
+// NodeBalancerVPCConfig represents one VPC configuration attached to a NodeBalancer.
+type NodeBalancerVPCConfig struct {
+	VPCID          int    `json:"vpc_id"`
+	SubnetID       int    `json:"subnet_id"`
+	IPv4Range      string `json:"ipv4_range,omitempty"`
+	IPv6Range      string `json:"ipv6_range,omitempty"`
+	IPv4RangeID    *int   `json:"ipv4_range_id,omitempty"`
+	IPv6RangeID    *int   `json:"ipv6_range_id,omitempty"`
+	NodeBalancerID int    `json:"nodebalancer_id,omitempty"`
+}
+
 // CreateVPCRequest represents the request body for creating a VPC.
 type CreateVPCRequest struct {
 	Label       string                `json:"label"`

@@ -155,6 +155,24 @@ func NewLinodeNodeBalancerFirewallUpdateTool(cfg *config.Config) (mcp.Tool, prof
 	return tool, profiles.CapWrite, handler
 }
 
+// NewLinodeNodeBalancerVPCListTool creates a tool for listing VPC configurations on a NodeBalancer.
+func NewLinodeNodeBalancerVPCListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_nodebalancer_vpc_list",
+		"Lists VPC configurations for a specific NodeBalancer by its ID.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
+				mcp.Description("The ID of the NodeBalancer whose VPC configurations should be listed")),
+			mcp.WithNumber("page", mcp.Description("Page number to retrieve")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page, from 25 through 500")),
+		},
+		handleLinodeNodeBalancerVPCListRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeNodeBalancerConfigListTool creates a tool for listing configs on a NodeBalancer.
 func NewLinodeNodeBalancerConfigListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -555,6 +573,37 @@ func handleLinodeNodeBalancerFirewallUpdateRequest(ctx context.Context, request 
 
 func formatNodeBalancerFirewallsUpdateError(nodeBalancerID int, err error) string {
 	return "Failed to update firewall assignments for NodeBalancer " + strconv.Itoa(nodeBalancerID) + ": " + err.Error()
+}
+
+func handleLinodeNodeBalancerVPCListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	nodeBalancerID, validationMessage := nodeBalancerIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	args := request.GetArguments()
+
+	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	pageSize, validationMessage := optionalPaginationInt(args, "page_size", nodeBalancerConfigNodesPageSizeMin, nodeBalancerConfigNodesPageSizeMax)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	vpcs, err := client.ListNodeBalancerVPCs(ctx, nodeBalancerID, page, pageSize)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to list VPC configurations for NodeBalancer %d: %v", nodeBalancerID, err)), nil
+	}
+
+	return MarshalToolResponse(vpcs)
 }
 
 func handleLinodeNodeBalancerConfigRebuildRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

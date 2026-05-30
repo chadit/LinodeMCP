@@ -1520,6 +1520,21 @@ func (c *Client) UpdateAccount(ctx context.Context, req *UpdateAccountRequest) (
 	return c.httpUpdateAccount(ctx, req)
 }
 
+// ListNodeBalancerVPCs retrieves VPC configurations for a NodeBalancer with automatic retry on transient failures.
+func (c *Client) ListNodeBalancerVPCs(ctx context.Context, nodeBalancerID, page, pageSize int) (*PaginatedResponse[NodeBalancerVPCConfig], error) {
+	var vpcs *PaginatedResponse[NodeBalancerVPCConfig]
+
+	err := c.executeWithRetry(ctx, "ListNodeBalancerVPCs", func() error {
+		var err error
+
+		vpcs, err = c.httpListNodeBalancerVPCs(ctx, nodeBalancerID, page, pageSize)
+
+		return err
+	})
+
+	return vpcs, err
+}
+
 // ListRegions retrieves all regions with automatic retry on transient failures.
 func (c *Client) ListRegions(ctx context.Context) ([]Region, error) {
 	var regions []Region
