@@ -998,6 +998,43 @@ func (c *Client) httpGetNodeBalancerConfig(ctx context.Context, nodeBalancerID, 
 	return &config, nil
 }
 
+// GetNodeBalancerConfigNode retrieves a single node for a NodeBalancer config.
+func (c *Client) httpGetNodeBalancerConfigNode(ctx context.Context, nodeBalancerID, configID, nodeID int) (*NodeBalancerConfigNode, error) {
+	if nodeBalancerID <= 0 {
+		return nil, ErrNodeBalancerIDPositive
+	}
+
+	if configID <= 0 {
+		return nil, ErrConfigIDPositive
+	}
+
+	if nodeID <= 0 {
+		return nil, ErrNodeIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedNodeBalancerID := url.PathEscape(strconv.Itoa(nodeBalancerID))
+	encodedConfigID := url.PathEscape(strconv.Itoa(configID))
+	encodedNodeID := url.PathEscape(strconv.Itoa(nodeID))
+	endpoint := endpointNodeBalancers + "/" + encodedNodeBalancerID + "/configs/" + encodedConfigID + "/nodes/" + encodedNodeID
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetNodeBalancerConfigNode", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var node NodeBalancerConfigNode
+	if err := c.handleResponse(resp, &node); err != nil {
+		return nil, err
+	}
+
+	return &node, nil
+}
+
 // CreateNodeBalancerConfig creates a config for a NodeBalancer by its ID.
 func (c *Client) httpCreateNodeBalancerConfig(ctx context.Context, nodeBalancerID int, req *CreateNodeBalancerConfigRequest) (*NodeBalancerConfig, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
