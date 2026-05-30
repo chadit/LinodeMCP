@@ -2813,6 +2813,21 @@ func (c *Client) DeleteNodeBalancerConfig(ctx context.Context, nodeBalancerID, c
 	})
 }
 
+// UpdateNodeBalancerNode updates a node for a node balancer config without retrying the PUT update call.
+func (c *Client) UpdateNodeBalancerNode(ctx context.Context, nodeBalancerID, configID, nodeID int, req *UpdateNodeBalancerNodeRequest) (*NodeBalancerNode, error) {
+	var node *NodeBalancerNode
+
+	err := c.executeWithoutRetry(ctx, "UpdateNodeBalancerNode", func() error {
+		var retryErr error
+
+		node, retryErr = c.httpUpdateNodeBalancerNode(ctx, nodeBalancerID, configID, nodeID, req)
+
+		return retryErr
+	})
+
+	return node, err
+}
+
 // ListStackScripts retrieves all stack scripts with automatic retry on transient failures.
 func (c *Client) ListStackScripts(ctx context.Context) ([]StackScript, error) {
 	var scripts []StackScript

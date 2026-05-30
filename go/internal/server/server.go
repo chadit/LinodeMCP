@@ -1053,6 +1053,7 @@ func networkingToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeNodeBalancerNodeDeleteTool,
 		tools.NewLinodeNodeBalancerConfigUpdateTool,
 		tools.NewLinodeNodeBalancerConfigDeleteTool,
+		tools.NewLinodeNodeBalancerNodeUpdateTool,
 		tools.NewLinodeFirewallCreateTool,
 		tools.NewLinodeFirewallUpdateTool,
 		tools.NewLinodeFirewallDeleteTool,

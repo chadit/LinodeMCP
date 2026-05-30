@@ -17,14 +17,18 @@ import (
 )
 
 const (
-	errNodeBalancerIDRequired  = "nodebalancer_id is required"
-	errNodeBalancerIDInteger   = "nodebalancer_id must be an integer"
-	errNodeBalancerIDMin       = "nodebalancer_id must be an integer greater than or equal to 1"
-	nodeBalancerNodeAddress    = "192.0.2.10:80"
-	nodeBalancerNodeKeyMode    = "mode"
-	nodeBalancerNodeStatusUP   = "UP"
-	nodeBalancerNodeModeAccept = "accept"
-	keyWeight                  = "weight"
+	errNodeBalancerIDRequired   = "nodebalancer_id is required"
+	errNodeBalancerIDInteger    = "nodebalancer_id must be an integer"
+	errNodeBalancerIDMin        = "nodebalancer_id must be an integer greater than or equal to 1"
+	nodeBalancerNodeAddress     = "192.0.2.10:80"
+	nodeBalancerNodeKeyMode     = "mode"
+	nodeBalancerNodeStatusUP    = "UP"
+	nodeBalancerNodeModeAccept  = "accept"
+	caseSeparatorNodeID         = "separator node id"
+	caseQueryNodeID             = "query node id"
+	caseTraversalNodeID         = "traversal node id"
+	keyWeight                   = "weight"
+	invalidNodeBalancerNodeMode = "invalid"
 )
 
 func TestLinodeNodeBalancerConfigListTool(t *testing.T) {
@@ -291,9 +295,9 @@ func TestLinodeNodeBalancerConfigNodeGetTool(t *testing.T) {
 		{name: caseTraversalConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: pathTraversalValue, keyNodeID: float64(789)}, wantContains: errConfigIDInteger},
 		{name: caseZeroConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(0), keyNodeID: float64(789)}, wantContains: errConfigIDMin},
 		{name: caseMissingNodeID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456)}, wantContains: errNodeIDRequired},
-		{name: "separator node id", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: pathSeparatorLinodeID}, wantContains: errNodeIDInteger},
-		{name: "query node id", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: shareGroupIDQueryValue}, wantContains: errNodeIDInteger},
-		{name: "traversal node id", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: pathTraversalValue}, wantContains: errNodeIDInteger},
+		{name: caseSeparatorNodeID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: pathSeparatorLinodeID}, wantContains: errNodeIDInteger},
+		{name: caseQueryNodeID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: shareGroupIDQueryValue}, wantContains: errNodeIDInteger},
+		{name: caseTraversalNodeID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: pathTraversalValue}, wantContains: errNodeIDInteger},
 		{name: "negative node id", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(-1)}, wantContains: "node_id must be an integer greater than or equal to 1"},
 	}
 	for _, tt := range validationTests {
@@ -702,7 +706,7 @@ func TestLinodeNodeBalancerNodeCreateTool(t *testing.T) {
 		{name: caseMissingLabel, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyAddress: nodeBalancerNodeAddress, keyConfirm: true}, wantContains: errLabelRequired},
 		{name: caseMissingAddress, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyConfirm: true}, wantContains: "address is required"},
 		{name: "invalid weight", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyWeight: float64(0), keyConfirm: true}, wantContains: "weight must be an integer greater than or equal to 1"},
-		{name: "invalid mode", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, nodeBalancerNodeKeyMode: "invalid", keyConfirm: true}, wantContains: "mode must be one of"},
+		{name: "invalid mode", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, nodeBalancerNodeKeyMode: invalidNodeBalancerNodeMode, keyConfirm: true}, wantContains: "mode must be one of"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -742,7 +746,7 @@ func TestLinodeNodeBalancerNodeCreateTool(t *testing.T) {
 		}
 		_, _, srvHandler := tools.NewLinodeNodeBalancerNodeCreateTool(srvCfg)
 
-		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, nodeBalancerNodeKeyMode: nodeBalancerNodeModeAccept, keyConfirm: true}))
+		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyWeight: float64(50), nodeBalancerNodeKeyMode: nodeBalancerNodeModeAccept, keyConfirm: true}))
 
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
@@ -872,9 +876,9 @@ func TestLinodeNodeBalancerNodeDeleteTool(t *testing.T) {
 		{name: caseTraversalConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: pathTraversalValue, keyNodeID: float64(789), keyConfirm: true}, wantContains: errConfigIDInteger},
 		{name: caseZeroConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(0), keyNodeID: float64(789), keyConfirm: true}, wantContains: errConfigIDMin},
 		{name: caseMissingNodeID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyConfirm: true}, wantContains: errNodeIDRequired},
-		{name: "separator node id", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: pathSeparatorLinodeID, keyConfirm: true}, wantContains: errNodeIDInteger},
-		{name: "query node id", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: shareGroupIDQueryValue, keyConfirm: true}, wantContains: errNodeIDInteger},
-		{name: "traversal node id", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: pathTraversalValue, keyConfirm: true}, wantContains: errNodeIDInteger},
+		{name: caseSeparatorNodeID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: pathSeparatorLinodeID, keyConfirm: true}, wantContains: errNodeIDInteger},
+		{name: caseQueryNodeID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: shareGroupIDQueryValue, keyConfirm: true}, wantContains: errNodeIDInteger},
+		{name: caseTraversalNodeID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: pathTraversalValue, keyConfirm: true}, wantContains: errNodeIDInteger},
 		{name: "negative node id", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(-1), keyConfirm: true}, wantContains: "node_id must be an integer greater than or equal to 1"},
 	}
 	for _, tt := range validationTests {
@@ -985,6 +989,208 @@ func TestLinodeNodeBalancerNodeDeleteTool(t *testing.T) {
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
 		assert.Equal(t, int32(1), calls.Load(), "destructive delete should not be retried")
+	})
+}
+
+func TestLinodeNodeBalancerNodeUpdateTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
+		},
+	}
+	tool, capability, handler := tools.NewLinodeNodeBalancerNodeUpdateTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+		assert.Equal(t, "linode_nodebalancer_node_update", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapWrite, capability, "tool should require write capability")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Contains(t, tool.InputSchema.Properties, keyNodeBalancerID, "schema should include nodebalancer_id")
+		assert.Contains(t, tool.InputSchema.Properties, keyConfigID, "schema should include config_id")
+		assert.Contains(t, tool.InputSchema.Properties, keyNodeID, "schema should include node_id")
+		assert.Contains(t, tool.InputSchema.Properties, keyLabel, "schema should include label")
+		assert.Contains(t, tool.InputSchema.Properties, keyAddress, "schema should include address")
+		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "schema should include confirm")
+		assert.Contains(t, tool.InputSchema.Required, keyNodeBalancerID, "schema should require nodebalancer_id")
+		assert.Contains(t, tool.InputSchema.Required, keyConfigID, "schema should require config_id")
+		assert.Contains(t, tool.InputSchema.Required, keyNodeID, "schema should require node_id")
+		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "schema should require confirm")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	confirmTests := []struct {
+		name string
+		args map[string]any
+	}{
+		{name: caseMissingConfirm, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1}},
+		{name: caseFalseConfirmRejected, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1, keyConfirm: false}},
+		{name: caseStringConfirmRejected, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1, keyConfirm: boolStringTrue}},
+		{name: caseNumericConfirmRejected, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1, keyConfirm: float64(1)}},
+	}
+	for _, tt := range confirmTests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
+			require.NoError(t, err, "handler should not return Go error")
+			require.NotNil(t, result, "handler should return a result")
+			assert.True(t, result.IsError, "result should be a tool error")
+			assertErrorContains(t, result, "confirm=true")
+		})
+	}
+
+	validationTests := []struct {
+		name         string
+		args         map[string]any
+		wantContains string
+	}{
+		{name: caseMissingNodeBalancerID, args: map[string]any{keyConfigID: float64(456), keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1, keyConfirm: true}, wantContains: errNodeBalancerIDRequired},
+		{name: caseSeparatorNodeBalancerID, args: map[string]any{keyNodeBalancerID: pathSeparatorLinodeID, keyConfigID: float64(456), keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1, keyConfirm: true}, wantContains: errNodeBalancerIDInteger},
+		{name: caseQueryNodeBalancerID, args: map[string]any{keyNodeBalancerID: shareGroupIDQueryValue, keyConfigID: float64(456), keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1, keyConfirm: true}, wantContains: errNodeBalancerIDInteger},
+		{name: caseTraversalNodeBalancerID, args: map[string]any{keyNodeBalancerID: pathTraversalValue, keyConfigID: float64(456), keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1, keyConfirm: true}, wantContains: errNodeBalancerIDInteger},
+		{name: caseMissingConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1, keyConfirm: true}, wantContains: errConfigIDRequired},
+		{name: caseSeparatorConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: pathSeparatorValue, keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1, keyConfirm: true}, wantContains: errConfigIDInteger},
+		{name: caseQueryConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: shareGroupIDQueryValue, keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1, keyConfirm: true}, wantContains: errConfigIDInteger},
+		{name: caseTraversalConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: pathTraversalValue, keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1, keyConfirm: true}, wantContains: errConfigIDInteger},
+		{name: caseMissingNodeID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyConfirm: true}, wantContains: errNodeIDRequired},
+		{name: caseSeparatorNodeID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: pathSeparatorValue, keyLabel: nodeBalancerNodeLabelWeb1, keyConfirm: true}, wantContains: errNodeIDInteger},
+		{name: caseQueryNodeID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: shareGroupIDQueryValue, keyLabel: nodeBalancerNodeLabelWeb1, keyConfirm: true}, wantContains: errNodeIDInteger},
+		{name: caseTraversalNodeID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: pathTraversalValue, keyLabel: nodeBalancerNodeLabelWeb1, keyConfirm: true}, wantContains: errNodeIDInteger},
+		{name: managedContactUpdateEmptyCase, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyConfirm: true}, wantContains: "at least one update field is required"},
+		{name: caseMissingLabel, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyLabel: " ", keyConfirm: true}, wantContains: errLabelRequired},
+		{name: caseMissingAddress, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyAddress: " ", keyConfirm: true}, wantContains: "address is required"},
+		{name: "invalid weight", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyWeight: float64(0), keyConfirm: true}, wantContains: "weight must be an integer greater than or equal to 1"},
+		{name: "invalid mode", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), nodeBalancerNodeKeyMode: invalidNodeBalancerNodeMode, keyConfirm: true}, wantContains: "mode must be one of"},
+	}
+	for _, tt := range validationTests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
+			require.NoError(t, err, "handler should not return Go error")
+			require.NotNil(t, result, "handler should return a result")
+			assert.True(t, result.IsError, "result should be a tool error")
+			assertErrorContains(t, result, tt.wantContains)
+		})
+	}
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+			assert.Equal(t, "/nodebalancers/123/configs/456/nodes/789", r.URL.Path, "request path should match")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+
+			var body map[string]any
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			assert.Equal(t, nodeBalancerNodeLabelWeb1, body[keyLabel], "request body should include label")
+			assert.Equal(t, nodeBalancerNodeAddress, body[keyAddress], "request body should include address")
+			assert.InDelta(t, float64(50), body[keyWeight], 0.001, "request body should include weight")
+			assert.Equal(t, nodeBalancerNodeModeAccept, body[nodeBalancerNodeKeyMode], "request body should include mode")
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyID: 789, keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyStatus: nodeBalancerNodeStatusUP, nodeBalancerNodeKeyMode: nodeBalancerNodeModeAccept, keyNodeBalancerID: 123, keyConfigID: 456}))
+		}))
+		t.Cleanup(srv.Close)
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeNodeBalancerNodeUpdateTool(srvCfg)
+
+		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyWeight: float64(50), nodeBalancerNodeKeyMode: nodeBalancerNodeModeAccept, keyConfirm: true}))
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.False(t, result.IsError, "result should not be a tool error")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "updated successfully", "response should confirm update")
+		assert.Contains(t, textContent.Text, "789", "response should contain node ID")
+	})
+
+	t.Run("dry_run preview does not call client", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			t.Error("dry_run should not call the Linode API")
+			w.WriteHeader(http.StatusTeapot)
+		}))
+		t.Cleanup(srv.Close)
+
+		dryRunCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, dryRunHandler := tools.NewLinodeNodeBalancerNodeUpdateTool(dryRunCfg)
+
+		result, err := dryRunHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1, keyDryRun: true}))
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.False(t, result.IsError, "dry_run should return a preview")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "linode_nodebalancer_node_update", "preview should include tool name")
+		assert.Contains(t, textContent.Text, "PUT", "preview should include method")
+		assert.Contains(t, textContent.Text, "/nodebalancers/123/configs/456/nodes/789", "preview should include path")
+	})
+
+	t.Run("client error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		t.Cleanup(srv.Close)
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeNodeBalancerNodeUpdateTool(srvCfg)
+
+		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1, keyConfirm: true}))
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "Failed to update node 789 for NodeBalancer 123 config 456")
+		assertErrorContains(t, result, errForbidden)
+	})
+
+	t.Run("empty response", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		}))
+		t.Cleanup(srv.Close)
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeNodeBalancerNodeUpdateTool(srvCfg)
+
+		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1, keyConfirm: true}))
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "empty response")
 	})
 }
 

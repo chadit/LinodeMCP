@@ -117,6 +117,12 @@ func TestRequiredScopesReadVsWrite(t *testing.T) {
 			want:       []profiles.Scope{profiles.ScopeNodeBalancersReadWrite},
 		},
 		{
+			name:       "nodebalancer node update",
+			toolName:   "linode_nodebalancer_node_update",
+			capability: profiles.CapWrite,
+			want:       []profiles.Scope{profiles.ScopeNodeBalancersReadWrite},
+		},
+		{
 			name:       "firewall create",
 			toolName:   "linode_firewall_create",
 			capability: profiles.CapWrite,

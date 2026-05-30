@@ -97,6 +97,9 @@ var ErrCreateConfigRequestRequired = errors.New("create config request is requir
 // ErrCreateNodeBalancerNodeRequestRequired is returned when CreateNodeBalancerNode is called without a request body.
 var ErrCreateNodeBalancerNodeRequestRequired = errors.New("create nodebalancer node request is required")
 
+// ErrUpdateNodeBalancerNodeRequestRequired is returned when UpdateNodeBalancerNode is called without a request body.
+var ErrUpdateNodeBalancerNodeRequestRequired = errors.New("update nodebalancer node request is required")
+
 // ErrUpdateConfigRequestRequired is returned when UpdateInstanceConfig is called without a request body.
 var ErrUpdateConfigRequestRequired = errors.New("update config request is required")
 
