@@ -7,6 +7,7 @@ from mcp.types import TextContent, Tool
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
+    PARAM_DRY_RUN,
     execute_dry_run,
     execute_tool,
     is_dry_run,
@@ -154,6 +155,7 @@ def create_linode_instance_backup_create_tool() -> tuple[Tool, Capability]:
                     "description": "Label for the snapshot",
                 },
                 "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["instance_id", "confirm"],
         },
@@ -164,13 +166,26 @@ async def handle_linode_instance_backup_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_instance_backup_create tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return _error_response("Set confirm=true to proceed.")
-
     iid = _parse_instance_id(arguments)
     if isinstance(iid, list):
         return iid
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_instance(iid)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_instance_backup_create",
+            "POST",
+            f"/linode/instances/{iid}/backups",
+            _fetch,
+        )
+
+    if not arguments.get("confirm"):
+        return _error_response("Set confirm=true to proceed.")
 
     async def _call(
         client: RetryableClient,
@@ -200,6 +215,7 @@ def create_linode_instance_backup_restore_tool() -> tuple[Tool, Capability]:
                     "description": ("Overwrite existing data on target"),
                 },
                 "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
                 "instance_id",
@@ -215,10 +231,6 @@ async def handle_linode_instance_backup_restore(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_instance_backup_restore request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return _error_response("Set confirm=true to proceed.")
-
     ids = _parse_instance_and_backup_ids(arguments)
     if isinstance(ids, list):
         return ids
@@ -227,6 +239,24 @@ async def handle_linode_instance_backup_restore(
     linode_id = arguments.get("linode_id")
     if not linode_id:
         return _error_response("linode_id is required")
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_instance_backup(instance_id, backup_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_instance_backup_restore",
+            "POST",
+            f"/linode/instances/{instance_id}/backups/{backup_id}/restore",
+            _fetch,
+        )
+
+    if not arguments.get("confirm"):
+        return _error_response("Set confirm=true to proceed.")
+
     overwrite = arguments.get("overwrite", False)
 
     async def _call(
@@ -258,6 +288,7 @@ def create_linode_instance_backups_enable_tool() -> tuple[Tool, Capability]:
                 "environment": _ENV_PROP,
                 "instance_id": _INSTANCE_ID_PROP,
                 "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["instance_id", "confirm"],
         },
@@ -268,13 +299,26 @@ async def handle_linode_instance_backups_enable(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_instance_backups_enable request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return _error_response("Set confirm=true to proceed.")
-
     iid = _parse_instance_id(arguments)
     if isinstance(iid, list):
         return iid
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_instance(iid)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_instance_backups_enable",
+            "POST",
+            f"/linode/instances/{iid}/backups/enable",
+            _fetch,
+        )
+
+    if not arguments.get("confirm"):
+        return _error_response("Set confirm=true to proceed.")
 
     async def _call(
         client: RetryableClient,
@@ -309,7 +353,7 @@ def create_linode_instance_backups_cancel_tool() -> tuple[Tool, Capability]:
                         " Ignored when dry_run=true."
                     ),
                 },
-                **DRY_RUN_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["instance_id", "confirm"],
         },

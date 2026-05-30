@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
+    PARAM_DRY_RUN,
+    build_dry_run_response,
     error_response,
     execute_dry_run,
     execute_tool,
@@ -181,28 +183,52 @@ def create_linode_vpc_create_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Must be true to confirm creation.",
+                    "description": (
+                        "Must be true to confirm creation. Ignored when dry_run=true."
+                    ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["label", "region", "confirm"],
         },
     ), Capability.Write
 
 
-async def handle_linode_vpc_create(
-    arguments: dict[str, Any], cfg: Config
-) -> list[TextContent]:
-    """Handle linode_vpc_create tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return error_response("Set confirm=true to proceed.")
-
-    label = arguments.get("label", "")
-    region = arguments.get("region", "")
+def _vpc_create_error(label: str, region: str) -> list[TextContent] | None:
+    """Validate VPC create args; return an error response or None."""
     if not label:
         return error_response("label is required")
     if not region:
         return error_response("region is required")
+    return None
+
+
+async def handle_linode_vpc_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_vpc_create tool request."""
+    label = arguments.get("label", "")
+    region = arguments.get("region", "")
+
+    if is_dry_run(arguments):
+        fields_error = _vpc_create_error(label, region)
+        if fields_error is not None:
+            return fields_error
+        return build_dry_run_response(
+            "linode_vpc_create",
+            arguments.get("environment", ""),
+            "POST",
+            "/vpcs",
+            None,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return error_response("Set confirm=true to proceed.")
+
+    fields_error = _vpc_create_error(label, region)
+    if fields_error is not None:
+        return fields_error
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.create_vpc(
@@ -234,6 +260,7 @@ def create_linode_vpc_update_tool() -> tuple[Tool, Capability]:
                     "description": "New description for the VPC",
                 },
                 "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["vpc_id", "confirm"],
         },
@@ -244,10 +271,6 @@ async def handle_linode_vpc_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_vpc_update tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return error_response("Set confirm=true to proceed.")
-
     vpc_id_str = arguments.get("vpc_id", "")
     if not vpc_id_str:
         return error_response("vpc_id is required")
@@ -255,6 +278,24 @@ async def handle_linode_vpc_update(
         vpc_id = int(vpc_id_str)
     except ValueError:
         return error_response("vpc_id must be a valid integer")
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_vpc(vpc_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_vpc_update",
+            "PUT",
+            f"/vpcs/{vpc_id}",
+            _fetch,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.update_vpc(
@@ -283,7 +324,7 @@ def create_linode_vpc_delete_tool() -> tuple[Tool, Capability]:
                         " Ignored when dry_run=true."
                     ),
                 },
-                **DRY_RUN_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["vpc_id", "confirm"],
         },
@@ -355,8 +396,11 @@ def create_linode_vpc_subnet_create_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Must be true to confirm creation.",
+                    "description": (
+                        "Must be true to confirm creation. Ignored when dry_run=true."
+                    ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
                 "vpc_id",
@@ -368,32 +412,54 @@ def create_linode_vpc_subnet_create_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def _vpc_subnet_create_error(
+    vpc_id_str: Any, label: str, ipv4: str
+) -> tuple[int, None] | tuple[None, list[TextContent]]:
+    """Parse+validate subnet create args; return (vpc_id, None) or (None, err)."""
+    if not vpc_id_str:
+        return None, error_response("vpc_id is required")
+    try:
+        vpc_id = int(vpc_id_str)
+    except ValueError:
+        return None, error_response("vpc_id must be a valid integer")
+    if not label:
+        return None, error_response("label is required")
+    if not ipv4:
+        return None, error_response("ipv4 is required")
+    return vpc_id, None
+
+
 async def handle_linode_vpc_subnet_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_vpc_subnet_create tool request."""
+    vpc_id_str = arguments.get("vpc_id", "")
+    label = arguments.get("label", "")
+    ipv4 = arguments.get("ipv4", "")
+
+    vpc_id, fields_error = _vpc_subnet_create_error(vpc_id_str, label, ipv4)
+
+    if is_dry_run(arguments):
+        if fields_error is not None:
+            return fields_error
+        return build_dry_run_response(
+            "linode_vpc_subnet_create",
+            arguments.get("environment", ""),
+            "POST",
+            f"/vpcs/{vpc_id}/subnets",
+            None,
+        )
+
     confirm = arguments.get("confirm", False)
     if not confirm:
         return error_response("Set confirm=true to proceed.")
 
-    vpc_id_str = arguments.get("vpc_id", "")
-    if not vpc_id_str:
-        return error_response("vpc_id is required")
-    try:
-        vpc_id = int(vpc_id_str)
-    except ValueError:
-        return error_response("vpc_id must be a valid integer")
-
-    label = arguments.get("label", "")
-    ipv4 = arguments.get("ipv4", "")
-    if not label:
-        return error_response("label is required")
-    if not ipv4:
-        return error_response("ipv4 is required")
+    if fields_error is not None:
+        return fields_error
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.create_vpc_subnet(
-            vpc_id=vpc_id,
+            vpc_id=cast("int", vpc_id),
             label=label,
             ipv4=ipv4,
         )
@@ -417,6 +483,7 @@ def create_linode_vpc_subnet_update_tool() -> tuple[Tool, Capability]:
                     "description": "New label for the subnet (required)",
                 },
                 "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
                 "vpc_id",
@@ -432,10 +499,6 @@ async def handle_linode_vpc_subnet_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_vpc_subnet_update tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return error_response("Set confirm=true to proceed.")
-
     ids = _parse_vpc_subnet_ids(arguments)
     if isinstance(ids, list):
         return ids
@@ -444,6 +507,24 @@ async def handle_linode_vpc_subnet_update(
     label = arguments.get("label", "")
     if not label:
         return error_response("label is required")
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_vpc_subnet(vpc_id, subnet_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_vpc_subnet_update",
+            "PUT",
+            f"/vpcs/{vpc_id}/subnets/{subnet_id}",
+            _fetch,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.update_vpc_subnet(
@@ -475,7 +556,7 @@ def create_linode_vpc_subnet_delete_tool() -> tuple[Tool, Capability]:
                         " Ignored when dry_run=true."
                     ),
                 },
-                **DRY_RUN_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
                 "vpc_id",
@@ -540,8 +621,11 @@ def create_linode_ipv6_range_create_tool() -> tuple[Tool, Capability]:
                 _ROUTE_TARGET_KEY: _ROUTE_TARGET_PROP,
                 "confirm": {
                     "type": "boolean",
-                    "description": "Must be true to confirm creation.",
+                    "description": (
+                        "Must be true to confirm creation. Ignored when dry_run=true."
+                    ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [_IPV6_PREFIX_LENGTH_KEY, "confirm"],
         },
@@ -552,6 +636,18 @@ async def handle_linode_ipv6_range_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_ipv6_range_create tool request."""
+    if is_dry_run(arguments):
+        parsed = _parse_ipv6_range_create_args(arguments)
+        if isinstance(parsed, list):
+            return parsed
+        return build_dry_run_response(
+            "linode_ipv6_range_create",
+            arguments.get("environment", ""),
+            "POST",
+            "/networking/ipv6/ranges",
+            None,
+        )
+
     confirm = arguments.get("confirm", False)
     if not confirm:
         return error_response("Set confirm=true to proceed.")
@@ -590,7 +686,7 @@ def create_linode_ipv6_range_delete_tool() -> tuple[Tool, Capability]:
                         " Ignored when dry_run=true."
                     ),
                 },
-                **DRY_RUN_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [_IPV6_RANGE_KEY, "confirm"],
         },

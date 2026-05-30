@@ -8,6 +8,8 @@ from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     ENV_PARAM_SCHEMA,
+    PARAM_DRY_RUN,
+    build_dry_run_response,
     error_response,
     execute_dry_run,
     execute_tool,
@@ -81,8 +83,12 @@ def create_linode_firewall_create_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Must be true to confirm this operation.",
+                    "description": (
+                        "Must be true to confirm this operation. "
+                        "Ignored when dry_run=true."
+                    ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["label", "confirm"],
         },
@@ -93,14 +99,25 @@ async def handle_linode_firewall_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_firewall_create tool request."""
+    label = arguments.get("label", "")
+    inbound_policy = arguments.get("inbound_policy", "ACCEPT")
+    outbound_policy = arguments.get("outbound_policy", "ACCEPT")
+
+    if is_dry_run(arguments):
+        if not label:
+            return error_response("label is required")
+        return build_dry_run_response(
+            "linode_firewall_create",
+            arguments.get("environment", ""),
+            "POST",
+            "/networking/firewalls",
+            None,
+        )
+
     if not arguments.get("confirm"):
         return error_response(
             "This creates a Cloud Firewall. Set confirm=true to proceed."
         )
-
-    label = arguments.get("label", "")
-    inbound_policy = arguments.get("inbound_policy", "ACCEPT")
-    outbound_policy = arguments.get("outbound_policy", "ACCEPT")
 
     if not label:
         return error_response("label is required")
@@ -157,8 +174,12 @@ def create_linode_firewall_update_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Set true to confirm this mutating operation.",
+                    "description": (
+                        "Set true to confirm this mutating operation. "
+                        "Ignored when dry_run=true."
+                    ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["firewall_id", "confirm"],
         },
@@ -173,6 +194,20 @@ async def handle_linode_firewall_update(
 
     if not firewall_id:
         return error_response("firewall_id is required")
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_firewall(int(firewall_id))
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_firewall_update",
+            "PUT",
+            f"/networking/firewalls/{int(firewall_id)}",
+            _fetch,
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         firewall = await client.update_firewall(
@@ -218,7 +253,7 @@ def create_linode_firewall_delete_tool() -> tuple[Tool, Capability]:
                         "Must be true to confirm deletion. Ignored when dry_run=true."
                     ),
                 },
-                **DRY_RUN_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["firewall_id", "confirm"],
         },
@@ -300,7 +335,7 @@ def create_linode_firewall_device_delete_tool() -> tuple[Tool, Capability]:
                         "Must be true to confirm deletion. Ignored when dry_run=true."
                     ),
                 },
-                **DRY_RUN_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["firewall_id", "device_id", "confirm"],
         },
@@ -384,37 +419,40 @@ def create_linode_firewall_rules_update_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Set true to confirm.",
+                    "description": "Set true to confirm. Ignored when dry_run=true.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["firewall_id", "inbound", "outbound", "confirm"],
         },
     ), Capability.Write
 
 
-def _firewall_rules_update_validation_error(arguments: dict[str, Any]) -> str | None:
+def _firewall_rules_fields_error(arguments: dict[str, Any]) -> str | None:
     firewall_id = arguments.get("firewall_id", 0)
-    error: str | None = None
 
+    if not firewall_id:
+        return "firewall_id is required"
+    if not isinstance(firewall_id, int) or isinstance(firewall_id, bool):
+        return "firewall_id must be an integer"
+    if firewall_id <= 0:
+        return "firewall_id must be a positive integer"
+
+    for field in ("inbound", "outbound"):
+        rules_raw: Any = arguments.get(field)
+        if rules_raw is None:
+            return f"{field} is required"
+        if not _is_firewall_rule_list(rules_raw):
+            return f"{field} must be a list of rule objects"
+
+    return None
+
+
+def _firewall_rules_update_validation_error(arguments: dict[str, Any]) -> str | None:
     if arguments.get("confirm") is not True:
-        error = "This replaces all firewall rules. Set confirm=true to proceed."
-    elif not firewall_id:
-        error = "firewall_id is required"
-    elif not isinstance(firewall_id, int) or isinstance(firewall_id, bool):
-        error = "firewall_id must be an integer"
-    elif firewall_id <= 0:
-        error = "firewall_id must be a positive integer"
-    else:
-        for field in ("inbound", "outbound"):
-            rules_raw: Any = arguments.get(field)
-            if rules_raw is None:
-                error = f"{field} is required"
-                break
-            if not _is_firewall_rule_list(rules_raw):
-                error = f"{field} must be a list of rule objects"
-                break
+        return "This replaces all firewall rules. Set confirm=true to proceed."
 
-    return error
+    return _firewall_rules_fields_error(arguments)
 
 
 async def handle_linode_firewall_rules_update(
@@ -422,6 +460,24 @@ async def handle_linode_firewall_rules_update(
 ) -> list[TextContent]:
     """Handle linode_firewall_rules_update tool request."""
     firewall_id = arguments.get("firewall_id", 0)
+
+    if is_dry_run(arguments):
+        fields_error = _firewall_rules_fields_error(arguments)
+        if fields_error is not None:
+            return error_response(fields_error)
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_firewall_rules(int(firewall_id))
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_firewall_rules_update",
+            "PUT",
+            f"/networking/firewalls/{int(firewall_id)}/rules",
+            _fetch,
+        )
+
     validation_error = _firewall_rules_update_validation_error(arguments)
     if validation_error is not None:
         return error_response(validation_error)
@@ -474,32 +530,63 @@ def create_linode_firewall_settings_update_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Must be true to update default firewalls.",
+                    "description": (
+                        "Must be true to update default firewalls. "
+                        "Ignored when dry_run=true."
+                    ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["default_firewall_ids", "confirm"],
         },
     ), Capability.Write
 
 
-async def handle_linode_firewall_settings_update(
-    arguments: dict[str, Any], cfg: Config
-) -> list[TextContent]:
-    """Handle linode_firewall_settings_update tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
-
-    default_firewall_ids_raw = arguments.get("default_firewall_ids")
-    if not _is_default_firewall_ids(default_firewall_ids_raw):
+def _firewall_settings_ids_error(raw: Any) -> list[TextContent] | None:
+    if not _is_default_firewall_ids(raw):
         return error_response(
             "default_firewall_ids must be a non-empty object of positive "
             "integer firewall IDs keyed by linode, nodebalancer, "
             "public_interface, or vpc_interface"
         )
+    return None
+
+
+async def handle_linode_firewall_settings_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_firewall_settings_update tool request."""
+    default_firewall_ids_raw = arguments.get("default_firewall_ids")
+
+    if is_dry_run(arguments):
+        ids_error = _firewall_settings_ids_error(default_firewall_ids_raw)
+        if ids_error is not None:
+            return ids_error
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_firewall_settings()
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_firewall_settings_update",
+            "PUT",
+            "/networking/firewalls/settings",
+            _fetch,
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response("confirm must be true")
+
+    ids_error = _firewall_settings_ids_error(default_firewall_ids_raw)
+    if ids_error is not None:
+        return ids_error
+
+    default_firewall_ids = cast("dict[str, int]", default_firewall_ids_raw)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        result = await client.update_firewall_settings(default_firewall_ids_raw)
-        updated = result.get("default_firewall_ids", default_firewall_ids_raw)
+        result = await client.update_firewall_settings(default_firewall_ids)
+        updated = result.get("default_firewall_ids", default_firewall_ids)
         return {
             "message": "Default firewall settings updated successfully",
             "default_firewall_ids": updated,
@@ -538,25 +625,61 @@ def create_linode_firewall_device_create_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Must be true to confirm this operation.",
+                    "description": (
+                        "Must be true to confirm this operation. "
+                        "Ignored when dry_run=true."
+                    ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["firewall_id", "id", "type", "confirm"],
         },
     ), Capability.Write
 
 
-async def handle_linode_firewall_device_create(  # noqa: PLR0911
+def _firewall_device_create_fields_error(
+    arguments: dict[str, Any],
+) -> list[TextContent] | None:
+    """Validate device-create fields; return an error response or None."""
+    _, error = _positive_int_argument(arguments, "firewall_id")
+    if error is not None:
+        return error_response(error)
+
+    _, error = _positive_int_argument(arguments, "id")
+    if error is not None:
+        return error_response(error)
+
+    if "type" not in arguments:
+        return error_response("type is required")
+
+    device_type = arguments.get("type", "")
+    if not isinstance(device_type, str):
+        return error_response("type must be a string")
+    if not device_type.strip():
+        return error_response("type must be a non-empty string")
+
+    return None
+
+
+async def handle_linode_firewall_device_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_firewall_device_create tool request."""
-    firewall_id = arguments.get("firewall_id", 0)
-    device_id = arguments.get("id", 0)
-    device_type = arguments.get("type", "")
-    confirm = arguments.get("confirm", False)
+    if is_dry_run(arguments):
+        fields_error = _firewall_device_create_fields_error(arguments)
+        if fields_error is not None:
+            return fields_error
 
-    # Validation
-    if not confirm:
+        firewall_id = int(arguments["firewall_id"])
+        return build_dry_run_response(
+            "linode_firewall_device_create",
+            arguments.get("environment", ""),
+            "POST",
+            f"/networking/firewalls/{firewall_id}/devices",
+            None,
+        )
+
+    if not arguments.get("confirm"):
         return [
             TextContent(
                 type="text",
@@ -567,32 +690,15 @@ async def handle_linode_firewall_device_create(  # noqa: PLR0911
             )
         ]
 
-    if not firewall_id:
-        return error_response("firewall_id is required")
-    if not isinstance(firewall_id, int) or isinstance(firewall_id, bool):
-        return error_response("firewall_id must be a valid integer")
-    if firewall_id <= 0:
-        return error_response("firewall_id must be a positive integer")
-
-    if not device_id:
-        return error_response("id is required")
-    if not isinstance(device_id, int) or isinstance(device_id, bool):
-        return error_response("id must be a valid integer")
-    if device_id <= 0:
-        return error_response("id must be a positive integer")
-
-    if "type" not in arguments:
-        return error_response("type is required")
-    if not isinstance(device_type, str):
-        return error_response("type must be a string")
-    if not device_type.strip():
-        return error_response("type must be a non-empty string")
+    fields_error = _firewall_device_create_fields_error(arguments)
+    if fields_error is not None:
+        return fields_error
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         device = await client.create_firewall_device(
-            firewall_id=int(firewall_id),
-            device_id=int(device_id),
-            device_type=str(device_type),
+            firewall_id=int(arguments["firewall_id"]),
+            device_id=int(arguments["id"]),
+            device_type=str(arguments["type"]),
         )
         return {"message": "Firewall device created successfully", "device": device}
 

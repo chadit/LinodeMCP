@@ -148,10 +148,11 @@ func NewLinodeLongviewClientCreateTool(cfg *config.Config) (mcp.Tool, profiles.C
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_longview_client_create",
-		"Creates a Longview client. WARNING: the API key and install code are returned in the response and may be needed to configure the client application.",
+		"Creates a Longview client. WARNING: the API key and install code are returned in the response and may be needed to configure the client application. Pass dry_run=true to preview without creating.",
 		[]mcp.ToolOption{
 			mcp.WithString("label", mcp.Required(), mcp.Description("Label for the Longview client.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm Longview client creation.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm Longview client creation. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeLongviewClientCreateRequest,
 	)
@@ -160,13 +161,17 @@ func NewLinodeLongviewClientCreateTool(cfg *config.Config) (mcp.Tool, profiles.C
 }
 
 func handleLinodeLongviewClientCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This creates a Longview client and returns setup credentials. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	req, validationMessage := longviewClientCreateRequestFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_longview_client_create", httpMethodPost, longviewClientsPath, nil)
+	}
+
+	if result := RequireConfirm(request, "This creates a Longview client and returns setup credentials. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -218,10 +223,11 @@ func NewLinodeLongviewPlanUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_longview_plan_update",
-		"Updates the account Longview subscription plan.",
+		"Updates the account Longview subscription plan. Pass dry_run=true to preview without modifying.",
 		[]mcp.ToolOption{
 			mcp.WithString("longview_subscription", mcp.Required(), mcp.Description("Longview subscription plan slug to apply.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm Longview plan update.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm Longview plan update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeLongviewPlanUpdateRequest,
 	)
@@ -230,13 +236,20 @@ func NewLinodeLongviewPlanUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 }
 
 func handleLinodeLongviewPlanUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This updates the Longview subscription plan. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	req, validationMessage := longviewPlanUpdateRequestFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_longview_plan_update", "PUT", longviewPlanPath,
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetLongviewPlan(ctx)
+			})
+	}
+
+	if result := RequireConfirm(request, "This updates the Longview subscription plan. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)

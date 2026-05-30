@@ -41,8 +41,9 @@ func NewLinodeVolumeCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		mcp.WithBoolean(
 			paramConfirm,
 			mcp.Required(),
-			mcp.Description("Must be set to true to confirm volume creation. This operation incurs billing charges."),
+			mcp.Description("Must be set to true to confirm volume creation. This operation incurs billing charges. Ignored when dry_run=true."),
 		),
+		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -52,28 +53,46 @@ func NewLinodeVolumeCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 	return tool, profiles.CapWrite, handler
 }
 
-func handleLinodeVolumeCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This operation creates a billable resource. Set confirm=true to proceed."); result != nil {
-		return result, nil
+// validateVolumeCreateArgs validates the create args, returning an error
+// message or "". Shared by the real create path and the dry-run preview.
+func validateVolumeCreateArgs(label, region string, size, linodeID int) string {
+	if label == "" {
+		return errLabelRequired
 	}
 
+	if region == "" && linodeID == 0 {
+		return "either region or linode_id is required"
+	}
+
+	if size > 0 {
+		if err := validateVolumeSize(size); err != nil {
+			return err.Error()
+		}
+	}
+
+	return ""
+}
+
+func handleLinodeVolumeCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	label := request.GetString("label", "")
 	region := request.GetString("region", "")
 	size := request.GetInt("size", 0)
 	linodeID := request.GetInt("linode_id", 0)
 
-	if label == "" {
-		return mcp.NewToolResultError("label is required"), nil
-	}
-
-	if region == "" && linodeID == 0 {
-		return mcp.NewToolResultError("either region or linode_id is required"), nil
-	}
-
-	if size > 0 {
-		if err := validateVolumeSize(size); err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+	if IsDryRun(request) {
+		if msg := validateVolumeCreateArgs(label, region, size, linodeID); msg != "" {
+			return mcp.NewToolResultError(msg), nil
 		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_volume_create", httpMethodPost, "/volumes", nil)
+	}
+
+	if result := RequireConfirm(request, "This operation creates a billable resource. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	if msg := validateVolumeCreateArgs(label, region, size, linodeID); msg != "" {
+		return mcp.NewToolResultError(msg), nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -133,8 +152,9 @@ func NewLinodeVolumeAttachTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		mcp.WithBoolean(
 			paramConfirm,
 			mcp.Required(),
-			mcp.Description("Must be set to true to confirm attaching the volume."),
+			mcp.Description("Must be set to true to confirm attaching the volume. Ignored when dry_run=true."),
 		),
+		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -148,6 +168,20 @@ func handleLinodeVolumeAttachRequest(ctx context.Context, request *mcp.CallToolR
 	volumeID := request.GetInt("volume_id", 0)
 	linodeID := request.GetInt("linode_id", 0)
 	configID := request.GetInt("config_id", 0)
+
+	if IsDryRun(request) {
+		if volumeID == 0 {
+			return mcp.NewToolResultError("volume_id is required"), nil
+		}
+
+		if linodeID == 0 {
+			return mcp.NewToolResultError("linode_id is required"), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_volume_attach", httpMethodPost,
+			fmt.Sprintf("/volumes/%d/attach", volumeID),
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetVolume(ctx, volumeID) })
+	}
 
 	if result := RequireConfirm(request, "This attaches a block storage volume to an instance. Set confirm=true to proceed."); result != nil {
 		return result, nil
@@ -194,34 +228,34 @@ func handleLinodeVolumeAttachRequest(ctx context.Context, request *mcp.CallToolR
 
 // NewLinodeVolumeDetachTool creates a tool for detaching a volume from a Linode.
 func NewLinodeVolumeDetachTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newToolWithHandler(
+		cfg,
 		"linode_volume_detach",
-		mcp.WithDescription("Detaches a block storage volume from a Linode instance. The volume data is preserved."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithNumber(
-			"volume_id",
-			mcp.Required(),
-			mcp.Description("The ID of the volume to detach"),
-		),
-		mcp.WithBoolean(
-			paramConfirm,
-			mcp.Required(),
-			mcp.Description("Must be set to true to confirm detaching the volume."),
-		),
+		"Detaches a block storage volume from a Linode instance. The volume data is preserved. Pass dry_run=true to preview without detaching.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("volume_id", mcp.Required(), mcp.Description("The ID of the volume to detach")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be set to true to confirm detaching the volume. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeVolumeDetachRequest,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeVolumeDetachRequest(ctx, &request, cfg)
-	}
 
 	return tool, profiles.CapWrite, handler
 }
 
 func handleLinodeVolumeDetachRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	volumeID := request.GetInt("volume_id", 0)
+
+	if IsDryRun(request) {
+		if volumeID == 0 {
+			return mcp.NewToolResultError("volume_id is required"), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_volume_detach", httpMethodPost,
+			fmt.Sprintf("/volumes/%d/detach", volumeID),
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetVolume(ctx, volumeID) })
+	}
 
 	if result := RequireConfirm(request, "This detaches a block storage volume from an instance. Set confirm=true to proceed."); result != nil {
 		return result, nil
@@ -273,8 +307,9 @@ func NewLinodeVolumeResizeTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		mcp.WithBoolean(
 			paramConfirm,
 			mcp.Required(),
-			mcp.Description("Must be set to true to confirm resize. Volumes cannot be downsized."),
+			mcp.Description("Must be set to true to confirm resize. Volumes cannot be downsized. Ignored when dry_run=true."),
 		),
+		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -285,12 +320,26 @@ func NewLinodeVolumeResizeTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 }
 
 func handleLinodeVolumeResizeRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	volumeID := request.GetInt("volume_id", 0)
+	size := request.GetInt("size", 0)
+
+	if IsDryRun(request) {
+		if volumeID == 0 {
+			return mcp.NewToolResultError("volume_id is required"), nil
+		}
+
+		if err := validateVolumeSize(size); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_volume_resize", httpMethodPost,
+			fmt.Sprintf("/volumes/%d/resize", volumeID),
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetVolume(ctx, volumeID) })
+	}
+
 	if result := RequireConfirm(request, "This operation may increase billing. Volumes cannot be downsized. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
-
-	volumeID := request.GetInt("volume_id", 0)
-	size := request.GetInt("size", 0)
 
 	if volumeID == 0 {
 		return mcp.NewToolResultError("volume_id is required"), nil
@@ -346,8 +395,9 @@ func NewLinodeVolumeUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		mcp.WithBoolean(
 			paramConfirm,
 			mcp.Required(),
-			mcp.Description("Must be set to true to confirm the update."),
+			mcp.Description("Must be set to true to confirm the update. Ignored when dry_run=true."),
 		),
+		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -358,18 +408,31 @@ func NewLinodeVolumeUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 }
 
 func handleLinodeVolumeUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	volumeID := request.GetInt("volume_id", 0)
+	label := request.GetString("label", "")
+	tagsRaw := request.GetString("tags", "")
+
+	if IsDryRun(request) {
+		if volumeID == 0 {
+			return mcp.NewToolResultError("volume_id is required"), nil
+		}
+
+		if label == "" && tagsRaw == "" {
+			return mcp.NewToolResultError("at least one of label or tags is required"), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_volume_update", "PUT",
+			fmt.Sprintf("/volumes/%d", volumeID),
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetVolume(ctx, volumeID) })
+	}
+
 	if result := RequireConfirm(request, "This updates a block storage volume. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
-	volumeID := request.GetInt("volume_id", 0)
-
 	if volumeID == 0 {
 		return mcp.NewToolResultError("volume_id is required"), nil
 	}
-
-	label := request.GetString("label", "")
-	tagsRaw := request.GetString("tags", "")
 
 	if label == "" && tagsRaw == "" {
 		return mcp.NewToolResultError("at least one of label or tags is required"), nil

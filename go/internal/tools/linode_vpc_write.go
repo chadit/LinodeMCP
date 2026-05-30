@@ -29,7 +29,8 @@ func NewLinodeVPCCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 			mcp.WithString("subnets",
 				mcp.Description("JSON array of subnets to create: [{\"label\": \"my-subnet\", \"ipv4\": \"10.0.0.0/24\"}] (optional)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm VPC creation. This creates a billable resource.")),
+				mcp.Description("Must be true to confirm VPC creation. This creates a billable resource. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleVPCCreateRequest,
 	)
@@ -37,19 +38,38 @@ func NewLinodeVPCCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 	return tool, profiles.CapWrite, handler
 }
 
+// validateVPCCreateArgs validates the VPC create args, returning an error
+// message or "". Shared by the real create path and the dry-run preview.
+func validateVPCCreateArgs(label, region string) string {
+	if label == "" {
+		return errLabelRequired
+	}
+
+	if region == "" {
+		return errRegionRequired
+	}
+
+	return ""
+}
+
 func handleVPCCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	label := request.GetString("label", "")
+	region := request.GetString("region", "")
+
+	if IsDryRun(request) {
+		if msg := validateVPCCreateArgs(label, region); msg != "" {
+			return mcp.NewToolResultError(msg), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_vpc_create", httpMethodPost, "/vpcs", nil)
+	}
+
 	if result := RequireConfirm(request, "This creates a billable VPC resource. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
-	label := request.GetString("label", "")
-	if label == "" {
-		return mcp.NewToolResultError("label is required"), nil
-	}
-
-	region := request.GetString("region", "")
-	if region == "" {
-		return mcp.NewToolResultError("region is required"), nil
+	if msg := validateVPCCreateArgs(label, region); msg != "" {
+		return mcp.NewToolResultError(msg), nil
 	}
 
 	req := linode.CreateVPCRequest{
@@ -105,7 +125,8 @@ func NewLinodeVPCUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 			mcp.WithString("description",
 				mcp.Description("New description for the VPC (optional)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm VPC update.")),
+				mcp.Description("Must be true to confirm VPC update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleVPCUpdateRequest,
 	)
@@ -114,11 +135,22 @@ func NewLinodeVPCUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 }
 
 func handleVPCUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	vpcID := request.GetInt("vpc_id", 0)
+
+	if IsDryRun(request) {
+		if vpcID == 0 {
+			return mcp.NewToolResultError("vpc_id is required"), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_vpc_update", "PUT",
+			fmt.Sprintf("/vpcs/%d", vpcID),
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetVPC(ctx, vpcID) })
+	}
+
 	if result := RequireConfirm(request, "This modifies the VPC configuration. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
-	vpcID := request.GetInt("vpc_id", 0)
 	if vpcID == 0 {
 		return mcp.NewToolResultError("vpc_id is required"), nil
 	}
@@ -205,7 +237,8 @@ func NewLinodeVPCSubnetCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 			mcp.WithString("ipv4", mcp.Required(),
 				mcp.Description("IPv4 range for the subnet in CIDR notation (e.g. 10.0.0.0/24)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm subnet creation.")),
+				mcp.Description("Must be true to confirm subnet creation. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleVPCSubnetCreateRequest,
 	)
@@ -213,24 +246,44 @@ func NewLinodeVPCSubnetCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 	return tool, profiles.CapWrite, handler
 }
 
+// validateVPCSubnetCreateArgs validates the subnet create args, returning an
+// error message or "". Shared by the real create path and the dry-run preview.
+func validateVPCSubnetCreateArgs(vpcID int, label, ipv4 string) string {
+	if vpcID == 0 {
+		return "vpc_id is required"
+	}
+
+	if label == "" {
+		return errLabelRequired
+	}
+
+	if ipv4 == "" {
+		return "ipv4 is required (CIDR notation, e.g. 10.0.0.0/24)"
+	}
+
+	return ""
+}
+
 func handleVPCSubnetCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	vpcID := request.GetInt("vpc_id", 0)
+	label := request.GetString("label", "")
+	ipv4 := request.GetString("ipv4", "")
+
+	if IsDryRun(request) {
+		if msg := validateVPCSubnetCreateArgs(vpcID, label, ipv4); msg != "" {
+			return mcp.NewToolResultError(msg), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_vpc_subnet_create", httpMethodPost,
+			fmt.Sprintf("/vpcs/%d/subnets", vpcID), nil)
+	}
+
 	if result := RequireConfirm(request, "This creates a new subnet in the VPC. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
-	vpcID := request.GetInt("vpc_id", 0)
-	if vpcID == 0 {
-		return mcp.NewToolResultError("vpc_id is required"), nil
-	}
-
-	label := request.GetString("label", "")
-	if label == "" {
-		return mcp.NewToolResultError("label is required"), nil
-	}
-
-	ipv4 := request.GetString("ipv4", "")
-	if ipv4 == "" {
-		return mcp.NewToolResultError("ipv4 is required (CIDR notation, e.g. 10.0.0.0/24)"), nil
+	if msg := validateVPCSubnetCreateArgs(vpcID, label, ipv4); msg != "" {
+		return mcp.NewToolResultError(msg), nil
 	}
 
 	req := linode.CreateSubnetRequest{
@@ -273,7 +326,8 @@ func NewLinodeVPCSubnetUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 			mcp.WithString("label", mcp.Required(),
 				mcp.Description("New label for the subnet")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm subnet update.")),
+				mcp.Description("Must be true to confirm subnet update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleVPCSubnetUpdateRequest,
 	)
@@ -281,24 +335,45 @@ func NewLinodeVPCSubnetUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 	return tool, profiles.CapWrite, handler
 }
 
+// validateVPCSubnetUpdateArgs validates the subnet update args, returning an
+// error message or "". Shared by the real update path and the dry-run preview.
+func validateVPCSubnetUpdateArgs(vpcID, subnetID int, label string) string {
+	if vpcID == 0 {
+		return "vpc_id is required"
+	}
+
+	if subnetID == 0 {
+		return "subnet_id is required"
+	}
+
+	if label == "" {
+		return errLabelRequired
+	}
+
+	return ""
+}
+
 func handleVPCSubnetUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	vpcID := request.GetInt("vpc_id", 0)
+	subnetID := request.GetInt("subnet_id", 0)
+	label := request.GetString("label", "")
+
+	if IsDryRun(request) {
+		if msg := validateVPCSubnetUpdateArgs(vpcID, subnetID, label); msg != "" {
+			return mcp.NewToolResultError(msg), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_vpc_subnet_update", "PUT",
+			fmt.Sprintf("/vpcs/%d/subnets/%d", vpcID, subnetID),
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetVPCSubnet(ctx, vpcID, subnetID) })
+	}
+
 	if result := RequireConfirm(request, "This modifies the subnet configuration. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
-	vpcID := request.GetInt("vpc_id", 0)
-	if vpcID == 0 {
-		return mcp.NewToolResultError("vpc_id is required"), nil
-	}
-
-	subnetID := request.GetInt("subnet_id", 0)
-	if subnetID == 0 {
-		return mcp.NewToolResultError("subnet_id is required"), nil
-	}
-
-	label := request.GetString("label", "")
-	if label == "" {
-		return mcp.NewToolResultError("label is required"), nil
+	if msg := validateVPCSubnetUpdateArgs(vpcID, subnetID, label); msg != "" {
+		return mcp.NewToolResultError(msg), nil
 	}
 
 	req := linode.UpdateSubnetRequest{

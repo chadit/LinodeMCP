@@ -29,7 +29,8 @@ func NewLinodeObjectStorageBucketCreateTool(cfg *config.Config) (mcp.Tool, profi
 			mcp.WithBoolean("cors_enabled",
 				mcp.Description("Whether to enable CORS on the bucket (default: true)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm bucket creation. This operation incurs billing charges.")),
+				mcp.Description("Must be set to true to confirm bucket creation. This operation incurs billing charges. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleObjectStorageBucketCreateRequest,
 	)
@@ -37,27 +38,45 @@ func NewLinodeObjectStorageBucketCreateTool(cfg *config.Config) (mcp.Tool, profi
 	return tool, profiles.CapWrite, handler
 }
 
-func handleObjectStorageBucketCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This operation creates a billable resource. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	label := request.GetString("label", "")
-	region := request.GetString("region", "")
-	acl := request.GetString("acl", "")
-
+// validateBucketCreateArgs validates the bucket create args, returning an
+// error message or "". Shared by the real create path and the dry-run preview.
+func validateBucketCreateArgs(label, region, acl string) string {
 	if err := validateBucketLabel(label); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return err.Error()
 	}
 
 	if region == "" {
-		return mcp.NewToolResultError(ErrBucketRegionRequired.Error()), nil
+		return ErrBucketRegionRequired.Error()
 	}
 
 	if acl != "" {
 		if err := validateBucketACL(acl); err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return err.Error()
 		}
+	}
+
+	return ""
+}
+
+func handleObjectStorageBucketCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	label := request.GetString("label", "")
+	region := request.GetString("region", "")
+	acl := request.GetString("acl", "")
+
+	if IsDryRun(request) {
+		if msg := validateBucketCreateArgs(label, region, acl); msg != "" {
+			return mcp.NewToolResultError(msg), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_object_storage_bucket_create", httpMethodPost, "/object-storage/buckets", nil)
+	}
+
+	if result := RequireConfirm(request, "This operation creates a billable resource. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	if msg := validateBucketCreateArgs(label, region, acl); msg != "" {
+		return mcp.NewToolResultError(msg), nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -144,7 +163,8 @@ func NewLinodeObjectStorageBucketAccessAllowTool(cfg *config.Config) (mcp.Tool, 
 			mcp.WithBoolean("cors_enabled",
 				mcp.Description("Whether to enable CORS on the bucket")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm access changes.")),
+				mcp.Description("Must be set to true to confirm access changes. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleObjectStorageBucketAccessAllowRequest,
 	)
@@ -152,27 +172,62 @@ func NewLinodeObjectStorageBucketAccessAllowTool(cfg *config.Config) (mcp.Tool, 
 	return tool, profiles.CapWrite, handler
 }
 
-func handleObjectStorageBucketAccessAllowRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This operation changes bucket access controls. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
+// runObjectStorageAccessDryRun previews a bucket access change. Both the allow
+// (POST) and update (PUT) tools fetch current access via the same GET sibling,
+// so the preview path and fetch are shared; callers validate region/label and
+// pass the would-be HTTP method.
+func runObjectStorageAccessDryRun(
+	ctx context.Context,
+	request *mcp.CallToolRequest,
+	cfg *config.Config,
+	toolName, method, region, label string,
+) (*mcp.CallToolResult, error) {
+	return RunDryRunPreview(ctx, request, cfg, toolName, method,
+		fmt.Sprintf("/object-storage/buckets/%s/%s/access", region, label),
+		func(ctx context.Context, c *linode.Client) (any, error) {
+			return c.GetObjectStorageBucketAccess(ctx, region, label)
+		})
+}
 
-	region := request.GetString("region", "")
-	label := request.GetString("label", "")
-	acl := request.GetString("acl", "")
-
+// validateBucketAccessAllowArgs validates the allow-access args, returning an
+// error message or "". Shared by the real path and the dry-run preview.
+func validateBucketAccessAllowArgs(region, label, acl string) string {
 	if err := validateRegionSlug(region); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return err.Error()
 	}
 
 	if err := validateBucketLabel(label); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return err.Error()
 	}
 
 	if acl != "" {
 		if err := validateBucketACL(acl); err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return err.Error()
 		}
+	}
+
+	return ""
+}
+
+func handleObjectStorageBucketAccessAllowRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	region := request.GetString("region", "")
+	label := request.GetString("label", "")
+	acl := request.GetString("acl", "")
+
+	if IsDryRun(request) {
+		if msg := validateBucketAccessAllowArgs(region, label, acl); msg != "" {
+			return mcp.NewToolResultError(msg), nil
+		}
+
+		return runObjectStorageAccessDryRun(ctx, request, cfg, "linode_object_storage_bucket_access_allow", httpMethodPost, region, label)
+	}
+
+	if result := RequireConfirm(request, "This operation changes bucket access controls. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	if msg := validateBucketAccessAllowArgs(region, label, acl); msg != "" {
+		return mcp.NewToolResultError(msg), nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -224,7 +279,8 @@ func NewLinodeObjectStorageBucketAccessUpdateTool(cfg *config.Config) (mcp.Tool,
 			mcp.WithBoolean("cors_enabled",
 				mcp.Description("Whether to enable CORS on the bucket")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm access update.")),
+				mcp.Description("Must be set to true to confirm access update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleObjectStorageBucketAccessUpdateRequest,
 	)
@@ -232,27 +288,45 @@ func NewLinodeObjectStorageBucketAccessUpdateTool(cfg *config.Config) (mcp.Tool,
 	return tool, profiles.CapWrite, handler
 }
 
-func handleObjectStorageBucketAccessUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This operation changes bucket access controls. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	region := request.GetString("region", "")
-	label := request.GetString("label", "")
-	acl := request.GetString("acl", "")
-
+// validateBucketAccessUpdateArgs validates the update-access args, returning an
+// error message or "". Shared by the real path and the dry-run preview.
+func validateBucketAccessUpdateArgs(region, label, acl string) string {
 	if region == "" {
-		return mcp.NewToolResultError(ErrBucketRegionRequired.Error()), nil
+		return ErrBucketRegionRequired.Error()
 	}
 
 	if label == "" {
-		return mcp.NewToolResultError(ErrBucketLabelRequired.Error()), nil
+		return ErrBucketLabelRequired.Error()
 	}
 
 	if acl != "" {
 		if err := validateBucketACL(acl); err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return err.Error()
 		}
+	}
+
+	return ""
+}
+
+func handleObjectStorageBucketAccessUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	region := request.GetString("region", "")
+	label := request.GetString("label", "")
+	acl := request.GetString("acl", "")
+
+	if IsDryRun(request) {
+		if msg := validateBucketAccessUpdateArgs(region, label, acl); msg != "" {
+			return mcp.NewToolResultError(msg), nil
+		}
+
+		return runObjectStorageAccessDryRun(ctx, request, cfg, "linode_object_storage_bucket_access_update", "PUT", region, label)
+	}
+
+	if result := RequireConfirm(request, "This operation changes bucket access controls. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	if msg := validateBucketAccessUpdateArgs(region, label, acl); msg != "" {
+		return mcp.NewToolResultError(msg), nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -309,8 +383,9 @@ func NewLinodeObjectStorageKeyCreateTool(cfg *config.Config) (mcp.Tool, profiles
 		mcp.WithBoolean(
 			paramConfirm,
 			mcp.Required(),
-			mcp.Description("Must be set to true. The secret_key is only shown ONCE in the response."),
+			mcp.Description("Must be set to true. The secret_key is only shown ONCE in the response. Ignored when dry_run=true."),
 		),
+		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -320,30 +395,53 @@ func NewLinodeObjectStorageKeyCreateTool(cfg *config.Config) (mcp.Tool, profiles
 	return tool, profiles.CapWrite, handler
 }
 
+// parseObjectStorageKeyBucketAccess parses+validates the bucket_access JSON,
+// returning the entries or an error message. Shared by the key create and
+// update paths (and their dry-run previews).
+func parseObjectStorageKeyBucketAccess(bucketAccessJSON string) ([]linode.ObjectStorageKeyBucketAccess, string) {
+	if bucketAccessJSON == "" {
+		return nil, ""
+	}
+
+	var bucketAccess []linode.ObjectStorageKeyBucketAccess
+	if err := json.Unmarshal([]byte(bucketAccessJSON), &bucketAccess); err != nil {
+		return nil, fmt.Sprintf("Invalid bucket_access JSON: %v. Expected format: [{\"bucket_name\": \"name\", \"region\": \"region\", \"permissions\": \"read_only\"}]", err)
+	}
+
+	if err := validateBucketAccessEntries(bucketAccess); err != nil {
+		return nil, err.Error()
+	}
+
+	return bucketAccess, ""
+}
+
 func handleObjectStorageKeyCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	label := request.GetString("label", "")
+	bucketAccessJSON := request.GetString("bucket_access", "")
+
+	if IsDryRun(request) {
+		if err := validateKeyLabel(label); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		if _, msg := parseObjectStorageKeyBucketAccess(bucketAccessJSON); msg != "" {
+			return mcp.NewToolResultError(msg), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_object_storage_key_create", httpMethodPost, "/object-storage/keys", nil)
+	}
+
 	if result := RequireConfirm(request, "This creates an access key. The secret_key is only shown ONCE in the response. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
-
-	label := request.GetString("label", "")
-	bucketAccessJSON := request.GetString("bucket_access", "")
 
 	if err := validateKeyLabel(label); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	var bucketAccess []linode.ObjectStorageKeyBucketAccess
-
-	if bucketAccessJSON != "" {
-		if err := json.Unmarshal([]byte(bucketAccessJSON), &bucketAccess); err != nil {
-			return mcp.NewToolResultError(
-				fmt.Sprintf("Invalid bucket_access JSON: %v. Expected format: [{\"bucket_name\": \"name\", \"region\": \"region\", \"permissions\": \"read_only\"}]", err),
-			), nil
-		}
-
-		if err := validateBucketAccessEntries(bucketAccess); err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+	bucketAccess, msg := parseObjectStorageKeyBucketAccess(bucketAccessJSON)
+	if msg != "" {
+		return mcp.NewToolResultError(msg), nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -376,72 +474,71 @@ func handleObjectStorageKeyCreateRequest(ctx context.Context, request *mcp.CallT
 
 // NewLinodeObjectStorageKeyUpdateTool creates a tool for updating an Object Storage access key.
 func NewLinodeObjectStorageKeyUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newToolWithHandler(
+		cfg,
 		"linode_object_storage_key_update",
-		mcp.WithDescription("Updates an Object Storage access key's label or bucket permissions."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithNumber(
-			"key_id",
-			mcp.Required(),
-			mcp.Description("ID of the access key to update"),
-		),
-		mcp.WithString(
-			"label",
-			mcp.Description("New label for the access key (max 50 characters)"),
-		),
-		mcp.WithString(
-			"bucket_access",
-			mcp.Description("JSON array of bucket permissions: [{\"bucket_name\": \"name\", \"region\": \"region\", \"permissions\": \"read_only|read_write\"}]"),
-		),
-		mcp.WithBoolean(
-			paramConfirm,
-			mcp.Required(),
-			mcp.Description("Must be set to true to confirm key update."),
-		),
+		"Updates an Object Storage access key's label or bucket permissions.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("key_id", mcp.Required(),
+				mcp.Description("ID of the access key to update")),
+			mcp.WithString("label",
+				mcp.Description("New label for the access key (max 50 characters)")),
+			mcp.WithString("bucket_access",
+				mcp.Description("JSON array of bucket permissions: [{\"bucket_name\": \"name\", \"region\": \"region\", \"permissions\": \"read_only|read_write\"}]")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be set to true to confirm key update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleObjectStorageKeyUpdateRequest,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleObjectStorageKeyUpdateRequest(ctx, &request, cfg)
-	}
 
 	return tool, profiles.CapWrite, handler
 }
 
-func handleObjectStorageKeyUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This modifies access key permissions. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	keyID := request.GetInt("key_id", 0)
-	label := request.GetString("label", "")
-	bucketAccessJSON := request.GetString("bucket_access", "")
-
+// validateObjectStorageKeyUpdateArgs validates the key update args, returning
+// an error message or "". Shared by the real path and the dry-run preview.
+func validateObjectStorageKeyUpdateArgs(keyID int, label, bucketAccessJSON string) string {
 	if keyID <= 0 {
-		return mcp.NewToolResultError(ErrKeyIDRequired.Error()), nil
+		return ErrKeyIDRequired.Error()
 	}
 
 	if label != "" {
 		if err := validateKeyLabel(label); err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return err.Error()
 		}
 	}
 
-	var bucketAccess []linode.ObjectStorageKeyBucketAccess
-
-	if bucketAccessJSON != "" {
-		if err := json.Unmarshal([]byte(bucketAccessJSON), &bucketAccess); err != nil {
-			return mcp.NewToolResultError(
-				fmt.Sprintf("Invalid bucket_access JSON: %v. Expected format: [{\"bucket_name\": \"name\", \"region\": \"region\", \"permissions\": \"read_only\"}]", err),
-			), nil
-		}
-
-		if err := validateBucketAccessEntries(bucketAccess); err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
+	if _, msg := parseObjectStorageKeyBucketAccess(bucketAccessJSON); msg != "" {
+		return msg
 	}
+
+	return ""
+}
+
+func handleObjectStorageKeyUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	keyID := request.GetInt("key_id", 0)
+	label := request.GetString("label", "")
+	bucketAccessJSON := request.GetString("bucket_access", "")
+
+	if IsDryRun(request) {
+		if msg := validateObjectStorageKeyUpdateArgs(keyID, label, bucketAccessJSON); msg != "" {
+			return mcp.NewToolResultError(msg), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_object_storage_key_update", "PUT",
+			fmt.Sprintf("/object-storage/keys/%d", keyID),
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetObjectStorageKey(ctx, keyID) })
+	}
+
+	if result := RequireConfirm(request, "This modifies access key permissions. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	if msg := validateObjectStorageKeyUpdateArgs(keyID, label, bucketAccessJSON); msg != "" {
+		return mcp.NewToolResultError(msg), nil
+	}
+
+	bucketAccess, _ := parseObjectStorageKeyBucketAccess(bucketAccessJSON)
 
 	client, err := prepareClient(request, cfg)
 	if err != nil {
@@ -521,8 +618,6 @@ func handleObjectStorageKeyDeleteRequest(ctx context.Context, request *mcp.CallT
 }
 
 // NewLinodeObjectStorageObjectACLUpdateTool creates a tool for updating an object's ACL.
-//
-//nolint:dupl // follows the same tool factory pattern as all other NewLinode*Tool functions
 func NewLinodeObjectStorageObjectACLUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_object_storage_object_acl_update",
@@ -555,8 +650,9 @@ func NewLinodeObjectStorageObjectACLUpdateTool(cfg *config.Config) (mcp.Tool, pr
 		mcp.WithBoolean(
 			paramConfirm,
 			mcp.Required(),
-			mcp.Description("Must be true to proceed. This modifies the object's access permissions."),
+			mcp.Description("Must be true to proceed. This modifies the object's access permissions. Ignored when dry_run=true."),
 		),
+		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -566,30 +662,52 @@ func NewLinodeObjectStorageObjectACLUpdateTool(cfg *config.Config) (mcp.Tool, pr
 	return tool, profiles.CapWrite, handler
 }
 
-func handleObjectStorageObjectACLUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This modifies the object's access permissions. Set confirm=true to proceed."); result != nil {
-		return result, nil
+// validateObjectACLUpdateArgs validates the object ACL update args, returning
+// an error message or "". Shared by the real path and the dry-run preview.
+func validateObjectACLUpdateArgs(region, label, name, acl string) string {
+	if region == "" {
+		return errRegionRequired
 	}
 
+	if label == "" {
+		return errLabelRequired
+	}
+
+	if name == "" {
+		return ErrObjectNameRequired.Error()
+	}
+
+	if err := validateBucketACL(acl); err != nil {
+		return err.Error()
+	}
+
+	return ""
+}
+
+func handleObjectStorageObjectACLUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	region := request.GetString("region", "")
 	label := request.GetString("label", "")
 	name := request.GetString("name", "")
 	acl := request.GetString("acl", "")
 
-	if region == "" {
-		return mcp.NewToolResultError("region is required"), nil
+	if IsDryRun(request) {
+		if msg := validateObjectACLUpdateArgs(region, label, name, acl); msg != "" {
+			return mcp.NewToolResultError(msg), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_object_storage_object_acl_update", "PUT",
+			fmt.Sprintf("/object-storage/buckets/%s/%s/object-acl", region, label),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetObjectACL(ctx, region, label, name)
+			})
 	}
 
-	if label == "" {
-		return mcp.NewToolResultError("label is required"), nil
+	if result := RequireConfirm(request, "This modifies the object's access permissions. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
-	if name == "" {
-		return mcp.NewToolResultError(ErrObjectNameRequired.Error()), nil
-	}
-
-	if err := validateBucketACL(acl); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+	if msg := validateObjectACLUpdateArgs(region, label, name, acl); msg != "" {
+		return mcp.NewToolResultError(msg), nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -649,75 +767,74 @@ func handleObjectStorageSSLDeleteRequest(ctx context.Context, request *mcp.CallT
 }
 
 // NewLinodeObjectStorageSSLUploadTool creates a tool for uploading an SSL certificate to a bucket.
-//
-//nolint:dupl // follows the same tool factory pattern as all other NewLinode*Tool functions
 func NewLinodeObjectStorageSSLUploadTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newToolWithHandler(
+		cfg,
 		"linode_object_storage_ssl_upload",
-		mcp.WithDescription("Uploads an SSL/TLS certificate to an Object Storage bucket. "+
-			"Requires confirm=true to proceed."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithString(
-			"region",
-			mcp.Required(),
-			mcp.Description("Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1')"),
-		),
-		mcp.WithString(
-			"label",
-			mcp.Required(),
-			mcp.Description("The bucket label (name)"),
-		),
-		mcp.WithString(
-			"certificate",
-			mcp.Required(),
-			mcp.Description("The PEM-encoded TLS/SSL certificate to upload"),
-		),
-		mcp.WithString(
-			"private_key",
-			mcp.Required(),
-			mcp.Description("The PEM-encoded private key for the certificate"),
-		),
-		mcp.WithBoolean(
-			paramConfirm,
-			mcp.Required(),
-			mcp.Description("Must be true to proceed. This uploads a certificate to the bucket."),
-		),
+		"Uploads an SSL/TLS certificate to an Object Storage bucket. Requires confirm=true to proceed.",
+		[]mcp.ToolOption{
+			mcp.WithString("region", mcp.Required(),
+				mcp.Description("Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1')")),
+			mcp.WithString("label", mcp.Required(), mcp.Description("The bucket label (name)")),
+			mcp.WithString("certificate", mcp.Required(),
+				mcp.Description("The PEM-encoded TLS/SSL certificate to upload")),
+			mcp.WithString("private_key", mcp.Required(),
+				mcp.Description("The PEM-encoded private key for the certificate")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to proceed. This uploads a certificate to the bucket. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleObjectStorageSSLUploadRequest,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleObjectStorageSSLUploadRequest(ctx, &request, cfg)
-	}
 
 	return tool, profiles.CapWrite, handler
 }
 
-func handleObjectStorageSSLUploadRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This uploads an SSL certificate to the bucket. Set confirm=true to proceed."); result != nil {
-		return result, nil
+// validateSSLUploadArgs validates the SSL upload args, returning an error
+// message or "". Shared by the real path and the dry-run preview.
+func validateSSLUploadArgs(region, label, certificate, privateKey string) string {
+	if region == "" {
+		return errRegionRequired
 	}
 
+	if label == "" {
+		return errLabelRequired
+	}
+
+	if certificate == "" {
+		return "certificate is required"
+	}
+
+	if privateKey == "" {
+		return "private_key is required"
+	}
+
+	return ""
+}
+
+func handleObjectStorageSSLUploadRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	region := request.GetString("region", "")
 	label := request.GetString("label", "")
 	certificate := request.GetString("certificate", "")
 	privateKey := request.GetString("private_key", "")
 
-	if region == "" {
-		return mcp.NewToolResultError("region is required"), nil
+	if IsDryRun(request) {
+		if msg := validateSSLUploadArgs(region, label, certificate, privateKey); msg != "" {
+			return mcp.NewToolResultError(msg), nil
+		}
+
+		// nil fetchState: current_state is null. The request body (cert +
+		// private_key) is never echoed in the v0 preview, so no key leaks.
+		return RunDryRunPreview(ctx, request, cfg, "linode_object_storage_ssl_upload", httpMethodPost,
+			fmt.Sprintf("/object-storage/buckets/%s/%s/ssl", region, label), nil)
 	}
 
-	if label == "" {
-		return mcp.NewToolResultError("label is required"), nil
+	if result := RequireConfirm(request, "This uploads an SSL certificate to the bucket. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
-	if certificate == "" {
-		return mcp.NewToolResultError("certificate is required"), nil
-	}
-
-	if privateKey == "" {
-		return mcp.NewToolResultError("private_key is required"), nil
+	if msg := validateSSLUploadArgs(region, label, certificate, privateKey); msg != "" {
+		return mcp.NewToolResultError(msg), nil
 	}
 
 	client, err := prepareClient(request, cfg)

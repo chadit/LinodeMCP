@@ -2734,7 +2734,80 @@ func TestLinodeDatabaseInstanceDeleteTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Failed to delete Managed Database instance")
+		assert.Contains(t, textContent.Text, "linode_database_instance_delete failed")
+	})
+}
+
+// Dry-run coverage for MySQL Managed Database instance delete.
+func TestLinodeDatabaseInstanceDeleteToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	t.Run("schema advertises dry_run", func(t *testing.T) {
+		t.Parallel()
+
+		tool, _, _ := tools.NewLinodeDatabaseInstanceDeleteTool(&config.Config{})
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run")
+	})
+
+	t.Run("preview without mutating", func(t *testing.T) {
+		t.Parallel()
+
+		var methodsSeen []string
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsSeen = append(methodsSeen, r.Method)
+			assert.Equal(t, databaseInstancePath, r.URL.Path)
+
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Status: statusActive}))
+
+				return
+			}
+
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeDatabaseInstanceDeleteTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+			databaseInstanceIDParam: databaseInstanceID,
+			keyDryRun:               true,
+		}))
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError)
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, true, body[keyDryRun])
+		assert.Equal(t, "linode_database_instance_delete", body["tool"])
+		would, _ := body["would_execute"].(map[string]any)
+		assert.Equal(t, "DELETE", would["method"])
+		assert.Equal(t, databaseInstancePath, would["path"])
+
+		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+			"dry_run must only issue a single GET, never DELETE")
+	})
+
+	t.Run("still validates instance_id", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, handler := tools.NewLinodeDatabaseInstanceDeleteTool(&config.Config{})
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyDryRun: true}))
+
+		require.NoError(t, err)
+		assert.True(t, result.IsError)
+		assertErrorContains(t, result, databaseInstanceIDMessage)
 	})
 }
 
@@ -2883,7 +2956,79 @@ func TestLinodeDatabasePostgreSQLInstanceDeleteTool(t *testing.T) {
 
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, "Failed to delete PostgreSQL Managed Database instance")
+		assert.Contains(t, textContent.Text, "linode_database_postgresql_instance_delete failed")
+	})
+}
+
+// Dry-run coverage for PostgreSQL Managed Database instance delete.
+func TestLinodeDatabasePostgreSQLInstanceDeleteToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	t.Run("schema advertises dry_run", func(t *testing.T) {
+		t.Parallel()
+
+		tool, _, _ := tools.NewLinodeDatabasePostgreSQLInstanceDeleteTool(&config.Config{})
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run")
+	})
+
+	t.Run("preview without mutating", func(t *testing.T) {
+		t.Parallel()
+
+		var methodsSeen []string
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsSeen = append(methodsSeen, r.Method)
+			assert.Equal(t, databasePostgreSQLInstancePath, r.URL.Path)
+
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				assert.NoError(t, json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Status: statusActive}))
+
+				return
+			}
+
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceDeleteTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+			databaseInstanceIDParam: databaseInstanceID,
+			keyDryRun:               true,
+		}))
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError)
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, "linode_database_postgresql_instance_delete", body["tool"])
+		would, _ := body["would_execute"].(map[string]any)
+		assert.Equal(t, "DELETE", would["method"])
+		assert.Equal(t, databasePostgreSQLInstancePath, would["path"])
+
+		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+			"dry_run must only issue a single GET, never DELETE")
+	})
+
+	t.Run("still validates instance_id", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceDeleteTool(&config.Config{})
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyDryRun: true}))
+
+		require.NoError(t, err)
+		assert.True(t, result.IsError)
+		assertErrorContains(t, result, databaseInstanceIDMessage)
 	})
 }
 

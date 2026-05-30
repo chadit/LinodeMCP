@@ -32,8 +32,9 @@ func NewLinodeInstanceBootTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		mcp.WithBoolean(
 			paramConfirm,
 			mcp.Required(),
-			mcp.Description("Must be set to true to confirm booting the instance."),
+			mcp.Description("Must be set to true to confirm booting the instance. Ignored when dry_run=true."),
 		),
+		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -56,6 +57,16 @@ func handleInstancePowerAction(
 ) (*mcp.CallToolResult, error) {
 	instanceID := request.GetInt("instance_id", 0)
 	configID := request.GetInt("config_id", 0)
+
+	if IsDryRun(request) {
+		if instanceID == 0 {
+			return mcp.NewToolResultError("instance_id is required"), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_"+verb, httpMethodPost,
+			fmt.Sprintf("/linode/instances/%d/%s", instanceID, verb),
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, instanceID) })
+	}
 
 	if result := RequireConfirm(request, confirmMsg); result != nil {
 		return result, nil
@@ -122,8 +133,9 @@ func NewLinodeInstanceRebootTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 		mcp.WithBoolean(
 			paramConfirm,
 			mcp.Required(),
-			mcp.Description("Must be set to true to confirm rebooting the instance. This causes a brief outage."),
+			mcp.Description("Must be set to true to confirm rebooting the instance. This causes a brief outage. Ignored when dry_run=true."),
 		),
+		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -161,8 +173,9 @@ func NewLinodeInstanceShutdownTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 		mcp.WithBoolean(
 			paramConfirm,
 			mcp.Required(),
-			mcp.Description("Must be set to true to confirm shutting down the instance."),
+			mcp.Description("Must be set to true to confirm shutting down the instance. Ignored when dry_run=true."),
 		),
+		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -173,34 +186,17 @@ func NewLinodeInstanceShutdownTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 }
 
 func handleLinodeInstanceShutdownRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	instanceID := request.GetInt("instance_id", 0)
-
-	if result := RequireConfirm(request, "This shuts down a Linode instance. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	if instanceID == 0 {
-		return mcp.NewToolResultError("instance_id is required"), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := client.ShutdownInstance(ctx, instanceID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to shut down instance %d: %v", instanceID, err)), nil
-	}
-
-	response := struct {
-		Message    string `json:"message"`
-		InstanceID int    `json:"instance_id"`
-	}{
-		Message:    fmt.Sprintf("Instance %d shutdown initiated successfully", instanceID),
-		InstanceID: instanceID,
-	}
-
-	return MarshalToolResponse(response)
+	// Routes through the shared power-action flow (verb "shutdown" yields the
+	// same "Instance N shutdown initiated successfully" message). The action
+	// closure ignores configID since shutdown takes no config profile.
+	return handleInstancePowerAction(
+		ctx, request, cfg,
+		"shutdown",
+		"This shuts down a Linode instance. Set confirm=true to proceed.",
+		func(ctx context.Context, client *linode.Client, instanceID int, _ *int) error {
+			return client.ShutdownInstance(ctx, instanceID)
+		},
+	)
 }
 
 // NewLinodeInstanceCreateTool creates a tool for creating a new Linode instance.
@@ -254,8 +250,9 @@ func NewLinodeInstanceCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 		mcp.WithBoolean(
 			paramConfirm,
 			mcp.Required(),
-			mcp.Description("Must be set to true to confirm instance creation. This operation incurs billing charges."),
+			mcp.Description("Must be set to true to confirm instance creation. This operation incurs billing charges. Ignored when dry_run=true."),
 		),
+		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -266,6 +263,28 @@ func NewLinodeInstanceCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 }
 
 const errFirewallIDRequired = "firewall_id is required for instance creation. Get a firewall ID from linode_firewall_list, or create one with linode_firewall_create."
+
+// validateInstanceCreateArgs validates the instance create args, returning an
+// error message or "". Shared by the real create path and the dry-run preview.
+func validateInstanceCreateArgs(region, instanceType, rootPass string, firewallID int) string {
+	if region == "" {
+		return errRegionRequired
+	}
+
+	if instanceType == "" {
+		return "type is required"
+	}
+
+	if firewallID <= 0 {
+		return errFirewallIDRequired
+	}
+
+	if err := validateRootPassword(rootPass); err != nil {
+		return err.Error()
+	}
+
+	return ""
+}
 
 func handleLinodeInstanceCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	region := request.GetString("region", "")
@@ -278,24 +297,20 @@ func handleLinodeInstanceCreateRequest(ctx context.Context, request *mcp.CallToo
 	routeIPv4 := request.GetBool("route_ipv4", true)
 	routeIPv6 := request.GetBool("route_ipv6", true)
 
+	if IsDryRun(request) {
+		if msg := validateInstanceCreateArgs(region, instanceType, rootPass, firewallID); msg != "" {
+			return mcp.NewToolResultError(msg), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_create", httpMethodPost, "/linode/instances", nil)
+	}
+
 	if result := RequireConfirm(request, "This operation creates a billable resource. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
-	if region == "" {
-		return mcp.NewToolResultError("region is required"), nil
-	}
-
-	if instanceType == "" {
-		return mcp.NewToolResultError("type is required"), nil
-	}
-
-	if firewallID <= 0 {
-		return mcp.NewToolResultError(errFirewallIDRequired), nil
-	}
-
-	if err := validateRootPassword(rootPass); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+	if msg := validateInstanceCreateArgs(region, instanceType, rootPass, firewallID); msg != "" {
+		return mcp.NewToolResultError(msg), nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -409,7 +424,8 @@ func NewLinodeInstanceResizeTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 			mcp.WithString("migration_type",
 				mcp.Description("Migration type: 'cold' (default) or 'warm' (optional)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm resize. This operation causes downtime.")),
+				mcp.Description("Must be set to true to confirm resize. This operation causes downtime. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeInstanceResizeRequest,
 	)
@@ -422,6 +438,20 @@ func handleLinodeInstanceResizeRequest(ctx context.Context, request *mcp.CallToo
 	instanceType := request.GetString("type", "")
 	allowAutoDisk := request.GetBool("allow_auto_disk", false)
 	migrationType := request.GetString("migration_type", "")
+
+	if IsDryRun(request) {
+		if instanceID == 0 {
+			return mcp.NewToolResultError("instance_id is required"), nil
+		}
+
+		if instanceType == "" {
+			return mcp.NewToolResultError("type is required"), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_resize", httpMethodPost,
+			fmt.Sprintf("/linode/instances/%d/resize", instanceID),
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, instanceID) })
+	}
 
 	if result := RequireConfirm(request, "This operation causes downtime and may affect billing. Set confirm=true to proceed."); result != nil {
 		return result, nil

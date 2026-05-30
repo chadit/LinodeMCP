@@ -223,7 +223,8 @@ func NewLinodeFirewallRulesUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 			mcp.WithString(paramFirewallRuleOutbound, mcp.Required(),
 				mcp.Description("JSON array of outbound firewall rules.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm replacing firewall rules.")),
+				mcp.Description("Must be set to true to confirm replacing firewall rules. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeFirewallRulesUpdateRequest,
 	)
@@ -232,6 +233,10 @@ func NewLinodeFirewallRulesUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 }
 
 func handleLinodeFirewallRulesUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if IsDryRun(request) {
+		return handleLinodeFirewallRulesUpdateDryRun(ctx, request, cfg)
+	}
+
 	if result := RequireConfirm(request, "This replaces Cloud Firewall rules. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
@@ -279,6 +284,30 @@ func handleLinodeFirewallRulesUpdateRequest(ctx context.Context, request *mcp.Ca
 	}
 
 	return MarshalToolResponse(response)
+}
+
+func handleLinodeFirewallRulesUpdateDryRun(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	firewallID, validationMessage := requiredPositiveIntArgument(
+		request,
+		paramFirewallID,
+		linode.ErrFirewallIDPositive.Error(),
+		linode.ErrFirewallIDPositive.Error(),
+	)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if _, msg := parseFirewallRuleSet(request.GetString(paramFirewallRuleInbound, ""), paramFirewallRuleInbound); msg != "" {
+		return mcp.NewToolResultError(msg), nil
+	}
+
+	if _, msg := parseFirewallRuleSet(request.GetString(paramFirewallRuleOutbound, ""), paramFirewallRuleOutbound); msg != "" {
+		return mcp.NewToolResultError(msg), nil
+	}
+
+	return RunDryRunPreview(ctx, request, cfg, "linode_firewall_rules_update", "PUT",
+		fmt.Sprintf("/networking/firewalls/%d/rules", firewallID),
+		func(ctx context.Context, c *linode.Client) (any, error) { return c.ListFirewallRules(ctx, firewallID) })
 }
 
 func formatFirewallRulesUpdateError(err error) string {
@@ -482,7 +511,8 @@ func NewLinodeFirewallDeviceCreateTool(cfg *config.Config) (mcp.Tool, profiles.C
 			mcp.WithString(paramDeviceType, mcp.Required(),
 				mcp.Description("Device type. Must be linode, nodebalancer, or linode_interface.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm firewall device assignment.")),
+				mcp.Description("Must be true to confirm firewall device assignment. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeFirewallDeviceCreateRequest,
 	)
@@ -491,11 +521,25 @@ func NewLinodeFirewallDeviceCreateTool(cfg *config.Config) (mcp.Tool, profiles.C
 }
 
 func handleLinodeFirewallDeviceCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	firewallID := request.GetInt(paramFirewallID, 0)
+
+	if IsDryRun(request) {
+		if firewallID <= 0 {
+			return mcp.NewToolResultError(linode.ErrFirewallIDPositive.Error()), nil
+		}
+
+		if _, validationMessage := firewallDeviceCreateRequestFromTool(request); validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_firewall_device_create", httpMethodPost,
+			fmt.Sprintf("/networking/firewalls/%d/devices", firewallID), nil)
+	}
+
 	if result := RequireConfirm(request, "This assigns a device to a Cloud Firewall. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
-	firewallID := request.GetInt(paramFirewallID, 0)
 	if firewallID <= 0 {
 		return mcp.NewToolResultError(linode.ErrFirewallIDPositive.Error()), nil
 	}
@@ -736,7 +780,8 @@ func NewLinodeFirewallSettingsUpdateTool(cfg *config.Config) (mcp.Tool, profiles
 			mcp.WithObject(paramDefaultFirewallIDs, mcp.Required(),
 				mcp.Description("Object of positive firewall IDs keyed by linode, nodebalancer, public_interface, or vpc_interface.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm default firewall settings update.")),
+				mcp.Description("Must be true to confirm default firewall settings update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeFirewallSettingsUpdateRequest,
 	)
@@ -745,6 +790,16 @@ func NewLinodeFirewallSettingsUpdateTool(cfg *config.Config) (mcp.Tool, profiles
 }
 
 func handleLinodeFirewallSettingsUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if IsDryRun(request) {
+		if _, validationMessage := firewallSettingsUpdateRequestFromTool(request); validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_firewall_settings_update", "PUT",
+			"/networking/firewalls/settings",
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.ListFirewallSettings(ctx, 0, 0) })
+	}
+
 	if result := RequireConfirm(request, "This updates default Cloud Firewall assignments. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}

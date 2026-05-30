@@ -37,6 +37,21 @@ const (
 	monitorAlertChannelsPageSizeMin    = 25
 	monitorAlertChannelsPageSizeMax    = 500
 	longviewClientIDParam              = "client_id"
+	longviewClientsPath                = "/longview/clients"
+	longviewPlanPath                   = "/longview/plan"
+	accountSettingsPath                = "/account/settings"
+	accountUsersPath                   = "/account/users"
+	accountOAuthClientsPath            = "/account/oauth-clients"
+	accountPaymentsPath                = "/account/payments"
+	accountPaymentMethodsPath          = "/account/payment-methods"
+	accountEntityTransfersPath         = "/account/entity-transfers"
+	accountServiceTransfersPath        = "/account/service-transfers"
+	accountAgreementsPath              = "/account/agreements"
+	accountBetasPath                   = "/account/betas"
+	accountCancelPath                  = "/account/cancel"
+	accountPromoCodesPath              = "/account/promo-codes"
+	accountEventsPath                  = "/account/events"
+	accountChildAccountsPath           = "/account/child-accounts"
 	longviewSubscriptionIDParam        = "longview_subscription_id"
 	maxLongviewClientIDFromJSON        = 9007199254740991
 	errLongviewClientIDPositive        = "client_id must be a positive integer"
@@ -100,6 +115,7 @@ const (
 	errAccountPaymentIDPositive        = "payment_id must be a positive integer"
 	errAccountLoginIDPositive          = "login_id must be a positive integer"
 	errLabelRequired                   = "label is required"
+	errRegionRequired                  = "region is required"
 	errRedirectURIRequired             = "redirect_uri is required"
 	errPaymentMethodDataRequired       = "data is required"
 	errPaymentMethodTypeRequired       = "type is required"
@@ -166,7 +182,8 @@ func NewLinodeAccountSettingsUpdateTool(cfg *config.Config) (mcp.Tool, profiles.
 			mcp.WithBoolean("network_helper", mcp.Description("Whether Network Helper is enabled by default (optional).")),
 			mcp.WithString("object_storage", mcp.Description("Object Storage subscription status or tier (optional).")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm account settings update.")),
+				mcp.Description("Must be true to confirm account settings update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountSettingsUpdateRequest,
 	)
@@ -179,10 +196,11 @@ func NewLinodeAccountSettingsManagedEnableTool(cfg *config.Config) (mcp.Tool, pr
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_account_settings_managed_enable",
-		"Enables Linode Managed for the account.",
+		"Enables Linode Managed for the account. Pass dry_run=true to preview without enabling.",
 		[]mcp.ToolOption{
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm enabling Linode Managed.")),
+				mcp.Description("Must be true to confirm enabling Linode Managed. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountSettingsManagedEnableRequest,
 	)
@@ -224,11 +242,12 @@ func NewLinodeManagedCredentialUpdateTool(cfg *config.Config) (mcp.Tool, profile
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_managed_credential_update",
-		"Updates one stored managed credential by ID.",
+		"Updates one stored managed credential by ID. Pass dry_run=true to preview without modifying.",
 		[]mcp.ToolOption{
 			mcp.WithNumber(managedUpdateIDParam, mcp.Required(), mcp.Description("The numeric Managed credential ID to update.")),
 			mcp.WithString("label", mcp.Description("Updated credential label.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm updating the Managed credential.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm updating the Managed credential. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeManagedCredentialUpdateRequest,
 	)
@@ -249,7 +268,8 @@ func NewLinodeManagedCredentialUsernamePasswordUpdateTool(cfg *config.Config) (m
 			mcp.WithString(managedCredentialCreateUserParam,
 				mcp.Description("Updated username to store for the Managed credential.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm updating a stored Managed credential's username and password.")),
+				mcp.Description("Must be true to confirm updating a stored Managed credential's username and password. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeManagedCredentialUsernamePasswordUpdateRequest,
 	)
@@ -284,7 +304,8 @@ func NewLinodeManagedCredentialCreateTool(cfg *config.Config) (mcp.Tool, profile
 			mcp.WithString(managedCredentialCreateUserParam,
 				mcp.Description("Username to store for the Managed credential.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm creating a stored Managed credential.")),
+				mcp.Description("Must be true to confirm creating a stored Managed credential. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeManagedCredentialCreateRequest,
 	)
@@ -297,9 +318,10 @@ func NewLinodeManagedCredentialGetTool(cfg *config.Config) (mcp.Tool, profiles.C
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_managed_credential_get",
-		"Gets one stored managed credential by ID. This account-level managed credential metadata requires admin capability.",
+		"Gets one stored managed credential by ID. This account-level managed credential metadata requires admin capability. Pass dry_run=true to preview the request without retrieving it.",
 		[]mcp.ToolOption{
 			mcp.WithNumber(managedIDParam, mcp.Required(), mcp.Description("Managed credential ID to retrieve.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeManagedCredentialGetRequest,
 	)
@@ -312,11 +334,12 @@ func NewLinodeManagedCredentialRevokeTool(cfg *config.Config) (mcp.Tool, profile
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_managed_credential_revoke",
-		"Revokes one stored managed credential by ID. This credential-affecting action requires admin capability and confirm=true.",
+		"Revokes one stored managed credential by ID. This credential-affecting action requires admin capability and confirm=true. Pass dry_run=true to preview without revoking.",
 		[]mcp.ToolOption{
 			mcp.WithNumber(managedIDParam, mcp.Required(), mcp.Description("Managed credential ID to revoke.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm revoking the stored Managed credential.")),
+				mcp.Description("Must be true to confirm revoking the stored Managed credential. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeManagedCredentialRevokeRequest,
 	)
@@ -470,7 +493,8 @@ func NewLinodeAccountUserGrantsUpdateTool(cfg *config.Config) (mcp.Tool, profile
 			mcp.WithArray(accountUserGrantsFirewallParam, mcp.Description("Optional firewall resource grants.")),
 			mcp.WithArray(accountUserGrantsVPCParam, mcp.Description("Optional VPC resource grants.")),
 			mcp.WithArray(accountUserGrantsLKEClusterParam, mcp.Description("Optional LKE cluster resource grants.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm account user grants update.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm account user grants update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountUserGrantsUpdateRequest,
 	)
@@ -490,7 +514,8 @@ func NewLinodeAccountUserUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 			mcp.WithBoolean("restricted", mcp.Description("Whether the account user is restricted.")),
 			mcp.WithArray("ssh_keys", mcp.Description("SSH public keys for the account user.")),
 			mcp.WithString("new_username", mcp.Description("New username for the account user.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm account user update.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm account user update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountUserUpdateRequest,
 	)
@@ -506,7 +531,8 @@ func NewLinodeAccountUserDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 		"Deletes one account user by username.",
 		[]mcp.ToolOption{
 			mcp.WithString(accountUserUsernameParam, mcp.Required(), mcp.Description("Account username to delete.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm account user deletion.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm account user deletion. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountUserDeleteRequest,
 	)
@@ -523,7 +549,8 @@ func NewLinodeAccountUserCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 		[]mcp.ToolOption{
 			mcp.WithString(accountUserUsernameParam, mcp.Required(), mcp.Description("Username for the new account user.")),
 			mcp.WithString(accountUserEmailParam, mcp.Required(), mcp.Description("Email address for the new account user.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm account user creation.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm account user creation. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountUserCreateRequest,
 	)
@@ -536,14 +563,15 @@ func NewLinodeManagedContactCreateTool(cfg *config.Config) (mcp.Tool, profiles.C
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_managed_contact_create",
-		"Creates a managed contact for service monitor issue handling.",
+		"Creates a managed contact for service monitor issue handling. Pass dry_run=true to preview without creating.",
 		[]mcp.ToolOption{
 			mcp.WithString(managedContactNameParam, mcp.Description("Name for the managed contact.")),
 			mcp.WithString(managedContactEmailParam, mcp.Description("Email address for the managed contact.")),
 			mcp.WithString(managedContactGroupParam, mcp.Description("Display grouping for the managed contact.")),
 			mcp.WithString(managedContactPhonePrimaryParam, mcp.Description("Primary phone number for the managed contact.")),
 			mcp.WithString(managedContactPhoneSecondaryParam, mcp.Description("Secondary phone number for the managed contact.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm managed contact creation.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm managed contact creation. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeManagedContactCreateRequest,
 	)
@@ -640,7 +668,8 @@ func NewLinodeAccountPaymentCreateTool(cfg *config.Config) (mcp.Tool, profiles.C
 		[]mcp.ToolOption{
 			mcp.WithString("payment_method_id", mcp.Description("Payment method ID to charge (optional).")),
 			mcp.WithNumber("usd", mcp.Required(), mcp.Description("Payment amount in USD.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm making an account payment.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm making an account payment. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountPaymentCreateRequest,
 	)
@@ -656,7 +685,8 @@ func NewLinodeAccountPromoCreditTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		"Applies a promo credit to the authenticated account.",
 		[]mcp.ToolOption{
 			mcp.WithString("promo_code", mcp.Required(), mcp.Description("Promo code to apply to the account.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm applying a promo credit.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm applying a promo credit. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountPromoCreditRequest,
 	)
@@ -735,14 +765,15 @@ func NewLinodeLongviewClientUpdateTool(cfg *config.Config) (mcp.Tool, profiles.C
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_longview_client_update",
-		"Updates the label for one Longview client.",
+		"Updates the label for one Longview client. Pass dry_run=true to preview without modifying.",
 		[]mcp.ToolOption{
 			mcp.WithNumber(longviewClientIDParam, mcp.Required(),
 				mcp.Description("Longview client ID to update.")),
 			mcp.WithString("label", mcp.Required(),
 				mcp.Description("New Longview client label. Must be 3-32 letters, digits, hyphens, or underscores.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm Longview client update.")),
+				mcp.Description("Must be true to confirm Longview client update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeLongviewClientUpdateRequest,
 	)
@@ -755,12 +786,13 @@ func NewLinodeLongviewClientDeleteTool(cfg *config.Config) (mcp.Tool, profiles.C
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_longview_client_delete",
-		"Deletes one Longview client.",
+		"Deletes one Longview client. Pass dry_run=true to preview without deleting.",
 		[]mcp.ToolOption{
 			mcp.WithNumber(longviewClientIDParam, mcp.Required(),
 				mcp.Description("Longview client ID to delete.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm Longview client deletion.")),
+				mcp.Description("Must be true to confirm Longview client deletion. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeLongviewClientDeleteRequest,
 	)
@@ -842,7 +874,8 @@ func NewLinodeAccountPaymentMethodCreateTool(cfg *config.Config) (mcp.Tool, prof
 			mcp.WithString("type", mcp.Required(), mcp.Description("Payment method type.")),
 			mcp.WithObject("data", mcp.Required(), mcp.Description("Payment method provider data.")),
 			mcp.WithBoolean("is_default", mcp.Required(), mcp.Description("Whether the payment method should become the account default.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm payment method creation.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm payment method creation. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountPaymentMethodCreateRequest,
 	)
@@ -859,7 +892,8 @@ func NewLinodeAccountPaymentMethodDeleteTool(cfg *config.Config) (mcp.Tool, prof
 		[]mcp.ToolOption{
 			mcp.WithString("payment_method_id", mcp.Required(),
 				mcp.Description("Payment method ID.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm payment method deletion.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm payment method deletion. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountPaymentMethodDeleteRequest,
 	)
@@ -876,7 +910,8 @@ func NewLinodeAccountPaymentMethodMakeDefaultTool(cfg *config.Config) (mcp.Tool,
 		[]mcp.ToolOption{
 			mcp.WithString("payment_method_id", mcp.Required(),
 				mcp.Description("Payment method ID.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm changing the default payment method.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm changing the default payment method. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountPaymentMethodMakeDefaultRequest,
 	)
@@ -909,7 +944,8 @@ func NewLinodeAccountOAuthClientCreateTool(cfg *config.Config) (mcp.Tool, profil
 		[]mcp.ToolOption{
 			mcp.WithString("label", mcp.Required(), mcp.Description("Label for the OAuth client.")),
 			mcp.WithString("redirect_uri", mcp.Required(), mcp.Description("Redirect URI for the OAuth client.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm OAuth client creation. The secret is only shown once.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm OAuth client creation. The secret is only shown once. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountOAuthClientCreateRequest,
 	)
@@ -928,7 +964,8 @@ func NewLinodeAccountOAuthClientUpdateTool(cfg *config.Config) (mcp.Tool, profil
 			mcp.WithString("label", mcp.Description("New label for the OAuth client.")),
 			mcp.WithString("redirect_uri", mcp.Description("New redirect URI for the OAuth client.")),
 			mcp.WithBoolean("public", mcp.Description("Whether this OAuth client is public.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm OAuth client update.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm OAuth client update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountOAuthClientUpdateRequest,
 	)
@@ -945,7 +982,8 @@ func NewLinodeAccountOAuthClientThumbnailUpdateTool(cfg *config.Config) (mcp.Too
 		[]mcp.ToolOption{
 			mcp.WithString("client_id", mcp.Required(), mcp.Description("OAuth client ID.")),
 			mcp.WithString(oauthClientThumbnailPNGParam, mcp.Required(), mcp.Description("Base64-encoded PNG image for the OAuth client thumbnail.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm OAuth client thumbnail update.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm OAuth client thumbnail update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountOAuthClientThumbnailUpdateRequest,
 	)
@@ -976,7 +1014,8 @@ func NewLinodeAccountOAuthClientDeleteTool(cfg *config.Config) (mcp.Tool, profil
 		"Deletes one account OAuth client by ID.",
 		[]mcp.ToolOption{
 			mcp.WithString("client_id", mcp.Required(), mcp.Description("OAuth client ID.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm OAuth client deletion.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm OAuth client deletion. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountOAuthClientDeleteRequest,
 	)
@@ -992,7 +1031,8 @@ func NewLinodeAccountOAuthClientResetSecretTool(cfg *config.Config) (mcp.Tool, p
 		"Resets one account OAuth client secret by ID. WARNING: The new secret is only shown once in the response and cannot be retrieved later.",
 		[]mcp.ToolOption{
 			mcp.WithString("client_id", mcp.Required(), mcp.Description("OAuth client ID.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm OAuth client secret reset. The new secret is only shown once.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm OAuth client secret reset. The new secret is only shown once. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountOAuthClientResetSecretRequest,
 	)
@@ -1074,7 +1114,8 @@ func NewLinodeAccountServiceTransferCreateTool(cfg *config.Config) (mcp.Tool, pr
 			mcp.WithArray("linode_ids", mcp.Required(),
 				mcp.Description("Linode IDs to include in the service transfer.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm service transfer creation.")),
+				mcp.Description("Must be true to confirm service transfer creation. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountServiceTransferCreateRequest,
 	)
@@ -1092,7 +1133,8 @@ func NewLinodeAccountServiceTransferDeleteTool(cfg *config.Config) (mcp.Tool, pr
 			mcp.WithString("token", mcp.Required(),
 				mcp.Description("Service transfer token to cancel.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm service transfer cancellation.")),
+				mcp.Description("Must be true to confirm service transfer cancellation. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountServiceTransferDeleteRequest,
 	)
@@ -1110,7 +1152,8 @@ func NewLinodeAccountServiceTransferAcceptTool(cfg *config.Config) (mcp.Tool, pr
 			mcp.WithString("token", mcp.Required(),
 				mcp.Description("Service transfer token to accept.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm service transfer acceptance.")),
+				mcp.Description("Must be true to confirm service transfer acceptance. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountServiceTransferAcceptRequest,
 	)
@@ -1160,7 +1203,8 @@ func NewLinodeAccountEventSeenTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 			mcp.WithNumber(accountEventIDParam, mcp.Required(),
 				mcp.Description("Numeric account event ID to mark as seen.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm marking the account event as seen.")),
+				mcp.Description("Must be true to confirm marking the account event as seen. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountEventSeenRequest,
 	)
@@ -1178,7 +1222,8 @@ func NewLinodeAccountEntityTransferCreateTool(cfg *config.Config) (mcp.Tool, pro
 			mcp.WithArray("linode_ids", mcp.Required(),
 				mcp.Description("Linode IDs to include in the entity transfer.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm entity transfer creation.")),
+				mcp.Description("Must be true to confirm entity transfer creation. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountEntityTransferCreateRequest,
 	)
@@ -1196,7 +1241,8 @@ func NewLinodeAccountEntityTransferAcceptTool(cfg *config.Config) (mcp.Tool, pro
 			mcp.WithString("token", mcp.Required(),
 				mcp.Description("Entity transfer token to accept.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm entity transfer acceptance.")),
+				mcp.Description("Must be true to confirm entity transfer acceptance. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountEntityTransferAcceptRequest,
 	)
@@ -1214,7 +1260,8 @@ func NewLinodeAccountEntityTransferDeleteTool(cfg *config.Config) (mcp.Tool, pro
 			mcp.WithString("token", mcp.Required(),
 				mcp.Description("Entity transfer token to cancel.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm entity transfer cancellation.")),
+				mcp.Description("Must be true to confirm entity transfer cancellation. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountEntityTransferDeleteRequest,
 	)
@@ -1248,7 +1295,8 @@ func NewLinodeAccountChildAccountTokenTool(cfg *config.Config) (mcp.Tool, profil
 			mcp.WithString("euuid", mcp.Required(),
 				mcp.Description("External unique identifier for the child account.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm proxy user token creation.")),
+				mcp.Description("Must be true to confirm proxy user token creation. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountChildAccountTokenRequest,
 	)
@@ -1314,7 +1362,8 @@ func NewLinodeAccountBetaEnrollTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 			mcp.WithString("id", mcp.Required(),
 				mcp.Description("Unique identifier for the beta program.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm beta program enrollment.")),
+				mcp.Description("Must be true to confirm beta program enrollment. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountBetaEnrollRequest,
 	)
@@ -1366,7 +1415,8 @@ func NewLinodeAccountAgreementsAcknowledgeTool(cfg *config.Config) (mcp.Tool, pr
 			mcp.WithBoolean("master_service_agreement", mcp.Description("Acknowledge the master service agreement (optional)")),
 			mcp.WithBoolean("privacy_policy", mcp.Description("Acknowledge the privacy policy (optional)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm account agreement acknowledgement.")),
+				mcp.Description("Must be true to confirm account agreement acknowledgement. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountAgreementsAcknowledgeRequest,
 	)
@@ -1383,7 +1433,8 @@ func NewLinodeAccountCancelTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 		[]mcp.ToolOption{
 			mcp.WithString("comments", mcp.Description("Reason for canceling the account or other feedback (optional).")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm account cancellation.")),
+				mcp.Description("Must be true to confirm account cancellation. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountCancelRequest,
 	)
@@ -1561,13 +1612,25 @@ func longviewClientsPaginationFromTool(request *mcp.CallToolRequest) (int, int, 
 }
 
 func handleLinodeLongviewClientUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This updates a Longview client. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	clientID, validationMessage := longviewClientIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		if _, dryRunValidationMessage := longviewClientUpdateRequestFromTool(request); dryRunValidationMessage != "" {
+			return mcp.NewToolResultError(dryRunValidationMessage), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_longview_client_update", "PUT",
+			fmt.Sprintf(longviewClientsPath+"/%d", clientID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetLongviewClient(ctx, strconv.Itoa(clientID))
+			})
+	}
+
+	if result := RequireConfirm(request, "This updates a Longview client. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	req, validationMessage := longviewClientUpdateRequestFromTool(request)
@@ -1675,13 +1738,21 @@ func updateLongviewClient(ctx context.Context, client *linode.Client, clientID i
 }
 
 func handleLinodeLongviewClientDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This deletes a Longview client. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	clientID, validationMessage := longviewClientIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_longview_client_delete", httpMethodDelete,
+			fmt.Sprintf(longviewClientsPath+"/%d", clientID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetLongviewClient(ctx, strconv.Itoa(clientID))
+			})
+	}
+
+	if result := RequireConfirm(request, "This deletes a Longview client. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -1890,13 +1961,17 @@ func accountPaymentMethodIDFromTool(request *mcp.CallToolRequest) (string, strin
 }
 
 func handleLinodeAccountPaymentMethodCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This creates a payment method. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	req, validationMessage := paymentMethodCreateRequestFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_account_payment_method_create", httpMethodPost, accountPaymentMethodsPath, nil)
+	}
+
+	if result := RequireConfirm(request, "This creates a payment method. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -1949,13 +2024,21 @@ func createAccountPaymentMethod(ctx context.Context, client *linode.Client, req 
 }
 
 func handleLinodeAccountPaymentMethodDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This deletes a payment method. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	paymentMethodID, validationMessage := accountPaymentMethodIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_account_payment_method_delete", httpMethodDelete,
+			accountPaymentMethodsPath+"/"+paymentMethodID,
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetAccountPaymentMethod(ctx, paymentMethodID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This deletes a payment method. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -1982,13 +2065,21 @@ func deleteAccountPaymentMethod(ctx context.Context, client *linode.Client, paym
 }
 
 func handleLinodeAccountPaymentMethodMakeDefaultRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This changes the default payment method. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	paymentMethodID, validationMessage := accountPaymentMethodIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_account_payment_method_make_default", httpMethodPost,
+			accountPaymentMethodsPath+"/"+paymentMethodID+"/make-default",
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetAccountPaymentMethod(ctx, paymentMethodID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This changes the default payment method. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -2052,13 +2143,17 @@ func accountOAuthClientIDFromTool(request *mcp.CallToolRequest) (string, string)
 }
 
 func handleLinodeAccountOAuthClientCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This creates an OAuth client. The secret is only shown once. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	req, validationMessage := oauthClientCreateRequestFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_account_oauth_client_create", httpMethodPost, accountOAuthClientsPath, nil)
+	}
+
+	if result := RequireConfirm(request, "This creates an OAuth client. The secret is only shown once. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -2092,10 +2187,6 @@ func createOAuthClient(ctx context.Context, client *linode.Client, req *linode.C
 }
 
 func handleLinodeAccountOAuthClientUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This updates an OAuth client. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	clientID, validationMessage := accountOAuthClientIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
@@ -2104,6 +2195,18 @@ func handleLinodeAccountOAuthClientUpdateRequest(ctx context.Context, request *m
 	req, validationMessage := oauthClientUpdateRequestFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_account_oauth_client_update", "PUT",
+			accountOAuthClientsPath+"/"+clientID,
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetAccountOAuthClient(ctx, clientID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This updates an OAuth client. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -2135,10 +2238,6 @@ func updateOAuthClient(ctx context.Context, client *linode.Client, clientID stri
 }
 
 func handleLinodeAccountOAuthClientThumbnailUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This updates an OAuth client thumbnail. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	clientID, validationMessage := accountOAuthClientIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
@@ -2147,6 +2246,18 @@ func handleLinodeAccountOAuthClientThumbnailUpdateRequest(ctx context.Context, r
 	thumbnailPNG, validationMessage := oauthClientThumbnailPNGFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_account_oauth_client_thumbnail_update", "PUT",
+			accountOAuthClientsPath+"/"+clientID+"/thumbnail",
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetAccountOAuthClient(ctx, clientID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This updates an OAuth client thumbnail. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -2225,13 +2336,21 @@ func handleLinodeAccountOAuthClientThumbnailGetRequest(ctx context.Context, requ
 }
 
 func handleLinodeAccountOAuthClientDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This deletes an OAuth client. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	clientID, validationMessage := accountOAuthClientIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_account_oauth_client_delete", httpMethodDelete,
+			accountOAuthClientsPath+"/"+clientID,
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetAccountOAuthClient(ctx, clientID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This deletes an OAuth client. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -2263,13 +2382,23 @@ func deleteOAuthClient(ctx context.Context, client *linode.Client, clientID stri
 }
 
 func handleLinodeAccountOAuthClientResetSecretRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This resets an OAuth client secret. The new secret is only shown once. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	clientID, validationMessage := accountOAuthClientIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		// Credential-safe: fetch the client metadata (not the secret) and
+		// preview the POST; the new secret is never surfaced.
+		return RunDryRunPreview(ctx, request, cfg, "linode_account_oauth_client_reset_secret", httpMethodPost,
+			accountOAuthClientsPath+"/"+clientID+"/reset-secret",
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetAccountOAuthClient(ctx, clientID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This resets an OAuth client secret. The new secret is only shown once. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -2472,10 +2601,6 @@ func handleLinodeAccountUserGrantsRequest(ctx context.Context, request *mcp.Call
 }
 
 func handleLinodeAccountUserGrantsUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This updates account user grants. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	username, validationMessage := accountUserUsernamePathParamFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
@@ -2484,6 +2609,18 @@ func handleLinodeAccountUserGrantsUpdateRequest(ctx context.Context, request *mc
 	updateRequest, validationMessage := accountUserGrantsUpdateRequestFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_account_user_grants_update", "PUT",
+			accountUsersPath+"/"+username+"/grants",
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetAccountUserGrants(ctx, username)
+			})
+	}
+
+	if result := RequireConfirm(request, "This updates account user grants. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -2513,10 +2650,6 @@ func accountUserUsernamePathParamFromTool(request *mcp.CallToolRequest) (string,
 }
 
 func handleLinodeAccountUserUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This updates an account user. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	username, validationMessage := accountUserUsernamePathParamFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
@@ -2525,6 +2658,18 @@ func handleLinodeAccountUserUpdateRequest(ctx context.Context, request *mcp.Call
 	updateRequest, validationMessage := accountUserUpdateRequestFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_account_user_update", "PUT",
+			accountUsersPath+"/"+username,
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetAccountUser(ctx, username)
+			})
+	}
+
+	if result := RequireConfirm(request, "This updates an account user. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -2541,13 +2686,21 @@ func handleLinodeAccountUserUpdateRequest(ctx context.Context, request *mcp.Call
 }
 
 func handleLinodeAccountUserDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This deletes an account user. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	username, validationMessage := accountUserUsernamePathParamFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_account_user_delete", httpMethodDelete,
+			accountUsersPath+"/"+username,
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetAccountUser(ctx, username)
+			})
+	}
+
+	if result := RequireConfirm(request, "This deletes an account user. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -2772,13 +2925,17 @@ func accountUserSSHKeysFromTool(raw any) (*[]string, string) {
 }
 
 func handleLinodeAccountUserCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This creates an account user. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	createRequest, validationMessage := accountUserCreateRequestFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_account_user_create", httpMethodPost, accountUsersPath, nil)
+	}
+
+	if result := RequireConfirm(request, "This creates an account user. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -2811,13 +2968,17 @@ func accountUserCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.Cre
 }
 
 func handleLinodeManagedContactCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This creates a managed contact. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	createRequest, validationMessage := managedContactCreateRequestFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_managed_contact_create", httpMethodPost, managedContactsPath, nil)
+	}
+
+	if result := RequireConfirm(request, "This creates a managed contact. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -3115,13 +3276,17 @@ func accountPaymentIDFromTool(request *mcp.CallToolRequest) (int, string) {
 }
 
 func handleLinodeAccountPaymentCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This makes an account payment. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	req, validationMessage := accountPaymentCreateRequestFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_account_payment_create", httpMethodPost, accountPaymentsPath, nil)
+	}
+
+	if result := RequireConfirm(request, "This makes an account payment. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -3141,13 +3306,17 @@ func handleLinodeAccountPaymentCreateRequest(ctx context.Context, request *mcp.C
 }
 
 func handleLinodeAccountPromoCreditRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This applies a promo credit to the account. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	req, validationMessage := accountPromoCreditRequestFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_account_promo_credit", httpMethodPost, accountPromoCodesPath, nil)
+	}
+
+	if result := RequireConfirm(request, "This applies a promo credit to the account. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -3366,13 +3535,23 @@ func handleLinodeAccountChildAccountGetRequest(ctx context.Context, request *mcp
 }
 
 func handleLinodeAccountChildAccountTokenRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This creates a proxy user token for a child account. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	euuid, validationMessage := accountChildAccountEUUIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		// Credential-safe: fetch the child account metadata (not the proxy
+		// token) and preview the POST; the token is never surfaced.
+		return RunDryRunPreview(ctx, request, cfg, "linode_account_child_account_token", httpMethodPost,
+			accountChildAccountsPath+"/"+euuid+"/token",
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetAccountChildAccount(ctx, euuid)
+			})
+	}
+
+	if result := RequireConfirm(request, "This creates a proxy user token for a child account. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -3445,14 +3624,38 @@ func handleLinodeAccountServiceTransferGetRequest(ctx context.Context, request *
 	return mcp.NewToolResultError("Failed to retrieve linode_account_service_transfer_get: " + getFailure.Error()), nil
 }
 
-func handleLinodeAccountServiceTransferDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This cancels an account service transfer. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
+// runAccountTransferAction wires dry-run preview, confirm gating, and
+// execution for the token-based entity/service transfer accept + delete
+// actions, which are otherwise identical and trip the dupl linter. verb is
+// the path suffix ("accept") or empty (delete). The caller's execute closure
+// returns a full failure message (already prefixed) or "" on success.
+func runAccountTransferAction(
+	ctx context.Context,
+	request *mcp.CallToolRequest,
+	cfg *config.Config,
+	toolName, method, basePath, verb, confirmMessage, successMessage, failurePrefix string,
+	fetchState func(context.Context, *linode.Client, string) (any, error),
+	execute func(context.Context, *linode.Client, string) string,
+) (*mcp.CallToolResult, error) {
 	token, validationMessage := accountTransferTokenFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		path := basePath + "/" + token
+		if verb != "" {
+			path += "/" + verb
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, toolName, method, path,
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return fetchState(ctx, c, token)
+			})
+	}
+
+	if result := RequireConfirm(request, confirmMessage); result != nil {
+		return result, nil
 	}
 
 	client, prepErr := prepareClient(request, cfg)
@@ -3460,51 +3663,38 @@ func handleLinodeAccountServiceTransferDeleteRequest(ctx context.Context, reques
 		return mcp.NewToolResultError(prepErr.Error()), nil
 	}
 
-	deleteFailureMessage := deleteAccountServiceTransfer(ctx, client, token)
-	if deleteFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to delete linode_account_service_transfer_delete: " + deleteFailureMessage), nil
+	if failureMessage := execute(ctx, client, token); failureMessage != "" {
+		return mcp.NewToolResultError(failurePrefix + failureMessage), nil
 	}
 
-	response := struct {
-		Message string `json:"message"`
-		Token   string `json:"token"`
-	}{
-		Message: "Account service transfer canceled successfully",
-		Token:   token,
-	}
+	return MarshalToolResponse(map[string]any{
+		responseKeyMessage: successMessage,
+		"token":            token,
+	})
+}
 
-	return MarshalToolResponse(response)
+func handleLinodeAccountServiceTransferDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	return runAccountTransferAction(ctx, request, cfg,
+		"linode_account_service_transfer_delete", httpMethodDelete, accountServiceTransfersPath, "",
+		"This cancels an account service transfer. Set confirm=true to proceed.",
+		"Account service transfer canceled successfully",
+		"Failed to delete linode_account_service_transfer_delete: ",
+		func(ctx context.Context, c *linode.Client, token string) (any, error) {
+			return c.GetAccountServiceTransfer(ctx, token)
+		},
+		deleteAccountServiceTransfer)
 }
 
 func handleLinodeAccountServiceTransferAcceptRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This accepts an account service transfer. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	token, validationMessage := accountTransferTokenFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, prepErr := prepareClient(request, cfg)
-	if prepErr != nil {
-		return mcp.NewToolResultError(prepErr.Error()), nil
-	}
-
-	acceptFailureMessage := acceptAccountServiceTransfer(ctx, client, token)
-	if acceptFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to accept linode_account_service_transfer_accept: " + acceptFailureMessage), nil
-	}
-
-	response := struct {
-		Message string `json:"message"`
-		Token   string `json:"token"`
-	}{
-		Message: "Account service transfer accepted successfully",
-		Token:   token,
-	}
-
-	return MarshalToolResponse(response)
+	return runAccountTransferAction(ctx, request, cfg,
+		"linode_account_service_transfer_accept", httpMethodPost, accountServiceTransfersPath, "accept",
+		"This accepts an account service transfer. Set confirm=true to proceed.",
+		"Account service transfer accepted successfully",
+		"Failed to accept linode_account_service_transfer_accept: ",
+		func(ctx context.Context, c *linode.Client, token string) (any, error) {
+			return c.GetAccountServiceTransfer(ctx, token)
+		},
+		acceptAccountServiceTransfer)
 }
 
 func handleLinodeAccountEntityTransferGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -3546,13 +3736,21 @@ func handleLinodeAccountEventGetRequest(ctx context.Context, request *mcp.CallTo
 }
 
 func handleLinodeAccountEventSeenRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This marks an account event as seen. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	eventID, validationMessage := accountEventIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_account_event_seen", httpMethodPost,
+			fmt.Sprintf(accountEventsPath+"/%d/seen", eventID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetAccountEvent(ctx, eventID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This marks an account event as seen. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, prepErr := prepareClient(request, cfg)
@@ -3660,13 +3858,17 @@ func accountServiceTransfersPaginationFromTool(request *mcp.CallToolRequest) (in
 }
 
 func handleLinodeAccountEntityTransferCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This creates an account entity transfer. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	req, validationMessage := accountEntityTransferCreateRequestFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_account_entity_transfer_create", httpMethodPost, accountEntityTransfersPath, nil)
+	}
+
+	if result := RequireConfirm(request, "This creates an account entity transfer. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -3683,13 +3885,17 @@ func handleLinodeAccountEntityTransferCreateRequest(ctx context.Context, request
 }
 
 func handleLinodeAccountServiceTransferCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This creates an account service transfer. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	req, validationMessage := accountServiceTransferCreateRequestFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_account_service_transfer_create", httpMethodPost, accountServiceTransfersPath, nil)
+	}
+
+	if result := RequireConfirm(request, "This creates an account service transfer. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -3706,65 +3912,27 @@ func handleLinodeAccountServiceTransferCreateRequest(ctx context.Context, reques
 }
 
 func handleLinodeAccountEntityTransferAcceptRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This accepts an account entity transfer. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	token, validationMessage := accountTransferTokenFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, prepErr := prepareClient(request, cfg)
-	if prepErr != nil {
-		return mcp.NewToolResultError(prepErr.Error()), nil
-	}
-
-	acceptFailureMessage := acceptAccountEntityTransfer(ctx, client, token)
-	if acceptFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to accept linode_account_entity_transfer_accept: " + acceptFailureMessage), nil
-	}
-
-	response := struct {
-		Message string `json:"message"`
-		Token   string `json:"token"`
-	}{
-		Message: "Account entity transfer accepted successfully",
-		Token:   token,
-	}
-
-	return MarshalToolResponse(response)
+	return runAccountTransferAction(ctx, request, cfg,
+		"linode_account_entity_transfer_accept", httpMethodPost, accountEntityTransfersPath, "accept",
+		"This accepts an account entity transfer. Set confirm=true to proceed.",
+		"Account entity transfer accepted successfully",
+		"Failed to accept linode_account_entity_transfer_accept: ",
+		func(ctx context.Context, c *linode.Client, token string) (any, error) {
+			return c.GetAccountEntityTransfer(ctx, token)
+		},
+		acceptAccountEntityTransfer)
 }
 
 func handleLinodeAccountEntityTransferDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This cancels an account entity transfer. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	token, validationMessage := accountTransferTokenFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, prepErr := prepareClient(request, cfg)
-	if prepErr != nil {
-		return mcp.NewToolResultError(prepErr.Error()), nil
-	}
-
-	deleteFailureMessage := deleteAccountEntityTransfer(ctx, client, token)
-	if deleteFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to delete linode_account_entity_transfer_delete: " + deleteFailureMessage), nil
-	}
-
-	response := struct {
-		Message string `json:"message"`
-		Token   string `json:"token"`
-	}{
-		Message: "Account entity transfer canceled successfully",
-		Token:   token,
-	}
-
-	return MarshalToolResponse(response)
+	return runAccountTransferAction(ctx, request, cfg,
+		"linode_account_entity_transfer_delete", httpMethodDelete, accountEntityTransfersPath, "",
+		"This cancels an account entity transfer. Set confirm=true to proceed.",
+		"Account entity transfer canceled successfully",
+		"Failed to delete linode_account_entity_transfer_delete: ",
+		func(ctx context.Context, c *linode.Client, token string) (any, error) {
+			return c.GetAccountEntityTransfer(ctx, token)
+		},
+		deleteAccountEntityTransfer)
 }
 
 func acceptAccountEntityTransfer(ctx context.Context, client *linode.Client, token string) string {
@@ -3950,13 +4118,17 @@ func handleLinodeAccountBetaGetRequest(ctx context.Context, request *mcp.CallToo
 }
 
 func handleLinodeAccountBetaEnrollRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This enrolls the account in a beta program. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	req, validationMessage := enrollAccountBetaRequestFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_account_beta_enroll", httpMethodPost, accountBetasPath, nil)
+	}
+
+	if result := RequireConfirm(request, "This enrolls the account in a beta program. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -4051,10 +4223,6 @@ func handleLinodeManagedCredentialsRequest(ctx context.Context, request *mcp.Cal
 }
 
 func handleLinodeManagedCredentialUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This updates a Managed credential. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	credentialID, ok := getPositiveIntArgument(request, managedUpdateIDParam)
 	if !ok {
 		return mcp.NewToolResultError(errManagedIDPositive), nil
@@ -4067,6 +4235,18 @@ func handleLinodeManagedCredentialUpdateRequest(ctx context.Context, request *mc
 
 	if _, exists := request.GetArguments()["label"]; !exists {
 		return mcp.NewToolResultError("label is required"), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_managed_credential_update", "PUT",
+			fmt.Sprintf(managedCredentialsPath+"/%d", credentialID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetManagedCredential(ctx, credentialID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This updates a Managed credential. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -4098,13 +4278,23 @@ func updateManagedCredentialResponse(ctx context.Context, client *linode.Client,
 }
 
 func handleLinodeManagedCredentialUsernamePasswordUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This updates a stored Managed credential's username and password. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	credentialID, updateReq, validationMessage := managedCredentialUsernamePasswordUpdateRequestFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		// Credential-safe: fetch the credential metadata (no secret) and
+		// preview the POST; the new username/password are never echoed.
+		return RunDryRunPreview(ctx, request, cfg, "linode_managed_credential_username_password_update", httpMethodPost,
+			fmt.Sprintf(managedCredentialsPath+"/%d/update", credentialID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetManagedCredential(ctx, credentialID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This updates a stored Managed credential's username and password. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -4182,6 +4372,14 @@ func handleLinodeManagedCredentialGetRequest(ctx context.Context, request *mcp.C
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_managed_credential_get", "GET",
+			fmt.Sprintf(managedCredentialsPath+"/%d", credentialID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetManagedCredential(ctx, credentialID)
+			})
+	}
+
 	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -4196,13 +4394,21 @@ func handleLinodeManagedCredentialGetRequest(ctx context.Context, request *mcp.C
 }
 
 func handleLinodeManagedCredentialRevokeRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This revokes a stored Managed credential. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	credentialID, validationMessage := managedCredentialIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_managed_credential_revoke", httpMethodPost,
+			fmt.Sprintf(managedCredentialsPath+"/%d/revoke", credentialID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetManagedCredential(ctx, credentialID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This revokes a stored Managed credential. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -4259,13 +4465,19 @@ func managedCredentialsPaginationFromTool(request *mcp.CallToolRequest) (int, in
 }
 
 func handleLinodeManagedCredentialCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This creates a stored Managed credential. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	createReq, validationMessage := managedCredentialCreateRequestFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		// Credential-safe: the create body holds the password, but the v0
+		// preview is method + path only, so the secret is never echoed.
+		return RunDryRunPreview(ctx, request, cfg, "linode_managed_credential_create", httpMethodPost, managedCredentialsPath, nil)
+	}
+
+	if result := RequireConfirm(request, "This creates a stored Managed credential. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -4541,6 +4753,15 @@ func optionalPaginationInt(args map[string]any, name string, minValue, maxValue 
 }
 
 func handleLinodeAccountAgreementsAcknowledgeRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	req, validationMessage := acknowledgeAccountAgreementsRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_account_agreements_acknowledge", httpMethodPost, accountAgreementsPath, nil)
+	}
+
 	if result := RequireConfirm(request, "This acknowledges account agreements. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
@@ -4548,11 +4769,6 @@ func handleLinodeAccountAgreementsAcknowledgeRequest(ctx context.Context, reques
 	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	req, validationMessage := acknowledgeAccountAgreementsRequestFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	ackErr := client.AcknowledgeAccountAgreements(ctx, req)
@@ -4618,6 +4834,15 @@ func acknowledgeAccountAgreementsRequestFromTool(request *mcp.CallToolRequest) (
 }
 
 func handleLinodeAccountCancelRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	req, validationMessage := cancelAccountRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_account_cancel", httpMethodPost, accountCancelPath, nil)
+	}
+
 	if result := RequireConfirm(request, "This cancels the active account. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
@@ -4625,11 +4850,6 @@ func handleLinodeAccountCancelRequest(ctx context.Context, request *mcp.CallTool
 	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	req, validationMessage := cancelAccountRequestFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	cancelResponse, cancelErr := client.CancelAccount(ctx, req)
@@ -4790,6 +5010,14 @@ func enableAccountManagedErrorMessage(ctx context.Context, client *linode.Client
 }
 
 func handleLinodeAccountSettingsManagedEnableRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_account_settings_managed_enable", httpMethodPost,
+			accountSettingsPath+"/managed-enable",
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetAccountSettings(ctx)
+			})
+	}
+
 	if result := RequireConfirm(request, "This enables Linode Managed for the account. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
@@ -4809,6 +5037,19 @@ func handleLinodeAccountSettingsManagedEnableRequest(ctx context.Context, reques
 }
 
 func handleLinodeAccountSettingsUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	req, validationMessage := updateAccountSettingsRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_account_settings_update", "PUT",
+			accountSettingsPath,
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetAccountSettings(ctx)
+			})
+	}
+
 	if result := RequireConfirm(request, "This updates account-wide settings. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
@@ -4816,11 +5057,6 @@ func handleLinodeAccountSettingsUpdateRequest(ctx context.Context, request *mcp.
 	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	req, validationMessage := updateAccountSettingsRequestFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	updatedSettings, updateErr := client.UpdateAccountSettings(ctx, req)

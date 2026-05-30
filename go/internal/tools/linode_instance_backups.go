@@ -99,7 +99,8 @@ func NewLinodeInstanceBackupCreateTool(cfg *config.Config) (mcp.Tool, profiles.C
 			mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance to snapshot")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm snapshot creation. This overwrites any existing manual snapshot.")),
+				mcp.Description("Must be true to confirm snapshot creation. This overwrites any existing manual snapshot. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceBackupCreateRequest,
 	)
@@ -108,11 +109,22 @@ func NewLinodeInstanceBackupCreateTool(cfg *config.Config) (mcp.Tool, profiles.C
 }
 
 func handleInstanceBackupCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	linodeID := request.GetInt("linode_id", 0)
+
+	if IsDryRun(request) {
+		if linodeID == 0 {
+			return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_backup_create", httpMethodPost,
+			fmt.Sprintf("/linode/instances/%d/backups", linodeID),
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, linodeID) })
+	}
+
 	if result := RequireConfirm(request, "This creates a manual snapshot and overwrites any existing one. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
-	linodeID := request.GetInt("linode_id", 0)
 	if linodeID == 0 {
 		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
 	}
@@ -155,7 +167,8 @@ func NewLinodeInstanceBackupRestoreTool(cfg *config.Config) (mcp.Tool, profiles.
 			mcp.WithBoolean("overwrite",
 				mcp.Description("If true, deletes all disks and configs on the target before restoring. Defaults to false.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm restore. With overwrite=true, all existing data on the target is destroyed.")),
+				mcp.Description("Must be true to confirm restore. With overwrite=true, all existing data on the target is destroyed. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceBackupRestoreRequest,
 	)
@@ -163,8 +176,41 @@ func NewLinodeInstanceBackupRestoreTool(cfg *config.Config) (mcp.Tool, profiles.
 	return tool, profiles.CapWrite, handler
 }
 
+// validateBackupRestoreArgs validates the restore IDs, returning an error
+// message or "". Shared by the real restore path and the dry-run preview.
+func validateBackupRestoreArgs(linodeID, backupID, targetLinodeID int) string {
+	if linodeID == 0 {
+		return ErrLinodeIDRequired.Error()
+	}
+
+	if backupID == 0 {
+		return ErrBackupIDRequired.Error()
+	}
+
+	if targetLinodeID == 0 {
+		return "target_linode_id is required"
+	}
+
+	return ""
+}
+
 func handleInstanceBackupRestoreRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	overwrite := request.GetBool("overwrite", false)
+	linodeID := request.GetInt("linode_id", 0)
+	backupID := request.GetInt("backup_id", 0)
+	targetLinodeID := request.GetInt("target_linode_id", 0)
+
+	if IsDryRun(request) {
+		if msg := validateBackupRestoreArgs(linodeID, backupID, targetLinodeID); msg != "" {
+			return mcp.NewToolResultError(msg), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_backup_restore", httpMethodPost,
+			fmt.Sprintf("/linode/instances/%d/backups/%d/restore", linodeID, backupID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetInstanceBackup(ctx, linodeID, backupID)
+			})
+	}
 
 	confirmMsg := "This restores a backup to the target instance. Set confirm=true to proceed."
 	if overwrite {
@@ -175,19 +221,8 @@ func handleInstanceBackupRestoreRequest(ctx context.Context, request *mcp.CallTo
 		return result, nil
 	}
 
-	linodeID := request.GetInt("linode_id", 0)
-	if linodeID == 0 {
-		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
-	}
-
-	backupID := request.GetInt("backup_id", 0)
-	if backupID == 0 {
-		return mcp.NewToolResultError(ErrBackupIDRequired.Error()), nil
-	}
-
-	targetLinodeID := request.GetInt("target_linode_id", 0)
-	if targetLinodeID == 0 {
-		return mcp.NewToolResultError("target_linode_id is required"), nil
+	if msg := validateBackupRestoreArgs(linodeID, backupID, targetLinodeID); msg != "" {
+		return mcp.NewToolResultError(msg), nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -230,7 +265,8 @@ func NewLinodeInstanceBackupsEnableTool(cfg *config.Config) (mcp.Tool, profiles.
 			mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm enabling backups. This adds a recurring billing charge.")),
+				mcp.Description("Must be true to confirm enabling backups. This adds a recurring billing charge. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceBackupsEnableRequest,
 	)
@@ -239,11 +275,22 @@ func NewLinodeInstanceBackupsEnableTool(cfg *config.Config) (mcp.Tool, profiles.
 }
 
 func handleInstanceBackupsEnableRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	linodeID := request.GetInt("linode_id", 0)
+
+	if IsDryRun(request) {
+		if linodeID == 0 {
+			return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_backups_enable", httpMethodPost,
+			fmt.Sprintf("/linode/instances/%d/backups/enable", linodeID),
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, linodeID) })
+	}
+
 	if result := RequireConfirm(request, "Enabling backups adds a recurring charge to your account. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
-	linodeID := request.GetInt("linode_id", 0)
 	if linodeID == 0 {
 		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
 	}
@@ -278,7 +325,8 @@ func NewLinodeInstanceFirewallsApplyTool(cfg *config.Config) (mcp.Tool, profiles
 			mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm reapplying firewalls to this Linode.")),
+				mcp.Description("Must be true to confirm reapplying firewalls to this Linode. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceFirewallsApplyRequest,
 	)
@@ -286,17 +334,34 @@ func NewLinodeInstanceFirewallsApplyTool(cfg *config.Config) (mcp.Tool, profiles
 	return tool, profiles.CapWrite, handler
 }
 
+// firewallsApplyLinodeIDFromTool validates and parses the linode_id, returning
+// the ID or an error message. Shared by the real path and the dry-run preview.
+func firewallsApplyLinodeIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	args := request.GetArguments()
+	if _, exists := args["linode_id"]; !exists {
+		return 0, ErrLinodeIDRequired.Error()
+	}
+
+	return optionalPaginationInt(args, "linode_id", 1, 0)
+}
+
 func handleInstanceFirewallsApplyRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if IsDryRun(request) {
+		linodeID, validationMessage := firewallsApplyLinodeIDFromTool(request)
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_firewalls_apply", httpMethodPost,
+			fmt.Sprintf("/linode/instances/%d/firewalls/apply", linodeID),
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, linodeID) })
+	}
+
 	if result := RequireConfirm(request, "This reapplies assigned firewalls to the Linode. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
-	args := request.GetArguments()
-	if _, exists := args["linode_id"]; !exists {
-		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
-	}
-
-	linodeID, validationMessage := optionalPaginationInt(args, "linode_id", 1, 0)
+	linodeID, validationMessage := firewallsApplyLinodeIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}

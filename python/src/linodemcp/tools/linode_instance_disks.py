@@ -7,6 +7,7 @@ from mcp.types import TextContent, Tool
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
+    PARAM_DRY_RUN,
     execute_dry_run,
     execute_tool,
     is_dry_run,
@@ -171,6 +172,7 @@ def create_linode_instance_disk_create_tool() -> tuple[Tool, Capability]:
                     "description": ("Root password (required with image)"),
                 },
                 "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
                 "instance_id",
@@ -186,10 +188,6 @@ async def handle_linode_instance_disk_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_instance_disk_create tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return _error_response("Set confirm=true to proceed.")
-
     iid = _parse_instance_id(arguments)
     if isinstance(iid, list):
         return iid
@@ -201,6 +199,23 @@ async def handle_linode_instance_disk_create(
     size = arguments.get("size")
     if not size:
         return _error_response("size is required")
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_instance(iid)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_instance_disk_create",
+            "POST",
+            f"/linode/instances/{iid}/disks",
+            _fetch,
+        )
+
+    if not arguments.get("confirm"):
+        return _error_response("Set confirm=true to proceed.")
 
     async def _call(
         client: RetryableClient,
@@ -233,6 +248,7 @@ def create_linode_instance_disk_update_tool() -> tuple[Tool, Capability]:
                     "description": "New label for the disk",
                 },
                 "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
                 "instance_id",
@@ -247,14 +263,27 @@ async def handle_linode_instance_disk_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_instance_disk_update tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return _error_response("Set confirm=true to proceed.")
-
     ids = _parse_instance_and_disk_ids(arguments)
     if isinstance(ids, list):
         return ids
     instance_id, disk_id = ids
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_instance_disk(instance_id, disk_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_instance_disk_update",
+            "PUT",
+            f"/linode/instances/{instance_id}/disks/{disk_id}",
+            _fetch,
+        )
+
+    if not arguments.get("confirm"):
+        return _error_response("Set confirm=true to proceed.")
 
     async def _call(
         client: RetryableClient,
@@ -289,7 +318,7 @@ def create_linode_instance_disk_delete_tool() -> tuple[Tool, Capability]:
                         " Ignored when dry_run=true."
                     ),
                 },
-                **DRY_RUN_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
                 "instance_id",
@@ -352,6 +381,7 @@ def create_linode_instance_disk_clone_tool() -> tuple[Tool, Capability]:
                 "instance_id": _INSTANCE_ID_PROP,
                 "disk_id": _DISK_ID_PROP,
                 "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
                 "instance_id",
@@ -366,14 +396,27 @@ async def handle_linode_instance_disk_clone(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_instance_disk_clone tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return _error_response("Set confirm=true to proceed.")
-
     ids = _parse_instance_and_disk_ids(arguments)
     if isinstance(ids, list):
         return ids
     instance_id, disk_id = ids
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_instance_disk(instance_id, disk_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_instance_disk_clone",
+            "POST",
+            f"/linode/instances/{instance_id}/disks/{disk_id}/clone",
+            _fetch,
+        )
+
+    if not arguments.get("confirm"):
+        return _error_response("Set confirm=true to proceed.")
 
     async def _call(
         client: RetryableClient,
@@ -399,6 +442,7 @@ def create_linode_instance_disk_resize_tool() -> tuple[Tool, Capability]:
                     "description": "New size in MB",
                 },
                 "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
                 "instance_id",
@@ -414,10 +458,6 @@ async def handle_linode_instance_disk_resize(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_instance_disk_resize tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return _error_response("Set confirm=true to proceed.")
-
     ids = _parse_instance_and_disk_ids(arguments)
     if isinstance(ids, list):
         return ids
@@ -426,6 +466,23 @@ async def handle_linode_instance_disk_resize(
     size = arguments.get("size")
     if not size:
         return _error_response("size is required")
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_instance_disk(instance_id, disk_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_instance_disk_resize",
+            "POST",
+            f"/linode/instances/{instance_id}/disks/{disk_id}/resize",
+            _fetch,
+        )
+
+    if not arguments.get("confirm"):
+        return _error_response("Set confirm=true to proceed.")
 
     async def _call(
         client: RetryableClient,

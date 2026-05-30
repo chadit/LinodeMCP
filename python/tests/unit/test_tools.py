@@ -2736,6 +2736,33 @@ async def test_handle_linode_image_create_invalid_tags(sample_config: Config) ->
     assert "tags" in result[0].text
 
 
+async def test_image_create_dry_run_returns_preview(sample_config: Config) -> None:
+    """dry_run=true previews the create with no resource state and no call."""
+    result = await handle_linode_image_create(
+        {"disk_id": 123, "dry_run": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_image_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/images"
+    assert body["current_state"] is None
+    assert "confirm=true" not in result[0].text
+
+
+async def test_image_create_dry_run_still_validates_disk_id(
+    sample_config: Config,
+) -> None:
+    """Missing/invalid disk_id must error out regardless of dry_run."""
+    result = await handle_linode_image_create({"dry_run": True}, sample_config)
+
+    assert len(result) == 1
+    assert "disk_id must be a positive integer" in result[0].text
+
+
 async def test_handle_linode_images_list(sample_config: Config) -> None:
     """Test linode_images_list tool."""
     mock_images = [
@@ -4794,6 +4821,143 @@ async def test_handle_linode_sshkey_delete(sample_config: Config) -> None:
         assert "deleted" in result[0].text.lower()
 
 
+async def test_sshkey_create_dry_run_returns_preview(sample_config: Config) -> None:
+    """dry_run=true previews the create with no resource state and no call."""
+    result = await handle_linode_sshkey_create(
+        {"label": "my-key", "ssh_key": "ssh-rsa AAAA", "dry_run": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_sshkey_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/profile/sshkeys"
+    assert body["current_state"] is None
+    assert "confirm=true" not in result[0].text
+
+
+async def test_sshkey_create_dry_run_still_validates_label(
+    sample_config: Config,
+) -> None:
+    """Missing label must error out regardless of dry_run."""
+    result = await handle_linode_sshkey_create(
+        {"ssh_key": "ssh-rsa AAAA", "dry_run": True}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "label is required" in result[0].text
+
+
+async def test_sshkey_update_dry_run_returns_preview(sample_config: Config) -> None:
+    """dry_run=true fetches state via GET and never calls update."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_ssh_key.return_value = {"id": 123, "label": "old"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_sshkey_update(
+            {"ssh_key_id": 123, "label": "renamed", "dry_run": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["dry_run"] is True
+        assert body["tool"] == "linode_sshkey_update"
+        assert body["would_execute"]["method"] == "PUT"
+        assert body["would_execute"]["path"] == "/profile/sshkeys/123"
+        mock_client.get_ssh_key.assert_awaited_once_with(123)
+        mock_client.update_ssh_key.assert_not_called()
+
+
+async def test_sshkey_update_dry_run_still_validates_id(
+    sample_config: Config,
+) -> None:
+    """Missing ssh_key_id must error out regardless of dry_run."""
+    result = await handle_linode_sshkey_update(
+        {"label": "renamed", "dry_run": True}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "ssh_key_id is required" in result[0].text
+
+
+async def test_sshkey_delete_dry_run_returns_preview(sample_config: Config) -> None:
+    """dry_run=true fetches state via GET and never calls delete."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_ssh_key.return_value = {"id": 123, "label": "old"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_sshkey_delete(
+            {"ssh_key_id": 123, "dry_run": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["dry_run"] is True
+        assert body["tool"] == "linode_sshkey_delete"
+        assert body["would_execute"]["method"] == "DELETE"
+        assert body["would_execute"]["path"] == "/profile/sshkeys/123"
+        mock_client.get_ssh_key.assert_awaited_once_with(123)
+        mock_client.delete_ssh_key.assert_not_called()
+        assert "confirm=true" not in result[0].text
+
+
+async def test_sshkey_delete_dry_run_still_validates_id(
+    sample_config: Config,
+) -> None:
+    """Missing ssh_key_id must error out regardless of dry_run."""
+    result = await handle_linode_sshkey_delete({"dry_run": True}, sample_config)
+
+    assert len(result) == 1
+    assert "ssh_key_id is required" in result[0].text
+
+
+async def test_stackscript_create_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the create with no resource state and no call."""
+    result = await handle_linode_stackscript_create(
+        {
+            "label": "my-script",
+            "images": ["linode/ubuntu22.04"],
+            "script": "#!/bin/bash",
+            "dry_run": True,
+        },
+        sample_config,
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_stackscript_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/linode/stackscripts"
+    assert body["current_state"] is None
+    assert "confirm=true" not in result[0].text
+
+
+async def test_stackscript_create_dry_run_still_validates_label(
+    sample_config: Config,
+) -> None:
+    """Missing label must error out regardless of dry_run."""
+    result = await handle_linode_stackscript_create(
+        {"images": ["linode/ubuntu22.04"], "script": "#!/bin/bash", "dry_run": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "label is required" in result[0].text
+
+
 async def test_handle_linode_instance_boot(sample_config: Config) -> None:
     """Test linode_instance_boot tool."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
@@ -5253,6 +5417,185 @@ async def test_firewall_delete_dry_run_still_validates_firewall_id(
     assert "firewall_id is required" in result[0].text
 
 
+async def test_firewall_create_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the create with no resource state and no call."""
+    result = await handle_linode_firewall_create(
+        {"label": "fw-01", "dry_run": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_firewall_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/networking/firewalls"
+    assert body["current_state"] is None
+    assert "confirm=true" not in result[0].text
+
+
+async def test_firewall_create_dry_run_still_validates_label(
+    sample_config: Config,
+) -> None:
+    """Missing label must error out regardless of dry_run."""
+    result = await handle_linode_firewall_create({"dry_run": True}, sample_config)
+
+    assert len(result) == 1
+    assert "label is required" in result[0].text
+
+
+async def test_firewall_update_dry_run_returns_preview_without_mutating(
+    sample_config: Config,
+) -> None:
+    """dry_run=true must fetch state via GET and never call update."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_firewall.return_value = {"id": 789, "label": "prod-fw"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_firewall_update(
+            {"firewall_id": 789, "label": "renamed", "dry_run": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_firewall_update"
+        assert body["would_execute"]["method"] == "PUT"
+        assert body["would_execute"]["path"] == "/networking/firewalls/789"
+        mock_client.get_firewall.assert_awaited_once_with(789)
+        mock_client.update_firewall.assert_not_called()
+
+
+async def test_firewall_update_dry_run_still_validates_firewall_id(
+    sample_config: Config,
+) -> None:
+    """Missing firewall_id must error out regardless of dry_run."""
+    result = await handle_linode_firewall_update({"dry_run": True}, sample_config)
+
+    assert len(result) == 1
+    assert "firewall_id is required" in result[0].text
+
+
+async def test_firewall_rules_update_dry_run_returns_preview_without_mutating(
+    sample_config: Config,
+) -> None:
+    """dry_run=true must fetch current rules via GET and never replace them."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_firewall_rules.return_value = {"inbound": [], "outbound": []}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_firewall_rules_update(
+            {"firewall_id": 789, "inbound": [], "outbound": [], "dry_run": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_firewall_rules_update"
+        assert body["would_execute"]["method"] == "PUT"
+        assert body["would_execute"]["path"] == "/networking/firewalls/789/rules"
+        mock_client.get_firewall_rules.assert_awaited_once_with(789)
+        mock_client.update_firewall_rules.assert_not_called()
+
+
+async def test_firewall_rules_update_dry_run_still_validates_firewall_id(
+    sample_config: Config,
+) -> None:
+    """Missing firewall_id must error out regardless of dry_run."""
+    result = await handle_linode_firewall_rules_update(
+        {"inbound": [], "outbound": [], "dry_run": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "firewall_id is required" in result[0].text
+
+
+async def test_firewall_settings_update_dry_run_returns_preview_without_mutating(
+    sample_config: Config,
+) -> None:
+    """dry_run=true must fetch settings via GET and never update them."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_firewall_settings.return_value = {"default_firewall_ids": {}}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_firewall_settings_update(
+            {"default_firewall_ids": {"linode": 5}, "dry_run": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_firewall_settings_update"
+        assert body["would_execute"]["method"] == "PUT"
+        assert body["would_execute"]["path"] == "/networking/firewalls/settings"
+        mock_client.get_firewall_settings.assert_awaited_once()
+        mock_client.update_firewall_settings.assert_not_called()
+
+
+async def test_firewall_settings_update_dry_run_still_validates_ids(
+    sample_config: Config,
+) -> None:
+    """Missing default_firewall_ids must error out regardless of dry_run."""
+    result = await handle_linode_firewall_settings_update(
+        {"dry_run": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "default_firewall_ids" in result[0].text
+
+
+async def test_firewall_device_create_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the device assignment with no call."""
+    from linodemcp.tools.linode_firewalls_write import (
+        handle_linode_firewall_device_create,
+    )
+
+    result = await handle_linode_firewall_device_create(
+        {"firewall_id": 789, "id": 456, "type": "linode", "dry_run": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_firewall_device_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/networking/firewalls/789/devices"
+    assert body["current_state"] is None
+    assert "confirm=true" not in result[0].text
+
+
+async def test_firewall_device_create_dry_run_still_validates_firewall_id(
+    sample_config: Config,
+) -> None:
+    """Missing firewall_id must error out regardless of dry_run."""
+    from linodemcp.tools.linode_firewalls_write import (
+        handle_linode_firewall_device_create,
+    )
+
+    result = await handle_linode_firewall_device_create(
+        {"id": 456, "type": "linode", "dry_run": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "firewall_id is required" in result[0].text
+
+
 async def test_handle_linode_firewall_rules_update(sample_config: Config) -> None:
     """Test linode_firewall_rules_update tool happy path."""
     mock_result = {
@@ -5630,6 +5973,94 @@ async def test_handle_linode_domain_record_update(sample_config: Config) -> None
         assert "updated" in result[0].text.lower()
 
 
+async def test_domain_create_dry_run_returns_preview(sample_config: Config) -> None:
+    """dry_run=true previews the create with no resource state and no call."""
+    result = await handle_linode_domain_create(
+        {"domain": "example.com", "type": "master", "dry_run": True}, sample_config
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_domain_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/domains"
+    assert body["current_state"] is None
+    assert "confirm=true" not in result[0].text
+
+
+async def test_domain_create_dry_run_still_validates_domain(
+    sample_config: Config,
+) -> None:
+    """Missing domain must error out regardless of dry_run."""
+    result = await handle_linode_domain_create(
+        {"type": "master", "dry_run": True}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "domain is required" in result[0].text
+
+
+async def test_domain_record_create_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the record create with no state and no call."""
+    result = await handle_linode_domain_record_create(
+        {"domain_id": 333, "type": "A", "target": "192.0.2.1", "dry_run": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_domain_record_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/domains/333/records"
+    assert body["current_state"] is None
+
+
+async def test_domain_record_create_dry_run_still_validates_domain_id(
+    sample_config: Config,
+) -> None:
+    """Missing domain_id must error out regardless of dry_run."""
+    result = await handle_linode_domain_record_create(
+        {"type": "A", "dry_run": True}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "domain_id is required" in result[0].text
+
+
+async def test_domain_record_update_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the record via GET and never updates."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_domain_record.return_value = {"id": 555, "type": "A"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_domain_record_update(
+            {
+                "domain_id": 333,
+                "record_id": 555,
+                "target": "192.0.2.2",
+                "dry_run": True,
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_domain_record_update"
+        assert body["would_execute"]["method"] == "PUT"
+        assert body["would_execute"]["path"] == "/domains/333/records/555"
+        mock_client.get_domain_record.assert_awaited_once_with(333, 555)
+        mock_client.update_domain_record.assert_not_called()
+
+
 async def test_handle_linode_domain_record_delete(sample_config: Config) -> None:
     """Test linode_domain_record_delete tool."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
@@ -5928,6 +6359,168 @@ async def test_handle_linode_volume_delete(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "deleted" in result[0].text.lower()
+
+
+async def test_volume_create_dry_run_returns_preview(sample_config: Config) -> None:
+    """dry_run=true previews the create with no resource state and no call."""
+    result = await handle_linode_volume_create(
+        {"label": "vol", "region": "us-east", "dry_run": True}, sample_config
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_volume_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/volumes"
+    assert body["current_state"] is None
+    assert "confirm=true" not in result[0].text
+
+
+async def test_volume_create_dry_run_still_validates_label(
+    sample_config: Config,
+) -> None:
+    """Missing label must error out regardless of dry_run."""
+    result = await handle_linode_volume_create(
+        {"region": "us-east", "dry_run": True}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "label is required" in result[0].text
+
+
+async def test_volume_clone_dry_run_returns_preview(sample_config: Config) -> None:
+    """dry_run=true fetches the source volume via GET and never clones."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_volume.return_value = {"id": 333, "label": "src"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_volume_clone(
+            {"volume_id": 333, "label": "copy", "dry_run": True}, sample_config
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_volume_clone"
+        assert body["would_execute"]["method"] == "POST"
+        assert body["would_execute"]["path"] == "/volumes/333/clone"
+        mock_client.get_volume.assert_awaited_once_with(333)
+        mock_client.clone_volume.assert_not_called()
+
+
+async def test_volume_attach_dry_run_returns_preview(sample_config: Config) -> None:
+    """dry_run=true fetches state via GET and never attaches."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_volume.return_value = {"id": 333, "label": "vol"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_volume_attach(
+            {"volume_id": 333, "linode_id": 444, "dry_run": True}, sample_config
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_volume_attach"
+        assert body["would_execute"]["method"] == "POST"
+        assert body["would_execute"]["path"] == "/volumes/333/attach"
+        mock_client.get_volume.assert_awaited_once_with(333)
+        mock_client.attach_volume.assert_not_called()
+
+
+async def test_volume_attach_dry_run_still_validates_volume_id(
+    sample_config: Config,
+) -> None:
+    """Missing volume_id must error out regardless of dry_run."""
+    result = await handle_linode_volume_attach(
+        {"linode_id": 444, "dry_run": True}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "volume_id is required" in result[0].text
+
+
+async def test_volume_detach_dry_run_returns_preview(sample_config: Config) -> None:
+    """dry_run=true fetches state via GET and never detaches."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_volume.return_value = {"id": 333, "label": "vol"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_volume_detach(
+            {"volume_id": 333, "dry_run": True}, sample_config
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_volume_detach"
+        assert body["would_execute"]["method"] == "POST"
+        assert body["would_execute"]["path"] == "/volumes/333/detach"
+        mock_client.get_volume.assert_awaited_once_with(333)
+        mock_client.detach_volume.assert_not_called()
+
+
+async def test_volume_resize_dry_run_returns_preview(sample_config: Config) -> None:
+    """dry_run=true fetches state via GET and never resizes."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_volume.return_value = {"id": 333, "label": "vol"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_volume_resize(
+            {"volume_id": 333, "size": 100, "dry_run": True}, sample_config
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_volume_resize"
+        assert body["would_execute"]["method"] == "POST"
+        assert body["would_execute"]["path"] == "/volumes/333/resize"
+        mock_client.get_volume.assert_awaited_once_with(333)
+        mock_client.resize_volume.assert_not_called()
+
+
+async def test_volume_update_dry_run_returns_preview(sample_config: Config) -> None:
+    """dry_run=true fetches state via GET and never updates."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_volume.return_value = {"id": 333, "label": "vol"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_volume_update(
+            {"volume_id": 333, "label": "renamed", "dry_run": True}, sample_config
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_volume_update"
+        assert body["would_execute"]["method"] == "PUT"
+        assert body["would_execute"]["path"] == "/volumes/333"
+        mock_client.get_volume.assert_awaited_once_with(333)
+        mock_client.update_volume.assert_not_called()
+
+
+async def test_volume_update_dry_run_still_validates_change(
+    sample_config: Config,
+) -> None:
+    """A volume_id with no label/tags must error out regardless of dry_run."""
+    result = await handle_linode_volume_update(
+        {"volume_id": 333, "dry_run": True}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "label or tags is required" in result[0].text
 
 
 async def test_linode_nodebalancer_firewalls_update_tool_definition() -> None:
@@ -6418,6 +7011,141 @@ async def test_nodebalancer_delete_dry_run_still_validates_nodebalancer_id(
 
     assert len(result) == 1
     assert "nodebalancer_id is required" in result[0].text
+
+
+async def test_nodebalancer_create_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the create with no resource state and no call."""
+    result = await handle_linode_nodebalancer_create(
+        {"region": "us-east", "dry_run": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_nodebalancer_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/nodebalancers"
+    assert body["current_state"] is None
+    assert "confirm=true" not in result[0].text
+
+
+async def test_nodebalancer_create_dry_run_still_validates_region(
+    sample_config: Config,
+) -> None:
+    """Missing region must error out regardless of dry_run."""
+    result = await handle_linode_nodebalancer_create({"dry_run": True}, sample_config)
+
+    assert len(result) == 1
+    assert "region is required" in result[0].text
+
+
+async def test_nodebalancer_update_dry_run_returns_preview_without_mutating(
+    sample_config: Config,
+) -> None:
+    """dry_run=true must fetch state via GET and never call update."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_nodebalancer.return_value = {"id": 444, "label": "prod-lb"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_update(
+            {"nodebalancer_id": 444, "label": "renamed", "dry_run": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_nodebalancer_update"
+        assert body["would_execute"]["method"] == "PUT"
+        assert body["would_execute"]["path"] == "/nodebalancers/444"
+        mock_client.get_nodebalancer.assert_awaited_once_with(444)
+        mock_client.update_nodebalancer.assert_not_called()
+
+
+async def test_nodebalancer_update_dry_run_still_validates_nodebalancer_id(
+    sample_config: Config,
+) -> None:
+    """Missing nodebalancer_id must error out regardless of dry_run."""
+    result = await handle_linode_nodebalancer_update({"dry_run": True}, sample_config)
+
+    assert len(result) == 1
+    assert "nodebalancer_id is required" in result[0].text
+
+
+async def test_networking_ip_allocate_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the allocate with no resource state and no call."""
+    from linodemcp.tools.linode_instance_ips import (
+        handle_linode_networking_ip_allocate,
+    )
+
+    result = await handle_linode_networking_ip_allocate(
+        {"linode_id": 123, "type": "ipv4", "dry_run": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_networking_ip_allocate"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/networking/ips"
+    assert body["current_state"] is None
+    assert "confirm=true" not in result[0].text
+
+
+async def test_networking_ip_allocate_dry_run_still_validates_linode_id(
+    sample_config: Config,
+) -> None:
+    """Missing linode_id must error out regardless of dry_run."""
+    from linodemcp.tools.linode_instance_ips import (
+        handle_linode_networking_ip_allocate,
+    )
+
+    result = await handle_linode_networking_ip_allocate(
+        {"type": "ipv4", "dry_run": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "linode_id must be an integer" in result[0].text
+
+
+async def test_ipv6_range_create_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the create with no resource state and no call."""
+    result = list(
+        await handle_linode_ipv6_range_create(
+            {"prefix_length": 64, "linode_id": 123, "dry_run": True},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_ipv6_range_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/networking/ipv6/ranges"
+    assert body["current_state"] is None
+    assert "confirm=true" not in result[0].text
+
+
+async def test_ipv6_range_create_dry_run_still_validates_prefix_length(
+    sample_config: Config,
+) -> None:
+    """Missing prefix_length must error out regardless of dry_run."""
+    result = list(
+        await handle_linode_ipv6_range_create({"dry_run": True}, sample_config)
+    )
+
+    assert len(result) == 1
+    assert "prefix_length" in result[0].text
 
 
 async def test_linode_nodebalancer_config_node_update_tool_definition() -> None:
@@ -9159,6 +9887,273 @@ async def test_ssl_delete_dry_run_still_validates_label(
     assert "label is required" in result[0].text
 
 
+async def test_obj_bucket_create_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the create with no resource state and no call."""
+    result = list(
+        await handle_linode_object_storage_bucket_create(
+            {"label": "my-bucket", "region": "us-east-1", "dry_run": True},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_object_storage_bucket_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/object-storage/buckets"
+    assert body["current_state"] is None
+    assert "confirm=true" not in result[0].text
+
+
+async def test_obj_bucket_create_dry_run_still_validates_label(
+    sample_config: Config,
+) -> None:
+    """Missing label must error out regardless of dry_run."""
+    result = list(
+        await handle_linode_object_storage_bucket_create(
+            {"region": "us-east-1", "dry_run": True},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "label is required" in result[0].text
+
+
+async def test_obj_bucket_access_allow_dry_run_returns_preview_without_mutating(
+    sample_config: Config,
+) -> None:
+    """dry_run=true must fetch current access via GET and never apply it."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_object_storage_bucket_access.return_value = {"acl": "private"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_object_storage_bucket_access_allow(
+                {
+                    "region": "us-east-1",
+                    "label": "my-bucket",
+                    "acl": "private",
+                    "dry_run": True,
+                },
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_object_storage_bucket_access_allow"
+        assert body["would_execute"]["method"] == "POST"
+        assert (
+            body["would_execute"]["path"]
+            == "/object-storage/buckets/us-east-1/my-bucket/access"
+        )
+        mock_client.get_object_storage_bucket_access.assert_awaited_once_with(
+            "us-east-1", "my-bucket"
+        )
+        mock_client.allow_object_storage_bucket_access.assert_not_called()
+
+
+async def test_obj_bucket_access_update_dry_run_returns_preview_without_mutating(
+    sample_config: Config,
+) -> None:
+    """dry_run=true must fetch current access via GET and never update it."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_object_storage_bucket_access.return_value = {"acl": "private"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_object_storage_bucket_access_update(
+                {
+                    "region": "us-east-1",
+                    "label": "my-bucket",
+                    "acl": "private",
+                    "dry_run": True,
+                },
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_object_storage_bucket_access_update"
+        assert body["would_execute"]["method"] == "PUT"
+        mock_client.get_object_storage_bucket_access.assert_awaited_once_with(
+            "us-east-1", "my-bucket"
+        )
+        mock_client.update_object_storage_bucket_access.assert_not_called()
+
+
+async def test_obj_key_create_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the key create with no call (no secret leak)."""
+    result = list(
+        await handle_linode_object_storage_key_create(
+            {"label": "my-key", "dry_run": True},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_object_storage_key_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/object-storage/keys"
+    assert body["current_state"] is None
+    assert "confirm=true" not in result[0].text
+
+
+async def test_obj_key_create_dry_run_still_validates_label(
+    sample_config: Config,
+) -> None:
+    """Missing label must error out regardless of dry_run."""
+    result = list(
+        await handle_linode_object_storage_key_create(
+            {"dry_run": True},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "label is required" in result[0].text
+
+
+async def test_obj_key_update_dry_run_returns_preview_without_mutating(
+    sample_config: Config,
+) -> None:
+    """dry_run=true must fetch the key (not the secret) via GET and never update."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_object_storage_key.return_value = {"id": 77, "label": "my-key"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_object_storage_key_update(
+                {"key_id": 77, "label": "renamed", "dry_run": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_object_storage_key_update"
+        assert body["would_execute"]["method"] == "PUT"
+        assert body["would_execute"]["path"] == "/object-storage/keys/77"
+        mock_client.get_object_storage_key.assert_awaited_once_with(key_id=77)
+        mock_client.update_object_storage_key.assert_not_called()
+
+
+async def test_obj_key_update_dry_run_still_validates_key_id(
+    sample_config: Config,
+) -> None:
+    """Missing key_id must error out regardless of dry_run."""
+    result = list(
+        await handle_linode_object_storage_key_update(
+            {"label": "renamed", "dry_run": True},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "key_id is required" in result[0].text
+
+
+async def test_obj_object_acl_update_dry_run_returns_preview_without_mutating(
+    sample_config: Config,
+) -> None:
+    """dry_run=true must fetch current ACL via GET and never update it."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_object_acl.return_value = {"acl": "private"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_object_storage_object_acl_update(
+                {
+                    "region": "us-east-1",
+                    "label": "my-bucket",
+                    "name": "object.txt",
+                    "acl": "private",
+                    "dry_run": True,
+                },
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_object_storage_object_acl_update"
+        assert body["would_execute"]["method"] == "PUT"
+        mock_client.get_object_acl.assert_awaited_once_with(
+            "us-east-1", "my-bucket", "object.txt"
+        )
+        mock_client.update_object_acl.assert_not_called()
+
+
+async def test_obj_ssl_upload_dry_run_returns_preview_no_key_echoed(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the upload with no call and no private key echoed."""
+    result = list(
+        await handle_linode_object_storage_ssl_upload(
+            {
+                "region": "us-east-1",
+                "label": "my-bucket",
+                "certificate": "cert-pem",
+                "private_key": "key-pem",
+                "dry_run": True,
+            },
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    text = result[0].text
+    body = json.loads(text)
+    assert body["tool"] == "linode_object_storage_ssl_upload"
+    assert body["would_execute"]["method"] == "POST"
+    assert (
+        body["would_execute"]["path"]
+        == "/object-storage/buckets/us-east-1/my-bucket/ssl"
+    )
+    assert body["current_state"] is None
+    assert "key-pem" not in text
+
+
+async def test_obj_ssl_upload_dry_run_still_validates_private_key(
+    sample_config: Config,
+) -> None:
+    """Missing private_key must error out regardless of dry_run."""
+    result = list(
+        await handle_linode_object_storage_ssl_upload(
+            {
+                "region": "us-east-1",
+                "label": "my-bucket",
+                "certificate": "cert-pem",
+                "dry_run": True,
+            },
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "private_key is required" in result[0].text
+
+
 async def test_ssl_delete_missing_env() -> None:
     """SSL delete should fail with missing environment."""
     cfg = Config(environments={})
@@ -11239,6 +12234,159 @@ async def test_vpc_subnet_delete_dry_run_still_validates_ids(
     assert "vpc_id is required" in result[0].text
 
 
+async def test_vpc_create_dry_run_returns_preview(sample_config: Config) -> None:
+    """dry_run=true previews the create with no resource state and no call."""
+    result = list(
+        await handle_linode_vpc_create(
+            {"label": "vpc-01", "region": "us-east", "dry_run": True},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_vpc_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/vpcs"
+    assert body["current_state"] is None
+    assert "confirm=true" not in result[0].text
+
+
+async def test_vpc_create_dry_run_still_validates_label(
+    sample_config: Config,
+) -> None:
+    """Missing label must error out regardless of dry_run."""
+    result = list(
+        await handle_linode_vpc_create(
+            {"region": "us-east", "dry_run": True},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "label is required" in result[0].text
+
+
+async def test_vpc_update_dry_run_returns_preview_without_mutating(
+    sample_config: Config,
+) -> None:
+    """dry_run=true must fetch state via GET and never call update."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_vpc.return_value = {"id": 55, "label": "prod-vpc"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_vpc_update(
+                {"vpc_id": 55, "label": "renamed", "dry_run": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_vpc_update"
+        assert body["would_execute"]["method"] == "PUT"
+        assert body["would_execute"]["path"] == "/vpcs/55"
+        mock_client.get_vpc.assert_awaited_once_with(55)
+        mock_client.update_vpc.assert_not_called()
+
+
+async def test_vpc_update_dry_run_still_validates_vpc_id(
+    sample_config: Config,
+) -> None:
+    """Missing vpc_id must error out regardless of dry_run."""
+    result = list(await handle_linode_vpc_update({"dry_run": True}, sample_config))
+
+    assert len(result) == 1
+    assert "vpc_id is required" in result[0].text
+
+
+async def test_vpc_subnet_create_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the subnet create with no call."""
+    result = list(
+        await handle_linode_vpc_subnet_create(
+            {
+                "vpc_id": 55,
+                "label": "subnet-01",
+                "ipv4": "10.0.0.0/24",
+                "dry_run": True,
+            },
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_vpc_subnet_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/vpcs/55/subnets"
+    assert body["current_state"] is None
+    assert "confirm=true" not in result[0].text
+
+
+async def test_vpc_subnet_create_dry_run_still_validates_vpc_id(
+    sample_config: Config,
+) -> None:
+    """Missing vpc_id must error out regardless of dry_run."""
+    result = list(
+        await handle_linode_vpc_subnet_create(
+            {"label": "subnet-01", "ipv4": "10.0.0.0/24", "dry_run": True},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "vpc_id is required" in result[0].text
+
+
+async def test_vpc_subnet_update_dry_run_returns_preview_without_mutating(
+    sample_config: Config,
+) -> None:
+    """dry_run=true must fetch state via GET and never call update."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_vpc_subnet.return_value = {"id": 10, "label": "sub"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_vpc_subnet_update(
+                {"vpc_id": 55, "subnet_id": 10, "label": "renamed", "dry_run": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_vpc_subnet_update"
+        assert body["would_execute"]["method"] == "PUT"
+        assert body["would_execute"]["path"] == "/vpcs/55/subnets/10"
+        mock_client.get_vpc_subnet.assert_awaited_once_with(55, 10)
+        mock_client.update_vpc_subnet.assert_not_called()
+
+
+async def test_vpc_subnet_update_dry_run_still_validates_label(
+    sample_config: Config,
+) -> None:
+    """Missing label must error out regardless of dry_run."""
+    result = list(
+        await handle_linode_vpc_subnet_update(
+            {"vpc_id": 55, "subnet_id": 10, "dry_run": True},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "label is required" in result[0].text
+
+
 # ── Instance Backups tool definition tests ──
 
 
@@ -11709,6 +12857,41 @@ async def test_instance_ip_allocate_no_confirm(
     )
     assert len(result) == 1
     assert "confirm" in result[0].text.lower()
+
+
+async def test_instance_ip_allocate_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the allocate with no resource state and no call."""
+    result = list(
+        await handle_linode_instance_ip_allocate(
+            {"instance_id": 123, "type": "ipv4", "dry_run": True},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_instance_ip_allocate"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/linode/instances/123/ips"
+    assert body["current_state"] is None
+    assert "confirm=true" not in result[0].text
+
+
+async def test_instance_ip_allocate_dry_run_still_validates_type(
+    sample_config: Config,
+) -> None:
+    """Missing type must error out regardless of dry_run."""
+    result = list(
+        await handle_linode_instance_ip_allocate(
+            {"instance_id": 123, "dry_run": True},
+            sample_config,
+        )
+    )
+
+    assert len(result) == 1
+    assert "type is required" in result[0].text
 
 
 async def test_instance_ip_update_no_confirm(
@@ -12433,6 +13616,123 @@ async def test_instance_disk_delete_dry_run_still_validates_disk_id(
     mock_linode_client.delete_instance_disk.assert_not_called()
 
 
+async def test_instance_backup_create_dry_run_returns_preview(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """dry_run=true must fetch state via GET and never snapshot."""
+    mock_linode_client.get_instance.return_value = {"id": 123}
+
+    result = await handle_linode_instance_backup_create(
+        {"instance_id": 123, "dry_run": True}, sample_config
+    )
+
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_instance_backup_create"
+    assert body["would_execute"]["path"] == "/linode/instances/123/backups"
+    mock_linode_client.create_instance_backup.assert_not_called()
+
+
+async def test_instance_backup_restore_dry_run_returns_preview(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """dry_run=true must fetch the backup via GET and never restore."""
+    mock_linode_client.get_instance_backup.return_value = {"id": 456}
+
+    result = await handle_linode_instance_backup_restore(
+        {"instance_id": 123, "backup_id": 456, "linode_id": 999, "dry_run": True},
+        sample_config,
+    )
+
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_instance_backup_restore"
+    assert body["would_execute"]["path"] == "/linode/instances/123/backups/456/restore"
+    mock_linode_client.restore_instance_backup.assert_not_called()
+
+
+async def test_instance_backups_enable_dry_run_returns_preview(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """dry_run=true must fetch state via GET and never enable."""
+    mock_linode_client.get_instance.return_value = {"id": 123}
+
+    result = await handle_linode_instance_backups_enable(
+        {"instance_id": 123, "dry_run": True}, sample_config
+    )
+
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_instance_backups_enable"
+    assert body["would_execute"]["path"] == "/linode/instances/123/backups/enable"
+    mock_linode_client.enable_instance_backups.assert_not_called()
+
+
+async def test_instance_disk_create_dry_run_returns_preview(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """dry_run=true must fetch the instance via GET and never create."""
+    mock_linode_client.get_instance.return_value = {"id": 123}
+
+    result = await handle_linode_instance_disk_create(
+        {"instance_id": 123, "label": "data", "size": 10240, "dry_run": True},
+        sample_config,
+    )
+
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_instance_disk_create"
+    assert body["would_execute"]["path"] == "/linode/instances/123/disks"
+    mock_linode_client.create_instance_disk.assert_not_called()
+
+
+async def test_instance_disk_update_dry_run_returns_preview(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """dry_run=true must fetch the disk via GET and never update."""
+    mock_linode_client.get_instance_disk.return_value = {"id": 789}
+
+    result = await handle_linode_instance_disk_update(
+        {"instance_id": 123, "disk_id": 789, "label": "renamed", "dry_run": True},
+        sample_config,
+    )
+
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_instance_disk_update"
+    assert body["would_execute"]["method"] == "PUT"
+    assert body["would_execute"]["path"] == "/linode/instances/123/disks/789"
+    mock_linode_client.update_instance_disk.assert_not_called()
+
+
+async def test_instance_disk_clone_dry_run_returns_preview(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """dry_run=true must fetch the disk via GET and never clone."""
+    mock_linode_client.get_instance_disk.return_value = {"id": 789}
+
+    result = await handle_linode_instance_disk_clone(
+        {"instance_id": 123, "disk_id": 789, "dry_run": True}, sample_config
+    )
+
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_instance_disk_clone"
+    assert body["would_execute"]["path"] == "/linode/instances/123/disks/789/clone"
+    mock_linode_client.clone_instance_disk.assert_not_called()
+
+
+async def test_instance_disk_resize_dry_run_returns_preview(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """dry_run=true must fetch the disk via GET and never resize."""
+    mock_linode_client.get_instance_disk.return_value = {"id": 789}
+
+    result = await handle_linode_instance_disk_resize(
+        {"instance_id": 123, "disk_id": 789, "size": 20480, "dry_run": True},
+        sample_config,
+    )
+
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_instance_disk_resize"
+    assert body["would_execute"]["path"] == "/linode/instances/123/disks/789/resize"
+    mock_linode_client.resize_instance_disk.assert_not_called()
+
+
 async def test_handle_linode_instance_disk_clone_success(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
@@ -12700,6 +14000,166 @@ async def test_instance_rebuild_dry_run_still_validates_root_pass(
     )
     assert "root_pass is required" in result[0].text
     mock_linode_client.rebuild_instance.assert_not_called()
+
+
+async def test_instance_create_dry_run_returns_preview(sample_config: Config) -> None:
+    """dry_run=true previews the create with no resource state and no call."""
+    result = await handle_linode_instance_create(
+        {
+            "region": "us-east",
+            "type": "g6-nanode-1",
+            "firewall_id": 789,
+            "dry_run": True,
+        },
+        sample_config,
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_instance_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/linode/instances"
+    assert body["current_state"] is None
+    assert "confirm=true" not in result[0].text
+
+
+async def test_instance_create_dry_run_still_validates_firewall_id(
+    sample_config: Config,
+) -> None:
+    """Missing firewall_id must error out regardless of dry_run."""
+    result = await handle_linode_instance_create(
+        {"region": "us-east", "type": "g6-nanode-1", "dry_run": True},
+        sample_config,
+    )
+
+    assert "firewall_id is required" in result[0].text
+
+
+async def test_instance_boot_dry_run_returns_preview_without_mutating(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """dry_run=true must fetch state via GET and never boot."""
+    mock_linode_client.get_instance.return_value = {"id": 123, "status": "offline"}
+
+    result = await handle_linode_instance_boot(
+        {"instance_id": 123, "dry_run": True}, sample_config
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_instance_boot"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/linode/instances/123/boot"
+    mock_linode_client.get_instance.assert_awaited_once_with(123)
+    mock_linode_client.boot_instance.assert_not_called()
+
+
+async def test_instance_reboot_dry_run_returns_preview_without_mutating(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """dry_run=true must fetch state via GET and never reboot."""
+    mock_linode_client.get_instance.return_value = {"id": 123}
+
+    result = await handle_linode_instance_reboot(
+        {"instance_id": 123, "dry_run": True}, sample_config
+    )
+
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_instance_reboot"
+    assert body["would_execute"]["path"] == "/linode/instances/123/reboot"
+    mock_linode_client.reboot_instance.assert_not_called()
+
+
+async def test_instance_shutdown_dry_run_returns_preview_without_mutating(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """dry_run=true must fetch state via GET and never shut down."""
+    mock_linode_client.get_instance.return_value = {"id": 123}
+
+    result = await handle_linode_instance_shutdown(
+        {"instance_id": 123, "dry_run": True}, sample_config
+    )
+
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_instance_shutdown"
+    assert body["would_execute"]["path"] == "/linode/instances/123/shutdown"
+    mock_linode_client.shutdown_instance.assert_not_called()
+
+
+async def test_instance_resize_dry_run_returns_preview_without_mutating(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """dry_run=true must fetch state via GET and never resize."""
+    mock_linode_client.get_instance.return_value = {"id": 123}
+
+    result = await handle_linode_instance_resize(
+        {"instance_id": 123, "type": "g6-standard-1", "dry_run": True},
+        sample_config,
+    )
+
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_instance_resize"
+    assert body["would_execute"]["path"] == "/linode/instances/123/resize"
+    mock_linode_client.resize_instance.assert_not_called()
+
+
+async def test_instance_resize_dry_run_still_validates_type(
+    sample_config: Config,
+) -> None:
+    """Missing type must error out regardless of dry_run."""
+    result = await handle_linode_instance_resize(
+        {"instance_id": 123, "dry_run": True}, sample_config
+    )
+
+    assert "type is required" in result[0].text
+
+
+async def test_instance_clone_dry_run_returns_preview_without_mutating(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """dry_run=true must fetch state via GET and never clone."""
+    mock_linode_client.get_instance.return_value = {"id": 123}
+
+    result = await handle_linode_instance_clone(
+        {"instance_id": 123, "dry_run": True}, sample_config
+    )
+
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_instance_clone"
+    assert body["would_execute"]["path"] == "/linode/instances/123/clone"
+    mock_linode_client.clone_instance.assert_not_called()
+
+
+async def test_instance_migrate_dry_run_returns_preview_without_mutating(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """dry_run=true must fetch state via GET and never migrate."""
+    mock_linode_client.get_instance.return_value = {"id": 123}
+
+    result = await handle_linode_instance_migrate(
+        {"instance_id": 123, "dry_run": True}, sample_config
+    )
+
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_instance_migrate"
+    assert body["would_execute"]["path"] == "/linode/instances/123/migrate"
+    mock_linode_client.migrate_instance.assert_not_called()
+
+
+async def test_instance_rescue_dry_run_returns_preview_without_mutating(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """dry_run=true must fetch state via GET and never rescue."""
+    mock_linode_client.get_instance.return_value = {"id": 123}
+
+    result = await handle_linode_instance_rescue(
+        {"instance_id": 123, "dry_run": True}, sample_config
+    )
+
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_instance_rescue"
+    assert body["would_execute"]["path"] == "/linode/instances/123/rescue"
+    mock_linode_client.rescue_instance.assert_not_called()
 
 
 async def test_handle_linode_instance_rescue_success(
@@ -16513,3 +17973,1237 @@ async def test_handle_linode_firewall_devices_list_invalid_args(
     result = await handle_linode_firewall_devices_list(arguments, sample_config)
     assert len(result) == 1
     assert expected in result[0].text
+
+
+async def test_lke_cluster_create_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the create with no resource state and no call."""
+    result = await handle_linode_lke_cluster_create(
+        {
+            "label": "k8s-prod",
+            "region": "us-east",
+            "k8s_version": "1.29",
+            "node_pools": [{"type": "g6-standard-2", "count": 3}],
+            "dry_run": True,
+        },
+        sample_config,
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_lke_cluster_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/lke/clusters"
+    assert body["current_state"] is None
+
+
+async def test_lke_cluster_create_dry_run_still_validates_label(
+    sample_config: Config,
+) -> None:
+    """Missing label must error out regardless of dry_run."""
+    result = await handle_linode_lke_cluster_create(
+        {
+            "region": "us-east",
+            "k8s_version": "1.29",
+            "node_pools": [{"type": "g6-standard-2", "count": 3}],
+            "dry_run": True,
+        },
+        sample_config,
+    )
+
+    assert len(result) == 1
+    assert "label is required" in result[0].text
+
+
+async def test_lke_cluster_update_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the cluster via GET and never calls update."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_lke_cluster.return_value = {"id": 123, "label": "k8s"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_lke_cluster_update(
+            {"cluster_id": "123", "label": "renamed", "dry_run": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_lke_cluster_update"
+        assert body["would_execute"]["method"] == "PUT"
+        assert body["would_execute"]["path"] == "/lke/clusters/123"
+        mock_client.get_lke_cluster.assert_awaited_once_with(123)
+        mock_client.update_lke_cluster.assert_not_called()
+
+
+async def test_lke_cluster_recycle_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the cluster via GET and never recycles."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_lke_cluster.return_value = {"id": 123}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_lke_cluster_recycle(
+            {"cluster_id": "123", "dry_run": True}, sample_config
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_lke_cluster_recycle"
+        assert body["would_execute"]["method"] == "POST"
+        assert body["would_execute"]["path"] == "/lke/clusters/123/recycle"
+        mock_client.get_lke_cluster.assert_awaited_once_with(123)
+        mock_client.recycle_lke_cluster.assert_not_called()
+
+
+async def test_lke_cluster_regenerate_dry_run_hides_token(
+    sample_config: Config,
+) -> None:
+    """dry_run fetches the cluster, not the rotated service token."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_lke_cluster.return_value = {"id": 123, "label": "k8s"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_lke_cluster_regenerate(
+            {"cluster_id": "123", "dry_run": True}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "service_token" not in result[0].text
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_lke_cluster_regenerate"
+        assert body["would_execute"]["method"] == "POST"
+        assert body["would_execute"]["path"] == "/lke/clusters/123/regenerate"
+        mock_client.get_lke_cluster.assert_awaited_once_with(123)
+        mock_client.regenerate_lke_cluster.assert_not_called()
+
+
+async def test_lke_pool_create_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the cluster via GET and never creates a pool."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_lke_cluster.return_value = {"id": 123}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_lke_pool_create(
+            {
+                "cluster_id": "123",
+                "type": "g6-standard-2",
+                "count": 3,
+                "dry_run": True,
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_lke_pool_create"
+        assert body["would_execute"]["method"] == "POST"
+        assert body["would_execute"]["path"] == "/lke/clusters/123/pools"
+        mock_client.get_lke_cluster.assert_awaited_once_with(123)
+        mock_client.create_lke_node_pool.assert_not_called()
+
+
+async def test_lke_pool_create_dry_run_still_validates_type(
+    sample_config: Config,
+) -> None:
+    """Missing type must error out regardless of dry_run."""
+    result = await handle_linode_lke_pool_create(
+        {"cluster_id": "123", "count": 3, "dry_run": True}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "type is required" in result[0].text
+
+
+async def test_lke_pool_update_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the pool via GET and never updates."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_lke_node_pool.return_value = {"id": 10, "cluster_id": 123}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_lke_pool_update(
+            {"cluster_id": "123", "pool_id": "10", "count": 5, "dry_run": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_lke_pool_update"
+        assert body["would_execute"]["method"] == "PUT"
+        assert body["would_execute"]["path"] == "/lke/clusters/123/pools/10"
+        mock_client.get_lke_node_pool.assert_awaited_once_with(123, 10)
+        mock_client.update_lke_node_pool.assert_not_called()
+
+
+async def test_lke_pool_recycle_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the pool via GET and never recycles."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_lke_node_pool.return_value = {"id": 10, "cluster_id": 123}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_lke_pool_recycle(
+            {"cluster_id": "123", "pool_id": "10", "dry_run": True}, sample_config
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_lke_pool_recycle"
+        assert body["would_execute"]["method"] == "POST"
+        assert body["would_execute"]["path"] == "/lke/clusters/123/pools/10/recycle"
+        mock_client.get_lke_node_pool.assert_awaited_once_with(123, 10)
+        mock_client.recycle_lke_node_pool.assert_not_called()
+
+
+async def test_lke_node_recycle_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the node via GET and never recycles."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_lke_node.return_value = {"id": "abc-123"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_lke_node_recycle(
+            {"cluster_id": "123", "node_id": "abc-123", "dry_run": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_lke_node_recycle"
+        assert body["would_execute"]["method"] == "POST"
+        assert (
+            body["would_execute"]["path"] == "/lke/clusters/123/nodes/abc-123/recycle"
+        )
+        mock_client.get_lke_node.assert_awaited_once_with(123, "abc-123")
+        mock_client.recycle_lke_node.assert_not_called()
+
+
+async def test_lke_acl_update_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the ACL via GET and never updates."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_lke_control_plane_acl.return_value = {"enabled": True}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_lke_acl_update(
+            {"cluster_id": "123", "acl": {"enabled": True}, "dry_run": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_lke_acl_update"
+        assert body["would_execute"]["method"] == "PUT"
+        assert body["would_execute"]["path"] == "/lke/clusters/123/control_plane_acl"
+        mock_client.get_lke_control_plane_acl.assert_awaited_once_with(123)
+        mock_client.update_lke_control_plane_acl.assert_not_called()
+
+
+async def test_lke_acl_update_dry_run_still_validates_acl(
+    sample_config: Config,
+) -> None:
+    """Missing acl must error out regardless of dry_run."""
+    result = await handle_linode_lke_acl_update(
+        {"cluster_id": "123", "dry_run": True}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "acl is required" in result[0].text
+
+
+async def test_lke_acl_delete_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the ACL via GET and never deletes."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_lke_control_plane_acl.return_value = {"enabled": True}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_lke_acl_delete(
+            {"cluster_id": "123", "dry_run": True}, sample_config
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_lke_acl_delete"
+        assert body["would_execute"]["method"] == "DELETE"
+        assert body["would_execute"]["path"] == "/lke/clusters/123/control_plane_acl"
+        mock_client.get_lke_control_plane_acl.assert_awaited_once_with(123)
+        mock_client.delete_lke_control_plane_acl.assert_not_called()
+
+
+async def test_monitor_service_token_create_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the token create with no resource state."""
+    result = await handle_linode_monitor_service_token_create(
+        {"service_type": "dbaas", "entity_ids": [1, 2], "dry_run": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_monitor_service_token_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/monitor/services/dbaas/token"
+    assert body["current_state"] is None
+    assert "confirm=true" not in result[0].text
+
+
+async def test_monitor_alert_definition_create_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the alert-definition create with no state."""
+    from linodemcp.tools.linode_monitor_write import (
+        handle_linode_monitor_service_alert_definition_create,
+    )
+
+    result = await handle_linode_monitor_service_alert_definition_create(
+        {
+            "service_type": "dbaas",
+            "label": "high-cpu",
+            "severity": 2,
+            "rule_criteria": {"rules": [{"metric": "cpu", "operator": "gt"}]},
+            "trigger_conditions": {"criteria_condition": "ALL"},
+            "channel_ids": [546],
+            "dry_run": True,
+        },
+        sample_config,
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_monitor_service_alert_definition_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/monitor/services/dbaas/alert-definitions"
+    assert body["current_state"] is None
+
+
+async def test_monitor_alert_definition_delete_dry_run_returns_preview(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """dry_run=true fetches the definition via GET and never deletes."""
+    from linodemcp.tools.linode_monitor_write import (
+        handle_linode_monitor_service_alert_definition_delete,
+    )
+
+    mock_linode_client.get_monitor_service_alert_definition.return_value = {
+        "id": 20000,
+        "label": "high-cpu",
+    }
+
+    result = await handle_linode_monitor_service_alert_definition_delete(
+        {"service_type": "dbaas", "alert_id": 20000, "dry_run": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_monitor_service_alert_definition_delete"
+    assert body["would_execute"]["method"] == "DELETE"
+    assert (
+        body["would_execute"]["path"]
+        == "/monitor/services/dbaas/alert-definitions/20000"
+    )
+    mock_linode_client.get_monitor_service_alert_definition.assert_awaited_once_with(
+        "dbaas", 20000
+    )
+    mock_linode_client.delete_monitor_service_alert_definition.assert_not_called()
+
+
+async def test_monitor_alert_definition_update_dry_run_returns_preview(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """dry_run=true fetches the definition via GET and never updates."""
+    from linodemcp.tools.linode_monitor_write import (
+        handle_linode_monitor_alert_definition_update,
+    )
+
+    mock_linode_client.get_monitor_service_alert_definition.return_value = {
+        "id": 20000,
+        "label": "high-cpu",
+    }
+
+    result = await handle_linode_monitor_alert_definition_update(
+        {
+            "service_type": "dbaas",
+            "alert_id": 20000,
+            "label": "renamed-alert",
+            "dry_run": True,
+        },
+        sample_config,
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_monitor_alert_definition_update"
+    assert body["would_execute"]["method"] == "PUT"
+    assert (
+        body["would_execute"]["path"]
+        == "/monitor/services/dbaas/alert-definitions/20000"
+    )
+    mock_linode_client.get_monitor_service_alert_definition.assert_awaited_once_with(
+        "dbaas", 20000
+    )
+    mock_linode_client.update_monitor_alert_definition.assert_not_called()
+
+
+async def test_instance_ip_update_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the IP via GET and never updates."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_instance_ip.return_value = {"address": "192.0.2.10"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_instance_ip_update(
+            {
+                "instance_id": 123,
+                "address": "192.0.2.10",
+                "rdns": "host.example.com",
+                "dry_run": True,
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["dry_run"] is True
+        assert body["tool"] == "linode_instance_ip_update"
+        assert body["would_execute"]["method"] == "PUT"
+        assert body["would_execute"]["path"] == "/linode/instances/123/ips/192.0.2.10"
+        mock_client.get_instance_ip.assert_awaited_once_with(123, "192.0.2.10")
+        mock_client.update_instance_ip.assert_not_called()
+
+
+async def test_instance_ip_update_dry_run_still_validates_address(
+    sample_config: Config,
+) -> None:
+    """A missing address errors out under dry_run."""
+    result = await handle_linode_instance_ip_update(
+        {"instance_id": 123, "rdns": "host.example.com", "dry_run": True},
+        sample_config,
+    )
+    assert len(result) == 1
+    assert "address is required" in result[0].text
+
+
+async def test_networking_ip_update_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the IP via GET and never updates."""
+    from linodemcp.tools.linode_instance_ips import (
+        handle_linode_networking_ip_update,
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_networking_ip.return_value = {"address": "192.0.2.20"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_networking_ip_update(
+            {
+                "address": "192.0.2.20",
+                "rdns": "host.example.com",
+                "dry_run": True,
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["dry_run"] is True
+        assert body["tool"] == "linode_networking_ip_update"
+        assert body["would_execute"]["method"] == "PUT"
+        assert body["would_execute"]["path"] == "/networking/ips/192.0.2.20"
+        mock_client.get_networking_ip.assert_awaited_once_with("192.0.2.20")
+        mock_client.update_networking_ip.assert_not_called()
+
+
+async def test_networking_ip_update_dry_run_still_validates_address(
+    sample_config: Config,
+) -> None:
+    """A missing address errors out under dry_run."""
+    from linodemcp.tools.linode_instance_ips import (
+        handle_linode_networking_ip_update,
+    )
+
+    result = await handle_linode_networking_ip_update(
+        {"rdns": "host.example.com", "dry_run": True}, sample_config
+    )
+    assert len(result) == 1
+    assert "address is required" in result[0].text
+
+
+async def test_ipv4_share_dry_run_returns_preview(sample_config: Config) -> None:
+    """dry_run=true previews the share POST with no call."""
+    from linodemcp.tools.linode_networking import handle_linode_ipv4_share
+
+    result = await handle_linode_ipv4_share(
+        {"ips": ["192.0.2.10"], "linode_id": 123, "dry_run": True},
+        sample_config,
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_ipv4_share"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/networking/ips/share"
+    assert body["current_state"] is None
+    assert "confirm=true" not in result[0].text
+
+
+async def test_ipv4_share_dry_run_still_validates_linode_id(
+    sample_config: Config,
+) -> None:
+    """A missing linode_id errors out under dry_run."""
+    from linodemcp.tools.linode_networking import handle_linode_ipv4_share
+
+    result = await handle_linode_ipv4_share(
+        {"ips": ["192.0.2.10"], "dry_run": True}, sample_config
+    )
+    assert len(result) == 1
+    assert "linode_id is required" in result[0].text
+
+
+async def test_ipv4_assign_dry_run_returns_preview(sample_config: Config) -> None:
+    """dry_run=true previews the assign POST with no call."""
+    from linodemcp.tools.linode_networking import handle_linode_ipv4_assign
+
+    result = await handle_linode_ipv4_assign(
+        {
+            "region": "us-east",
+            "assignments": [{"address": "192.0.2.10", "linode_id": 123}],
+            "dry_run": True,
+        },
+        sample_config,
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_ipv4_assign"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/networking/ips/assign"
+    assert body["current_state"] is None
+    assert "confirm=true" not in result[0].text
+
+
+async def test_ipv4_assign_dry_run_still_validates_region(
+    sample_config: Config,
+) -> None:
+    """A missing region errors out under dry_run."""
+    from linodemcp.tools.linode_networking import handle_linode_ipv4_assign
+
+    result = await handle_linode_ipv4_assign(
+        {
+            "assignments": [{"address": "192.0.2.10", "linode_id": 123}],
+            "dry_run": True,
+        },
+        sample_config,
+    )
+    assert len(result) == 1
+    assert "region is required" in result[0].text
+
+
+async def test_instance_update_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the instance via GET and never updates."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_instance.return_value = {"id": 123, "label": "old"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_instance_update(
+            {"instance_id": 123, "label": "renamed", "dry_run": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["dry_run"] is True
+        assert body["tool"] == "linode_instance_update"
+        assert body["would_execute"]["method"] == "PUT"
+        assert body["would_execute"]["path"] == "/linode/instances/123"
+        mock_client.get_instance.assert_awaited_once_with(123)
+        mock_client.update_instance.assert_not_called()
+
+
+async def test_instance_update_dry_run_still_validates_id(
+    sample_config: Config,
+) -> None:
+    """A missing instance_id errors out under dry_run."""
+    result = await handle_linode_instance_update(
+        {"label": "renamed", "dry_run": True}, sample_config
+    )
+    assert len(result) == 1
+    assert "instance_id is required" in result[0].text
+
+
+async def test_object_storage_cancel_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the cancel POST with no call."""
+    result = await handle_linode_object_storage_cancel({"dry_run": True}, sample_config)
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_object_storage_cancel"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/object-storage/cancel"
+    assert body["current_state"] is None
+    assert "confirm=true" not in result[0].text
+
+
+_PG_CREATE_ARGS = {
+    "label": "pg-1",
+    "region": "us-east",
+    "placement_group_type": "anti_affinity:local",
+    "placement_group_policy": "strict",
+}
+
+
+async def test_placement_group_create_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the create POST with no call."""
+    result = await handle_linode_placement_group_create(
+        {**_PG_CREATE_ARGS, "dry_run": True}, sample_config
+    )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_placement_group_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/placement/groups"
+    assert body["current_state"] is None
+
+
+async def test_placement_group_create_dry_run_still_validates_label(
+    sample_config: Config,
+) -> None:
+    """An invalid label errors out under dry_run."""
+    result = await handle_linode_placement_group_create(
+        {**_PG_CREATE_ARGS, "label": "", "dry_run": True}, sample_config
+    )
+    assert len(result) == 1
+    assert "label" in result[0].text
+
+
+async def test_placement_group_update_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the group via GET and never updates."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_placement_group.return_value = {"id": 7, "label": "old"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_placement_group_update(
+            {"group_id": 7, "label": "renamed", "dry_run": True}, sample_config
+        )
+
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_placement_group_update"
+        assert body["would_execute"]["method"] == "PUT"
+        assert body["would_execute"]["path"] == "/placement/groups/7"
+        mock_client.get_placement_group.assert_awaited_once_with(7)
+        mock_client.update_placement_group.assert_not_called()
+
+
+async def test_placement_group_delete_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the group via GET and never deletes."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_placement_group.return_value = {"id": 7}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_placement_group_delete(
+            {"group_id": 7, "dry_run": True}, sample_config
+        )
+
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_placement_group_delete"
+        assert body["would_execute"]["method"] == "DELETE"
+        assert body["would_execute"]["path"] == "/placement/groups/7"
+        mock_client.get_placement_group.assert_awaited_once_with(7)
+        mock_client.delete_placement_group.assert_not_called()
+
+
+async def test_placement_group_assign_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the group via GET and never assigns."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_placement_group.return_value = {"id": 7}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_placement_group_assign(
+            {"group_id": 7, "linodes": [123], "dry_run": True}, sample_config
+        )
+
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_placement_group_assign"
+        assert body["would_execute"]["method"] == "POST"
+        assert body["would_execute"]["path"] == "/placement/groups/7/assign"
+        mock_client.get_placement_group.assert_awaited_once_with(7)
+        mock_client.assign_placement_group.assert_not_called()
+
+
+async def test_placement_group_unassign_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the group via GET and never unassigns."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_placement_group.return_value = {"id": 7}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_placement_group_unassign(
+            {"group_id": 7, "linodes": [123], "dry_run": True}, sample_config
+        )
+
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_placement_group_unassign"
+        assert body["would_execute"]["method"] == "POST"
+        assert body["would_execute"]["path"] == "/placement/groups/7/unassign"
+        mock_client.get_placement_group.assert_awaited_once_with(7)
+        mock_client.unassign_placement_group.assert_not_called()
+
+
+async def test_nb_firewalls_update_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the NodeBalancer via GET and never updates."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_nodebalancer.return_value = {"id": 8}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_firewalls_update(
+            {"nodebalancer_id": 8, "firewall_ids": [1], "dry_run": True},
+            sample_config,
+        )
+
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_nodebalancer_firewalls_update"
+        assert body["would_execute"]["method"] == "PUT"
+        assert body["would_execute"]["path"] == "/nodebalancers/8/firewalls"
+        mock_client.get_nodebalancer.assert_awaited_once_with(8)
+        mock_client.update_nodebalancer_firewalls.assert_not_called()
+
+
+async def test_nb_config_rebuild_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the config via GET and never rebuilds."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_nodebalancer_config.return_value = {"id": 6}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_config_rebuild(
+            {"nodebalancer_id": 8, "config_id": 6, "dry_run": True},
+            sample_config,
+        )
+
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_nodebalancer_config_rebuild"
+        assert body["would_execute"]["method"] == "POST"
+        assert body["would_execute"]["path"] == "/nodebalancers/8/configs/6/rebuild"
+        mock_client.get_nodebalancer_config.assert_awaited_once_with(8, 6)
+        mock_client.rebuild_nodebalancer_config.assert_not_called()
+
+
+async def test_nb_config_update_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the config via GET and never updates."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_nodebalancer_config.return_value = {"id": 6}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_config_update(
+            {"nodebalancer_id": 8, "config_id": 6, "port": 80, "dry_run": True},
+            sample_config,
+        )
+
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_nodebalancer_config_update"
+        assert body["would_execute"]["method"] == "PUT"
+        assert body["would_execute"]["path"] == "/nodebalancers/8/configs/6"
+        mock_client.get_nodebalancer_config.assert_awaited_once_with(8, 6)
+        mock_client.update_nodebalancer_config.assert_not_called()
+
+
+async def test_nb_config_create_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the create POST with no call."""
+    result = await handle_linode_nodebalancer_config_create(
+        {"nodebalancer_id": 8, "dry_run": True}, sample_config
+    )
+
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_nodebalancer_config_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/nodebalancers/8/configs"
+    assert body["current_state"] is None
+
+
+async def test_nb_config_node_create_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the node create POST with no call."""
+    result = await handle_linode_nodebalancer_config_node_create(
+        {"nodebalancer_id": 8, "config_id": 6, "dry_run": True}, sample_config
+    )
+
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_nodebalancer_config_node_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/nodebalancers/8/configs/6/nodes"
+    assert body["current_state"] is None
+
+
+async def test_nb_config_node_update_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the node via GET and never updates."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_nodebalancer_config_node.return_value = {"id": 7}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_config_node_update(
+            {
+                "nodebalancer_id": 8,
+                "config_id": 6,
+                "node_id": 7,
+                "label": "renamed",
+                "dry_run": True,
+            },
+            sample_config,
+        )
+
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_nodebalancer_config_node_update"
+        assert body["would_execute"]["method"] == "PUT"
+        assert body["would_execute"]["path"] == "/nodebalancers/8/configs/6/nodes/7"
+        mock_client.get_nodebalancer_config_node.assert_awaited_once_with(8, 6, 7)
+        mock_client.update_nodebalancer_config_node.assert_not_called()
+
+
+async def test_account_tag_create_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the tag create POST with no call."""
+    result = await handle_linode_account_tag_create(
+        {"label": "my-tag", "dry_run": True}, sample_config
+    )
+
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_account_tag_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/tags"
+    assert body["current_state"] is None
+
+
+async def test_account_tag_delete_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the tag delete DELETE with no call."""
+    result = await handle_linode_account_tag_delete(
+        {"tag_label": "my-tag", "dry_run": True}, sample_config
+    )
+
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_account_tag_delete"
+    assert body["would_execute"]["method"] == "DELETE"
+    assert body["would_execute"]["path"] == "/tags/my-tag"
+    assert body["current_state"] is None
+
+
+async def test_account_support_ticket_create_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the ticket create POST with no call."""
+    result = await handle_linode_account_support_ticket_create(
+        {"summary": "S", "description": "D", "dry_run": True}, sample_config
+    )
+
+    body = json.loads(result[0].text)
+    assert body["tool"] == "linode_account_support_ticket_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/support/tickets"
+    assert body["current_state"] is None
+
+
+async def test_account_support_ticket_close_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the ticket via GET and never closes."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_support_ticket.return_value = {"id": 42}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_account_support_ticket_close(
+            {"ticket_id": 42, "dry_run": True}, sample_config
+        )
+
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_account_support_ticket_close"
+        assert body["would_execute"]["method"] == "POST"
+        assert body["would_execute"]["path"] == "/support/tickets/42/close"
+        mock_client.get_support_ticket.assert_awaited_once_with(42)
+        mock_client.close_support_ticket.assert_not_called()
+
+
+async def test_account_support_ticket_reply_create_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the ticket via GET and never replies."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_support_ticket.return_value = {"id": 42}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_account_support_ticket_reply_create(
+            {"ticket_id": 42, "description": "hi", "dry_run": True},
+            sample_config,
+        )
+
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_account_support_ticket_reply_create"
+        assert body["would_execute"]["method"] == "POST"
+        assert body["would_execute"]["path"] == "/support/tickets/42/replies"
+        mock_client.get_support_ticket.assert_awaited_once_with(42)
+        mock_client.create_support_ticket_reply.assert_not_called()
+
+
+async def test_account_support_ticket_attachment_create_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the ticket via GET and never attaches."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_support_ticket.return_value = {"id": 42}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_account_support_ticket_attachment_create(
+            {"ticket_id": 42, "dry_run": True}, sample_config
+        )
+
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_account_support_ticket_attachment_create"
+        assert body["would_execute"]["method"] == "POST"
+        assert body["would_execute"]["path"] == "/support/tickets/42/attachments"
+        mock_client.get_support_ticket.assert_awaited_once_with(42)
+        mock_client.create_support_ticket_attachment.assert_not_called()
+
+
+def _profile_preview_body(result: list[TextContent]) -> dict[str, Any]:
+    """Decode a profile dry-run preview body."""
+    assert len(result) == 1
+    body: dict[str, Any] = json.loads(result[0].text)
+    return body
+
+
+async def test_profile_preferences_update_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches preferences via GET and never updates."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_profile_preferences.return_value = {"theme": "dark"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_profile_preferences_update(
+            {"preferences": {"theme": "light"}, "dry_run": True}, sample_config
+        )
+
+        body = _profile_preview_body(result)
+        assert body["tool"] == "linode_profile_preferences_update"
+        assert body["would_execute"]["method"] == "PUT"
+        assert body["would_execute"]["path"] == "/profile/preferences"
+        mock_client.update_profile_preferences.assert_not_called()
+
+
+async def test_profile_tfa_enable_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the TFA enable POST and never generates a secret."""
+    result = await handle_linode_profile_tfa_enable({"dry_run": True}, sample_config)
+    body = _profile_preview_body(result)
+    assert body["tool"] == "linode_profile_tfa_enable"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/profile/tfa-enable"
+    assert body["current_state"] is None
+    assert "secret" not in str(body["current_state"])
+
+
+async def test_profile_tfa_disable_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the TFA disable POST with no call."""
+    result = await handle_linode_profile_tfa_disable({"dry_run": True}, sample_config)
+    body = _profile_preview_body(result)
+    assert body["tool"] == "linode_profile_tfa_disable"
+    assert body["would_execute"]["path"] == "/profile/tfa-disable"
+    assert body["current_state"] is None
+
+
+async def test_profile_tfa_enable_confirm_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the TFA confirm POST with no call."""
+    result = await handle_linode_profile_tfa_enable_confirm(
+        {"tfa_code": "123456", "dry_run": True}, sample_config
+    )
+    body = _profile_preview_body(result)
+    assert body["tool"] == "linode_profile_tfa_enable_confirm"
+    assert body["would_execute"]["path"] == "/profile/tfa-enable-confirm"
+
+
+async def test_profile_phone_number_send_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the phone-number POST with no call."""
+    result = await handle_linode_profile_phone_number_send(
+        {"iso_code": "US", "phone_number": "5551234567", "dry_run": True},
+        sample_config,
+    )
+    body = _profile_preview_body(result)
+    assert body["tool"] == "linode_profile_phone_number_send"
+    assert body["would_execute"]["path"] == "/profile/phone-number"
+
+
+async def test_profile_phone_number_verify_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the phone-number verify POST with no call."""
+    result = await handle_linode_profile_phone_number_verify(
+        {"otp_code": "000111", "dry_run": True}, sample_config
+    )
+    body = _profile_preview_body(result)
+    assert body["tool"] == "linode_profile_phone_number_verify"
+    assert body["would_execute"]["path"] == "/profile/phone-number/verify"
+
+
+async def test_profile_phone_number_delete_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the phone-number DELETE with no call."""
+    result = await handle_linode_profile_phone_number_delete(
+        {"dry_run": True}, sample_config
+    )
+    body = _profile_preview_body(result)
+    assert body["tool"] == "linode_profile_phone_number_delete"
+    assert body["would_execute"]["method"] == "DELETE"
+    assert body["would_execute"]["path"] == "/profile/phone-number"
+
+
+async def test_profile_security_questions_answer_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the security-questions POST with no call."""
+    result = await handle_linode_profile_security_questions_answer(
+        {
+            "security_questions": [
+                {"question_id": 1, "response": "answer1"},
+                {"question_id": 2, "response": "answer2"},
+                {"question_id": 3, "response": "answer3"},
+            ],
+            "dry_run": True,
+        },
+        sample_config,
+    )
+    body = _profile_preview_body(result)
+    assert body["tool"] == "linode_profile_security_questions_answer"
+    assert body["would_execute"]["path"] == "/profile/security-questions"
+
+
+async def test_profile_token_create_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews the token create POST and never echoes a token."""
+    result = await handle_linode_profile_token_create(
+        {"label": "ci", "dry_run": True}, sample_config
+    )
+    body = _profile_preview_body(result)
+    assert body["tool"] == "linode_profile_token_create"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/profile/tokens"
+    assert body["current_state"] is None
+    assert "token" not in str(body["current_state"])
+
+
+async def test_profile_token_update_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the token metadata via GET and never updates."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_profile_token.return_value = {"id": 9, "label": "old"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_profile_token_update(
+            {"token_id": 9, "label": "renamed", "dry_run": True}, sample_config
+        )
+
+        body = _profile_preview_body(result)
+        assert body["tool"] == "linode_profile_token_update"
+        assert body["would_execute"]["method"] == "PUT"
+        assert body["would_execute"]["path"] == "/profile/tokens/9"
+        mock_client.get_profile_token.assert_awaited_once_with(9)
+        mock_client.update_profile_token.assert_not_called()
+
+
+async def test_profile_token_revoke_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the token metadata via GET and never revokes."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_profile_token.return_value = {"id": 9}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_profile_token_revoke(
+            {"token_id": 9, "dry_run": True}, sample_config
+        )
+
+        body = _profile_preview_body(result)
+        assert body["tool"] == "linode_profile_token_revoke"
+        assert body["would_execute"]["method"] == "DELETE"
+        assert body["would_execute"]["path"] == "/profile/tokens/9"
+        mock_client.get_profile_token.assert_awaited_once_with(9)
+        mock_client.delete_profile_token.assert_not_called()
+
+
+async def test_profile_app_revoke_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the app via GET and never revokes."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_profile_app.return_value = {"id": 5}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_profile_app_revoke(
+            {"app_id": 5, "dry_run": True}, sample_config
+        )
+
+        body = _profile_preview_body(result)
+        assert body["tool"] == "linode_profile_app_revoke"
+        assert body["would_execute"]["method"] == "DELETE"
+        assert body["would_execute"]["path"] == "/profile/apps/5"
+        mock_client.get_profile_app.assert_awaited_once_with(5)
+        mock_client.delete_profile_app.assert_not_called()
+
+
+async def test_profile_device_revoke_dry_run_returns_preview(
+    sample_config: Config,
+) -> None:
+    """dry_run=true fetches the device via GET and never revokes."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_profile_device.return_value = {"id": 3}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_profile_device_revoke(
+            {"device_id": 3, "dry_run": True}, sample_config
+        )
+
+        body = _profile_preview_body(result)
+        assert body["tool"] == "linode_profile_device_revoke"
+        assert body["would_execute"]["method"] == "DELETE"
+        assert body["would_execute"]["path"] == "/profile/devices/3"
+        mock_client.get_profile_device.assert_awaited_once_with(3)
+        mock_client.delete_profile_device.assert_not_called()

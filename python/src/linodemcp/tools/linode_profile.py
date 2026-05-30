@@ -7,7 +7,16 @@ from mcp.types import TextContent, Tool
 from linodemcp.config import Config
 from linodemcp.linode import RetryableClient, build_profile_security_questions_body
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
+from linodemcp.tools.helpers import (
+    DRY_RUN_PROP,
+    ENV_PARAM_SCHEMA,
+    PARAM_DRY_RUN,
+    build_dry_run_response,
+    error_response,
+    execute_dry_run,
+    execute_tool,
+    is_dry_run,
+)
 
 PROFILE_TOKEN_LABEL_MAX_LENGTH = 100
 PROFILE_TOKEN_SECRET_FIELDS = frozenset({"token", "access_token", "secret"})
@@ -113,6 +122,7 @@ def create_linode_profile_preferences_update_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": "Set true to confirm this preferences update.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["preferences", "confirm"],
         },
@@ -123,6 +133,22 @@ async def handle_linode_profile_preferences_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_profile_preferences_update tool request."""
+    if is_dry_run(arguments):
+        if not isinstance(arguments.get("preferences"), dict):
+            return error_response("preferences must be an object")
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_profile_preferences()
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_profile_preferences_update",
+            "PUT",
+            "/profile/preferences",
+            _fetch,
+        )
+
     preferences_arg = arguments.get("preferences")
     if not isinstance(preferences_arg, dict):
         return error_response("preferences must be an object")
@@ -155,6 +181,7 @@ def create_linode_profile_tfa_enable_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": "Set true to generate a profile TFA secret.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["confirm"],
         },
@@ -165,6 +192,15 @@ async def handle_linode_profile_tfa_enable(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_profile_tfa_enable tool request."""
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_profile_tfa_enable",
+            arguments.get("environment", ""),
+            "POST",
+            "/profile/tfa-enable",
+            None,
+        )
+
     if arguments.get("confirm") is not True:
         return error_response(
             "This generates a profile two-factor authentication secret. "
@@ -202,6 +238,7 @@ def create_linode_profile_tfa_disable_tool() -> tuple[Tool, Capability]:
                         "Set true to disable profile two-factor authentication."
                     ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["confirm"],
         },
@@ -212,6 +249,15 @@ async def handle_linode_profile_tfa_disable(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_profile_tfa_disable tool request."""
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_profile_tfa_disable",
+            arguments.get("environment", ""),
+            "POST",
+            "/profile/tfa-disable",
+            None,
+        )
+
     if arguments.get("confirm") is not True:
         return error_response(
             "This disables profile two-factor authentication. "
@@ -246,6 +292,7 @@ def create_linode_profile_tfa_enable_confirm_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": "Set true to confirm this profile update.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["tfa_code", "confirm"],
         },
@@ -256,6 +303,20 @@ async def handle_linode_profile_tfa_enable_confirm(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_profile_tfa_enable_confirm tool request."""
+    if is_dry_run(arguments):
+        if (
+            not isinstance(arguments.get("tfa_code"), str)
+            or not str(arguments.get("tfa_code")).strip()
+        ):
+            return error_response("tfa_code must be a non-empty string")
+        return build_dry_run_response(
+            "linode_profile_tfa_enable_confirm",
+            arguments.get("environment", ""),
+            "POST",
+            "/profile/tfa-enable-confirm",
+            None,
+        )
+
     tfa_code = arguments.get("tfa_code")
     if not isinstance(tfa_code, str) or not tfa_code.strip():
         return error_response("tfa_code must be a non-empty string")
@@ -300,22 +361,65 @@ def create_linode_profile_phone_number_send_tool() -> tuple[Tool, Capability]:
                         "Set true to send a verification code to this phone number."
                     ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["iso_code", "phone_number", "confirm"],
         },
     ), Capability.Write
 
 
-async def handle_linode_profile_phone_number_send(
-    arguments: dict[str, Any], cfg: Config
-) -> list[TextContent]:
-    """Handle linode_profile_phone_number_send tool request."""
+def _profile_required_id(
+    arguments: dict[str, Any], name: str
+) -> int | list[TextContent]:
+    """Parse a required positive-integer id, or return an error response."""
+    value = arguments.get(name)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        return error_response(f"{name} must be a positive integer")
+    return value
+
+
+def _token_label_error(label: object) -> list[TextContent] | None:
+    """Validate a token label; return an error response or None."""
+    if not isinstance(label, str) or not label.strip():
+        return error_response("label must be a non-empty string")
+    if len(label) > PROFILE_TOKEN_LABEL_MAX_LENGTH:
+        return error_response("label must be 100 characters or fewer")
+    return None
+
+
+def _parse_phone_send(
+    arguments: dict[str, Any],
+) -> tuple[str, str] | list[TextContent]:
+    """Parse iso_code and phone_number, or return an error response."""
     iso_code = arguments.get("iso_code")
     if not isinstance(iso_code, str) or not iso_code.strip():
         return error_response("iso_code must be a non-empty string")
     phone_number = arguments.get("phone_number")
     if not isinstance(phone_number, str) or not phone_number.strip():
         return error_response("phone_number must be a non-empty string")
+    return iso_code.strip(), phone_number.strip()
+
+
+async def handle_linode_profile_phone_number_send(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_profile_phone_number_send tool request."""
+    if is_dry_run(arguments):
+        parsed = _parse_phone_send(arguments)
+        if isinstance(parsed, list):
+            return parsed
+        return build_dry_run_response(
+            "linode_profile_phone_number_send",
+            arguments.get("environment", ""),
+            "POST",
+            "/profile/phone-number",
+            None,
+        )
+
+    parsed = _parse_phone_send(arguments)
+    if isinstance(parsed, list):
+        return parsed
+    iso_code, phone_number = parsed
     if arguments.get("confirm") is not True:
         return error_response(
             "This sends a profile phone number verification code. "
@@ -324,7 +428,7 @@ async def handle_linode_profile_phone_number_send(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.send_profile_phone_number_verification(
-            iso_code.strip(), phone_number.strip()
+            iso_code, phone_number
         )
 
     return await execute_tool(
@@ -350,6 +454,7 @@ def create_linode_profile_phone_number_verify_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": "Set true to verify this profile phone number.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["otp_code", "confirm"],
         },
@@ -360,6 +465,18 @@ async def handle_linode_profile_phone_number_verify(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_profile_phone_number_verify tool request."""
+    if is_dry_run(arguments):
+        code = arguments.get("otp_code")
+        if not isinstance(code, str) or not code.strip():
+            return error_response("otp_code must be a non-empty string")
+        return build_dry_run_response(
+            "linode_profile_phone_number_verify",
+            arguments.get("environment", ""),
+            "POST",
+            "/profile/phone-number/verify",
+            None,
+        )
+
     otp_code = arguments.get("otp_code")
     if not isinstance(otp_code, str) or not otp_code.strip():
         return error_response("otp_code must be a non-empty string")
@@ -389,6 +506,7 @@ def create_linode_profile_phone_number_delete_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": "Set true to delete this profile phone number.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["confirm"],
         },
@@ -399,6 +517,15 @@ async def handle_linode_profile_phone_number_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_profile_phone_number_delete tool request."""
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_profile_phone_number_delete",
+            arguments.get("environment", ""),
+            "DELETE",
+            "/profile/phone-number",
+            None,
+        )
+
     if arguments.get("confirm") is not True:
         return error_response(
             "This deletes a profile phone number. Set confirm=true to proceed."
@@ -475,6 +602,7 @@ def create_linode_profile_security_questions_answer_tool() -> tuple[Tool, Capabi
                     "type": "boolean",
                     "description": "Set true to answer profile security questions.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["security_questions", "confirm"],
         },
@@ -485,6 +613,19 @@ async def handle_linode_profile_security_questions_answer(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_profile_security_questions_answer tool request."""
+    if is_dry_run(arguments):
+        try:
+            build_profile_security_questions_body(arguments.get("security_questions"))
+        except (TypeError, ValueError) as exc:
+            return error_response(str(exc))
+        return build_dry_run_response(
+            "linode_profile_security_questions_answer",
+            arguments.get("environment", ""),
+            "POST",
+            "/profile/security-questions",
+            None,
+        )
+
     if arguments.get("confirm") is not True:
         return error_response(
             "This answers profile security questions. Set confirm=true to proceed."
@@ -536,39 +677,62 @@ def create_linode_profile_token_create_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": "Set true to confirm this token creation.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["confirm"],
         },
     ), Capability.Write
 
 
-async def handle_linode_profile_token_create(
-    arguments: dict[str, Any], cfg: Config
-) -> list[TextContent]:
-    """Handle linode_profile_token_create tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This creates a profile token. Set confirm=true to proceed."
-        )
-
+def _token_create_error(arguments: dict[str, Any]) -> list[TextContent] | None:
+    """Validate the optional token-create fields; return an error or None."""
     label = arguments.get("label")
     if label is not None:
         if not isinstance(label, str) or not label.strip():
             return error_response("label must be a non-empty string")
         if len(label) > PROFILE_TOKEN_LABEL_MAX_LENGTH:
             return error_response("label must be 100 characters or fewer")
-
     scopes = arguments.get("scopes")
     if scopes is not None and (not isinstance(scopes, str) or not scopes.strip()):
         return error_response("scopes must be a non-empty string")
-
     expiry = arguments.get("expiry")
     if expiry is not None and not isinstance(expiry, str):
         return error_response("expiry must be a string or null")
+    return None
+
+
+async def handle_linode_profile_token_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_profile_token_create tool request."""
+    if is_dry_run(arguments):
+        field_error = _token_create_error(arguments)
+        if field_error is not None:
+            return field_error
+        return build_dry_run_response(
+            "linode_profile_token_create",
+            arguments.get("environment", ""),
+            "POST",
+            "/profile/tokens",
+            None,
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This creates a profile token. Set confirm=true to proceed."
+        )
+
+    field_error = _token_create_error(arguments)
+    if field_error is not None:
+        return field_error
+
+    label = arguments.get("label")
+    scopes = arguments.get("scopes")
+    expiry = arguments.get("expiry")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         token = await client.create_profile_token(
-            expiry=expiry,
+            expiry=expiry if isinstance(expiry, str) else None,
             label=label.strip() if isinstance(label, str) else None,
             scopes=scopes.strip() if isinstance(scopes, str) else None,
         )
@@ -754,6 +918,7 @@ def create_linode_profile_token_update_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": "Set true to confirm this token update.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["token_id", "label", "confirm"],
         },
@@ -764,22 +929,41 @@ async def handle_linode_profile_token_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_profile_token_update tool request."""
-    token_id = arguments.get("token_id")
-    if isinstance(token_id, bool) or not isinstance(token_id, int) or token_id < 1:
-        return error_response("token_id must be a positive integer")
+    if is_dry_run(arguments):
+        tid = _profile_required_id(arguments, "token_id")
+        if isinstance(tid, list):
+            return tid
+        token_id = tid
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_profile_token(token_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_profile_token_update",
+            "PUT",
+            f"/profile/tokens/{token_id}",
+            _fetch,
+        )
+
+    parsed_id = _profile_required_id(arguments, "token_id")
+    if isinstance(parsed_id, list):
+        return parsed_id
+    token_id = parsed_id
 
     label = arguments.get("label")
-    if not isinstance(label, str) or not label.strip():
-        return error_response("label must be a non-empty string")
-    if len(label) > PROFILE_TOKEN_LABEL_MAX_LENGTH:
-        return error_response("label must be 100 characters or fewer")
+    label_error = _token_label_error(label)
+    if label_error is not None:
+        return label_error
     if arguments.get("confirm") is not True:
         return error_response(
             "This updates a profile token. Set confirm=true to proceed."
         )
+    label_value = cast("str", label)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.update_profile_token(token_id, label=label)
+        return await client.update_profile_token(token_id, label=label_value)
 
     return await execute_tool(cfg, arguments, "update Linode profile token", _call)
 
@@ -898,6 +1082,7 @@ def create_linode_profile_app_revoke_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": "Set true to confirm this destructive operation.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["app_id", "confirm"],
         },
@@ -908,6 +1093,23 @@ async def handle_linode_profile_app_revoke(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_profile_app_revoke tool request."""
+    if is_dry_run(arguments):
+        aid = _profile_required_id(arguments, "app_id")
+        if isinstance(aid, list):
+            return aid
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_profile_app(aid)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_profile_app_revoke",
+            "DELETE",
+            f"/profile/apps/{aid}",
+            _fetch,
+        )
+
     app_id = arguments.get("app_id")
     if isinstance(app_id, bool) or not isinstance(app_id, int) or app_id < 1:
         return error_response("app_id must be a positive integer")
@@ -979,6 +1181,7 @@ def create_linode_profile_device_revoke_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": "Set true to confirm this destructive operation.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["device_id", "confirm"],
         },
@@ -989,6 +1192,23 @@ async def handle_linode_profile_device_revoke(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_profile_device_revoke tool request."""
+    if is_dry_run(arguments):
+        did = _profile_required_id(arguments, "device_id")
+        if isinstance(did, list):
+            return did
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_profile_device(did)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_profile_device_revoke",
+            "DELETE",
+            f"/profile/devices/{did}",
+            _fetch,
+        )
+
     device_id = arguments.get("device_id")
     if isinstance(device_id, bool) or not isinstance(device_id, int) or device_id < 1:
         return error_response("device_id must be a positive integer")
@@ -1024,6 +1244,7 @@ def create_linode_profile_token_revoke_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": "Set true to confirm this destructive operation.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["token_id", "confirm"],
         },
@@ -1034,6 +1255,23 @@ async def handle_linode_profile_token_revoke(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_profile_token_revoke tool request."""
+    if is_dry_run(arguments):
+        tid = _profile_required_id(arguments, "token_id")
+        if isinstance(tid, list):
+            return tid
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_profile_token(tid)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_profile_token_revoke",
+            "DELETE",
+            f"/profile/tokens/{tid}",
+            _fetch,
+        )
+
     token_id = arguments.get("token_id")
     if isinstance(token_id, bool) or not isinstance(token_id, int) or token_id < 1:
         return error_response("token_id must be a positive integer")

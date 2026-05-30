@@ -97,3 +97,32 @@ def test_capability_and_confirm_invariants() -> None:
         "Write/Destroy/Admin tools must require confirm in required[]: "
         + ", ".join(sorted(mutator_violations))
     )
+
+
+def test_capability_and_dry_run_invariants() -> None:
+    """Every mutating tool must advertise a ``dry_run`` boolean property.
+
+    ``Write``, ``Destroy``, and ``Admin`` tools all support dry-run previews,
+    so each must declare ``dry_run`` (as a boolean property, not in
+    ``required[]`` since it defaults to False). This mirrors the Go-side
+    ``TestCapabilityAndDryRunInvariants`` gate. There is no allowlist: the
+    Python surface is fully wired, so any mutator missing ``dry_run`` is a bug.
+    A common regression is the ``**DRY_RUN_PROP`` spread, which scatters the
+    inner schema's keys into ``properties`` instead of adding a ``dry_run``
+    property; the canonical form is ``PARAM_DRY_RUN: DRY_RUN_PROP``.
+    """
+    registry = get_tool_registry()
+    mutators = {Capability.Write, Capability.Destroy, Capability.Admin}
+
+    missing: list[str] = [
+        entry.name
+        for entry in registry
+        if entry.capability in mutators
+        and not _schema_has_boolean_prop(entry.tool.inputSchema, "dry_run")
+    ]
+
+    assert not missing, (
+        "Write/Destroy/Admin tools must advertise a dry_run boolean property "
+        "(use PARAM_DRY_RUN: DRY_RUN_PROP, not **DRY_RUN_PROP): "
+        + ", ".join(sorted(missing))
+    )

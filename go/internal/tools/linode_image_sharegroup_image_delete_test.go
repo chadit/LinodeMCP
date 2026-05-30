@@ -137,6 +137,84 @@ func TestLinodeImageShareGroupImageDeleteTool(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		assert.True(t, result.IsError, "client failure should be an error result")
-		assertErrorContains(t, result, "Failed to remove shared image 5678")
+		assertErrorContains(t, result, "linode_image_sharegroup_image_delete failed")
+	})
+}
+
+// Dry-run coverage for image share group image delete. Preview fetches
+// the PARENT group; would_execute targets the child image path.
+func TestLinodeImageShareGroupImageDeleteToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	t.Run("schema advertises dry_run", func(t *testing.T) {
+		t.Parallel()
+
+		tool, _, _ := tools.NewLinodeImageShareGroupImageDeleteTool(&config.Config{})
+		assert.Contains(t, tool.InputSchema.Properties, "dry_run")
+	})
+
+	t.Run("preview without mutating", func(t *testing.T) {
+		t.Parallel()
+
+		var methodsSeen []string
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			methodsSeen = append(methodsSeen, r.Method)
+			assert.Equal(t, "/images/sharegroups/1234", r.URL.Path,
+				"dry_run must GET the parent share group")
+
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyBetaID: 1234}))
+
+				return
+			}
+
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		}}
+		_, _, handler := tools.NewLinodeImageShareGroupImageDeleteTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+			keyShareGroupID: 1234,
+			keyImageID:      5678,
+			keyDryRun:       true,
+		}))
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.False(t, result.IsError)
+
+		textContent, isText := result.Content[0].(mcp.TextContent)
+		require.True(t, isText)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(textContent.Text), &body))
+		assert.Equal(t, "linode_image_sharegroup_image_delete", body["tool"])
+		would, _ := body["would_execute"].(map[string]any)
+		assert.Equal(t, "DELETE", would["method"])
+		assert.Equal(t, "/images/sharegroups/1234/images/5678", would["path"])
+
+		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
+			"dry_run must only issue a single GET, never DELETE")
+	})
+
+	t.Run("still validates image_id", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, handler := tools.NewLinodeImageShareGroupImageDeleteTool(&config.Config{})
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+			keyShareGroupID: 1234,
+			keyDryRun:       true,
+		}))
+
+		require.NoError(t, err)
+		assert.True(t, result.IsError)
+		assertErrorContains(t, result, "image_id must be a positive integer")
 	})
 }

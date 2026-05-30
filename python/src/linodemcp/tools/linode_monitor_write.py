@@ -6,7 +6,15 @@ from typing import TYPE_CHECKING, Any, cast
 from mcp.types import TextContent, Tool
 
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import error_response, execute_tool
+from linodemcp.tools.helpers import (
+    DRY_RUN_PROP,
+    PARAM_DRY_RUN,
+    build_dry_run_response,
+    error_response,
+    execute_dry_run,
+    execute_tool,
+    is_dry_run,
+)
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -293,6 +301,7 @@ def create_linode_monitor_service_token_create_tool() -> tuple[Tool, Capability]
                     "type": "boolean",
                     "description": "Set true to confirm this mutating operation.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["service_type", "entity_ids", "confirm"],
         },
@@ -352,6 +361,7 @@ def create_linode_monitor_service_alert_definition_create_tool() -> tuple[
                     "type": "boolean",
                     "description": "Set true to confirm this mutating operation.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
                 "service_type",
@@ -406,7 +416,10 @@ def create_linode_monitor_service_alert_definition_delete_tool() -> tuple[
     """Create the linode_monitor_service_alert_definition_delete tool."""
     return Tool(
         name="linode_monitor_service_alert_definition_delete",
-        description="Deletes an alert definition for a Linode Metrics service type.",
+        description=(
+            "Deletes an alert definition for a Linode Metrics service type."
+            " Pass dry_run=true to preview without deleting."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -431,6 +444,7 @@ def create_linode_monitor_service_alert_definition_delete_tool() -> tuple[
                     "type": "boolean",
                     "description": "Set true to confirm this destructive operation.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["service_type", "alert_id", "confirm"],
         },
@@ -688,8 +702,15 @@ def _coerce_entity_ids(raw: object) -> list[int] | None:
 
 def _build_alert_definition_create_args(
     arguments: dict[str, Any],
+    *,
+    require_confirm: bool = True,
 ) -> tuple[dict[str, Any] | None, str | None]:
-    """Validate tool args for alert-definition create."""
+    """Validate tool args for alert-definition create.
+
+    When require_confirm is False (the dry-run path) the confirm gate is
+    skipped so the preview still validates the create body without forcing
+    confirm=true.
+    """
     args: dict[str, Any] | None = None
     error: str | None = None
 
@@ -704,7 +725,7 @@ def _build_alert_definition_create_args(
     if "entity_ids" in arguments:
         entity_ids = _coerce_entity_ids(arguments.get("entity_ids"))
 
-    if arguments.get("confirm") is not True:
+    if require_confirm and arguments.get("confirm") is not True:
         error = (
             "This creates a Linode Metrics alert definition. "
             "Set confirm=true to proceed."
@@ -749,11 +770,6 @@ async def handle_linode_monitor_service_token_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_monitor_service_token_create tool request."""
-    if not arguments.get("confirm"):
-        return error_response(
-            "This creates a Linode Metrics service token. Set confirm=true to proceed."
-        )
-
     service_type = arguments.get("service_type", "")
     if not service_type or not isinstance(service_type, str):
         return error_response("service_type is required")
@@ -761,6 +777,20 @@ async def handle_linode_monitor_service_token_create(
     entity_ids = _coerce_entity_ids(arguments.get("entity_ids"))
     if entity_ids is None:
         return error_response("entity_ids must be a non-empty list of integers")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_monitor_service_token_create",
+            arguments.get("environment", ""),
+            "POST",
+            f"/monitor/services/{service_type}/token",
+            None,
+        )
+
+    if not arguments.get("confirm"):
+        return error_response(
+            "This creates a Linode Metrics service token. Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         data = await client.create_monitor_service_token(service_type, entity_ids)
@@ -778,6 +808,22 @@ async def handle_linode_monitor_service_alert_definition_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_monitor_service_alert_definition_create tool request."""
+    if is_dry_run(arguments):
+        preview, preview_error = _build_alert_definition_create_args(
+            arguments, require_confirm=False
+        )
+        if preview_error is not None or preview is None:
+            return error_response(
+                preview_error or "invalid alert definition create arguments"
+            )
+        return build_dry_run_response(
+            "linode_monitor_service_alert_definition_create",
+            arguments.get("environment", ""),
+            "POST",
+            f"/monitor/services/{preview['service_type']}/alert-definitions",
+            None,
+        )
+
     parsed, error = _build_alert_definition_create_args(arguments)
     if error is not None or parsed is None:
         return error_response(error or "invalid alert definition create arguments")
@@ -846,12 +892,6 @@ async def handle_linode_monitor_service_alert_definition_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_monitor_service_alert_definition_delete tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This deletes a Linode Metrics alert definition. "
-            "Set confirm=true to proceed."
-        )
-
     service_type = _validate_service_type(arguments.get("service_type"))
     if service_type is None:
         return error_response(
@@ -865,6 +905,28 @@ async def handle_linode_monitor_service_alert_definition_delete(
     if raw_alert_id <= 0:
         return error_response("alert_id must be a positive integer")
     alert_id = raw_alert_id
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_monitor_service_alert_definition(
+                service_type, alert_id
+            )
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_monitor_service_alert_definition_delete",
+            "DELETE",
+            f"/monitor/services/{service_type}/alert-definitions/{alert_id}",
+            _fetch,
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This deletes a Linode Metrics alert definition. "
+            "Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_monitor_service_alert_definition(service_type, alert_id)
@@ -886,7 +948,10 @@ def create_linode_monitor_alert_definition_update_tool() -> tuple[Tool, Capabili
     """Create the linode_monitor_alert_definition_update tool."""
     return Tool(
         name="linode_monitor_alert_definition_update",
-        description="Updates a Linode Metrics alert definition for a service type.",
+        description=(
+            "Updates a Linode Metrics alert definition for a service type."
+            " Pass dry_run=true to preview without modifying."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -916,33 +981,68 @@ def create_linode_monitor_alert_definition_update_tool() -> tuple[Tool, Capabili
                     "type": "boolean",
                     "description": "Set true to confirm this mutating operation.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["service_type", "alert_id", "confirm"],
         },
     ), Capability.Write
 
 
+def _validate_alert_target(
+    arguments: dict[str, Any],
+) -> tuple[str | None, int | None, str | None]:
+    """Validate service_type + alert_id, the path components shared by the
+    alert update dry-run and real paths. Returns (service_type, alert_id,
+    error); extracted to keep the update handler under PLR0911 once the
+    dry-run branch lands.
+    """
+    service_type = _validate_service_type(arguments.get("service_type"))
+    if service_type is None:
+        return (
+            None,
+            None,
+            (
+                "service_type is required and must contain only letters, "
+                "numbers, '_' or '-'"
+            ),
+        )
+    raw_alert_id = arguments.get("alert_id")
+    if type(raw_alert_id) is not int:
+        return None, None, "alert_id must be a valid integer"
+    if raw_alert_id <= 0:
+        return None, None, "alert_id must be a positive integer"
+    return service_type, raw_alert_id, None
+
+
 async def handle_linode_monitor_alert_definition_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_monitor_alert_definition_update tool request."""
+    service_type, alert_id, target_error = _validate_alert_target(arguments)
+    if target_error is not None or service_type is None or alert_id is None:
+        return error_response(target_error or "invalid alert target")
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_monitor_service_alert_definition(
+                service_type, alert_id
+            )
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_monitor_alert_definition_update",
+            "PUT",
+            f"/monitor/services/{service_type}/alert-definitions/{alert_id}",
+            _fetch,
+        )
+
     if arguments.get("confirm") is not True:
         return error_response(
             "This updates a Linode Metrics alert definition. "
             "Set confirm=true to proceed."
         )
-    service_type = _validate_service_type(arguments.get("service_type"))
-    if service_type is None:
-        return error_response(
-            "service_type is required and must contain only letters, "
-            "numbers, '_' or '-'"
-        )
-    raw_alert_id = arguments.get("alert_id")
-    if type(raw_alert_id) is not int:
-        return error_response("alert_id must be a valid integer")
-    if raw_alert_id <= 0:
-        return error_response("alert_id must be a positive integer")
-    alert_id = raw_alert_id
     payload_keys = (
         "channel_ids",
         "description",

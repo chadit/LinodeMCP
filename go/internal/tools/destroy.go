@@ -17,6 +17,10 @@ const (
 	httpMethodDelete   = "DELETE"
 	httpMethodPost     = "POST"
 	responseKeyMessage = "message"
+
+	// destroyConfirmMessage is the generic confirm gate for destroy tools
+	// whose resource type is already clear from the tool name.
+	destroyConfirmMessage = "This operation is destructive. Set confirm=true to proceed."
 )
 
 // DestructiveAction packages per-tool customization for the destroy

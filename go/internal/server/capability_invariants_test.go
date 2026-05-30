@@ -134,6 +134,64 @@ func TestCapabilityAndConfirmInvariants(t *testing.T) {
 	}
 }
 
+// dryRunPendingTools returns the mutating tools (CapWrite/CapDestroy/CapAdmin)
+// that do not yet wire the dry_run preview branch. This is a RATCHET, not a
+// permanent exemption: as each tool gains its dry_run branch, delete it from
+// this set. TestCapabilityAndDryRunInvariants fails in three directions, so
+// the set can only shrink:
+//
+//   - a listed tool that already advertises dry_run fails (stale entry, remove it)
+//   - a listed name that matches no registered tool fails (renamed/deleted tool)
+//   - an unlisted mutator that lacks dry_run fails (new tool, wire it or list it)
+//
+// When this set is empty, every Phase 1 mutator advertises dry_run and the
+// check collapses into a pure steady-state invariant.
+func dryRunPendingTools() map[string]struct{} {
+	return map[string]struct{}{}
+}
+
+// TestCapabilityAndDryRunInvariants is the Phase 1 dry-run coverage ratchet.
+// Every CapWrite/CapDestroy/CapAdmin tool must advertise the dry_run
+// parameter unless it sits on the pending allowlist. The allowlist is
+// checked for staleness so it can only shrink: listed tools that already
+// advertise dry_run, and listed names with no matching tool, both fail.
+func TestCapabilityAndDryRunInvariants(t *testing.T) {
+	t.Parallel()
+
+	srv := newCapabilityTestServer(t)
+	infos := srv.AllToolInfos()
+	require.NotEmpty(t, infos, "server must expose its full tool catalog")
+
+	pending := dryRunPendingTools()
+	registered := make(map[string]struct{}, len(infos))
+
+	for _, info := range infos {
+		registered[info.Name] = struct{}{}
+
+		switch info.Capability {
+		case profiles.CapWrite, profiles.CapDestroy, profiles.CapAdmin:
+			hasDryRun := schemaHasBooleanProp(info.InputSchema.Properties, "dry_run")
+			_, isPending := pending[info.Name]
+
+			assert.Equalf(
+				t, !isPending, hasDryRun,
+				"tool %q (%s): advertises dry_run=%v, on pending allowlist=%v. Mutators must advertise dry_run unless explicitly pending; remove it from dryRunPendingTools once wired",
+				info.Name, info.Capability, hasDryRun, isPending,
+			)
+		case profiles.CapRead, profiles.CapMeta, profiles.CapUnknown:
+		}
+	}
+
+	for name := range pending {
+		_, exists := registered[name]
+		assert.Truef(
+			t, exists,
+			"dryRunPendingTools lists %q but no such tool is registered; remove the stale allowlist entry",
+			name,
+		)
+	}
+}
+
 func TestLinodeInstanceStatsToolRegistered(t *testing.T) {
 	t.Parallel()
 

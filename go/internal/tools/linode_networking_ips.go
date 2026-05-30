@@ -104,7 +104,8 @@ func NewLinodeNetworkingIPUpdateRDNSTool(cfg *config.Config) (mcp.Tool, profiles
 			mcp.WithString(paramRDNS, mcp.Required(),
 				mcp.Description("The reverse DNS value to set.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm changing reverse DNS.")),
+				mcp.Description("Must be true to confirm changing reverse DNS. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeNetworkingIPUpdateRDNSRequest,
 	)
@@ -113,6 +114,21 @@ func NewLinodeNetworkingIPUpdateRDNSTool(cfg *config.Config) (mcp.Tool, profiles
 }
 
 func handleLinodeNetworkingIPUpdateRDNSRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if IsDryRun(request) {
+		address, validationMessage := requiredNetworkingIPAddressArg(request.GetArguments(), paramAddress)
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		if _, rdnsMessage := requiredStringArg(request.GetArguments(), paramRDNS); rdnsMessage != "" {
+			return mcp.NewToolResultError(rdnsMessage), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_networking_ip_update_rdns", "PUT",
+			"/networking/ips/"+address,
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetNetworkingIP(ctx, address) })
+	}
+
 	if result := RequireConfirm(request, "This updates reverse DNS for an IP address. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
@@ -169,7 +185,8 @@ func NewLinodeNetworkingIPAllocateTool(cfg *config.Config) (mcp.Tool, profiles.C
 			mcp.WithBoolean("public", mcp.Required(),
 				mcp.Description("Whether the IP address should be public.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm IP allocation. Additional IPs may incur charges.")),
+				mcp.Description("Must be true to confirm IP allocation. Additional IPs may incur charges. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeNetworkingIPAllocateRequest,
 	)
@@ -178,6 +195,14 @@ func NewLinodeNetworkingIPAllocateTool(cfg *config.Config) (mcp.Tool, profiles.C
 }
 
 func handleLinodeNetworkingIPAllocateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if IsDryRun(request) {
+		if _, validationMessage := networkingIPAllocateRequestFromTool(request.GetArguments()); validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_networking_ip_allocate", httpMethodPost, "/networking/ips", nil)
+	}
+
 	if result := RequireConfirm(request, "This allocates a new IP address which may incur charges. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
@@ -220,7 +245,8 @@ func NewLinodeNetworkingIPAssignTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 			mcp.WithString("assignments", mcp.Required(),
 				mcp.Description("JSON array of assignments, each with address and linode_id.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm IP reassignment.")),
+				mcp.Description("Must be true to confirm IP reassignment. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeNetworkingIPAssignRequest,
 	)
@@ -228,12 +254,42 @@ func NewLinodeNetworkingIPAssignTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 	return tool, profiles.CapWrite, handler
 }
 
-func handleLinodeNetworkingIPAssignRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This assigns IP addresses to Linodes. Set confirm=true to proceed."); result != nil {
+// networkingIPWriteSpec describes a bulk networking-IP mutation (assign,
+// ipv4 assign, share). These endpoints are POST-only with no single-resource
+// GET, so the dry-run preview reports current_state null.
+type networkingIPWriteSpec struct {
+	ToolName       string
+	Path           string
+	ConfirmMessage string
+	SuccessMessage string
+	FailureLabel   string
+}
+
+// runNetworkingIPWrite is the shared dry-run/confirm/execute flow for the
+// bulk networking-IP mutations. The caller parses+validates its own request
+// type and hands in the resulting validation message plus an execute closure
+// that captures the parsed request. validationMessage is checked in both the
+// dry-run and real paths so a malformed call fails the same way either way.
+func runNetworkingIPWrite(
+	ctx context.Context,
+	request *mcp.CallToolRequest,
+	cfg *config.Config,
+	spec *networkingIPWriteSpec,
+	validationMessage string,
+	execute func(ctx context.Context, client *linode.Client) (map[string]any, error),
+) (*mcp.CallToolResult, error) {
+	if IsDryRun(request) {
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, spec.ToolName, httpMethodPost, spec.Path, nil)
+	}
+
+	if result := RequireConfirm(request, spec.ConfirmMessage); result != nil {
 		return result, nil
 	}
 
-	req, validationMessage := networkingIPAssignRequestFromTool(request.GetArguments())
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}
@@ -243,17 +299,31 @@ func handleLinodeNetworkingIPAssignRequest(ctx context.Context, request *mcp.Cal
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	response, err := client.AssignNetworkingIPs(ctx, req)
+	response, err := execute(ctx, client)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to assign networking IPs: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("%s: %v", spec.FailureLabel, err)), nil
 	}
 
 	return MarshalToolResponse(struct {
 		Message  string         `json:"message"`
 		Response map[string]any `json:"response"`
 	}{
-		Message:  "Networking IP assignments updated",
+		Message:  spec.SuccessMessage,
 		Response: response,
+	})
+}
+
+func handleLinodeNetworkingIPAssignRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	req, validationMessage := networkingIPAssignRequestFromTool(request.GetArguments())
+
+	return runNetworkingIPWrite(ctx, request, cfg, &networkingIPWriteSpec{
+		ToolName:       "linode_networking_ips_assign",
+		Path:           "/networking/ips/assign",
+		ConfirmMessage: "This assigns IP addresses to Linodes. Set confirm=true to proceed.",
+		SuccessMessage: "Networking IP assignments updated",
+		FailureLabel:   "Failed to assign networking IPs",
+	}, validationMessage, func(ctx context.Context, client *linode.Client) (map[string]any, error) {
+		return client.AssignNetworkingIPs(ctx, req)
 	})
 }
 
@@ -269,7 +339,8 @@ func NewLinodeNetworkingIPv4AssignTool(cfg *config.Config) (mcp.Tool, profiles.C
 			mcp.WithString("assignments", mcp.Required(),
 				mcp.Description("JSON array of assignments, each with address and linode_id.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm IPv4 reassignment.")),
+				mcp.Description("Must be true to confirm IPv4 reassignment. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeNetworkingIPv4AssignRequest,
 	)
@@ -278,41 +349,17 @@ func NewLinodeNetworkingIPv4AssignTool(cfg *config.Config) (mcp.Tool, profiles.C
 }
 
 func handleLinodeNetworkingIPv4AssignRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This assigns IPv4 addresses to Linodes. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	req, validationMessage := networkingIPAssignRequestFromTool(request.GetArguments())
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
 
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	response, failure := assignNetworkingIPv4s(ctx, client, req)
-	if failure != "" {
-		return mcp.NewToolResultError(failure), nil
-	}
-
-	return MarshalToolResponse(struct {
-		Message  string         `json:"message"`
-		Response map[string]any `json:"response"`
-	}{
-		Message:  "Networking IPv4 assignments updated",
-		Response: response,
+	return runNetworkingIPWrite(ctx, request, cfg, &networkingIPWriteSpec{
+		ToolName:       "linode_networking_ipv4_assign",
+		Path:           "/networking/ipv4/assign",
+		ConfirmMessage: "This assigns IPv4 addresses to Linodes. Set confirm=true to proceed.",
+		SuccessMessage: "Networking IPv4 assignments updated",
+		FailureLabel:   "Failed to assign networking IPv4s",
+	}, validationMessage, func(ctx context.Context, client *linode.Client) (map[string]any, error) {
+		return client.AssignNetworkingIPv4s(ctx, req)
 	})
-}
-
-func assignNetworkingIPv4s(ctx context.Context, client *linode.Client, req linode.AssignNetworkingIPsRequest) (map[string]any, string) {
-	response, err := client.AssignNetworkingIPv4s(ctx, req)
-	if err != nil {
-		return nil, "Failed to assign networking IPv4s: " + err.Error()
-	}
-
-	return response, ""
 }
 
 // NewLinodeNetworkingIPShareTool creates a tool for sharing IP addresses with a primary Linode.
@@ -327,7 +374,8 @@ func NewLinodeNetworkingIPShareTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 			mcp.WithString(paramIPs, mcp.Required(),
 				mcp.Description("JSON array of IP addresses or IPv6 ranges to share. Use [] to remove all shared IP addresses.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm changing shared IP assignments.")),
+				mcp.Description("Must be true to confirm changing shared IP assignments. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeNetworkingIPShareRequest,
 	)
@@ -336,31 +384,16 @@ func NewLinodeNetworkingIPShareTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 }
 
 func handleLinodeNetworkingIPShareRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This changes shared IP assignments. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	req, validationMessage := networkingIPShareRequestFromTool(request.GetArguments())
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
 
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	response, err := client.ShareNetworkingIPs(ctx, req)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to share networking IPs: %v", err)), nil
-	}
-
-	return MarshalToolResponse(struct {
-		Message  string         `json:"message"`
-		Response map[string]any `json:"response"`
-	}{
-		Message:  "Networking IP sharing updated",
-		Response: response,
+	return runNetworkingIPWrite(ctx, request, cfg, &networkingIPWriteSpec{
+		ToolName:       "linode_networking_ips_share",
+		Path:           "/networking/ipv4/share",
+		ConfirmMessage: "This changes shared IP assignments. Set confirm=true to proceed.",
+		SuccessMessage: "Networking IP sharing updated",
+		FailureLabel:   "Failed to share networking IPs",
+	}, validationMessage, func(ctx context.Context, client *linode.Client) (map[string]any, error) {
+		return client.ShareNetworkingIPs(ctx, req)
 	})
 }
 

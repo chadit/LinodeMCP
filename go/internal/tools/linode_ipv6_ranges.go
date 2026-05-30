@@ -99,7 +99,8 @@ func NewLinodeIPv6RangeCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 			mcp.WithString(keyIPv6RangeRouteTarget,
 				mcp.Description("Optional route target for the new IPv6 range.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm IPv6 range creation.")),
+				mcp.Description("Must be true to confirm IPv6 range creation. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeIPv6RangeCreateRequest,
 	)
@@ -108,6 +109,14 @@ func NewLinodeIPv6RangeCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 }
 
 func handleLinodeIPv6RangeCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if IsDryRun(request) {
+		if _, validationMessage := ipv6RangeCreateRequestFromTool(request.GetArguments()); validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_ipv6_range_create", httpMethodPost, "/networking/ipv6/ranges", nil)
+	}
+
 	if result := RequireConfirm(request, "This creates an IPv6 range and changes networking configuration. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}

@@ -13,33 +13,21 @@ import (
 
 // NewLinodeDomainImportTool creates a tool for importing a domain zone.
 func NewLinodeDomainImportTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newToolWithHandler(
+		cfg,
 		"linode_domain_import",
-		mcp.WithDescription("Imports a DNS domain zone from a remote nameserver that allows zone transfers."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithString(
-			"domain",
-			mcp.Required(),
-			mcp.Description("The domain name to import (for example, 'example.com')"),
-		),
-		mcp.WithString(
-			"remote_nameserver",
-			mcp.Required(),
-			mcp.Description("The remote nameserver that allows zone transfers (AXFR)"),
-		),
-		mcp.WithBoolean(
-			paramConfirm,
-			mcp.Required(),
-			mcp.Description("Must be set to true to confirm domain import."),
-		),
+		"Imports a DNS domain zone from a remote nameserver that allows zone transfers. Pass dry_run=true to preview without importing.",
+		[]mcp.ToolOption{
+			mcp.WithString("domain", mcp.Required(),
+				mcp.Description("The domain name to import (for example, 'example.com')")),
+			mcp.WithString("remote_nameserver", mcp.Required(),
+				mcp.Description("The remote nameserver that allows zone transfers (AXFR)")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be set to true to confirm domain import. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeDomainImportRequest,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeDomainImportRequest(ctx, &request, cfg)
-	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -47,6 +35,18 @@ func NewLinodeDomainImportTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 func handleLinodeDomainImportRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	domain := request.GetString("domain", "")
 	remoteNameserver := request.GetString("remote_nameserver", "")
+
+	if IsDryRun(request) {
+		if domain == "" {
+			return mcp.NewToolResultError("domain is required"), nil
+		}
+
+		if remoteNameserver == "" {
+			return mcp.NewToolResultError("remote_nameserver is required"), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_domain_import", httpMethodPost, "/domains/import", nil)
+	}
 
 	if result := RequireConfirm(request, "This imports a DNS domain zone. Set confirm=true to proceed."); result != nil {
 		return result, nil
@@ -95,7 +95,9 @@ func NewLinodeDomainCloneTool(cfg *config.Config) (mcp.Tool, profiles.Capability
 		[]mcp.ToolOption{
 			mcp.WithNumber("domain_id", mcp.Required(), mcp.Description("The ID of the domain to clone")),
 			mcp.WithString("domain", mcp.Required(), mcp.Description("The new domain name for the clone")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be set to true to confirm domain cloning.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be set to true to confirm domain cloning. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeDomainCloneRequest,
 	)
@@ -106,6 +108,20 @@ func NewLinodeDomainCloneTool(cfg *config.Config) (mcp.Tool, profiles.Capability
 func handleLinodeDomainCloneRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	domainID := request.GetInt("domain_id", 0)
 	domain := request.GetString("domain", "")
+
+	if IsDryRun(request) {
+		if domainID <= 0 {
+			return mcp.NewToolResultError("domain_id must be a positive integer"), nil
+		}
+
+		if domain == "" {
+			return mcp.NewToolResultError("domain is required"), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_domain_clone", httpMethodPost,
+			fmt.Sprintf("/domains/%d/clone", domainID),
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetDomain(ctx, domainID) })
+	}
 
 	if result := RequireConfirm(request, "This clones a DNS domain. Set confirm=true to proceed."); result != nil {
 		return result, nil
@@ -176,8 +192,9 @@ func NewLinodeDomainCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		mcp.WithBoolean(
 			paramConfirm,
 			mcp.Required(),
-			mcp.Description("Must be set to true to confirm domain creation."),
+			mcp.Description("Must be set to true to confirm domain creation. Ignored when dry_run=true."),
 		),
+		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -193,6 +210,18 @@ func handleLinodeDomainCreateRequest(ctx context.Context, request *mcp.CallToolR
 	soaEmail := request.GetString("soa_email", "")
 	description := request.GetString("description", "")
 	ttlSec := request.GetInt("ttl_sec", 0)
+
+	if IsDryRun(request) {
+		if domain == "" {
+			return mcp.NewToolResultError("domain is required"), nil
+		}
+
+		if domainType == "" {
+			return mcp.NewToolResultError("type is required"), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_domain_create", httpMethodPost, "/domains", nil)
+	}
 
 	if result := RequireConfirm(request, "This creates a DNS domain. Set confirm=true to proceed."); result != nil {
 		return result, nil

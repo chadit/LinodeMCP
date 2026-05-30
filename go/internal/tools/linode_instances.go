@@ -237,7 +237,8 @@ func NewLinodeInstanceInterfaceAddTool(cfg *config.Config) (mcp.Tool, profiles.C
 			mcp.WithString("interface", mcp.Required(),
 				mcp.Description("JSON object defining exactly one interface type: public, vpc, or vlan.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm interface creation.")),
+				mcp.Description("Must be true to confirm interface creation. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceInterfaceAddRequest,
 	)
@@ -246,13 +247,23 @@ func NewLinodeInstanceInterfaceAddTool(cfg *config.Config) (mcp.Tool, profiles.C
 }
 
 func handleInstanceInterfaceAddRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This adds a network interface to the Linode instance. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		if _, ifaceMessage := instanceInterfaceAddRequestFromTool(request); ifaceMessage != "" {
+			return mcp.NewToolResultError(ifaceMessage), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_interface_add", httpMethodPost,
+			fmt.Sprintf("/linode/instances/%d/interfaces", linodeID),
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, linodeID) })
+	}
+
+	if result := RequireConfirm(request, "This adds a network interface to the Linode instance. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	interfaceReq, validationMessage := instanceInterfaceAddRequestFromTool(request)
@@ -410,7 +421,8 @@ func NewLinodeInstanceInterfaceDeleteTool(cfg *config.Config) (mcp.Tool, profile
 			mcp.WithNumber(paramConfigInterfaceID, mcp.Required(),
 				mcp.Description("The ID of the Linode interface to delete")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm interface deletion. This action is irreversible.")),
+				mcp.Description("Must be true to confirm interface deletion. This action is irreversible. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceInterfaceDeleteRequest,
 	)
@@ -419,10 +431,6 @@ func NewLinodeInstanceInterfaceDeleteTool(cfg *config.Config) (mcp.Tool, profile
 }
 
 func handleInstanceInterfaceDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This deletes a Linode interface and changes instance networking. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
@@ -431,6 +439,18 @@ func handleInstanceInterfaceDeleteRequest(ctx context.Context, request *mcp.Call
 	interfaceID, validationMessage := instanceInterfaceIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_interface_delete", httpMethodDelete,
+			fmt.Sprintf("/linode/instances/%d/interfaces/%d", linodeID, interfaceID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetInstanceInterface(ctx, linodeID, interfaceID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This deletes a Linode interface and changes instance networking. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -506,7 +526,8 @@ func NewLinodeInstanceInterfaceSettingsUpdateTool(cfg *config.Config) (mcp.Tool,
 			mcp.WithString("settings", mcp.Required(),
 				mcp.Description("JSON object with optional default_route and/or network_helper fields.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm interface settings update.")),
+				mcp.Description("Must be true to confirm interface settings update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceInterfaceSettingsUpdateRequest,
 	)
@@ -515,13 +536,25 @@ func NewLinodeInstanceInterfaceSettingsUpdateTool(cfg *config.Config) (mcp.Tool,
 }
 
 func handleInstanceInterfaceSettingsUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This updates interface settings for the Linode instance. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		if _, settingsMessage := instanceInterfaceSettingsUpdateRequestFromTool(request); settingsMessage != "" {
+			return mcp.NewToolResultError(settingsMessage), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_interface_settings_update", "PUT",
+			fmt.Sprintf("/linode/instances/%d/interfaces/settings", linodeID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetInstanceInterfaceSettings(ctx, linodeID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This updates interface settings for the Linode instance. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	settingsReq, validationMessage := instanceInterfaceSettingsUpdateRequestFromTool(request)
@@ -592,7 +625,8 @@ func NewLinodeInstanceInterfaceUpdateTool(cfg *config.Config) (mcp.Tool, profile
 			mcp.WithString("interface", mcp.Required(),
 				mcp.Description("JSON object defining exactly one interface update type: public, vpc, or vlan.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm interface update.")),
+				mcp.Description("Must be true to confirm interface update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceInterfaceUpdateRequest,
 	)
@@ -601,10 +635,6 @@ func NewLinodeInstanceInterfaceUpdateTool(cfg *config.Config) (mcp.Tool, profile
 }
 
 func handleInstanceInterfaceUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This updates a network interface on the Linode instance. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
@@ -613,6 +643,22 @@ func handleInstanceInterfaceUpdateRequest(ctx context.Context, request *mcp.Call
 	interfaceID, interfaceIDOK := getPositiveIntArgument(request, "interface_id")
 	if !interfaceIDOK {
 		return mcp.NewToolResultError(linode.ErrInterfaceIDPositive.Error()), nil
+	}
+
+	if IsDryRun(request) {
+		if _, ifaceMessage := instanceInterfaceUpdateRequestFromTool(request); ifaceMessage != "" {
+			return mcp.NewToolResultError(ifaceMessage), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_interface_update", "PUT",
+			fmt.Sprintf("/linode/instances/%d/interfaces/%d", linodeID, interfaceID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetInstanceInterface(ctx, linodeID, interfaceID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This updates a network interface on the Linode instance. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	interfaceReq, validationMessage := instanceInterfaceUpdateRequestFromTool(request)

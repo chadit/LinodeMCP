@@ -7,8 +7,12 @@ from mcp.types import TextContent, Tool
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DESCRIPTION_TRUNCATE_LIMIT,
+    DRY_RUN_PROP,
+    PARAM_DRY_RUN,
+    build_dry_run_response,
     error_response,
     execute_tool,
+    is_dry_run,
 )
 
 if TYPE_CHECKING:
@@ -119,7 +123,10 @@ def create_linode_stackscript_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_stackscript_create tool."""
     return Tool(
         name="linode_stackscript_create",
-        description="Creates a StackScript for deploying configured Linodes.",
+        description=(
+            "Creates a StackScript for deploying configured Linodes."
+            " Pass dry_run=true to preview without creating."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -158,39 +165,61 @@ def create_linode_stackscript_create_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Set true to confirm this mutating operation.",
+                    "description": (
+                        "Set true to confirm this mutating operation."
+                        " Ignored when dry_run=true."
+                    ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["label", "images", "script", "confirm"],
         },
     ), Capability.Write
 
 
+def _stackscript_create_error(arguments: dict[str, Any]) -> list[TextContent] | None:
+    """Validate create fields; return an error response or None."""
+    if not arguments.get("label", ""):
+        return error_response("label is required")
+    images_arg: object = arguments.get("images", [])
+    if not isinstance(images_arg, list) or not images_arg:
+        return error_response("images must be a non-empty list")
+    for image in cast("list[object]", images_arg):
+        if not isinstance(image, str) or not image:
+            return error_response("images must contain non-empty strings")
+    if not arguments.get("script", ""):
+        return error_response("script is required")
+    return None
+
+
 async def handle_linode_stackscript_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_stackscript_create tool request."""
+    if is_dry_run(arguments):
+        validation = _stackscript_create_error(arguments)
+        if validation is not None:
+            return validation
+        return build_dry_run_response(
+            "linode_stackscript_create",
+            arguments.get("environment", ""),
+            "POST",
+            "/linode/stackscripts",
+            None,
+        )
+
     if not arguments.get("confirm"):
         return error_response(
             "This creates a StackScript. Set confirm=true to proceed."
         )
 
-    label = arguments.get("label", "")
-    images_arg: object = arguments.get("images", [])
-    script = arguments.get("script", "")
+    validation = _stackscript_create_error(arguments)
+    if validation is not None:
+        return validation
 
-    if not label:
-        return error_response("label is required")
-    if not isinstance(images_arg, list) or not images_arg:
-        return error_response("images must be a non-empty list")
-    image_values = cast("list[object]", images_arg)
-    images: list[str] = []
-    for image in image_values:
-        if not isinstance(image, str) or not image:
-            return error_response("images must contain non-empty strings")
-        images.append(image)
-    if not script:
-        return error_response("script is required")
+    label = arguments.get("label", "")
+    images = cast("list[str]", arguments.get("images", []))
+    script = arguments.get("script", "")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         stackscript = await client.create_stackscript(

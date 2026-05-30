@@ -9,6 +9,8 @@ from mcp.types import TextContent, Tool
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
+    PARAM_DRY_RUN,
+    build_dry_run_response,
     error_response,
     execute_dry_run,
     execute_tool,
@@ -76,18 +78,50 @@ def create_linode_lke_cluster_create_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": (
                         "Must be true to confirm creation. This incurs billing."
+                        " Ignored when dry_run=true."
                     ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["label", "region", "k8s_version", "node_pools", "confirm"],
         },
     ), Capability.Write
 
 
+def _lke_cluster_create_error(arguments: dict[str, Any]) -> list[TextContent] | None:
+    """Validate cluster_create args; return an error response or None.
+
+    Extracted to keep handle_linode_lke_cluster_create under PLR0911's
+    return-count threshold once the dry-run branch is added.
+    """
+    if not arguments.get("label", ""):
+        return error_response("label is required")
+    if not arguments.get("region", ""):
+        return error_response("region is required")
+    if not arguments.get("k8s_version", ""):
+        return error_response("k8s_version is required")
+    if not arguments.get("node_pools", []):
+        return error_response("node_pools is required")
+    return None
+
+
 async def handle_linode_lke_cluster_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_lke_cluster_create tool request."""
+    fields_error = _lke_cluster_create_error(arguments)
+    if fields_error is not None:
+        return fields_error
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_lke_cluster_create",
+            arguments.get("environment", ""),
+            "POST",
+            "/lke/clusters",
+            None,
+        )
+
     confirm = arguments.get("confirm", False)
     if not confirm:
         return [
@@ -107,15 +141,6 @@ async def handle_linode_lke_cluster_create(
     tags = arguments.get("tags")
     control_plane = arguments.get("control_plane")
 
-    if not label:
-        return error_response("label is required")
-    if not region:
-        return error_response("region is required")
-    if not k8s_version:
-        return error_response("k8s_version is required")
-    if not node_pools:
-        return error_response("node_pools is required")
-
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.create_lke_cluster(
             label=label,
@@ -133,7 +158,10 @@ def create_linode_lke_cluster_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_cluster_update tool."""
     return Tool(
         name="linode_lke_cluster_update",
-        description="Updates an existing LKE cluster",
+        description=(
+            "Updates an existing LKE cluster."
+            " Pass dry_run=true to preview without modifying."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -157,6 +185,7 @@ def create_linode_lke_cluster_update_tool() -> tuple[Tool, Capability]:
                     "description": "Control plane config: {high_availability: bool}",
                 },
                 "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["cluster_id", "confirm"],
         },
@@ -167,10 +196,6 @@ async def handle_linode_lke_cluster_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_lke_cluster_update tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return error_response("Set confirm=true to proceed.")
-
     cluster_id_str = arguments.get("cluster_id", "")
     if not cluster_id_str:
         return error_response("cluster_id is required")
@@ -178,6 +203,24 @@ async def handle_linode_lke_cluster_update(
         cluster_id = int(cluster_id_str)
     except ValueError:
         return error_response("cluster_id must be a valid integer")
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_lke_cluster(cluster_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_lke_cluster_update",
+            "PUT",
+            f"/lke/clusters/{cluster_id}",
+            _fetch,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.update_lke_cluster(
@@ -211,7 +254,7 @@ def create_linode_lke_cluster_delete_tool() -> tuple[Tool, Capability]:
                         " Ignored when dry_run=true."
                     ),
                 },
-                **DRY_RUN_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["cluster_id", "confirm"],
         },
@@ -267,13 +310,17 @@ def create_linode_lke_cluster_recycle_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_cluster_recycle tool."""
     return Tool(
         name="linode_lke_cluster_recycle",
-        description="Recycles all nodes in an LKE cluster",
+        description=(
+            "Recycles all nodes in an LKE cluster."
+            " Pass dry_run=true to preview without recycling."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
                 "cluster_id": _CLUSTER_ID_PROP,
                 "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["cluster_id", "confirm"],
         },
@@ -284,10 +331,6 @@ async def handle_linode_lke_cluster_recycle(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_lke_cluster_recycle tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return error_response("Set confirm=true to proceed.")
-
     cluster_id_str = arguments.get("cluster_id", "")
     if not cluster_id_str:
         return error_response("cluster_id is required")
@@ -295,6 +338,24 @@ async def handle_linode_lke_cluster_recycle(
         cluster_id = int(cluster_id_str)
     except ValueError:
         return error_response("cluster_id must be a valid integer")
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_lke_cluster(cluster_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_lke_cluster_recycle",
+            "POST",
+            f"/lke/clusters/{cluster_id}/recycle",
+            _fetch,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.recycle_lke_cluster(cluster_id)
@@ -310,13 +371,17 @@ def create_linode_lke_cluster_regenerate_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_cluster_regenerate tool."""
     return Tool(
         name="linode_lke_cluster_regenerate",
-        description="Regenerates the service token for an LKE cluster",
+        description=(
+            "Regenerates the service token for an LKE cluster."
+            " Pass dry_run=true to preview without regenerating."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
                 "environment": _ENV_PROP,
                 "cluster_id": _CLUSTER_ID_PROP,
                 "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["cluster_id", "confirm"],
         },
@@ -327,10 +392,6 @@ async def handle_linode_lke_cluster_regenerate(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_lke_cluster_regenerate tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return error_response("Set confirm=true to proceed.")
-
     cluster_id_str = arguments.get("cluster_id", "")
     if not cluster_id_str:
         return error_response("cluster_id is required")
@@ -338,6 +399,25 @@ async def handle_linode_lke_cluster_regenerate(
         cluster_id = int(cluster_id_str)
     except ValueError:
         return error_response("cluster_id must be a valid integer")
+
+    if is_dry_run(arguments):
+        # Fetch the cluster (not the service token) so dry_run surfaces
+        # cluster metadata without exposing the token credential.
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_lke_cluster(cluster_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_lke_cluster_regenerate",
+            "POST",
+            f"/lke/clusters/{cluster_id}/regenerate",
+            _fetch,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.regenerate_lke_cluster(cluster_id)
@@ -380,30 +460,24 @@ def create_linode_lke_pool_create_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": (
                         "Must be true to confirm creation. This incurs billing."
+                        " Ignored when dry_run=true."
                     ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["cluster_id", "type", "count", "confirm"],
         },
     ), Capability.Write
 
 
-async def handle_linode_lke_pool_create(
-    arguments: dict[str, Any], cfg: Config
-) -> list[TextContent]:
-    """Handle linode_lke_pool_create tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return [
-            TextContent(
-                type="text",
-                text=(
-                    "Error: This creates a billable resource. "
-                    "Set confirm=true to proceed."
-                ),
-            )
-        ]
+def _parse_pool_create(
+    arguments: dict[str, Any],
+) -> tuple[int, str, int] | list[TextContent]:
+    """Parse and validate cluster_id + type + count for pool creation.
 
+    Extracted to keep handle_linode_lke_pool_create under PLR0911's
+    return-count threshold once the dry-run branch is added.
+    """
     cluster_id_str = arguments.get("cluster_id", "")
     if not cluster_id_str:
         return error_response("cluster_id is required")
@@ -420,11 +494,49 @@ async def handle_linode_lke_pool_create(
     if not count:
         return error_response("count is required and must be > 0")
 
+    return cluster_id, str(node_type), int(count)
+
+
+async def handle_linode_lke_pool_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_lke_pool_create tool request."""
+    parsed = _parse_pool_create(arguments)
+    if isinstance(parsed, list):
+        return parsed
+    cluster_id, node_type, count = parsed
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_lke_cluster(cluster_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_lke_pool_create",
+            "POST",
+            f"/lke/clusters/{cluster_id}/pools",
+            _fetch,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return [
+            TextContent(
+                type="text",
+                text=(
+                    "Error: This creates a billable resource. "
+                    "Set confirm=true to proceed."
+                ),
+            )
+        ]
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.create_lke_node_pool(
             cluster_id=cluster_id,
             node_type=node_type,
-            count=int(count),
+            count=count,
             autoscaler=arguments.get("autoscaler"),
             tags=arguments.get("tags"),
         )
@@ -460,6 +572,7 @@ def create_linode_lke_pool_update_tool() -> tuple[Tool, Capability]:
                     "items": {"type": "string"},
                 },
                 "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["cluster_id", "pool_id", "confirm"],
         },
@@ -470,24 +583,28 @@ async def handle_linode_lke_pool_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_lke_pool_update tool request."""
+    parsed = _parse_cluster_pool_ids(arguments)
+    if isinstance(parsed, list):
+        return parsed
+    cluster_id, pool_id = parsed
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_lke_node_pool(cluster_id, pool_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_lke_pool_update",
+            "PUT",
+            f"/lke/clusters/{cluster_id}/pools/{pool_id}",
+            _fetch,
+        )
+
     confirm = arguments.get("confirm", False)
     if not confirm:
         return error_response("Set confirm=true to proceed.")
-
-    cluster_id_str = arguments.get("cluster_id", "")
-    pool_id_str = arguments.get("pool_id", "")
-    if not cluster_id_str:
-        return error_response("cluster_id is required")
-    if not pool_id_str:
-        return error_response("pool_id is required")
-    try:
-        cluster_id = int(cluster_id_str)
-    except ValueError:
-        return error_response("cluster_id must be a valid integer")
-    try:
-        pool_id = int(pool_id_str)
-    except ValueError:
-        return error_response("pool_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.update_lke_node_pool(
@@ -525,7 +642,7 @@ def create_linode_lke_pool_delete_tool() -> tuple[Tool, Capability]:
                         " Ignored when dry_run=true."
                     ),
                 },
-                **DRY_RUN_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["cluster_id", "pool_id", "confirm"],
         },
@@ -605,7 +722,10 @@ def create_linode_lke_pool_recycle_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_pool_recycle tool."""
     return Tool(
         name="linode_lke_pool_recycle",
-        description="Recycles all nodes in a node pool",
+        description=(
+            "Recycles all nodes in a node pool."
+            " Pass dry_run=true to preview without recycling."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -616,6 +736,7 @@ def create_linode_lke_pool_recycle_tool() -> tuple[Tool, Capability]:
                     "description": "The ID of the node pool (required)",
                 },
                 "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["cluster_id", "pool_id", "confirm"],
         },
@@ -626,24 +747,28 @@ async def handle_linode_lke_pool_recycle(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_lke_pool_recycle tool request."""
+    parsed = _parse_cluster_pool_ids(arguments)
+    if isinstance(parsed, list):
+        return parsed
+    cluster_id, pool_id = parsed
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_lke_node_pool(cluster_id, pool_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_lke_pool_recycle",
+            "POST",
+            f"/lke/clusters/{cluster_id}/pools/{pool_id}/recycle",
+            _fetch,
+        )
+
     confirm = arguments.get("confirm", False)
     if not confirm:
         return error_response("Set confirm=true to proceed.")
-
-    cluster_id_str = arguments.get("cluster_id", "")
-    pool_id_str = arguments.get("pool_id", "")
-    if not cluster_id_str:
-        return error_response("cluster_id is required")
-    if not pool_id_str:
-        return error_response("pool_id is required")
-    try:
-        cluster_id = int(cluster_id_str)
-    except ValueError:
-        return error_response("cluster_id must be a valid integer")
-    try:
-        pool_id = int(pool_id_str)
-    except ValueError:
-        return error_response("pool_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.recycle_lke_node_pool(cluster_id, pool_id)
@@ -680,7 +805,7 @@ def create_linode_lke_node_delete_tool() -> tuple[Tool, Capability]:
                         " Ignored when dry_run=true."
                     ),
                 },
-                **DRY_RUN_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["cluster_id", "node_id", "confirm"],
         },
@@ -755,7 +880,10 @@ def create_linode_lke_node_recycle_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_node_recycle tool."""
     return Tool(
         name="linode_lke_node_recycle",
-        description="Recycles a specific node in an LKE cluster",
+        description=(
+            "Recycles a specific node in an LKE cluster."
+            " Pass dry_run=true to preview without recycling."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -766,6 +894,7 @@ def create_linode_lke_node_recycle_tool() -> tuple[Tool, Capability]:
                     "description": "The ID of the node (required, string)",
                 },
                 "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["cluster_id", "node_id", "confirm"],
         },
@@ -776,23 +905,31 @@ async def handle_linode_lke_node_recycle(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_lke_node_recycle tool request."""
+    parsed = _parse_cluster_node_ids(arguments)
+    if isinstance(parsed, list):
+        return parsed
+    cluster_id, node_id = parsed
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_lke_node(cluster_id, node_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_lke_node_recycle",
+            "POST",
+            f"/lke/clusters/{cluster_id}/nodes/{node_id}/recycle",
+            _fetch,
+        )
+
     confirm = arguments.get("confirm", False)
     if not confirm:
         return error_response("Set confirm=true to proceed.")
 
-    cluster_id_str = arguments.get("cluster_id", "")
-    node_id = arguments.get("node_id", "")
-    if not cluster_id_str:
-        return error_response("cluster_id is required")
-    if not node_id:
-        return error_response("node_id is required")
-    try:
-        cluster_id = int(cluster_id_str)
-    except ValueError:
-        return error_response("cluster_id must be a valid integer")
-
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        await client.recycle_lke_node(cluster_id, str(node_id))
+        await client.recycle_lke_node(cluster_id, node_id)
         return {
             "message": f"Node {node_id} in cluster {cluster_id} recycled",
             "cluster_id": cluster_id,
@@ -816,7 +953,7 @@ def create_linode_lke_kubeconfig_delete_tool() -> tuple[Tool, Capability]:
                 "environment": _ENV_PROP,
                 "cluster_id": _CLUSTER_ID_PROP,
                 "confirm": _CONFIRM_PROP,
-                **DRY_RUN_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["cluster_id", "confirm"],
         },
@@ -878,7 +1015,7 @@ def create_linode_lke_service_token_delete_tool() -> tuple[Tool, Capability]:
                 "environment": _ENV_PROP,
                 "cluster_id": _CLUSTER_ID_PROP,
                 "confirm": _CONFIRM_PROP,
-                **DRY_RUN_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["cluster_id", "confirm"],
         },
@@ -930,7 +1067,10 @@ def create_linode_lke_acl_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_acl_update tool."""
     return Tool(
         name="linode_lke_acl_update",
-        description="Updates the control plane ACL for an LKE cluster",
+        description=(
+            "Updates the control plane ACL for an LKE cluster."
+            " Pass dry_run=true to preview without modifying."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -944,20 +1084,22 @@ def create_linode_lke_acl_update_tool() -> tuple[Tool, Capability]:
                     ),
                 },
                 "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["cluster_id", "acl", "confirm"],
         },
     ), Capability.Write
 
 
-async def handle_linode_lke_acl_update(
-    arguments: dict[str, Any], cfg: Config
-) -> list[TextContent]:
-    """Handle linode_lke_acl_update tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return error_response("Set confirm=true to proceed.")
+def _parse_acl_update(
+    arguments: dict[str, Any],
+) -> tuple[int, dict[str, Any]] | list[TextContent]:
+    """Parse and validate cluster_id + acl for an ACL update.
 
+    Extracted so the dry-run and real paths share validation while the
+    real path keeps its confirm-before-acl precedence, and to stay under
+    PLR0911's return-count threshold.
+    """
     cluster_id_str = arguments.get("cluster_id", "")
     if not cluster_id_str:
         return error_response("cluster_id is required")
@@ -970,6 +1112,40 @@ async def handle_linode_lke_acl_update(
     if not acl:
         return error_response("acl is required")
 
+    return cluster_id, acl
+
+
+async def handle_linode_lke_acl_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_lke_acl_update tool request."""
+    if is_dry_run(arguments):
+        parsed = _parse_acl_update(arguments)
+        if isinstance(parsed, list):
+            return parsed
+        cluster_id, _acl = parsed
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_lke_control_plane_acl(cluster_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_lke_acl_update",
+            "PUT",
+            f"/lke/clusters/{cluster_id}/control_plane_acl",
+            _fetch,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return error_response("Set confirm=true to proceed.")
+
+    parsed = _parse_acl_update(arguments)
+    if isinstance(parsed, list):
+        return parsed
+    cluster_id, acl = parsed
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.update_lke_control_plane_acl(cluster_id, acl)
 
@@ -980,7 +1156,10 @@ def create_linode_lke_acl_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_acl_delete tool."""
     return Tool(
         name="linode_lke_acl_delete",
-        description="Deletes the control plane ACL for an LKE cluster",
+        description=(
+            "Deletes the control plane ACL for an LKE cluster."
+            " Pass dry_run=true to preview without deleting."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -990,8 +1169,10 @@ def create_linode_lke_acl_delete_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": (
                         "Must be true to confirm deletion. This is irreversible."
+                        " Ignored when dry_run=true."
                     ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["cluster_id", "confirm"],
         },
@@ -1002,6 +1183,28 @@ async def handle_linode_lke_acl_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_lke_acl_delete tool request."""
+    cluster_id_str = arguments.get("cluster_id", "")
+    if not cluster_id_str:
+        return error_response("cluster_id is required")
+    try:
+        cluster_id = int(cluster_id_str)
+    except ValueError:
+        return error_response("cluster_id must be a valid integer")
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_lke_control_plane_acl(cluster_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_lke_acl_delete",
+            "DELETE",
+            f"/lke/clusters/{cluster_id}/control_plane_acl",
+            _fetch,
+        )
+
     confirm = arguments.get("confirm", False)
     if not confirm:
         return [
@@ -1010,14 +1213,6 @@ async def handle_linode_lke_acl_delete(
                 text="Error: This is destructive. Set confirm=true to proceed.",
             )
         ]
-
-    cluster_id_str = arguments.get("cluster_id", "")
-    if not cluster_id_str:
-        return error_response("cluster_id is required")
-    try:
-        cluster_id = int(cluster_id_str)
-    except ValueError:
-        return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_lke_control_plane_acl(cluster_id)

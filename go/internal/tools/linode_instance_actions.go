@@ -30,7 +30,8 @@ func NewLinodeInstanceCloneTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 			mcp.WithBoolean("backups_enabled",
 				mcp.Description("Enable backups on the cloned instance (optional)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm instance cloning. This creates a billable resource.")),
+				mcp.Description("Must be true to confirm instance cloning. This creates a billable resource. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceCloneRequest,
 	)
@@ -39,11 +40,22 @@ func NewLinodeInstanceCloneTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 }
 
 func handleInstanceCloneRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	linodeID := request.GetInt("linode_id", 0)
+
+	if IsDryRun(request) {
+		if linodeID == 0 {
+			return mcp.NewToolResultError("linode_id is required"), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_clone", httpMethodPost,
+			fmt.Sprintf("/linode/instances/%d/clone", linodeID),
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, linodeID) })
+	}
+
 	if result := RequireConfirm(request, "This clones a Linode instance and creates a billable resource. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
-	linodeID := request.GetInt("linode_id", 0)
 	if linodeID == 0 {
 		return mcp.NewToolResultError("linode_id is required"), nil
 	}
@@ -99,7 +111,8 @@ func NewLinodeInstanceMigrateTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 			mcp.WithString("region",
 				mcp.Description("Target region for migration (optional, Linode picks if omitted)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm migration. The instance will be shut down during migration.")),
+				mcp.Description("Must be true to confirm migration. The instance will be shut down during migration. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceMigrateRequest,
 	)
@@ -108,11 +121,22 @@ func NewLinodeInstanceMigrateTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 }
 
 func handleInstanceMigrateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	linodeID := request.GetInt("linode_id", 0)
+
+	if IsDryRun(request) {
+		if linodeID == 0 {
+			return mcp.NewToolResultError("linode_id is required"), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_migrate", httpMethodPost,
+			fmt.Sprintf("/linode/instances/%d/migrate", linodeID),
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, linodeID) })
+	}
+
 	if result := RequireConfirm(request, "This migrates the instance and causes downtime during migration. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
-	linodeID := request.GetInt("linode_id", 0)
 	if linodeID == 0 {
 		return mcp.NewToolResultError("linode_id is required"), nil
 	}
@@ -158,7 +182,8 @@ func NewLinodeInstanceMutateTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 			mcp.WithBoolean("allow_auto_disk_resize",
 				mcp.Description("Automatically resize disks during the upgrade when possible (optional, API default: true)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm the instance upgrade.")),
+				mcp.Description("Must be true to confirm the instance upgrade. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceMutateRequest,
 	)
@@ -167,11 +192,22 @@ func NewLinodeInstanceMutateTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 }
 
 func handleInstanceMutateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	linodeID := request.GetInt("linode_id", 0)
+
+	if IsDryRun(request) {
+		if linodeID <= 0 {
+			return mcp.NewToolResultError("linode_id is required and must be positive"), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_mutate", httpMethodPost,
+			fmt.Sprintf("/linode/instances/%d/mutate", linodeID),
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, linodeID) })
+	}
+
 	if result := RequireConfirm(request, "This upgrades the instance and may cause downtime. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
-	linodeID := request.GetInt("linode_id", 0)
 	if linodeID <= 0 {
 		return mcp.NewToolResultError("linode_id is required and must be positive"), nil
 	}
@@ -323,7 +359,8 @@ func NewLinodeInstanceRescueTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 				mcp.Description("JSON object mapping device slots to disk/volume IDs, e.g. "+
 					"{\"sda\":{\"disk_id\":123},\"sdb\":{\"volume_id\":456}} (optional)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm booting into rescue mode.")),
+				mcp.Description("Must be true to confirm booting into rescue mode. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceRescueRequest,
 	)
@@ -332,11 +369,22 @@ func NewLinodeInstanceRescueTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 }
 
 func handleInstanceRescueRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	linodeID := request.GetInt("linode_id", 0)
+
+	if IsDryRun(request) {
+		if linodeID == 0 {
+			return mcp.NewToolResultError("linode_id is required"), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_rescue", httpMethodPost,
+			fmt.Sprintf("/linode/instances/%d/rescue", linodeID),
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, linodeID) })
+	}
+
 	if result := RequireConfirm(request, "This reboots the instance into rescue mode. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
-	linodeID := request.GetInt("linode_id", 0)
 	if linodeID == 0 {
 		return mcp.NewToolResultError("linode_id is required"), nil
 	}

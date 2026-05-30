@@ -12,6 +12,7 @@ from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     PARAM_DRY_RUN,
+    build_dry_run_response,
     execute_dry_run,
     execute_tool,
     is_dry_run,
@@ -76,6 +77,7 @@ def create_linode_object_storage_cancel_tool() -> tuple[Tool, Capability]:
                         "Must be true to confirm Object Storage cancellation"
                     ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["confirm"],
         },
@@ -86,6 +88,15 @@ async def handle_linode_object_storage_cancel(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_object_storage_cancel tool request."""
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_object_storage_cancel",
+            arguments.get("environment", ""),
+            "POST",
+            "/object-storage/cancel",
+            None,
+        )
+
     if arguments.get("confirm") is not True:
         return [TextContent(type="text", text="confirm=true is required")]
 
@@ -140,21 +151,50 @@ def create_linode_object_storage_bucket_create_tool() -> tuple[Tool, Capability]
                     "type": "boolean",
                     "description": (
                         "Must be true to confirm creation. This incurs billing."
+                        " Ignored when dry_run=true."
                     ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["label", "region", "confirm"],
         },
     ), Capability.Write
 
 
+def _bucket_create_error(label: str, region: str, acl: Any) -> str | None:
+    """Validate bucket create args; return an error message or None."""
+    label_err = _validate_bucket_label(label)
+    if label_err:
+        return label_err
+    if not region:
+        return "region is required"
+    if acl is not None:
+        return _validate_bucket_acl(acl)
+    return None
+
+
 async def handle_linode_object_storage_bucket_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_object_storage_bucket_create tool request."""
-    confirm = arguments.get("confirm", False)
+    label = arguments.get("label", "")
+    region = arguments.get("region", "")
+    acl = arguments.get("acl")
+    cors_enabled = arguments.get("cors_enabled")
 
-    if not confirm:
+    if is_dry_run(arguments):
+        validation_err = _bucket_create_error(label, region, acl)
+        if validation_err:
+            return _error_response(validation_err)
+        return build_dry_run_response(
+            "linode_object_storage_bucket_create",
+            arguments.get("environment", ""),
+            "POST",
+            "/object-storage/buckets",
+            None,
+        )
+
+    if not arguments.get("confirm"):
         return [
             TextContent(
                 type="text",
@@ -165,20 +205,7 @@ async def handle_linode_object_storage_bucket_create(
             )
         ]
 
-    label = arguments.get("label", "")
-    region = arguments.get("region", "")
-    acl = arguments.get("acl")
-    cors_enabled = arguments.get("cors_enabled")
-
-    label_err = _validate_bucket_label(label)
-    if label_err:
-        return _error_response(label_err)
-
-    validation_err = None
-    if not region:
-        validation_err = "region is required"
-    elif acl is not None:
-        validation_err = _validate_bucket_acl(acl)
+    validation_err = _bucket_create_error(label, region, acl)
     if validation_err:
         return _error_response(validation_err)
 
@@ -231,7 +258,7 @@ def create_linode_object_storage_bucket_delete_tool() -> tuple[Tool, Capability]
                         " Ignored when dry_run=true."
                     ),
                 },
-                **DRY_RUN_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["region", "label", "confirm"],
         },
@@ -328,21 +355,56 @@ def create_linode_object_storage_bucket_access_update_tool() -> tuple[Tool, Capa
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": ("Must be true to confirm access update."),
+                    "description": (
+                        "Must be true to confirm access update."
+                        " Ignored when dry_run=true."
+                    ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["region", "label", "confirm"],
         },
     ), Capability.Write
 
 
+def _bucket_access_error(region: str, label: str, acl: Any) -> str | None:
+    """Validate bucket access args; return an error message or None."""
+    if not region:
+        return "region is required"
+    if not label:
+        return "label is required"
+    if acl is not None:
+        return _validate_bucket_acl(acl)
+    return None
+
+
 async def handle_linode_object_storage_bucket_access_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle bucket access update tool request."""
-    confirm = arguments.get("confirm", False)
+    region = arguments.get("region", "")
+    label = arguments.get("label", "")
+    acl = arguments.get("acl")
+    cors_enabled = arguments.get("cors_enabled")
 
-    if not confirm:
+    if is_dry_run(arguments):
+        validation_err = _bucket_access_error(region, label, acl)
+        if validation_err:
+            return _error_response(validation_err)
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_object_storage_bucket_access(region, label)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_object_storage_bucket_access_update",
+            "PUT",
+            f"/object-storage/buckets/{region}/{label}/access",
+            _fetch,
+        )
+
+    if not arguments.get("confirm"):
         return [
             TextContent(
                 type="text",
@@ -353,18 +415,7 @@ async def handle_linode_object_storage_bucket_access_update(
             )
         ]
 
-    region = arguments.get("region", "")
-    label = arguments.get("label", "")
-    acl = arguments.get("acl")
-    cors_enabled = arguments.get("cors_enabled")
-
-    validation_err = None
-    if not region:
-        validation_err = "region is required"
-    elif not label:
-        validation_err = "label is required"
-    elif acl is not None:
-        validation_err = _validate_bucket_acl(acl)
+    validation_err = _bucket_access_error(region, label, acl)
     if validation_err:
         return _error_response(validation_err)
 
@@ -424,8 +475,12 @@ def create_linode_object_storage_bucket_access_allow_tool() -> tuple[Tool, Capab
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": ("Must be true to confirm access changes."),
+                    "description": (
+                        "Must be true to confirm access changes."
+                        " Ignored when dry_run=true."
+                    ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["region", "label", "confirm"],
         },
@@ -436,9 +491,29 @@ async def handle_linode_object_storage_bucket_access_allow(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle bucket access allow tool request."""
-    confirm = arguments.get("confirm", False)
+    region = arguments.get("region", "")
+    label = arguments.get("label", "")
+    acl = arguments.get("acl")
+    cors_enabled = arguments.get("cors_enabled")
 
-    if not confirm:
+    if is_dry_run(arguments):
+        validation_err = _bucket_access_error(region, label, acl)
+        if validation_err:
+            return _error_response(validation_err)
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_object_storage_bucket_access(region, label)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_object_storage_bucket_access_allow",
+            "POST",
+            f"/object-storage/buckets/{region}/{label}/access",
+            _fetch,
+        )
+
+    if not arguments.get("confirm"):
         return [
             TextContent(
                 type="text",
@@ -449,18 +524,7 @@ async def handle_linode_object_storage_bucket_access_allow(
             )
         ]
 
-    region = arguments.get("region", "")
-    label = arguments.get("label", "")
-    acl = arguments.get("acl")
-    cors_enabled = arguments.get("cors_enabled")
-
-    validation_err = None
-    if not region:
-        validation_err = "region is required"
-    elif not label:
-        validation_err = "label is required"
-    elif acl is not None:
-        validation_err = _validate_bucket_acl(acl)
+    validation_err = _bucket_access_error(region, label, acl)
     if validation_err:
         return _error_response(validation_err)
 
@@ -552,8 +616,10 @@ def create_linode_object_storage_key_create_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": (
                         "Must be set to true. The secret_key is only shown ONCE."
+                        " Ignored when dry_run=true."
                     ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["label", "confirm"],
         },
@@ -595,8 +661,12 @@ def create_linode_object_storage_key_update_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": ("Must be set to true to confirm key update."),
+                    "description": (
+                        "Must be set to true to confirm key update."
+                        " Ignored when dry_run=true."
+                    ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["key_id", "confirm"],
         },
@@ -638,15 +708,52 @@ def create_linode_object_storage_key_delete_tool() -> tuple[Tool, Capability]:
     ), Capability.Destroy
 
 
+def _parse_key_bucket_access(bucket_access_json: str) -> tuple[Any, str | None]:
+    """Parse+validate bucket_access JSON; return (value, error message)."""
+    if not bucket_access_json:
+        return None, None
+    try:
+        bucket_access = json.loads(bucket_access_json)
+    except (json.JSONDecodeError, TypeError) as e:
+        return None, (
+            f"Invalid bucket_access JSON: {e}."
+            " Expected format:"
+            ' [{"bucket_name": "name",'
+            ' "region": "region",'
+            ' "permissions": "read_only"}]'
+        )
+    return bucket_access, _validate_bucket_access_entries(bucket_access)
+
+
+def _key_create_error(label: str, bucket_access_json: str) -> str | None:
+    """Validate key create args; return an error message or None."""
+    label_err = _validate_key_label(label)
+    if label_err:
+        return label_err
+    _, access_err = _parse_key_bucket_access(bucket_access_json)
+    return access_err
+
+
 async def handle_linode_object_storage_key_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle the linode_object_storage_key_create tool."""
     label = arguments.get("label", "")
     bucket_access_json = arguments.get("bucket_access", "")
-    confirm = arguments.get("confirm", False)
 
-    if not confirm:
+    if is_dry_run(arguments):
+        validation_err = _key_create_error(label, bucket_access_json)
+        if validation_err:
+            return _error_response(validation_err)
+        return build_dry_run_response(
+            "linode_object_storage_key_create",
+            arguments.get("environment", ""),
+            "POST",
+            "/object-storage/keys",
+            None,
+        )
+
+    if not arguments.get("confirm"):
         return [
             TextContent(
                 type="text",
@@ -659,22 +766,11 @@ async def handle_linode_object_storage_key_create(
             )
         ]
 
-    validation_err = _validate_key_label(label)
-    bucket_access = None
-    if not validation_err and bucket_access_json:
-        try:
-            bucket_access = json.loads(bucket_access_json)
-            validation_err = _validate_bucket_access_entries(bucket_access)
-        except (json.JSONDecodeError, TypeError) as e:
-            validation_err = (
-                f"Invalid bucket_access JSON: {e}."
-                " Expected format:"
-                ' [{"bucket_name": "name",'
-                ' "region": "region",'
-                ' "permissions": "read_only"}]'
-            )
+    validation_err = _key_create_error(label, bucket_access_json)
     if validation_err:
         return _error_response(validation_err)
+
+    bucket_access, _ = _parse_key_bucket_access(bucket_access_json)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         key = await client.create_object_storage_key(
@@ -698,16 +794,47 @@ async def handle_linode_object_storage_key_create(
     return await execute_tool(cfg, arguments, "create access key", _call)
 
 
+def _key_update_error(key_id: Any, label: str, bucket_access_json: str) -> str | None:
+    """Validate key update args; return an error message or None."""
+    if not key_id or int(key_id) <= 0:
+        return "key_id is required and must be a positive integer"
+    if label:
+        label_err = _validate_key_label(label)
+        if label_err:
+            return label_err
+    _, access_err = _parse_key_bucket_access(bucket_access_json)
+    return access_err
+
+
 async def handle_linode_object_storage_key_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle the linode_object_storage_key_update tool."""
-    key_id = arguments.get("key_id", 0)
+    key_id_raw = arguments.get("key_id", 0)
     label = arguments.get("label", "")
     bucket_access_json = arguments.get("bucket_access", "")
-    confirm = arguments.get("confirm", False)
 
-    if not confirm:
+    validation_err = _key_update_error(key_id_raw, label, bucket_access_json)
+    if validation_err:
+        return _error_response(validation_err)
+
+    key_id = int(key_id_raw)
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_object_storage_key(key_id=key_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_object_storage_key_update",
+            "PUT",
+            f"/object-storage/keys/{key_id}",
+            _fetch,
+        )
+
+    if not arguments.get("confirm"):
         return [
             TextContent(
                 type="text",
@@ -718,28 +845,7 @@ async def handle_linode_object_storage_key_update(
             )
         ]
 
-    validation_err = None
-    if not key_id or int(key_id) <= 0:
-        validation_err = "key_id is required and must be a positive integer"
-    elif label:
-        validation_err = _validate_key_label(label)
-
-    key_id = int(key_id) if not validation_err else 0
-    bucket_access = None
-    if not validation_err and bucket_access_json:
-        try:
-            bucket_access = json.loads(bucket_access_json)
-            validation_err = _validate_bucket_access_entries(bucket_access)
-        except (json.JSONDecodeError, TypeError) as e:
-            validation_err = (
-                f"Invalid bucket_access JSON: {e}."
-                " Expected format:"
-                ' [{"bucket_name": "name",'
-                ' "region": "region",'
-                ' "permissions": "read_only"}]'
-            )
-    if validation_err:
-        return _error_response(validation_err)
+    bucket_access, _ = _parse_key_bucket_access(bucket_access_json)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.update_object_storage_key(
@@ -1017,8 +1123,10 @@ def create_linode_object_storage_object_acl_update_tool() -> tuple[Tool, Capabil
                         "Must be true to proceed."
                         " This modifies the object's"
                         " access permissions."
+                        " Ignored when dry_run=true."
                     ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
                 "region",
@@ -1031,12 +1139,46 @@ def create_linode_object_storage_object_acl_update_tool() -> tuple[Tool, Capabil
     ), Capability.Write
 
 
+def _object_acl_update_error(
+    region: str, label: str, name: str, acl: str
+) -> str | None:
+    """Validate object ACL update args; return an error message or None."""
+    if not region:
+        return "region is required"
+    if not label:
+        return "label is required"
+    if not name:
+        return "name (object key) is required"
+    return _validate_bucket_acl(acl)
+
+
 async def handle_linode_object_storage_object_acl_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_object_storage_object_acl_update tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
+    region = arguments.get("region", "")
+    label = arguments.get("label", "")
+    name = arguments.get("name", "")
+    acl = arguments.get("acl", "")
+
+    if is_dry_run(arguments):
+        validation_err = _object_acl_update_error(region, label, name, acl)
+        if validation_err is not None:
+            return _error_response(validation_err)
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_object_acl(region, label, name)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_object_storage_object_acl_update",
+            "PUT",
+            f"/object-storage/buckets/{region}/{label}/object-acl",
+            _fetch,
+        )
+
+    if not arguments.get("confirm"):
         return [
             TextContent(
                 type="text",
@@ -1045,26 +1187,9 @@ async def handle_linode_object_storage_object_acl_update(
             )
         ]
 
-    region = arguments.get("region", "")
-    label = arguments.get("label", "")
-    name = arguments.get("name", "")
-    acl = arguments.get("acl", "")
-
-    missing = (
-        "region is required"
-        if not region
-        else "label is required"
-        if not label
-        else "name (object key) is required"
-        if not name
-        else None
-    )
-    if missing is not None:
-        return _error_response(missing)
-
-    acl_err = _validate_bucket_acl(acl)
-    if acl_err is not None:
-        return _error_response(acl_err)
+    validation_err = _object_acl_update_error(region, label, name, acl)
+    if validation_err is not None:
+        return _error_response(validation_err)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.update_object_acl(region, label, name, acl)
@@ -1161,8 +1286,10 @@ def create_linode_object_storage_ssl_upload_tool() -> tuple[Tool, Capability]:
                         "Must be true to proceed."
                         " This uploads SSL certificate material"
                         " for the bucket."
+                        " Ignored when dry_run=true."
                     ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
                 "region",
@@ -1175,12 +1302,45 @@ def create_linode_object_storage_ssl_upload_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def _ssl_upload_error(
+    region: str, label: str, certificate: str, private_key: str
+) -> str | None:
+    """Validate SSL upload args; return an error message or None."""
+    if not region:
+        return "region is required"
+    if not label:
+        return "label is required"
+    if not certificate:
+        return "certificate is required"
+    if not private_key:
+        return "private_key is required"
+    return None
+
+
 async def handle_linode_object_storage_ssl_upload(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_object_storage_ssl_upload tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
+    region = arguments.get("region", "")
+    label = arguments.get("label", "")
+    certificate = arguments.get("certificate", "")
+    private_key = arguments.get("private_key", "")
+
+    if is_dry_run(arguments):
+        validation_err = _ssl_upload_error(region, label, certificate, private_key)
+        if validation_err is not None:
+            return _error_response(validation_err)
+        # current_state null; the request body (cert + private_key) is never
+        # echoed in the v0 preview, so no key material leaks.
+        return build_dry_run_response(
+            "linode_object_storage_ssl_upload",
+            arguments.get("environment", ""),
+            "POST",
+            f"/object-storage/buckets/{region}/{label}/ssl",
+            None,
+        )
+
+    if not arguments.get("confirm"):
         return [
             TextContent(
                 type="text",
@@ -1190,19 +1350,9 @@ async def handle_linode_object_storage_ssl_upload(
             )
         ]
 
-    region = arguments.get("region", "")
-    label = arguments.get("label", "")
-    certificate = arguments.get("certificate", "")
-    private_key = arguments.get("private_key", "")
-
-    if not region:
-        return _error_response("region is required")
-    if not label:
-        return _error_response("label is required")
-    if not certificate:
-        return _error_response("certificate is required")
-    if not private_key:
-        return _error_response("private_key is required")
+    validation_err = _ssl_upload_error(region, label, certificate, private_key)
+    if validation_err is not None:
+        return _error_response(validation_err)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         result = await client.upload_bucket_ssl(region, label, certificate, private_key)
@@ -1254,7 +1404,7 @@ def create_linode_object_storage_ssl_delete_tool() -> tuple[Tool, Capability]:
                         " Ignored when dry_run=true."
                     ),
                 },
-                **DRY_RUN_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["region", "label", "confirm"],
         },

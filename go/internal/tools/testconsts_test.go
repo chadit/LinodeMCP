@@ -106,6 +106,7 @@ const (
 	keyNextMarker                = "next_marker"
 	keyKeyID                     = "key_id"
 	keySSHKeyID                  = "sshkey_id"
+	keySSHKey                    = "ssh_key"
 	keyRDNS                      = "rdns"
 	keySince                     = "since"
 	keyPrivacyPolicy             = "privacy_policy"
@@ -198,6 +199,8 @@ const (
 	keyKernel                     = "kernel"
 	keyInstanceID                 = "instance_id"
 	keyVolumeID                   = "volume_id"
+	testVolumeLabel               = "vol"
+	testPublicIPv4                = "192.0.2.1"
 	keyDomainID                   = "domain_id"
 	keyDiskID                     = "disk_id"
 	keyConfigID                   = "config_id"
@@ -540,6 +543,7 @@ const (
 	testDebian12Image             = "linode/debian12"
 	keyScript                     = "script"
 	testStackScriptLabel          = "test-script"
+	testRenamedLabel              = "renamed"
 	errStackScriptImagesValid     = "images entries must be valid image IDs"
 )
 

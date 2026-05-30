@@ -9,6 +9,7 @@ from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     ENV_PARAM_SCHEMA,
     PARAM_DRY_RUN,
+    build_dry_run_response,
     error_response,
     execute_dry_run,
     execute_tool,
@@ -207,28 +208,52 @@ def create_linode_domain_record_create_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Must be true to confirm this operation.",
+                    "description": (
+                        "Must be true to confirm this operation."
+                        " Ignored when dry_run=true."
+                    ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["domain_id", "type", "confirm"],
         },
     ), Capability.Write
 
 
-async def handle_linode_domain_record_create(
-    arguments: dict[str, Any], cfg: Config
-) -> list[TextContent]:
-    """Handle linode_domain_record_create tool request."""
-    if not arguments.get("confirm"):
-        return error_response("This creates a DNS record. Set confirm=true to proceed.")
-
-    domain_id = arguments.get("domain_id", 0)
-    record_type = arguments.get("type", "")
-
+def _record_create_error(domain_id: Any, record_type: str) -> list[TextContent] | None:
+    """Validate record-create args; return an error response or None."""
     if not domain_id:
         return error_response("domain_id is required")
     if not record_type:
         return error_response("type is required")
+    return None
+
+
+async def handle_linode_domain_record_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_domain_record_create tool request."""
+    domain_id = arguments.get("domain_id", 0)
+    record_type = arguments.get("type", "")
+
+    if is_dry_run(arguments):
+        fields_error = _record_create_error(domain_id, record_type)
+        if fields_error is not None:
+            return fields_error
+        return build_dry_run_response(
+            "linode_domain_record_create",
+            arguments.get("environment", ""),
+            "POST",
+            f"/domains/{int(domain_id)}/records",
+            None,
+        )
+
+    if not arguments.get("confirm"):
+        return error_response("This creates a DNS record. Set confirm=true to proceed.")
+
+    fields_error = _record_create_error(domain_id, record_type)
+    if fields_error is not None:
+        return fields_error
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         record = await client.create_domain_record(
@@ -301,28 +326,57 @@ def create_linode_domain_record_update_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Must be true to confirm this operation.",
+                    "description": (
+                        "Must be true to confirm this operation."
+                        " Ignored when dry_run=true."
+                    ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["domain_id", "record_id", "confirm"],
         },
     ), Capability.Write
 
 
-async def handle_linode_domain_record_update(
-    arguments: dict[str, Any], cfg: Config
-) -> list[TextContent]:
-    """Handle linode_domain_record_update tool request."""
-    if not arguments.get("confirm"):
-        return error_response("This updates a DNS record. Set confirm=true to proceed.")
-
-    domain_id = arguments.get("domain_id", 0)
-    record_id = arguments.get("record_id", 0)
-
+def _record_update_error(domain_id: Any, record_id: Any) -> list[TextContent] | None:
+    """Validate record-update args; return an error response or None."""
     if not domain_id:
         return error_response("domain_id is required")
     if not record_id:
         return error_response("record_id is required")
+    return None
+
+
+async def handle_linode_domain_record_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_domain_record_update tool request."""
+    domain_id = arguments.get("domain_id", 0)
+    record_id = arguments.get("record_id", 0)
+
+    if is_dry_run(arguments):
+        fields_error = _record_update_error(domain_id, record_id)
+        if fields_error is not None:
+            return fields_error
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_domain_record(int(domain_id), int(record_id))
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_domain_record_update",
+            "PUT",
+            f"/domains/{int(domain_id)}/records/{int(record_id)}",
+            _fetch,
+        )
+
+    if not arguments.get("confirm"):
+        return error_response("This updates a DNS record. Set confirm=true to proceed.")
+
+    fields_error = _record_update_error(domain_id, record_id)
+    if fields_error is not None:
+        return fields_error
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         record = await client.update_domain_record(

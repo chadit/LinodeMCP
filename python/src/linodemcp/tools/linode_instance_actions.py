@@ -7,6 +7,7 @@ from mcp.types import TextContent, Tool
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
+    PARAM_DRY_RUN,
     execute_dry_run,
     execute_tool,
     is_dry_run,
@@ -84,6 +85,7 @@ def create_linode_instance_clone_tool() -> tuple[Tool, Capability]:
                     "items": {"type": "integer"},
                 },
                 "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["instance_id", "confirm"],
         },
@@ -94,13 +96,26 @@ async def handle_linode_instance_clone(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_instance_clone tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return _error_response("Set confirm=true to proceed.")
-
     iid = _parse_instance_id(arguments)
     if isinstance(iid, list):
         return iid
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_instance(iid)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_instance_clone",
+            "POST",
+            f"/linode/instances/{iid}/clone",
+            _fetch,
+        )
+
+    if not arguments.get("confirm"):
+        return _error_response("Set confirm=true to proceed.")
 
     async def _call(
         client: RetryableClient,
@@ -132,6 +147,7 @@ def create_linode_instance_migrate_tool() -> tuple[Tool, Capability]:
                     "description": ("Target region for migration"),
                 },
                 "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["instance_id", "confirm"],
         },
@@ -142,13 +158,26 @@ async def handle_linode_instance_migrate(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_instance_migrate tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return _error_response("Set confirm=true to proceed.")
-
     iid = _parse_instance_id(arguments)
     if isinstance(iid, list):
         return iid
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_instance(iid)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_instance_migrate",
+            "POST",
+            f"/linode/instances/{iid}/migrate",
+            _fetch,
+        )
+
+    if not arguments.get("confirm"):
+        return _error_response("Set confirm=true to proceed.")
 
     async def _call(
         client: RetryableClient,
@@ -204,7 +233,7 @@ def create_linode_instance_rebuild_tool() -> tuple[Tool, Capability]:
                         " Ignored when dry_run=true."
                     ),
                 },
-                **DRY_RUN_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
                 "instance_id",
@@ -279,6 +308,7 @@ def create_linode_instance_rescue_tool() -> tuple[Tool, Capability]:
                     "description": ("Device mappings for rescue mode"),
                 },
                 "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["instance_id", "confirm"],
         },
@@ -289,13 +319,26 @@ async def handle_linode_instance_rescue(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_instance_rescue tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return _error_response("Set confirm=true to proceed.")
-
     iid = _parse_instance_id(arguments)
     if isinstance(iid, list):
         return iid
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_instance(iid)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_instance_rescue",
+            "POST",
+            f"/linode/instances/{iid}/rescue",
+            _fetch,
+        )
+
+    if not arguments.get("confirm"):
+        return _error_response("Set confirm=true to proceed.")
 
     async def _call(
         client: RetryableClient,
@@ -327,7 +370,7 @@ def create_linode_instance_password_reset_tool() -> tuple[Tool, Capability]:
                     "description": ("New root password (required)"),
                 },
                 "confirm": _CONFIRM_PROP,
-                **DRY_RUN_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
                 "instance_id",

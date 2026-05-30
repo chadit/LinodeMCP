@@ -1,7 +1,13 @@
 package tools
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/mark3labs/mcp-go/mcp"
+
+	"github.com/chadit/LinodeMCP/internal/config"
+	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
 // DryRunResponse is the v0 wire shape returned by mutating tools when
@@ -59,4 +65,35 @@ func BuildDryRunResponse(
 		WouldExecute: DryRunRequest{Method: method, Path: path},
 		CurrentState: currentState,
 	})
+}
+
+// RunDryRunPreview is the shared dry-run branch for non-destroy mutating
+// tools (CapWrite / CapAdmin). The caller validates required args first,
+// then delegates here. When fetchState is non-nil it prepares the client
+// and fetches current_state via the read sibling's GET (update tools);
+// when nil, no client call is made and current_state is null (create
+// tools, which have no existing resource to preview). Either way it
+// emits the v0 preview and never mutates.
+func RunDryRunPreview(
+	ctx context.Context,
+	request *mcp.CallToolRequest,
+	cfg *config.Config,
+	toolName, method, path string,
+	fetchState func(ctx context.Context, client *linode.Client) (any, error),
+) (*mcp.CallToolResult, error) {
+	var state any
+
+	if fetchState != nil {
+		client, err := prepareClient(request, cfg)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		state, err = fetchState(ctx, client)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch state for dry-run: %v", err)), nil
+		}
+	}
+
+	return BuildDryRunResponse(toolName, request.GetString(paramEnvironment, ""), method, path, state)
 }

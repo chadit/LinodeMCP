@@ -139,7 +139,8 @@ func NewLinodeInstanceFirewallsUpdateTool(cfg *config.Config) (mcp.Tool, profile
 			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
 			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm firewall assignment changes.")),
+				mcp.Description("Must be set to true to confirm firewall assignment changes. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceFirewallsUpdateRequest,
 	)
@@ -148,21 +149,33 @@ func NewLinodeInstanceFirewallsUpdateTool(cfg *config.Config) (mcp.Tool, profile
 }
 
 func handleInstanceFirewallsUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This replaces firewall assignments for a Linode instance. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	firewallIDs, validationMessage := instanceFirewallsIDsFromTool(request)
+	page, pageSize, validationMessage := instanceFirewallsPaginationFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	page, pageSize, validationMessage := instanceFirewallsPaginationFromTool(request)
+	if IsDryRun(request) {
+		if _, idsMessage := instanceFirewallsIDsFromTool(request); idsMessage != "" {
+			return mcp.NewToolResultError(idsMessage), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_firewalls_update", "PUT",
+			fmt.Sprintf("/linode/instances/%d/firewalls", linodeID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.ListInstanceFirewalls(ctx, linodeID, page, pageSize)
+			})
+	}
+
+	if result := RequireConfirm(request, "This replaces firewall assignments for a Linode instance. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	firewallIDs, validationMessage := instanceFirewallsIDsFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}

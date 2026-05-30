@@ -13,7 +13,10 @@ import (
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
-const paramClusterID = "cluster_id"
+const (
+	paramClusterID  = "cluster_id"
+	lkeClustersPath = "/lke/clusters"
+)
 
 // handleLKESubResourceAction handles confirmed actions on LKE sub-resources
 // (node pools with int IDs, individual nodes with string IDs) using generics
@@ -65,7 +68,7 @@ func NewLinodeLKEClusterCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 		"linode_lke_cluster_create",
 		"Creates a new LKE Kubernetes cluster. WARNING: This creates billable resources. "+
 			"Use linode_lke_version_list to find valid k8s_version values, linode_region_list for regions, "+
-			"and linode_lke_type_list for node types.",
+			"and linode_lke_type_list for node types. Pass dry_run=true to preview without creating.",
 		[]mcp.ToolOption{
 			mcp.WithString("label", mcp.Required(),
 				mcp.Description("Label for the cluster (3-32 characters)")),
@@ -81,7 +84,8 @@ func NewLinodeLKEClusterCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 			mcp.WithBoolean("high_availability",
 				mcp.Description("Enable high availability control plane (optional, incurs additional cost)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm cluster creation. This creates billable resources.")),
+				mcp.Description("Must be true to confirm cluster creation. This creates billable resources. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLKEClusterCreateRequest,
 	)
@@ -89,41 +93,39 @@ func NewLinodeLKEClusterCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 	return tool, profiles.CapWrite, handler
 }
 
-func handleLKEClusterCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This creates billable Kubernetes resources. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
+// validateLKEClusterCreateArgs validates required args and builds the
+// create request, shared by the dry-run and real-execution paths.
+func validateLKEClusterCreateArgs(request *mcp.CallToolRequest) (*linode.CreateLKEClusterRequest, *mcp.CallToolResult) {
 	label := request.GetString("label", "")
 	if label == "" {
-		return mcp.NewToolResultError("label is required"), nil
+		return nil, mcp.NewToolResultError("label is required")
 	}
 
 	region := request.GetString("region", "")
 	if region == "" {
-		return mcp.NewToolResultError("region is required"), nil
+		return nil, mcp.NewToolResultError(errRegionRequired)
 	}
 
 	k8sVersion := request.GetString("k8s_version", "")
 	if k8sVersion == "" {
-		return mcp.NewToolResultError("k8s_version is required"), nil
+		return nil, mcp.NewToolResultError("k8s_version is required")
 	}
 
 	nodePoolsJSON := request.GetString("node_pools", "")
 	if nodePoolsJSON == "" {
-		return mcp.NewToolResultError("node_pools is required (JSON array of node pool definitions)"), nil
+		return nil, mcp.NewToolResultError("node_pools is required (JSON array of node pool definitions)")
 	}
 
 	var nodePools []linode.CreateLKEClusterNodePool
 	if err := json.Unmarshal([]byte(nodePoolsJSON), &nodePools); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("invalid node_pools JSON: %v", err)), nil
+		return nil, mcp.NewToolResultError(fmt.Sprintf("invalid node_pools JSON: %v", err))
 	}
 
 	if len(nodePools) == 0 {
-		return mcp.NewToolResultError("at least one node pool is required"), nil
+		return nil, mcp.NewToolResultError("at least one node pool is required")
 	}
 
-	req := linode.CreateLKEClusterRequest{
+	req := &linode.CreateLKEClusterRequest{
 		Label:      label,
 		Region:     region,
 		K8sVersion: k8sVersion,
@@ -139,12 +141,29 @@ func handleLKEClusterCreateRequest(ctx context.Context, request *mcp.CallToolReq
 		req.ControlPlane = &linode.LKEControlPlane{HighAvailability: ha}
 	}
 
+	return req, nil
+}
+
+func handleLKEClusterCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	req, errResult := validateLKEClusterCreateArgs(request)
+	if errResult != nil {
+		return errResult, nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_lke_cluster_create", httpMethodPost, lkeClustersPath, nil)
+	}
+
+	if result := RequireConfirm(request, "This creates billable Kubernetes resources. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
 	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	cluster, err := client.CreateLKECluster(ctx, &req)
+	cluster, err := client.CreateLKECluster(ctx, req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create LKE cluster: %v", err)), nil
 	}
@@ -165,7 +184,8 @@ func NewLinodeLKEClusterUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_cluster_update",
-		"Updates an existing LKE cluster's label, Kubernetes version, tags, or high availability setting.",
+		"Updates an existing LKE cluster's label, Kubernetes version, tags, or high availability setting."+
+			" Pass dry_run=true to preview without modifying.",
 		[]mcp.ToolOption{
 			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster to update")),
@@ -178,7 +198,8 @@ func NewLinodeLKEClusterUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 			mcp.WithBoolean("high_availability",
 				mcp.Description("Enable or disable high availability control plane (optional)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm cluster update.")),
+				mcp.Description("Must be true to confirm cluster update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLKEClusterUpdateRequest,
 	)
@@ -187,13 +208,21 @@ func NewLinodeLKEClusterUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 }
 
 func handleLKEClusterUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This modifies the LKE cluster configuration. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	clusterID := request.GetInt(paramClusterID, 0)
 	if clusterID == 0 {
 		return mcp.NewToolResultError("cluster_id is required"), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_lke_cluster_update", "PUT",
+			fmt.Sprintf(lkeClustersPath+"/%d", clusterID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetLKECluster(ctx, clusterID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This modifies the LKE cluster configuration. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	req := linode.UpdateLKEClusterRequest{}
@@ -278,12 +307,14 @@ func NewLinodeLKEClusterRecycleTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_cluster_recycle",
-		"Recycles all nodes in an LKE cluster. WARNING: This causes temporary disruption as all nodes are replaced.",
+		"Recycles all nodes in an LKE cluster. WARNING: This causes temporary disruption as all nodes are replaced."+
+			" Pass dry_run=true to preview without recycling.",
 		[]mcp.ToolOption{
 			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster to recycle")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm recycling. This causes temporary disruption.")),
+				mcp.Description("Must be true to confirm recycling. This causes temporary disruption. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLKEClusterRecycleRequest,
 	)
@@ -291,14 +322,36 @@ func NewLinodeLKEClusterRecycleTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 	return tool, profiles.CapDestroy, handler
 }
 
-func handleLKEClusterRecycleRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "Recycles all nodes in the cluster. This causes temporary disruption. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
+// lkeClusterActionSpec describes a single-cluster POST action (recycle,
+// regenerate) so the dry-run + confirm + execute flow stays in one place.
+type lkeClusterActionSpec struct {
+	ToolName       string
+	Verb           string
+	ConfirmMessage string
+	FailureFormat  string
+	SuccessFormat  string
+	Execute        func(ctx context.Context, c *linode.Client, clusterID int) error
+}
 
+// runLKEClusterAction wires dry-run preview, confirm gating, and execution
+// for cluster-scoped POST actions. dry_run fetches the cluster (never any
+// credential the action might rotate) and previews the POST without firing.
+func runLKEClusterAction(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config, spec *lkeClusterActionSpec) (*mcp.CallToolResult, error) {
 	clusterID := request.GetInt(paramClusterID, 0)
 	if clusterID == 0 {
 		return mcp.NewToolResultError("cluster_id is required"), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, spec.ToolName, httpMethodPost,
+			fmt.Sprintf(lkeClustersPath+"/%d/"+spec.Verb, clusterID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetLKECluster(ctx, clusterID)
+			})
+	}
+
+	if result := RequireConfirm(request, spec.ConfirmMessage); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -306,19 +359,27 @@ func handleLKEClusterRecycleRequest(ctx context.Context, request *mcp.CallToolRe
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	if err := client.RecycleLKECluster(ctx, clusterID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to recycle LKE cluster %d: %v", clusterID, err)), nil
+	if err := spec.Execute(ctx, client, clusterID); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf(spec.FailureFormat, clusterID, err)), nil
 	}
 
-	response := struct {
-		Message   string `json:"message"`
-		ClusterID int    `json:"cluster_id"`
-	}{
-		Message:   fmt.Sprintf("LKE cluster %d recycle initiated successfully", clusterID),
-		ClusterID: clusterID,
-	}
+	return MarshalToolResponse(map[string]any{
+		responseKeyMessage: fmt.Sprintf(spec.SuccessFormat, clusterID),
+		paramClusterID:     clusterID,
+	})
+}
 
-	return MarshalToolResponse(response)
+func handleLKEClusterRecycleRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	return runLKEClusterAction(ctx, request, cfg, &lkeClusterActionSpec{
+		ToolName:       "linode_lke_cluster_recycle",
+		Verb:           "recycle",
+		ConfirmMessage: "Recycles all nodes in the cluster. This causes temporary disruption. Set confirm=true to proceed.",
+		FailureFormat:  "Failed to recycle LKE cluster %d: %v",
+		SuccessFormat:  "LKE cluster %d recycle initiated successfully",
+		Execute: func(ctx context.Context, c *linode.Client, clusterID int) error {
+			return c.RecycleLKECluster(ctx, clusterID)
+		},
+	})
 }
 
 // NewLinodeLKEClusterRegenerateTool creates a tool for regenerating an LKE cluster's service token.
@@ -326,12 +387,14 @@ func NewLinodeLKEClusterRegenerateTool(cfg *config.Config) (mcp.Tool, profiles.C
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_cluster_regenerate",
-		"Regenerates the service token for an LKE cluster. Existing tokens will stop working.",
+		"Regenerates the service token for an LKE cluster. Existing tokens will stop working."+
+			" Pass dry_run=true to preview without regenerating.",
 		[]mcp.ToolOption{
 			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm token regeneration.")),
+				mcp.Description("Must be true to confirm token regeneration. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLKEClusterRegenerateRequest,
 	)
@@ -340,33 +403,16 @@ func NewLinodeLKEClusterRegenerateTool(cfg *config.Config) (mcp.Tool, profiles.C
 }
 
 func handleLKEClusterRegenerateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This regenerates the cluster service token. Existing tokens will stop working. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	clusterID := request.GetInt(paramClusterID, 0)
-	if clusterID == 0 {
-		return mcp.NewToolResultError("cluster_id is required"), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := client.RegenerateLKECluster(ctx, clusterID); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to regenerate service token for LKE cluster %d: %v", clusterID, err)), nil
-	}
-
-	response := struct {
-		Message   string `json:"message"`
-		ClusterID int    `json:"cluster_id"`
-	}{
-		Message:   fmt.Sprintf("Service token for LKE cluster %d regenerated successfully", clusterID),
-		ClusterID: clusterID,
-	}
-
-	return MarshalToolResponse(response)
+	return runLKEClusterAction(ctx, request, cfg, &lkeClusterActionSpec{
+		ToolName:       "linode_lke_cluster_regenerate",
+		Verb:           "regenerate",
+		ConfirmMessage: "This regenerates the cluster service token. Existing tokens will stop working. Set confirm=true to proceed.",
+		FailureFormat:  "Failed to regenerate service token for LKE cluster %d: %v",
+		SuccessFormat:  "Service token for LKE cluster %d regenerated successfully",
+		Execute: func(ctx context.Context, c *linode.Client, clusterID int) error {
+			return c.RegenerateLKECluster(ctx, clusterID)
+		},
+	})
 }
 
 // NewLinodeLKEPoolCreateTool creates a tool for adding a node pool to an LKE cluster.
@@ -374,7 +420,8 @@ func NewLinodeLKEPoolCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_pool_create",
-		"Creates a new node pool in an LKE cluster. WARNING: This creates billable compute resources.",
+		"Creates a new node pool in an LKE cluster. WARNING: This creates billable compute resources."+
+			" Pass dry_run=true to preview without creating.",
 		[]mcp.ToolOption{
 			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
@@ -391,7 +438,8 @@ func NewLinodeLKEPoolCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 			mcp.WithString("tags",
 				mcp.Description("Comma-separated tags for the node pool (optional)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm pool creation. This creates billable resources.")),
+				mcp.Description("Must be true to confirm pool creation. This creates billable resources. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLKEPoolCreateRequest,
 	)
@@ -400,10 +448,6 @@ func NewLinodeLKEPoolCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 }
 
 func handleLKEPoolCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This creates billable compute resources. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	clusterID := request.GetInt(paramClusterID, 0)
 	if clusterID == 0 {
 		return mcp.NewToolResultError("cluster_id is required"), nil
@@ -417,6 +461,18 @@ func handleLKEPoolCreateRequest(ctx context.Context, request *mcp.CallToolReques
 	count := request.GetInt("count", 0)
 	if count <= 0 {
 		return mcp.NewToolResultError("count is required and must be at least 1"), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_lke_pool_create", httpMethodPost,
+			fmt.Sprintf(lkeClustersPath+"/%d/pools", clusterID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetLKECluster(ctx, clusterID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This creates billable compute resources. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	req := linode.CreateLKENodePoolRequest{
@@ -463,7 +519,8 @@ func NewLinodeLKEPoolUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_pool_update",
-		"Updates a node pool in an LKE cluster. Can change node count, autoscaler settings, or tags.",
+		"Updates a node pool in an LKE cluster. Can change node count, autoscaler settings, or tags."+
+			" Pass dry_run=true to preview without modifying.",
 		[]mcp.ToolOption{
 			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
@@ -480,7 +537,8 @@ func NewLinodeLKEPoolUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 			mcp.WithString("tags",
 				mcp.Description("Comma-separated tags for the node pool (optional, replaces existing tags)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm pool update.")),
+				mcp.Description("Must be true to confirm pool update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLKEPoolUpdateRequest,
 	)
@@ -489,10 +547,6 @@ func NewLinodeLKEPoolUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 }
 
 func handleLKEPoolUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This modifies the node pool configuration. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	clusterID := request.GetInt(paramClusterID, 0)
 	if clusterID == 0 {
 		return mcp.NewToolResultError("cluster_id is required"), nil
@@ -501,6 +555,18 @@ func handleLKEPoolUpdateRequest(ctx context.Context, request *mcp.CallToolReques
 	poolID := request.GetInt("pool_id", 0)
 	if poolID == 0 {
 		return mcp.NewToolResultError("pool_id is required"), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_lke_pool_update", "PUT",
+			fmt.Sprintf(lkeClustersPath+"/%d/pools/%d", clusterID, poolID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetLKENodePool(ctx, clusterID, poolID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This modifies the node pool configuration. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	req := linode.UpdateLKENodePoolRequest{}
@@ -589,14 +655,16 @@ func NewLinodeLKEPoolRecycleTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_pool_recycle",
-		"Recycles all nodes in a specific LKE node pool. Nodes will be replaced with new ones.",
+		"Recycles all nodes in a specific LKE node pool. Nodes will be replaced with new ones."+
+			" Pass dry_run=true to preview without recycling.",
 		[]mcp.ToolOption{
 			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
 			mcp.WithNumber("pool_id", mcp.Required(),
 				mcp.Description("The ID of the node pool to recycle")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm pool recycling.")),
+				mcp.Description("Must be true to confirm pool recycling. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLKEPoolRecycleRequest,
 	)
@@ -605,6 +673,24 @@ func NewLinodeLKEPoolRecycleTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 }
 
 func handleLKEPoolRecycleRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if IsDryRun(request) {
+		clusterID := request.GetInt(paramClusterID, 0)
+		if clusterID == 0 {
+			return mcp.NewToolResultError("cluster_id is required"), nil
+		}
+
+		poolID := request.GetInt("pool_id", 0)
+		if poolID == 0 {
+			return mcp.NewToolResultError("pool_id is required"), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_lke_pool_recycle", httpMethodPost,
+			fmt.Sprintf(lkeClustersPath+"/%d/pools/%d/recycle", clusterID, poolID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetLKENodePool(ctx, clusterID, poolID)
+			})
+	}
+
 	return handleLKESubResourceAction(
 		ctx, request, cfg,
 		"This recycles all nodes in the pool, causing temporary disruption. Set confirm=true to proceed.",
@@ -681,14 +767,16 @@ func NewLinodeLKENodeRecycleTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_node_recycle",
-		"Recycles a specific node in an LKE cluster. The node will be drained and replaced with a new one.",
+		"Recycles a specific node in an LKE cluster. The node will be drained and replaced with a new one."+
+			" Pass dry_run=true to preview without recycling.",
 		[]mcp.ToolOption{
 			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
 			mcp.WithString("node_id", mcp.Required(),
 				mcp.Description("The ID of the node to recycle (string format)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm node recycling.")),
+				mcp.Description("Must be true to confirm node recycling. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLKENodeRecycleRequest,
 	)
@@ -697,6 +785,24 @@ func NewLinodeLKENodeRecycleTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 }
 
 func handleLKENodeRecycleRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if IsDryRun(request) {
+		clusterID := request.GetInt(paramClusterID, 0)
+		if clusterID == 0 {
+			return mcp.NewToolResultError("cluster_id is required"), nil
+		}
+
+		nodeID := request.GetString("node_id", "")
+		if nodeID == "" {
+			return mcp.NewToolResultError("node_id is required"), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_lke_node_recycle", httpMethodPost,
+			fmt.Sprintf(lkeClustersPath+"/%d/nodes/%s/recycle", clusterID, nodeID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetLKENode(ctx, clusterID, nodeID)
+			})
+	}
+
 	return handleLKESubResourceAction(
 		ctx, request, cfg,
 		"This recycles the specified node, replacing it with a new one. Set confirm=true to proceed.",
@@ -798,7 +904,8 @@ func NewLinodeLKEACLUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_acl_update",
-		"Updates the control plane ACL for an LKE cluster. Controls which IP addresses can access the cluster's API server.",
+		"Updates the control plane ACL for an LKE cluster. Controls which IP addresses can access the cluster's API server."+
+			" Pass dry_run=true to preview without modifying.",
 		[]mcp.ToolOption{
 			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
@@ -809,7 +916,8 @@ func NewLinodeLKEACLUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 			mcp.WithString("ipv6",
 				mcp.Description("Comma-separated list of IPv6 addresses/CIDRs to allow (optional)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm ACL update.")),
+				mcp.Description("Must be true to confirm ACL update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLKEACLUpdateRequest,
 	)
@@ -818,13 +926,21 @@ func NewLinodeLKEACLUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 }
 
 func handleLKEACLUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This modifies the control plane ACL, which controls API server access. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	clusterID := request.GetInt(paramClusterID, 0)
 	if clusterID == 0 {
 		return mcp.NewToolResultError("cluster_id is required"), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_lke_acl_update", "PUT",
+			fmt.Sprintf(lkeClustersPath+"/%d/control_plane_acl", clusterID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetLKEControlPlaneACL(ctx, clusterID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This modifies the control plane ACL, which controls API server access. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	enabled := request.GetBool("enabled", false)
@@ -871,12 +987,14 @@ func NewLinodeLKEACLDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_lke_acl_delete",
-		"Deletes the control plane ACL for an LKE cluster. This removes all IP restrictions from the API server.",
+		"Deletes the control plane ACL for an LKE cluster. This removes all IP restrictions from the API server."+
+			" Pass dry_run=true to preview without deleting.",
 		[]mcp.ToolOption{
 			mcp.WithNumber(paramClusterID, mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm ACL deletion.")),
+				mcp.Description("Must be true to confirm ACL deletion. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLKEACLDeleteRequest,
 	)
@@ -885,13 +1003,21 @@ func NewLinodeLKEACLDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 }
 
 func handleLKEACLDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This removes all IP restrictions from the API server. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	clusterID := request.GetInt(paramClusterID, 0)
 	if clusterID == 0 {
 		return mcp.NewToolResultError("cluster_id is required"), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_lke_acl_delete", httpMethodDelete,
+			fmt.Sprintf(lkeClustersPath+"/%d/control_plane_acl", clusterID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetLKEControlPlaneACL(ctx, clusterID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This removes all IP restrictions from the API server. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)

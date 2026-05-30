@@ -47,7 +47,7 @@ func TestLinodeSSHKeyCreateTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: caseMissingLabel, args: map[string]any{"ssh_key": validTestSSHKey, keyConfirm: true}, wantContains: errLabelRequired},
+		{name: caseMissingLabel, args: map[string]any{keySSHKey: validTestSSHKey, keyConfirm: true}, wantContains: errLabelRequired},
 		{name: "missing ssh key", args: map[string]any{keyLabel: keyNameTest, keyConfirm: true}, wantContains: "ssh_key is required"},
 	}
 	for _, tt := range validationTests {
@@ -85,7 +85,7 @@ func TestLinodeSSHKeyCreateTool(t *testing.T) {
 
 		req := createRequestWithArgs(t, map[string]any{
 			keyLabel:   keyNameTest,
-			"ssh_key":  validTestSSHKey,
+			keySSHKey:  validTestSSHKey,
 			keyConfirm: true,
 		})
 		result, err := successHandler(t.Context(), req)

@@ -70,8 +70,9 @@ func NewLinodeDomainRecordCreateTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		mcp.WithBoolean(
 			paramConfirm,
 			mcp.Required(),
-			mcp.Description("Must be set to true to confirm DNS record creation."),
+			mcp.Description("Must be set to true to confirm DNS record creation. Ignored when dry_run=true."),
 		),
+		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -79,6 +80,29 @@ func NewLinodeDomainRecordCreateTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 	}
 
 	return tool, profiles.CapWrite, handler
+}
+
+// validateDomainRecordCreateArgs validates the create args, returning an
+// error message or "". Shared by the real create path and the dry-run
+// preview so both reject the same malformed inputs.
+func validateDomainRecordCreateArgs(domainID int, recordType, name, target string) string {
+	if domainID == 0 {
+		return "domain_id is required"
+	}
+
+	if recordType == "" {
+		return "type is required"
+	}
+
+	if err := validateDNSRecordName(name); err != nil {
+		return err.Error()
+	}
+
+	if err := validateDNSRecordTarget(recordType, target); err != nil {
+		return err.Error()
+	}
+
+	return ""
 }
 
 func handleLinodeDomainRecordCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -94,24 +118,21 @@ func handleLinodeDomainRecordCreateRequest(ctx context.Context, request *mcp.Cal
 	ttlSec := request.GetInt("ttl_sec", 0)
 	tag := request.GetString("tag", "")
 
+	if IsDryRun(request) {
+		if msg := validateDomainRecordCreateArgs(domainID, recordType, name, target); msg != "" {
+			return mcp.NewToolResultError(msg), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_domain_record_create", httpMethodPost,
+			fmt.Sprintf("/domains/%d/records", domainID), nil)
+	}
+
 	if result := RequireConfirm(request, "This creates a DNS record. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
-	if domainID == 0 {
-		return mcp.NewToolResultError("domain_id is required"), nil
-	}
-
-	if recordType == "" {
-		return mcp.NewToolResultError("type is required"), nil
-	}
-
-	if err := validateDNSRecordName(name); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := validateDNSRecordTarget(recordType, target); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+	if msg := validateDomainRecordCreateArgs(domainID, recordType, name, target); msg != "" {
+		return mcp.NewToolResultError(msg), nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -196,8 +217,9 @@ func NewLinodeDomainRecordUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		mcp.WithBoolean(
 			paramConfirm,
 			mcp.Required(),
-			mcp.Description("Must be set to true to confirm DNS record update."),
+			mcp.Description("Must be set to true to confirm DNS record update. Ignored when dry_run=true."),
 		),
+		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -216,6 +238,22 @@ func handleLinodeDomainRecordUpdateRequest(ctx context.Context, request *mcp.Cal
 	weight := request.GetInt("weight", 0)
 	port := request.GetInt("port", 0)
 	ttlSec := request.GetInt("ttl_sec", 0)
+
+	if IsDryRun(request) {
+		if domainID == 0 {
+			return mcp.NewToolResultError("domain_id is required"), nil
+		}
+
+		if recordID == 0 {
+			return mcp.NewToolResultError("record_id is required"), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_domain_record_update", "PUT",
+			fmt.Sprintf("/domains/%d/records/%d", domainID, recordID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetDomainRecord(ctx, domainID, recordID)
+			})
+	}
 
 	if result := RequireConfirm(request, "This updates a DNS record. Set confirm=true to proceed."); result != nil {
 		return result, nil

@@ -57,7 +57,8 @@ func NewLinodeInstanceConfigDeleteTool(cfg *config.Config) (mcp.Tool, profiles.C
 			mcp.WithNumber("config_id", mcp.Required(),
 				mcp.Description("The ID of the configuration profile to delete")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm deletion. This action is irreversible.")),
+				mcp.Description("Must be true to confirm deletion. This action is irreversible. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceConfigDeleteRequest,
 	)
@@ -98,10 +99,6 @@ func handleInstanceConfigsListRequest(ctx context.Context, request *mcp.CallTool
 }
 
 func handleInstanceConfigDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This is irreversible. The configuration profile will be permanently deleted. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
@@ -110,6 +107,18 @@ func handleInstanceConfigDeleteRequest(ctx context.Context, request *mcp.CallToo
 	configID, validationMessage := instanceConfigIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_config_delete", httpMethodDelete,
+			fmt.Sprintf("/linode/instances/%d/configs/%d", linodeID, configID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetInstanceConfig(ctx, linodeID, configID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This is irreversible. The configuration profile will be permanently deleted. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -314,7 +323,8 @@ func NewLinodeInstanceConfigCreateTool(cfg *config.Config) (mcp.Tool, profiles.C
 			mcp.WithString("interfaces",
 				mcp.Description("Optional interfaces JSON array")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm configuration profile creation.")),
+				mcp.Description("Must be true to confirm configuration profile creation. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceConfigCreateRequest,
 	)
@@ -323,13 +333,23 @@ func NewLinodeInstanceConfigCreateTool(cfg *config.Config) (mcp.Tool, profiles.C
 }
 
 func handleInstanceConfigCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This creates a configuration profile on the instance. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	linodeID, linodeIDOK := getPositiveIntArgument(request, "linode_id")
 	if !linodeIDOK {
 		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
+	}
+
+	if IsDryRun(request) {
+		if _, errText := buildCreateConfigRequest(request); errText != "" {
+			return mcp.NewToolResultError(errText), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_config_create", httpMethodPost,
+			fmt.Sprintf("/linode/instances/%d/configs", linodeID),
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, linodeID) })
+	}
+
+	if result := RequireConfirm(request, "This creates a configuration profile on the instance. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	createReq, errText := buildCreateConfigRequest(request)
@@ -374,7 +394,8 @@ func NewLinodeInstanceConfigInterfaceAddTool(cfg *config.Config) (mcp.Tool, prof
 			mcp.WithString("interface", mcp.Required(),
 				mcp.Description("JSON object for the interface to add. Must include purpose: public, vlan, or vpc.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm configuration profile interface creation.")),
+				mcp.Description("Must be true to confirm configuration profile interface creation. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceConfigInterfaceAddRequest,
 	)
@@ -383,10 +404,6 @@ func NewLinodeInstanceConfigInterfaceAddTool(cfg *config.Config) (mcp.Tool, prof
 }
 
 func handleInstanceConfigInterfaceAddRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This adds a network interface to the configuration profile. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	linodeID, linodeIDOK := getPositiveIntArgument(request, "linode_id")
 	if !linodeIDOK {
 		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
@@ -395,6 +412,22 @@ func handleInstanceConfigInterfaceAddRequest(ctx context.Context, request *mcp.C
 	configID, configIDOK := getPositiveIntArgument(request, "config_id")
 	if !configIDOK {
 		return mcp.NewToolResultError("config_id must be a positive integer"), nil
+	}
+
+	if IsDryRun(request) {
+		if _, errText := configInterfaceFromTool(request); errText != "" {
+			return mcp.NewToolResultError(errText), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_config_interface_add", httpMethodPost,
+			fmt.Sprintf("/linode/instances/%d/configs/%d/interfaces", linodeID, configID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetInstanceConfig(ctx, linodeID, configID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This adds a network interface to the configuration profile. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	configInterface, errText := configInterfaceFromTool(request)
@@ -473,7 +506,8 @@ func NewLinodeInstanceConfigInterfaceUpdateTool(cfg *config.Config) (mcp.Tool, p
 			mcp.WithString("interface", mcp.Required(),
 				mcp.Description("JSON object with interface update fields: ip_ranges, ipv4, and/or primary.")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm configuration profile interface update.")),
+				mcp.Description("Must be true to confirm configuration profile interface update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceConfigInterfaceUpdateRequest,
 	)
@@ -482,10 +516,6 @@ func NewLinodeInstanceConfigInterfaceUpdateTool(cfg *config.Config) (mcp.Tool, p
 }
 
 func handleInstanceConfigInterfaceUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This updates a network interface on the configuration profile. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	linodeID, linodeIDOK := getPositiveIntArgument(request, "linode_id")
 	if !linodeIDOK {
 		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
@@ -499,6 +529,22 @@ func handleInstanceConfigInterfaceUpdateRequest(ctx context.Context, request *mc
 	interfaceID, interfaceIDOK := getPositiveIntArgument(request, paramConfigInterfaceID)
 	if !interfaceIDOK {
 		return mcp.NewToolResultError("interface_id must be a positive integer"), nil
+	}
+
+	if IsDryRun(request) {
+		if _, errText := updateConfigInterfaceFromTool(request); errText != "" {
+			return mcp.NewToolResultError(errText), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_config_interface_update", "PUT",
+			fmt.Sprintf("/linode/instances/%d/configs/%d/interfaces/%d", linodeID, configID, interfaceID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetInstanceConfigInterface(ctx, linodeID, configID, interfaceID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This updates a network interface on the configuration profile. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	updateReq, errText := updateConfigInterfaceFromTool(request)
@@ -577,7 +623,8 @@ func NewLinodeInstanceConfigInterfacesReorderTool(cfg *config.Config) (mcp.Tool,
 			mcp.WithString("ids", mcp.Required(),
 				mcp.Description("JSON array of existing configuration profile interface IDs in the desired order, e.g. [101,102,103]")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm configuration interface reorder.")),
+				mcp.Description("Must be true to confirm configuration interface reorder. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceConfigInterfacesReorderRequest,
 	)
@@ -586,10 +633,6 @@ func NewLinodeInstanceConfigInterfacesReorderTool(cfg *config.Config) (mcp.Tool,
 }
 
 func handleInstanceConfigInterfacesReorderRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This reorders network interfaces on the configuration profile. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
@@ -598,6 +641,22 @@ func handleInstanceConfigInterfacesReorderRequest(ctx context.Context, request *
 	configID, validationMessage := instanceConfigIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		if _, reorderMessage := buildReorderConfigInterfacesRequest(request); reorderMessage != "" {
+			return mcp.NewToolResultError(reorderMessage), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_config_interfaces_reorder", httpMethodPost,
+			fmt.Sprintf("/linode/instances/%d/configs/%d/interfaces/order", linodeID, configID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetInstanceConfig(ctx, linodeID, configID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This reorders network interfaces on the configuration profile. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	reorderReq, validationMessage := buildReorderConfigInterfacesRequest(request)
@@ -750,7 +809,8 @@ func NewLinodeInstanceConfigInterfaceDeleteTool(cfg *config.Config) (mcp.Tool, p
 			mcp.WithNumber("interface_id", mcp.Required(),
 				mcp.Description("The ID of the configuration profile interface to delete")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm configuration profile interface deletion.")),
+				mcp.Description("Must be true to confirm configuration profile interface deletion. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceConfigInterfaceDeleteRequest,
 	)
@@ -759,10 +819,6 @@ func NewLinodeInstanceConfigInterfaceDeleteTool(cfg *config.Config) (mcp.Tool, p
 }
 
 func handleInstanceConfigInterfaceDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This removes a network interface from the configuration profile. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	linodeID, linodeIDOK := getPositiveIntArgument(request, "linode_id")
 	if !linodeIDOK {
 		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
@@ -776,6 +832,18 @@ func handleInstanceConfigInterfaceDeleteRequest(ctx context.Context, request *mc
 	interfaceID, interfaceIDOK := getPositiveIntArgument(request, "interface_id")
 	if !interfaceIDOK {
 		return mcp.NewToolResultError(linode.ErrInterfaceIDPositive.Error()), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_config_interface_delete", httpMethodDelete,
+			fmt.Sprintf("/linode/instances/%d/configs/%d/interfaces/%d", linodeID, configID, interfaceID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetInstanceConfigInterface(ctx, linodeID, configID, interfaceID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This removes a network interface from the configuration profile. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -838,7 +906,8 @@ func NewLinodeInstanceConfigUpdateTool(cfg *config.Config) (mcp.Tool, profiles.C
 			mcp.WithString("interfaces",
 				mcp.Description("Optional interfaces JSON array")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm configuration profile update.")),
+				mcp.Description("Must be true to confirm configuration profile update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceConfigUpdateRequest,
 	)
@@ -847,10 +916,6 @@ func NewLinodeInstanceConfigUpdateTool(cfg *config.Config) (mcp.Tool, profiles.C
 }
 
 func handleInstanceConfigUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This updates a configuration profile on the instance. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	linodeID, linodeIDOK := getPositiveIntArgument(request, "linode_id")
 	if !linodeIDOK {
 		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
@@ -859,6 +924,22 @@ func handleInstanceConfigUpdateRequest(ctx context.Context, request *mcp.CallToo
 	configID, configIDOK := getPositiveIntArgument(request, "config_id")
 	if !configIDOK {
 		return mcp.NewToolResultError("config_id must be a positive integer"), nil
+	}
+
+	if IsDryRun(request) {
+		if _, errText := buildUpdateConfigRequest(request); errText != "" {
+			return mcp.NewToolResultError(errText), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_config_update", "PUT",
+			fmt.Sprintf("/linode/instances/%d/configs/%d", linodeID, configID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetInstanceConfig(ctx, linodeID, configID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This updates a configuration profile on the instance. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	updateReq, errText := buildUpdateConfigRequest(request)

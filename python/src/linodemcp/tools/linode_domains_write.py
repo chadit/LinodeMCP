@@ -9,6 +9,7 @@ from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     ENV_PARAM_SCHEMA,
     PARAM_DRY_RUN,
+    build_dry_run_response,
     error_response,
     execute_dry_run,
     execute_tool,
@@ -24,7 +25,9 @@ def create_linode_domain_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_domain_create tool."""
     return Tool(
         name="linode_domain_create",
-        description="Creates a new DNS domain.",
+        description=(
+            "Creates a new DNS domain. Pass dry_run=true to preview without creating."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -49,8 +52,12 @@ def create_linode_domain_create_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Must be true to confirm this operation.",
+                    "description": (
+                        "Must be true to confirm this operation."
+                        " Ignored when dry_run=true."
+                    ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["domain", "confirm"],
         },
@@ -61,10 +68,21 @@ async def handle_linode_domain_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_domain_create tool request."""
+    domain_name = arguments.get("domain", "")
+
+    if is_dry_run(arguments):
+        if not domain_name:
+            return error_response("domain is required")
+        return build_dry_run_response(
+            "linode_domain_create",
+            arguments.get("environment", ""),
+            "POST",
+            "/domains",
+            None,
+        )
+
     if not arguments.get("confirm"):
         return error_response("This creates a DNS domain. Set confirm=true to proceed.")
-
-    domain_name = arguments.get("domain", "")
 
     if not domain_name:
         return error_response("domain is required")

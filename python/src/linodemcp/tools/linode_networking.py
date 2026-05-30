@@ -9,6 +9,8 @@ from mcp.types import TextContent, Tool
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
+    PARAM_DRY_RUN,
+    build_dry_run_response,
     error_response,
     execute_dry_run,
     execute_tool,
@@ -74,7 +76,7 @@ def create_linode_vlan_delete_tool() -> tuple[Tool, Capability]:
                         "Must be true to confirm deletion. Ignored when dry_run=true."
                     ),
                 },
-                **DRY_RUN_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["region_id", "label", "confirm"],
         },
@@ -162,25 +164,19 @@ def create_linode_ipv4_share_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": "Must be true to confirm sharing IPs.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["ips", "linode_id", "confirm"],
         },
     ), Capability.Write
 
 
-async def handle_linode_ipv4_share(
-    arguments: dict[str, Any], cfg: Config
-) -> list[TextContent]:
-    """Handle linode_ipv4_share tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return error_response(
-            "This modifies network state. Set confirm=true to proceed."
-        )
-
+def _parse_ipv4_share(
+    arguments: dict[str, Any],
+) -> tuple[list[str], int] | list[TextContent]:
+    """Parse ips and linode_id; return the pair or an error response."""
     ips = arguments.get("ips")
     linode_id = arguments.get("linode_id")
-
     if not isinstance(ips, list):
         return error_response("ips must be a non-empty list of IPv4 addresses")
     typed_ips = cast("list[str]", ips)
@@ -190,6 +186,35 @@ async def handle_linode_ipv4_share(
         return error_response("linode_id is required")
     if not isinstance(linode_id, int):
         return error_response("linode_id must be an integer")
+    return typed_ips, linode_id
+
+
+async def handle_linode_ipv4_share(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_ipv4_share tool request."""
+    if is_dry_run(arguments):
+        parsed = _parse_ipv4_share(arguments)
+        if isinstance(parsed, list):
+            return parsed
+        return build_dry_run_response(
+            "linode_ipv4_share",
+            arguments.get("environment", ""),
+            "POST",
+            "/networking/ips/share",
+            None,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return error_response(
+            "This modifies network state. Set confirm=true to proceed."
+        )
+
+    parsed = _parse_ipv4_share(arguments)
+    if isinstance(parsed, list):
+        return parsed
+    typed_ips, linode_id = parsed
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         result = await client.share_ipv4s(typed_ips, linode_id)
@@ -238,21 +263,17 @@ def create_linode_ipv4_assign_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": "Must be true to confirm assigning IPv4 addresses.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["region", "assignments", "confirm"],
         },
     ), Capability.Write
 
 
-async def handle_linode_ipv4_assign(
-    arguments: dict[str, Any], cfg: Config
-) -> list[TextContent]:
-    """Handle linode_ipv4_assign tool request."""
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This modifies network assignments. Set confirm=true to proceed."
-        )
-
+def _parse_ipv4_assign(
+    arguments: dict[str, Any],
+) -> tuple[str, list[dict[str, Any]]] | list[TextContent]:
+    """Parse region and assignments; return the pair or an error response."""
     region = arguments.get("region")
     assignments = arguments.get("assignments")
 
@@ -289,6 +310,35 @@ async def handle_linode_ipv4_assign(
 
     if assignment_error is not None:
         return error_response(assignment_error)
+
+    return region, typed_assignments
+
+
+async def handle_linode_ipv4_assign(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_ipv4_assign tool request."""
+    if is_dry_run(arguments):
+        parsed = _parse_ipv4_assign(arguments)
+        if isinstance(parsed, list):
+            return parsed
+        return build_dry_run_response(
+            "linode_ipv4_assign",
+            arguments.get("environment", ""),
+            "POST",
+            "/networking/ips/assign",
+            None,
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This modifies network assignments. Set confirm=true to proceed."
+        )
+
+    parsed = _parse_ipv4_assign(arguments)
+    if isinstance(parsed, list):
+        return parsed
+    region, typed_assignments = parsed
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         result = await client.assign_ipv4s(region, typed_assignments)

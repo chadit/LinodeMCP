@@ -8,6 +8,8 @@ from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     ENV_PARAM_SCHEMA,
+    PARAM_DRY_RUN,
+    build_dry_run_response,
     error_response,
     execute_dry_run,
     execute_tool,
@@ -133,6 +135,47 @@ def _node_update_fields(arguments: dict[str, Any]) -> tuple[dict[str, Any], str 
     return fields, None
 
 
+def _nb_config_ids(
+    arguments: dict[str, Any],
+) -> tuple[int, int] | list[TextContent]:
+    """Parse nodebalancer_id and config_id; return the pair or an error."""
+    nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
+    if nodebalancer_id is None:
+        return error_response("nodebalancer_id must be a positive integer")
+    config_id = _positive_int_argument(arguments, "config_id")
+    if config_id is None:
+        return error_response("config_id must be a positive integer")
+    return nodebalancer_id, config_id
+
+
+def _nb_config_node_ids(
+    arguments: dict[str, Any],
+) -> tuple[int, int, int] | list[TextContent]:
+    """Parse nodebalancer_id, config_id, and node_id, or return an error."""
+    ids = _nb_config_ids(arguments)
+    if isinstance(ids, list):
+        return ids
+    node_id = _positive_int_argument(arguments, "node_id")
+    if node_id is None:
+        return error_response("node_id must be a positive integer")
+    return ids[0], ids[1], node_id
+
+
+def _firewalls_update_fields(
+    arguments: dict[str, Any],
+) -> tuple[list[int], int | None, int | None] | list[TextContent]:
+    """Parse firewall_ids plus pagination, or return an error response."""
+    firewall_ids = _firewall_ids_argument(arguments)
+    if firewall_ids is None:
+        return error_response("firewall_ids must be a list of positive integers")
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+    return firewall_ids, page, page_size
+
+
 def create_linode_nodebalancer_firewalls_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_nodebalancer_firewalls_update tool."""
     return Tool(
@@ -174,6 +217,7 @@ def create_linode_nodebalancer_firewalls_update_tool() -> tuple[Tool, Capability
                         "Must be true to replace NodeBalancer firewall assignments."
                     ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["nodebalancer_id", "firewall_ids", "confirm"],
         },
@@ -184,6 +228,24 @@ async def handle_linode_nodebalancer_firewalls_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_nodebalancer_firewalls_update tool request."""
+    if is_dry_run(arguments):
+        nb_id = _positive_int_argument(arguments, "nodebalancer_id")
+        if nb_id is None:
+            return error_response("nodebalancer_id must be a positive integer")
+        nb = nb_id
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_nodebalancer(nb)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_nodebalancer_firewalls_update",
+            "PUT",
+            f"/nodebalancers/{nb}/firewalls",
+            _fetch,
+        )
+
     if arguments.get("confirm") is not True:
         return error_response("confirm must be true")
 
@@ -191,15 +253,10 @@ async def handle_linode_nodebalancer_firewalls_update(
     if nodebalancer_id is None:
         return error_response("nodebalancer_id must be a positive integer")
 
-    firewall_ids = _firewall_ids_argument(arguments)
-    if firewall_ids is None:
-        return error_response("firewall_ids must be a list of positive integers")
-
-    try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
-    except (TypeError, ValueError) as exc:
-        return error_response(str(exc))
+    parsed = _firewalls_update_fields(arguments)
+    if isinstance(parsed, list):
+        return parsed
+    firewall_ids, page, page_size = parsed
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.update_nodebalancer_firewalls(
@@ -237,6 +294,7 @@ def create_linode_nodebalancer_config_rebuild_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": "Must be true to rebuild the NodeBalancer config.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["nodebalancer_id", "config_id", "confirm"],
         },
@@ -247,6 +305,24 @@ async def handle_linode_nodebalancer_config_rebuild(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_nodebalancer_config_rebuild tool request."""
+    if is_dry_run(arguments):
+        ids = _nb_config_ids(arguments)
+        if isinstance(ids, list):
+            return ids
+        nb, config = ids
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_nodebalancer_config(nb, config)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_nodebalancer_config_rebuild",
+            "POST",
+            f"/nodebalancers/{nb}/configs/{config}/rebuild",
+            _fetch,
+        )
+
     if arguments.get("confirm") is not True:
         return error_response("confirm must be true")
 
@@ -305,7 +381,7 @@ def create_linode_nodebalancer_config_delete_tool() -> tuple[Tool, Capability]:
                         "Must be true to confirm deletion. Ignored when dry_run=true."
                     ),
                 },
-                **DRY_RUN_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["nodebalancer_id", "config_id", "confirm"],
         },
@@ -384,9 +460,11 @@ def create_linode_nodebalancer_create_tool() -> tuple[Tool, Capability]:
                 "confirm": {
                     "type": "boolean",
                     "description": (
-                        "Must be true to confirm creation. This incurs billing."
+                        "Must be true to confirm creation. This incurs billing. "
+                        "Ignored when dry_run=true."
                     ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["region", "confirm"],
         },
@@ -397,9 +475,20 @@ async def handle_linode_nodebalancer_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_nodebalancer_create tool request."""
-    confirm = arguments.get("confirm", False)
+    region = arguments.get("region", "")
 
-    if not confirm:
+    if is_dry_run(arguments):
+        if not region:
+            return error_response("region is required")
+        return build_dry_run_response(
+            "linode_nodebalancer_create",
+            arguments.get("environment", ""),
+            "POST",
+            "/nodebalancers",
+            None,
+        )
+
+    if not arguments.get("confirm"):
         return [
             TextContent(
                 type="text",
@@ -407,7 +496,6 @@ async def handle_linode_nodebalancer_create(
             )
         ]
 
-    region = arguments.get("region", "")
     if not region:
         return error_response("region is required")
 
@@ -458,8 +546,12 @@ def create_linode_nodebalancer_update_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Set true to confirm this mutating operation.",
+                    "description": (
+                        "Set true to confirm this mutating operation. "
+                        "Ignored when dry_run=true."
+                    ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["nodebalancer_id", "confirm"],
         },
@@ -474,6 +566,20 @@ async def handle_linode_nodebalancer_update(
 
     if not nodebalancer_id:
         return error_response("nodebalancer_id is required")
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_nodebalancer(int(nodebalancer_id))
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_nodebalancer_update",
+            "PUT",
+            f"/nodebalancers/{int(nodebalancer_id)}",
+            _fetch,
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         nb = await client.update_nodebalancer(
@@ -517,7 +623,7 @@ def create_linode_nodebalancer_delete_tool() -> tuple[Tool, Capability]:
                         "Must be true to confirm deletion. Ignored when dry_run=true."
                     ),
                 },
-                **DRY_RUN_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["nodebalancer_id", "confirm"],
         },
@@ -626,6 +732,7 @@ def create_linode_nodebalancer_config_node_create_tool() -> tuple[Tool, Capabili
                         "Must be true to create the NodeBalancer config node."
                     ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
                 "nodebalancer_id",
@@ -642,16 +749,26 @@ async def handle_linode_nodebalancer_config_node_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_nodebalancer_config_node_create tool request."""
+    if is_dry_run(arguments):
+        ids = _nb_config_ids(arguments)
+        if isinstance(ids, list):
+            return ids
+        nb, config = ids
+        return build_dry_run_response(
+            "linode_nodebalancer_config_node_create",
+            arguments.get("environment", ""),
+            "POST",
+            f"/nodebalancers/{nb}/configs/{config}/nodes",
+            None,
+        )
+
     if arguments.get("confirm") is not True:
         return error_response("confirm must be true")
 
-    nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
-    if nodebalancer_id is None:
-        return error_response("nodebalancer_id must be a positive integer")
-
-    config_id = _positive_int_argument(arguments, "config_id")
-    if config_id is None:
-        return error_response("config_id must be a positive integer")
+    ids = _nb_config_ids(arguments)
+    if isinstance(ids, list):
+        return ids
+    nodebalancer_id, config_id = ids
 
     fields, field_error = _node_create_fields(arguments)
     if field_error is not None:
@@ -734,6 +851,7 @@ def create_linode_nodebalancer_config_node_update_tool() -> tuple[Tool, Capabili
                         "Must be true to update the NodeBalancer config node."
                     ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["nodebalancer_id", "config_id", "node_id", "confirm"],
         },
@@ -744,20 +862,31 @@ async def handle_linode_nodebalancer_config_node_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_nodebalancer_config_node_update tool request."""
+    if is_dry_run(arguments):
+        ids = _nb_config_node_ids(arguments)
+        if isinstance(ids, list):
+            return ids
+        nb, config, node = ids
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_nodebalancer_config_node(nb, config, node)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_nodebalancer_config_node_update",
+            "PUT",
+            f"/nodebalancers/{nb}/configs/{config}/nodes/{node}",
+            _fetch,
+        )
+
     if arguments.get("confirm") is not True:
         return error_response("confirm must be true")
 
-    nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
-    if nodebalancer_id is None:
-        return error_response("nodebalancer_id must be a positive integer")
-
-    config_id = _positive_int_argument(arguments, "config_id")
-    if config_id is None:
-        return error_response("config_id must be a positive integer")
-
-    node_id = _positive_int_argument(arguments, "node_id")
-    if node_id is None:
-        return error_response("node_id must be a positive integer")
+    ids = _nb_config_node_ids(arguments)
+    if isinstance(ids, list):
+        return ids
+    nodebalancer_id, config_id, node_id = ids
 
     fields, field_error = _node_update_fields(arguments)
     if field_error is not None:
@@ -816,7 +945,7 @@ def create_linode_nodebalancer_config_node_delete_tool() -> tuple[Tool, Capabili
                         "Must be true to confirm deletion. Ignored when dry_run=true."
                     ),
                 },
-                **DRY_RUN_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["nodebalancer_id", "config_id", "node_id", "confirm"],
         },
@@ -1000,6 +1129,7 @@ def create_linode_nodebalancer_config_update_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": "Must be true to update the NodeBalancer config.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["nodebalancer_id", "config_id", "confirm"],
         },
@@ -1010,6 +1140,24 @@ async def handle_linode_nodebalancer_config_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_nodebalancer_config_update tool request."""
+    if is_dry_run(arguments):
+        ids = _nb_config_ids(arguments)
+        if isinstance(ids, list):
+            return ids
+        nb, config = ids
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_nodebalancer_config(nb, config)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_nodebalancer_config_update",
+            "PUT",
+            f"/nodebalancers/{nb}/configs/{config}",
+            _fetch,
+        )
+
     if arguments.get("confirm") is not True:
         return error_response("confirm must be true")
 
@@ -1159,6 +1307,7 @@ def create_linode_nodebalancer_config_create_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": "Must be true to create the NodeBalancer config.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["nodebalancer_id", "confirm"],
         },
@@ -1169,6 +1318,18 @@ async def handle_linode_nodebalancer_config_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_nodebalancer_config_create tool request."""
+    if is_dry_run(arguments):
+        nb_id = _positive_int_argument(arguments, "nodebalancer_id")
+        if nb_id is None:
+            return error_response("nodebalancer_id must be a positive integer")
+        return build_dry_run_response(
+            "linode_nodebalancer_config_create",
+            arguments.get("environment", ""),
+            "POST",
+            f"/nodebalancers/{nb_id}/configs",
+            None,
+        )
+
     if arguments.get("confirm") is not True:
         return error_response("confirm must be true")
 

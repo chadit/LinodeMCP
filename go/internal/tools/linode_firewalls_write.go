@@ -13,38 +13,43 @@ import (
 
 // NewLinodeFirewallCreateTool creates a tool for creating a firewall.
 func NewLinodeFirewallCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newToolWithHandler(
+		cfg,
 		"linode_firewall_create",
-		mcp.WithDescription("Creates a new Cloud Firewall. The firewall is created with no rules by default."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithString(
-			"label",
-			mcp.Required(),
-			mcp.Description("A label for the firewall (must be unique)"),
-		),
-		mcp.WithString(
-			"inbound_policy",
-			mcp.Description("Default policy for inbound traffic: 'ACCEPT' or 'DROP' (optional, default: 'ACCEPT')"),
-		),
-		mcp.WithString(
-			"outbound_policy",
-			mcp.Description("Default policy for outbound traffic: 'ACCEPT' or 'DROP' (optional, default: 'ACCEPT')"),
-		),
-		mcp.WithBoolean(
-			paramConfirm,
-			mcp.Required(),
-			mcp.Description("Must be set to true to confirm firewall creation."),
-		),
+		"Creates a new Cloud Firewall. The firewall is created with no rules by default.",
+		[]mcp.ToolOption{
+			mcp.WithString("label", mcp.Required(),
+				mcp.Description("A label for the firewall (must be unique)")),
+			mcp.WithString("inbound_policy",
+				mcp.Description("Default policy for inbound traffic: 'ACCEPT' or 'DROP' (optional, default: 'ACCEPT')")),
+			mcp.WithString("outbound_policy",
+				mcp.Description("Default policy for outbound traffic: 'ACCEPT' or 'DROP' (optional, default: 'ACCEPT')")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be set to true to confirm firewall creation. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeFirewallCreateRequest,
 	)
 
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeFirewallCreateRequest(ctx, &request, cfg)
+	return tool, profiles.CapWrite, handler
+}
+
+// validateFirewallCreateArgs validates the firewall create args, returning an
+// error message or "". Shared by the real create path and the dry-run preview.
+func validateFirewallCreateArgs(label, inboundPolicy, outboundPolicy string) string {
+	if label == "" {
+		return errLabelRequired
 	}
 
-	return tool, profiles.CapWrite, handler
+	if err := validateFirewallPolicy(inboundPolicy); err != nil {
+		return fmt.Sprintf("inbound_policy: %v", err)
+	}
+
+	if err := validateFirewallPolicy(outboundPolicy); err != nil {
+		return fmt.Sprintf("outbound_policy: %v", err)
+	}
+
+	return ""
 }
 
 func handleLinodeFirewallCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -52,20 +57,20 @@ func handleLinodeFirewallCreateRequest(ctx context.Context, request *mcp.CallToo
 	inboundPolicy := request.GetString("inbound_policy", "ACCEPT")
 	outboundPolicy := request.GetString("outbound_policy", "ACCEPT")
 
+	if IsDryRun(request) {
+		if msg := validateFirewallCreateArgs(label, inboundPolicy, outboundPolicy); msg != "" {
+			return mcp.NewToolResultError(msg), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_firewall_create", httpMethodPost, "/networking/firewalls", nil)
+	}
+
 	if result := RequireConfirm(request, "This creates a Cloud Firewall. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
-	if label == "" {
-		return mcp.NewToolResultError("label is required"), nil
-	}
-
-	if err := validateFirewallPolicy(inboundPolicy); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("inbound_policy: %v", err)), nil
-	}
-
-	if err := validateFirewallPolicy(outboundPolicy); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("outbound_policy: %v", err)), nil
+	if msg := validateFirewallCreateArgs(label, inboundPolicy, outboundPolicy); msg != "" {
+		return mcp.NewToolResultError(msg), nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -110,12 +115,35 @@ func NewLinodeFirewallUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 			mcp.WithString("inbound_policy", mcp.Description("Default policy for inbound traffic: 'ACCEPT' or 'DROP' (optional)")),
 			mcp.WithString("outbound_policy", mcp.Description("Default policy for outbound traffic: 'ACCEPT' or 'DROP' (optional)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm firewall update.")),
+				mcp.Description("Must be set to true to confirm firewall update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeFirewallUpdateRequest,
 	)
 
 	return tool, profiles.CapWrite, handler
+}
+
+// validateFirewallUpdateArgs validates the firewall update args, returning an
+// error message or "". Shared by the real update path and the dry-run preview.
+func validateFirewallUpdateArgs(firewallID int, inboundPolicy, outboundPolicy string) string {
+	if firewallID == 0 {
+		return "firewall_id is required"
+	}
+
+	if inboundPolicy != "" {
+		if err := validateFirewallPolicy(inboundPolicy); err != nil {
+			return fmt.Sprintf("inbound_policy: %v", err)
+		}
+	}
+
+	if outboundPolicy != "" {
+		if err := validateFirewallPolicy(outboundPolicy); err != nil {
+			return fmt.Sprintf("outbound_policy: %v", err)
+		}
+	}
+
+	return ""
 }
 
 func handleLinodeFirewallUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -125,24 +153,22 @@ func handleLinodeFirewallUpdateRequest(ctx context.Context, request *mcp.CallToo
 	inboundPolicy := request.GetString("inbound_policy", "")
 	outboundPolicy := request.GetString("outbound_policy", "")
 
+	if IsDryRun(request) {
+		if msg := validateFirewallUpdateArgs(firewallID, inboundPolicy, outboundPolicy); msg != "" {
+			return mcp.NewToolResultError(msg), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_firewall_update", "PUT",
+			fmt.Sprintf("/networking/firewalls/%d", firewallID),
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetFirewall(ctx, firewallID) })
+	}
+
 	if result := RequireConfirm(request, "This updates a Cloud Firewall. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
-	if firewallID == 0 {
-		return mcp.NewToolResultError("firewall_id is required"), nil
-	}
-
-	if inboundPolicy != "" {
-		if err := validateFirewallPolicy(inboundPolicy); err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("inbound_policy: %v", err)), nil
-		}
-	}
-
-	if outboundPolicy != "" {
-		if err := validateFirewallPolicy(outboundPolicy); err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("outbound_policy: %v", err)), nil
-		}
+	if msg := validateFirewallUpdateArgs(firewallID, inboundPolicy, outboundPolicy); msg != "" {
+		return mcp.NewToolResultError(msg), nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -203,7 +229,7 @@ func handleLinodeFirewallDeleteRequest(ctx context.Context, request *mcp.CallToo
 		IDParam:        "firewall_id",
 		Method:         httpMethodDelete,
 		PathPattern:    "/networking/firewalls/%d",
-		ConfirmMessage: "This operation is destructive. Set confirm=true to proceed.",
+		ConfirmMessage: destroyConfirmMessage,
 		SuccessFormat:  "Firewall %d removed successfully",
 		FetchState: func(ctx context.Context, c *linode.Client, id int) (any, error) {
 			return c.GetFirewall(ctx, id)

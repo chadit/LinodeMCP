@@ -103,7 +103,8 @@ func NewLinodeInstanceIPAllocateTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 			mcp.WithBoolean("public", mcp.Required(),
 				mcp.Description("Whether the IP address should be public (true) or private (false)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm IP allocation. Additional IPs may incur charges.")),
+				mcp.Description("Must be true to confirm IP allocation. Additional IPs may incur charges. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceIPAllocateRequest,
 	)
@@ -112,16 +113,30 @@ func NewLinodeInstanceIPAllocateTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 }
 
 func handleInstanceIPAllocateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	linodeID := request.GetInt("linode_id", 0)
+	ipType := request.GetString("type", "")
+
+	if IsDryRun(request) {
+		if linodeID == 0 {
+			return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
+		}
+
+		if ipType == "" {
+			return mcp.NewToolResultError("type is required (e.g. 'ipv4')"), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_ip_allocate", httpMethodPost,
+			fmt.Sprintf("/linode/instances/%d/ips", linodeID), nil)
+	}
+
 	if result := RequireConfirm(request, "This allocates a new IP address which may incur charges. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
-	linodeID := request.GetInt("linode_id", 0)
 	if linodeID == 0 {
 		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
 	}
 
-	ipType := request.GetString("type", "")
 	if ipType == "" {
 		return mcp.NewToolResultError("type is required (e.g. 'ipv4')"), nil
 	}
@@ -168,7 +183,8 @@ func NewLinodeInstanceIPUpdateRDNSTool(cfg *config.Config) (mcp.Tool, profiles.C
 			mcp.WithString("rdns", mcp.Required(),
 				mcp.Description("The reverse DNS hostname to assign to the IP address")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm the RDNS update.")),
+				mcp.Description("Must be true to confirm the RDNS update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceIPUpdateRDNSRequest,
 	)
@@ -176,28 +192,51 @@ func NewLinodeInstanceIPUpdateRDNSTool(cfg *config.Config) (mcp.Tool, profiles.C
 	return tool, profiles.CapWrite, handler
 }
 
+// validateInstanceIPRDNSArgs validates the IP RDNS update args, returning an
+// error message or "". Shared by the real path and the dry-run preview.
+func validateInstanceIPRDNSArgs(linodeID int, address, rdns string) string {
+	if linodeID == 0 {
+		return ErrLinodeIDRequired.Error()
+	}
+
+	if address == "" {
+		return "address is required"
+	}
+
+	if net.ParseIP(address) == nil {
+		return "address must be a valid IP address"
+	}
+
+	if rdns == "" {
+		return "rdns is required"
+	}
+
+	return ""
+}
+
 func handleInstanceIPUpdateRDNSRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	linodeID := request.GetInt("linode_id", 0)
+	address := request.GetString("address", "")
+	rdns := request.GetString("rdns", "")
+
+	if IsDryRun(request) {
+		if msg := validateInstanceIPRDNSArgs(linodeID, address, rdns); msg != "" {
+			return mcp.NewToolResultError(msg), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_ip_update_rdns", "PUT",
+			fmt.Sprintf("/linode/instances/%d/ips/%s", linodeID, address),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetInstanceIP(ctx, linodeID, address)
+			})
+	}
+
 	if result := RequireConfirm(request, "This updates reverse DNS for the IP address. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
-	linodeID := request.GetInt("linode_id", 0)
-	if linodeID == 0 {
-		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
-	}
-
-	address := request.GetString("address", "")
-	if address == "" {
-		return mcp.NewToolResultError("address is required"), nil
-	}
-
-	if net.ParseIP(address) == nil {
-		return mcp.NewToolResultError("address must be a valid IP address"), nil
-	}
-
-	rdns := request.GetString("rdns", "")
-	if rdns == "" {
-		return mcp.NewToolResultError("rdns is required"), nil
+	if msg := validateInstanceIPRDNSArgs(linodeID, address, rdns); msg != "" {
+		return mcp.NewToolResultError(msg), nil
 	}
 
 	client, err := prepareClient(request, cfg)

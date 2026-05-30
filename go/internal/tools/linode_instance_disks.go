@@ -120,7 +120,8 @@ func NewLinodeInstanceDiskCreateTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 			mcp.WithString("authorized_users",
 				mcp.Description("Comma-separated list of Linode usernames whose SSH keys to install")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm disk creation.")),
+				mcp.Description("Must be true to confirm disk creation. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceDiskCreateRequest,
 	)
@@ -128,24 +129,45 @@ func NewLinodeInstanceDiskCreateTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 	return tool, profiles.CapWrite, handler
 }
 
+// validateDiskCreateArgs validates the disk create args, returning an error
+// message or "". Shared by the real create path and the dry-run preview.
+func validateDiskCreateArgs(linodeID int, label string, size int) string {
+	if linodeID == 0 {
+		return ErrLinodeIDRequired.Error()
+	}
+
+	if label == "" {
+		return errLabelRequired
+	}
+
+	if size == 0 {
+		return "size is required and must be greater than 0"
+	}
+
+	return ""
+}
+
 func handleInstanceDiskCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	linodeID := request.GetInt("linode_id", 0)
+	label := request.GetString("label", "")
+	size := request.GetInt("size", 0)
+
+	if IsDryRun(request) {
+		if msg := validateDiskCreateArgs(linodeID, label, size); msg != "" {
+			return mcp.NewToolResultError(msg), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_disk_create", httpMethodPost,
+			fmt.Sprintf("/linode/instances/%d/disks", linodeID),
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, linodeID) })
+	}
+
 	if result := RequireConfirm(request, "This creates a new disk on the instance. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
-	linodeID := request.GetInt("linode_id", 0)
-	if linodeID == 0 {
-		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
-	}
-
-	label := request.GetString("label", "")
-	if label == "" {
-		return mcp.NewToolResultError("label is required"), nil
-	}
-
-	size := request.GetInt("size", 0)
-	if size == 0 {
-		return mcp.NewToolResultError("size is required and must be greater than 0"), nil
+	if msg := validateDiskCreateArgs(linodeID, label, size); msg != "" {
+		return mcp.NewToolResultError(msg), nil
 	}
 
 	req := linode.CreateDiskRequest{
@@ -212,7 +234,8 @@ func NewLinodeInstanceDiskUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 			mcp.WithString("label",
 				mcp.Description("New label for the disk")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm disk update.")),
+				mcp.Description("Must be true to confirm disk update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceDiskUpdateRequest,
 	)
@@ -220,19 +243,43 @@ func NewLinodeInstanceDiskUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 	return tool, profiles.CapWrite, handler
 }
 
+// validateInstanceDiskIDs validates the linode_id + disk_id pair, returning an
+// error message or "". Shared by the disk update/clone/resize/password-reset
+// real paths and their dry-run previews.
+func validateInstanceDiskIDs(linodeID, diskID int) string {
+	if linodeID == 0 {
+		return ErrLinodeIDRequired.Error()
+	}
+
+	if diskID == 0 {
+		return ErrDiskIDRequired.Error()
+	}
+
+	return ""
+}
+
 func handleInstanceDiskUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	linodeID := request.GetInt("linode_id", 0)
+	diskID := request.GetInt("disk_id", 0)
+
+	if IsDryRun(request) {
+		if msg := validateInstanceDiskIDs(linodeID, diskID); msg != "" {
+			return mcp.NewToolResultError(msg), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_disk_update", "PUT",
+			fmt.Sprintf("/linode/instances/%d/disks/%d", linodeID, diskID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetInstanceDisk(ctx, linodeID, diskID)
+			})
+	}
+
 	if result := RequireConfirm(request, "This modifies the disk configuration. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
-	linodeID := request.GetInt("linode_id", 0)
-	if linodeID == 0 {
-		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
-	}
-
-	diskID := request.GetInt("disk_id", 0)
-	if diskID == 0 {
-		return mcp.NewToolResultError(ErrDiskIDRequired.Error()), nil
+	if msg := validateInstanceDiskIDs(linodeID, diskID); msg != "" {
+		return mcp.NewToolResultError(msg), nil
 	}
 
 	req := linode.UpdateDiskRequest{}
@@ -317,7 +364,8 @@ func NewLinodeInstanceDiskCloneTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 			mcp.WithNumber("disk_id", mcp.Required(),
 				mcp.Description("The ID of the disk to clone")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm disk clone.")),
+				mcp.Description("Must be true to confirm disk clone. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceDiskCloneRequest,
 	)
@@ -326,18 +374,27 @@ func NewLinodeInstanceDiskCloneTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 }
 
 func handleInstanceDiskCloneRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	linodeID := request.GetInt("linode_id", 0)
+	diskID := request.GetInt("disk_id", 0)
+
+	if IsDryRun(request) {
+		if msg := validateInstanceDiskIDs(linodeID, diskID); msg != "" {
+			return mcp.NewToolResultError(msg), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_disk_clone", httpMethodPost,
+			fmt.Sprintf("/linode/instances/%d/disks/%d/clone", linodeID, diskID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetInstanceDisk(ctx, linodeID, diskID)
+			})
+	}
+
 	if result := RequireConfirm(request, "This clones a disk, consuming additional storage on the instance. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
-	linodeID := request.GetInt("linode_id", 0)
-	if linodeID == 0 {
-		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
-	}
-
-	diskID := request.GetInt("disk_id", 0)
-	if diskID == 0 {
-		return mcp.NewToolResultError(ErrDiskIDRequired.Error()), nil
+	if msg := validateInstanceDiskIDs(linodeID, diskID); msg != "" {
+		return mcp.NewToolResultError(msg), nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -376,7 +433,8 @@ func NewLinodeInstanceDiskResizeTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 			mcp.WithNumber("size", mcp.Required(),
 				mcp.Description("New size for the disk in MB")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm disk resize.")),
+				mcp.Description("Must be true to confirm disk resize. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceDiskResizeRequest,
 	)
@@ -385,21 +443,34 @@ func NewLinodeInstanceDiskResizeTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 }
 
 func handleInstanceDiskResizeRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	linodeID := request.GetInt("linode_id", 0)
+	diskID := request.GetInt("disk_id", 0)
+	size := request.GetInt("size", 0)
+
+	if IsDryRun(request) {
+		if msg := validateInstanceDiskIDs(linodeID, diskID); msg != "" {
+			return mcp.NewToolResultError(msg), nil
+		}
+
+		if size == 0 {
+			return mcp.NewToolResultError("size is required and must be greater than 0"), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_disk_resize", httpMethodPost,
+			fmt.Sprintf("/linode/instances/%d/disks/%d/resize", linodeID, diskID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetInstanceDisk(ctx, linodeID, diskID)
+			})
+	}
+
 	if result := RequireConfirm(request, "This resizes the disk. The instance must be powered off. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
-	linodeID := request.GetInt("linode_id", 0)
-	if linodeID == 0 {
-		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
+	if msg := validateInstanceDiskIDs(linodeID, diskID); msg != "" {
+		return mcp.NewToolResultError(msg), nil
 	}
 
-	diskID := request.GetInt("disk_id", 0)
-	if diskID == 0 {
-		return mcp.NewToolResultError(ErrDiskIDRequired.Error()), nil
-	}
-
-	size := request.GetInt("size", 0)
 	if size == 0 {
 		return mcp.NewToolResultError("size is required and must be greater than 0"), nil
 	}
@@ -445,6 +516,7 @@ func NewLinodeInstanceDiskPasswordResetTool(cfg *config.Config) (mcp.Tool, profi
 				mcp.Description("New disk root password (min 12 chars, must include upper, lower, and digits)")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
 				mcp.Description("Must be true to confirm disk password reset.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleInstanceDiskPasswordResetRequest,
 	)
@@ -453,10 +525,6 @@ func NewLinodeInstanceDiskPasswordResetTool(cfg *config.Config) (mcp.Tool, profi
 }
 
 func handleInstanceDiskPasswordResetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This resets the root password for a disk. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	linodeID := request.GetInt("linode_id", 0)
 	if linodeID == 0 {
 		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
@@ -465,6 +533,20 @@ func handleInstanceDiskPasswordResetRequest(ctx context.Context, request *mcp.Ca
 	diskID := request.GetInt("disk_id", 0)
 	if diskID == 0 {
 		return mcp.NewToolResultError(ErrDiskIDRequired.Error()), nil
+	}
+
+	// Preview fetches the disk metadata, never the secret. The reset payload
+	// itself is write-only, so there is nothing sensitive to surface.
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_instance_disk_password_reset", httpMethodPost,
+			fmt.Sprintf("/linode/instances/%d/disks/%d/password", linodeID, diskID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetInstanceDisk(ctx, linodeID, diskID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This resets the root password for a disk. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	password := request.GetString("password", "")

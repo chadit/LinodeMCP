@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -28,7 +29,8 @@ func NewLinodeMonitorServiceAlertDefinitionUpdateTool(cfg *config.Config) (mcp.T
 			mcp.WithArray(monitorAlertDefinitionChannelIDsParam, mcp.Description("Optional alert channel IDs.")),
 			mcp.WithString(monitorAlertDefinitionDescriptionParam, mcp.Description("Optional alert definition description.")),
 			mcp.WithArray(monitorAlertDefinitionEntityIDsParam, mcp.Description("Optional service entity IDs.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm updating an alert definition.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm updating an alert definition. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeMonitorServiceAlertDefinitionUpdateRequest,
 	)
@@ -37,10 +39,6 @@ func NewLinodeMonitorServiceAlertDefinitionUpdateTool(cfg *config.Config) (mcp.T
 }
 
 func handleLinodeMonitorServiceAlertDefinitionUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This updates a monitor alert definition. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	serviceType, validationMessage := monitorServiceTypeFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
@@ -54,6 +52,18 @@ func handleLinodeMonitorServiceAlertDefinitionUpdateRequest(ctx context.Context,
 	updateRequest, validationMessage := monitorServiceAlertDefinitionUpdateRequestFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, monitorServiceAlertDefinitionUpdateToolName, "PUT",
+			fmt.Sprintf(monitorServicesPath+"/%s/alert-definitions/%d", serviceType, alertID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetMonitorServiceAlertDefinition(ctx, serviceType, alertID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This updates a monitor alert definition. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)

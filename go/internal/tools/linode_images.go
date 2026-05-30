@@ -81,10 +81,11 @@ func NewLinodeImageGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, f
 func NewLinodeImageDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_image_delete",
-		mcp.WithDescription("Deletes a private image by image ID. WARNING: this cannot be undone and replicated instances are also deleted."),
+		mcp.WithDescription("Deletes a private image by image ID. WARNING: this cannot be undone and replicated instances are also deleted. Pass dry_run=true to preview without deleting."),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithString("image_id", mcp.Required(), mcp.Description("The image ID to delete, for example private/12345.")),
-		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm image deletion.")),
+		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm image deletion. Ignored when dry_run=true.")),
+		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -219,10 +220,11 @@ func NewLinodeImageShareGroupTokensListTool(cfg *config.Config) (mcp.Tool, profi
 func NewLinodeImageShareGroupDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_image_sharegroup_delete",
-		mcp.WithDescription("Deletes an owned image share group by ID. WARNING: members lose access to images in the group."),
+		mcp.WithDescription("Deletes an owned image share group by ID. WARNING: members lose access to images in the group. Pass dry_run=true to preview without deleting."),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("The numeric ID of the image share group to delete.")),
-		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm share group deletion.")),
+		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm share group deletion. Ignored when dry_run=true.")),
+		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -234,18 +236,18 @@ func NewLinodeImageShareGroupDeleteTool(cfg *config.Config) (mcp.Tool, profiles.
 
 // NewLinodeImageShareGroupImageDeleteTool creates a tool for revoking a shared image from an owned image share group.
 func NewLinodeImageShareGroupImageDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newToolWithHandler(
+		cfg,
 		"linode_image_sharegroup_image_delete",
-		mcp.WithDescription("Revokes access to one shared image in an owned image share group."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("The numeric image share group ID.")),
-		mcp.WithNumber("image_id", mcp.Required(), mcp.Description("The numeric shared image ID to remove from the group.")),
-		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm shared image removal.")),
+		"Revokes access to one shared image in an owned image share group. Pass dry_run=true to preview without removing.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("The numeric image share group ID.")),
+			mcp.WithNumber("image_id", mcp.Required(), mcp.Description("The numeric shared image ID to remove from the group.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm shared image removal. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleImageShareGroupImageDeleteRequest,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleImageShareGroupImageDeleteRequest(ctx, &request, cfg)
-	}
 
 	return tool, profiles.CapDestroy, handler
 }
@@ -270,10 +272,11 @@ func NewLinodeImageShareGroupTokenGetTool(cfg *config.Config) (mcp.Tool, profile
 func NewLinodeImageShareGroupTokenDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
 		"linode_image_sharegroup_token_delete",
-		mcp.WithDescription("Removes a single image share group membership token by token UUID."),
+		mcp.WithDescription("Removes a single image share group membership token by token UUID. Pass dry_run=true to preview without removing."),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		mcp.WithString("token_uuid", mcp.Required(), mcp.Description("Image share group token UUID.")),
-		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm token removal.")),
+		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm token removal. Ignored when dry_run=true.")),
+		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -285,18 +288,18 @@ func NewLinodeImageShareGroupTokenDeleteTool(cfg *config.Config) (mcp.Tool, prof
 
 // NewLinodeImageShareGroupMemberTokenDeleteTool creates a tool for revoking one accepted image share group membership token.
 func NewLinodeImageShareGroupMemberTokenDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newToolWithHandler(
+		cfg,
 		"linode_image_sharegroup_member_token_delete",
-		mcp.WithDescription("Revokes an accepted image share group membership token from an owned share group."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("The numeric image share group ID.")),
-		mcp.WithString("token_uuid", mcp.Required(), mcp.Description("Image share group member token UUID.")),
-		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm member token revocation.")),
+		"Revokes an accepted image share group membership token from an owned share group. Pass dry_run=true to preview without revoking.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("The numeric image share group ID.")),
+			mcp.WithString("token_uuid", mcp.Required(), mcp.Description("Image share group member token UUID.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm member token revocation. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleImageShareGroupMemberTokenDeleteRequest,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleImageShareGroupMemberTokenDeleteRequest(ctx, &request, cfg)
-	}
 
 	return tool, profiles.CapDestroy, handler
 }
@@ -336,29 +339,28 @@ func NewLinodeImageShareGroupByTokenGetTool(cfg *config.Config) (mcp.Tool, profi
 }
 
 func handleImageDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if confirmResult := RequireConfirm(request, "confirm=true is required"); confirmResult != nil {
-		return confirmResult, nil
-	}
-
 	imageID, validationMessage := privateImageIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := client.DeleteImage(ctx, imageID); err != nil {
-		return mcp.NewToolResultError(formatImageDeleteError(imageID, err)), nil
-	}
-
-	return mcp.NewToolResultText(fmt.Sprintf("Image %s deleted successfully", imageID)), nil
-}
-
-func formatImageDeleteError(imageID string, err error) string {
-	return "Failed to remove image " + imageID + ": " + err.Error()
+	return RunDestructiveAction(ctx, request, cfg, &DestructiveAction{
+		ToolName:       "linode_image_delete",
+		Method:         httpMethodDelete,
+		Path:           "/images/" + imageID,
+		ConfirmMessage: "confirm=true is required to delete the image",
+		FetchState: func(ctx context.Context, c *linode.Client) (any, error) {
+			return c.GetImage(ctx, imageID)
+		},
+		Execute: func(ctx context.Context, c *linode.Client) error {
+			return c.DeleteImage(ctx, imageID)
+		},
+		Success: func() any {
+			return map[string]any{
+				responseKeyMessage: fmt.Sprintf("Image %s deleted successfully", imageID),
+			}
+		},
+	})
 }
 
 func privateImageIDFromTool(request *mcp.CallToolRequest) (string, string) {
@@ -576,36 +578,58 @@ func handleImageShareGroupTokensListRequest(ctx context.Context, request *mcp.Ca
 }
 
 func handleImageShareGroupDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if confirmResult := RequireConfirm(request, "confirm=true is required"); confirmResult != nil {
-		return confirmResult, nil
-	}
-
 	shareGroupID := request.GetInt("sharegroup_id", 0)
 	if shareGroupID <= 0 {
 		return mcp.NewToolResultError("sharegroup_id must be a positive integer"), nil
 	}
 
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := client.DeleteImageShareGroup(ctx, shareGroupID); err != nil {
-		return mcp.NewToolResultError(formatImageShareGroupDeleteError(shareGroupID, err)), nil
-	}
-
-	return mcp.NewToolResultText(fmt.Sprintf("Image share group %d removed successfully", shareGroupID)), nil
+	return RunDestructiveAction(ctx, request, cfg, &DestructiveAction{
+		ToolName:       "linode_image_sharegroup_delete",
+		Method:         httpMethodDelete,
+		Path:           fmt.Sprintf("/images/sharegroups/%d", shareGroupID),
+		ConfirmMessage: "confirm=true is required to delete the image share group",
+		FetchState: func(ctx context.Context, c *linode.Client) (any, error) {
+			return c.GetImageShareGroup(ctx, shareGroupID)
+		},
+		Execute: func(ctx context.Context, c *linode.Client) error {
+			return c.DeleteImageShareGroup(ctx, shareGroupID)
+		},
+		Success: func() any {
+			return map[string]any{
+				responseKeyMessage: fmt.Sprintf("Image share group %d removed successfully", shareGroupID),
+			}
+		},
+	})
 }
 
-func formatImageShareGroupDeleteError(shareGroupID int, err error) string {
-	return fmt.Sprintf("Failed to remove image share group %d: %v", shareGroupID, err)
+// runImageShareGroupChildDestroy runs the destroy flow for a child of an
+// image share group (a shared image, or a member/membership token). The
+// dry-run preview fetches the PARENT share group: the children have no
+// single-GET, and for token children this avoids surfacing the secret.
+func runImageShareGroupChildDestroy(
+	ctx context.Context,
+	request *mcp.CallToolRequest,
+	cfg *config.Config,
+	toolName, path, confirmMessage, successMessage string,
+	shareGroupID int,
+	execute func(ctx context.Context, c *linode.Client) error,
+) (*mcp.CallToolResult, error) {
+	return RunDestructiveAction(ctx, request, cfg, &DestructiveAction{
+		ToolName:       toolName,
+		Method:         httpMethodDelete,
+		Path:           path,
+		ConfirmMessage: confirmMessage,
+		FetchState: func(ctx context.Context, c *linode.Client) (any, error) {
+			return c.GetImageShareGroup(ctx, shareGroupID)
+		},
+		Execute: execute,
+		Success: func() any {
+			return map[string]any{responseKeyMessage: successMessage}
+		},
+	})
 }
 
 func handleImageShareGroupImageDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if confirmResult := RequireConfirm(request, "confirm=true is required"); confirmResult != nil {
-		return confirmResult, nil
-	}
-
 	shareGroupID, validationMessage := imageShareGroupIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
@@ -616,20 +640,17 @@ func handleImageShareGroupImageDeleteRequest(ctx context.Context, request *mcp.C
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := client.DeleteImageShareGroupImage(ctx, shareGroupID, imageID); err != nil {
-		return mcp.NewToolResultError(formatImageShareGroupImageRemoveError(shareGroupID, imageID, err)), nil
-	}
-
-	return mcp.NewToolResultText(fmt.Sprintf("Shared image %d removed from image share group %d successfully", imageID, shareGroupID)), nil
-}
-
-func formatImageShareGroupImageRemoveError(shareGroupID, imageID int, err error) string {
-	return fmt.Sprintf("Failed to remove shared image %d from image share group %d: %v", imageID, shareGroupID, err)
+	return runImageShareGroupChildDestroy(
+		ctx, request, cfg,
+		"linode_image_sharegroup_image_delete",
+		fmt.Sprintf("/images/sharegroups/%d/images/%d", shareGroupID, imageID),
+		"confirm=true is required to remove the shared image",
+		fmt.Sprintf("Shared image %d removed from image share group %d successfully", imageID, shareGroupID),
+		shareGroupID,
+		func(ctx context.Context, c *linode.Client) error {
+			return c.DeleteImageShareGroupImage(ctx, shareGroupID, imageID)
+		},
+	)
 }
 
 func handleImageShareGroupTokenGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -676,36 +697,34 @@ func handleImageShareGroupTokenImagesListRequest(ctx context.Context, request *m
 }
 
 func handleImageShareGroupTokenDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if confirmResult := RequireConfirm(request, "confirm=true is required"); confirmResult != nil {
-		return confirmResult, nil
-	}
-
 	tokenUUID, validationMessage := imageShareGroupTokenUUIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := client.DeleteImageShareGroupToken(ctx, tokenUUID); err != nil {
-		return mcp.NewToolResultError(formatImageShareGroupTokenDeleteError(err)), nil
-	}
-
-	return mcp.NewToolResultText("Image share group token removed successfully"), nil
-}
-
-func formatImageShareGroupTokenDeleteError(err error) string {
-	return "Failed to remove image share group token: " + err.Error()
+	return RunDestructiveAction(ctx, request, cfg, &DestructiveAction{
+		ToolName:       "linode_image_sharegroup_token_delete",
+		Method:         httpMethodDelete,
+		Path:           "/images/sharegroups/tokens/" + tokenUUID,
+		ConfirmMessage: "confirm=true is required to remove the share group token",
+		// Credential safety: resolve the token to its PARENT share group
+		// rather than fetching the token entity, so dry-run never surfaces
+		// the token secret to the model.
+		FetchState: func(ctx context.Context, c *linode.Client) (any, error) {
+			return c.GetImageShareGroupByToken(ctx, tokenUUID)
+		},
+		Execute: func(ctx context.Context, c *linode.Client) error {
+			return c.DeleteImageShareGroupToken(ctx, tokenUUID)
+		},
+		Success: func() any {
+			return map[string]any{
+				responseKeyMessage: "Image share group token removed successfully",
+			}
+		},
+	})
 }
 
 func handleImageShareGroupMemberTokenDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if confirmResult := RequireConfirm(request, "confirm=true is required"); confirmResult != nil {
-		return confirmResult, nil
-	}
-
 	shareGroupID, validationMessage := imageShareGroupIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
@@ -716,20 +735,17 @@ func handleImageShareGroupMemberTokenDeleteRequest(ctx context.Context, request 
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if err := client.DeleteImageShareGroupMemberToken(ctx, shareGroupID, tokenUUID); err != nil {
-		return mcp.NewToolResultError(formatImageShareGroupMemberTokenDeleteError(err)), nil
-	}
-
-	return mcp.NewToolResultText(fmt.Sprintf("Image share group member token %s revoked from share group %d successfully", tokenUUID, shareGroupID)), nil
-}
-
-func formatImageShareGroupMemberTokenDeleteError(err error) string {
-	return "Failed to revoke image share group member token: " + err.Error()
+	return runImageShareGroupChildDestroy(
+		ctx, request, cfg,
+		"linode_image_sharegroup_member_token_delete",
+		fmt.Sprintf("/images/sharegroups/%d/members/%s", shareGroupID, tokenUUID),
+		"confirm=true is required to revoke the member token",
+		fmt.Sprintf("Image share group member token %s revoked from share group %d successfully", tokenUUID, shareGroupID),
+		shareGroupID,
+		func(ctx context.Context, c *linode.Client) error {
+			return c.DeleteImageShareGroupMemberToken(ctx, shareGroupID, tokenUUID)
+		},
+	)
 }
 
 func handleImageShareGroupByTokenGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

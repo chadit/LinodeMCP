@@ -8,6 +8,7 @@ from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     PARAM_DRY_RUN,
+    build_dry_run_response,
     execute_dry_run,
     execute_tool,
     is_dry_run,
@@ -49,8 +50,12 @@ def create_linode_instance_boot_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Set true to confirm this mutating operation.",
+                    "description": (
+                        "Set true to confirm this mutating operation."
+                        " Ignored when dry_run=true."
+                    ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["instance_id", "confirm"],
         },
@@ -66,6 +71,20 @@ async def handle_linode_instance_boot(
 
     if not instance_id:
         return _error_response("instance_id is required")
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_instance(int(instance_id))
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_instance_boot",
+            "POST",
+            f"/linode/instances/{int(instance_id)}/boot",
+            _fetch,
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.boot_instance(int(instance_id), config_id)
@@ -103,8 +122,12 @@ def create_linode_instance_reboot_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Set true to confirm this mutating operation.",
+                    "description": (
+                        "Set true to confirm this mutating operation."
+                        " Ignored when dry_run=true."
+                    ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["instance_id", "confirm"],
         },
@@ -120,6 +143,20 @@ async def handle_linode_instance_reboot(
 
     if not instance_id:
         return _error_response("instance_id is required")
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_instance(int(instance_id))
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_instance_reboot",
+            "POST",
+            f"/linode/instances/{int(instance_id)}/reboot",
+            _fetch,
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.reboot_instance(int(instance_id), config_id)
@@ -151,8 +188,12 @@ def create_linode_instance_shutdown_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Set true to confirm this mutating operation.",
+                    "description": (
+                        "Set true to confirm this mutating operation."
+                        " Ignored when dry_run=true."
+                    ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["instance_id", "confirm"],
         },
@@ -167,6 +208,20 @@ async def handle_linode_instance_shutdown(
 
     if not instance_id:
         return _error_response("instance_id is required")
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_instance(int(instance_id))
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_instance_shutdown",
+            "POST",
+            f"/linode/instances/{int(instance_id)}/shutdown",
+            _fetch,
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.shutdown_instance(int(instance_id))
@@ -259,21 +314,53 @@ def create_linode_instance_create_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": (
                         "Must be true to confirm creation. This incurs billing."
+                        " Ignored when dry_run=true."
                     ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["region", "type", "firewall_id", "confirm"],
         },
     ), Capability.Write
 
 
+def _instance_create_error(
+    region: str, instance_type: str, firewall_id: Any
+) -> str | None:
+    """Validate instance create args; return an error message or None."""
+    if not region:
+        return "region is required"
+    if not instance_type:
+        return "type is required"
+    if not firewall_id or firewall_id <= 0:
+        return (
+            "firewall_id is required for instance creation. Get a firewall ID "
+            "from linode_firewalls_list, or create one with linode_firewall_create."
+        )
+    return None
+
+
 async def handle_linode_instance_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_instance_create tool request."""
-    confirm = arguments.get("confirm", False)
+    region = arguments.get("region", "")
+    instance_type = arguments.get("type", "")
+    firewall_id = arguments.get("firewall_id", 0)
 
-    if not confirm:
+    if is_dry_run(arguments):
+        fields_error = _instance_create_error(region, instance_type, firewall_id)
+        if fields_error is not None:
+            return _error_response(fields_error)
+        return build_dry_run_response(
+            "linode_instance_create",
+            arguments.get("environment", ""),
+            "POST",
+            "/linode/instances",
+            None,
+        )
+
+    if not arguments.get("confirm"):
         return [
             TextContent(
                 type="text",
@@ -281,19 +368,9 @@ async def handle_linode_instance_create(
             )
         ]
 
-    region = arguments.get("region", "")
-    instance_type = arguments.get("type", "")
-    firewall_id = arguments.get("firewall_id", 0)
-
-    if not region:
-        return _error_response("region is required")
-    if not instance_type:
-        return _error_response("type is required")
-    if not firewall_id or firewall_id <= 0:
-        return _error_response(
-            "firewall_id is required for instance creation. Get a firewall ID "
-            "from linode_firewalls_list, or create one with linode_firewall_create."
-        )
+    fields_error = _instance_create_error(region, instance_type, firewall_id)
+    if fields_error is not None:
+        return _error_response(fields_error)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         instance = await client.create_instance(
@@ -379,6 +456,7 @@ def create_linode_instance_update_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": "Must be true to confirm update.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["instance_id", "confirm"],
         },
@@ -390,6 +468,24 @@ async def handle_linode_instance_update(
 ) -> list[TextContent]:
     """Handle linode_instance_update tool request."""
     instance_id = arguments.get("instance_id", 0)
+
+    if is_dry_run(arguments):
+        if not instance_id:
+            return _error_response("instance_id is required")
+        iid = int(instance_id)
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_instance(iid)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_instance_update",
+            "PUT",
+            f"/linode/instances/{iid}",
+            _fetch,
+        )
+
     confirm = arguments.get("confirm", False)
 
     if not confirm:
@@ -551,8 +647,11 @@ def create_linode_instance_resize_tool() -> tuple[Tool, Capability]:
                 },
                 "confirm": {
                     "type": "boolean",
-                    "description": "Must be true to confirm resize.",
+                    "description": (
+                        "Must be true to confirm resize. Ignored when dry_run=true."
+                    ),
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["instance_id", "type", "confirm"],
         },
@@ -565,20 +664,33 @@ async def handle_linode_instance_resize(
     """Handle linode_instance_resize tool request."""
     instance_id = arguments.get("instance_id", 0)
     instance_type = arguments.get("type", "")
-    confirm = arguments.get("confirm", False)
 
-    if not confirm:
+    if not instance_id:
+        return _error_response("instance_id is required")
+    if not instance_type:
+        return _error_response("type is required")
+
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_instance(int(instance_id))
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_instance_resize",
+            "POST",
+            f"/linode/instances/{int(instance_id)}/resize",
+            _fetch,
+        )
+
+    if not arguments.get("confirm"):
         return [
             TextContent(
                 type="text",
                 text="Error: This may cause downtime. Set confirm=true to proceed.",
             )
         ]
-
-    if not instance_id:
-        return _error_response("instance_id is required")
-    if not instance_type:
-        return _error_response("type is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.resize_instance(

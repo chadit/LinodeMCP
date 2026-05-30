@@ -12,6 +12,7 @@ from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     ENV_PARAM_SCHEMA,
     PARAM_DRY_RUN,
+    build_dry_run_response,
     error_response,
     execute_dry_run,
     execute_tool,
@@ -306,6 +307,7 @@ def create_linode_account_tag_create_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": "Set true to confirm this mutating operation.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["label", "confirm"],
         },
@@ -336,6 +338,18 @@ async def handle_linode_account_tag_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_account_tag_create tool request."""
+    if is_dry_run(arguments):
+        label = arguments.get("label")
+        if not isinstance(label, str) or not label.strip():
+            return error_response("label is required")
+        return build_dry_run_response(
+            "linode_account_tag_create",
+            arguments.get("environment", ""),
+            "POST",
+            "/tags",
+            None,
+        )
+
     if arguments.get("confirm") is not True:
         return error_response("This creates a tag. Set confirm=true to proceed.")
 
@@ -375,6 +389,7 @@ def create_linode_account_tag_delete_tool() -> tuple[Tool, Capability]:
                     "type": "boolean",
                     "description": "Set true to confirm this destructive operation.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["tag_label", "confirm"],
         },
@@ -385,6 +400,18 @@ async def handle_linode_account_tag_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_account_tag_delete tool request."""
+    if is_dry_run(arguments):
+        tag_label = arguments.get("tag_label")
+        if not isinstance(tag_label, str) or not tag_label.strip():
+            return error_response("tag_label is required")
+        return build_dry_run_response(
+            "linode_account_tag_delete",
+            arguments.get("environment", ""),
+            "DELETE",
+            f"/tags/{tag_label}",
+            None,
+        )
+
     tag_label = arguments.get("tag_label")
     if not isinstance(tag_label, str) or not tag_label.strip():
         return error_response("tag_label is required")
@@ -445,6 +472,7 @@ def create_linode_account_support_ticket_create_tool() -> tuple[Tool, Capability
                     "type": "boolean",
                     "description": "Set true to confirm this mutating operation.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["summary", "description", "confirm"],
         },
@@ -476,10 +504,43 @@ def _optional_bool_argument(arguments: dict[str, Any], name: str) -> bool | None
     return value
 
 
+def _support_ticket_id(arguments: dict[str, Any]) -> int | list[TextContent]:
+    """Parse a positive integer ticket_id, or return an error response."""
+    ticket_id = arguments.get("ticket_id")
+    if not isinstance(ticket_id, int) or isinstance(ticket_id, bool) or ticket_id < 1:
+        return error_response("ticket_id must be a positive integer")
+    return ticket_id
+
+
+def _attachment_file(arguments: dict[str, Any]) -> str | list[TextContent]:
+    """Parse the attachment file path, or return an error response."""
+    file = arguments.get("file")
+    if not isinstance(file, str) or not file.strip():
+        return error_response("file is required")
+    file_path = file.strip()
+    if not Path(file_path).is_absolute():
+        return error_response("file must be a local, absolute path")
+    return file_path
+
+
 async def handle_linode_account_support_ticket_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_account_support_ticket_create tool request."""
+    if is_dry_run(arguments):
+        try:
+            _required_string_argument(arguments, "summary")
+            _required_string_argument(arguments, "description")
+        except (TypeError, ValueError) as exc:
+            return error_response(str(exc))
+        return build_dry_run_response(
+            "linode_account_support_ticket_create",
+            arguments.get("environment", ""),
+            "POST",
+            "/support/tickets",
+            None,
+        )
+
     if arguments.get("confirm") is not True:
         return error_response(
             "This opens a support ticket. Set confirm=true to proceed."
@@ -689,6 +750,7 @@ def create_linode_account_support_ticket_close_tool() -> tuple[Tool, Capability]
                     "type": "boolean",
                     "description": "Set true to confirm this mutating operation.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["ticket_id", "confirm"],
         },
@@ -699,14 +761,33 @@ async def handle_linode_account_support_ticket_close(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_account_support_ticket_close tool request."""
+    if is_dry_run(arguments):
+        ticket = _support_ticket_id(arguments)
+        if isinstance(ticket, list):
+            return ticket
+        tid = ticket
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_support_ticket(tid)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_account_support_ticket_close",
+            "POST",
+            f"/support/tickets/{tid}/close",
+            _fetch,
+        )
+
     if arguments.get("confirm") is not True:
         return error_response(
             "This closes a support ticket. Set confirm=true to proceed."
         )
 
-    ticket_id = arguments.get("ticket_id")
-    if not isinstance(ticket_id, int) or isinstance(ticket_id, bool) or ticket_id < 1:
-        return error_response("ticket_id must be a positive integer")
+    ticket = _support_ticket_id(arguments)
+    if isinstance(ticket, list):
+        return ticket
+    ticket_id = ticket
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         closed_ticket = await client.close_support_ticket(ticket_id)
@@ -740,6 +821,7 @@ def create_linode_account_support_ticket_reply_create_tool() -> tuple[Tool, Capa
                     "type": "boolean",
                     "description": "Set true to confirm this mutating operation.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["ticket_id", "description", "confirm"],
         },
@@ -750,14 +832,33 @@ async def handle_linode_account_support_ticket_reply_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_account_support_ticket_reply_create tool request."""
+    if is_dry_run(arguments):
+        ticket = _support_ticket_id(arguments)
+        if isinstance(ticket, list):
+            return ticket
+        tid = ticket
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_support_ticket(tid)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_account_support_ticket_reply_create",
+            "POST",
+            f"/support/tickets/{tid}/replies",
+            _fetch,
+        )
+
     if arguments.get("confirm") is not True:
         return error_response(
             "This creates a support ticket reply. Set confirm=true to proceed."
         )
 
-    ticket_id = arguments.get("ticket_id")
-    if not isinstance(ticket_id, int) or isinstance(ticket_id, bool) or ticket_id < 1:
-        return error_response("ticket_id must be a positive integer")
+    ticket = _support_ticket_id(arguments)
+    if isinstance(ticket, list):
+        return ticket
+    ticket_id = ticket
 
     description = arguments.get("description")
     if not isinstance(description, str) or not description.strip():
@@ -796,6 +897,7 @@ def create_linode_account_support_ticket_attachment_create_tool() -> tuple[
                     "type": "boolean",
                     "description": "Set true to confirm this mutating operation.",
                 },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": ["ticket_id", "file", "confirm"],
         },
@@ -806,21 +908,38 @@ async def handle_linode_account_support_ticket_attachment_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_account_support_ticket_attachment_create tool request."""
+    if is_dry_run(arguments):
+        ticket = _support_ticket_id(arguments)
+        if isinstance(ticket, list):
+            return ticket
+        tid = ticket
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_support_ticket(tid)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_account_support_ticket_attachment_create",
+            "POST",
+            f"/support/tickets/{tid}/attachments",
+            _fetch,
+        )
+
     if arguments.get("confirm") is not True:
         return error_response(
             "This creates a support ticket attachment. Set confirm=true to proceed."
         )
 
-    ticket_id = arguments.get("ticket_id")
-    if not isinstance(ticket_id, int) or isinstance(ticket_id, bool) or ticket_id < 1:
-        return error_response("ticket_id must be a positive integer")
+    ticket = _support_ticket_id(arguments)
+    if isinstance(ticket, list):
+        return ticket
+    ticket_id = ticket
 
-    file = arguments.get("file")
-    if not isinstance(file, str) or not file.strip():
-        return error_response("file is required")
-    file_path = file.strip()
-    if not Path(file_path).is_absolute():
-        return error_response("file must be a local, absolute path")
+    parsed_file = _attachment_file(arguments)
+    if isinstance(parsed_file, list):
+        return parsed_file
+    file_path = parsed_file
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         attachment = await client.create_support_ticket_attachment(ticket_id, file_path)

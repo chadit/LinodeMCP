@@ -8,6 +8,8 @@ from mcp.types import TextContent, Tool
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
+    PARAM_DRY_RUN,
+    build_dry_run_response,
     execute_dry_run,
     execute_tool,
     is_dry_run,
@@ -192,6 +194,7 @@ def create_linode_instance_ip_allocate_tool() -> tuple[Tool, Capability]:
                     "description": ("Whether the IP is public (default true)"),
                 },
                 "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
                 "instance_id",
@@ -206,10 +209,6 @@ async def handle_linode_instance_ip_allocate(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_instance_ip_allocate tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return _error_response("Set confirm=true to proceed.")
-
     iid = _parse_instance_id(arguments)
     if isinstance(iid, list):
         return iid
@@ -217,6 +216,18 @@ async def handle_linode_instance_ip_allocate(
     ip_type = arguments.get("type", "")
     if not ip_type:
         return _error_response("type is required")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_instance_ip_allocate",
+            arguments.get("environment", ""),
+            "POST",
+            f"/linode/instances/{iid}/ips",
+            None,
+        )
+
+    if not arguments.get("confirm"):
+        return _error_response("Set confirm=true to proceed.")
 
     public = arguments.get("public", True)
 
@@ -247,6 +258,7 @@ def create_linode_instance_ip_update_tool() -> tuple[Tool, Capability]:
                     "description": ("The reverse DNS value to assign (required)"),
                 },
                 "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
                 "instance_id",
@@ -258,27 +270,54 @@ def create_linode_instance_ip_update_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
-async def handle_linode_instance_ip_update(
-    arguments: dict[str, Any], cfg: Config
-) -> list[TextContent]:
-    """Handle linode_instance_ip_update tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return _error_response("Set confirm=true to proceed.")
-
+def _parse_instance_ip_update(
+    arguments: dict[str, Any],
+) -> tuple[int, str, str | None] | list[TextContent]:
+    """Parse instance_id, address, and rdns; return the triple or an error."""
     iid = _parse_instance_id(arguments)
     if isinstance(iid, list):
         return iid
-
     address = _parse_ip_address_argument(arguments)
     if isinstance(address, list):
         return address
-
     if "rdns" not in arguments:
         return _error_response("rdns is required")
     rdns = arguments.get("rdns")
     if rdns is not None and not isinstance(rdns, str):
         return _error_response("rdns must be a string or null")
+    return iid, address, rdns
+
+
+async def handle_linode_instance_ip_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_ip_update tool request."""
+    if is_dry_run(arguments):
+        parsed = _parse_instance_ip_update(arguments)
+        if isinstance(parsed, list):
+            return parsed
+        iid, address, _ = parsed
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_instance_ip(iid, address)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_instance_ip_update",
+            "PUT",
+            f"/linode/instances/{iid}/ips/{address}",
+            _fetch,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("Set confirm=true to proceed.")
+
+    parsed = _parse_instance_ip_update(arguments)
+    if isinstance(parsed, list):
+        return parsed
+    iid, address, rdns = parsed
 
     async def _call(
         client: RetryableClient,
@@ -306,6 +345,7 @@ def create_linode_networking_ip_update_tool() -> tuple[Tool, Capability]:
                     "description": ("The reverse DNS value to assign (required)"),
                 },
                 "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
                 "address",
@@ -316,23 +356,51 @@ def create_linode_networking_ip_update_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
-async def handle_linode_networking_ip_update(
-    arguments: dict[str, Any], cfg: Config
-) -> list[TextContent]:
-    """Handle linode_networking_ip_update tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return _error_response("Set confirm=true to proceed.")
-
+def _parse_networking_ip_update(
+    arguments: dict[str, Any],
+) -> tuple[str, str | None] | list[TextContent]:
+    """Parse address and rdns; return the pair or an error response."""
     address = _parse_ip_address_argument(arguments)
     if isinstance(address, list):
         return address
-
     if "rdns" not in arguments:
         return _error_response("rdns is required")
     rdns = arguments.get("rdns")
     if rdns is not None and not isinstance(rdns, str):
         return _error_response("rdns must be a string or null")
+    return address, rdns
+
+
+async def handle_linode_networking_ip_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_networking_ip_update tool request."""
+    if is_dry_run(arguments):
+        parsed = _parse_networking_ip_update(arguments)
+        if isinstance(parsed, list):
+            return parsed
+        address, _ = parsed
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_networking_ip(address)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_networking_ip_update",
+            "PUT",
+            f"/networking/ips/{address}",
+            _fetch,
+        )
+
+    confirm = arguments.get("confirm", False)
+    if not confirm:
+        return _error_response("Set confirm=true to proceed.")
+
+    parsed = _parse_networking_ip_update(arguments)
+    if isinstance(parsed, list):
+        return parsed
+    address, rdns = parsed
 
     async def _call(
         client: RetryableClient,
@@ -401,6 +469,7 @@ def create_linode_networking_ip_allocate_tool() -> tuple[Tool, Capability]:
                     "description": ("Whether the IP is public (default true)"),
                 },
                 "confirm": _CONFIRM_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
                 "linode_id",
@@ -411,14 +480,8 @@ def create_linode_networking_ip_allocate_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
-async def handle_linode_networking_ip_allocate(
-    arguments: dict[str, Any], cfg: Config
-) -> list[TextContent]:
-    """Handle linode_networking_ip_allocate tool request."""
-    confirm = arguments.get("confirm", False)
-    if not confirm:
-        return _error_response("Set confirm=true to proceed.")
-
+def _networking_ip_allocate_error(arguments: dict[str, Any]) -> str | None:
+    """Validate allocate args; return a joined error string or None."""
     errors: list[str] = []
     linode_id = arguments.get("linode_id")
     if (
@@ -439,7 +502,36 @@ async def handle_linode_networking_ip_allocate(
         errors.append("public must be a boolean")
 
     if errors:
-        return _error_response("; ".join(errors))
+        return "; ".join(errors)
+    return None
+
+
+async def handle_linode_networking_ip_allocate(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_networking_ip_allocate tool request."""
+    if is_dry_run(arguments):
+        validation_error = _networking_ip_allocate_error(arguments)
+        if validation_error is not None:
+            return _error_response(validation_error)
+        return build_dry_run_response(
+            "linode_networking_ip_allocate",
+            arguments.get("environment", ""),
+            "POST",
+            "/networking/ips",
+            None,
+        )
+
+    if not arguments.get("confirm"):
+        return _error_response("Set confirm=true to proceed.")
+
+    validation_error = _networking_ip_allocate_error(arguments)
+    if validation_error is not None:
+        return _error_response(validation_error)
+
+    linode_id = arguments.get("linode_id")
+    ip_type = arguments.get("type", "")
+    public = arguments.get("public", True)
 
     async def _call(
         client: RetryableClient,
@@ -475,7 +567,7 @@ def create_linode_instance_ip_delete_tool() -> tuple[Tool, Capability]:
                         " Ignored when dry_run=true."
                     ),
                 },
-                **DRY_RUN_PROP,
+                PARAM_DRY_RUN: DRY_RUN_PROP,
             },
             "required": [
                 "instance_id",

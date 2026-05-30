@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -25,6 +26,7 @@ const (
 
 	monitorServiceAlertDefinitionUpdateToolName  = "linode_monitor_service_alert_definition_update"
 	monitorServiceTypeParam                      = "service_type"
+	monitorServicesPath                          = "/monitor/services"
 	monitorAlertDefinitionLabelParam             = "label"
 	monitorAlertDefinitionSeverityParam          = "severity"
 	monitorAlertDefinitionRuleCriteriaParam      = "rule_criteria"
@@ -337,11 +339,12 @@ func NewLinodeMonitorServiceTokenCreateTool(cfg *config.Config) (mcp.Tool, profi
 	tool, handler := newToolWithHandler(
 		cfg,
 		monitorServiceCreateToolName,
-		"Creates a token for one supported monitoring service type. Requires confirm=true.",
+		"Creates a token for one supported monitoring service type. Requires confirm=true. Pass dry_run=true to preview without creating.",
 		[]mcp.ToolOption{
 			mcp.WithString(monitorServiceTypeParam, mcp.Required(), mcp.Description("Supported monitoring service type slug for the token.")),
 			mcp.WithArray(monitorAlertDefinitionEntityIDsParam, mcp.Required(), mcp.Description("Service entity IDs to include in the token.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm creating a monitor service token.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm creating a monitor service token. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeMonitorServiceTokenCreateRequest,
 	)
@@ -349,19 +352,38 @@ func NewLinodeMonitorServiceTokenCreateTool(cfg *config.Config) (mcp.Tool, profi
 	return tool, profiles.CapWrite, handler
 }
 
-func handleLinodeMonitorServiceTokenCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This creates a monitor service token. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
+// runMonitorServiceCreate validates the service type, runs the create-specific
+// build/validation, previews on dry_run (nil-fetch POST, current_state null
+// since the resource does not exist yet), then gates on confirm and executes.
+// Shared by the token and alert-definition create handlers, which are
+// otherwise identical and trip the dupl linter once both gain a dry-run branch.
+// build returns the execute closure (capturing the parsed create request) plus
+// a validation message; it runs after the service-type check so error
+// precedence is preserved.
+func runMonitorServiceCreate(
+	ctx context.Context,
+	request *mcp.CallToolRequest,
+	cfg *config.Config,
+	toolName, verb, confirmMessage string,
+	build func(*mcp.CallToolRequest) (func(context.Context, *linode.Client, string) (any, string), string),
+) (*mcp.CallToolResult, error) {
 	serviceType, validationMessage := monitorServiceTypeFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	createRequest, validationMessage := monitorServiceTokenCreateRequestFromTool(request)
+	execute, validationMessage := build(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, toolName, httpMethodPost,
+			fmt.Sprintf(monitorServicesPath+"/%s/"+verb, serviceType), nil)
+	}
+
+	if result := RequireConfirm(request, confirmMessage); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -369,12 +391,27 @@ func handleLinodeMonitorServiceTokenCreateRequest(ctx context.Context, request *
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	token, createFailureMessage := createMonitorServiceToken(ctx, client, serviceType, createRequest)
+	result, createFailureMessage := execute(ctx, client, serviceType)
 	if createFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to create " + monitorServiceCreateToolName + ": " + createFailureMessage), nil
+		return mcp.NewToolResultError("Failed to create " + toolName + ": " + createFailureMessage), nil
 	}
 
-	return MarshalToolResponse(token)
+	return MarshalToolResponse(result)
+}
+
+func handleLinodeMonitorServiceTokenCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	return runMonitorServiceCreate(ctx, request, cfg, monitorServiceCreateToolName, "token",
+		"This creates a monitor service token. Set confirm=true to proceed.",
+		func(r *mcp.CallToolRequest) (func(context.Context, *linode.Client, string) (any, string), string) {
+			createRequest, validationMessage := monitorServiceTokenCreateRequestFromTool(r)
+			if validationMessage != "" {
+				return nil, validationMessage
+			}
+
+			return func(ctx context.Context, client *linode.Client, serviceType string) (any, string) {
+				return createMonitorServiceToken(ctx, client, serviceType, createRequest)
+			}, ""
+		})
 }
 
 func monitorServiceTokenCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateMonitorServiceTokenRequest, string) {
@@ -475,11 +512,12 @@ func NewLinodeMonitorServiceAlertDefinitionDeleteTool(cfg *config.Config) (mcp.T
 	tool, handler := newToolWithHandler(
 		cfg,
 		monitorServiceAlertDefinitionDeleteToolName,
-		"Deletes one alert definition for a supported monitoring service type by service_type and alert_id. Requires confirm=true.",
+		"Deletes one alert definition for a supported monitoring service type by service_type and alert_id. Requires confirm=true. Pass dry_run=true to preview without deleting.",
 		[]mcp.ToolOption{
 			mcp.WithString(monitorServiceTypeParam, mcp.Required(), mcp.Description("Supported monitoring service type slug whose alert definition should be deleted.")),
 			mcp.WithNumber(monitorAlertIDParam, mcp.Required(), mcp.Description("Alert definition ID to delete.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm deleting an alert definition.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm deleting an alert definition. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeMonitorServiceAlertDefinitionDeleteRequest,
 	)
@@ -488,6 +526,24 @@ func NewLinodeMonitorServiceAlertDefinitionDeleteTool(cfg *config.Config) (mcp.T
 }
 
 func handleLinodeMonitorServiceAlertDefinitionDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if IsDryRun(request) {
+		serviceType, validationMessage := monitorServiceTypeFromTool(request)
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		alertID, validationMessage := requiredPositiveIntArgument(request, monitorAlertIDParam, errMonitorAlertIDMissing, errMonitorAlertIDPositive)
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, monitorServiceAlertDefinitionDeleteToolName, httpMethodDelete,
+			fmt.Sprintf(monitorServicesPath+"/%s/alert-definitions/%d", serviceType, alertID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetMonitorServiceAlertDefinition(ctx, serviceType, alertID)
+			})
+	}
+
 	if result := RequireConfirm(request, "This deletes a monitor alert definition. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
@@ -538,7 +594,8 @@ func NewLinodeMonitorServiceAlertDefinitionCreateTool(cfg *config.Config) (mcp.T
 			mcp.WithArray(monitorAlertDefinitionChannelIDsParam, mcp.Required(), mcp.Description("Alert channel IDs.")),
 			mcp.WithString(monitorAlertDefinitionDescriptionParam, mcp.Description("Optional alert definition description.")),
 			mcp.WithArray(monitorAlertDefinitionEntityIDsParam, mcp.Description("Optional service entity IDs.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm creating an alert definition.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm creating an alert definition. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeMonitorServiceAlertDefinitionCreateRequest,
 	)
@@ -547,31 +604,18 @@ func NewLinodeMonitorServiceAlertDefinitionCreateTool(cfg *config.Config) (mcp.T
 }
 
 func handleLinodeMonitorServiceAlertDefinitionCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This creates a monitor alert definition. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
+	return runMonitorServiceCreate(ctx, request, cfg, monitorServiceAlertDefinitionCreateToolName, "alert-definitions",
+		"This creates a monitor alert definition. Set confirm=true to proceed.",
+		func(r *mcp.CallToolRequest) (func(context.Context, *linode.Client, string) (any, string), string) {
+			createRequest, validationMessage := monitorServiceAlertDefinitionCreateRequestFromTool(r)
+			if validationMessage != "" {
+				return nil, validationMessage
+			}
 
-	serviceType, validationMessage := monitorServiceTypeFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	createRequest, validationMessage := monitorServiceAlertDefinitionCreateRequestFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	definition, createFailureMessage := createMonitorServiceAlertDefinition(ctx, client, serviceType, createRequest)
-	if createFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to create " + monitorServiceAlertDefinitionCreateToolName + ": " + createFailureMessage), nil
-	}
-
-	return MarshalToolResponse(definition)
+			return func(ctx context.Context, client *linode.Client, serviceType string) (any, string) {
+				return createMonitorServiceAlertDefinition(ctx, client, serviceType, createRequest)
+			}, ""
+		})
 }
 
 func monitorServiceAlertDefinitionCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateAlertDefinitionRequest, string) {
