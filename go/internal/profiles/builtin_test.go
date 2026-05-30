@@ -159,6 +159,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_nodebalancer_types", Capability: profiles.CapRead},
 		{Name: "linode_nodebalancer_list", Capability: profiles.CapRead},
 		{Name: "linode_nodebalancer_config_get", Capability: profiles.CapRead},
+		{Name: "linode_nodebalancer_config_rebuild", Capability: profiles.CapWrite},
 		{Name: "linode_nodebalancer_create", Capability: profiles.CapWrite},
 		{Name: "linode_nodebalancer_node_update", Capability: profiles.CapWrite},
 		{Name: "linode_networking_ip_get", Capability: profiles.CapRead},

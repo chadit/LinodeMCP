@@ -54,8 +54,8 @@ func TestLinodeNodeBalancerConfigDeleteTool(t *testing.T) {
 		{name: caseTraversalNodeBalancerID, args: map[string]any{keyNodeBalancerID: pathTraversalValue, keyConfigID: float64(456), keyConfirm: true}, want: errNodeBalancerIDInteger},
 		{name: caseMissingConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfirm: true}, want: errConfigIDRequired},
 		{name: caseSeparatorConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: pathSeparatorValue, keyConfirm: true}, want: errConfigIDInteger},
-		{name: "query config id", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: shareGroupIDQueryValue, keyConfirm: true}, want: errConfigIDInteger},
-		{name: "traversal config id", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: pathTraversalValue, keyConfirm: true}, want: errConfigIDInteger},
+		{name: caseQueryConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: shareGroupIDQueryValue, keyConfirm: true}, want: errConfigIDInteger},
+		{name: caseTraversalConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: pathTraversalValue, keyConfirm: true}, want: errConfigIDInteger},
 		{name: caseNegativeConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(-1), keyConfirm: true}, want: errConfigIDMin},
 	}
 	for _, tt := range validationTests {

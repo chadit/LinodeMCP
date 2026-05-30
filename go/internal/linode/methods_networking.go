@@ -1260,6 +1260,38 @@ func (c *Client) httpUpdateNodeBalancerNode(ctx context.Context, nodeBalancerID,
 	return &node, nil
 }
 
+// RebuildNodeBalancerConfig rebuilds a config for a NodeBalancer by ID.
+func (c *Client) httpRebuildNodeBalancerConfig(ctx context.Context, nodeBalancerID, configID int) (*NodeBalancerConfig, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	if nodeBalancerID < 1 {
+		return nil, ErrNodeBalancerIDPositive
+	}
+
+	if configID <= 0 {
+		return nil, ErrConfigIDPositive
+	}
+
+	encodedNodeBalancerID := url.PathEscape(strconv.Itoa(nodeBalancerID))
+	encodedConfigID := url.PathEscape(strconv.Itoa(configID))
+	endpoint := endpointNodeBalancers + "/" + encodedNodeBalancerID + "/configs/" + encodedConfigID + "/rebuild"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "RebuildNodeBalancerConfig", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var config NodeBalancerConfig
+	if err := c.handleResponse(resp, &config); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
+}
+
 // CreateNodeBalancer creates a new NodeBalancer.
 func (c *Client) httpCreateNodeBalancer(ctx context.Context, req CreateNodeBalancerRequest) (*NodeBalancer, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

@@ -363,6 +363,27 @@ func NewLinodeNodeBalancerConfigUpdateTool(cfg *config.Config) (mcp.Tool, profil
 	return tool, profiles.CapWrite, handler
 }
 
+// NewLinodeNodeBalancerConfigRebuildTool creates a tool for rebuilding a config on a NodeBalancer.
+func NewLinodeNodeBalancerConfigRebuildTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_nodebalancer_config_rebuild",
+		"Rebuilds a config for a specific NodeBalancer by NodeBalancer and config ID.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("nodebalancer_id", mcp.Required(),
+				mcp.Description("The ID of the NodeBalancer whose config should be rebuilt")),
+			mcp.WithNumber("config_id", mcp.Required(),
+				mcp.Description("The ID of the NodeBalancer config to rebuild")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be set to true to confirm NodeBalancer config rebuild. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeNodeBalancerConfigRebuildRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
 // NewLinodeNodeBalancerGetTool creates a tool for getting a single NodeBalancer.
 func NewLinodeNodeBalancerGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
@@ -435,6 +456,52 @@ func handleLinodeNodeBalancerFirewallListRequest(ctx context.Context, request *m
 	}{
 		Count:     len(firewalls),
 		Firewalls: firewalls,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func handleLinodeNodeBalancerConfigRebuildRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	nodeBalancerID, validationMessage := nodeBalancerIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	configID, validationMessage := configIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return BuildDryRunResponse(
+			"linode_nodebalancer_config_rebuild",
+			request.GetString(paramEnvironment, ""),
+			"POST",
+			fmt.Sprintf("/nodebalancers/%d/configs/%d/rebuild", nodeBalancerID, configID),
+			nil,
+		)
+	}
+
+	if result := RequireConfirm(request, "This rebuilds a NodeBalancer config. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	nodeBalancerConfig, err := client.RebuildNodeBalancerConfig(ctx, nodeBalancerID, configID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to rebuild config %d for NodeBalancer %d: %v", configID, nodeBalancerID, err)), nil
+	}
+
+	response := struct {
+		Message string                     `json:"message"`
+		Config  *linode.NodeBalancerConfig `json:"config"`
+	}{
+		Message: fmt.Sprintf("Rebuilt config %d for NodeBalancer %d successfully", configID, nodeBalancerID),
+		Config:  nodeBalancerConfig,
 	}
 
 	return MarshalToolResponse(response)
