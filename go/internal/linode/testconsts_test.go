@@ -13,6 +13,7 @@ const (
 	keyResults         = "results"
 	keyPageSize        = "page_size"
 	keyNodeBalancerID  = "nodebalancer_id"
+	keyVPCID           = "vpc_id"
 	keyConfigID        = "config_id"
 	keyNodeID          = "node_id"
 	keyPort            = "port"

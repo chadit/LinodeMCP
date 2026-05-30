@@ -2692,6 +2692,21 @@ func (c *Client) GetNodeBalancer(ctx context.Context, nodeBalancerID int) (*Node
 	return nodeBalancer, err
 }
 
+// GetNodeBalancerVPCConfig retrieves a NodeBalancer VPC configuration by ID with automatic retry on transient failures.
+func (c *Client) GetNodeBalancerVPCConfig(ctx context.Context, nodeBalancerID, vpcConfigID int) (*NodeBalancerVPCConfig, error) {
+	var config *NodeBalancerVPCConfig
+
+	err := c.executeWithRetry(ctx, "GetNodeBalancerVPCConfig", func() error {
+		var err error
+
+		config, err = c.httpGetNodeBalancerVPCConfig(ctx, nodeBalancerID, vpcConfigID)
+
+		return err
+	})
+
+	return config, err
+}
+
 // ListNodeBalancerConfigs retrieves configs for a node balancer by ID with automatic retry on transient failures.
 func (c *Client) ListNodeBalancerConfigs(ctx context.Context, nodeBalancerID int) ([]NodeBalancerConfig, error) {
 	var configs []NodeBalancerConfig
