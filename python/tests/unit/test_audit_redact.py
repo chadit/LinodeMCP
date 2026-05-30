@@ -50,6 +50,7 @@ def test_redaction_list_matches_go_canonical() -> None:
         "secret",
         "service_token",
         "ssh_key",
+        "ssl_key",
         "ssh_keys",
         "token",
         "token_uuid",
