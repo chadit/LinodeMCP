@@ -1192,6 +1192,47 @@ func (c *Client) httpUpdateNodeBalancerConfig(ctx context.Context, nodeBalancerI
 	return &config, nil
 }
 
+// UpdateNodeBalancerNode updates a node for a NodeBalancer config.
+func (c *Client) httpUpdateNodeBalancerNode(ctx context.Context, nodeBalancerID, configID, nodeID int, req *UpdateNodeBalancerNodeRequest) (*NodeBalancerNode, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	if nodeBalancerID < 1 {
+		return nil, ErrNodeBalancerIDPositive
+	}
+
+	if configID <= 0 {
+		return nil, ErrConfigIDPositive
+	}
+
+	if nodeID <= 0 {
+		return nil, ErrNodeIDPositive
+	}
+
+	if req == nil {
+		return nil, ErrUpdateNodeBalancerNodeRequestRequired
+	}
+
+	encodedNodeBalancerID := url.PathEscape(strconv.Itoa(nodeBalancerID))
+	encodedConfigID := url.PathEscape(strconv.Itoa(configID))
+	encodedNodeID := url.PathEscape(strconv.Itoa(nodeID))
+	endpoint := endpointNodeBalancers + "/" + encodedNodeBalancerID + "/configs/" + encodedConfigID + "/nodes/" + encodedNodeID
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateNodeBalancerNode", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var node NodeBalancerNode
+	if err := c.handleResponse(resp, &node); err != nil {
+		return nil, err
+	}
+
+	return &node, nil
+}
+
 // CreateNodeBalancer creates a new NodeBalancer.
 func (c *Client) httpCreateNodeBalancer(ctx context.Context, req CreateNodeBalancerRequest) (*NodeBalancer, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

@@ -235,6 +235,14 @@ type CreateNodeBalancerNodeRequest struct {
 	Mode    string `json:"mode,omitempty"`
 }
 
+// UpdateNodeBalancerNodeRequest represents the request body for updating a NodeBalancer config node.
+type UpdateNodeBalancerNodeRequest struct {
+	Label   string `json:"label,omitempty"`
+	Address string `json:"address,omitempty"`
+	Weight  int    `json:"weight,omitempty"`
+	Mode    string `json:"mode,omitempty"`
+}
+
 // UpdateNodeBalancerConfigRequest represents the request body for updating a NodeBalancer config.
 type UpdateNodeBalancerConfigRequest struct {
 	Port          int    `json:"port,omitempty"`
