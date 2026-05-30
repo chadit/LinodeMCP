@@ -116,6 +116,22 @@ func NewLinodeInstanceNodeBalancerListTool(cfg *config.Config) (mcp.Tool, profil
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeNodeBalancerFirewallListTool creates a tool for listing Cloud Firewalls assigned to a NodeBalancer.
+func NewLinodeNodeBalancerFirewallListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_nodebalancer_firewall_list",
+		"Lists Cloud Firewalls assigned to a specific NodeBalancer by its ID.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
+				mcp.Description("The ID of the NodeBalancer whose Cloud Firewalls should be listed")),
+		},
+		handleLinodeNodeBalancerFirewallListRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeNodeBalancerConfigListTool creates a tool for listing configs on a NodeBalancer.
 func NewLinodeNodeBalancerConfigListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -392,6 +408,33 @@ func handleLinodeInstanceNodeBalancerListRequest(ctx context.Context, request *m
 	}{
 		Count:         len(nodeBalancers),
 		NodeBalancers: nodeBalancers,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func handleLinodeNodeBalancerFirewallListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	nodeBalancerID, validationMessage := nodeBalancerIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	firewalls, err := client.ListNodeBalancerFirewalls(ctx, nodeBalancerID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to list firewalls for NodeBalancer %d: %v", nodeBalancerID, err)), nil
+	}
+
+	response := struct {
+		Count     int               `json:"count"`
+		Firewalls []linode.Firewall `json:"firewalls"`
+	}{
+		Count:     len(firewalls),
+		Firewalls: firewalls,
 	}
 
 	return MarshalToolResponse(response)
