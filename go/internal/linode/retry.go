@@ -2797,6 +2797,14 @@ func (c *Client) UpdateNodeBalancerConfig(ctx context.Context, nodeBalancerID, c
 	return config, err
 }
 
+// DeleteNodeBalancerConfig deletes one node balancer config without retrying the destructive request.
+// Retrying can replay config deletion after a transient error, so this method delegates exactly once.
+func (c *Client) DeleteNodeBalancerConfig(ctx context.Context, nodeBalancerID, configID int) error {
+	return c.executeWithoutRetry(ctx, "DeleteNodeBalancerConfig", func() error {
+		return c.httpDeleteNodeBalancerConfig(ctx, nodeBalancerID, configID)
+	})
+}
+
 // ListStackScripts retrieves all stack scripts with automatic retry on transient failures.
 func (c *Client) ListStackScripts(ctx context.Context) ([]StackScript, error) {
 	var scripts []StackScript

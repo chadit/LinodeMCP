@@ -28,6 +28,33 @@ const (
 	endpointNodeBalancerNodes     = endpointNodeBalancerConfigs + "/%d/nodes"
 )
 
+// DeleteNodeBalancerConfig deletes one config from a NodeBalancer.
+func (c *Client) httpDeleteNodeBalancerConfig(ctx context.Context, nodeBalancerID, configID int) error {
+	if nodeBalancerID <= 0 {
+		return ErrNodeBalancerIDPositive
+	}
+
+	if configID <= 0 {
+		return ErrConfigIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedNodeBalancerID := url.PathEscape(strconv.Itoa(nodeBalancerID))
+	encodedConfigID := url.PathEscape(strconv.Itoa(configID))
+	endpoint := endpointNodeBalancers + "/" + encodedNodeBalancerID + "/configs/" + encodedConfigID
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteNodeBalancerConfig", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return c.handleResponse(resp, nil)
+}
+
 // ListFirewalls retrieves all Cloud Firewalls for the authenticated user.
 func (c *Client) httpListFirewalls(ctx context.Context) ([]Firewall, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

@@ -560,7 +560,7 @@ func TestLinodeNodeBalancerConfigGetTool(t *testing.T) {
 		{name: caseSeparatorConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: pathSeparatorLinodeID}, wantContains: errConfigIDInteger},
 		{name: caseQueryConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: shareGroupIDQueryValue}, wantContains: errConfigIDInteger},
 		{name: caseTraversalConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: pathTraversalValue}, wantContains: errConfigIDInteger},
-		{name: "negative config id", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(-1)}, wantContains: errConfigIDMin},
+		{name: caseNegativeConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(-1)}, wantContains: errConfigIDMin},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -692,11 +692,11 @@ func TestLinodeNodeBalancerNodeCreateTool(t *testing.T) {
 		{name: caseSeparatorNodeBalancerID, args: map[string]any{keyNodeBalancerID: pathSeparatorLinodeID, keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyConfirm: true}, wantContains: errNodeBalancerIDInteger},
 		{name: caseQueryNodeBalancerID, args: map[string]any{keyNodeBalancerID: shareGroupIDQueryValue, keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyConfirm: true}, wantContains: errNodeBalancerIDInteger},
 		{name: caseTraversalNodeBalancerID, args: map[string]any{keyNodeBalancerID: pathTraversalValue, keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyConfirm: true}, wantContains: errNodeBalancerIDInteger},
-		{name: caseMissingConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyConfirm: true}, wantContains: "config_id is required"},
-		{name: "separator config id", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: pathSeparatorValue, keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyConfirm: true}, wantContains: errConfigIDInteger},
+		{name: caseMissingConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyConfirm: true}, wantContains: errConfigIDRequired},
+		{name: caseSeparatorConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: pathSeparatorValue, keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyConfirm: true}, wantContains: errConfigIDInteger},
 		{name: caseQueryConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: shareGroupIDQueryValue, keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyConfirm: true}, wantContains: errConfigIDInteger},
 		{name: caseTraversalConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: pathTraversalValue, keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyConfirm: true}, wantContains: errConfigIDInteger},
-		{name: "negative config id", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(-1), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyConfirm: true}, wantContains: "config_id must be an integer greater than or equal to 1"},
+		{name: caseNegativeConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(-1), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyConfirm: true}, wantContains: errConfigIDMin},
 		{name: caseMissingLabel, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyAddress: nodeBalancerNodeAddress, keyConfirm: true}, wantContains: errLabelRequired},
 		{name: caseMissingAddress, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyConfirm: true}, wantContains: "address is required"},
 		{name: "invalid weight", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyWeight: float64(0), keyConfirm: true}, wantContains: "weight must be an integer greater than or equal to 1"},
