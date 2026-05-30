@@ -130,7 +130,7 @@ func NewLinodeNodeBalancerConfigCreateTool(cfg *config.Config) (mcp.Tool, profil
 	tool, handler := newToolWithHandler(
 		cfg,
 		"linode_nodebalancer_config_create",
-		"Creates a config for a specific NodeBalancer by its ID.",
+		"Creates a config for a specific NodeBalancer by its ID. Pass dry_run=true to preview without creating.",
 		[]mcp.ToolOption{
 			mcp.WithNumber("nodebalancer_id", mcp.Required(),
 				mcp.Description("The ID of the NodeBalancer that should receive a new config")),
@@ -154,7 +154,8 @@ func NewLinodeNodeBalancerConfigCreateTool(cfg *config.Config) (mcp.Tool, profil
 			mcp.WithString(nodeBalancerConfigKeySSLCert, mcp.Description("Optional HTTPS certificate PEM")),
 			mcp.WithString(nodeBalancerConfigKeySSLKey, mcp.Description("Optional HTTPS private key PEM")),
 			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm NodeBalancer config creation.")),
+				mcp.Description("Must be set to true to confirm NodeBalancer config creation. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeNodeBalancerConfigCreateRequest,
 	)
@@ -240,10 +241,6 @@ func handleLinodeNodeBalancerConfigListRequest(ctx context.Context, request *mcp
 }
 
 func handleLinodeNodeBalancerConfigCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	if result := RequireConfirm(request, "This creates a NodeBalancer config. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
 	nodeBalancerID, validationMessage := nodeBalancerIDFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
@@ -252,6 +249,14 @@ func handleLinodeNodeBalancerConfigCreateRequest(ctx context.Context, request *m
 	req, validationMessage := nodeBalancerConfigCreateRequestFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return handleLinodeNodeBalancerConfigCreateDryRun(ctx, request, cfg, nodeBalancerID)
+	}
+
+	if result := RequireConfirm(request, "This creates a NodeBalancer config. Set confirm=true to proceed."); result != nil {
+		return result, nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -277,6 +282,34 @@ func handleLinodeNodeBalancerConfigCreateRequest(ctx context.Context, request *m
 	}
 
 	return MarshalToolResponse(response)
+}
+
+func handleLinodeNodeBalancerConfigCreateDryRun(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config, nodeBalancerID int) (*mcp.CallToolResult, error) {
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	configs, err := client.ListNodeBalancerConfigs(ctx, nodeBalancerID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch NodeBalancer configs for dry-run: %v", err)), nil
+	}
+
+	currentState := struct {
+		NodeBalancerID int                         `json:"nodebalancer_id"`
+		Configs        []linode.NodeBalancerConfig `json:"configs"`
+	}{
+		NodeBalancerID: nodeBalancerID,
+		Configs:        configs,
+	}
+
+	return BuildDryRunResponse(
+		"linode_nodebalancer_config_create",
+		request.GetString(paramEnvironment, ""),
+		"POST",
+		fmt.Sprintf("/nodebalancers/%d/configs", nodeBalancerID),
+		currentState,
+	)
 }
 
 func nodeBalancerConfigCreateRequestFromTool(request *mcp.CallToolRequest) (linode.CreateNodeBalancerConfigRequest, string) {
