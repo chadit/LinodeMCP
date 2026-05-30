@@ -106,6 +106,57 @@ func TestLinodeNodeBalancerUpdateToolDryRun(t *testing.T) {
 	})
 }
 
+func TestLinodeNodeBalancerFirewallUpdateToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	t.Run("schema advertises dry_run", func(t *testing.T) {
+		t.Parallel()
+
+		tool, _, _ := tools.NewLinodeNodeBalancerFirewallUpdateTool(&config.Config{})
+		assert.Contains(t, tool.InputSchema.Properties, keyDryRun)
+	})
+
+	t.Run("preview without updating", func(t *testing.T) {
+		t.Parallel()
+
+		cfg, methods := dryRunGetStateServer(t, "/nodebalancers/123/firewalls", map[string]any{
+			keyData: []map[string]any{{keyID: 456, keyLabel: nodeBalancerFirewallLabel, keyStatus: statusEnabled}},
+			keyPage: 1, keyPages: 1, keyResults: 1,
+		})
+		_, _, handler := tools.NewLinodeNodeBalancerFirewallUpdateTool(cfg)
+
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+			keyNodeBalancerID: float64(123),
+			keyFirewallIDs:    []any{float64(456)},
+			keyDryRun:         true,
+		}))
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		assert.Equal(t, "linode_nodebalancer_firewall_update", body["tool"])
+
+		would, _ := body["would_execute"].(map[string]any)
+		assert.Equal(t, "PUT", would["method"])
+		assert.Equal(t, "/nodebalancers/123/firewalls", would["path"])
+		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read current firewall assignments")
+	})
+
+	t.Run("still validates firewall IDs", func(t *testing.T) {
+		t.Parallel()
+
+		_, _, handler := tools.NewLinodeNodeBalancerFirewallUpdateTool(&config.Config{})
+		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+			keyNodeBalancerID: float64(123),
+			keyDryRun:         true,
+		}))
+		require.NoError(t, err)
+		assert.True(t, result.IsError)
+		assertErrorContains(t, result, "firewall_ids is required")
+	})
+}
+
 func TestLinodeNetworkingIPUpdateRDNSToolDryRun(t *testing.T) {
 	t.Parallel()
 

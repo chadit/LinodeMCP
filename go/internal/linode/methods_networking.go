@@ -996,6 +996,37 @@ func (c *Client) httpListNodeBalancerFirewalls(ctx context.Context, nodeBalancer
 	return response.Data, nil
 }
 
+// UpdateNodeBalancerFirewalls replaces firewall assignments for a NodeBalancer.
+func (c *Client) httpUpdateNodeBalancerFirewalls(ctx context.Context, nodeBalancerID, page, pageSize int, req *UpdateNodeBalancerFirewallsRequest) ([]Firewall, error) {
+	if nodeBalancerID <= 0 {
+		return nil, ErrNodeBalancerIDPositive
+	}
+
+	if req == nil {
+		return nil, ErrUpdateNodeBalancerFirewallsRequestRequired
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedNodeBalancerID := url.PathEscape(strconv.Itoa(nodeBalancerID))
+	endpoint := withPaginationQuery(endpointNodeBalancers+"/"+encodedNodeBalancerID+"/firewalls", page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateNodeBalancerFirewalls", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[Firewall]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
+}
+
 // ListNodeBalancerConfigNodes retrieves nodes for a NodeBalancer config.
 func (c *Client) httpListNodeBalancerConfigNodes(ctx context.Context, nodeBalancerID, configID, page, pageSize int) (*PaginatedResponse[NodeBalancerConfigNode], error) {
 	if nodeBalancerID <= 0 {

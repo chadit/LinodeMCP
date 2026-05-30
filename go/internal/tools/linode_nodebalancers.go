@@ -132,6 +132,29 @@ func NewLinodeNodeBalancerFirewallListTool(cfg *config.Config) (mcp.Tool, profil
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeNodeBalancerFirewallUpdateTool creates a tool for replacing Cloud Firewall assignments on a NodeBalancer.
+func NewLinodeNodeBalancerFirewallUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_nodebalancer_firewall_update",
+		"Replaces the Cloud Firewall assignments for a specific NodeBalancer. Pass an empty firewall_ids list to remove all assignments.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
+				mcp.Description("The ID of the NodeBalancer whose Cloud Firewall assignments should be replaced")),
+			mcp.WithArray("firewall_ids", mcp.Required(),
+				mcp.Description("Complete list of firewall IDs to assign to the NodeBalancer. Use an empty list to remove all firewall assignments.")),
+			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be set to true to confirm firewall assignment changes. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeNodeBalancerFirewallUpdateRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
 // NewLinodeNodeBalancerConfigListTool creates a tool for listing configs on a NodeBalancer.
 func NewLinodeNodeBalancerConfigListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -475,6 +498,63 @@ func handleLinodeNodeBalancerFirewallListRequest(ctx context.Context, request *m
 	}
 
 	return MarshalToolResponse(response)
+}
+
+func handleLinodeNodeBalancerFirewallUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	nodeBalancerID, validationMessage := nodeBalancerIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	page, pageSize, validationMessage := instanceFirewallsPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		if _, idsMessage := instanceFirewallsIDsFromTool(request); idsMessage != "" {
+			return mcp.NewToolResultError(idsMessage), nil
+		}
+
+		return RunDryRunPreview(ctx, request, cfg, "linode_nodebalancer_firewall_update", "PUT",
+			fmt.Sprintf("/nodebalancers/%d/firewalls", nodeBalancerID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.ListNodeBalancerFirewalls(ctx, nodeBalancerID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This replaces firewall assignments for a NodeBalancer. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	firewallIDs, validationMessage := instanceFirewallsIDsFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	firewalls, err := client.UpdateNodeBalancerFirewalls(ctx, nodeBalancerID, page, pageSize, &linode.UpdateNodeBalancerFirewallsRequest{FirewallIDs: firewallIDs})
+	if err != nil {
+		return mcp.NewToolResultError(formatNodeBalancerFirewallsUpdateError(nodeBalancerID, err)), nil
+	}
+
+	response := struct {
+		Count     int               `json:"count"`
+		Firewalls []linode.Firewall `json:"firewalls"`
+	}{
+		Count:     len(firewalls),
+		Firewalls: firewalls,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func formatNodeBalancerFirewallsUpdateError(nodeBalancerID int, err error) string {
+	return "Failed to update firewall assignments for NodeBalancer " + strconv.Itoa(nodeBalancerID) + ": " + err.Error()
 }
 
 func handleLinodeNodeBalancerConfigRebuildRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
