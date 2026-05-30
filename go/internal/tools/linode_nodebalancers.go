@@ -166,6 +166,26 @@ func NewLinodeNodeBalancerConfigGetTool(cfg *config.Config) (mcp.Tool, profiles.
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeNodeBalancerConfigNodeGetTool creates a tool for getting one node on a NodeBalancer config.
+func NewLinodeNodeBalancerConfigNodeGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_nodebalancer_config_node_get",
+		"Gets a backend node for a specific NodeBalancer config.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("nodebalancer_id", mcp.Required(),
+				mcp.Description("The ID of the NodeBalancer whose config node should be retrieved")),
+			mcp.WithNumber("config_id", mcp.Required(),
+				mcp.Description("The ID of the NodeBalancer config whose node should be retrieved")),
+			mcp.WithNumber("node_id", mcp.Required(),
+				mcp.Description("The ID of the NodeBalancer config node to retrieve")),
+		},
+		handleLinodeNodeBalancerConfigNodeGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeNodeBalancerConfigCreateTool creates a tool for creating a config on a NodeBalancer.
 func NewLinodeNodeBalancerConfigCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -366,6 +386,35 @@ func handleLinodeNodeBalancerConfigGetRequest(ctx context.Context, request *mcp.
 	return MarshalToolResponse(nodeBalancerConfig)
 }
 
+func handleLinodeNodeBalancerConfigNodeGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	nodeBalancerID, validationMessage := nodeBalancerIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	configID, validationMessage := nodeBalancerConfigIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	nodeID, validationMessage := nodeBalancerConfigNodeIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	node, err := client.GetNodeBalancerConfigNode(ctx, nodeBalancerID, configID, nodeID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve node %d for NodeBalancer %d config %d: %v", nodeID, nodeBalancerID, configID, err)), nil
+	}
+
+	return MarshalToolResponse(node)
+}
+
 func handleLinodeNodeBalancerConfigCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	nodeBalancerID, validationMessage := nodeBalancerIDFromTool(request)
 	if validationMessage != "" {
@@ -539,6 +588,20 @@ func nodeBalancerConfigIDFromTool(request *mcp.CallToolRequest) (int, string) {
 	}
 
 	return configID, ""
+}
+
+func nodeBalancerConfigNodeIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	args := request.GetArguments()
+	if _, exists := args["node_id"]; !exists {
+		return 0, "node_id is required"
+	}
+
+	nodeID, validationMessage := optionalPaginationInt(args, "node_id", 1, 0)
+	if validationMessage != "" {
+		return 0, validationMessage
+	}
+
+	return nodeID, ""
 }
 
 func nodeBalancerIDFromTool(request *mcp.CallToolRequest) (int, string) {

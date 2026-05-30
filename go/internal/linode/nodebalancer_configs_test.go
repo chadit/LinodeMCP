@@ -124,8 +124,8 @@ func TestClientListNodeBalancerConfigNodesSuccess(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData: []map[string]any{{
-				keyID: 789, keyAddress: "192.0.2.10:80", keyLabel: nodeLabelWeb1, keyStatus: "UP",
-				"weight": 100, "mode": nodeBalancerNodeModeAccept, keyNodeBalancerID: 123, keyConfigID: 456,
+				keyID: 789, keyAddress: "192.0.2.10:80", keyLabel: nodeLabelWeb1, keyStatus: nodeBalancerNodeStatusUP,
+				keyWeight: 100, "mode": nodeBalancerNodeModeAccept, keyNodeBalancerID: 123, keyConfigID: 456,
 			}},
 			keyPage: 2, keyPages: 3, keyResults: 1,
 		}))
@@ -218,6 +218,110 @@ func TestClientListNodeBalancerConfigNodesRetriesTransientError(t *testing.T) {
 	require.NotNil(t, got)
 	require.Len(t, got.Data, 1)
 	assert.Equal(t, 789, got.Data[0].ID)
+}
+
+func TestClientGetNodeBalancerConfigNodeSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/nodebalancers/123/configs/456/nodes/789", r.URL.Path, "request path should match")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyID: 789, keyAddress: "192.0.2.10:80", keyLabel: nodeLabelWeb1, keyStatus: nodeBalancerNodeStatusUP,
+			keyWeight: 100, "mode": "accept", keyNodeBalancerID: 123, keyConfigID: 456,
+		}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.GetNodeBalancerConfigNode(t.Context(), 123, 456, 789)
+
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, 789, got.ID)
+	assert.Equal(t, "192.0.2.10:80", got.Address)
+	assert.Equal(t, 123, got.NodeBalancerID)
+	assert.Equal(t, 456, got.ConfigID)
+}
+
+func TestClientGetNodeBalancerConfigNodeAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/nodebalancers/123/configs/456/nodes/789", r.URL.Path, "request path should match")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.GetNodeBalancerConfigNode(t.Context(), 123, 456, 789)
+
+	require.Error(t, err)
+	assert.Nil(t, got)
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+func TestClientGetNodeBalancerConfigNodeRejectsInvalidIDs(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("request should not be sent for invalid IDs")
+		w.WriteHeader(http.StatusTeapot)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
+	got, err := client.GetNodeBalancerConfigNode(t.Context(), 0, 456, 789)
+	require.ErrorIs(t, err, linode.ErrNodeBalancerIDPositive)
+	assert.Nil(t, got)
+
+	got, err = client.GetNodeBalancerConfigNode(t.Context(), 123, 0, 789)
+	require.ErrorIs(t, err, linode.ErrConfigIDPositive)
+	assert.Nil(t, got)
+
+	got, err = client.GetNodeBalancerConfigNode(t.Context(), 123, 456, 0)
+	require.ErrorIs(t, err, linode.ErrNodeIDPositive)
+	assert.Nil(t, got)
+}
+
+func TestClientGetNodeBalancerConfigNodeRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/nodebalancers/123/configs/456/nodes/789", r.URL.Path, "request path should match")
+
+		if calls.Add(1) == 1 {
+			http.Error(w, "temporary", http.StatusServiceUnavailable)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyID: 789, keyNodeBalancerID: 123, keyConfigID: 456}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
+	got, err := client.GetNodeBalancerConfigNode(t.Context(), 123, 456, 789)
+
+	require.NoError(t, err)
+	assert.Equal(t, int32(2), calls.Load(), "read route should retry once after transient failure")
+	require.NotNil(t, got)
+	assert.Equal(t, 789, got.ID)
 }
 
 func TestClientCreateNodeBalancerConfigSuccess(t *testing.T) {
@@ -436,7 +540,7 @@ func TestClientCreateNodeBalancerNodeSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-			keyID: 789, "label": accountMaintenanceLabel, keyAddress: nodeBalancerNodeAddress, keyStatus: "UP", "weight": 100,
+			keyID: 789, "label": accountMaintenanceLabel, keyAddress: nodeBalancerNodeAddress, keyStatus: nodeBalancerNodeStatusUP, keyWeight: 100,
 			keyMode: nodeBalancerNodeModeAccept, keyNodeBalancerID: 123, keyConfigID: 456,
 		}))
 	}))

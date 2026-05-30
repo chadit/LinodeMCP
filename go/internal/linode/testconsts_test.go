@@ -14,6 +14,7 @@ const (
 	keyPageSize        = "page_size"
 	keyNodeBalancerID  = "nodebalancer_id"
 	keyConfigID        = "config_id"
+	keyNodeID          = "node_id"
 	keyAddress         = "address"
 	nodeLabelWeb1      = "web-1"
 	keyErrors          = "errors"
@@ -71,6 +72,8 @@ const (
 	serviceNodeBalancers       = "NodeBalancers"
 	nodeBalancerNodeAddress    = "192.0.2.10:80"
 	nodeBalancerNodeModeAccept = "accept"
+	nodeBalancerNodeStatusUP   = "UP"
+	keyWeight                  = "weight"
 
 	// fwLabelNew is the firewall label reused across the retry-wrapper tests.
 	fwLabelNew                   = "new-fw"
