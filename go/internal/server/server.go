@@ -1050,6 +1050,7 @@ func networkingToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeNodeBalancerConfigNodeGetTool,
 		tools.NewLinodeNodeBalancerConfigCreateTool,
 		tools.NewLinodeNodeBalancerNodeCreateTool,
+		tools.NewLinodeNodeBalancerConfigUpdateTool,
 		tools.NewLinodeFirewallCreateTool,
 		tools.NewLinodeFirewallUpdateTool,
 		tools.NewLinodeFirewallDeleteTool,

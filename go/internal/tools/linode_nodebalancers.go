@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -251,6 +252,46 @@ func NewLinodeNodeBalancerNodeCreateTool(cfg *config.Config) (mcp.Tool, profiles
 	return tool, profiles.CapWrite, handler
 }
 
+// NewLinodeNodeBalancerConfigUpdateTool creates a tool for updating a config on a NodeBalancer.
+func NewLinodeNodeBalancerConfigUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_nodebalancer_config_update",
+		"Updates a config for a specific NodeBalancer by NodeBalancer and config ID.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("nodebalancer_id", mcp.Required(),
+				mcp.Description("The ID of the NodeBalancer whose config should be updated")),
+			mcp.WithNumber("config_id", mcp.Required(),
+				mcp.Description("The ID of the NodeBalancer config to update")),
+			mcp.WithNumber(nodeBalancerConfigKeyPort,
+				mcp.Description("Optional TCP port this config listens on, from 1 through 65535")),
+			mcp.WithString(nodeBalancerConfigKeyProtocol,
+				mcp.Description("Optional protocol: http, https, or tcp")),
+			mcp.WithString("algorithm",
+				mcp.Description("Optional balancing algorithm: roundrobin, leastconn, or source")),
+			mcp.WithString("stickiness",
+				mcp.Description("Optional session stickiness: none, table, or http_cookie")),
+			mcp.WithString("check",
+				mcp.Description("Optional health check mode: none, connection, http, or http_body")),
+			mcp.WithNumber("check_interval", mcp.Description("Optional health check interval in seconds")),
+			mcp.WithNumber("check_timeout", mcp.Description("Optional health check timeout in seconds")),
+			mcp.WithNumber("check_attempts", mcp.Description("Optional health check attempt count")),
+			mcp.WithString("check_path", mcp.Description("Optional HTTP health check path")),
+			mcp.WithString("check_body", mcp.Description("Optional expected HTTP health check body")),
+			mcp.WithBoolean("check_passive", mcp.Description("Optionally enable passive health checks")),
+			mcp.WithString("cipher_suite", mcp.Description("Optional HTTPS cipher suite")),
+			mcp.WithString(nodeBalancerConfigKeySSLCert, mcp.Description("Optional HTTPS certificate PEM")),
+			mcp.WithString(nodeBalancerConfigKeySSLKey, mcp.Description("Optional HTTPS private key PEM")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be set to true to confirm NodeBalancer config update. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeNodeBalancerConfigUpdateRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
 // NewLinodeNodeBalancerGetTool creates a tool for getting a single NodeBalancer.
 func NewLinodeNodeBalancerGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
@@ -415,6 +456,103 @@ func handleLinodeNodeBalancerConfigNodeGetRequest(ctx context.Context, request *
 	return MarshalToolResponse(node)
 }
 
+func handleLinodeNodeBalancerConfigUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	nodeBalancerID, validationMessage := nodeBalancerIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	configID, validationMessage := nodeBalancerConfigIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	req, validationMessage := nodeBalancerConfigUpdateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return handleLinodeNodeBalancerConfigUpdateDryRun(ctx, request, cfg, nodeBalancerID, configID)
+	}
+
+	if result := RequireConfirm(request, "This updates a NodeBalancer config. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	nodeBalancerConfig, updateFailureMessage := updateNodeBalancerConfig(ctx, client, nodeBalancerID, configID, &req)
+	if updateFailureMessage != "" {
+		return mcp.NewToolResultError(updateFailureMessage), nil
+	}
+
+	if nodeBalancerConfig == nil {
+		return mcp.NewToolResultError("Failed to update config " + strconv.Itoa(configID) + " for NodeBalancer " + strconv.Itoa(nodeBalancerID) + ": empty response"), nil
+	}
+
+	response := struct {
+		Message string                     `json:"message"`
+		Config  *linode.NodeBalancerConfig `json:"config"`
+	}{
+		Message: fmt.Sprintf("NodeBalancer config %d updated successfully for NodeBalancer %d", nodeBalancerConfig.ID, nodeBalancerID),
+		Config:  nodeBalancerConfig,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func listNodeBalancerConfigs(ctx context.Context, client *linode.Client, nodeBalancerID int) ([]linode.NodeBalancerConfig, string) {
+	configs, err := client.ListNodeBalancerConfigs(ctx, nodeBalancerID)
+	if err != nil {
+		return nil, err.Error()
+	}
+
+	return configs, ""
+}
+
+func handleLinodeNodeBalancerConfigUpdateDryRun(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config, nodeBalancerID, configID int) (*mcp.CallToolResult, error) {
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	configs, listFailureMessage := listNodeBalancerConfigs(ctx, client, nodeBalancerID)
+	if listFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to fetch NodeBalancer configs for dry-run: " + listFailureMessage), nil
+	}
+
+	currentState := struct {
+		NodeBalancerID int                         `json:"nodebalancer_id"`
+		ConfigID       int                         `json:"config_id"`
+		Configs        []linode.NodeBalancerConfig `json:"configs"`
+	}{
+		NodeBalancerID: nodeBalancerID,
+		ConfigID:       configID,
+		Configs:        configs,
+	}
+
+	return BuildDryRunResponse(
+		"linode_nodebalancer_config_update",
+		request.GetString(paramEnvironment, ""),
+		"PUT",
+		fmt.Sprintf("/nodebalancers/%d/configs/%d", nodeBalancerID, configID),
+		currentState,
+	)
+}
+
+func updateNodeBalancerConfig(ctx context.Context, client *linode.Client, nodeBalancerID, configID int, req *linode.UpdateNodeBalancerConfigRequest) (*linode.NodeBalancerConfig, string) {
+	nodeBalancerConfig, err := client.UpdateNodeBalancerConfig(ctx, nodeBalancerID, configID, req)
+	if err != nil {
+		return nil, "Failed to update config " + strconv.Itoa(configID) + " for NodeBalancer " + strconv.Itoa(nodeBalancerID) + ": " + err.Error()
+	}
+
+	return nodeBalancerConfig, ""
+}
+
 func handleLinodeNodeBalancerConfigCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	nodeBalancerID, validationMessage := nodeBalancerIDFromTool(request)
 	if validationMessage != "" {
@@ -550,6 +688,77 @@ func nodeBalancerConfigCreateRequestFromTool(request *mcp.CallToolRequest) (lino
 		}
 
 		req.CheckPassive = &v
+	}
+
+	return req, ""
+}
+
+func nodeBalancerConfigUpdateRequestFromTool(request *mcp.CallToolRequest) (linode.UpdateNodeBalancerConfigRequest, string) {
+	args := request.GetArguments()
+	req := linode.UpdateNodeBalancerConfigRequest{}
+
+	if _, exists := args[nodeBalancerConfigKeyPort]; exists {
+		port, validationMessage := optionalPaginationInt(args, nodeBalancerConfigKeyPort, 1, nodeBalancerConfigPortMax)
+		if validationMessage != "" {
+			return linode.UpdateNodeBalancerConfigRequest{}, validationMessage
+		}
+
+		req.Port = port
+	}
+
+	var message string
+	if req.Protocol, message = optionalNodeBalancerConfigChoice(request, nodeBalancerConfigKeyProtocol, []string{nodeBalancerConfigProtocolHTTP, nodeBalancerConfigProtocolHTTPS, nodeBalancerConfigProtocolTCP}); message != "" {
+		return linode.UpdateNodeBalancerConfigRequest{}, message
+	}
+
+	if req.Algorithm, message = optionalNodeBalancerConfigChoice(request, "algorithm", []string{nodeBalancerConfigAlgorithmRoundRobin, nodeBalancerConfigAlgorithmLeastConn, nodeBalancerConfigAlgorithmSource}); message != "" {
+		return linode.UpdateNodeBalancerConfigRequest{}, message
+	}
+
+	if req.Stickiness, message = optionalNodeBalancerConfigChoice(request, "stickiness", []string{nodeBalancerConfigStickinessNone, nodeBalancerConfigStickinessTable, nodeBalancerConfigStickinessHTTPCookie}); message != "" {
+		return linode.UpdateNodeBalancerConfigRequest{}, message
+	}
+
+	if req.Check, message = optionalNodeBalancerConfigChoice(request, "check", []string{nodeBalancerConfigCheckNone, nodeBalancerConfigCheckConnection, nodeBalancerConfigCheckHTTP, nodeBalancerConfigCheckHTTPBody}); message != "" {
+		return linode.UpdateNodeBalancerConfigRequest{}, message
+	}
+
+	if req.CipherSuite, message = optionalNodeBalancerConfigChoice(request, "cipher_suite", []string{nodeBalancerConfigCipherRecommended, nodeBalancerConfigCipherLegacy}); message != "" {
+		return linode.UpdateNodeBalancerConfigRequest{}, message
+	}
+
+	if req.CheckInterval, message = optionalNodeBalancerConfigInt(args, "check_interval"); message != "" {
+		return linode.UpdateNodeBalancerConfigRequest{}, message
+	}
+
+	if req.CheckTimeout, message = optionalNodeBalancerConfigInt(args, "check_timeout"); message != "" {
+		return linode.UpdateNodeBalancerConfigRequest{}, message
+	}
+
+	if req.CheckAttempts, message = optionalNodeBalancerConfigInt(args, "check_attempts"); message != "" {
+		return linode.UpdateNodeBalancerConfigRequest{}, message
+	}
+
+	req.CheckPath = request.GetString("check_path", "")
+	req.CheckBody = request.GetString("check_body", "")
+	req.SSLCert = request.GetString(nodeBalancerConfigKeySSLCert, "")
+	req.SSLKey = request.GetString(nodeBalancerConfigKeySSLKey, "")
+
+	if req.Protocol == nodeBalancerConfigProtocolHTTPS && (req.SSLCert == "" || req.SSLKey == "") {
+		return linode.UpdateNodeBalancerConfigRequest{}, "ssl_cert and ssl_key are required when protocol is https"
+	}
+
+	if raw, exists := args["check_passive"]; exists {
+		v, ok := raw.(bool)
+		if !ok {
+			return linode.UpdateNodeBalancerConfigRequest{}, "check_passive must be a boolean"
+		}
+
+		req.CheckPassive = &v
+	}
+
+	if req == (linode.UpdateNodeBalancerConfigRequest{}) {
+		return linode.UpdateNodeBalancerConfigRequest{}, "at least one update field is required"
 	}
 
 	return req, ""
