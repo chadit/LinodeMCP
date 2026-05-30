@@ -288,6 +288,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_database_engine_list":                           profiles.CapRead,
 		"linode_database_type_list":                             profiles.CapRead,
 		"linode_database_type_get":                              profiles.CapRead,
+		"linode_nodebalancer_config_get":                        profiles.CapRead,
 		"linode_database_engine_get":                            profiles.CapRead,
 		"linode_database_mysql_config_get":                      profiles.CapRead,
 		"linode_database_postgresql_config_get":                 profiles.CapRead,
@@ -573,6 +574,7 @@ func TestToolDescriptorsIncludesNodeBalancerConfigList(t *testing.T) {
 
 	descriptors := server.ToolDescriptors(&config.Config{})
 	assert.Contains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_list", Capability: profiles.CapRead})
+	assert.Contains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_get", Capability: profiles.CapRead})
 }
 
 func TestToolDescriptorsIncludesNodeBalancerConfigNodesList(t *testing.T) {

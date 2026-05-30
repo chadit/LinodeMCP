@@ -13,7 +13,15 @@ import (
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
-const nodeBalancerConfigsPath = "/nodebalancers/123/configs"
+const (
+	nodeBalancerConfigsPath = "/nodebalancers/123/configs"
+	keyPort                 = "port"
+	keyProtocol             = "protocol"
+	keyAlgorithm            = "algorithm"
+	valueRoundRobin         = "roundrobin"
+	protocolHTTP            = "http"
+	protocolHTTPS           = "https"
+)
 
 func TestClientListNodeBalancerConfigsSuccess(t *testing.T) {
 	t.Parallel()
@@ -26,8 +34,8 @@ func TestClientListNodeBalancerConfigsSuccess(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData: []map[string]any{{
-				keyID: 456, "port": 443, "protocol": "https", "algorithm": "roundrobin",
-				"stickiness": "http_cookie", "check": "http", "check_interval": 10,
+				keyID: 456, keyPort: 443, keyProtocol: protocolHTTPS, keyAlgorithm: valueRoundRobin,
+				"stickiness": "http_cookie", "check": protocolHTTP, "check_interval": 10,
 				"check_timeout": 5, "check_attempts": 3, "check_path": "/health",
 				"check_body": "healthy", "check_passive": true, "cipher_suite": "recommended",
 				"ssl_commonname": "example.com", "ssl_fingerprint": "fp", keyNodeBalancerID: 123,
@@ -320,4 +328,90 @@ func TestClientCreateNodeBalancerConfigRejectsNilRequest(t *testing.T) {
 
 	require.ErrorIs(t, err, linode.ErrCreateConfigRequestRequired)
 	assert.Nil(t, got)
+}
+
+func TestClientGetNodeBalancerConfigSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, nodeBalancerConfigsPath+"/456", r.URL.Path, "request path should match")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyID: 456, keyPort: 443, keyProtocol: protocolHTTPS, keyAlgorithm: valueRoundRobin,
+			"stickiness": "http_cookie", "check": protocolHTTP, "check_interval": 10,
+			"check_timeout": 5, "check_attempts": 3, "check_path": "/health",
+			"check_body": "healthy", "check_passive": true, "cipher_suite": "recommended",
+			"ssl_commonname": domainExample, "ssl_fingerprint": "fp", keyNodeBalancerID: 123,
+			"nodes_status": map[string]int{"up": 2, "down": 1},
+		}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.GetNodeBalancerConfig(t.Context(), 123, 456)
+
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, 456, got.ID)
+	assert.Equal(t, 443, got.Port)
+	assert.Equal(t, "https", got.Protocol)
+	assert.Equal(t, 123, got.NodeBalancerID)
+	assert.Equal(t, 2, got.NodesStatus.Up)
+	assert.Equal(t, 1, got.NodesStatus.Down)
+}
+
+func TestClientGetNodeBalancerConfigAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, nodeBalancerConfigsPath+"/456", r.URL.Path, "request path should match")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.GetNodeBalancerConfig(t.Context(), 123, 456)
+
+	require.Error(t, err)
+	assert.Nil(t, got)
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+func TestClientGetNodeBalancerConfigRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, nodeBalancerConfigsPath+"/456", r.URL.Path, "request path should match")
+
+		if calls.Add(1) == 1 {
+			http.Error(w, "temporary", http.StatusServiceUnavailable)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyID: 456}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
+	got, err := client.GetNodeBalancerConfig(t.Context(), 123, 456)
+
+	require.NoError(t, err)
+	assert.Equal(t, int32(2), calls.Load(), "read route should retry once after transient failure")
+	require.NotNil(t, got)
+	assert.Equal(t, 456, got.ID)
 }

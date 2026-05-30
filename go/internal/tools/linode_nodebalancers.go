@@ -147,6 +147,24 @@ func NewLinodeNodeBalancerConfigNodesListTool(cfg *config.Config) (mcp.Tool, pro
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeNodeBalancerConfigGetTool creates a tool for getting one config on a NodeBalancer.
+func NewLinodeNodeBalancerConfigGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_nodebalancer_config_get",
+		"Gets one config for a specific NodeBalancer by IDs.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("nodebalancer_id", mcp.Required(),
+				mcp.Description("The ID of the NodeBalancer whose config should be retrieved")),
+			mcp.WithNumber("config_id", mcp.Required(),
+				mcp.Description("The ID of the NodeBalancer config to retrieve")),
+		},
+		handleLinodeNodeBalancerConfigGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeNodeBalancerConfigCreateTool creates a tool for creating a config on a NodeBalancer.
 func NewLinodeNodeBalancerConfigCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -294,6 +312,30 @@ func handleLinodeNodeBalancerConfigNodesListRequest(ctx context.Context, request
 	}
 
 	return MarshalToolResponse(nodes)
+}
+
+func handleLinodeNodeBalancerConfigGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	nodeBalancerID, validationMessage := nodeBalancerIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	configID, validationMessage := configIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	nodeBalancerConfig, err := client.GetNodeBalancerConfig(ctx, nodeBalancerID, configID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve config %d for NodeBalancer %d: %v", configID, nodeBalancerID, err)), nil
+	}
+
+	return MarshalToolResponse(nodeBalancerConfig)
 }
 
 func handleLinodeNodeBalancerConfigCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

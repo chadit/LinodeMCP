@@ -2722,6 +2722,21 @@ func (c *Client) ListNodeBalancerConfigNodes(ctx context.Context, nodeBalancerID
 	return nodes, err
 }
 
+// GetNodeBalancerConfig retrieves one node balancer config by IDs with automatic retry on transient failures.
+func (c *Client) GetNodeBalancerConfig(ctx context.Context, nodeBalancerID, configID int) (*NodeBalancerConfig, error) {
+	var config *NodeBalancerConfig
+
+	err := c.executeWithRetry(ctx, "GetNodeBalancerConfig", func() error {
+		var err error
+
+		config, err = c.httpGetNodeBalancerConfig(ctx, nodeBalancerID, configID)
+
+		return err
+	})
+
+	return config, err
+}
+
 // CreateNodeBalancerConfig creates a config for a node balancer by ID without retrying the POST create call.
 func (c *Client) CreateNodeBalancerConfig(ctx context.Context, nodeBalancerID int, req *CreateNodeBalancerConfigRequest) (*NodeBalancerConfig, error) {
 	var config *NodeBalancerConfig

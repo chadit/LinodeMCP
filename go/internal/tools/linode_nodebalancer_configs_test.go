@@ -16,8 +16,12 @@ import (
 )
 
 const (
-	errNodeBalancerIDRequired = "nodebalancer_id is required"
-	errNodeBalancerIDInteger  = "nodebalancer_id must be an integer"
+	errNodeBalancerIDRequired  = "nodebalancer_id is required"
+	errNodeBalancerIDInteger   = "nodebalancer_id must be an integer"
+	caseNegativeNodeBalancerID = "negative nodebalancer id"
+	caseSeparatorConfigID      = "separator config id"
+	errNodeBalancerIDMin       = "nodebalancer_id must be an integer greater than or equal to 1"
+	protocolHTTPS              = "https"
 )
 
 func TestLinodeNodeBalancerConfigListTool(t *testing.T) {
@@ -96,7 +100,7 @@ func TestLinodeNodeBalancerConfigListTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, "configs", "response should contain config list")
-		assert.Contains(t, textContent.Text, "https", "response should contain protocol")
+		assert.Contains(t, textContent.Text, protocolHTTPS, "response should contain protocol")
 		assert.Contains(t, textContent.Text, "443", "response should contain port")
 	})
 
@@ -161,7 +165,7 @@ func TestLinodeNodeBalancerConfigNodesListTool(t *testing.T) {
 		{name: caseQueryNodeBalancerID, args: map[string]any{keyNodeBalancerID: shareGroupIDQueryValue, keyConfigID: float64(456)}, wantContains: errNodeBalancerIDInteger},
 		{name: caseTraversalNodeBalancerID, args: map[string]any{keyNodeBalancerID: pathTraversalValue, keyConfigID: float64(456)}, wantContains: errNodeBalancerIDInteger},
 		{name: "missing config id", args: map[string]any{keyNodeBalancerID: float64(123)}, wantContains: errConfigIDRequired},
-		{name: "separator config id", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: pathSeparatorValue}, wantContains: errConfigIDInteger},
+		{name: caseSeparatorConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: pathSeparatorValue}, wantContains: errConfigIDInteger},
 		{name: "query config id", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: configIDQueryValue}, wantContains: errConfigIDInteger},
 		{name: "traversal config id", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: pathTraversalValue}, wantContains: errConfigIDInteger},
 		{name: caseZeroConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(0)}, wantContains: errConfigIDMin},
@@ -307,7 +311,7 @@ func TestLinodeNodeBalancerConfigCreateTool(t *testing.T) {
 		{name: "invalid stickiness", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyStickiness: "cookie", keyConfirm: true}, wantContains: "stickiness must be one of"},
 		{name: "invalid check", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyCheck: "ping", keyConfirm: true}, wantContains: "check must be one of"},
 		{name: "invalid cipher suite", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyCipherSuite: "custom", keyConfirm: true}, wantContains: "cipher_suite must be one of"},
-		{name: "missing https tls", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(443), keyProtocol: "https", keyConfirm: true}, wantContains: "ssl_cert and ssl_key are required"},
+		{name: "missing https tls", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(443), keyProtocol: protocolHTTPS, keyConfirm: true}, wantContains: "ssl_cert and ssl_key are required"},
 		{name: "invalid check interval", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyCheckInterval: "ten", keyConfirm: true}, wantContains: "check_interval must be an integer"},
 		{name: "negative check timeout", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyCheckTimeout: float64(-1), keyConfirm: true}, wantContains: "check_timeout must be an integer greater than or equal to 1"},
 		{name: "invalid check attempts", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyCheckAttempts: "three", keyConfirm: true}, wantContains: "check_attempts must be an integer"},
@@ -395,6 +399,117 @@ func TestLinodeNodeBalancerConfigCreateTool(t *testing.T) {
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
 		assertErrorContains(t, result, "Failed to create config for NodeBalancer 123")
+		assertErrorContains(t, result, errForbidden)
+	})
+}
+
+func TestLinodeNodeBalancerConfigGetTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	tool, capability, handler := tools.NewLinodeNodeBalancerConfigGetTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+		assert.Equal(t, "linode_nodebalancer_config_get", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Contains(t, tool.InputSchema.Properties, keyNodeBalancerID, "schema should include nodebalancer_id")
+		assert.Contains(t, tool.InputSchema.Properties, keyConfigID, "schema should include config_id")
+		assert.Contains(t, tool.InputSchema.Required, keyNodeBalancerID, "schema should require nodebalancer_id")
+		assert.Contains(t, tool.InputSchema.Required, keyConfigID, "schema should require config_id")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	validationTests := []struct {
+		name         string
+		args         map[string]any
+		wantContains string
+	}{
+		{name: caseMissingNodeBalancerID, args: map[string]any{keyConfigID: float64(456)}, wantContains: errNodeBalancerIDRequired},
+		{name: caseSeparatorNodeBalancerID, args: map[string]any{keyNodeBalancerID: pathSeparatorLinodeID, keyConfigID: float64(456)}, wantContains: errNodeBalancerIDInteger},
+		{name: caseQueryNodeBalancerID, args: map[string]any{keyNodeBalancerID: shareGroupIDQueryValue, keyConfigID: float64(456)}, wantContains: errNodeBalancerIDInteger},
+		{name: caseTraversalNodeBalancerID, args: map[string]any{keyNodeBalancerID: pathTraversalValue, keyConfigID: float64(456)}, wantContains: errNodeBalancerIDInteger},
+		{name: caseNegativeNodeBalancerID, args: map[string]any{keyNodeBalancerID: float64(-1), keyConfigID: float64(456)}, wantContains: errNodeBalancerIDMin},
+		{name: "missing config id", args: map[string]any{keyNodeBalancerID: float64(123)}, wantContains: errConfigIDRequired},
+		{name: caseSeparatorConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: pathSeparatorLinodeID}, wantContains: errConfigIDInteger},
+		{name: "query config id", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: shareGroupIDQueryValue}, wantContains: errConfigIDInteger},
+		{name: "traversal config id", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: pathTraversalValue}, wantContains: errConfigIDInteger},
+		{name: "negative config id", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(-1)}, wantContains: errConfigIDMin},
+	}
+	for _, tt := range validationTests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			req := createRequestWithArgs(t, tt.args)
+			result, err := handler(t.Context(), req)
+			require.NoError(t, err, "handler should not return Go error")
+			require.NotNil(t, result, "handler should return a result")
+			assert.True(t, result.IsError, "result should be a tool error")
+			assertErrorContains(t, result, tt.wantContains)
+		})
+	}
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/nodebalancers/123/configs/456", r.URL.Path, "request path should match")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyID: 456, keyPort: 443, keyProtocol: protocolHTTPS, keyNodeBalancerID: 123}))
+		}))
+		t.Cleanup(srv.Close)
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeNodeBalancerConfigGetTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456)})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.False(t, result.IsError, "result should not be a tool error")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, protocolHTTPS, "response should contain protocol")
+		assert.Contains(t, textContent.Text, "443", "response should contain port")
+		assert.Contains(t, textContent.Text, "456", "response should contain config id")
+	})
+
+	t.Run("client error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		t.Cleanup(srv.Close)
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeNodeBalancerConfigGetTool(srvCfg)
+
+		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456)}))
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "Failed to retrieve config 456 for NodeBalancer 123")
 		assertErrorContains(t, result, errForbidden)
 	})
 }
