@@ -1292,6 +1292,33 @@ func (c *Client) httpRebuildNodeBalancerConfig(ctx context.Context, nodeBalancer
 	return &config, nil
 }
 
+// GetNodeBalancerStats retrieves statistics for a NodeBalancer by its ID.
+func (c *Client) httpGetNodeBalancerStats(ctx context.Context, nodeBalancerID int) (*NodeBalancerStats, error) {
+	if nodeBalancerID <= 0 {
+		return nil, ErrNodeBalancerIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedNodeBalancerID := url.PathEscape(strconv.Itoa(nodeBalancerID))
+	endpoint := endpointNodeBalancers + "/" + encodedNodeBalancerID + "/stats"
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetNodeBalancerStats", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var stats NodeBalancerStats
+	if err := c.handleResponse(resp, &stats); err != nil {
+		return nil, err
+	}
+
+	return &stats, nil
+}
+
 // CreateNodeBalancer creates a new NodeBalancer.
 func (c *Client) httpCreateNodeBalancer(ctx context.Context, req CreateNodeBalancerRequest) (*NodeBalancer, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

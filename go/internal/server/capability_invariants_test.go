@@ -212,6 +212,26 @@ func TestLinodeInstanceStatsToolRegistered(t *testing.T) {
 	assert.True(t, found, "server should register the instance stats tool")
 }
 
+func TestLinodeNodeBalancerStatsToolRegistered(t *testing.T) {
+	t.Parallel()
+
+	srv := newCapabilityTestServer(t)
+
+	var found bool
+
+	for _, info := range srv.ToolInfos() {
+		if info.Name == "linode_nodebalancer_stats_get" {
+			found = true
+
+			assert.Equal(t, profiles.CapRead, info.Capability, "NodeBalancer stats tool should be read-only")
+			assert.Contains(t, info.InputSchema.Properties, "nodebalancer_id", "stats tool should declare nodebalancer_id")
+			assert.Contains(t, info.InputSchema.Required, "nodebalancer_id", "stats tool should require nodebalancer_id")
+		}
+	}
+
+	assert.True(t, found, "server should register the NodeBalancer stats tool")
+}
+
 func TestLinodeNetworkingIPsToolRegistered(t *testing.T) {
 	t.Parallel()
 

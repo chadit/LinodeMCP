@@ -286,6 +286,19 @@ type Transfer struct {
 	Total float64 `json:"total"`
 }
 
+// NodeBalancerStats represents traffic and connection statistics for a NodeBalancer.
+type NodeBalancerStats struct {
+	Title       string                   `json:"title"`
+	Connections [][]float64              `json:"connections"`
+	Traffic     NodeBalancerTrafficStats `json:"traffic"`
+}
+
+// NodeBalancerTrafficStats contains inbound and outbound traffic graphs for a NodeBalancer.
+type NodeBalancerTrafficStats struct {
+	In  [][]float64 `json:"in"`
+	Out [][]float64 `json:"out"`
+}
+
 // CreateFirewallRequest represents the request body for creating a firewall.
 type CreateFirewallRequest struct {
 	Label   string         `json:"label"`
