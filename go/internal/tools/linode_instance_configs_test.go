@@ -819,7 +819,7 @@ func TestLinodeInstanceConfigInterfacesReorderTool(t *testing.T) {
 		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: pathSeparatorValue, keyConfigID: float64(789), keyIDs: singleInterfaceIDsJSON, keyConfirm: true}, wantContains: errLinodeIDInteger},
 		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfigID: float64(789), keyIDs: singleInterfaceIDsJSON, keyConfirm: true}, wantContains: errLinodeIDInteger},
 		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyConfigID: float64(789), keyIDs: singleInterfaceIDsJSON, keyConfirm: true}, wantContains: errLinodeIDInteger},
-		{name: caseMissingConfigID, args: map[string]any{keyLinodeID: float64(123), keyIDs: singleInterfaceIDsJSON, keyConfirm: true}, wantContains: "config_id is required"},
+		{name: caseMissingConfigID, args: map[string]any{keyLinodeID: float64(123), keyIDs: singleInterfaceIDsJSON, keyConfirm: true}, wantContains: errConfigIDRequired},
 		{name: caseSlashConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathSeparatorValue, keyIDs: singleInterfaceIDsJSON, keyConfirm: true}, wantContains: errConfigIDInteger},
 		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: configIDQueryValue, keyIDs: singleInterfaceIDsJSON, keyConfirm: true}, wantContains: errConfigIDInteger},
 		{name: caseTraversalConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathTraversalValue, keyIDs: singleInterfaceIDsJSON, keyConfirm: true}, wantContains: errConfigIDInteger},
