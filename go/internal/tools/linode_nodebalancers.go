@@ -384,6 +384,22 @@ func NewLinodeNodeBalancerConfigRebuildTool(cfg *config.Config) (mcp.Tool, profi
 	return tool, profiles.CapWrite, handler
 }
 
+// NewLinodeNodeBalancerStatsGetTool creates a tool for retrieving NodeBalancer statistics.
+func NewLinodeNodeBalancerStatsGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_nodebalancer_stats_get",
+		"Gets traffic and connection statistics for a specific NodeBalancer by its ID.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
+				mcp.Description("The ID of the NodeBalancer whose statistics should be retrieved")),
+		},
+		handleLinodeNodeBalancerStatsGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeNodeBalancerGetTool creates a tool for getting a single NodeBalancer.
 func NewLinodeNodeBalancerGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
@@ -1273,6 +1289,25 @@ func nodeBalancerNodeCreateRequestFromTool(request *mcp.CallToolRequest) (linode
 	}
 
 	return req, ""
+}
+
+func handleLinodeNodeBalancerStatsGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	nodeBalancerID, validationMessage := nodeBalancerIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	stats, err := client.GetNodeBalancerStats(ctx, nodeBalancerID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve NodeBalancer %d stats: %v", nodeBalancerID, err)), nil
+	}
+
+	return MarshalToolResponse(stats)
 }
 
 func handleLinodeNodeBalancerGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

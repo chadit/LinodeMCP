@@ -2859,6 +2859,21 @@ func (c *Client) UpdateNodeBalancerNode(ctx context.Context, nodeBalancerID, con
 	return node, err
 }
 
+// GetNodeBalancerStats retrieves node balancer statistics by ID with automatic retry on transient failures.
+func (c *Client) GetNodeBalancerStats(ctx context.Context, nodeBalancerID int) (*NodeBalancerStats, error) {
+	var stats *NodeBalancerStats
+
+	err := c.executeWithRetry(ctx, "GetNodeBalancerStats", func() error {
+		var err error
+
+		stats, err = c.httpGetNodeBalancerStats(ctx, nodeBalancerID)
+
+		return err
+	})
+
+	return stats, err
+}
+
 // ListStackScripts retrieves all stack scripts with automatic retry on transient failures.
 func (c *Client) ListStackScripts(ctx context.Context) ([]StackScript, error) {
 	var scripts []StackScript
