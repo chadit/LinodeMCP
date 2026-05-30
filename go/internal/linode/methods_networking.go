@@ -941,6 +941,36 @@ func (c *Client) httpListNodeBalancerConfigs(ctx context.Context, nodeBalancerID
 	return response.Data, nil
 }
 
+// CreateNodeBalancerConfig creates a config for a NodeBalancer by its ID.
+func (c *Client) httpCreateNodeBalancerConfig(ctx context.Context, nodeBalancerID int, req *CreateNodeBalancerConfigRequest) (*NodeBalancerConfig, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	if nodeBalancerID < 1 {
+		return nil, ErrNodeBalancerIDPositive
+	}
+
+	if req == nil {
+		return nil, ErrCreateConfigRequestRequired
+	}
+
+	endpoint := fmt.Sprintf(endpointNodeBalancerConfigs, nodeBalancerID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateNodeBalancerConfig", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var config NodeBalancerConfig
+	if err := c.handleResponse(resp, &config); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
+}
+
 // CreateNodeBalancer creates a new NodeBalancer.
 func (c *Client) httpCreateNodeBalancer(ctx context.Context, req CreateNodeBalancerRequest) (*NodeBalancer, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

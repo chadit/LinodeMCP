@@ -42,6 +42,7 @@ func TestRedactionCoversSensitiveArgNames(t *testing.T) {
 	//   - token_uuid: an image share group token resource identifier,
 	//     not token material. Safe to log.
 	knownSafe := map[string]struct{}{
+		"check_passive":         {}, // Health-check mode, not credential material.
 		"key_id":                {},
 		"sshkey_id":             {},
 		"required_token_scopes": {},

@@ -103,3 +103,113 @@ func TestClientListNodeBalancerConfigsRetriesTransientError(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.Equal(t, 456, got[0].ID)
 }
+
+func TestClientCreateNodeBalancerConfigSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, nodeBalancerConfigsPath, r.URL.Path, "request path should match")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+
+		var body map[string]any
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		port, ok := body["port"].(float64)
+		assert.True(t, ok, "request body port should be numeric")
+		assert.Equal(t, 80, int(port), "request body should include port")
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyID: 456, "port": 80, "protocol": "http", "algorithm": "roundrobin", "nodebalancer_id": 123,
+		}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.CreateNodeBalancerConfig(t.Context(), 123, &linode.CreateNodeBalancerConfigRequest{Port: 80})
+
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, 456, got.ID)
+	assert.Equal(t, 80, got.Port)
+	assert.Equal(t, "http", got.Protocol)
+	assert.Equal(t, 123, got.NodeBalancerID)
+}
+
+func TestClientCreateNodeBalancerConfigAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, nodeBalancerConfigsPath, r.URL.Path, "request path should match")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.CreateNodeBalancerConfig(t.Context(), 123, &linode.CreateNodeBalancerConfigRequest{Port: 80})
+
+	require.Error(t, err)
+	assert.Nil(t, got)
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+func TestClientCreateNodeBalancerConfigDoesNotRetryTransientError(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, nodeBalancerConfigsPath, r.URL.Path, "request path should match")
+		calls.Add(1)
+		http.Error(w, "temporary", http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
+	got, err := client.CreateNodeBalancerConfig(t.Context(), 123, &linode.CreateNodeBalancerConfigRequest{Port: 80})
+
+	require.Error(t, err)
+	assert.Nil(t, got)
+	assert.Equal(t, int32(1), calls.Load(), "POST create route must not be retried")
+}
+
+func TestClientCreateNodeBalancerConfigRejectsInvalidNodeBalancerID(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("request should not be sent for invalid nodebalancer_id")
+		w.WriteHeader(http.StatusTeapot)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.CreateNodeBalancerConfig(t.Context(), 0, &linode.CreateNodeBalancerConfigRequest{Port: 80})
+
+	require.ErrorIs(t, err, linode.ErrNodeBalancerIDPositive)
+	assert.Nil(t, got)
+}
+
+func TestClientCreateNodeBalancerConfigRejectsNilRequest(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("request should not be sent for nil create config request")
+		w.WriteHeader(http.StatusTeapot)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.CreateNodeBalancerConfig(t.Context(), 123, nil)
+
+	require.ErrorIs(t, err, linode.ErrCreateConfigRequestRequired)
+	assert.Nil(t, got)
+}

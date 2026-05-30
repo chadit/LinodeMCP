@@ -13,10 +13,7 @@ import (
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-const (
-	imageSGGetPath        = "/images/sharegroups/123"
-	imageTokenUUIDFixture = "123e4567-e89b-12d3-a456-426614174000"
-)
+const imageSGGetPath = "/images/sharegroups/123"
 
 func TestLinodeImageUploadToolDryRun(t *testing.T) {
 	t.Parallel()
@@ -465,7 +462,7 @@ func TestLinodeImageShareGroupMemberUpdateToolDryRun(t *testing.T) {
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyShareGroupID: float64(123),
-			keyTokenUUID:    imageTokenUUIDFixture,
+			keyTokenUUID:    shareGroupTokenGetUUID,
 			keyLabel:        testRenamedLabel,
 			keyDryRun:       true,
 		}))
@@ -478,7 +475,7 @@ func TestLinodeImageShareGroupMemberUpdateToolDryRun(t *testing.T) {
 
 		would, _ := body["would_execute"].(map[string]any)
 		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, imageSGGetPath+"/members/"+imageTokenUUIDFixture, would["path"])
+		assert.Equal(t, imageSGGetPath+"/members/"+shareGroupTokenGetUUID, would["path"])
 		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
 	})
 
@@ -552,12 +549,12 @@ func TestLinodeImageShareGroupTokenUpdateToolDryRun(t *testing.T) {
 	t.Run("preview without updating, fetches parent not token", func(t *testing.T) {
 		t.Parallel()
 
-		cfg, methods := dryRunGetStateServer(t, "/images/sharegroups/tokens/"+imageTokenUUIDFixture+"/sharegroup",
+		cfg, methods := dryRunGetStateServer(t, "/images/sharegroups/tokens/"+shareGroupTokenGetUUID+"/sharegroup",
 			linode.ImageShareGroup{ID: 123})
 		_, _, handler := tools.NewLinodeImageShareGroupTokenUpdateTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyTokenUUID: imageTokenUUIDFixture,
+			keyTokenUUID: shareGroupTokenGetUUID,
 			keyLabel:     testRenamedLabel,
 			keyDryRun:    true,
 		}))
@@ -570,7 +567,7 @@ func TestLinodeImageShareGroupTokenUpdateToolDryRun(t *testing.T) {
 
 		would, _ := body["would_execute"].(map[string]any)
 		assert.Equal(t, "PUT", would["method"])
-		assert.Equal(t, "/images/sharegroups/tokens/"+imageTokenUUIDFixture, would["path"])
+		assert.Equal(t, "/images/sharegroups/tokens/"+shareGroupTokenGetUUID, would["path"])
 		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
 	})
 
@@ -579,7 +576,7 @@ func TestLinodeImageShareGroupTokenUpdateToolDryRun(t *testing.T) {
 
 		_, _, handler := tools.NewLinodeImageShareGroupTokenUpdateTool(&config.Config{})
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyTokenUUID: imageTokenUUIDFixture,
+			keyTokenUUID: shareGroupTokenGetUUID,
 			keyDryRun:    true,
 		}))
 		require.NoError(t, err)
