@@ -252,6 +252,29 @@ func NewLinodeNodeBalancerNodeCreateTool(cfg *config.Config) (mcp.Tool, profiles
 	return tool, profiles.CapWrite, handler
 }
 
+// NewLinodeNodeBalancerNodeDeleteTool creates a tool for deleting a node from a NodeBalancer config.
+func NewLinodeNodeBalancerNodeDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_nodebalancer_node_delete",
+		"Deletes a backend node from a specific NodeBalancer config. WARNING: This removes the node from load balancing.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("nodebalancer_id", mcp.Required(),
+				mcp.Description("The ID of the NodeBalancer that owns the config")),
+			mcp.WithNumber("config_id", mcp.Required(),
+				mcp.Description("The ID of the NodeBalancer config that owns the node")),
+			mcp.WithNumber("node_id", mcp.Required(),
+				mcp.Description("The ID of the NodeBalancer config node to delete")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be set to true to confirm NodeBalancer node deletion. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeNodeBalancerNodeDeleteRequest,
+	)
+
+	return tool, profiles.CapDestroy, handler
+}
+
 // NewLinodeNodeBalancerConfigUpdateTool creates a tool for updating a config on a NodeBalancer.
 func NewLinodeNodeBalancerConfigUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -880,6 +903,89 @@ func handleLinodeNodeBalancerNodeCreateRequest(ctx context.Context, request *mcp
 	}
 
 	return MarshalToolResponse(response)
+}
+
+func handleLinodeNodeBalancerNodeDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	nodeBalancerID, validationMessage := nodeBalancerIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	configID, validationMessage := nodeBalancerConfigIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	nodeID, validationMessage := nodeBalancerConfigNodeIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		client, err := prepareClient(request, cfg)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		node, fetchFailureMessage := fetchNodeBalancerConfigNodeForDryRun(ctx, client, nodeBalancerID, configID, nodeID)
+		if fetchFailureMessage != "" {
+			return mcp.NewToolResultError("Failed to fetch state for dry-run: " + fetchFailureMessage), nil
+		}
+
+		return BuildDryRunResponse(
+			"linode_nodebalancer_node_delete",
+			request.GetString(paramEnvironment, ""),
+			httpMethodDelete,
+			"/nodebalancers/"+strconv.Itoa(nodeBalancerID)+"/configs/"+strconv.Itoa(configID)+"/nodes/"+strconv.Itoa(nodeID),
+			node,
+		)
+	}
+
+	if result := RequireConfirm(request, "This deletes a NodeBalancer node. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	deleteFailureMessage := deleteNodeBalancerConfigNode(ctx, client, nodeBalancerID, configID, nodeID)
+	if deleteFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to delete node " + strconv.Itoa(nodeID) + " from NodeBalancer " + strconv.Itoa(nodeBalancerID) + " config " + strconv.Itoa(configID) + ": " + deleteFailureMessage), nil
+	}
+
+	response := struct {
+		Message        string `json:"message"`
+		NodeBalancerID int    `json:"nodebalancer_id"`
+		ConfigID       int    `json:"config_id"`
+		NodeID         int    `json:"node_id"`
+	}{
+		Message:        "NodeBalancer node " + strconv.Itoa(nodeID) + " removed successfully from NodeBalancer " + strconv.Itoa(nodeBalancerID) + " config " + strconv.Itoa(configID),
+		NodeBalancerID: nodeBalancerID,
+		ConfigID:       configID,
+		NodeID:         nodeID,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func fetchNodeBalancerConfigNodeForDryRun(ctx context.Context, client *linode.Client, nodeBalancerID, configID, nodeID int) (*linode.NodeBalancerConfigNode, string) {
+	node, err := client.GetNodeBalancerConfigNode(ctx, nodeBalancerID, configID, nodeID)
+	if err != nil {
+		return nil, err.Error()
+	}
+
+	return node, ""
+}
+
+func deleteNodeBalancerConfigNode(ctx context.Context, client *linode.Client, nodeBalancerID, configID, nodeID int) string {
+	deleteErr := client.DeleteNodeBalancerConfigNode(ctx, nodeBalancerID, configID, nodeID)
+	if deleteErr != nil {
+		return deleteErr.Error()
+	}
+
+	return ""
 }
 
 func nodeBalancerNodeCreateRequestFromTool(request *mcp.CallToolRequest) (linode.CreateNodeBalancerNodeRequest, string) {

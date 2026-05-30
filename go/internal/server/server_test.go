@@ -605,6 +605,13 @@ func TestToolDescriptorsIncludesNodeBalancerNodeCreate(t *testing.T) {
 	assert.Contains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_node_create", Capability: profiles.CapWrite})
 }
 
+func TestToolDescriptorsIncludesNodeBalancerNodeDelete(t *testing.T) {
+	t.Parallel()
+
+	descriptors := server.ToolDescriptors(&config.Config{})
+	assert.Contains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_node_delete", Capability: profiles.CapDestroy})
+}
+
 func TestToolDescriptorsIncludesNodeBalancerConfigUpdate(t *testing.T) {
 	t.Parallel()
 
