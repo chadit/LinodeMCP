@@ -215,6 +215,26 @@ type CreateNodeBalancerConfigRequest struct {
 	SSLKey        string `json:"ssl_key,omitempty"`
 }
 
+// NodeBalancerNode represents a backend node on a NodeBalancer config.
+type NodeBalancerNode struct {
+	ID             int    `json:"id"`
+	Label          string `json:"label"`
+	Address        string `json:"address"`
+	Status         string `json:"status"`
+	Weight         int    `json:"weight"`
+	Mode           string `json:"mode"`
+	NodeBalancerID int    `json:"nodebalancer_id"`
+	ConfigID       int    `json:"config_id"`
+}
+
+// CreateNodeBalancerNodeRequest represents the request body for creating a NodeBalancer config node.
+type CreateNodeBalancerNodeRequest struct {
+	Label   string `json:"label"`
+	Address string `json:"address"`
+	Weight  int    `json:"weight,omitempty"`
+	Mode    string `json:"mode,omitempty"`
+}
+
 // NodeBalancerNodesStatus represents the health summary for nodes on a NodeBalancer config.
 type NodeBalancerNodesStatus struct {
 	Up   int `json:"up"`

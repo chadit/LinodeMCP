@@ -2752,6 +2752,21 @@ func (c *Client) CreateNodeBalancerConfig(ctx context.Context, nodeBalancerID in
 	return config, err
 }
 
+// CreateNodeBalancerNode creates a node for a node balancer config without retrying the POST create call.
+func (c *Client) CreateNodeBalancerNode(ctx context.Context, nodeBalancerID, configID int, req *CreateNodeBalancerNodeRequest) (*NodeBalancerNode, error) {
+	var node *NodeBalancerNode
+
+	err := c.executeWithoutRetry(ctx, "CreateNodeBalancerNode", func() error {
+		var retryErr error
+
+		node, retryErr = c.httpCreateNodeBalancerNode(ctx, nodeBalancerID, configID, req)
+
+		return retryErr
+	})
+
+	return node, err
+}
+
 // ListStackScripts retrieves all stack scripts with automatic retry on transient failures.
 func (c *Client) ListStackScripts(ctx context.Context) ([]StackScript, error) {
 	var scripts []StackScript

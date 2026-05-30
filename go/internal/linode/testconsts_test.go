@@ -35,6 +35,7 @@ const (
 	keyID          = "id"
 	keyLabel       = "label"
 	keyStatus      = "status"
+	keyMode        = "mode"
 	keySeverity    = "severity"
 	keyThreshold   = "threshold"
 	keySSHKey      = "ssh_key"
@@ -60,14 +61,16 @@ const (
 	accountInvoiceID  = 12345
 
 	// Common region IDs used in API response fixtures.
-	regionUSEast         = "us-east"
-	vlanLabelApp         = "app-vlan"
-	ipv6RangeFixture     = "2001:0db8::"
-	ipv6RangeCIDR        = "2001:0db8::/64"
-	ipv6RangeEscaped     = "2001:0db8::%2F64"
-	ipv6RouteTarget      = "2001:db8::1"
-	serviceLinodes       = "Linodes"
-	serviceNodeBalancers = "NodeBalancers"
+	regionUSEast               = "us-east"
+	vlanLabelApp               = "app-vlan"
+	ipv6RangeFixture           = "2001:0db8::"
+	ipv6RangeCIDR              = "2001:0db8::/64"
+	ipv6RangeEscaped           = "2001:0db8::%2F64"
+	ipv6RouteTarget            = "2001:db8::1"
+	serviceLinodes             = "Linodes"
+	serviceNodeBalancers       = "NodeBalancers"
+	nodeBalancerNodeAddress    = "192.0.2.10:80"
+	nodeBalancerNodeModeAccept = "accept"
 
 	// fwLabelNew is the firewall label reused across the retry-wrapper tests.
 	fwLabelNew                   = "new-fw"

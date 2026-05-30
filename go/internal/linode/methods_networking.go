@@ -25,6 +25,7 @@ const (
 	endpointNodeBalancers         = "/nodebalancers"
 	endpointNodeBalancerTypes     = "/nodebalancers/types"
 	endpointNodeBalancerConfigs   = endpointNodeBalancers + "/%d/configs"
+	endpointNodeBalancerNodes     = endpointNodeBalancerConfigs + "/%d/nodes"
 )
 
 // ListFirewalls retrieves all Cloud Firewalls for the authenticated user.
@@ -1025,6 +1026,40 @@ func (c *Client) httpCreateNodeBalancerConfig(ctx context.Context, nodeBalancerI
 	}
 
 	return &config, nil
+}
+
+// CreateNodeBalancerNode creates a node for a NodeBalancer config.
+func (c *Client) httpCreateNodeBalancerNode(ctx context.Context, nodeBalancerID, configID int, req *CreateNodeBalancerNodeRequest) (*NodeBalancerNode, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	if nodeBalancerID < 1 {
+		return nil, ErrNodeBalancerIDPositive
+	}
+
+	if configID < 1 {
+		return nil, ErrConfigIDPositive
+	}
+
+	if req == nil {
+		return nil, ErrCreateNodeBalancerNodeRequestRequired
+	}
+
+	endpoint := fmt.Sprintf(endpointNodeBalancerNodes, nodeBalancerID, configID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateNodeBalancerNode", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var node NodeBalancerNode
+	if err := c.handleResponse(resp, &node); err != nil {
+		return nil, err
+	}
+
+	return &node, nil
 }
 
 // CreateNodeBalancer creates a new NodeBalancer.
