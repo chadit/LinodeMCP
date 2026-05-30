@@ -941,6 +941,38 @@ func (c *Client) httpListNodeBalancerConfigs(ctx context.Context, nodeBalancerID
 	return response.Data, nil
 }
 
+// ListNodeBalancerConfigNodes retrieves nodes for a NodeBalancer config.
+func (c *Client) httpListNodeBalancerConfigNodes(ctx context.Context, nodeBalancerID, configID, page, pageSize int) (*PaginatedResponse[NodeBalancerConfigNode], error) {
+	if nodeBalancerID <= 0 {
+		return nil, ErrNodeBalancerIDPositive
+	}
+
+	if configID <= 0 {
+		return nil, ErrConfigIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedNodeBalancerID := url.PathEscape(strconv.Itoa(nodeBalancerID))
+	encodedConfigID := url.PathEscape(strconv.Itoa(configID))
+	endpoint := withPaginationQuery(endpointNodeBalancers+"/"+encodedNodeBalancerID+"/configs/"+encodedConfigID+"/nodes", page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListNodeBalancerConfigNodes", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[NodeBalancerConfigNode]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
+}
+
 // CreateNodeBalancerConfig creates a config for a NodeBalancer by its ID.
 func (c *Client) httpCreateNodeBalancerConfig(ctx context.Context, nodeBalancerID int, req *CreateNodeBalancerConfigRequest) (*NodeBalancerConfig, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
