@@ -2707,6 +2707,21 @@ func (c *Client) ListNodeBalancerConfigs(ctx context.Context, nodeBalancerID int
 	return configs, err
 }
 
+// ListNodeBalancerFirewalls retrieves Cloud Firewalls assigned to a NodeBalancer with automatic retry on transient failures.
+func (c *Client) ListNodeBalancerFirewalls(ctx context.Context, nodeBalancerID int) ([]Firewall, error) {
+	var firewalls []Firewall
+
+	err := c.executeWithRetry(ctx, "ListNodeBalancerFirewalls", func() error {
+		var err error
+
+		firewalls, err = c.httpListNodeBalancerFirewalls(ctx, nodeBalancerID)
+
+		return err
+	})
+
+	return firewalls, err
+}
+
 // ListNodeBalancerConfigNodes retrieves nodes for a node balancer config with automatic retry on transient failures.
 func (c *Client) ListNodeBalancerConfigNodes(ctx context.Context, nodeBalancerID, configID, page, pageSize int) (*PaginatedResponse[NodeBalancerConfigNode], error) {
 	var nodes *PaginatedResponse[NodeBalancerConfigNode]

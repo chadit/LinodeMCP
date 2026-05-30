@@ -969,6 +969,33 @@ func (c *Client) httpListNodeBalancerConfigs(ctx context.Context, nodeBalancerID
 	return response.Data, nil
 }
 
+// ListNodeBalancerFirewalls retrieves Cloud Firewalls assigned to a NodeBalancer.
+func (c *Client) httpListNodeBalancerFirewalls(ctx context.Context, nodeBalancerID int) ([]Firewall, error) {
+	if nodeBalancerID <= 0 {
+		return nil, ErrNodeBalancerIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedNodeBalancerID := url.PathEscape(strconv.Itoa(nodeBalancerID))
+	endpoint := endpointNodeBalancers + "/" + encodedNodeBalancerID + "/firewalls"
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListNodeBalancerFirewalls", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[Firewall]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
+}
+
 // ListNodeBalancerConfigNodes retrieves nodes for a NodeBalancer config.
 func (c *Client) httpListNodeBalancerConfigNodes(ctx context.Context, nodeBalancerID, configID, page, pageSize int) (*PaginatedResponse[NodeBalancerConfigNode], error) {
 	if nodeBalancerID <= 0 {
