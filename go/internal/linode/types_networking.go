@@ -221,6 +221,18 @@ type NodeBalancerNodesStatus struct {
 	Down int `json:"down"`
 }
 
+// NodeBalancerConfigNode represents a backend node attached to a NodeBalancer config.
+type NodeBalancerConfigNode struct {
+	ID             int    `json:"id"`
+	Address        string `json:"address"`
+	Label          string `json:"label"`
+	Status         string `json:"status"`
+	Weight         int    `json:"weight"`
+	Mode           string `json:"mode"`
+	NodeBalancerID int    `json:"nodebalancer_id"`
+	ConfigID       int    `json:"config_id"`
+}
+
 // Transfer represents data transfer statistics.
 type Transfer struct {
 	In    float64 `json:"in"`

@@ -34,6 +34,8 @@ const (
 	nodeBalancerConfigCheckHTTPBody        = "http_body"
 	nodeBalancerConfigCipherRecommended    = "recommended"
 	nodeBalancerConfigCipherLegacy         = "legacy"
+	nodeBalancerConfigNodesPageSizeMin     = 25
+	nodeBalancerConfigNodesPageSizeMax     = 500
 )
 
 // NewLinodeNodeBalancerTypesTool creates a tool for listing available NodeBalancer types.
@@ -120,6 +122,26 @@ func NewLinodeNodeBalancerConfigListTool(cfg *config.Config) (mcp.Tool, profiles
 				mcp.Description("The ID of the NodeBalancer whose configs should be listed")),
 		},
 		handleLinodeNodeBalancerConfigListRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeNodeBalancerConfigNodesListTool creates a tool for listing nodes on a NodeBalancer config.
+func NewLinodeNodeBalancerConfigNodesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_nodebalancer_config_nodes_list",
+		"Lists backend nodes for a specific NodeBalancer config.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("nodebalancer_id", mcp.Required(),
+				mcp.Description("The ID of the NodeBalancer whose config nodes should be listed")),
+			mcp.WithNumber("config_id", mcp.Required(),
+				mcp.Description("The ID of the NodeBalancer config whose nodes should be listed")),
+			mcp.WithNumber("page", mcp.Description("Page number to retrieve")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page, from 25 through 500")),
+		},
+		handleLinodeNodeBalancerConfigNodesListRequest,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -238,6 +260,40 @@ func handleLinodeNodeBalancerConfigListRequest(ctx context.Context, request *mcp
 	}
 
 	return MarshalToolResponse(response)
+}
+
+func handleLinodeNodeBalancerConfigNodesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	nodeBalancerID, validationMessage := nodeBalancerIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	configID, validationMessage := nodeBalancerConfigIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	page, validationMessage := optionalPaginationInt(request.GetArguments(), "page", 1, 0)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	pageSize, validationMessage := optionalPaginationInt(request.GetArguments(), "page_size", nodeBalancerConfigNodesPageSizeMin, nodeBalancerConfigNodesPageSizeMax)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	nodes, err := client.ListNodeBalancerConfigNodes(ctx, nodeBalancerID, configID, page, pageSize)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to list nodes for NodeBalancer %d config %d: %v", nodeBalancerID, configID, err)), nil
+	}
+
+	return MarshalToolResponse(nodes)
 }
 
 func handleLinodeNodeBalancerConfigCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -399,6 +455,20 @@ func optionalNodeBalancerConfigChoice(request *mcp.CallToolRequest, key string, 
 	}
 
 	return "", fmt.Sprintf("%s must be one of: %s", key, strings.Join(allowed, ", "))
+}
+
+func nodeBalancerConfigIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	args := request.GetArguments()
+	if _, exists := args["config_id"]; !exists {
+		return 0, "config_id is required"
+	}
+
+	configID, validationMessage := optionalPaginationInt(args, "config_id", 1, 0)
+	if validationMessage != "" {
+		return 0, validationMessage
+	}
+
+	return configID, ""
 }
 
 func nodeBalancerIDFromTool(request *mcp.CallToolRequest) (int, string) {
