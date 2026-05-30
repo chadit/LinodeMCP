@@ -91,6 +91,9 @@ var ErrInterfaceIDPositive = errors.New("interface_id must be a positive integer
 // ErrCreateConfigRequestRequired is returned when CreateInstanceConfig is called without a request body.
 var ErrCreateConfigRequestRequired = errors.New("create config request is required")
 
+// ErrCreateNodeBalancerNodeRequestRequired is returned when CreateNodeBalancerNode is called without a request body.
+var ErrCreateNodeBalancerNodeRequestRequired = errors.New("create nodebalancer node request is required")
+
 // ErrUpdateConfigRequestRequired is returned when UpdateInstanceConfig is called without a request body.
 var ErrUpdateConfigRequestRequired = errors.New("update config request is required")
 

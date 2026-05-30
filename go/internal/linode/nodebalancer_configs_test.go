@@ -125,7 +125,7 @@ func TestClientListNodeBalancerConfigNodesSuccess(t *testing.T) {
 		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyData: []map[string]any{{
 				keyID: 789, keyAddress: "192.0.2.10:80", keyLabel: nodeLabelWeb1, keyStatus: "UP",
-				"weight": 100, "mode": "accept", keyNodeBalancerID: 123, keyConfigID: 456,
+				"weight": 100, "mode": nodeBalancerNodeModeAccept, keyNodeBalancerID: 123, keyConfigID: 456,
 			}},
 			keyPage: 2, keyPages: 3, keyResults: 1,
 		}))
@@ -414,4 +414,113 @@ func TestClientGetNodeBalancerConfigRetriesTransientError(t *testing.T) {
 	assert.Equal(t, int32(2), calls.Load(), "read route should retry once after transient failure")
 	require.NotNil(t, got)
 	assert.Equal(t, 456, got.ID)
+}
+
+func TestClientCreateNodeBalancerNodeSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/nodebalancers/123/configs/456/nodes", r.URL.Path, "request path should match")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+
+		var body map[string]any
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		assert.Equal(t, accountMaintenanceLabel, body["label"], "request body should include label")
+		assert.Equal(t, nodeBalancerNodeAddress, body[keyAddress], "request body should include address")
+		weight, ok := body["weight"].(float64)
+		assert.True(t, ok, "request body weight should be numeric")
+		assert.Equal(t, 100, int(weight), "request body should include weight")
+		assert.Equal(t, nodeBalancerNodeModeAccept, body[keyMode], "request body should include mode")
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyID: 789, "label": accountMaintenanceLabel, keyAddress: nodeBalancerNodeAddress, keyStatus: "UP", "weight": 100,
+			keyMode: nodeBalancerNodeModeAccept, keyNodeBalancerID: 123, keyConfigID: 456,
+		}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.CreateNodeBalancerNode(t.Context(), 123, 456, &linode.CreateNodeBalancerNodeRequest{
+		Label: accountMaintenanceLabel, Address: nodeBalancerNodeAddress, Weight: 100, Mode: nodeBalancerNodeModeAccept,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, 789, got.ID)
+	assert.Equal(t, accountMaintenanceLabel, got.Label)
+	assert.Equal(t, nodeBalancerNodeAddress, got.Address)
+	assert.Equal(t, 123, got.NodeBalancerID)
+	assert.Equal(t, 456, got.ConfigID)
+}
+
+func TestClientCreateNodeBalancerNodeAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/nodebalancers/123/configs/456/nodes", r.URL.Path, "request path should match")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.CreateNodeBalancerNode(t.Context(), 123, 456, &linode.CreateNodeBalancerNodeRequest{Label: accountMaintenanceLabel, Address: nodeBalancerNodeAddress})
+
+	require.Error(t, err)
+	assert.Nil(t, got)
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+func TestClientCreateNodeBalancerNodeDoesNotRetryTransientError(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/nodebalancers/123/configs/456/nodes", r.URL.Path, "request path should match")
+		calls.Add(1)
+		http.Error(w, "temporary", http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
+	got, err := client.CreateNodeBalancerNode(t.Context(), 123, 456, &linode.CreateNodeBalancerNodeRequest{Label: accountMaintenanceLabel, Address: nodeBalancerNodeAddress})
+
+	require.Error(t, err)
+	assert.Nil(t, got)
+	assert.Equal(t, int32(1), calls.Load(), "POST create route must not be retried")
+}
+
+func TestClientCreateNodeBalancerNodeRejectsInvalidIDsAndNilRequest(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("request should not be sent for invalid create node arguments")
+		w.WriteHeader(http.StatusTeapot)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
+	got, err := client.CreateNodeBalancerNode(t.Context(), 0, 456, &linode.CreateNodeBalancerNodeRequest{Label: accountMaintenanceLabel, Address: nodeBalancerNodeAddress})
+	require.ErrorIs(t, err, linode.ErrNodeBalancerIDPositive)
+	assert.Nil(t, got)
+
+	got, err = client.CreateNodeBalancerNode(t.Context(), 123, 0, &linode.CreateNodeBalancerNodeRequest{Label: accountMaintenanceLabel, Address: nodeBalancerNodeAddress})
+	require.ErrorIs(t, err, linode.ErrConfigIDPositive)
+	assert.Nil(t, got)
+
+	got, err = client.CreateNodeBalancerNode(t.Context(), 123, 456, nil)
+	require.ErrorIs(t, err, linode.ErrCreateNodeBalancerNodeRequestRequired)
+	assert.Nil(t, got)
 }
