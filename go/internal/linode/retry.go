@@ -2722,6 +2722,21 @@ func (c *Client) ListNodeBalancerFirewalls(ctx context.Context, nodeBalancerID i
 	return firewalls, err
 }
 
+// UpdateNodeBalancerFirewalls replaces firewall assignments for a NodeBalancer without replaying the state-changing request.
+func (c *Client) UpdateNodeBalancerFirewalls(ctx context.Context, nodeBalancerID, page, pageSize int, req *UpdateNodeBalancerFirewallsRequest) ([]Firewall, error) {
+	var firewalls []Firewall
+
+	err := c.executeWithoutRetry(ctx, "UpdateNodeBalancerFirewalls", func() error {
+		var retryErr error
+
+		firewalls, retryErr = c.httpUpdateNodeBalancerFirewalls(ctx, nodeBalancerID, page, pageSize, req)
+
+		return retryErr
+	})
+
+	return firewalls, err
+}
+
 // ListNodeBalancerConfigNodes retrieves nodes for a node balancer config with automatic retry on transient failures.
 func (c *Client) ListNodeBalancerConfigNodes(ctx context.Context, nodeBalancerID, configID, page, pageSize int) (*PaginatedResponse[NodeBalancerConfigNode], error) {
 	var nodes *PaginatedResponse[NodeBalancerConfigNode]

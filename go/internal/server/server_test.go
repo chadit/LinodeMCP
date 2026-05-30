@@ -289,6 +289,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_database_type_list":                             profiles.CapRead,
 		"linode_database_type_get":                              profiles.CapRead,
 		"linode_nodebalancer_config_get":                        profiles.CapRead,
+		"linode_nodebalancer_firewall_update":                   profiles.CapWrite,
 		"linode_nodebalancer_config_rebuild":                    profiles.CapWrite,
 		"linode_database_engine_get":                            profiles.CapRead,
 		"linode_database_mysql_config_get":                      profiles.CapRead,

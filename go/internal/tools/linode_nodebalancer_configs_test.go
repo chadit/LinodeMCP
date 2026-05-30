@@ -21,6 +21,7 @@ const (
 	errNodeBalancerIDInteger    = "nodebalancer_id must be an integer"
 	errNodeBalancerIDMin        = "nodebalancer_id must be an integer greater than or equal to 1"
 	nodeBalancerNodeAddress     = "192.0.2.10:80"
+	nodeBalancerFirewallLabel   = "nb-firewall"
 	nodeBalancerNodeKeyMode     = "mode"
 	nodeBalancerNodeStatusUP    = "UP"
 	nodeBalancerNodeModeAccept  = "accept"
@@ -83,7 +84,7 @@ func TestLinodeNodeBalancerFirewallListTool(t *testing.T) {
 			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyData: []map[string]any{{keyID: 456, keyLabel: "nb-firewall", keyStatus: statusEnabled}},
+				keyData: []map[string]any{{keyID: 456, keyLabel: nodeBalancerFirewallLabel, keyStatus: statusEnabled}},
 				keyPage: 1, keyPages: 1, keyResults: 1,
 			}))
 		}))
@@ -105,7 +106,7 @@ func TestLinodeNodeBalancerFirewallListTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, "firewalls", "response should contain firewall list")
-		assert.Contains(t, textContent.Text, "nb-firewall", "response should contain firewall label")
+		assert.Contains(t, textContent.Text, nodeBalancerFirewallLabel, "response should contain firewall label")
 	})
 
 	t.Run("client error", func(t *testing.T) {
@@ -1629,6 +1630,161 @@ func TestLinodeNodeBalancerConfigUpdateTool(t *testing.T) {
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
 		assertErrorContains(t, result, "Failed to update config 456 for NodeBalancer 123")
+		assertErrorContains(t, result, errForbidden)
+	})
+}
+
+func TestLinodeNodeBalancerFirewallUpdateTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	tool, capability, handler := tools.NewLinodeNodeBalancerFirewallUpdateTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+		assert.Equal(t, "linode_nodebalancer_firewall_update", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapWrite, capability, "tool should be write capability")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		assert.Contains(t, tool.InputSchema.Properties, keyNodeBalancerID, "schema should include nodebalancer_id")
+		assert.Contains(t, tool.InputSchema.Properties, keyFirewallIDs, "schema should include firewall_ids")
+		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "schema should include confirm")
+		assert.Contains(t, tool.InputSchema.Required, keyNodeBalancerID, "schema should require nodebalancer_id")
+		assert.Contains(t, tool.InputSchema.Required, keyFirewallIDs, "schema should require firewall_ids")
+		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "schema should require confirm")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	validationTests := []struct {
+		name         string
+		args         map[string]any
+		wantContains string
+	}{
+		{name: caseMissingNodeBalancerID, args: map[string]any{keyFirewallIDs: []any{float64(456)}, keyConfirm: true}, wantContains: errNodeBalancerIDRequired},
+		{name: caseSeparatorNodeBalancerID, args: map[string]any{keyNodeBalancerID: pathSeparatorLinodeID, keyFirewallIDs: []any{float64(456)}, keyConfirm: true}, wantContains: errNodeBalancerIDInteger},
+		{name: caseQueryNodeBalancerID, args: map[string]any{keyNodeBalancerID: shareGroupIDQueryValue, keyFirewallIDs: []any{float64(456)}, keyConfirm: true}, wantContains: errNodeBalancerIDInteger},
+		{name: caseTraversalNodeBalancerID, args: map[string]any{keyNodeBalancerID: pathTraversalValue, keyFirewallIDs: []any{float64(456)}, keyConfirm: true}, wantContains: errNodeBalancerIDInteger},
+		{name: caseNegativeNodeBalancerID, args: map[string]any{keyNodeBalancerID: float64(-1), keyFirewallIDs: []any{float64(456)}, keyConfirm: true}, wantContains: errNodeBalancerIDMin},
+		{name: caseMissingConfirm, args: map[string]any{keyNodeBalancerID: float64(123), keyFirewallIDs: []any{float64(456)}}, wantContains: errConfirmEqualsTrue},
+		{name: "false confirm", args: map[string]any{keyNodeBalancerID: float64(123), keyFirewallIDs: []any{float64(456)}, keyConfirm: false}, wantContains: errConfirmEqualsTrue},
+		{name: caseString, args: map[string]any{keyNodeBalancerID: float64(123), keyFirewallIDs: []any{float64(456)}, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
+		{name: caseNumeric, args: map[string]any{keyNodeBalancerID: float64(123), keyFirewallIDs: []any{float64(456)}, keyConfirm: float64(1)}, wantContains: errConfirmEqualsTrue},
+		{name: "missing firewall ids", args: map[string]any{keyNodeBalancerID: float64(123), keyConfirm: true}, wantContains: "firewall_ids is required"},
+		{name: "bad firewall ids", args: map[string]any{keyNodeBalancerID: float64(123), keyFirewallIDs: []any{"456"}, keyConfirm: true}, wantContains: "firewall_ids entries must be positive integers"},
+	}
+	for _, tt := range validationTests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
+			require.NoError(t, err, "handler should not return Go error")
+			require.NotNil(t, result, "handler should return a result")
+			assert.True(t, result.IsError, "result should be a tool error")
+			assertErrorContains(t, result, tt.wantContains)
+		})
+	}
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+			assert.Equal(t, "/nodebalancers/123/firewalls", r.URL.Path, "request path should match")
+			assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+
+			var body map[string][]int
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode")
+			assert.Equal(t, []int{456, 789}, body[keyFirewallIDs], "request body should include firewall IDs")
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyData: []map[string]any{{keyID: 456, keyLabel: nodeBalancerFirewallLabel, keyStatus: statusEnabled}},
+				keyPage: 2, keyPages: 3, keyResults: 1,
+			}))
+		}))
+		t.Cleanup(srv.Close)
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeNodeBalancerFirewallUpdateTool(srvCfg)
+
+		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{
+			keyNodeBalancerID: float64(123), keyFirewallIDs: []any{float64(456), float64(789)}, "page": float64(2), "page_size": float64(25), keyConfirm: true,
+		}))
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.False(t, result.IsError, "result should not be a tool error")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "firewalls", "response should contain firewall list")
+		assert.Contains(t, textContent.Text, nodeBalancerFirewallLabel, "response should contain firewall label")
+	})
+
+	t.Run("empty assignments", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+			assert.Equal(t, "/nodebalancers/123/firewalls", r.URL.Path, "request path should match")
+
+			var body map[string][]int
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode")
+			assert.Empty(t, body[keyFirewallIDs], "empty firewall_ids should be forwarded")
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{}, keyPage: 1, keyPages: 1, keyResults: 0}))
+		}))
+		t.Cleanup(srv.Close)
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeNodeBalancerFirewallUpdateTool(srvCfg)
+
+		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{
+			keyNodeBalancerID: float64(123), keyFirewallIDs: []any{}, keyConfirm: true,
+		}))
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.False(t, result.IsError, "result should not be a tool error")
+	})
+
+	t.Run("client error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		t.Cleanup(srv.Close)
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeNodeBalancerFirewallUpdateTool(srvCfg)
+
+		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{
+			keyNodeBalancerID: float64(123), keyFirewallIDs: []any{float64(456)}, keyConfirm: true,
+		}))
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.NotNil(t, result, "handler should return a result")
+		assert.True(t, result.IsError, "result should be a tool error")
+		assertErrorContains(t, result, "Failed to update firewall assignments for NodeBalancer 123")
 		assertErrorContains(t, result, errForbidden)
 	})
 }
