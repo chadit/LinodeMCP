@@ -2820,6 +2820,22 @@ func (c *Client) UpdateNodeBalancerConfig(ctx context.Context, nodeBalancerID, c
 	return config, err
 }
 
+// RebuildNodeBalancerConfig rebuilds a node balancer config without retrying the POST rebuild call.
+// Retrying can replay config rebuild after a transient error, so this method delegates exactly once.
+func (c *Client) RebuildNodeBalancerConfig(ctx context.Context, nodeBalancerID, configID int) (*NodeBalancerConfig, error) {
+	var config *NodeBalancerConfig
+
+	err := c.executeWithoutRetry(ctx, "RebuildNodeBalancerConfig", func() error {
+		var retryErr error
+
+		config, retryErr = c.httpRebuildNodeBalancerConfig(ctx, nodeBalancerID, configID)
+
+		return retryErr
+	})
+
+	return config, err
+}
+
 // DeleteNodeBalancerConfig deletes one node balancer config without retrying the destructive request.
 // Retrying can replay config deletion after a transient error, so this method delegates exactly once.
 func (c *Client) DeleteNodeBalancerConfig(ctx context.Context, nodeBalancerID, configID int) error {

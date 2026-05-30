@@ -430,6 +430,85 @@ func TestClientCreateNodeBalancerConfigRejectsNilRequest(t *testing.T) {
 	assert.Nil(t, got)
 }
 
+func TestClientRebuildNodeBalancerConfigSuccess(t *testing.T) {
+	t.Parallel()
+
+	var sawBody atomic.Bool
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/nodebalancers/123/configs/456/rebuild", r.URL.Path, "request path should match")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+
+		if r.Body != nil {
+			body, readErr := io.ReadAll(r.Body)
+			assert.NoError(t, readErr)
+			sawBody.Store(len(body) > 0)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyID: 456, keyPort: 80, keyProtocol: protocolHTTP, keyNodeBalancerID: 123}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	got, err := client.RebuildNodeBalancerConfig(t.Context(), 123, 456)
+
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, 456, got.ID)
+	assert.Equal(t, 80, got.Port)
+	assert.Equal(t, protocolHTTP, got.Protocol)
+	assert.Equal(t, 123, got.NodeBalancerID)
+	assert.False(t, sawBody.Load(), "rebuild request should not send a body")
+}
+
+func TestClientRebuildNodeBalancerConfigDoesNotRetryTransientError(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/nodebalancers/123/configs/456/rebuild", r.URL.Path, "request path should match")
+		calls.Add(1)
+		http.Error(w, "temporary", http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
+	got, err := client.RebuildNodeBalancerConfig(t.Context(), 123, 456)
+
+	require.Error(t, err)
+	assert.Nil(t, got)
+	assert.Equal(t, int32(1), calls.Load(), "POST rebuild route must not be retried")
+}
+
+func TestClientRebuildNodeBalancerConfigValidatesIDs(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
+
+	got, err := client.RebuildNodeBalancerConfig(t.Context(), 0, 456)
+	require.ErrorIs(t, err, linode.ErrNodeBalancerIDPositive)
+	assert.Nil(t, got)
+
+	got, err = client.RebuildNodeBalancerConfig(t.Context(), 123, 0)
+	require.ErrorIs(t, err, linode.ErrConfigIDPositive)
+	assert.Nil(t, got)
+
+	assert.Equal(t, int32(0), calls.Load(), "invalid IDs should be rejected before making an HTTP request")
+}
+
 func TestClientDeleteNodeBalancerConfigSuccess(t *testing.T) {
 	t.Parallel()
 
