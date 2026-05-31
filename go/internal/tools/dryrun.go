@@ -24,6 +24,47 @@ type DryRunResponse struct {
 	Environment  string        `json:"environment,omitempty"`
 	WouldExecute DryRunRequest `json:"would_execute"`
 	CurrentState any           `json:"current_state"`
+
+	// Phase 2 enrichment, all optional (omitempty). Phase 1 tools and
+	// Tier C tools leave these unset, keeping the v0 wire shape stable
+	// across every tool wired before Phase 2.
+	Dependencies []DryRunDependency  `json:"dependencies,omitempty"`
+	SideEffects  []string            `json:"side_effects,omitempty"`
+	BillingDelta *DryRunBillingDelta `json:"billing_delta,omitempty"`
+	Warnings     []string            `json:"warnings,omitempty"`
+}
+
+// DryRunDependency is one resource a destructive call would affect. The
+// dependency walk for a Tier A tool returns a slice of these. Kind names
+// the resource type (e.g. "volume", "public_ip", "nodebalancer_backend").
+// ID is an int or string identifier (omitted for resources without a
+// stable id, like a released IP carried in Label). Action is one of
+// detached, released, removed, cascade_deleted. Note is free-form context.
+type DryRunDependency struct {
+	Kind   string `json:"kind"`
+	ID     any    `json:"id,omitempty"`
+	Label  string `json:"label,omitempty"`
+	Action string `json:"action"`
+	Note   string `json:"note,omitempty"`
+}
+
+// DryRunBillingDelta is a best-effort monthly cost change estimate.
+// MonthlyChangeUSD is a signed decimal string (e.g. "-20.00") or
+// "unknown" when estimation is not possible.
+type DryRunBillingDelta struct {
+	MonthlyChangeUSD string `json:"monthly_change_usd"`
+	Note             string `json:"note,omitempty"`
+}
+
+// DryRunDetails bundles the Phase 2 enrichment a per-tool dependency walk
+// produces. A walk fills whichever fields apply to its tier: Tier A fills
+// Dependencies (and usually BillingDelta/Warnings), Tier B fills
+// SideEffects, Tier C fills none. Empty fields stay out of the wire shape.
+type DryRunDetails struct {
+	Dependencies []DryRunDependency
+	SideEffects  []string
+	BillingDelta *DryRunBillingDelta
+	Warnings     []string
 }
 
 // DryRunRequest captures the HTTP method and path the mutating call
@@ -67,6 +108,34 @@ func BuildDryRunResponse(
 	})
 }
 
+// BuildDryRunResponseDetailed is the Phase 2 builder: same v0 shape plus
+// the enrichment a per-tool dependency walk produced. Tier A/B handlers
+// call this instead of BuildDryRunResponse after running their walk.
+// Empty detail fields stay omitempty, so a walk that finds no dependencies
+// produces the same wire shape as the Phase 1 builder.
+func BuildDryRunResponseDetailed(
+	toolName, environment, method, path string,
+	currentState any,
+	details *DryRunDetails,
+) (*mcp.CallToolResult, error) {
+	var detail DryRunDetails
+	if details != nil {
+		detail = *details
+	}
+
+	return MarshalToolResponse(DryRunResponse{
+		DryRun:       true,
+		Tool:         toolName,
+		Environment:  environment,
+		WouldExecute: DryRunRequest{Method: method, Path: path},
+		CurrentState: currentState,
+		Dependencies: detail.Dependencies,
+		SideEffects:  detail.SideEffects,
+		BillingDelta: detail.BillingDelta,
+		Warnings:     detail.Warnings,
+	})
+}
+
 // RunDryRunPreview is the shared dry-run branch for non-destroy mutating
 // tools (CapWrite / CapAdmin). The caller validates required args first,
 // then delegates here. When fetchState is non-nil it prepares the client
@@ -81,13 +150,36 @@ func RunDryRunPreview(
 	toolName, method, path string,
 	fetchState func(ctx context.Context, client *linode.Client) (any, error),
 ) (*mcp.CallToolResult, error) {
-	var state any
+	return RunDryRunPreviewDetailed(ctx, request, cfg, toolName, method, path, fetchState, nil)
+}
+
+// RunDryRunPreviewDetailed is RunDryRunPreview with a Phase 2 enrichment hook.
+// When detailsFn is non-nil it runs after the state fetch and returns the
+// side_effects / warnings / billing_delta to attach to the preview; the
+// client it receives is the same one used for the fetch (nil when fetchState
+// is nil, e.g. create previews that describe the new resource from the
+// request alone). A detailsFn error fails the preview, matching the destroy
+// helpers' dependency-walk behavior.
+func RunDryRunPreviewDetailed(
+	ctx context.Context,
+	request *mcp.CallToolRequest,
+	cfg *config.Config,
+	toolName, method, path string,
+	fetchState func(ctx context.Context, client *linode.Client) (any, error),
+	detailsFn func(ctx context.Context, client *linode.Client, state any) (DryRunDetails, error),
+) (*mcp.CallToolResult, error) {
+	var (
+		state  any
+		client *linode.Client
+	)
 
 	if fetchState != nil {
-		client, err := prepareClient(request, cfg)
+		preparedClient, err := prepareClient(request, cfg)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+
+		client = preparedClient
 
 		state, err = fetchState(ctx, client)
 		if err != nil {
@@ -95,5 +187,16 @@ func RunDryRunPreview(
 		}
 	}
 
-	return BuildDryRunResponse(toolName, request.GetString(paramEnvironment, ""), method, path, state)
+	env := request.GetString(paramEnvironment, "")
+
+	if detailsFn == nil {
+		return BuildDryRunResponse(toolName, env, method, path, state)
+	}
+
+	details, err := detailsFn(ctx, client, state)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to compute dry-run side effects: %v", err)), nil
+	}
+
+	return BuildDryRunResponseDetailed(toolName, env, method, path, state, &details)
 }

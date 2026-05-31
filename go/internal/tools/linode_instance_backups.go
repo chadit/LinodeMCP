@@ -205,10 +205,13 @@ func handleInstanceBackupRestoreRequest(ctx context.Context, request *mcp.CallTo
 			return mcp.NewToolResultError(msg), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_instance_backup_restore", httpMethodPost,
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_instance_backup_restore", httpMethodPost,
 			fmt.Sprintf("/linode/instances/%d/backups/%d/restore", linodeID, backupID),
 			func(ctx context.Context, c *linode.Client) (any, error) {
 				return c.GetInstanceBackup(ctx, linodeID, backupID)
+			},
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return backupRestoreSideEffects(ctx, targetLinodeID, overwrite)
 			})
 	}
 

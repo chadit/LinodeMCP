@@ -43,7 +43,10 @@ func handleLinodeNodeBalancerCreateRequest(ctx context.Context, request *mcp.Cal
 			return mcp.NewToolResultError("region is required"), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_nodebalancer_create", httpMethodPost, "/nodebalancers", nil)
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_nodebalancer_create", httpMethodPost, "/nodebalancers", nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return nodebalancerCreateSideEffects(ctx, label, region)
+			})
 	}
 
 	if result := RequireConfirm(request, "This operation creates a billable resource. Set confirm=true to proceed."); result != nil {
@@ -116,10 +119,13 @@ func handleLinodeNodeBalancerUpdateRequest(ctx context.Context, request *mcp.Cal
 			return mcp.NewToolResultError("nodebalancer_id is required"), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_nodebalancer_update", "PUT",
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_nodebalancer_update", "PUT",
 			fmt.Sprintf("/nodebalancers/%d", nodeBalancerID),
 			func(ctx context.Context, c *linode.Client) (any, error) {
 				return c.GetNodeBalancer(ctx, nodeBalancerID)
+			},
+			func(ctx context.Context, _ *linode.Client, state any) (DryRunDetails, error) {
+				return nodebalancerUpdateSideEffects(ctx, state, label, clientConnThrottle)
 			})
 	}
 
@@ -194,5 +200,6 @@ func handleLinodeNodeBalancerDeleteRequest(ctx context.Context, request *mcp.Cal
 		Execute: func(ctx context.Context, c *linode.Client, id int) error {
 			return c.DeleteNodeBalancer(ctx, id)
 		},
+		DependencyWalk: nodebalancerDeleteDependencyWalk,
 	})
 }

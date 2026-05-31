@@ -239,6 +239,8 @@ func TestLinodePlacementGroupUpdateTool(t *testing.T) {
 		assert.Contains(t, textContent.Text, "linode_placement_group_update")
 		assert.Contains(t, textContent.Text, "PUT")
 		assert.Contains(t, textContent.Text, "/placement/groups/123")
+		assert.Contains(t, textContent.Text, "side_effects")
+		assert.Contains(t, textContent.Text, "label is set to")
 	})
 
 	t.Run("success", func(t *testing.T) {

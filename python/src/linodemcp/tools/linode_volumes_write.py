@@ -8,6 +8,7 @@ from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     PARAM_DRY_RUN,
+    DryRunDetails,
     build_dry_run_response,
     error_response,
     execute_dry_run,
@@ -76,12 +77,25 @@ async def handle_linode_volume_create(
     if is_dry_run(arguments):
         if not label:
             return error_response("label is required")
+        size = arguments.get("size", 20)
+        region = arguments.get("region")
+        attach_to = arguments.get("linode_id")
+        effect = f"A new {size} GB volume {label!r} will be created"
+        if region:
+            effect += f" in region {region}"
+        side_effects = [f"{effect}."]
+        if attach_to:
+            side_effects.append(
+                f"The volume is attached to instance {attach_to} on creation."
+            )
         return build_dry_run_response(
             "linode_volume_create",
             arguments.get("environment", ""),
             "POST",
             "/volumes",
             None,
+            side_effects=side_effects,
+            warnings=["Billing for the volume starts immediately on creation."],
         )
 
     confirm = arguments.get("confirm", False)
@@ -271,6 +285,18 @@ def create_linode_volume_attach_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def _volume_attach_side_effects(volume_id: int, linode_id: int) -> DryRunDetails:
+    """Phase 2 Tier B walk for volume attach. Describes the attachment the call
+    would make; the instance is an argument, not read from the volume state.
+    """
+    return {
+        "side_effects": [
+            f"Volume {volume_id} attaches to instance {linode_id}; the volume "
+            "must be in the same region as the instance."
+        ]
+    }
+
+
 async def handle_linode_volume_attach(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -287,6 +313,9 @@ async def handle_linode_volume_attach(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_volume(int(volume_id))
 
+        async def _walk(_client: RetryableClient, _state: Any) -> DryRunDetails:
+            return _volume_attach_side_effects(int(volume_id), int(linode_id))
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -294,6 +323,7 @@ async def handle_linode_volume_attach(
             "POST",
             f"/volumes/{int(volume_id)}/attach",
             _fetch,
+            _walk,
         )
 
     if not volume_id:
@@ -355,6 +385,26 @@ def create_linode_volume_detach_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def _volume_detach_side_effects(state: Any) -> DryRunDetails:
+    """Phase 2 Tier B walk for volume detach. Reads the volume's current
+    attachment from the fetched state and reports the detach (data preserved,
+    billing continues). State-only, no extra API call.
+    """
+    attached = getattr(state, "linode_id", None)
+    if not attached:
+        return {
+            "side_effects": [
+                "Volume is not attached to any instance; detach is a no-op."
+            ]
+        }
+    return {
+        "side_effects": [
+            f"Volume detaches from instance {attached}; its data is preserved "
+            "and billing continues."
+        ]
+    }
+
+
 async def handle_linode_volume_detach(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -369,6 +419,9 @@ async def handle_linode_volume_detach(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_volume(int(volume_id))
 
+        async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+            return _volume_detach_side_effects(state)
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -376,6 +429,7 @@ async def handle_linode_volume_detach(
             "POST",
             f"/volumes/{int(volume_id)}/detach",
             _fetch,
+            _walk,
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -436,6 +490,23 @@ def _volume_resize_error(volume_id: Any, size: Any) -> list[TextContent] | None:
     return None
 
 
+def _volume_resize_side_effects(state: Any, target_size: int) -> DryRunDetails:
+    """Phase 2 Tier B walk for volume resize. Names the size change (from the
+    fetched state to the requested size) and warns a volume can only grow.
+    """
+    from_size = getattr(state, "size", 0)
+    if from_size:
+        effect = f"Volume resizes from {from_size} GB to {target_size} GB."
+    else:
+        effect = f"Volume resizes to {target_size} GB."
+    return {
+        "side_effects": [effect],
+        "warnings": [
+            "A volume can only grow; the new size must be larger than the current size."
+        ],
+    }
+
+
 async def handle_linode_volume_resize(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -451,6 +522,9 @@ async def handle_linode_volume_resize(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_volume(int(volume_id))
 
+        async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+            return _volume_resize_side_effects(state, int(size))
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -458,6 +532,7 @@ async def handle_linode_volume_resize(
             "POST",
             f"/volumes/{int(volume_id)}/resize",
             _fetch,
+            _walk,
         )
 
     if not arguments.get("confirm"):
@@ -537,6 +612,24 @@ def _volume_update_error(
     return None
 
 
+def _volume_update_side_effects(
+    state: Any, new_label: Any, new_tags: Any
+) -> DryRunDetails:
+    """Phase 2 Tier B walk for volume update. Reports the label change (against
+    the fetched state) and notes when the tag set is replaced.
+    """
+    side_effects: list[str] = []
+    if new_label:
+        from_label = getattr(state, "label", "")
+        if from_label and from_label != new_label:
+            side_effects.append(f"Label changes from {from_label!r} to {new_label!r}.")
+        else:
+            side_effects.append(f"Label is set to {new_label!r}.")
+    if new_tags is not None:
+        side_effects.append("The volume's tag set is replaced with the provided tags.")
+    return {"side_effects": side_effects} if side_effects else {}
+
+
 async def handle_linode_volume_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -553,6 +646,9 @@ async def handle_linode_volume_update(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_volume(int(volume_id))
 
+        async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+            return _volume_update_side_effects(state, label, tags)
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -560,6 +656,7 @@ async def handle_linode_volume_update(
             "PUT",
             f"/volumes/{int(volume_id)}",
             _fetch,
+            _walk,
         )
 
     if not arguments.get("confirm"):
@@ -627,6 +724,37 @@ def create_linode_volume_delete_tool() -> tuple[Tool, Capability]:
     ), Capability.Destroy
 
 
+async def _volume_delete_dependency_walk(
+    _client: RetryableClient, state: Any
+) -> DryRunDetails:
+    """Phase 2 Tier A walk for volume delete. The instance the volume is
+    attached to detaches before the volume is destroyed. Read straight from
+    the volume state (which carries linode_id/linode_label); no extra call.
+    """
+    details: DryRunDetails = {}
+    linode_id = getattr(state, "linode_id", None)
+    if not linode_id:
+        return details
+
+    label = getattr(state, "linode_label", None) or ""
+    details["dependencies"] = [
+        {
+            "kind": "instance",
+            "id": linode_id,
+            "label": label,
+            "action": "detached",
+            "note": (
+                "Volume is attached; it detaches from this instance before deletion."
+            ),
+        }
+    ]
+    details["warnings"] = [
+        "Volume is currently attached to an instance; "
+        "it will be detached as part of deletion."
+    ]
+    return details
+
+
 async def handle_linode_volume_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -647,6 +775,7 @@ async def handle_linode_volume_delete(
             "DELETE",
             f"/volumes/{int(volume_id)}",
             _fetch,
+            _volume_delete_dependency_walk,
         )
 
     confirm = arguments.get("confirm", False)

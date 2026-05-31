@@ -77,8 +77,16 @@ func TestLinodeNodeBalancerConfigDeleteTool(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			methods = append(methods, r.Method)
 			assert.Equal(t, http.MethodGet, r.Method, "dry_run must only issue GET")
-			assert.Equal(t, "/nodebalancers/123/configs", r.URL.Path)
 			w.Header().Set("Content-Type", "application/json")
+			// The Phase 2 dependency walk also reads the config's backend nodes,
+			// so the preview issues a second GET beyond the config-list fetch.
+			if r.URL.Path == "/nodebalancers/123/configs/456/nodes" {
+				assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{}}))
+
+				return
+			}
+
+			assert.Equal(t, "/nodebalancers/123/configs", r.URL.Path)
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{{keyID: 456, keyPort: 80}}}))
 		}))
 		t.Cleanup(srv.Close)
@@ -95,7 +103,7 @@ func TestLinodeNodeBalancerConfigDeleteTool(t *testing.T) {
 		assert.Contains(t, textContent.Text, `"dry_run": true`)
 		assert.Contains(t, textContent.Text, `"method": "DELETE"`)
 		assert.Contains(t, textContent.Text, `"path": "/nodebalancers/123/configs/456"`)
-		assert.Equal(t, []string{http.MethodGet}, methods, "dry_run must not send DELETE")
+		assert.NotContains(t, methods, http.MethodDelete, "dry_run must not send DELETE")
 	})
 
 	t.Run("success", func(t *testing.T) {

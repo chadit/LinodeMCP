@@ -11,6 +11,7 @@ from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     PARAM_DRY_RUN,
+    DryRunDetails,
     build_dry_run_response,
     error_response,
     execute_dry_run,
@@ -180,12 +181,18 @@ async def handle_linode_placement_group_create(
         parsed = _parse_placement_group_create(arguments)
         if isinstance(parsed, list):
             return parsed
+        label, region, placement_group_type, placement_group_policy = parsed
         return build_dry_run_response(
             "linode_placement_group_create",
             arguments.get("environment", ""),
             "POST",
             "/placement/groups",
             None,
+            side_effects=[
+                f"A new placement group {label!r} "
+                f"({placement_group_type}, {placement_group_policy} policy) "
+                f"will be created in region {region}."
+            ],
         )
 
     if arguments.get("confirm") is not True:
@@ -290,6 +297,13 @@ async def handle_linode_placement_group_update(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_placement_group(gid)
 
+        label = arguments.get("label", "")
+
+        async def _walk(_client: RetryableClient, _state: Any) -> DryRunDetails:
+            return {
+                "side_effects": [f"The placement group's label is set to {label!r}."]
+            }
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -297,6 +311,7 @@ async def handle_linode_placement_group_update(
             "PUT",
             f"/placement/groups/{gid}",
             _fetch,
+            _walk,
         )
 
     if arguments.get("confirm") is not True:

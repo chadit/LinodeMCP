@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
+import httpx
 from mcp.types import TextContent, Tool
 
+from linodemcp.linode import APIError, NetworkError
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     PARAM_DRY_RUN,
+    DryRunDetails,
     build_dry_run_response,
     execute_dry_run,
     execute_tool,
@@ -352,12 +355,18 @@ async def handle_linode_instance_create(
         fields_error = _instance_create_error(region, instance_type, firewall_id)
         if fields_error is not None:
             return _error_response(fields_error)
+        image = arguments.get("image")
+        effect = f"A new {instance_type} instance will be created in region {region}"
+        if image:
+            effect += f" from image {image}"
         return build_dry_run_response(
             "linode_instance_create",
             arguments.get("environment", ""),
             "POST",
             "/linode/instances",
             None,
+            side_effects=[f"{effect}."],
+            warnings=["Billing for the instance starts immediately on creation."],
         )
 
     if not arguments.get("confirm"):
@@ -566,6 +575,90 @@ def create_linode_instance_delete_tool() -> tuple[Tool, Capability]:
     ), Capability.Destroy
 
 
+async def _instance_volume_deps(
+    client: RetryableClient, instance_id: int
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Volumes attached to the instance detach (not destroy) on delete."""
+    try:
+        volumes = await client.list_volumes()
+    except (APIError, NetworkError, httpx.HTTPError) as exc:
+        return [], [f"Could not list volumes: {exc}"]
+
+    deps = [
+        {
+            "kind": "volume",
+            "id": volume.id,
+            "label": volume.label,
+            "action": "detached",
+            "note": f"{volume.size}GB volume stays; billing continues.",
+        }
+        for volume in volumes
+        if volume.linode_id == instance_id
+    ]
+
+    return deps, []
+
+
+async def _instance_ip_deps(
+    client: RetryableClient, instance_id: int
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Public IPv4 addresses are released back to the pool on delete."""
+    try:
+        ips = await client.list_instance_ips(instance_id)
+    except (APIError, NetworkError, httpx.HTTPError) as exc:
+        return [], [f"Could not list IP addresses: {exc}"]
+
+    ipv4 = cast("dict[str, Any]", ips.get("ipv4", {}))
+    public = cast("list[dict[str, Any]]", ipv4.get("public", []))
+    deps: list[dict[str, Any]] = [
+        {
+            "kind": "public_ip",
+            "label": str(addr.get("address", "")),
+            "action": "released",
+        }
+        for addr in public
+    ]
+
+    return deps, []
+
+
+async def _instance_delete_dependency_walk(
+    client: RetryableClient, instance_id: int, state: Any
+) -> DryRunDetails:
+    """Phase 2 Tier A walk for instance delete. Best-effort: a failed
+    sub-fetch becomes a warning, not an error. Firewall attachments and the
+    billing estimate are omitted from this preview because the Python client
+    lacks the per-instance firewall list and type-pricing lookups; that
+    coverage is tracked for a later pass.
+    """
+    dependencies: list[dict[str, Any]] = []
+    warnings: list[str] = []
+
+    for collect in (_instance_volume_deps, _instance_ip_deps):
+        deps, deps_warnings = await collect(client, instance_id)
+        dependencies.extend(deps)
+        warnings.extend(deps_warnings)
+
+    warnings.append(
+        "Firewall attachments and the billing estimate are not included in "
+        "this preview."
+    )
+
+    if getattr(state, "status", "") == "running":
+        warnings.append(
+            "Instance is currently running. Delete will not pause for a "
+            "graceful shutdown."
+        )
+
+    details: DryRunDetails = {}
+    if dependencies:
+        details["dependencies"] = dependencies
+    if warnings:
+        details["warnings"] = warnings
+
+    return details
+
+
 async def handle_linode_instance_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -579,6 +672,11 @@ async def handle_linode_instance_delete(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_instance(int(instance_id))
 
+        async def _walk(client: RetryableClient, state: Any) -> DryRunDetails:
+            return await _instance_delete_dependency_walk(
+                client, int(instance_id), state
+            )
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -586,6 +684,7 @@ async def handle_linode_instance_delete(
             "DELETE",
             f"/linode/instances/{int(instance_id)}",
             _fetch,
+            _walk,
         )
 
     confirm = arguments.get("confirm", False)
@@ -658,6 +757,27 @@ def create_linode_instance_resize_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def _instance_resize_side_effects(state: Any, target_type: str) -> DryRunDetails:
+    """Phase 2 Tier B walk for instance resize. Names the type change (from the
+    fetched state to the requested type) and warns about reboot and billing.
+    """
+    from_type = getattr(state, "type", "")
+    if from_type:
+        effect = (
+            f"Instance resizes from type {from_type} to {target_type}; it "
+            "reboots and is unavailable during the resize."
+        )
+    else:
+        effect = (
+            f"Instance resizes to type {target_type}; it reboots and is "
+            "unavailable during the resize."
+        )
+    return {
+        "side_effects": [effect],
+        "warnings": ["Resizing changes the monthly price to match the new type."],
+    }
+
+
 async def handle_linode_instance_resize(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -675,6 +795,9 @@ async def handle_linode_instance_resize(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_instance(int(instance_id))
 
+        async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+            return _instance_resize_side_effects(state, str(instance_type))
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -682,6 +805,7 @@ async def handle_linode_instance_resize(
             "POST",
             f"/linode/instances/{int(instance_id)}/resize",
             _fetch,
+            _walk,
         )
 
     if not arguments.get("confirm"):

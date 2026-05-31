@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import httpx
 from mcp.types import TextContent, Tool
 
+from linodemcp.linode import APIError, NetworkError
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     ENV_PARAM_SCHEMA,
     PARAM_DRY_RUN,
+    DryRunDetails,
     build_dry_run_response,
     error_response,
     execute_dry_run,
@@ -73,12 +76,16 @@ async def handle_linode_domain_create(
     if is_dry_run(arguments):
         if not domain_name:
             return error_response("domain is required")
+        domain_type = arguments.get("type", "master")
         return build_dry_run_response(
             "linode_domain_create",
             arguments.get("environment", ""),
             "POST",
             "/domains",
             None,
+            side_effects=[
+                f"A new {domain_type} DNS domain {domain_name!r} will be created."
+            ],
         )
 
     if not arguments.get("confirm"):
@@ -152,6 +159,30 @@ def create_linode_domain_update_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def _domain_update_side_effects(
+    state: Any, new_domain: Any, new_soa: Any, new_description: Any
+) -> DryRunDetails:
+    """Phase 2 Tier B walk for domain update. Reports the domain-name and SOA
+    email changes against the fetched state and notes a description change.
+    """
+    side_effects: list[str] = []
+    if new_domain:
+        from_domain = getattr(state, "domain", "")
+        if from_domain and from_domain != new_domain:
+            side_effects.append(
+                f"Domain name changes from {from_domain!r} to {new_domain!r}."
+            )
+        else:
+            side_effects.append(f"Domain name is set to {new_domain!r}.")
+    if new_soa:
+        from_soa = getattr(state, "soa_email", "")
+        if new_soa != from_soa:
+            side_effects.append(f"SOA email is set to {new_soa!r}.")
+    if new_description:
+        side_effects.append("The domain description is updated.")
+    return {"side_effects": side_effects} if side_effects else {}
+
+
 async def handle_linode_domain_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -165,6 +196,14 @@ async def handle_linode_domain_update(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_domain(int(domain_id))
 
+        async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+            return _domain_update_side_effects(
+                state,
+                arguments.get("domain"),
+                arguments.get("soa_email"),
+                arguments.get("description"),
+            )
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -172,6 +211,7 @@ async def handle_linode_domain_update(
             "PUT",
             f"/domains/{int(domain_id)}",
             _fetch,
+            _walk,
         )
 
     if not arguments.get("confirm"):
@@ -230,6 +270,47 @@ def create_linode_domain_delete_tool() -> tuple[Tool, Capability]:
     ), Capability.Destroy
 
 
+async def _domain_delete_dependency_walk(
+    client: RetryableClient, domain_id: int
+) -> DryRunDetails:
+    """Phase 2 Tier A walk for domain delete. Deleting a domain destroys all
+    its DNS records; the walk surfaces the NS records (the delegation that
+    breaks) as cascade_deleted dependencies and warns with the total record
+    count. Best-effort: a failed record list becomes a warning, not a hard
+    error.
+    """
+    details: DryRunDetails = {}
+    try:
+        records = await client.list_domain_records(domain_id)
+    except (APIError, NetworkError, httpx.HTTPError) as exc:
+        details["warnings"] = [f"Could not list domain records: {exc}"]
+        return details
+
+    dependencies: list[dict[str, Any]] = []
+    ns_count = 0
+    for record in records:
+        if record.type.upper() != "NS":
+            continue
+        ns_count += 1
+        dependencies.append(
+            {
+                "kind": "ns_record",
+                "label": record.target,
+                "action": "cascade_deleted",
+                "note": f"NS record for {record.name}",
+            }
+        )
+
+    if dependencies:
+        details["dependencies"] = dependencies
+    if records:
+        details["warnings"] = [
+            f"Deleting this domain destroys {len(records)} DNS record(s), "
+            f"including {ns_count} NS record(s)."
+        ]
+    return details
+
+
 async def handle_linode_domain_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -243,6 +324,9 @@ async def handle_linode_domain_delete(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_domain(int(domain_id))
 
+        async def _walk(client: RetryableClient, _state: Any) -> DryRunDetails:
+            return await _domain_delete_dependency_walk(client, int(domain_id))
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -250,6 +334,7 @@ async def handle_linode_domain_delete(
             "DELETE",
             f"/domains/{int(domain_id)}",
             _fetch,
+            _walk,
         )
 
     if not arguments.get("confirm"):

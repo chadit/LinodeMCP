@@ -84,7 +84,10 @@ func handleLinodeVolumeCreateRequest(ctx context.Context, request *mcp.CallToolR
 			return mcp.NewToolResultError(msg), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_volume_create", httpMethodPost, "/volumes", nil)
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_volume_create", httpMethodPost, "/volumes", nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return volumeCreateSideEffects(ctx, label, region, size, linodeID)
+			})
 	}
 
 	if result := RequireConfirm(request, "This operation creates a billable resource. Set confirm=true to proceed."); result != nil {
@@ -178,9 +181,12 @@ func handleLinodeVolumeAttachRequest(ctx context.Context, request *mcp.CallToolR
 			return mcp.NewToolResultError("linode_id is required"), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_volume_attach", httpMethodPost,
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_volume_attach", httpMethodPost,
 			fmt.Sprintf("/volumes/%d/attach", volumeID),
-			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetVolume(ctx, volumeID) })
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetVolume(ctx, volumeID) },
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return volumeAttachSideEffects(ctx, volumeID, linodeID)
+			})
 	}
 
 	if result := RequireConfirm(request, "This attaches a block storage volume to an instance. Set confirm=true to proceed."); result != nil {
@@ -252,9 +258,12 @@ func handleLinodeVolumeDetachRequest(ctx context.Context, request *mcp.CallToolR
 			return mcp.NewToolResultError("volume_id is required"), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_volume_detach", httpMethodPost,
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_volume_detach", httpMethodPost,
 			fmt.Sprintf("/volumes/%d/detach", volumeID),
-			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetVolume(ctx, volumeID) })
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetVolume(ctx, volumeID) },
+			func(ctx context.Context, _ *linode.Client, state any) (DryRunDetails, error) {
+				return volumeDetachSideEffects(ctx, state)
+			})
 	}
 
 	if result := RequireConfirm(request, "This detaches a block storage volume from an instance. Set confirm=true to proceed."); result != nil {
@@ -332,9 +341,12 @@ func handleLinodeVolumeResizeRequest(ctx context.Context, request *mcp.CallToolR
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_volume_resize", httpMethodPost,
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_volume_resize", httpMethodPost,
 			fmt.Sprintf("/volumes/%d/resize", volumeID),
-			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetVolume(ctx, volumeID) })
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetVolume(ctx, volumeID) },
+			func(ctx context.Context, _ *linode.Client, state any) (DryRunDetails, error) {
+				return volumeResizeSideEffects(ctx, state, size)
+			})
 	}
 
 	if result := RequireConfirm(request, "This operation may increase billing. Volumes cannot be downsized. Set confirm=true to proceed."); result != nil {
@@ -421,9 +433,12 @@ func handleLinodeVolumeUpdateRequest(ctx context.Context, request *mcp.CallToolR
 			return mcp.NewToolResultError("at least one of label or tags is required"), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_volume_update", "PUT",
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_volume_update", "PUT",
 			fmt.Sprintf("/volumes/%d", volumeID),
-			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetVolume(ctx, volumeID) })
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetVolume(ctx, volumeID) },
+			func(ctx context.Context, _ *linode.Client, state any) (DryRunDetails, error) {
+				return volumeUpdateSideEffects(ctx, state, label, tagsRaw)
+			})
 	}
 
 	if result := RequireConfirm(request, "This updates a block storage volume. Set confirm=true to proceed."); result != nil {
@@ -518,5 +533,6 @@ func handleLinodeVolumeDeleteRequest(ctx context.Context, request *mcp.CallToolR
 		SuccessFormat:  "Volume %d removed successfully",
 		FetchState:     func(ctx context.Context, c *linode.Client, id int) (any, error) { return c.GetVolume(ctx, id) },
 		Execute:        func(ctx context.Context, c *linode.Client, id int) error { return c.DeleteVolume(ctx, id) },
+		DependencyWalk: volumeDeleteDependencyWalk,
 	})
 }

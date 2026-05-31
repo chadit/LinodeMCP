@@ -62,7 +62,10 @@ func handleLinodeFirewallCreateRequest(ctx context.Context, request *mcp.CallToo
 			return mcp.NewToolResultError(msg), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_firewall_create", httpMethodPost, "/networking/firewalls", nil)
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_firewall_create", httpMethodPost, "/networking/firewalls", nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return firewallCreateSideEffects(ctx, label, inboundPolicy, outboundPolicy)
+			})
 	}
 
 	if result := RequireConfirm(request, "This creates a Cloud Firewall. Set confirm=true to proceed."); result != nil {
@@ -158,9 +161,12 @@ func handleLinodeFirewallUpdateRequest(ctx context.Context, request *mcp.CallToo
 			return mcp.NewToolResultError(msg), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_firewall_update", "PUT",
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_firewall_update", "PUT",
 			fmt.Sprintf("/networking/firewalls/%d", firewallID),
-			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetFirewall(ctx, firewallID) })
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetFirewall(ctx, firewallID) },
+			func(ctx context.Context, _ *linode.Client, state any) (DryRunDetails, error) {
+				return firewallUpdateSideEffects(ctx, state, label, status)
+			})
 	}
 
 	if result := RequireConfirm(request, "This updates a Cloud Firewall. Set confirm=true to proceed."); result != nil {
@@ -237,5 +243,6 @@ func handleLinodeFirewallDeleteRequest(ctx context.Context, request *mcp.CallToo
 		Execute: func(ctx context.Context, c *linode.Client, id int) error {
 			return c.DeleteFirewall(ctx, id)
 		},
+		DependencyWalk: firewallDeleteDependencyWalk,
 	})
 }

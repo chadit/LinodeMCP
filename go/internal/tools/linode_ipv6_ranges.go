@@ -114,7 +114,13 @@ func handleLinodeIPv6RangeCreateRequest(ctx context.Context, request *mcp.CallTo
 			return mcp.NewToolResultError(validationMessage), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_ipv6_range_create", httpMethodPost, "/networking/ipv6/ranges", nil)
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_ipv6_range_create", httpMethodPost, "/networking/ipv6/ranges", nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return ipv6RangeCreateSideEffects(ctx,
+					request.GetInt(keyIPv6RangePrefixLength, 0),
+					request.GetInt(keyIPv6RangeLinodeID, 0),
+					request.GetString(keyIPv6RangeRouteTarget, ""))
+			})
 	}
 
 	if result := RequireConfirm(request, "This creates an IPv6 range and changes networking configuration. Set confirm=true to proceed."); result != nil {

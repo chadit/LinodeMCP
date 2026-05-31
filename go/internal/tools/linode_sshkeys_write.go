@@ -44,7 +44,10 @@ func handleLinodeSSHKeyCreateRequest(ctx context.Context, request *mcp.CallToolR
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_sshkey_create", httpMethodPost, "/profile/sshkeys", nil)
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_sshkey_create", httpMethodPost, "/profile/sshkeys", nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return sshKeyCreateSideEffects(ctx, label)
+			})
 	}
 
 	if result := RequireConfirm(request, "This adds an SSH key to your Linode profile. Set confirm=true to proceed."); result != nil {
@@ -117,9 +120,12 @@ func handleLinodeSSHKeyUpdateRequest(ctx context.Context, request *mcp.CallToolR
 			return mcp.NewToolResultError("label is required"), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_sshkey_update", "PUT",
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_sshkey_update", "PUT",
 			fmt.Sprintf("/profile/sshkeys/%d", sshKeyID),
-			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetSSHKey(ctx, sshKeyID) })
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetSSHKey(ctx, sshKeyID) },
+			func(ctx context.Context, _ *linode.Client, state any) (DryRunDetails, error) {
+				return sshKeyUpdateSideEffects(ctx, state, label)
+			})
 	}
 
 	if result := RequireConfirm(request, "This updates an SSH key in your Linode profile. Set confirm=true to proceed."); result != nil {

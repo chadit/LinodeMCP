@@ -2750,6 +2750,7 @@ async def test_image_create_dry_run_returns_preview(sample_config: Config) -> No
     assert body["would_execute"]["method"] == "POST"
     assert body["would_execute"]["path"] == "/images"
     assert body["current_state"] is None
+    assert any("123" in s for s in body["side_effects"])
     assert "confirm=true" not in result[0].text
 
 
@@ -4835,6 +4836,7 @@ async def test_sshkey_create_dry_run_returns_preview(sample_config: Config) -> N
     assert body["would_execute"]["method"] == "POST"
     assert body["would_execute"]["path"] == "/profile/sshkeys"
     assert body["current_state"] is None
+    assert any("my-key" in s for s in body["side_effects"])
     assert "confirm=true" not in result[0].text
 
 
@@ -4870,6 +4872,7 @@ async def test_sshkey_update_dry_run_returns_preview(sample_config: Config) -> N
         assert body["tool"] == "linode_sshkey_update"
         assert body["would_execute"]["method"] == "PUT"
         assert body["would_execute"]["path"] == "/profile/sshkeys/123"
+        assert any("renamed" in s for s in body["side_effects"])
         mock_client.get_ssh_key.assert_awaited_once_with(123)
         mock_client.update_ssh_key.assert_not_called()
 
@@ -5365,6 +5368,7 @@ async def test_firewall_delete_dry_run_returns_preview_without_mutating(
             "label": "prod-fw",
             "status": "enabled",
         }
+        mock_client.list_firewall_devices.return_value = {"data": []}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -5391,6 +5395,7 @@ async def test_firewall_delete_dry_run_does_not_require_confirm(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.get_firewall.return_value = {"id": 789, "label": "prod-fw"}
+        mock_client.list_firewall_devices.return_value = {"data": []}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -5417,6 +5422,38 @@ async def test_firewall_delete_dry_run_still_validates_firewall_id(
     assert "firewall_id is required" in result[0].text
 
 
+async def test_firewall_delete_dry_run_surfaces_device_dependencies(
+    sample_config: Config,
+) -> None:
+    """Phase 2 Tier A walk: attached devices appear as removed dependencies."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_firewall.return_value = {"id": 789, "label": "prod-fw"}
+        mock_client.list_firewall_devices.return_value = {
+            "data": [
+                {"id": 1, "entity": {"id": 555, "type": "linode", "label": "web"}},
+                {"id": 2, "entity": {"id": 666, "type": "nodebalancer", "label": "lb"}},
+            ]
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_firewall_delete(
+            {"firewall_id": 789, "dry_run": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        deps = body["dependencies"]
+        assert len(deps) == 2
+        assert {d["kind"] for d in deps} == {"linode", "nodebalancer"}
+        assert all(d["action"] == "removed" for d in deps)
+        assert body["warnings"]
+        mock_client.delete_firewall.assert_not_called()
+
+
 async def test_firewall_create_dry_run_returns_preview(
     sample_config: Config,
 ) -> None:
@@ -5433,6 +5470,7 @@ async def test_firewall_create_dry_run_returns_preview(
     assert body["would_execute"]["method"] == "POST"
     assert body["would_execute"]["path"] == "/networking/firewalls"
     assert body["current_state"] is None
+    assert any("fw-01" in s for s in body["side_effects"])
     assert "confirm=true" not in result[0].text
 
 
@@ -5467,6 +5505,7 @@ async def test_firewall_update_dry_run_returns_preview_without_mutating(
         assert body["tool"] == "linode_firewall_update"
         assert body["would_execute"]["method"] == "PUT"
         assert body["would_execute"]["path"] == "/networking/firewalls/789"
+        assert any("renamed" in s for s in body["side_effects"])
         mock_client.get_firewall.assert_awaited_once_with(789)
         mock_client.update_firewall.assert_not_called()
 
@@ -5577,6 +5616,9 @@ async def test_firewall_device_create_dry_run_returns_preview(
     assert body["would_execute"]["path"] == "/networking/firewalls/789/devices"
     assert body["current_state"] is None
     assert "confirm=true" not in result[0].text
+    assert len(body["side_effects"]) == 1
+    assert "456" in body["side_effects"][0]
+    assert "firewall 789" in body["side_effects"][0]
 
 
 async def test_firewall_device_create_dry_run_still_validates_firewall_id(
@@ -5883,6 +5925,40 @@ async def test_handle_linode_domain_update(sample_config: Config) -> None:
         assert "updated" in result[0].text.lower()
 
 
+async def test_domain_update_dry_run_surfaces_field_changes(
+    sample_config: Config,
+) -> None:
+    """Phase 2 Tier B walk: domain update names the SOA-email change."""
+    current = Domain(
+        id=12345,
+        domain="example.com",
+        type="master",
+        status="active",
+        soa_email="old@example.com",
+        description="",
+        tags=[],
+        created="2024-01-15T10:00:00",
+        updated="2024-01-15T12:00:00",
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_domain.return_value = current
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_domain_update(
+            {"domain_id": 12345, "soa_email": "new@example.com", "dry_run": True},
+            sample_config,
+        )
+
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_domain_update"
+        assert any("new@example.com" in s for s in body["side_effects"])
+        mock_client.update_domain.assert_not_called()
+
+
 async def test_handle_linode_domain_delete(sample_config: Config) -> None:
     """Test linode_domain_delete tool."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
@@ -5898,6 +5974,53 @@ async def test_handle_linode_domain_delete(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "deleted" in result[0].text.lower()
+
+
+async def test_domain_delete_dry_run_surfaces_ns_record_dependencies(
+    sample_config: Config,
+) -> None:
+    """Phase 2 Tier A walk: NS records appear as cascade_deleted dependencies."""
+
+    def _record(
+        record_id: int, record_type: str, name: str, target: str
+    ) -> DomainRecord:
+        return DomainRecord(
+            id=record_id,
+            type=record_type,
+            name=name,
+            target=target,
+            priority=0,
+            weight=0,
+            port=0,
+            ttl_sec=300,
+            created="2024-01-15T10:00:00",
+            updated="2024-01-15T10:00:00",
+        )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_domain.return_value = {"id": 12345, "domain": "example.com"}
+        mock_client.list_domain_records.return_value = [
+            _record(1, "NS", "example.com", "ns1.linode.com"),
+            _record(2, "A", "www", "192.0.2.1"),
+        ]
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_domain_delete(
+            {"domain_id": 12345, "dry_run": True}, sample_config
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_domain_delete"
+        deps = body["dependencies"]
+        assert len(deps) == 1
+        assert deps[0]["kind"] == "ns_record"
+        assert deps[0]["action"] == "cascade_deleted"
+        assert body["warnings"]
+        mock_client.delete_domain.assert_not_called()
 
 
 async def test_handle_linode_domain_record_create(sample_config: Config) -> None:
@@ -5986,6 +6109,7 @@ async def test_domain_create_dry_run_returns_preview(sample_config: Config) -> N
     assert body["would_execute"]["method"] == "POST"
     assert body["would_execute"]["path"] == "/domains"
     assert body["current_state"] is None
+    assert any("example.com" in s for s in body["side_effects"])
     assert "confirm=true" not in result[0].text
 
 
@@ -6017,6 +6141,9 @@ async def test_domain_record_create_dry_run_returns_preview(
     assert body["would_execute"]["method"] == "POST"
     assert body["would_execute"]["path"] == "/domains/333/records"
     assert body["current_state"] is None
+    assert len(body["side_effects"]) == 1
+    assert "A record" in body["side_effects"][0]
+    assert "192.0.2.1" in body["side_effects"][0]
 
 
 async def test_domain_record_create_dry_run_still_validates_domain_id(
@@ -6057,6 +6184,7 @@ async def test_domain_record_update_dry_run_returns_preview(
         assert body["tool"] == "linode_domain_record_update"
         assert body["would_execute"]["method"] == "PUT"
         assert body["would_execute"]["path"] == "/domains/333/records/555"
+        assert any("192.0.2.2" in s for s in body["side_effects"])
         mock_client.get_domain_record.assert_awaited_once_with(333, 555)
         mock_client.update_domain_record.assert_not_called()
 
@@ -6374,6 +6502,8 @@ async def test_volume_create_dry_run_returns_preview(sample_config: Config) -> N
     assert body["would_execute"]["method"] == "POST"
     assert body["would_execute"]["path"] == "/volumes"
     assert body["current_state"] is None
+    assert any("us-east" in s for s in body["side_effects"])
+    assert body["warnings"]
     assert "confirm=true" not in result[0].text
 
 
@@ -6431,6 +6561,7 @@ async def test_volume_attach_dry_run_returns_preview(sample_config: Config) -> N
         assert body["would_execute"]["path"] == "/volumes/333/attach"
         mock_client.get_volume.assert_awaited_once_with(333)
         mock_client.attach_volume.assert_not_called()
+        assert any("444" in s for s in body["side_effects"])
 
 
 async def test_volume_attach_dry_run_still_validates_volume_id(
@@ -6467,6 +6598,43 @@ async def test_volume_detach_dry_run_returns_preview(sample_config: Config) -> N
         mock_client.detach_volume.assert_not_called()
 
 
+async def test_volume_detach_dry_run_surfaces_current_attachment(
+    sample_config: Config,
+) -> None:
+    """Phase 2 Tier B walk: detach names the instance the volume is on."""
+    from linodemcp.linode import Volume
+
+    attached = Volume(
+        id=333,
+        label="vol",
+        status="active",
+        size=50,
+        region="us-east",
+        linode_id=444,
+        linode_label="web",
+        filesystem_path="/dev/disk/by-id/x",
+        tags=[],
+        created="2024-01-15T10:00:00",
+        updated="2024-01-15T10:00:00",
+        hardware_type="nvme",
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_volume.return_value = attached
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_volume_detach(
+            {"volume_id": 333, "dry_run": True}, sample_config
+        )
+
+        body = json.loads(result[0].text)
+        assert any("444" in s for s in body["side_effects"])
+        mock_client.detach_volume.assert_not_called()
+
+
 async def test_volume_resize_dry_run_returns_preview(sample_config: Config) -> None:
     """dry_run=true fetches state via GET and never resizes."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
@@ -6489,6 +6657,46 @@ async def test_volume_resize_dry_run_returns_preview(sample_config: Config) -> N
         mock_client.resize_volume.assert_not_called()
 
 
+async def test_volume_resize_dry_run_surfaces_size_change(
+    sample_config: Config,
+) -> None:
+    """Phase 2 Tier B walk: resize names the size change + grow-only warning."""
+    from linodemcp.linode import Volume
+
+    current = Volume(
+        id=333,
+        label="vol",
+        status="active",
+        size=50,
+        region="us-east",
+        linode_id=None,
+        linode_label=None,
+        filesystem_path="/dev/disk/by-id/x",
+        tags=[],
+        created="2024-01-15T10:00:00",
+        updated="2024-01-15T10:00:00",
+        hardware_type="nvme",
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_volume.return_value = current
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_volume_resize(
+            {"volume_id": 333, "size": 100, "dry_run": True}, sample_config
+        )
+
+        body = json.loads(result[0].text)
+        effect = body["side_effects"][0]
+        assert "50 GB" in effect
+        assert "100 GB" in effect
+        assert body["warnings"]
+        mock_client.resize_volume.assert_not_called()
+
+
 async def test_volume_update_dry_run_returns_preview(sample_config: Config) -> None:
     """dry_run=true fetches state via GET and never updates."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
@@ -6507,6 +6715,7 @@ async def test_volume_update_dry_run_returns_preview(sample_config: Config) -> N
         assert body["tool"] == "linode_volume_update"
         assert body["would_execute"]["method"] == "PUT"
         assert body["would_execute"]["path"] == "/volumes/333"
+        assert any("renamed" in s for s in body["side_effects"])
         mock_client.get_volume.assert_awaited_once_with(333)
         mock_client.update_volume.assert_not_called()
 
@@ -6961,6 +7170,7 @@ async def test_nodebalancer_delete_dry_run_returns_preview_without_mutating(
             "label": "prod-lb",
             "region": "us-east",
         }
+        mock_client.list_nodebalancer_configs.return_value = {"data": []}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -6987,6 +7197,7 @@ async def test_nodebalancer_delete_dry_run_does_not_require_confirm(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.get_nodebalancer.return_value = {"id": 444, "label": "prod-lb"}
+        mock_client.list_nodebalancer_configs.return_value = {"data": []}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -6998,6 +7209,38 @@ async def test_nodebalancer_delete_dry_run_does_not_require_confirm(
 
         assert len(result) == 1
         assert "confirm=true" not in result[0].text
+
+
+async def test_nodebalancer_delete_dry_run_surfaces_config_dependencies(
+    sample_config: Config,
+) -> None:
+    """Phase 2 Tier A walk: configs appear as cascade_deleted dependencies."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_nodebalancer.return_value = {"id": 444, "label": "prod-lb"}
+        mock_client.list_nodebalancer_configs.return_value = {
+            "data": [
+                {"id": 10, "port": 80, "protocol": "http"},
+                {"id": 11, "port": 443, "protocol": "https"},
+            ]
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_nodebalancer_delete(
+            {"nodebalancer_id": 444, "dry_run": True},
+            sample_config,
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        deps = body["dependencies"]
+        assert len(deps) == 2
+        assert all(d["kind"] == "nodebalancer_config" for d in deps)
+        assert all(d["action"] == "cascade_deleted" for d in deps)
+        assert body["warnings"]
+        mock_client.delete_nodebalancer.assert_not_called()
 
 
 async def test_nodebalancer_delete_dry_run_still_validates_nodebalancer_id(
@@ -7029,6 +7272,8 @@ async def test_nodebalancer_create_dry_run_returns_preview(
     assert body["would_execute"]["method"] == "POST"
     assert body["would_execute"]["path"] == "/nodebalancers"
     assert body["current_state"] is None
+    assert any("us-east" in s for s in body["side_effects"])
+    assert body["warnings"]
     assert "confirm=true" not in result[0].text
 
 
@@ -7063,6 +7308,7 @@ async def test_nodebalancer_update_dry_run_returns_preview_without_mutating(
         assert body["tool"] == "linode_nodebalancer_update"
         assert body["would_execute"]["method"] == "PUT"
         assert body["would_execute"]["path"] == "/nodebalancers/444"
+        assert any("renamed" in s for s in body["side_effects"])
         mock_client.get_nodebalancer.assert_awaited_once_with(444)
         mock_client.update_nodebalancer.assert_not_called()
 
@@ -7134,6 +7380,9 @@ async def test_ipv6_range_create_dry_run_returns_preview(
     assert body["would_execute"]["path"] == "/networking/ipv6/ranges"
     assert body["current_state"] is None
     assert "confirm=true" not in result[0].text
+    assert len(body["side_effects"]) == 1
+    assert "/64" in body["side_effects"][0]
+    assert "instance 123" in body["side_effects"][0]
 
 
 async def test_ipv6_range_create_dry_run_still_validates_prefix_length(
@@ -9905,6 +10154,8 @@ async def test_obj_bucket_create_dry_run_returns_preview(
     assert body["would_execute"]["method"] == "POST"
     assert body["would_execute"]["path"] == "/object-storage/buckets"
     assert body["current_state"] is None
+    assert any("my-bucket" in s for s in body["side_effects"])
+    assert body["warnings"]
     assert "confirm=true" not in result[0].text
 
 
@@ -9990,6 +10241,7 @@ async def test_obj_bucket_access_update_dry_run_returns_preview_without_mutating
         mock_client.get_object_storage_bucket_access.assert_awaited_once_with(
             "us-east-1", "my-bucket"
         )
+        assert any("private" in s for s in body["side_effects"])
         mock_client.update_object_storage_bucket_access.assert_not_called()
 
 
@@ -10010,6 +10262,8 @@ async def test_obj_key_create_dry_run_returns_preview(
     assert body["would_execute"]["method"] == "POST"
     assert body["would_execute"]["path"] == "/object-storage/keys"
     assert body["current_state"] is None
+    assert any("my-key" in s for s in body["side_effects"])
+    assert body["warnings"]
     assert "confirm=true" not in result[0].text
 
 
@@ -10051,6 +10305,7 @@ async def test_obj_key_update_dry_run_returns_preview_without_mutating(
         assert body["tool"] == "linode_object_storage_key_update"
         assert body["would_execute"]["method"] == "PUT"
         assert body["would_execute"]["path"] == "/object-storage/keys/77"
+        assert any("renamed" in s for s in body["side_effects"])
         mock_client.get_object_storage_key.assert_awaited_once_with(key_id=77)
         mock_client.update_object_storage_key.assert_not_called()
 
@@ -10101,6 +10356,7 @@ async def test_obj_object_acl_update_dry_run_returns_preview_without_mutating(
         mock_client.get_object_acl.assert_awaited_once_with(
             "us-east-1", "my-bucket", "object.txt"
         )
+        assert any("private" in s for s in body["side_effects"])
         mock_client.update_object_acl.assert_not_called()
 
 
@@ -10940,6 +11196,40 @@ async def test_lke_pool_delete_dry_run_returns_preview(
         mock_client.delete_lke_node_pool.assert_not_called()
 
 
+async def test_lke_pool_delete_dry_run_surfaces_node_dependencies(
+    sample_config: Config,
+) -> None:
+    """Phase 2 Tier A walk: pool nodes' backing Linodes cascade-delete."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_lke_node_pool.return_value = {
+            "id": 10,
+            "count": 2,
+            "nodes": [
+                {"id": "node-a", "instance_id": 9001},
+                {"id": "node-b", "instance_id": 9002},
+            ],
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_lke_pool_delete(
+                {"cluster_id": 123, "pool_id": 10, "dry_run": True},
+                sample_config,
+            )
+        )
+
+        body = json.loads(result[0].text)
+        deps = body["dependencies"]
+        assert len(deps) == 2
+        assert all(d["kind"] == "instance" for d in deps)
+        assert all(d["action"] == "cascade_deleted" for d in deps)
+        assert body["warnings"]
+        mock_client.delete_lke_node_pool.assert_not_called()
+
+
 async def test_lke_pool_delete_dry_run_still_validates_ids(
     sample_config: Config,
 ) -> None:
@@ -10972,6 +11262,36 @@ async def test_lke_node_delete_dry_run_returns_preview(
         assert body["tool"] == "linode_lke_node_delete"
         assert body["would_execute"]["path"] == "/lke/clusters/123/nodes/123-abc"
         mock_client.get_lke_node.assert_awaited_once_with(123, "123-abc")
+        mock_client.delete_lke_node.assert_not_called()
+
+
+async def test_lke_node_delete_dry_run_surfaces_backing_linode(
+    sample_config: Config,
+) -> None:
+    """Phase 2 Tier A walk: the node's backing Linode cascade-deletes."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_lke_node.return_value = {
+            "id": "123-abc",
+            "instance_id": 9100,
+            "status": "ready",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_lke_node_delete(
+            {"cluster_id": 123, "node_id": "123-abc", "dry_run": True},
+            sample_config,
+        )
+
+        body = json.loads(result[0].text)
+        deps = body["dependencies"]
+        assert len(deps) == 1
+        assert deps[0]["kind"] == "instance"
+        assert deps[0]["action"] == "cascade_deleted"
+        assert deps[0]["id"] == 9100
+        assert body["warnings"]
         mock_client.delete_lke_node.assert_not_called()
 
 
@@ -11667,6 +11987,7 @@ async def test_vpc_delete_dry_run_returns_preview_without_mutating(
             "label": "prod-vpc",
             "region": "us-east",
         }
+        mock_client.list_vpc_subnets.return_value = []
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -11695,6 +12016,7 @@ async def test_vpc_delete_dry_run_does_not_require_confirm(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.get_vpc.return_value = {"id": 123, "label": "prod-vpc"}
+        mock_client.list_vpc_subnets.return_value = []
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -11708,6 +12030,38 @@ async def test_vpc_delete_dry_run_does_not_require_confirm(
 
         assert len(result) == 1
         assert "confirm=true" not in result[0].text
+
+
+async def test_vpc_delete_dry_run_surfaces_subnet_dependencies(
+    sample_config: Config,
+) -> None:
+    """Phase 2 Tier A walk: subnets appear as cascade_deleted dependencies."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_vpc.return_value = {"id": 123, "label": "prod-vpc"}
+        mock_client.list_vpc_subnets.return_value = [
+            {"id": 1, "label": "subnet-a", "linodes": [{"id": 456}]},
+            {"id": 2, "label": "subnet-b", "linodes": []},
+        ]
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_vpc_delete(
+                {"vpc_id": 123, "dry_run": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        deps = body["dependencies"]
+        assert len(deps) == 2
+        assert all(d["kind"] == "vpc_subnet" for d in deps)
+        assert all(d["action"] == "cascade_deleted" for d in deps)
+        assert any("interface" in w for w in body["warnings"])
+        mock_client.delete_vpc.assert_not_called()
 
 
 async def test_vpc_delete_dry_run_still_validates_vpc_id(
@@ -12197,6 +12551,41 @@ async def test_vpc_subnet_delete_dry_run_returns_preview_without_mutating(
         mock_client.delete_vpc_subnet.assert_not_called()
 
 
+async def test_vpc_subnet_delete_dry_run_surfaces_linode_dependencies(
+    sample_config: Config,
+) -> None:
+    """Phase 2 Tier A walk: Linodes with interfaces in the subnet detach.
+
+    The walk reads the already-fetched subnet state, so no extra GET fires.
+    """
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_vpc_subnet.return_value = {
+            "id": 10,
+            "label": "web-subnet",
+            "linodes": [{"id": 456}, {"id": 789}],
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = list(
+            await handle_linode_vpc_subnet_delete(
+                {"vpc_id": 123, "subnet_id": 10, "dry_run": True},
+                sample_config,
+            )
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        deps = body["dependencies"]
+        assert len(deps) == 2
+        assert all(d["kind"] == "instance" for d in deps)
+        assert all(d["action"] == "detached" for d in deps)
+        assert body["warnings"]
+        mock_client.delete_vpc_subnet.assert_not_called()
+
+
 async def test_vpc_subnet_delete_dry_run_does_not_require_confirm(
     sample_config: Config,
 ) -> None:
@@ -12250,6 +12639,7 @@ async def test_vpc_create_dry_run_returns_preview(sample_config: Config) -> None
     assert body["would_execute"]["method"] == "POST"
     assert body["would_execute"]["path"] == "/vpcs"
     assert body["current_state"] is None
+    assert any("vpc-01" in s for s in body["side_effects"])
     assert "confirm=true" not in result[0].text
 
 
@@ -12291,6 +12681,7 @@ async def test_vpc_update_dry_run_returns_preview_without_mutating(
         assert body["tool"] == "linode_vpc_update"
         assert body["would_execute"]["method"] == "PUT"
         assert body["would_execute"]["path"] == "/vpcs/55"
+        assert any("renamed" in s for s in body["side_effects"])
         mock_client.get_vpc.assert_awaited_once_with(55)
         mock_client.update_vpc.assert_not_called()
 
@@ -12328,6 +12719,9 @@ async def test_vpc_subnet_create_dry_run_returns_preview(
     assert body["would_execute"]["path"] == "/vpcs/55/subnets"
     assert body["current_state"] is None
     assert "confirm=true" not in result[0].text
+    assert len(body["side_effects"]) == 1
+    assert "subnet-01" in body["side_effects"][0]
+    assert "10.0.0.0/24" in body["side_effects"][0]
 
 
 async def test_vpc_subnet_create_dry_run_still_validates_vpc_id(
@@ -13649,6 +14043,30 @@ async def test_instance_backup_restore_dry_run_returns_preview(
     mock_linode_client.restore_instance_backup.assert_not_called()
 
 
+async def test_instance_backup_restore_dry_run_overwrite_side_effects(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """Phase 2 Tier A walk: overwrite=true warns the target is destroyed."""
+    mock_linode_client.get_instance_backup.return_value = {"id": 456}
+
+    result = await handle_linode_instance_backup_restore(
+        {
+            "instance_id": 123,
+            "backup_id": 456,
+            "linode_id": 999,
+            "overwrite": True,
+            "dry_run": True,
+        },
+        sample_config,
+    )
+
+    body = json.loads(result[0].text)
+    assert len(body["side_effects"]) == 1
+    assert "999" in body["side_effects"][0]
+    assert body["warnings"]
+    mock_linode_client.restore_instance_backup.assert_not_called()
+
+
 async def test_instance_backups_enable_dry_run_returns_preview(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
@@ -13680,6 +14098,9 @@ async def test_instance_disk_create_dry_run_returns_preview(
     assert body["tool"] == "linode_instance_disk_create"
     assert body["would_execute"]["path"] == "/linode/instances/123/disks"
     mock_linode_client.create_instance_disk.assert_not_called()
+    assert len(body["side_effects"]) == 1
+    assert "data" in body["side_effects"][0]
+    assert "10240" in body["side_effects"][0]
 
 
 async def test_instance_disk_update_dry_run_returns_preview(
@@ -13704,7 +14125,11 @@ async def test_instance_disk_clone_dry_run_returns_preview(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """dry_run=true must fetch the disk via GET and never clone."""
-    mock_linode_client.get_instance_disk.return_value = {"id": 789}
+    mock_linode_client.get_instance_disk.return_value = {
+        "id": 789,
+        "label": "boot",
+        "size": 25600,
+    }
 
     result = await handle_linode_instance_disk_clone(
         {"instance_id": 123, "disk_id": 789, "dry_run": True}, sample_config
@@ -13713,6 +14138,7 @@ async def test_instance_disk_clone_dry_run_returns_preview(
     body = json.loads(result[0].text)
     assert body["tool"] == "linode_instance_disk_clone"
     assert body["would_execute"]["path"] == "/linode/instances/123/disks/789/clone"
+    assert "25600 MB" in body["side_effects"][0]
     mock_linode_client.clone_instance_disk.assert_not_called()
 
 
@@ -13720,7 +14146,7 @@ async def test_instance_disk_resize_dry_run_returns_preview(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """dry_run=true must fetch the disk via GET and never resize."""
-    mock_linode_client.get_instance_disk.return_value = {"id": 789}
+    mock_linode_client.get_instance_disk.return_value = {"id": 789, "size": 10240}
 
     result = await handle_linode_instance_disk_resize(
         {"instance_id": 123, "disk_id": 789, "size": 20480, "dry_run": True},
@@ -13730,6 +14156,10 @@ async def test_instance_disk_resize_dry_run_returns_preview(
     body = json.loads(result[0].text)
     assert body["tool"] == "linode_instance_disk_resize"
     assert body["would_execute"]["path"] == "/linode/instances/123/disks/789/resize"
+    effect = body["side_effects"][0]
+    assert "10240 MB" in effect
+    assert "20480 MB" in effect
+    assert body["warnings"]
     mock_linode_client.resize_instance_disk.assert_not_called()
 
 
@@ -14020,6 +14450,8 @@ async def test_instance_create_dry_run_returns_preview(sample_config: Config) ->
     assert body["would_execute"]["method"] == "POST"
     assert body["would_execute"]["path"] == "/linode/instances"
     assert body["current_state"] is None
+    assert any("g6-nanode-1" in s for s in body["side_effects"])
+    assert body["warnings"]
     assert "confirm=true" not in result[0].text
 
 
@@ -14146,6 +14578,64 @@ async def test_instance_migrate_dry_run_returns_preview_without_mutating(
     mock_linode_client.migrate_instance.assert_not_called()
 
 
+def _instance_with(**overrides: Any) -> Any:
+    """Build a real Instance dataclass with the given fields set."""
+    from dataclasses import fields as dataclass_fields
+
+    from linodemcp.linode import Instance
+
+    kwargs: dict[str, Any] = {f.name: None for f in dataclass_fields(Instance)}
+    kwargs.update(overrides)
+    return Instance(**kwargs)
+
+
+async def test_instance_resize_dry_run_surfaces_type_change(
+    sample_config: Config,
+) -> None:
+    """Phase 2 Tier B walk: resize names the type change + price warning."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_instance.return_value = _instance_with(type="g6-nanode-1")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_instance_resize(
+            {"instance_id": 123, "type": "g6-standard-1", "dry_run": True},
+            sample_config,
+        )
+
+        body = json.loads(result[0].text)
+        effect = body["side_effects"][0]
+        assert "g6-nanode-1" in effect
+        assert "g6-standard-1" in effect
+        assert body["warnings"]
+        mock_client.resize_instance.assert_not_called()
+
+
+async def test_instance_migrate_dry_run_surfaces_region_change(
+    sample_config: Config,
+) -> None:
+    """Phase 2 Tier B walk: migrate names the region change."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_instance.return_value = _instance_with(region="us-east")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_instance_migrate(
+            {"instance_id": 123, "region": "us-west", "dry_run": True},
+            sample_config,
+        )
+
+        body = json.loads(result[0].text)
+        effect = body["side_effects"][0]
+        assert "us-east" in effect
+        assert "us-west" in effect
+        mock_client.migrate_instance.assert_not_called()
+
+
 async def test_instance_rescue_dry_run_returns_preview_without_mutating(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
@@ -14226,6 +14716,93 @@ async def test_instance_password_reset_dry_run_still_validates_root_pass(
     )
     assert "root_pass is required" in result[0].text
     mock_linode_client.reset_instance_password.assert_not_called()
+
+
+def _running_instance() -> Any:
+    """Build a real Instance dataclass marked running, for side-effect walks."""
+    from dataclasses import fields as dataclass_fields
+
+    from linodemcp.linode import Instance
+
+    instance_kwargs: dict[str, Any] = {
+        field.name: None for field in dataclass_fields(Instance)
+    }
+    instance_kwargs["status"] = "running"
+    instance_kwargs["image"] = "linode/debian12"
+    return Instance(**instance_kwargs)
+
+
+async def test_instance_rebuild_dry_run_surfaces_disk_side_effects(
+    sample_config: Config,
+) -> None:
+    """Phase 2 Tier A walk: each disk is erased; the image is named in a warning."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_instance.return_value = _running_instance()
+        mock_client.list_instance_disks.return_value = [
+            {"id": 1, "label": "boot", "size": 25600, "filesystem": "ext4"},
+        ]
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_instance_rebuild(
+            {
+                "instance_id": 123,
+                "image": "linode/ubuntu24.04",
+                "root_pass": "Str0ngP@ssw0rd!",
+                "dry_run": True,
+            },
+            sample_config,
+        )
+
+        body = json.loads(result[0].text)
+        assert len(body["side_effects"]) == 1
+        assert any("linode/debian12" in w for w in body["warnings"])
+        mock_client.rebuild_instance.assert_not_called()
+
+
+async def test_instance_rescue_dry_run_surfaces_side_effects(
+    sample_config: Config,
+) -> None:
+    """Phase 2 Tier A walk: rescue-mode reboot side effect + downtime warning."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_instance.return_value = _running_instance()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_instance_rescue(
+            {"instance_id": 123, "dry_run": True}, sample_config
+        )
+
+        body = json.loads(result[0].text)
+        assert len(body["side_effects"]) == 1
+        assert body["warnings"]
+        mock_client.rescue_instance.assert_not_called()
+
+
+async def test_instance_password_reset_dry_run_surfaces_side_effects(
+    sample_config: Config,
+) -> None:
+    """Phase 2 Tier A walk: power-down/reboot side effect + downtime warning."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_instance.return_value = _running_instance()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_instance_password_reset(
+            {"instance_id": 123, "root_pass": "Str0ngP@ssw0rd!", "dry_run": True},
+            sample_config,
+        )
+
+        body = json.loads(result[0].text)
+        assert len(body["side_effects"]) == 1
+        assert body["warnings"]
+        mock_client.reset_instance_password.assert_not_called()
 
 
 async def test_handle_linode_instance_backup_get_error(
@@ -17997,6 +18574,8 @@ async def test_lke_cluster_create_dry_run_returns_preview(
     assert body["would_execute"]["method"] == "POST"
     assert body["would_execute"]["path"] == "/lke/clusters"
     assert body["current_state"] is None
+    assert any("k8s-prod" in s for s in body["side_effects"])
+    assert body["warnings"]
 
 
 async def test_lke_cluster_create_dry_run_still_validates_label(
@@ -18038,6 +18617,7 @@ async def test_lke_cluster_update_dry_run_returns_preview(
         assert body["tool"] == "linode_lke_cluster_update"
         assert body["would_execute"]["method"] == "PUT"
         assert body["would_execute"]["path"] == "/lke/clusters/123"
+        assert any("renamed" in s for s in body["side_effects"])
         mock_client.get_lke_cluster.assert_awaited_once_with(123)
         mock_client.update_lke_cluster.assert_not_called()
 
@@ -18154,6 +18734,7 @@ async def test_lke_pool_update_dry_run_returns_preview(
         assert body["tool"] == "linode_lke_pool_update"
         assert body["would_execute"]["method"] == "PUT"
         assert body["would_execute"]["path"] == "/lke/clusters/123/pools/10"
+        assert any("5 node" in s for s in body["side_effects"])
         mock_client.get_lke_node_pool.assert_awaited_once_with(123, 10)
         mock_client.update_lke_node_pool.assert_not_called()
 
@@ -18230,6 +18811,7 @@ async def test_lke_acl_update_dry_run_returns_preview(
         assert body["tool"] == "linode_lke_acl_update"
         assert body["would_execute"]["method"] == "PUT"
         assert body["would_execute"]["path"] == "/lke/clusters/123/control_plane_acl"
+        assert any("enabled" in s for s in body["side_effects"])
         mock_client.get_lke_control_plane_acl.assert_awaited_once_with(123)
         mock_client.update_lke_control_plane_acl.assert_not_called()
 
@@ -18460,6 +19042,7 @@ async def test_networking_ip_update_dry_run_returns_preview(
         assert body["tool"] == "linode_networking_ip_update"
         assert body["would_execute"]["method"] == "PUT"
         assert body["would_execute"]["path"] == "/networking/ips/192.0.2.20"
+        assert any("host.example.com" in s for s in body["side_effects"])
         mock_client.get_networking_ip.assert_awaited_once_with("192.0.2.20")
         mock_client.update_networking_ip.assert_not_called()
 
@@ -18627,6 +19210,8 @@ async def test_placement_group_create_dry_run_returns_preview(
     assert body["would_execute"]["method"] == "POST"
     assert body["would_execute"]["path"] == "/placement/groups"
     assert body["current_state"] is None
+    assert len(body["side_effects"]) == 1
+    assert "will be created in region" in body["side_effects"][0]
 
 
 async def test_placement_group_create_dry_run_still_validates_label(
@@ -18659,6 +19244,8 @@ async def test_placement_group_update_dry_run_returns_preview(
         assert body["tool"] == "linode_placement_group_update"
         assert body["would_execute"]["method"] == "PUT"
         assert body["would_execute"]["path"] == "/placement/groups/7"
+        assert len(body["side_effects"]) == 1
+        assert "renamed" in body["side_effects"][0]
         mock_client.get_placement_group.assert_awaited_once_with(7)
         mock_client.update_placement_group.assert_not_called()
 
@@ -19207,3 +19794,121 @@ async def test_profile_device_revoke_dry_run_returns_preview(
         assert body["would_execute"]["path"] == "/profile/devices/3"
         mock_client.get_profile_device.assert_awaited_once_with(3)
         mock_client.delete_profile_device.assert_not_called()
+
+
+async def test_instance_delete_dry_run_dependency_walk(
+    sample_config: Config,
+) -> None:
+    """dry_run surfaces attached volumes + public IPs, warns, never deletes."""
+    from dataclasses import fields as dataclass_fields
+    from types import SimpleNamespace
+
+    from linodemcp.linode import Instance
+
+    instance_kwargs: dict[str, Any] = {
+        field.name: None for field in dataclass_fields(Instance)
+    }
+    instance_kwargs["status"] = "running"
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_instance.return_value = Instance(**instance_kwargs)
+        mock_client.list_volumes.return_value = [
+            SimpleNamespace(id=6789, label="data-vol", size=50, linode_id=123),
+            SimpleNamespace(id=1, label="other-vol", size=10, linode_id=999),
+        ]
+        mock_client.list_instance_ips.return_value = {
+            "ipv4": {"public": [{"address": "198.51.100.10"}]}
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_instance_delete(
+            {"instance_id": 123, "dry_run": True}, sample_config
+        )
+
+        assert len(result) == 1
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_instance_delete"
+        assert body["would_execute"]["method"] == "DELETE"
+        assert body["would_execute"]["path"] == "/linode/instances/123"
+
+        deps = body["dependencies"]
+        assert sorted(d["kind"] for d in deps) == ["public_ip", "volume"]
+
+        volume_dep = next(d for d in deps if d["kind"] == "volume")
+        assert volume_dep["id"] == 6789
+        assert volume_dep["action"] == "detached"
+
+        ip_dep = next(d for d in deps if d["kind"] == "public_ip")
+        assert ip_dep["label"] == "198.51.100.10"
+        assert ip_dep["action"] == "released"
+
+        assert body["warnings"]
+        mock_client.delete_instance.assert_not_called()
+
+
+async def test_volume_delete_dry_run_dependency_walk(
+    sample_config: Config,
+) -> None:
+    """dry_run surfaces the attached instance and never deletes."""
+    from dataclasses import fields as dataclass_fields
+
+    from linodemcp.linode import Volume
+
+    volume_kwargs: dict[str, Any] = {
+        field.name: None for field in dataclass_fields(Volume)
+    }
+    volume_kwargs.update({"id": 789, "linode_id": 456, "linode_label": "attached-host"})
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_volume.return_value = Volume(**volume_kwargs)
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_volume_delete(
+            {"volume_id": 789, "dry_run": True}, sample_config
+        )
+
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_volume_delete"
+        deps = body["dependencies"]
+        assert len(deps) == 1
+        assert deps[0]["kind"] == "instance"
+        assert deps[0]["id"] == 456
+        assert deps[0]["label"] == "attached-host"
+        assert deps[0]["action"] == "detached"
+        assert body["warnings"]
+        mock_client.delete_volume.assert_not_called()
+
+
+async def test_lke_cluster_delete_dry_run_dependency_walk(
+    sample_config: Config,
+) -> None:
+    """dry_run lists node pools as cascade dependencies and never deletes."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get_lke_cluster.return_value = {"id": 55, "label": "prod"}
+        mock_client.list_lke_node_pools.return_value = [
+            {"id": 1, "type": "g6-standard-2", "count": 3},
+            {"id": 2, "type": "g6-standard-4", "count": 2},
+        ]
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_lke_cluster_delete(
+            {"cluster_id": 55, "dry_run": True}, sample_config
+        )
+
+        body = json.loads(result[0].text)
+        assert body["tool"] == "linode_lke_cluster_delete"
+        deps = body["dependencies"]
+        assert len(deps) == 2
+        assert all(dep["kind"] == "node_pool" for dep in deps)
+        assert all(dep["action"] == "cascade_deleted" for dep in deps)
+        assert any("5 node(s)" in warning for warning in body["warnings"])
+        mock_client.delete_lke_cluster.assert_not_called()

@@ -61,7 +61,10 @@ func handleVPCCreateRequest(ctx context.Context, request *mcp.CallToolRequest, c
 			return mcp.NewToolResultError(msg), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_vpc_create", httpMethodPost, "/vpcs", nil)
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_vpc_create", httpMethodPost, "/vpcs", nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return vpcCreateSideEffects(ctx, label, region)
+			})
 	}
 
 	if result := RequireConfirm(request, "This creates a billable VPC resource. Set confirm=true to proceed."); result != nil {
@@ -142,9 +145,13 @@ func handleVPCUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, c
 			return mcp.NewToolResultError("vpc_id is required"), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_vpc_update", "PUT",
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_vpc_update", "PUT",
 			fmt.Sprintf("/vpcs/%d", vpcID),
-			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetVPC(ctx, vpcID) })
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetVPC(ctx, vpcID) },
+			func(ctx context.Context, _ *linode.Client, state any) (DryRunDetails, error) {
+				return vpcUpdateSideEffects(ctx, state,
+					request.GetString("label", ""), request.GetString("description", ""))
+			})
 	}
 
 	if result := RequireConfirm(request, "This modifies the VPC configuration. Set confirm=true to proceed."); result != nil {
@@ -220,6 +227,7 @@ func handleVPCDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, c
 		Execute: func(ctx context.Context, c *linode.Client, id int) error {
 			return c.DeleteVPC(ctx, id)
 		},
+		DependencyWalk: vpcDeleteDependencyWalk,
 	})
 }
 
@@ -274,8 +282,11 @@ func handleVPCSubnetCreateRequest(ctx context.Context, request *mcp.CallToolRequ
 			return mcp.NewToolResultError(msg), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_vpc_subnet_create", httpMethodPost,
-			fmt.Sprintf("/vpcs/%d/subnets", vpcID), nil)
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_vpc_subnet_create", httpMethodPost,
+			fmt.Sprintf("/vpcs/%d/subnets", vpcID), nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return vpcSubnetCreateSideEffects(ctx, label, ipv4, vpcID)
+			})
 	}
 
 	if result := RequireConfirm(request, "This creates a new subnet in the VPC. Set confirm=true to proceed."); result != nil {
@@ -438,5 +449,6 @@ func handleVPCSubnetDeleteRequest(ctx context.Context, request *mcp.CallToolRequ
 		Execute: func(ctx context.Context, c *linode.Client, vpcID, subnetID int) error {
 			return c.DeleteVPCSubnet(ctx, vpcID, subnetID)
 		},
+		DependencyWalk: vpcSubnetDeleteDependencyWalk,
 	})
 }

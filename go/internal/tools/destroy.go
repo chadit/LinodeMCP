@@ -37,6 +37,48 @@ type DestructiveAction struct {
 	FetchState     func(ctx context.Context, client *linode.Client) (any, error)
 	Execute        func(ctx context.Context, client *linode.Client) error
 	Success        func() any
+
+	// DependencyWalk, when non-nil, runs the Phase 2 dependency walk on a
+	// dry-run after FetchState succeeds, enriching the preview with
+	// dependencies, side-effects, billing delta, and warnings. Nil keeps
+	// the Phase 1 behavior (preview carries would_execute + current_state
+	// only). The walk receives the already-fetched state so it can avoid a
+	// redundant GET.
+	DependencyWalk func(ctx context.Context, client *linode.Client, state any) (DryRunDetails, error)
+}
+
+// runDestructiveDryRun handles the dry-run branch of the destroy flow:
+// prepare the client, fetch current state, run the optional dependency
+// walk, and emit the preview. Extracted from RunDestructiveAction to keep
+// that function's nesting flat.
+func runDestructiveDryRun(
+	ctx context.Context,
+	request *mcp.CallToolRequest,
+	cfg *config.Config,
+	action *DestructiveAction,
+) (*mcp.CallToolResult, error) {
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	state, fetchErr := action.FetchState(ctx, client)
+	if fetchErr != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch state for dry-run: %v", fetchErr)), nil
+	}
+
+	env := request.GetString(paramEnvironment, "")
+
+	if action.DependencyWalk == nil {
+		return BuildDryRunResponse(action.ToolName, env, action.Method, action.Path, state)
+	}
+
+	details, walkErr := action.DependencyWalk(ctx, client, state)
+	if walkErr != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to compute dry-run dependencies: %v", walkErr)), nil
+	}
+
+	return BuildDryRunResponseDetailed(action.ToolName, env, action.Method, action.Path, state, &details)
 }
 
 // RunDestructiveAction runs the shared destroy-tool flow. On dry-run:
@@ -51,23 +93,7 @@ func RunDestructiveAction(
 	action *DestructiveAction,
 ) (*mcp.CallToolResult, error) {
 	if IsDryRun(request) {
-		client, err := prepareClient(request, cfg)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
-
-		state, fetchErr := action.FetchState(ctx, client)
-		if fetchErr != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch state for dry-run: %v", fetchErr)), nil
-		}
-
-		return BuildDryRunResponse(
-			action.ToolName,
-			request.GetString(paramEnvironment, ""),
-			action.Method,
-			action.Path,
-			state,
-		)
+		return runDestructiveDryRun(ctx, request, cfg, action)
 	}
 
 	if result := RequireConfirm(request, action.ConfirmMessage); result != nil {
@@ -103,6 +129,11 @@ type DestructiveActionByID struct {
 	SuccessFormat  string // single %d slot for the ID, e.g. "Domain %d removed successfully"
 	FetchState     func(ctx context.Context, client *linode.Client, id int) (any, error)
 	Execute        func(ctx context.Context, client *linode.Client, id int) error
+
+	// DependencyWalk, when non-nil, runs the Phase 2 dependency walk on a
+	// dry-run after FetchState. It receives the parsed ID and fetched state.
+	// Nil keeps the Phase 1 preview (would_execute + current_state only).
+	DependencyWalk func(ctx context.Context, client *linode.Client, id int, state any) (DryRunDetails, error)
 }
 
 // RunDestructiveActionWithID is the single-ID convenience wrapper over
@@ -119,6 +150,13 @@ func RunDestructiveActionWithID(
 	id := request.GetInt(params.IDParam, 0)
 	if id == 0 {
 		return mcp.NewToolResultError(params.IDParam + " is required"), nil
+	}
+
+	var walk func(ctx context.Context, client *linode.Client, state any) (DryRunDetails, error)
+	if params.DependencyWalk != nil {
+		walk = func(ctx context.Context, client *linode.Client, state any) (DryRunDetails, error) {
+			return params.DependencyWalk(ctx, client, id, state)
+		}
 	}
 
 	return RunDestructiveAction(ctx, request, cfg, &DestructiveAction{
@@ -138,6 +176,7 @@ func RunDestructiveActionWithID(
 				params.IDParam:     id,
 			}
 		},
+		DependencyWalk: walk,
 	})
 }
 
@@ -159,6 +198,11 @@ type DestructiveActionByTwoIDs struct {
 	SuccessFormat  string
 	FetchState     func(ctx context.Context, client *linode.Client, outerID, innerID int) (any, error)
 	Execute        func(ctx context.Context, client *linode.Client, outerID, innerID int) error
+
+	// DependencyWalk, when non-nil, runs the Phase 2 dependency walk on a
+	// dry-run after FetchState. It receives both parsed IDs and the fetched
+	// state. Nil keeps the Phase 1 preview (would_execute + current_state).
+	DependencyWalk func(ctx context.Context, client *linode.Client, outerID, innerID int, state any) (DryRunDetails, error)
 }
 
 // RunDestructiveActionByTwoIDs is the two-int-ID convenience wrapper
@@ -184,6 +228,13 @@ func RunDestructiveActionByTwoIDs(
 		return mcp.NewToolResultError(params.InnerIDParam + " is required"), nil
 	}
 
+	var walk func(ctx context.Context, client *linode.Client, state any) (DryRunDetails, error)
+	if params.DependencyWalk != nil {
+		walk = func(ctx context.Context, client *linode.Client, state any) (DryRunDetails, error) {
+			return params.DependencyWalk(ctx, client, outerID, innerID, state)
+		}
+	}
+
 	return RunDestructiveAction(ctx, request, cfg, &DestructiveAction{
 		ToolName:       params.ToolName,
 		Method:         params.Method,
@@ -202,6 +253,7 @@ func RunDestructiveActionByTwoIDs(
 				params.InnerIDParam: innerID,
 			}
 		},
+		DependencyWalk: walk,
 	})
 }
 

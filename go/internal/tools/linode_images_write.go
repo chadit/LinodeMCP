@@ -1379,7 +1379,10 @@ func handleLinodeImageCreateRequest(ctx context.Context, request *mcp.CallToolRe
 			return mcp.NewToolResultError(ErrDiskIDRequired.Error()), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_image_create", httpMethodPost, "/images", nil)
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_image_create", httpMethodPost, "/images", nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return imageCreateSideEffects(ctx, request.GetInt("disk_id", 0), request.GetString("label", ""))
+			})
 	}
 
 	confirm, confirmOK := request.GetArguments()[paramConfirm].(bool)

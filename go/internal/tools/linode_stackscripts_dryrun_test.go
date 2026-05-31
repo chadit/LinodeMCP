@@ -107,6 +107,13 @@ func TestLinodeStackScriptUpdateToolDryRun(t *testing.T) {
 		assert.Equal(t, "PUT", would["method"])
 		assert.Equal(t, "/linode/stackscripts/456", would["path"])
 		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "update surfaces the label change")
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, testRenamedLabel, "side effect names the new label")
 	})
 
 	t.Run("still validates stackscript_id", func(t *testing.T) {

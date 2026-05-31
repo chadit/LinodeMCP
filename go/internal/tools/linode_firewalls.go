@@ -532,8 +532,12 @@ func handleLinodeFirewallDeviceCreateRequest(ctx context.Context, request *mcp.C
 			return mcp.NewToolResultError(validationMessage), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_firewall_device_create", httpMethodPost,
-			fmt.Sprintf("/networking/firewalls/%d/devices", firewallID), nil)
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_firewall_device_create", httpMethodPost,
+			fmt.Sprintf("/networking/firewalls/%d/devices", firewallID), nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return firewallDeviceCreateSideEffects(ctx,
+					request.GetString(paramDeviceType, ""), request.GetInt(paramDeviceID, 0), firewallID)
+			})
 	}
 
 	if result := RequireConfirm(request, "This assigns a device to a Cloud Firewall. Set confirm=true to proceed."); result != nil {

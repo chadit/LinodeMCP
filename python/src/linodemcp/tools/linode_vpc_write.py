@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
+import httpx
 from mcp.types import TextContent, Tool
 
+from linodemcp.linode import APIError, NetworkError
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     PARAM_DRY_RUN,
+    DryRunDetails,
     build_dry_run_response,
     error_response,
     execute_dry_run,
@@ -220,6 +223,7 @@ async def handle_linode_vpc_create(
             "POST",
             "/vpcs",
             None,
+            side_effects=[f"A new VPC {label!r} will be created in region {region}."],
         )
 
     confirm = arguments.get("confirm", False)
@@ -267,6 +271,26 @@ def create_linode_vpc_update_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def _vpc_update_side_effects(
+    state: Any, new_label: Any, new_description: Any
+) -> DryRunDetails:
+    """Phase 2 Tier B walk for VPC update. Reports the label change against the
+    fetched state (a dict) and notes a description change.
+    """
+    side_effects: list[str] = []
+    if new_label:
+        from_label = ""
+        if isinstance(state, dict):
+            from_label = cast("dict[str, Any]", state).get("label", "")
+        if from_label and from_label != new_label:
+            side_effects.append(f"Label changes from {from_label!r} to {new_label!r}.")
+        else:
+            side_effects.append(f"Label is set to {new_label!r}.")
+    if new_description:
+        side_effects.append("The VPC description is updated.")
+    return {"side_effects": side_effects} if side_effects else {}
+
+
 async def handle_linode_vpc_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -284,6 +308,11 @@ async def handle_linode_vpc_update(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_vpc(vpc_id)
 
+        async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+            return _vpc_update_side_effects(
+                state, arguments.get("label"), arguments.get("description")
+            )
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -291,6 +320,7 @@ async def handle_linode_vpc_update(
             "PUT",
             f"/vpcs/{vpc_id}",
             _fetch,
+            _walk,
         )
 
     confirm = arguments.get("confirm", False)
@@ -331,6 +361,46 @@ def create_linode_vpc_delete_tool() -> tuple[Tool, Capability]:
     ), Capability.Destroy
 
 
+async def _vpc_delete_dependency_walk(
+    client: RetryableClient, vpc_id: int
+) -> DryRunDetails:
+    """Phase 2 Tier A walk for VPC delete. Each subnet is destroyed with the
+    VPC, and any Linode interfaces in a subnet are detached, so subnets are
+    surfaced as cascade_deleted dependencies with their attached-interface
+    count. Best-effort: a failed subnet list becomes a warning.
+    """
+    details: DryRunDetails = {}
+    try:
+        subnets = await client.list_vpc_subnets(vpc_id)
+    except (APIError, NetworkError, httpx.HTTPError) as exc:
+        details["warnings"] = [f"Could not list VPC subnets: {exc}"]
+        return details
+
+    attached_interfaces = 0
+    dependencies: list[dict[str, Any]] = []
+    for subnet in subnets:
+        linodes = cast("list[Any]", subnet.get("linodes", []))
+        attached_interfaces += len(linodes)
+        dependencies.append(
+            {
+                "kind": "vpc_subnet",
+                "id": subnet.get("id"),
+                "label": subnet.get("label", ""),
+                "action": "cascade_deleted",
+                "note": f"{len(linodes)} attached Linode interface(s)",
+            }
+        )
+
+    if dependencies:
+        details["dependencies"] = dependencies
+    if attached_interfaces > 0:
+        details["warnings"] = [
+            f"{attached_interfaces} Linode interface(s) across "
+            f"{len(subnets)} subnet(s) will be detached."
+        ]
+    return details
+
+
 async def handle_linode_vpc_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -351,6 +421,9 @@ async def handle_linode_vpc_delete(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_vpc(vpc_id)
 
+        async def _walk(client: RetryableClient, _state: Any) -> DryRunDetails:
+            return await _vpc_delete_dependency_walk(client, vpc_id)
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -358,6 +431,7 @@ async def handle_linode_vpc_delete(
             "DELETE",
             f"/vpcs/{vpc_id}",
             _fetch,
+            _walk,
         )
 
     confirm = arguments.get("confirm", False)
@@ -442,12 +516,16 @@ async def handle_linode_vpc_subnet_create(
     if is_dry_run(arguments):
         if fields_error is not None:
             return fields_error
+        effect = f"A new subnet {label!r} will be created in VPC {vpc_id}"
+        if ipv4:
+            effect += f" with IPv4 range {ipv4}"
         return build_dry_run_response(
             "linode_vpc_subnet_create",
             arguments.get("environment", ""),
             "POST",
             f"/vpcs/{vpc_id}/subnets",
             None,
+            side_effects=[f"{effect}."],
         )
 
     confirm = arguments.get("confirm", False)
@@ -567,6 +645,35 @@ def create_linode_vpc_subnet_delete_tool() -> tuple[Tool, Capability]:
     ), Capability.Destroy
 
 
+def _vpc_subnet_delete_dependency_walk(subnet_state: Any) -> DryRunDetails:
+    """Phase 2 Tier A walk for VPC subnet delete. The subnet state (already
+    fetched for current_state) carries the Linodes with interfaces in this
+    subnet; each is surfaced as a detached dependency. No extra API call.
+    """
+    details: DryRunDetails = {}
+    if not isinstance(subnet_state, dict):
+        return details
+
+    subnet = cast("dict[str, Any]", subnet_state)
+    linodes = cast("list[dict[str, Any]]", subnet.get("linodes", []))
+    dependencies: list[dict[str, Any]] = [
+        {
+            "kind": "instance",
+            "id": linode_ref.get("id"),
+            "action": "detached",
+            "note": "Has interface(s) in this subnet.",
+        }
+        for linode_ref in linodes
+    ]
+    if dependencies:
+        details["dependencies"] = dependencies
+        details["warnings"] = [
+            f"{len(dependencies)} Linode(s) have interfaces in this subnet "
+            "and will be detached."
+        ]
+    return details
+
+
 async def handle_linode_vpc_subnet_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -583,6 +690,9 @@ async def handle_linode_vpc_subnet_delete(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_vpc_subnet(vpc_id, subnet_id)
 
+        async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+            return _vpc_subnet_delete_dependency_walk(state)
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -590,6 +700,7 @@ async def handle_linode_vpc_subnet_delete(
             "DELETE",
             f"/vpcs/{vpc_id}/subnets/{subnet_id}",
             _fetch,
+            _walk,
         )
 
     confirm = arguments.get("confirm", False)
@@ -640,12 +751,21 @@ async def handle_linode_ipv6_range_create(
         parsed = _parse_ipv6_range_create_args(arguments)
         if isinstance(parsed, list):
             return parsed
+        prefix_length, linode_id, route_target = parsed
+        effect = (
+            f"A new IPv6 range with prefix length /{prefix_length} will be allocated"
+        )
+        if route_target:
+            effect += f" and routed to {route_target}"
+        elif linode_id:
+            effect += f" and routed to instance {linode_id}"
         return build_dry_run_response(
             "linode_ipv6_range_create",
             arguments.get("environment", ""),
             "POST",
             "/networking/ipv6/ranges",
             None,
+            side_effects=[f"{effect}."],
         )
 
     confirm = arguments.get("confirm", False)

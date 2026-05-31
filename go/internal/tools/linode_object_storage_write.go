@@ -68,7 +68,10 @@ func handleObjectStorageBucketCreateRequest(ctx context.Context, request *mcp.Ca
 			return mcp.NewToolResultError(msg), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_object_storage_bucket_create", httpMethodPost, "/object-storage/buckets", nil)
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_object_storage_bucket_create", httpMethodPost, "/object-storage/buckets", nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return bucketCreateSideEffects(ctx, label, region)
+			})
 	}
 
 	if result := RequireConfirm(request, "This operation creates a billable resource. Set confirm=true to proceed."); result != nil {
@@ -223,12 +226,14 @@ func runObjectStorageAccessDryRun(
 	request *mcp.CallToolRequest,
 	cfg *config.Config,
 	toolName, method, region, label string,
+	detailsFn func(ctx context.Context, client *linode.Client, state any) (DryRunDetails, error),
 ) (*mcp.CallToolResult, error) {
-	return RunDryRunPreview(ctx, request, cfg, toolName, method,
+	return RunDryRunPreviewDetailed(ctx, request, cfg, toolName, method,
 		fmt.Sprintf("/object-storage/buckets/%s/%s/access", region, label),
 		func(ctx context.Context, c *linode.Client) (any, error) {
 			return c.GetObjectStorageBucketAccess(ctx, region, label)
-		})
+		},
+		detailsFn)
 }
 
 // validateBucketAccessAllowArgs validates the allow-access args, returning an
@@ -261,7 +266,7 @@ func handleObjectStorageBucketAccessAllowRequest(ctx context.Context, request *m
 			return mcp.NewToolResultError(msg), nil
 		}
 
-		return runObjectStorageAccessDryRun(ctx, request, cfg, "linode_object_storage_bucket_access_allow", httpMethodPost, region, label)
+		return runObjectStorageAccessDryRun(ctx, request, cfg, "linode_object_storage_bucket_access_allow", httpMethodPost, region, label, nil)
 	}
 
 	if result := RequireConfirm(request, "This operation changes bucket access controls. Set confirm=true to proceed."); result != nil {
@@ -360,7 +365,13 @@ func handleObjectStorageBucketAccessUpdateRequest(ctx context.Context, request *
 			return mcp.NewToolResultError(msg), nil
 		}
 
-		return runObjectStorageAccessDryRun(ctx, request, cfg, "linode_object_storage_bucket_access_update", "PUT", region, label)
+		_, corsProvided := request.GetArguments()["cors_enabled"]
+		corsEnabled := request.GetBool("cors_enabled", false)
+
+		return runObjectStorageAccessDryRun(ctx, request, cfg, "linode_object_storage_bucket_access_update", "PUT", region, label,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return bucketAccessUpdateSideEffects(ctx, acl, corsProvided, corsEnabled)
+			})
 	}
 
 	if result := RequireConfirm(request, "This operation changes bucket access controls. Set confirm=true to proceed."); result != nil {
@@ -470,7 +481,10 @@ func handleObjectStorageKeyCreateRequest(ctx context.Context, request *mcp.CallT
 			return mcp.NewToolResultError(msg), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_object_storage_key_create", httpMethodPost, "/object-storage/keys", nil)
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_object_storage_key_create", httpMethodPost, "/object-storage/keys", nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return objectStorageKeyCreateSideEffects(ctx, label)
+			})
 	}
 
 	if result := RequireConfirm(request, "This creates an access key. The secret_key is only shown ONCE in the response. Set confirm=true to proceed."); result != nil {
@@ -567,9 +581,12 @@ func handleObjectStorageKeyUpdateRequest(ctx context.Context, request *mcp.CallT
 			return mcp.NewToolResultError(msg), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_object_storage_key_update", "PUT",
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_object_storage_key_update", "PUT",
 			fmt.Sprintf("/object-storage/keys/%d", keyID),
-			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetObjectStorageKey(ctx, keyID) })
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetObjectStorageKey(ctx, keyID) },
+			func(ctx context.Context, _ *linode.Client, state any) (DryRunDetails, error) {
+				return objectStorageKeyUpdateSideEffects(ctx, state, label, bucketAccessJSON)
+			})
 	}
 
 	if result := RequireConfirm(request, "This modifies access key permissions. Set confirm=true to proceed."); result != nil {
@@ -737,10 +754,13 @@ func handleObjectStorageObjectACLUpdateRequest(ctx context.Context, request *mcp
 			return mcp.NewToolResultError(msg), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_object_storage_object_acl_update", "PUT",
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_object_storage_object_acl_update", "PUT",
 			fmt.Sprintf("/object-storage/buckets/%s/%s/object-acl", region, label),
 			func(ctx context.Context, c *linode.Client) (any, error) {
 				return c.GetObjectACL(ctx, region, label, name)
+			},
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return objectACLUpdateSideEffects(ctx, acl)
 			})
 	}
 

@@ -92,6 +92,13 @@ func TestLinodeImageCreateToolDryRun(t *testing.T) {
 		assert.Equal(t, "POST", would["method"])
 		assert.Equal(t, "/images", would["path"])
 		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "create surfaces the image-capture side effect")
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, "456", "side effect should name the source disk")
 	})
 
 	t.Run("still validates disk_id", func(t *testing.T) {

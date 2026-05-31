@@ -135,12 +135,17 @@ async def handle_linode_image_create(
         disk_err = _image_create_disk_id_error(disk_id)
         if disk_err is not None:
             return error_response(disk_err)
+        img_label = arguments.get("label")
+        effect = f"A new image will be captured from disk {disk_id}"
+        if img_label:
+            effect += f" and labeled {img_label!r}"
         return build_dry_run_response(
             "linode_image_create",
             arguments.get("environment", ""),
             "POST",
             "/images",
             None,
+            side_effects=[f"{effect}."],
         )
 
     if not arguments.get("confirm"):

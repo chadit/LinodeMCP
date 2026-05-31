@@ -209,6 +209,14 @@ func TestLinodeInstanceDiskCreateToolDryRun(t *testing.T) {
 		assert.Equal(t, "POST", would["method"])
 		assert.Equal(t, instanceGetPath+"/disks", would["path"])
 		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "create surfaces the new-disk side effect")
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, "data-disk", "side effect should name the new disk")
+		assert.Contains(t, effect, "10240", "side effect should state the disk size")
 	})
 
 	t.Run("still validates label", func(t *testing.T) {
@@ -287,7 +295,8 @@ func TestLinodeInstanceDiskCloneToolDryRun(t *testing.T) {
 	t.Run("preview without cloning", func(t *testing.T) {
 		t.Parallel()
 
-		cfg, methods := dryRunGetStateServer(t, instanceDiskGetPath, linode.InstanceDisk{ID: 789})
+		cfg, methods := dryRunGetStateServer(t, instanceDiskGetPath,
+			linode.InstanceDisk{ID: 789, Label: "boot-disk", Size: 25600})
 		_, _, handler := tools.NewLinodeInstanceDiskCloneTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
@@ -306,6 +315,13 @@ func TestLinodeInstanceDiskCloneToolDryRun(t *testing.T) {
 		assert.Equal(t, "POST", would["method"])
 		assert.Equal(t, instanceDiskGetPath+"/clone", would["path"])
 		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "clone surfaces the new disk")
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, "25600 MB", "side effect names the cloned disk size")
 	})
 }
 
@@ -322,7 +338,8 @@ func TestLinodeInstanceDiskResizeToolDryRun(t *testing.T) {
 	t.Run("preview without resizing", func(t *testing.T) {
 		t.Parallel()
 
-		cfg, methods := dryRunGetStateServer(t, instanceDiskGetPath, linode.InstanceDisk{ID: 789})
+		cfg, methods := dryRunGetStateServer(t, instanceDiskGetPath,
+			linode.InstanceDisk{ID: 789, Size: 10240})
 		_, _, handler := tools.NewLinodeInstanceDiskResizeTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
@@ -342,6 +359,15 @@ func TestLinodeInstanceDiskResizeToolDryRun(t *testing.T) {
 		assert.Equal(t, "POST", would["method"])
 		assert.Equal(t, instanceDiskGetPath+"/resize", would["path"])
 		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "resize surfaces the size change")
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, "10240 MB", "side effect names the current size")
+		assert.Contains(t, effect, "20480 MB", "side effect names the target size")
+		assert.NotEmpty(t, body["warnings"], "resize warns about power-off")
 	})
 
 	t.Run("still validates size", func(t *testing.T) {
@@ -404,4 +430,52 @@ func TestLinodeInstanceDiskPasswordResetToolDryRun(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, result.IsError)
 	})
+}
+
+// TestLinodeInstanceDiskDeleteToolDryRunDependencies exercises the Phase 2
+// Tier A walk: config profiles that reference the disk are surfaced as removed
+// dependencies (their device slot is cleared when the disk is deleted).
+func TestLinodeInstanceDiskDeleteToolDryRunDependencies(t *testing.T) {
+	t.Parallel()
+
+	targetDiskID := 10
+	otherDiskID := 99
+
+	cfg, methods := dryRunRouteServer(t, map[string]any{
+		"/linode/instances/888/disks/10": linode.InstanceDisk{ID: 10, Label: "boot"},
+		"/linode/instances/888/configs": linode.PaginatedResponse[linode.InstanceConfig]{
+			Data: []linode.InstanceConfig{
+				{ID: 5, Label: "uses-disk", Devices: map[string]*linode.ConfigDevice{
+					"sda": {DiskID: &targetDiskID},
+				}},
+				{ID: 6, Label: "other-disk", Devices: map[string]*linode.ConfigDevice{
+					"sda": {DiskID: &otherDiskID},
+				}},
+			},
+		},
+	})
+
+	_, _, handler := tools.NewLinodeInstanceDiskDeleteTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyLinodeID: float64(888),
+		keyDiskID:   float64(10),
+		keyDryRun:   true,
+	}))
+	require.NoError(t, err)
+	require.False(t, result.IsError)
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+	assert.Equal(t, "linode_instance_disk_delete", body["tool"])
+
+	deps, _ := body["dependencies"].([]any)
+	require.Len(t, deps, 1, "only the config referencing this disk is surfaced")
+
+	dep, gotMap := deps[0].(map[string]any)
+	require.True(t, gotMap)
+	assert.Equal(t, "instance_config", dep["kind"])
+	assert.InDelta(t, 5, dep["id"], 0)
+
+	assert.NotContains(t, *methods, http.MethodDelete, "dry_run must not issue a DELETE")
 }

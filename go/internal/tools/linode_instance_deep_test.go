@@ -1374,17 +1374,25 @@ func TestLinodeInstanceDiskDeleteToolDryRun(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			methodsSeen = append(methodsSeen, r.Method)
-			assert.Equal(t, "/linode/instances/123/disks/10", r.URL.Path)
 
-			if r.Method == http.MethodGet {
-				w.Header().Set("Content-Type", "application/json")
+			if r.Method != http.MethodGet {
+				t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+				w.WriteHeader(http.StatusInternalServerError)
+
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+
+			if r.URL.Path == "/linode/instances/123/disks/10" {
 				_, _ = w.Write([]byte(diskBody))
 
 				return
 			}
 
-			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
-			w.WriteHeader(http.StatusInternalServerError)
+			// The Tier A walk also lists config profiles; an empty page keeps
+			// this subtest on the no-mutation and preview-shape contract.
+			_, _ = w.Write([]byte(`{}`))
 		}))
 		defer srv.Close()
 
@@ -1415,8 +1423,9 @@ func TestLinodeInstanceDiskDeleteToolDryRun(t *testing.T) {
 		assert.Equal(t, "DELETE", would["method"])
 		assert.Equal(t, "/linode/instances/123/disks/10", would["path"])
 
-		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
-			"dry_run must only issue a single GET, never DELETE")
+		require.NotEmpty(t, methodsSeen, "dry_run must read state")
+		assert.NotContains(t, methodsSeen, http.MethodDelete,
+			"dry_run must never issue a DELETE")
 	})
 
 	t.Run("still validates disk_id", func(t *testing.T) {
@@ -2327,18 +2336,27 @@ func TestLinodeInstanceRebuildToolDryRun(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			methodsSeen = append(methodsSeen, r.Method)
-			assert.Equal(t, "/linode/instances/123", r.URL.Path,
-				"dry_run must GET the instance, not the rebuild endpoint")
 
-			if r.Method == http.MethodGet {
-				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write([]byte(instanceBody))
+			if r.Method != http.MethodGet {
+				t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+				w.WriteHeader(http.StatusInternalServerError)
 
 				return
 			}
 
-			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
-			w.WriteHeader(http.StatusInternalServerError)
+			w.Header().Set("Content-Type", "application/json")
+
+			// The Phase 2 side-effects walk also lists the instance disks.
+			if r.URL.Path == "/linode/instances/123/disks" {
+				_, _ = w.Write([]byte(`{"data":[]}`))
+
+				return
+			}
+
+			assert.Equal(t, "/linode/instances/123", r.URL.Path,
+				"dry_run must GET the instance, not the rebuild endpoint")
+
+			_, _ = w.Write([]byte(instanceBody))
 		}))
 		defer srv.Close()
 
@@ -2369,8 +2387,8 @@ func TestLinodeInstanceRebuildToolDryRun(t *testing.T) {
 		assert.Equal(t, "POST", would["method"])
 		assert.Equal(t, "/linode/instances/123/rebuild", would["path"])
 
-		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
-			"dry_run must only issue a single GET, never POST")
+		assert.NotContains(t, methodsSeen, http.MethodPost,
+			"dry_run must never issue a POST")
 	})
 
 	t.Run("still validates root_pass", func(t *testing.T) {

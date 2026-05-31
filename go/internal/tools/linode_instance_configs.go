@@ -343,9 +343,12 @@ func handleInstanceConfigCreateRequest(ctx context.Context, request *mcp.CallToo
 			return mcp.NewToolResultError(errText), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_instance_config_create", httpMethodPost,
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_instance_config_create", httpMethodPost,
 			fmt.Sprintf("/linode/instances/%d/configs", linodeID),
-			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, linodeID) })
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, linodeID) },
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return instanceConfigCreateSideEffects(ctx, request.GetString("label", ""), linodeID)
+			})
 	}
 
 	if result := RequireConfirm(request, "This creates a configuration profile on the instance. Set confirm=true to proceed."); result != nil {

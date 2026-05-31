@@ -45,6 +45,16 @@ func TestLinodeNodeBalancerCreateToolDryRun(t *testing.T) {
 		assert.Equal(t, "POST", would["method"])
 		assert.Equal(t, "/nodebalancers", would["path"])
 		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "create surfaces the new-nodebalancer side effect")
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, regionUSEast, "side effect should name the target region")
+
+		warnings, _ := body["warnings"].([]any)
+		require.Len(t, warnings, 1, "create warns that billing starts immediately")
 	})
 
 	t.Run("still validates region", func(t *testing.T) {
@@ -90,6 +100,13 @@ func TestLinodeNodeBalancerUpdateToolDryRun(t *testing.T) {
 		assert.Equal(t, "PUT", would["method"])
 		assert.Equal(t, "/nodebalancers/123", would["path"])
 		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "update surfaces the label change")
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, testRenamedLabel, "side effect names the new label")
 	})
 
 	t.Run("still validates nodebalancer_id", func(t *testing.T) {
@@ -189,6 +206,13 @@ func TestLinodeNetworkingIPUpdateRDNSToolDryRun(t *testing.T) {
 		assert.Equal(t, "PUT", would["method"])
 		assert.Equal(t, "/networking/ips/"+testPublicIPv4, would["path"])
 		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "update surfaces the rDNS change")
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, rdnsHostFixture, "side effect names the new rDNS")
 	})
 
 	t.Run("still validates address", func(t *testing.T) {
@@ -425,6 +449,13 @@ func TestLinodeIPv6RangeCreateToolDryRun(t *testing.T) {
 		assert.Equal(t, "POST", would["method"])
 		assert.Equal(t, "/networking/ipv6/ranges", would["path"])
 		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "create surfaces the new-range side effect")
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, "/64", "side effect should state the prefix length")
 	})
 
 	t.Run("still validates prefix_length", func(t *testing.T) {
@@ -436,4 +467,93 @@ func TestLinodeIPv6RangeCreateToolDryRun(t *testing.T) {
 		assert.True(t, result.IsError)
 		assertErrorContains(t, result, "prefix_length must be an integer between 1 and 128")
 	})
+}
+
+// TestLinodeNodeBalancerDeleteToolDryRunDependencies exercises the Phase 2
+// Tier A walk: each config is destroyed with the NodeBalancer, so configs are
+// surfaced as cascade_deleted dependencies.
+func TestLinodeNodeBalancerDeleteToolDryRunDependencies(t *testing.T) {
+	t.Parallel()
+
+	cfg, methods := dryRunRouteServer(t, map[string]any{
+		"/nodebalancers/888": linode.NodeBalancer{ID: 888, Label: "prod-lb"},
+		"/nodebalancers/888/configs": linode.PaginatedResponse[linode.NodeBalancerConfig]{
+			Data: []linode.NodeBalancerConfig{
+				{ID: 10, Port: 80, Protocol: "http"},
+				{ID: 11, Port: 443, Protocol: "https"},
+			},
+		},
+	})
+
+	_, _, handler := tools.NewLinodeNodeBalancerDeleteTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyNodeBalancerID: float64(888),
+		keyDryRun:         true,
+	}))
+	require.NoError(t, err)
+	require.False(t, result.IsError)
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+	assert.Equal(t, "linode_nodebalancer_delete", body["tool"])
+
+	deps, _ := body["dependencies"].([]any)
+	require.Len(t, deps, 2, "each config is a cascade dependency")
+
+	for _, entry := range deps {
+		dep, gotMap := entry.(map[string]any)
+		require.True(t, gotMap)
+		assert.Equal(t, "nodebalancer_config", dep["kind"])
+		assert.Equal(t, "cascade_deleted", dep["action"])
+	}
+
+	assert.NotEmpty(t, body["warnings"])
+	assert.NotContains(t, *methods, http.MethodDelete, "dry_run must not issue a DELETE")
+}
+
+// TestLinodeNodeBalancerConfigDeleteToolDryRunDependencies exercises the Phase
+// 2 Tier A walk: deleting a config destroys its backend node list, so each
+// node is surfaced as a cascade_deleted dependency.
+func TestLinodeNodeBalancerConfigDeleteToolDryRunDependencies(t *testing.T) {
+	t.Parallel()
+
+	cfg, methods := dryRunRouteServer(t, map[string]any{
+		"/nodebalancers/888/configs": linode.PaginatedResponse[linode.NodeBalancerConfig]{
+			Data: []linode.NodeBalancerConfig{{ID: 10, Port: 80, Protocol: "http"}},
+		},
+		"/nodebalancers/888/configs/10/nodes": linode.PaginatedResponse[linode.NodeBalancerConfigNode]{
+			Data: []linode.NodeBalancerConfigNode{
+				{ID: 501, Label: "web-backend-1", Address: nodeBalancerNodeAddress, Mode: "accept"},
+				{ID: 502, Label: "web-backend-2", Address: "192.0.2.11:80", Mode: "accept"},
+			},
+		},
+	})
+
+	_, _, handler := tools.NewLinodeNodeBalancerConfigDeleteTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyNodeBalancerID: float64(888),
+		keyConfigID:       float64(10),
+		keyDryRun:         true,
+	}))
+	require.NoError(t, err)
+	require.False(t, result.IsError)
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+	assert.Equal(t, "linode_nodebalancer_config_delete", body["tool"])
+
+	deps, _ := body["dependencies"].([]any)
+	require.Len(t, deps, 2, "each backend node is a cascade dependency")
+
+	for _, entry := range deps {
+		dep, gotMap := entry.(map[string]any)
+		require.True(t, gotMap)
+		assert.Equal(t, "nodebalancer_node", dep["kind"])
+		assert.Equal(t, "cascade_deleted", dep["action"])
+	}
+
+	assert.NotEmpty(t, body["warnings"])
+	assert.NotContains(t, *methods, http.MethodDelete, "dry_run must not issue a DELETE")
 }

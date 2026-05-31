@@ -128,9 +128,12 @@ func handleInstanceMigrateRequest(ctx context.Context, request *mcp.CallToolRequ
 			return mcp.NewToolResultError("linode_id is required"), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_instance_migrate", httpMethodPost,
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_instance_migrate", httpMethodPost,
 			fmt.Sprintf("/linode/instances/%d/migrate", linodeID),
-			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, linodeID) })
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, linodeID) },
+			func(ctx context.Context, _ *linode.Client, state any) (DryRunDetails, error) {
+				return instanceMigrateSideEffects(ctx, state, request.GetString("region", ""))
+			})
 	}
 
 	if result := RequireConfirm(request, "This migrates the instance and causes downtime during migration. Set confirm=true to proceed."); result != nil {
@@ -199,9 +202,12 @@ func handleInstanceMutateRequest(ctx context.Context, request *mcp.CallToolReque
 			return mcp.NewToolResultError("linode_id is required and must be positive"), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_instance_mutate", httpMethodPost,
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_instance_mutate", httpMethodPost,
 			fmt.Sprintf("/linode/instances/%d/mutate", linodeID),
-			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, linodeID) })
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, linodeID) },
+			func(ctx context.Context, _ *linode.Client, state any) (DryRunDetails, error) {
+				return instanceMutateSideEffects(ctx, state)
+			})
 	}
 
 	if result := RequireConfirm(request, "This upgrades the instance and may cause downtime. Set confirm=true to proceed."); result != nil {
@@ -343,6 +349,7 @@ func handleInstanceRebuildRequest(ctx context.Context, request *mcp.CallToolRequ
 				"instance":         rebuilt,
 			}
 		},
+		DependencyWalk: instanceRebuildSideEffectsWalk,
 	})
 }
 
@@ -376,9 +383,10 @@ func handleInstanceRescueRequest(ctx context.Context, request *mcp.CallToolReque
 			return mcp.NewToolResultError("linode_id is required"), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_instance_rescue", httpMethodPost,
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_instance_rescue", httpMethodPost,
 			fmt.Sprintf("/linode/instances/%d/rescue", linodeID),
-			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, linodeID) })
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, linodeID) },
+			instanceRescueSideEffectsWalk)
 	}
 
 	if result := RequireConfirm(request, "This reboots the instance into rescue mode. Set confirm=true to proceed."); result != nil {
@@ -469,5 +477,6 @@ func handleInstancePasswordResetRequest(ctx context.Context, request *mcp.CallTo
 		Execute: func(ctx context.Context, c *linode.Client, id int) error {
 			return c.ResetInstancePassword(ctx, id, rootPass)
 		},
+		DependencyWalk: instancePasswordResetSideEffectsWalk,
 	})
 }

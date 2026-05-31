@@ -56,6 +56,14 @@ func TestLinodeSSHKeyCreateToolDryRun(t *testing.T) {
 		assert.Equal(t, "POST", would["method"])
 		assert.Equal(t, "/profile/sshkeys", would["path"])
 		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "create surfaces the new-key side effect")
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, keyNameTest, "side effect should name the new key")
+		assert.NotContains(t, effect, validTestSSHKey, "the public key material must never be echoed")
 	})
 
 	t.Run("still validates label", func(t *testing.T) {
@@ -104,6 +112,13 @@ func TestLinodeSSHKeyUpdateToolDryRun(t *testing.T) {
 		assert.Equal(t, "PUT", would["method"])
 		assert.Equal(t, "/profile/sshkeys/123", would["path"])
 		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "update surfaces the label change")
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, testRenamedLabel, "side effect names the new label")
 	})
 
 	t.Run("still validates sshkey_id", func(t *testing.T) {

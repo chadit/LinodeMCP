@@ -46,6 +46,16 @@ func TestLinodeObjectStorageBucketCreateToolDryRun(t *testing.T) {
 		assert.Equal(t, "POST", would["method"])
 		assert.Equal(t, "/object-storage/buckets", would["path"])
 		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "create surfaces the new-bucket side effect")
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, bucketTest, "side effect should name the new bucket")
+
+		warnings, _ := body["warnings"].([]any)
+		require.Len(t, warnings, 1, "create warns that billing starts immediately")
 	})
 
 	t.Run("still validates label", func(t *testing.T) {
@@ -144,6 +154,13 @@ func TestLinodeObjectStorageBucketAccessUpdateToolDryRun(t *testing.T) {
 		assert.Equal(t, "PUT", would["method"])
 		assert.Equal(t, objStorageAccessPath, would["path"])
 		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "ACL change surfaces one side effect")
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, aclPrivate, "side effect should name the target ACL")
 	})
 
 	t.Run("still validates region", func(t *testing.T) {
@@ -190,6 +207,16 @@ func TestLinodeObjectStorageKeyCreateToolDryRun(t *testing.T) {
 		assert.Equal(t, "POST", would["method"])
 		assert.Equal(t, "/object-storage/keys", would["path"])
 		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "create surfaces the new-key side effect")
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, "my-key", "side effect should name the new key")
+
+		warnings, _ := body["warnings"].([]any)
+		require.Len(t, warnings, 1, "create warns the secret is shown only once")
 	})
 
 	t.Run("still validates label", func(t *testing.T) {
@@ -236,6 +263,13 @@ func TestLinodeObjectStorageKeyUpdateToolDryRun(t *testing.T) {
 		assert.Equal(t, "PUT", would["method"])
 		assert.Equal(t, "/object-storage/keys/77", would["path"])
 		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "renaming the key surfaces the label-change side effect")
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, testRenamedLabel, "side effect should name the new label")
 	})
 
 	t.Run("still validates key_id", func(t *testing.T) {
@@ -287,6 +321,13 @@ func TestLinodeObjectStorageObjectACLUpdateToolDryRun(t *testing.T) {
 		assert.Equal(t, "PUT", would["method"])
 		assert.Equal(t, "/object-storage/buckets/us-east-1/my-bucket/object-acl", would["path"])
 		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "ACL change surfaces one side effect")
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, aclPrivate, "side effect should name the target ACL")
 	})
 
 	t.Run("still validates name", func(t *testing.T) {

@@ -298,9 +298,15 @@ func handleLinodeStackScriptUpdateDryRun(ctx context.Context, request *mcp.CallT
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	return RunDryRunPreview(ctx, request, cfg, "linode_stackscript_update", "PUT",
+	return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_stackscript_update", "PUT",
 		fmt.Sprintf("/linode/stackscripts/%d", stackScriptID),
-		func(ctx context.Context, c *linode.Client) (any, error) { return c.GetStackScript(ctx, stackScriptID) })
+		func(ctx context.Context, c *linode.Client) (any, error) { return c.GetStackScript(ctx, stackScriptID) },
+		func(ctx context.Context, _ *linode.Client, state any) (DryRunDetails, error) {
+			return stackScriptUpdateSideEffects(ctx, state,
+				request.GetString("label", ""),
+				request.GetString("script", ""),
+				request.GetString("description", ""))
+		})
 }
 
 func stackScriptUpdateFromTool(args map[string]any) (*linode.UpdateStackScriptRequest, string) {

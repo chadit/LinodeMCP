@@ -123,8 +123,11 @@ func handleLinodeDomainRecordCreateRequest(ctx context.Context, request *mcp.Cal
 			return mcp.NewToolResultError(msg), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_domain_record_create", httpMethodPost,
-			fmt.Sprintf("/domains/%d/records", domainID), nil)
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_domain_record_create", httpMethodPost,
+			fmt.Sprintf("/domains/%d/records", domainID), nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return domainRecordCreateSideEffects(ctx, recordType, name, target, domainID)
+			})
 	}
 
 	if result := RequireConfirm(request, "This creates a DNS record. Set confirm=true to proceed."); result != nil {
@@ -248,10 +251,13 @@ func handleLinodeDomainRecordUpdateRequest(ctx context.Context, request *mcp.Cal
 			return mcp.NewToolResultError("record_id is required"), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_domain_record_update", "PUT",
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_domain_record_update", "PUT",
 			fmt.Sprintf("/domains/%d/records/%d", domainID, recordID),
 			func(ctx context.Context, c *linode.Client) (any, error) {
 				return c.GetDomainRecord(ctx, domainID, recordID)
+			},
+			func(ctx context.Context, _ *linode.Client, state any) (DryRunDetails, error) {
+				return domainRecordUpdateSideEffects(ctx, state, name, target)
 			})
 	}
 

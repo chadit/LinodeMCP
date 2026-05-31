@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, TypeGuard, cast
 
+import httpx
 from mcp.types import TextContent, Tool
 
+from linodemcp.linode import APIError, NetworkError
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     ENV_PARAM_SCHEMA,
     PARAM_DRY_RUN,
+    DryRunDetails,
     build_dry_run_response,
     error_response,
     execute_dry_run,
@@ -112,6 +115,10 @@ async def handle_linode_firewall_create(
             "POST",
             "/networking/firewalls",
             None,
+            side_effects=[
+                f"A new Cloud Firewall {label!r} will be created with inbound "
+                f"policy {inbound_policy} and outbound policy {outbound_policy}."
+            ],
         )
 
     if not arguments.get("confirm"):
@@ -186,6 +193,30 @@ def create_linode_firewall_update_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def _firewall_update_side_effects(
+    state: Any, new_label: Any, new_status: Any
+) -> DryRunDetails:
+    """Phase 2 Tier B walk for firewall update. Reports the label change and a
+    status change (enabled/disabled) against the fetched state.
+    """
+    side_effects: list[str] = []
+    if new_label:
+        from_label = getattr(state, "label", "")
+        if from_label and from_label != new_label:
+            side_effects.append(f"Label changes from {from_label!r} to {new_label!r}.")
+        else:
+            side_effects.append(f"Label is set to {new_label!r}.")
+    if new_status:
+        from_status = getattr(state, "status", "")
+        if new_status != from_status:
+            verb = "stops enforcing" if new_status == "disabled" else "starts enforcing"
+            side_effects.append(
+                f"Firewall status changes to {new_status!r}; this immediately "
+                f"{verb} its rules."
+            )
+    return {"side_effects": side_effects} if side_effects else {}
+
+
 async def handle_linode_firewall_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -200,6 +231,11 @@ async def handle_linode_firewall_update(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_firewall(int(firewall_id))
 
+        async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+            return _firewall_update_side_effects(
+                state, arguments.get("label"), arguments.get("status")
+            )
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -207,6 +243,7 @@ async def handle_linode_firewall_update(
             "PUT",
             f"/networking/firewalls/{int(firewall_id)}",
             _fetch,
+            _walk,
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -260,6 +297,44 @@ def create_linode_firewall_delete_tool() -> tuple[Tool, Capability]:
     ), Capability.Destroy
 
 
+async def _firewall_delete_dependency_walk(
+    client: RetryableClient, firewall_id: int
+) -> DryRunDetails:
+    """Phase 2 Tier A walk for firewall delete. The Linodes and NodeBalancers
+    attached to a firewall survive the delete but lose its rules, so each
+    attached device is surfaced as a removed dependency. Best-effort: a failed
+    device list becomes a warning, not a hard error.
+    """
+    details: DryRunDetails = {}
+    try:
+        response = await client.list_firewall_devices(firewall_id)
+    except (APIError, NetworkError, httpx.HTTPError) as exc:
+        details["warnings"] = [f"Could not list firewall devices: {exc}"]
+        return details
+
+    devices = cast("list[dict[str, Any]]", response.get("data", []))
+    dependencies: list[dict[str, Any]] = []
+    for device in devices:
+        entity = cast("dict[str, Any]", device.get("entity") or {})
+        dependencies.append(
+            {
+                "kind": entity.get("type", ""),
+                "id": entity.get("id"),
+                "label": entity.get("label", ""),
+                "action": "removed",
+                "note": "Loses this firewall's rules when the firewall is deleted.",
+            }
+        )
+
+    if dependencies:
+        details["dependencies"] = dependencies
+        details["warnings"] = [
+            f"{len(dependencies)} resource(s) currently use this firewall "
+            "and will lose its rules."
+        ]
+    return details
+
+
 async def handle_linode_firewall_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -279,6 +354,9 @@ async def handle_linode_firewall_delete(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_firewall(firewall_id_int)
 
+        async def _walk(client: RetryableClient, _state: Any) -> DryRunDetails:
+            return await _firewall_delete_dependency_walk(client, firewall_id_int)
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -286,6 +364,7 @@ async def handle_linode_firewall_delete(
             "DELETE",
             f"/networking/firewalls/{firewall_id_int}",
             _fetch,
+            _walk,
         )
 
     confirm = arguments.get("confirm", False)
@@ -671,12 +750,18 @@ async def handle_linode_firewall_device_create(
             return fields_error
 
         firewall_id = int(arguments["firewall_id"])
+        device_type = arguments.get("type", "")
+        device_id = int(arguments["id"])
         return build_dry_run_response(
             "linode_firewall_device_create",
             arguments.get("environment", ""),
             "POST",
             f"/networking/firewalls/{firewall_id}/devices",
             None,
+            side_effects=[
+                f"The {device_type} {device_id} will be attached to "
+                f"firewall {firewall_id}."
+            ],
         )
 
     if not arguments.get("confirm"):

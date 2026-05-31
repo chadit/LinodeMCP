@@ -53,6 +53,16 @@ func TestLinodeLKEClusterCreateToolDryRun(t *testing.T) {
 		assert.Equal(t, "POST", would["method"])
 		assert.Equal(t, "/lke/clusters", would["path"])
 		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "create surfaces the new-cluster side effect")
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, labelTestCluster, "side effect should name the new cluster")
+
+		warnings, _ := body["warnings"].([]any)
+		require.Len(t, warnings, 1, "create warns that node-pool billing starts immediately")
 	})
 
 	t.Run("still validates label", func(t *testing.T) {
@@ -103,6 +113,13 @@ func TestLinodeLKEClusterUpdateToolDryRun(t *testing.T) {
 		assert.Equal(t, "PUT", would["method"])
 		assert.Equal(t, lkeClusterGetPath, would["path"])
 		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "update surfaces the label change")
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, testRenamedLabel, "side effect names the new label")
 	})
 }
 
@@ -260,6 +277,13 @@ func TestLinodeLKEPoolUpdateToolDryRun(t *testing.T) {
 		assert.Equal(t, "PUT", would["method"])
 		assert.Equal(t, lkePoolGetPath, would["path"])
 		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "update surfaces the node-count change")
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, "5 node", "side effect names the new node count")
 	})
 }
 
@@ -378,6 +402,13 @@ func TestLinodeLKEACLUpdateToolDryRun(t *testing.T) {
 		assert.Equal(t, "PUT", would["method"])
 		assert.Equal(t, lkeACLGetPath, would["path"])
 		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1)
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, "only the listed", "enabled ACL gates API access")
 	})
 }
 
@@ -425,4 +456,136 @@ func TestLinodeLKEACLDeleteToolDryRun(t *testing.T) {
 		assert.True(t, result.IsError)
 		assertErrorContains(t, result, "cluster_id is required")
 	})
+}
+
+// TestLinodeLKEClusterDeleteToolDryRunDependencies exercises the Phase 2 Tier A
+// cascade walk: each node pool is a cascade_deleted dependency and a warning
+// reports the total node count that would be destroyed.
+func TestLinodeLKEClusterDeleteToolDryRunDependencies(t *testing.T) {
+	t.Parallel()
+
+	cfg, methods := dryRunRouteServer(t, map[string]any{
+		"/lke/clusters/55": linode.LKECluster{ID: 55, Label: "prod-cluster"},
+		"/lke/clusters/55/pools": linode.PaginatedResponse[linode.LKENodePool]{
+			Data: []linode.LKENodePool{
+				{ID: 1, Type: linodeTypeGetID, Count: 3},
+				{ID: 2, Type: linodeTypeGetID, Count: 2},
+			},
+		},
+	})
+
+	_, _, handler := tools.NewLinodeLKEClusterDeleteTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyClusterID: float64(55),
+		keyDryRun:    true,
+	}))
+	require.NoError(t, err)
+	require.False(t, result.IsError)
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+	assert.Equal(t, "linode_lke_cluster_delete", body["tool"])
+
+	deps, _ := body["dependencies"].([]any)
+	require.Len(t, deps, 2, "each node pool is a cascade-deleted dependency")
+
+	for _, entry := range deps {
+		dep, ok := entry.(map[string]any)
+		require.True(t, ok)
+		assert.Equal(t, "node_pool", dep["kind"])
+		assert.Equal(t, "cascade_deleted", dep["action"])
+	}
+
+	warnings, _ := body["warnings"].([]any)
+	require.NotEmpty(t, warnings)
+
+	warning, ok := warnings[0].(string)
+	require.True(t, ok)
+	assert.Contains(t, warning, "5 node(s)")
+
+	assert.NotContains(t, *methods, http.MethodDelete, "dry_run must not issue a DELETE")
+}
+
+// TestLinodeLKEPoolDeleteToolDryRunDependencies exercises the Phase 2 Tier A
+// walk: each pool node's backing Linode is cascade_deleted with the pool, and
+// a warning reports the node count. The pool state comes from FetchState, so
+// the preview issues only the single state-fetch GET.
+func TestLinodeLKEPoolDeleteToolDryRunDependencies(t *testing.T) {
+	t.Parallel()
+
+	cfg, methods := dryRunGetStateServer(t, lkePoolGetPath, linode.LKENodePool{
+		ID:        10,
+		ClusterID: 123,
+		Count:     2,
+		Nodes: []linode.LKENode{
+			{ID: "node-aaa", InstanceID: 9001},
+			{ID: "node-bbb", InstanceID: 9002},
+		},
+	})
+
+	_, _, handler := tools.NewLinodeLKEPoolDeleteTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyClusterID: float64(123),
+		keyPoolID:    float64(10),
+		keyDryRun:    true,
+	}))
+	require.NoError(t, err)
+	require.False(t, result.IsError)
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+	assert.Equal(t, "linode_lke_pool_delete", body["tool"])
+
+	deps, _ := body["dependencies"].([]any)
+	require.Len(t, deps, 2, "each pool node's backing Linode is a cascade dependency")
+
+	for _, entry := range deps {
+		dep, ok := entry.(map[string]any)
+		require.True(t, ok)
+		assert.Equal(t, "instance", dep["kind"])
+		assert.Equal(t, "cascade_deleted", dep["action"])
+	}
+
+	assert.NotEmpty(t, body["warnings"])
+	assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+}
+
+// TestLinodeLKENodeDeleteToolDryRunDependencies exercises the Phase 2 Tier A
+// walk: the node's backing Linode is cascade_deleted with the node. The node
+// state comes from FetchState, so the preview issues only the single GET.
+func TestLinodeLKENodeDeleteToolDryRunDependencies(t *testing.T) {
+	t.Parallel()
+
+	cfg, methods := dryRunGetStateServer(t, lkeNodeGetPath, linode.LKENode{
+		ID:         "abc-123",
+		InstanceID: 9100,
+		Status:     "ready",
+	})
+
+	_, _, handler := tools.NewLinodeLKENodeDeleteTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyClusterID: float64(123),
+		keyNodeID:    "abc-123",
+		keyDryRun:    true,
+	}))
+	require.NoError(t, err)
+	require.False(t, result.IsError)
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+	assert.Equal(t, "linode_lke_node_delete", body["tool"])
+
+	deps, _ := body["dependencies"].([]any)
+	require.Len(t, deps, 1, "the node's backing Linode is the dependency")
+
+	dep, ok := deps[0].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "instance", dep["kind"])
+	assert.Equal(t, "cascade_deleted", dep["action"])
+	assert.InDelta(t, 9100, dep["id"], 0)
+
+	assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
 }

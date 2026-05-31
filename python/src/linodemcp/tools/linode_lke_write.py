@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
+import httpx
 from mcp.types import TextContent, Tool
 
+from linodemcp.linode import APIError, NetworkError
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     PARAM_DRY_RUN,
+    DryRunDetails,
     build_dry_run_response,
     error_response,
     execute_dry_run,
@@ -120,6 +123,14 @@ async def handle_linode_lke_cluster_create(
             "POST",
             "/lke/clusters",
             None,
+            side_effects=[
+                f"A new LKE cluster {arguments.get('label', '')!r} will be created "
+                f"in region {arguments.get('region', '')} running Kubernetes "
+                f"{arguments.get('k8s_version', '')}."
+            ],
+            warnings=[
+                "Billing for the cluster's node pools starts immediately on creation."
+            ],
         )
 
     confirm = arguments.get("confirm", False)
@@ -192,6 +203,31 @@ def create_linode_lke_cluster_update_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def _lke_cluster_update_side_effects(
+    state: Any, new_label: Any, new_k8s_version: Any
+) -> DryRunDetails:
+    """Phase 2 Tier B walk for LKE cluster update. Reports the label change and
+    a Kubernetes version change (a node upgrade) against the fetched state (a
+    dict).
+    """
+    cluster = cast("dict[str, Any]", state) if isinstance(state, dict) else {}
+    side_effects: list[str] = []
+    if new_label:
+        from_label = cluster.get("label", "")
+        if from_label and from_label != new_label:
+            side_effects.append(f"Label changes from {from_label!r} to {new_label!r}.")
+        else:
+            side_effects.append(f"Label is set to {new_label!r}.")
+    if new_k8s_version:
+        from_version = cluster.get("k8s_version", "")
+        if new_k8s_version != from_version:
+            side_effects.append(
+                f"Kubernetes version changes to {new_k8s_version!r}; the control "
+                "plane and nodes upgrade."
+            )
+    return {"side_effects": side_effects} if side_effects else {}
+
+
 async def handle_linode_lke_cluster_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -209,6 +245,11 @@ async def handle_linode_lke_cluster_update(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_lke_cluster(cluster_id)
 
+        async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+            return _lke_cluster_update_side_effects(
+                state, arguments.get("label"), arguments.get("k8s_version")
+            )
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -216,6 +257,7 @@ async def handle_linode_lke_cluster_update(
             "PUT",
             f"/lke/clusters/{cluster_id}",
             _fetch,
+            _walk,
         )
 
     confirm = arguments.get("confirm", False)
@@ -261,6 +303,45 @@ def create_linode_lke_cluster_delete_tool() -> tuple[Tool, Capability]:
     ), Capability.Destroy
 
 
+async def _lke_cluster_delete_dependency_walk(
+    client: RetryableClient, cluster_id: int
+) -> DryRunDetails:
+    """Phase 2 Tier A walk for LKE cluster delete. Deleting a cluster cascades
+    to its node pools and their nodes; each pool is surfaced as a
+    cascade_deleted dependency and a warning reports the total node count.
+    Best-effort: a failed pool list becomes a warning, not a hard error.
+    """
+    details: DryRunDetails = {}
+    try:
+        pools = await client.list_lke_node_pools(cluster_id)
+    except (APIError, NetworkError, httpx.HTTPError) as exc:
+        details["warnings"] = [f"Could not list node pools: {exc}"]
+        return details
+
+    dependencies: list[dict[str, Any]] = []
+    total_nodes = 0
+    for pool in pools:
+        count = int(pool.get("count", 0))
+        total_nodes += count
+        dependencies.append(
+            {
+                "kind": "node_pool",
+                "id": pool.get("id"),
+                "action": "cascade_deleted",
+                "note": f"{count} node(s) of type {pool.get('type', '')}",
+            }
+        )
+
+    if dependencies:
+        details["dependencies"] = dependencies
+    if total_nodes > 0:
+        details["warnings"] = [
+            f"Deleting this cluster destroys {len(pools)} node pool(s) "
+            f"and {total_nodes} node(s); running workloads are lost."
+        ]
+    return details
+
+
 async def handle_linode_lke_cluster_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -278,6 +359,9 @@ async def handle_linode_lke_cluster_delete(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_lke_cluster(cluster_id)
 
+        async def _walk(client: RetryableClient, _state: Any) -> DryRunDetails:
+            return await _lke_cluster_delete_dependency_walk(client, cluster_id)
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -285,6 +369,7 @@ async def handle_linode_lke_cluster_delete(
             "DELETE",
             f"/lke/clusters/{cluster_id}",
             _fetch,
+            _walk,
         )
 
     confirm = arguments.get("confirm", False)
@@ -579,6 +664,27 @@ def create_linode_lke_pool_update_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def _lke_pool_update_side_effects(
+    state: Any, new_count: Any, new_autoscaler: Any
+) -> DryRunDetails:
+    """Phase 2 Tier B walk for LKE pool update. Reports a node-count change
+    (against the fetched pool dict) and an autoscaler reconfiguration.
+    """
+    pool = cast("dict[str, Any]", state) if isinstance(state, dict) else {}
+    side_effects: list[str] = []
+    if new_count is not None:
+        from_count = pool.get("count")
+        if from_count is not None and from_count != new_count:
+            side_effects.append(
+                f"Node pool resizes from {from_count} to {new_count} node(s)."
+            )
+        else:
+            side_effects.append(f"Node pool is set to {new_count} node(s).")
+    if new_autoscaler is not None:
+        side_effects.append("The pool autoscaler configuration is updated.")
+    return {"side_effects": side_effects} if side_effects else {}
+
+
 async def handle_linode_lke_pool_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -593,6 +699,11 @@ async def handle_linode_lke_pool_update(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_lke_node_pool(cluster_id, pool_id)
 
+        async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+            return _lke_pool_update_side_effects(
+                state, arguments.get("count"), arguments.get("autoscaler")
+            )
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -600,6 +711,7 @@ async def handle_linode_lke_pool_update(
             "PUT",
             f"/lke/clusters/{cluster_id}/pools/{pool_id}",
             _fetch,
+            _walk,
         )
 
     confirm = arguments.get("confirm", False)
@@ -675,6 +787,39 @@ def _parse_cluster_pool_ids(
     return cluster_id, pool_id
 
 
+def _lke_pool_delete_dependency_walk(pool_state: Any) -> DryRunDetails:
+    """Phase 2 Tier A walk for LKE pool delete. The pool state (already fetched
+    for current_state) carries its nodes; each node's backing Linode is
+    destroyed with the pool, so nodes are surfaced as cascade_deleted
+    dependencies and a warning reports the node count. No extra API call.
+    """
+    details: DryRunDetails = {}
+    if not isinstance(pool_state, dict):
+        return details
+
+    pool = cast("dict[str, Any]", pool_state)
+    nodes = cast("list[dict[str, Any]]", pool.get("nodes", []))
+    dependencies: list[dict[str, Any]] = [
+        {
+            "kind": "instance",
+            "id": node.get("instance_id"),
+            "label": node.get("id"),
+            "action": "cascade_deleted",
+            "note": "Backing Linode for this pool node.",
+        }
+        for node in nodes
+    ]
+    count = int(pool.get("count", 0) or 0)
+    if dependencies:
+        details["dependencies"] = dependencies
+    if count > 0:
+        details["warnings"] = [
+            f"Deleting this pool destroys {count} node(s) and their backing "
+            "Linodes; running workloads are lost."
+        ]
+    return details
+
+
 async def handle_linode_lke_pool_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -689,6 +834,9 @@ async def handle_linode_lke_pool_delete(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_lke_node_pool(cluster_id, pool_id)
 
+        async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+            return _lke_pool_delete_dependency_walk(state)
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -696,6 +844,7 @@ async def handle_linode_lke_pool_delete(
             "DELETE",
             f"/lke/clusters/{cluster_id}/pools/{pool_id}",
             _fetch,
+            _walk,
         )
 
     confirm = arguments.get("confirm", False)
@@ -833,6 +982,34 @@ def _parse_cluster_node_ids(
     return cluster_id, str(node_id)
 
 
+def _lke_node_delete_dependency_walk(node_state: Any) -> DryRunDetails:
+    """Phase 2 Tier A walk for LKE node delete. The node state (already fetched
+    for current_state) names the backing Linode, which is destroyed with the
+    node, so it is surfaced as a cascade_deleted dependency. No extra API call.
+    """
+    details: DryRunDetails = {}
+    if not isinstance(node_state, dict):
+        return details
+
+    node = cast("dict[str, Any]", node_state)
+    instance_id = node.get("instance_id")
+    if instance_id:
+        details["dependencies"] = [
+            {
+                "kind": "instance",
+                "id": instance_id,
+                "label": node.get("id"),
+                "action": "cascade_deleted",
+                "note": "Backing Linode for this node.",
+            }
+        ]
+    details["warnings"] = [
+        "Deleting this node removes it from its pool; the pool node count "
+        "drops by one and scheduled workloads reschedule."
+    ]
+    return details
+
+
 async def handle_linode_lke_node_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -847,6 +1024,9 @@ async def handle_linode_lke_node_delete(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_lke_node(cluster_id, node_id)
 
+        async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+            return _lke_node_delete_dependency_walk(state)
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -854,6 +1034,7 @@ async def handle_linode_lke_node_delete(
             "DELETE",
             f"/lke/clusters/{cluster_id}/nodes/{node_id}",
             _fetch,
+            _walk,
         )
 
     confirm = arguments.get("confirm", False)
@@ -1115,6 +1296,30 @@ def _parse_acl_update(
     return cluster_id, acl
 
 
+def _lke_acl_update_side_effects(acl: Any) -> DryRunDetails:
+    """Phase 2 Tier B walk for LKE control-plane ACL update. Reports whether
+    the ACL is enabled/disabled (gating Kubernetes API reachability) or just
+    reconfigured.
+    """
+    acl_dict = cast("dict[str, Any]", acl) if isinstance(acl, dict) else {}
+    enabled = acl_dict.get("enabled")
+    if enabled is True:
+        return {
+            "side_effects": [
+                "The control-plane ACL is enabled; only the listed addresses "
+                "may reach the Kubernetes API."
+            ]
+        }
+    if enabled is False:
+        return {
+            "side_effects": [
+                "The control-plane ACL is disabled; the Kubernetes API becomes "
+                "reachable from any address."
+            ]
+        }
+    return {"side_effects": ["The cluster control-plane ACL address list is updated."]}
+
+
 async def handle_linode_lke_acl_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -1123,10 +1328,13 @@ async def handle_linode_lke_acl_update(
         parsed = _parse_acl_update(arguments)
         if isinstance(parsed, list):
             return parsed
-        cluster_id, _acl = parsed
+        cluster_id, acl = parsed
 
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_lke_control_plane_acl(cluster_id)
+
+        async def _walk(_client: RetryableClient, _state: Any) -> DryRunDetails:
+            return _lke_acl_update_side_effects(acl)
 
         return await execute_dry_run(
             cfg,
@@ -1135,6 +1343,7 @@ async def handle_linode_lke_acl_update(
             "PUT",
             f"/lke/clusters/{cluster_id}/control_plane_acl",
             _fetch,
+            _walk,
         )
 
     confirm = arguments.get("confirm", False)

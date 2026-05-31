@@ -831,17 +831,27 @@ func TestLinodeInstanceDeleteTool(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			methodsSeen = append(methodsSeen, r.Method)
-			assert.Equal(t, "/linode/instances/456", r.URL.Path)
 
-			if r.Method == http.MethodGet {
-				w.Header().Set("Content-Type", "application/json")
+			if r.Method != http.MethodGet {
+				t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+				w.WriteHeader(http.StatusInternalServerError)
+
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+
+			if r.URL.Path == "/linode/instances/456" {
 				_, _ = w.Write([]byte(instanceBody))
 
 				return
 			}
 
-			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
-			w.WriteHeader(http.StatusInternalServerError)
+			// The Tier A dependency walk also fetches volumes, IPs,
+			// firewalls, and the type. An empty body decodes to zero
+			// dependencies, keeping this subtest on the no-mutation and
+			// preview-shape contract; the rich walk has its own test.
+			_, _ = w.Write([]byte(`{}`))
 		}))
 		defer srv.Close()
 
@@ -878,8 +888,9 @@ func TestLinodeInstanceDeleteTool(t *testing.T) {
 		assert.InDelta(t, 456, state[keyBetaID], 0)
 		assert.Equal(t, "web-test", state[keyLabel])
 
-		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
-			"dry_run must only issue a single GET request, never DELETE")
+		require.NotEmpty(t, methodsSeen, "dry_run must read state")
+		assert.NotContains(t, methodsSeen, http.MethodDelete,
+			"dry_run must never issue a DELETE")
 	})
 
 	t.Run("dry_run does not require confirm", func(t *testing.T) {
@@ -1240,17 +1251,25 @@ func TestLinodeFirewallDeleteToolDryRun(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			methodsSeen = append(methodsSeen, r.Method)
-			assert.Equal(t, "/networking/firewalls/789", r.URL.Path)
 
-			if r.Method == http.MethodGet {
-				w.Header().Set("Content-Type", "application/json")
+			if r.Method != http.MethodGet {
+				t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+				w.WriteHeader(http.StatusInternalServerError)
+
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+
+			if r.URL.Path == "/networking/firewalls/789" {
 				_, _ = w.Write([]byte(firewallBody))
 
 				return
 			}
 
-			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
-			w.WriteHeader(http.StatusInternalServerError)
+			// The Tier A walk also lists firewall devices; an empty page
+			// keeps this subtest on the no-mutation and preview-shape contract.
+			_, _ = w.Write([]byte(`{}`))
 		}))
 		defer srv.Close()
 
@@ -1282,8 +1301,9 @@ func TestLinodeFirewallDeleteToolDryRun(t *testing.T) {
 		assert.Equal(t, "DELETE", would["method"])
 		assert.Equal(t, "/networking/firewalls/789", would["path"])
 
-		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
-			"dry_run must only issue a single GET, never DELETE")
+		require.NotEmpty(t, methodsSeen, "dry_run must read state")
+		assert.NotContains(t, methodsSeen, http.MethodDelete,
+			"dry_run must never issue a DELETE")
 	})
 
 	t.Run("does not require confirm", func(t *testing.T) {
@@ -1774,17 +1794,25 @@ func TestLinodeDomainUpdateTool(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			methodsSeen = append(methodsSeen, r.Method)
-			assert.Equal(t, "/domains/222", r.URL.Path)
 
-			if r.Method == http.MethodGet {
-				w.Header().Set("Content-Type", "application/json")
+			if r.Method != http.MethodGet {
+				t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+				w.WriteHeader(http.StatusInternalServerError)
+
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+
+			if r.URL.Path == "/domains/222" {
 				_, _ = w.Write([]byte(domainBody))
 
 				return
 			}
 
-			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
-			w.WriteHeader(http.StatusInternalServerError)
+			// The Tier A walk also lists DNS records; an empty page keeps
+			// this subtest on the no-mutation and preview-shape contract.
+			_, _ = w.Write([]byte(`{}`))
 		}))
 		defer srv.Close()
 
@@ -1947,17 +1975,25 @@ func TestLinodeDomainDeleteTool(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			methodsSeen = append(methodsSeen, r.Method)
-			assert.Equal(t, "/domains/222", r.URL.Path)
 
-			if r.Method == http.MethodGet {
-				w.Header().Set("Content-Type", "application/json")
+			if r.Method != http.MethodGet {
+				t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+				w.WriteHeader(http.StatusInternalServerError)
+
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+
+			if r.URL.Path == "/domains/222" {
 				_, _ = w.Write([]byte(domainBody))
 
 				return
 			}
 
-			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
-			w.WriteHeader(http.StatusInternalServerError)
+			// The Tier A walk also lists DNS records; an empty page keeps
+			// this subtest on the no-mutation and preview-shape contract.
+			_, _ = w.Write([]byte(`{}`))
 		}))
 		defer srv.Close()
 
@@ -1989,8 +2025,9 @@ func TestLinodeDomainDeleteTool(t *testing.T) {
 		assert.Equal(t, "DELETE", would["method"])
 		assert.Equal(t, "/domains/222", would["path"])
 
-		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
-			"dry_run must only issue a single GET request, never DELETE")
+		require.NotEmpty(t, methodsSeen, "dry_run must read state")
+		assert.NotContains(t, methodsSeen, http.MethodDelete,
+			"dry_run must never issue a DELETE")
 	})
 
 	t.Run("dry_run does not require confirm", func(t *testing.T) {
@@ -3180,17 +3217,25 @@ func TestLinodeNodeBalancerDeleteToolDryRun(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			methodsSeen = append(methodsSeen, r.Method)
-			assert.Equal(t, "/nodebalancers/444", r.URL.Path)
 
-			if r.Method == http.MethodGet {
-				w.Header().Set("Content-Type", "application/json")
+			if r.Method != http.MethodGet {
+				t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+				w.WriteHeader(http.StatusInternalServerError)
+
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+
+			if r.URL.Path == "/nodebalancers/444" {
 				_, _ = w.Write([]byte(nbBody))
 
 				return
 			}
 
-			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
-			w.WriteHeader(http.StatusInternalServerError)
+			// The Tier A walk also lists configs; an empty page keeps this
+			// subtest on the no-mutation and preview-shape contract.
+			_, _ = w.Write([]byte(`{}`))
 		}))
 		defer srv.Close()
 
@@ -3222,8 +3267,9 @@ func TestLinodeNodeBalancerDeleteToolDryRun(t *testing.T) {
 		assert.Equal(t, "DELETE", would["method"])
 		assert.Equal(t, "/nodebalancers/444", would["path"])
 
-		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
-			"dry_run must only issue a single GET, never DELETE")
+		require.NotEmpty(t, methodsSeen, "dry_run must read state")
+		assert.NotContains(t, methodsSeen, http.MethodDelete,
+			"dry_run must never issue a DELETE")
 	})
 
 	t.Run("does not require confirm", func(t *testing.T) {

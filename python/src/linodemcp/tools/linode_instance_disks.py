@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from mcp.types import TextContent, Tool
 
@@ -8,6 +8,7 @@ from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     PARAM_DRY_RUN,
+    DryRunDetails,
     execute_dry_run,
     execute_tool,
     is_dry_run,
@@ -205,6 +206,13 @@ async def handle_linode_instance_disk_create(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_instance(iid)
 
+        async def _walk(_client: RetryableClient, _state: Any) -> DryRunDetails:
+            return {
+                "side_effects": [
+                    f"A new {size} MB disk {label!r} will be created on instance {iid}."
+                ]
+            }
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -212,6 +220,7 @@ async def handle_linode_instance_disk_create(
             "POST",
             f"/linode/instances/{iid}/disks",
             _fetch,
+            _walk,
         )
 
     if not arguments.get("confirm"):
@@ -392,6 +401,28 @@ def create_linode_instance_disk_clone_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def _instance_disk_clone_side_effects(state: Any) -> DryRunDetails:
+    """Phase 2 Tier B walk for instance disk clone. Reports the new disk a
+    clone creates on the same instance and the storage it consumes.
+    """
+    if isinstance(state, dict):
+        disk = cast("dict[str, Any]", state)
+        label = disk.get("label", "")
+        size = disk.get("size", 0)
+        return {
+            "side_effects": [
+                f"Disk {label!r} ({size} MB) is cloned to a new disk on the "
+                f"same instance, consuming {size} MB of additional storage."
+            ]
+        }
+    return {
+        "side_effects": [
+            "A copy of the disk is created on the same instance, consuming "
+            "additional storage."
+        ]
+    }
+
+
 async def handle_linode_instance_disk_clone(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -406,6 +437,9 @@ async def handle_linode_instance_disk_clone(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_instance_disk(instance_id, disk_id)
 
+        async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+            return _instance_disk_clone_side_effects(state)
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -413,6 +447,7 @@ async def handle_linode_instance_disk_clone(
             "POST",
             f"/linode/instances/{instance_id}/disks/{disk_id}/clone",
             _fetch,
+            _walk,
         )
 
     if not arguments.get("confirm"):
@@ -454,6 +489,23 @@ def create_linode_instance_disk_resize_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def _instance_disk_resize_side_effects(state: Any, target_size: int) -> DryRunDetails:
+    """Phase 2 Tier B walk for instance disk resize. Names the size change (in
+    MB) and notes the instance must be powered off.
+    """
+    from_size = 0
+    if isinstance(state, dict):
+        from_size = cast("dict[str, Any]", state).get("size", 0)
+    if from_size:
+        effect = f"Disk resizes from {from_size} MB to {target_size} MB."
+    else:
+        effect = f"Disk resizes to {target_size} MB."
+    return {
+        "side_effects": [effect],
+        "warnings": ["The instance must be powered off to resize a disk."],
+    }
+
+
 async def handle_linode_instance_disk_resize(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -472,6 +524,9 @@ async def handle_linode_instance_disk_resize(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_instance_disk(instance_id, disk_id)
 
+        async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+            return _instance_disk_resize_side_effects(state, int(size))
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -479,6 +534,7 @@ async def handle_linode_instance_disk_resize(
             "POST",
             f"/linode/instances/{instance_id}/disks/{disk_id}/resize",
             _fetch,
+            _walk,
         )
 
     if not arguments.get("confirm"):

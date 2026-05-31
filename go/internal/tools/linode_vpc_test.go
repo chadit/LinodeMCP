@@ -684,17 +684,25 @@ func TestLinodeVPCDeleteToolDryRun(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			methodsSeen = append(methodsSeen, r.Method)
-			assert.Equal(t, "/vpcs/123", r.URL.Path)
 
-			if r.Method == http.MethodGet {
-				w.Header().Set("Content-Type", "application/json")
+			if r.Method != http.MethodGet {
+				t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+				w.WriteHeader(http.StatusInternalServerError)
+
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+
+			if r.URL.Path == "/vpcs/123" {
 				_, _ = w.Write([]byte(vpcBody))
 
 				return
 			}
 
-			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
-			w.WriteHeader(http.StatusInternalServerError)
+			// The Tier A walk also lists subnets; an empty page keeps this
+			// subtest on the no-mutation and preview-shape contract.
+			_, _ = w.Write([]byte(`{}`))
 		}))
 		defer srv.Close()
 
@@ -726,8 +734,9 @@ func TestLinodeVPCDeleteToolDryRun(t *testing.T) {
 		assert.Equal(t, "DELETE", would["method"])
 		assert.Equal(t, "/vpcs/123", would["path"])
 
-		assert.Equal(t, []string{http.MethodGet}, methodsSeen,
-			"dry_run must only issue a single GET, never DELETE")
+		require.NotEmpty(t, methodsSeen, "dry_run must read state")
+		assert.NotContains(t, methodsSeen, http.MethodDelete,
+			"dry_run must never issue a DELETE")
 	})
 
 	t.Run("does not require confirm", func(t *testing.T) {

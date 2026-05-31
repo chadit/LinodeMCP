@@ -157,9 +157,12 @@ func handleInstanceDiskCreateRequest(ctx context.Context, request *mcp.CallToolR
 			return mcp.NewToolResultError(msg), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_instance_disk_create", httpMethodPost,
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_instance_disk_create", httpMethodPost,
 			fmt.Sprintf("/linode/instances/%d/disks", linodeID),
-			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, linodeID) })
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, linodeID) },
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return instanceDiskCreateSideEffects(ctx, label, size, linodeID)
+			})
 	}
 
 	if result := RequireConfirm(request, "This creates a new disk on the instance. Set confirm=true to proceed."); result != nil {
@@ -349,6 +352,7 @@ func handleInstanceDiskDeleteRequest(ctx context.Context, request *mcp.CallToolR
 		Execute: func(ctx context.Context, c *linode.Client, linodeID, diskID int) error {
 			return c.DeleteInstanceDisk(ctx, linodeID, diskID)
 		},
+		DependencyWalk: instanceDiskDeleteDependencyWalk,
 	})
 }
 
@@ -382,10 +386,13 @@ func handleInstanceDiskCloneRequest(ctx context.Context, request *mcp.CallToolRe
 			return mcp.NewToolResultError(msg), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_instance_disk_clone", httpMethodPost,
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_instance_disk_clone", httpMethodPost,
 			fmt.Sprintf("/linode/instances/%d/disks/%d/clone", linodeID, diskID),
 			func(ctx context.Context, c *linode.Client) (any, error) {
 				return c.GetInstanceDisk(ctx, linodeID, diskID)
+			},
+			func(ctx context.Context, _ *linode.Client, state any) (DryRunDetails, error) {
+				return instanceDiskCloneSideEffects(ctx, state)
 			})
 	}
 
@@ -456,10 +463,13 @@ func handleInstanceDiskResizeRequest(ctx context.Context, request *mcp.CallToolR
 			return mcp.NewToolResultError("size is required and must be greater than 0"), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_instance_disk_resize", httpMethodPost,
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_instance_disk_resize", httpMethodPost,
 			fmt.Sprintf("/linode/instances/%d/disks/%d/resize", linodeID, diskID),
 			func(ctx context.Context, c *linode.Client) (any, error) {
 				return c.GetInstanceDisk(ctx, linodeID, diskID)
+			},
+			func(ctx context.Context, _ *linode.Client, state any) (DryRunDetails, error) {
+				return instanceDiskResizeSideEffects(ctx, state, size)
 			})
 	}
 

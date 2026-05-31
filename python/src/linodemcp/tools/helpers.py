@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 import httpx
 from mcp.types import TextContent
@@ -63,21 +64,51 @@ def is_dry_run(arguments: dict[str, Any]) -> bool:
     return value is True
 
 
+def _dataclass_json_default(obj: Any) -> Any:
+    """json.dumps ``default`` that serializes Linode dataclass models (e.g.
+    the ``Instance`` returned by ``get_instance``) as plain dicts. Without
+    this, a dry-run whose ``current_state`` is a dataclass would raise
+    "Object of type X is not JSON serializable".
+    """
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        return dataclasses.asdict(obj)
+    msg = f"Object of type {type(obj).__name__} is not JSON serializable"
+    raise TypeError(msg)
+
+
+class DryRunDetails(TypedDict, total=False):
+    """Phase 2 dependency-walk enrichment for a dry-run preview. All keys
+    optional: a walk fills whichever apply to its tier and omits the rest,
+    so the v0 wire shape is unchanged for tools without a walk. Mirrors the
+    Go-side ``DryRunDetails``.
+    """
+
+    dependencies: list[dict[str, Any]]
+    side_effects: list[str]
+    billing_delta: dict[str, Any]
+    warnings: list[str]
+
+
 def build_dry_run_response(
     tool_name: str,
     environment: str,
     method: str,
     path: str,
     current_state: Any,
+    *,
+    dependencies: list[dict[str, Any]] | None = None,
+    side_effects: list[str] | None = None,
+    billing_delta: dict[str, Any] | None = None,
+    warnings: list[str] | None = None,
 ) -> list[TextContent]:
     """Build the v0 dry-run wire shape and wrap it as MCP text content.
 
     Tool handlers call this from their dry_run branch after fetching
     current_state. The wire shape mirrors the Go-side
     ``BuildDryRunResponse``; cross-language parity is asserted by
-    test_tools_dryrun. Phase 2 per-tool dependency walks elevate the
-    response with ``dependencies``, ``billing_delta``, and
-    ``warnings`` fields.
+    test_tools_dryrun. The optional keyword-only fields carry Phase 2
+    per-tool dependency-walk output; each is emitted only when non-empty,
+    so tools without a walk produce the unchanged v0 shape.
     """
     body: dict[str, Any] = {
         "dry_run": True,
@@ -87,8 +118,21 @@ def build_dry_run_response(
     }
     if environment:
         body["environment"] = environment
+    if dependencies:
+        body["dependencies"] = dependencies
+    if side_effects:
+        body["side_effects"] = side_effects
+    if billing_delta:
+        body["billing_delta"] = billing_delta
+    if warnings:
+        body["warnings"] = warnings
 
-    return [TextContent(type="text", text=json.dumps(body, indent=2))]
+    return [
+        TextContent(
+            type="text",
+            text=json.dumps(body, indent=2, default=_dataclass_json_default),
+        )
+    ]
 
 
 def truncate_string(value: str, limit: int) -> str:
@@ -195,6 +239,8 @@ async def execute_dry_run(
     method: str,
     path: str,
     fetch_state: Callable[[RetryableClient], Awaitable[Any]],
+    details_fn: Callable[[RetryableClient, Any], Awaitable[DryRunDetails]]
+    | None = None,
 ) -> list[TextContent]:
     """Run the dry-run code path: fetch current state, return the v0
     preview wire shape, never mutate.
@@ -204,7 +250,9 @@ async def execute_dry_run(
     (e.g. instance_id non-zero) before calling this; this helper only
     handles environment selection, client setup, error handling, and
     response shaping. ``fetch_state`` performs the GET that supplies
-    ``current_state`` in the response.
+    ``current_state`` in the response. ``details_fn``, when given, runs the
+    Phase 2 dependency walk against the same client and fetched state and
+    its result enriches the preview (Tier A/B tools).
     """
     environment = arguments.get("environment", "")
     try:
@@ -216,8 +264,11 @@ async def execute_dry_run(
             _retry_config_from(cfg),
         ) as client:
             current_state = await fetch_state(client)
+            details: DryRunDetails = {}
+            if details_fn is not None:
+                details = await details_fn(client, current_state)
             return build_dry_run_response(
-                tool_name, environment, method, path, current_state
+                tool_name, environment, method, path, current_state, **details
             )
     except Exception as e:
         if isinstance(e, (EnvironmentNotFoundError, ValueError)):

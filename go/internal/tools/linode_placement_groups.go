@@ -99,8 +99,11 @@ func handlePlacementGroupUpdateRequest(ctx context.Context, request *mcp.CallToo
 	}
 
 	if IsDryRun(request) {
-		return RunDryRunPreview(ctx, request, cfg, "linode_placement_group_update", "PUT",
-			fmt.Sprintf("/placement/groups/%d", groupID), nil)
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_placement_group_update", "PUT",
+			fmt.Sprintf("/placement/groups/%d", groupID), nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return placementGroupUpdateSideEffects(ctx, updateRequest.Label)
+			})
 	}
 
 	if result := RequireConfirm(request, "This updates a placement group. Set confirm=true to proceed."); result != nil {
@@ -208,7 +211,10 @@ func handleLinodePlacementGroupCreateRequest(ctx context.Context, request *mcp.C
 	}
 
 	if IsDryRun(request) {
-		return RunDryRunPreview(ctx, request, cfg, "linode_placement_group_create", "POST", "/placement/groups", nil)
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_placement_group_create", "POST", "/placement/groups", nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return placementGroupCreateSideEffects(ctx, label, region, placementGroupType, placementGroupPolicy)
+			})
 	}
 
 	if result := RequireConfirm(request, "This creates a placement group. Set confirm=true to proceed."); result != nil {

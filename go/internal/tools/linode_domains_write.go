@@ -220,7 +220,10 @@ func handleLinodeDomainCreateRequest(ctx context.Context, request *mcp.CallToolR
 			return mcp.NewToolResultError("type is required"), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_domain_create", httpMethodPost, "/domains", nil)
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_domain_create", httpMethodPost, "/domains", nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return domainCreateSideEffects(ctx, domainType, domain)
+			})
 	}
 
 	if result := RequireConfirm(request, "This creates a DNS domain. Set confirm=true to proceed."); result != nil {
@@ -353,12 +356,21 @@ func handleLinodeDomainUpdateDryRun(ctx context.Context, request *mcp.CallToolRe
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch domain %d for dry-run: %v", domainID, err)), nil
 	}
 
-	return BuildDryRunResponse(
+	details, walkErr := domainUpdateSideEffects(ctx, domain,
+		request.GetString("status", ""),
+		request.GetString("soa_email", ""),
+		request.GetString("description", ""))
+	if walkErr != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to compute dry-run side effects: %v", walkErr)), nil
+	}
+
+	return BuildDryRunResponseDetailed(
 		"linode_domain_update",
 		request.GetString(paramEnvironment, ""),
 		"PUT",
 		fmt.Sprintf("/domains/%d", domainID),
 		domain,
+		&details,
 	)
 }
 
@@ -401,5 +413,6 @@ func handleLinodeDomainDeleteRequest(ctx context.Context, request *mcp.CallToolR
 		SuccessFormat:  "Domain %d and all its records removed successfully",
 		FetchState:     func(ctx context.Context, c *linode.Client, id int) (any, error) { return c.GetDomain(ctx, id) },
 		Execute:        func(ctx context.Context, c *linode.Client, id int) error { return c.DeleteDomain(ctx, id) },
+		DependencyWalk: domainDeleteDependencyWalk,
 	})
 }

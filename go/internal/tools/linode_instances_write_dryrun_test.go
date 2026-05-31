@@ -47,6 +47,16 @@ func TestLinodeInstanceCreateToolDryRun(t *testing.T) {
 		assert.Equal(t, "POST", would["method"])
 		assert.Equal(t, "/linode/instances", would["path"])
 		assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "create surfaces the new-instance side effect")
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, typeG6Nanode1, "side effect should name the instance type")
+
+		warnings, _ := body["warnings"].([]any)
+		require.Len(t, warnings, 1, "create warns that billing starts immediately")
 	})
 
 	t.Run("still validates firewall_id", func(t *testing.T) {
@@ -189,7 +199,7 @@ func TestLinodeInstanceResizeToolDryRun(t *testing.T) {
 	t.Run("preview without resizing", func(t *testing.T) {
 		t.Parallel()
 
-		cfg, methods := dryRunGetStateServer(t, instanceGetPath, linode.Instance{ID: 123})
+		cfg, methods := dryRunGetStateServer(t, instanceGetPath, linode.Instance{ID: 123, Type: "g6-nanode-1"})
 		_, _, handler := tools.NewLinodeInstanceResizeTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
@@ -208,6 +218,15 @@ func TestLinodeInstanceResizeToolDryRun(t *testing.T) {
 		assert.Equal(t, "POST", would["method"])
 		assert.Equal(t, instanceGetPath+"/resize", would["path"])
 		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "resize surfaces the type change")
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, "g6-nanode-1", "side effect names the current type")
+		assert.Contains(t, effect, typeG6Standard1, "side effect names the target type")
+		assert.NotEmpty(t, body["warnings"], "resize warns about the price change")
 	})
 
 	t.Run("still validates type", func(t *testing.T) {
@@ -281,11 +300,12 @@ func TestLinodeInstanceMigrateToolDryRun(t *testing.T) {
 	t.Run("preview without migrating", func(t *testing.T) {
 		t.Parallel()
 
-		cfg, methods := dryRunGetStateServer(t, instanceGetPath, linode.Instance{ID: 123})
+		cfg, methods := dryRunGetStateServer(t, instanceGetPath, linode.Instance{ID: 123, Region: regionUSEast})
 		_, _, handler := tools.NewLinodeInstanceMigrateTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyLinodeID: float64(123),
+			keyRegion:   "us-west",
 			keyDryRun:   true,
 		}))
 		require.NoError(t, err)
@@ -299,6 +319,14 @@ func TestLinodeInstanceMigrateToolDryRun(t *testing.T) {
 		assert.Equal(t, "POST", would["method"])
 		assert.Equal(t, instanceGetPath+"/migrate", would["path"])
 		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "migrate surfaces the region change")
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, regionUSEast, "side effect names the current region")
+		assert.Contains(t, effect, "us-west", "side effect names the target region")
 	})
 }
 
@@ -315,7 +343,7 @@ func TestLinodeInstanceMutateToolDryRun(t *testing.T) {
 	t.Run("preview without mutating", func(t *testing.T) {
 		t.Parallel()
 
-		cfg, methods := dryRunGetStateServer(t, instanceGetPath, linode.Instance{ID: 123})
+		cfg, methods := dryRunGetStateServer(t, instanceGetPath, linode.Instance{ID: 123, Type: "g6-nanode-1"})
 		_, _, handler := tools.NewLinodeInstanceMutateTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
@@ -333,6 +361,13 @@ func TestLinodeInstanceMutateToolDryRun(t *testing.T) {
 		assert.Equal(t, "POST", would["method"])
 		assert.Equal(t, instanceGetPath+"/mutate", would["path"])
 		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "mutate surfaces the upgrade")
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, "g6-nanode-1", "side effect names the current type")
 	})
 
 	t.Run("still validates linode_id", func(t *testing.T) {

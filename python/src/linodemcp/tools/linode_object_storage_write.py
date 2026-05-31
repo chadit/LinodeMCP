@@ -12,6 +12,7 @@ from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     PARAM_DRY_RUN,
+    DryRunDetails,
     build_dry_run_response,
     execute_dry_run,
     execute_tool,
@@ -192,6 +193,10 @@ async def handle_linode_object_storage_bucket_create(
             "POST",
             "/object-storage/buckets",
             None,
+            side_effects=[
+                f"A new Object Storage bucket {label!r} will be created in {region}."
+            ],
+            warnings=["Billing for Object Storage starts immediately on creation."],
         )
 
     if not arguments.get("confirm"):
@@ -378,6 +383,20 @@ def _bucket_access_error(region: str, label: str, acl: Any) -> str | None:
     return None
 
 
+def _bucket_access_update_side_effects(new_acl: Any, new_cors: Any) -> DryRunDetails:
+    """Phase 2 Tier B walk for bucket access update. Reports the ACL change and
+    a CORS enable/disable toggle.
+    """
+    side_effects: list[str] = []
+    if new_acl:
+        side_effects.append(f"Bucket access control is set to {new_acl!r}.")
+    if new_cors is not None:
+        side_effects.append(
+            f"CORS is {'enabled' if new_cors else 'disabled'} for the bucket."
+        )
+    return {"side_effects": side_effects} if side_effects else {}
+
+
 async def handle_linode_object_storage_bucket_access_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -395,6 +414,9 @@ async def handle_linode_object_storage_bucket_access_update(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_object_storage_bucket_access(region, label)
 
+        async def _walk(_client: RetryableClient, _state: Any) -> DryRunDetails:
+            return _bucket_access_update_side_effects(acl, cors_enabled)
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -402,6 +424,7 @@ async def handle_linode_object_storage_bucket_access_update(
             "PUT",
             f"/object-storage/buckets/{region}/{label}/access",
             _fetch,
+            _walk,
         )
 
     if not arguments.get("confirm"):
@@ -751,6 +774,10 @@ async def handle_linode_object_storage_key_create(
             "POST",
             "/object-storage/keys",
             None,
+            side_effects=[
+                f"A new Object Storage access key {label!r} will be created."
+            ],
+            warnings=["The secret key is returned only once, at creation time."],
         )
 
     if not arguments.get("confirm"):
@@ -806,6 +833,25 @@ def _key_update_error(key_id: Any, label: str, bucket_access_json: str) -> str |
     return access_err
 
 
+def _key_update_side_effects(
+    state: Any, new_label: Any, new_bucket_access: Any
+) -> DryRunDetails:
+    """Phase 2 Tier B walk for object-storage key update. Reports the label
+    change against the fetched key (credential-safe: the GET never returns the
+    secret) and notes when bucket access scopes are replaced.
+    """
+    side_effects: list[str] = []
+    if new_label:
+        from_label = getattr(state, "label", "")
+        if from_label and from_label != new_label:
+            side_effects.append(f"Label changes from {from_label!r} to {new_label!r}.")
+        else:
+            side_effects.append(f"Label is set to {new_label!r}.")
+    if new_bucket_access:
+        side_effects.append("The key's bucket access scopes are replaced.")
+    return {"side_effects": side_effects} if side_effects else {}
+
+
 async def handle_linode_object_storage_key_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -825,6 +871,9 @@ async def handle_linode_object_storage_key_update(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_object_storage_key(key_id=key_id)
 
+        async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+            return _key_update_side_effects(state, label, bucket_access_json)
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -832,6 +881,7 @@ async def handle_linode_object_storage_key_update(
             "PUT",
             f"/object-storage/keys/{key_id}",
             _fetch,
+            _walk,
         )
 
     if not arguments.get("confirm"):
@@ -1152,6 +1202,15 @@ def _object_acl_update_error(
     return _validate_bucket_acl(acl)
 
 
+def _object_acl_update_side_effects(new_acl: Any) -> DryRunDetails:
+    """Phase 2 Tier B walk for object ACL update. Reports the new access-control
+    level the object is set to.
+    """
+    if not new_acl:
+        return {}
+    return {"side_effects": [f"Object access control is set to {new_acl!r}."]}
+
+
 async def handle_linode_object_storage_object_acl_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -1169,6 +1228,9 @@ async def handle_linode_object_storage_object_acl_update(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_object_acl(region, label, name)
 
+        async def _walk(_client: RetryableClient, _state: Any) -> DryRunDetails:
+            return _object_acl_update_side_effects(acl)
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -1176,6 +1238,7 @@ async def handle_linode_object_storage_object_acl_update(
             "PUT",
             f"/object-storage/buckets/{region}/{label}/object-acl",
             _fetch,
+            _walk,
         )
 
     if not arguments.get("confirm"):

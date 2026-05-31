@@ -302,7 +302,10 @@ func handleLinodeInstanceCreateRequest(ctx context.Context, request *mcp.CallToo
 			return mcp.NewToolResultError(msg), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_instance_create", httpMethodPost, "/linode/instances", nil)
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_instance_create", httpMethodPost, "/linode/instances", nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return instanceCreateSideEffects(ctx, instanceType, region, image)
+			})
 	}
 
 	if result := RequireConfirm(request, "This operation creates a billable resource. Set confirm=true to proceed."); result != nil {
@@ -405,6 +408,7 @@ func handleLinodeInstanceDeleteRequest(ctx context.Context, request *mcp.CallToo
 		SuccessFormat:  "Instance %d removed successfully",
 		FetchState:     func(ctx context.Context, c *linode.Client, id int) (any, error) { return c.GetInstance(ctx, id) },
 		Execute:        func(ctx context.Context, c *linode.Client, id int) error { return c.DeleteInstance(ctx, id) },
+		DependencyWalk: instanceDeleteDependencyWalk,
 	})
 }
 
@@ -448,9 +452,12 @@ func handleLinodeInstanceResizeRequest(ctx context.Context, request *mcp.CallToo
 			return mcp.NewToolResultError("type is required"), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_instance_resize", httpMethodPost,
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_instance_resize", httpMethodPost,
 			fmt.Sprintf("/linode/instances/%d/resize", instanceID),
-			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, instanceID) })
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetInstance(ctx, instanceID) },
+			func(ctx context.Context, _ *linode.Client, state any) (DryRunDetails, error) {
+				return instanceResizeSideEffects(ctx, state, instanceType)
+			})
 	}
 
 	if result := RequireConfirm(request, "This operation causes downtime and may affect billing. Set confirm=true to proceed."); result != nil {

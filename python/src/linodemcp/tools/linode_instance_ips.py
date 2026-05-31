@@ -9,6 +9,7 @@ from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     PARAM_DRY_RUN,
+    DryRunDetails,
     build_dry_run_response,
     execute_dry_run,
     execute_tool,
@@ -371,6 +372,15 @@ def _parse_networking_ip_update(
     return address, rdns
 
 
+def _networking_ip_update_side_effects(new_rdns: Any) -> DryRunDetails:
+    """Phase 2 Tier B walk for networking IP update. Reports the reverse-DNS
+    (rDNS) change, or its removal when the rdns value is empty.
+    """
+    if new_rdns:
+        return {"side_effects": [f"Reverse DNS (rDNS) is set to {new_rdns!r}."]}
+    return {"side_effects": ["Reverse DNS (rDNS) is cleared."]}
+
+
 async def handle_linode_networking_ip_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -379,10 +389,13 @@ async def handle_linode_networking_ip_update(
         parsed = _parse_networking_ip_update(arguments)
         if isinstance(parsed, list):
             return parsed
-        address, _ = parsed
+        address, rdns = parsed
 
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_networking_ip(address)
+
+        async def _walk(_client: RetryableClient, _state: Any) -> DryRunDetails:
+            return _networking_ip_update_side_effects(rdns)
 
         return await execute_dry_run(
             cfg,
@@ -391,6 +404,7 @@ async def handle_linode_networking_ip_update(
             "PUT",
             f"/networking/ips/{address}",
             _fetch,
+            _walk,
         )
 
     confirm = arguments.get("confirm", False)

@@ -181,6 +181,8 @@ func TestLinodePlacementGroupCreateTool(t *testing.T) {
 		assert.Contains(t, textContent.Text, `"dry_run": true`)
 		assert.Contains(t, textContent.Text, `"method": "POST"`)
 		assert.Contains(t, textContent.Text, `"path": "/placement/groups"`)
+		assert.Contains(t, textContent.Text, "side_effects")
+		assert.Contains(t, textContent.Text, "will be created in region")
 		assert.Equal(t, int32(0), calls, "create dry_run must not call the Linode API")
 	})
 

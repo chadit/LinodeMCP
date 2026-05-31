@@ -151,7 +151,13 @@ func handleLKEClusterCreateRequest(ctx context.Context, request *mcp.CallToolReq
 	}
 
 	if IsDryRun(request) {
-		return RunDryRunPreview(ctx, request, cfg, "linode_lke_cluster_create", httpMethodPost, lkeClustersPath, nil)
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_lke_cluster_create", httpMethodPost, lkeClustersPath, nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return lkeClusterCreateSideEffects(ctx,
+					request.GetString("label", ""),
+					request.GetString("region", ""),
+					request.GetString("k8s_version", ""))
+			})
 	}
 
 	if result := RequireConfirm(request, "This creates billable Kubernetes resources. Set confirm=true to proceed."); result != nil {
@@ -214,10 +220,14 @@ func handleLKEClusterUpdateRequest(ctx context.Context, request *mcp.CallToolReq
 	}
 
 	if IsDryRun(request) {
-		return RunDryRunPreview(ctx, request, cfg, "linode_lke_cluster_update", "PUT",
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_lke_cluster_update", "PUT",
 			fmt.Sprintf(lkeClustersPath+"/%d", clusterID),
 			func(ctx context.Context, c *linode.Client) (any, error) {
 				return c.GetLKECluster(ctx, clusterID)
+			},
+			func(ctx context.Context, _ *linode.Client, state any) (DryRunDetails, error) {
+				return lkeClusterUpdateSideEffects(ctx, state,
+					request.GetString("label", ""), request.GetString("k8s_version", ""))
 			})
 	}
 
@@ -299,6 +309,7 @@ func handleLKEClusterDeleteRequest(ctx context.Context, request *mcp.CallToolReq
 		Execute: func(ctx context.Context, c *linode.Client, id int) error {
 			return c.DeleteLKECluster(ctx, id)
 		},
+		DependencyWalk: lkeClusterDeleteDependencyWalk,
 	})
 }
 
@@ -558,10 +569,17 @@ func handleLKEPoolUpdateRequest(ctx context.Context, request *mcp.CallToolReques
 	}
 
 	if IsDryRun(request) {
-		return RunDryRunPreview(ctx, request, cfg, "linode_lke_pool_update", "PUT",
+		_, countProvided := request.GetArguments()["count"]
+		_, autoscalerProvided := request.GetArguments()["autoscaler_enabled"]
+
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_lke_pool_update", "PUT",
 			fmt.Sprintf(lkeClustersPath+"/%d/pools/%d", clusterID, poolID),
 			func(ctx context.Context, c *linode.Client) (any, error) {
 				return c.GetLKENodePool(ctx, clusterID, poolID)
+			},
+			func(ctx context.Context, _ *linode.Client, state any) (DryRunDetails, error) {
+				return lkePoolUpdateSideEffects(ctx, state,
+					request.GetInt("count", 0), countProvided, autoscalerProvided)
 			})
 	}
 
@@ -647,6 +665,7 @@ func handleLKEPoolDeleteRequest(ctx context.Context, request *mcp.CallToolReques
 		Execute: func(ctx context.Context, c *linode.Client, clusterID, poolID int) error {
 			return c.DeleteLKENodePool(ctx, clusterID, poolID)
 		},
+		DependencyWalk: lkePoolDeleteDependencyWalk,
 	})
 }
 
@@ -759,6 +778,7 @@ func handleLKENodeDeleteRequest(ctx context.Context, request *mcp.CallToolReques
 				"node_id":          nodeID,
 			}
 		},
+		DependencyWalk: lkeNodeDeleteDependencyWalk,
 	})
 }
 
@@ -932,10 +952,13 @@ func handleLKEACLUpdateRequest(ctx context.Context, request *mcp.CallToolRequest
 	}
 
 	if IsDryRun(request) {
-		return RunDryRunPreview(ctx, request, cfg, "linode_lke_acl_update", "PUT",
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_lke_acl_update", "PUT",
 			fmt.Sprintf(lkeClustersPath+"/%d/control_plane_acl", clusterID),
 			func(ctx context.Context, c *linode.Client) (any, error) {
 				return c.GetLKEControlPlaneACL(ctx, clusterID)
+			},
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return lkeACLUpdateSideEffects(ctx, request.GetBool("enabled", false))
 			})
 	}
 

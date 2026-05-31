@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
+import httpx
 from mcp.types import TextContent, Tool
 
+from linodemcp.linode import APIError, NetworkError
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     ENV_PARAM_SCHEMA,
     PARAM_DRY_RUN,
+    DryRunDetails,
     build_dry_run_response,
     error_response,
     execute_dry_run,
@@ -480,12 +483,20 @@ async def handle_linode_nodebalancer_create(
     if is_dry_run(arguments):
         if not region:
             return error_response("region is required")
+        nb_label = arguments.get("label")
+        effect = (
+            f"A new NodeBalancer {nb_label!r} will be created in region {region}."
+            if nb_label
+            else f"A new NodeBalancer will be created in region {region}."
+        )
         return build_dry_run_response(
             "linode_nodebalancer_create",
             arguments.get("environment", ""),
             "POST",
             "/nodebalancers",
             None,
+            side_effects=[effect],
+            warnings=["Billing for the NodeBalancer starts immediately on creation."],
         )
 
     if not arguments.get("confirm"):
@@ -558,6 +569,27 @@ def create_linode_nodebalancer_update_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def _nodebalancer_update_side_effects(
+    state: Any, new_label: Any, new_throttle: Any
+) -> DryRunDetails:
+    """Phase 2 Tier B walk for NodeBalancer update. Reports the label change
+    and a connection-throttle change against the fetched state.
+    """
+    side_effects: list[str] = []
+    if new_label:
+        from_label = getattr(state, "label", "")
+        if from_label and from_label != new_label:
+            side_effects.append(f"Label changes from {from_label!r} to {new_label!r}.")
+        else:
+            side_effects.append(f"Label is set to {new_label!r}.")
+    if new_throttle is not None:
+        side_effects.append(
+            f"Connection throttle is set to {new_throttle} connections per "
+            "second per client IP."
+        )
+    return {"side_effects": side_effects} if side_effects else {}
+
+
 async def handle_linode_nodebalancer_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -572,6 +604,11 @@ async def handle_linode_nodebalancer_update(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_nodebalancer(int(nodebalancer_id))
 
+        async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+            return _nodebalancer_update_side_effects(
+                state, arguments.get("label"), arguments.get("client_conn_throttle")
+            )
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -579,6 +616,7 @@ async def handle_linode_nodebalancer_update(
             "PUT",
             f"/nodebalancers/{int(nodebalancer_id)}",
             _fetch,
+            _walk,
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -630,6 +668,43 @@ def create_linode_nodebalancer_delete_tool() -> tuple[Tool, Capability]:
     ), Capability.Destroy
 
 
+async def _nodebalancer_delete_dependency_walk(
+    client: RetryableClient, nodebalancer_id: int
+) -> DryRunDetails:
+    """Phase 2 Tier A walk for NodeBalancer delete. Each config (and its
+    backend node list) is destroyed with the NodeBalancer, so configs are
+    surfaced as cascade_deleted dependencies. Best-effort: a failed config
+    list becomes a warning, not a hard error.
+    """
+    details: DryRunDetails = {}
+    try:
+        response = await client.list_nodebalancer_configs(nodebalancer_id)
+    except (APIError, NetworkError, httpx.HTTPError) as exc:
+        details["warnings"] = [f"Could not list NodeBalancer configs: {exc}"]
+        return details
+
+    configs = cast("list[dict[str, Any]]", response.get("data", []))
+    dependencies: list[dict[str, Any]] = [
+        {
+            "kind": "nodebalancer_config",
+            "id": config.get("id"),
+            "action": "cascade_deleted",
+            "note": (
+                f"{config.get('protocol', '')} config on port {config.get('port', '')}"
+            ),
+        }
+        for config in configs
+    ]
+
+    if dependencies:
+        details["dependencies"] = dependencies
+        details["warnings"] = [
+            f"Deleting this NodeBalancer destroys {len(dependencies)} config(s) "
+            "and their backend node lists."
+        ]
+    return details
+
+
 async def handle_linode_nodebalancer_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -649,6 +724,11 @@ async def handle_linode_nodebalancer_delete(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_nodebalancer(nodebalancer_id_int)
 
+        async def _walk(client: RetryableClient, _state: Any) -> DryRunDetails:
+            return await _nodebalancer_delete_dependency_walk(
+                client, nodebalancer_id_int
+            )
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -656,6 +736,7 @@ async def handle_linode_nodebalancer_delete(
             "DELETE",
             f"/nodebalancers/{nodebalancer_id_int}",
             _fetch,
+            _walk,
         )
 
     confirm = arguments.get("confirm", False)

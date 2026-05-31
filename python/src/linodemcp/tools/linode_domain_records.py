@@ -9,6 +9,7 @@ from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     ENV_PARAM_SCHEMA,
     PARAM_DRY_RUN,
+    DryRunDetails,
     build_dry_run_response,
     error_response,
     execute_dry_run,
@@ -240,12 +241,22 @@ async def handle_linode_domain_record_create(
         fields_error = _record_create_error(domain_id, record_type)
         if fields_error is not None:
             return fields_error
+        effect = (
+            f"A new {record_type} record will be created in domain {int(domain_id)}"
+        )
+        name = arguments.get("name", "")
+        target = arguments.get("target", "")
+        if name:
+            effect += f" for host {name!r}"
+        if target:
+            effect += f" targeting {target!r}"
         return build_dry_run_response(
             "linode_domain_record_create",
             arguments.get("environment", ""),
             "POST",
             f"/domains/{int(domain_id)}/records",
             None,
+            side_effects=[f"{effect}."],
         )
 
     if not arguments.get("confirm"):
@@ -347,6 +358,28 @@ def _record_update_error(domain_id: Any, record_id: Any) -> list[TextContent] | 
     return None
 
 
+def _domain_record_update_side_effects(
+    state: Any, new_name: Any, new_target: Any
+) -> DryRunDetails:
+    """Phase 2 Tier B walk for domain record update. Reports the record name
+    and target changes against the fetched state.
+    """
+    side_effects: list[str] = []
+    if new_name is not None:
+        from_name = getattr(state, "name", "")
+        if new_name != from_name:
+            side_effects.append(
+                f"Record name changes from {from_name!r} to {new_name!r}."
+            )
+    if new_target:
+        from_target = getattr(state, "target", "")
+        if new_target != from_target:
+            side_effects.append(
+                f"Record target changes from {from_target!r} to {new_target!r}."
+            )
+    return {"side_effects": side_effects} if side_effects else {}
+
+
 async def handle_linode_domain_record_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -362,6 +395,11 @@ async def handle_linode_domain_record_update(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_domain_record(int(domain_id), int(record_id))
 
+        async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+            return _domain_record_update_side_effects(
+                state, arguments.get("name"), arguments.get("target")
+            )
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -369,6 +407,7 @@ async def handle_linode_domain_record_update(
             "PUT",
             f"/domains/{int(domain_id)}/records/{int(record_id)}",
             _fetch,
+            _walk,
         )
 
     if not arguments.get("confirm"):

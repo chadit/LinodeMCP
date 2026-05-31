@@ -8,6 +8,7 @@ from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     PARAM_DRY_RUN,
+    DryRunDetails,
     build_dry_run_response,
     error_response,
     execute_dry_run,
@@ -85,6 +86,7 @@ async def handle_linode_sshkey_create(
             "POST",
             "/profile/sshkeys",
             None,
+            side_effects=[f"A new SSH key {label!r} will be added to your profile."],
         )
 
     if not arguments.get("confirm"):
@@ -160,6 +162,20 @@ def _sshkey_update_fields_error(
     return None
 
 
+def _sshkey_update_side_effects(state: Any, new_label: Any) -> DryRunDetails:
+    """Phase 2 Tier B walk for SSH key update. Reports the label change against
+    the fetched state.
+    """
+    if not new_label:
+        return {}
+    from_label = getattr(state, "label", "")
+    if from_label and from_label != new_label:
+        return {
+            "side_effects": [f"Label changes from {from_label!r} to {new_label!r}."]
+        }
+    return {"side_effects": [f"Label is set to {new_label!r}."]}
+
+
 async def handle_linode_sshkey_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -176,6 +192,9 @@ async def handle_linode_sshkey_update(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_ssh_key(ssh_key_id_int)
 
+        async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+            return _sshkey_update_side_effects(state, label)
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -183,6 +202,7 @@ async def handle_linode_sshkey_update(
             "PUT",
             f"/profile/sshkeys/{ssh_key_id_int}",
             _fetch,
+            _walk,
         )
 
     if not arguments.get("confirm"):

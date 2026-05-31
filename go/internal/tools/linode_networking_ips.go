@@ -124,9 +124,12 @@ func handleLinodeNetworkingIPUpdateRDNSRequest(ctx context.Context, request *mcp
 			return mcp.NewToolResultError(rdnsMessage), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, "linode_networking_ip_update_rdns", "PUT",
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_networking_ip_update_rdns", "PUT",
 			"/networking/ips/"+address,
-			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetNetworkingIP(ctx, address) })
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetNetworkingIP(ctx, address) },
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return networkingIPUpdateRDNSSideEffects(ctx, request.GetString(paramRDNS, ""))
+			})
 	}
 
 	if result := RequireConfirm(request, "This updates reverse DNS for an IP address. Set confirm=true to proceed."); result != nil {

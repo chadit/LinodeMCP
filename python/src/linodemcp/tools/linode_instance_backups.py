@@ -8,6 +8,7 @@ from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     PARAM_DRY_RUN,
+    DryRunDetails,
     execute_dry_run,
     execute_tool,
     is_dry_run,
@@ -227,6 +228,31 @@ def create_linode_instance_backup_restore_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def _backup_restore_side_effects(target_id: int, overwrite: bool) -> DryRunDetails:
+    """Phase 2 Tier A walk for backup restore. The side effect depends on the
+    overwrite flag: with overwrite the target instance's existing disks and
+    configs are destroyed and replaced, otherwise the backup is restored
+    alongside what is already there. Args-based, no API call.
+    """
+    if overwrite:
+        return {
+            "side_effects": [
+                f"All existing disks and configs on target instance {target_id} "
+                "are destroyed and replaced by the backup."
+            ],
+            "warnings": [
+                f"overwrite=true: existing data on target instance {target_id} "
+                "is permanently lost."
+            ],
+        }
+    return {
+        "side_effects": [
+            f"The backup is restored onto target instance {target_id}; the "
+            "restore fails if its disks or configs collide."
+        ]
+    }
+
+
 async def handle_linode_instance_backup_restore(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -241,9 +267,13 @@ async def handle_linode_instance_backup_restore(
         return _error_response("linode_id is required")
 
     if is_dry_run(arguments):
+        overwrite = arguments.get("overwrite", False)
 
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_instance_backup(instance_id, backup_id)
+
+        async def _walk(_client: RetryableClient, _state: Any) -> DryRunDetails:
+            return _backup_restore_side_effects(int(linode_id), overwrite)
 
         return await execute_dry_run(
             cfg,
@@ -252,6 +282,7 @@ async def handle_linode_instance_backup_restore(
             "POST",
             f"/linode/instances/{instance_id}/backups/{backup_id}/restore",
             _fetch,
+            _walk,
         )
 
     if not arguments.get("confirm"):

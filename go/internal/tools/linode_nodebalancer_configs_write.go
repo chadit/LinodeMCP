@@ -54,12 +54,15 @@ func handleLinodeNodeBalancerConfigDeleteRequest(ctx context.Context, request *m
 			return mcp.NewToolResultError(fetchErr), nil
 		}
 
-		return BuildDryRunResponse(
+		details := nodebalancerConfigDeleteDependencyWalk(ctx, client, nodeBalancerID, configID)
+
+		return BuildDryRunResponseDetailed(
 			"linode_nodebalancer_config_delete",
 			request.GetString(paramEnvironment, ""),
 			httpMethodDelete,
 			"/nodebalancers/"+strconv.Itoa(nodeBalancerID)+"/configs/"+strconv.Itoa(configID),
 			state,
+			&details,
 		)
 	}
 
