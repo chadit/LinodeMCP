@@ -3366,6 +3366,21 @@ func (c *Client) ListObjectStorageBuckets(ctx context.Context) ([]ObjectStorageB
 	return buckets, err
 }
 
+// ListObjectStorageBucketsByRegion retrieves Object Storage buckets in a region with automatic retry.
+func (c *Client) ListObjectStorageBucketsByRegion(ctx context.Context, region string) ([]ObjectStorageBucket, error) {
+	var buckets []ObjectStorageBucket
+
+	err := c.executeWithRetry(ctx, "ListObjectStorageBucketsByRegion", func() error {
+		var err error
+
+		buckets, err = c.httpListObjectStorageBucketsByRegion(ctx, region)
+
+		return err
+	})
+
+	return buckets, err
+}
+
 // GetObjectStorageBucket retrieves a specific bucket with automatic retry.
 func (c *Client) GetObjectStorageBucket(ctx context.Context, region, label string) (*ObjectStorageBucket, error) {
 	var bucket *ObjectStorageBucket

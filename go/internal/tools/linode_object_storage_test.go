@@ -16,6 +16,8 @@ import (
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
+const bucketHostnameUSEast1 = "my-bucket.us-east-1.linodeobjects.com"
+
 // End-to-end verification of object storage bucket listing.
 func TestLinodeObjectStorageBucketsListTool(t *testing.T) {
 	t.Parallel()
@@ -39,7 +41,7 @@ func TestLinodeObjectStorageBucketsListTool(t *testing.T) {
 		t.Parallel()
 
 		buckets := []linode.ObjectStorageBucket{
-			{Label: bucketTest, Region: regionUSEast1, Hostname: "my-bucket.us-east-1.linodeobjects.com", Objects: 42, Size: 1024},
+			{Label: bucketTest, Region: regionUSEast1, Hostname: bucketHostnameUSEast1, Objects: 42, Size: 1024},
 			{Label: "backups", Region: "us-southeast-1", Hostname: "backups.us-southeast-1.linodeobjects.com", Objects: 10, Size: 512},
 		}
 
@@ -93,6 +95,100 @@ func TestLinodeObjectStorageBucketsListTool(t *testing.T) {
 	})
 }
 
+// End-to-end verification of object storage bucket listing by region.
+func TestLinodeObjectStorageBucketsListByRegionTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	tool, _, handler := tools.NewLinodeObjectStorageBucketListByRegionTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		assert.Equal(t, "linode_object_storage_bucket_list_by_region", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		buckets := []linode.ObjectStorageBucket{
+			{Label: bucketTest, Region: regionUSEast1, Hostname: bucketHostnameUSEast1, Objects: 42, Size: 1024},
+		}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/object-storage/buckets/us-east-1", r.URL.Path, "request path should match regional buckets endpoint")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query params")
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyData:    buckets,
+				keyPage:    1,
+				keyPages:   1,
+				keyResults: 1,
+			}), "encoding response should not fail")
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeObjectStorageBucketListByRegionTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyRegion: regionUSEast1})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "result should not be an error")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, bucketTest, "response should contain bucket name")
+		assert.Contains(t, textContent.Text, regionUSEast1, "response should contain region")
+		assert.Contains(t, textContent.Text, `"count": 1`, "response should contain correct count")
+	})
+
+	t.Run("validation", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			name string
+			args map[string]any
+		}{
+			{name: caseMissingRegion, args: map[string]any{}},
+			{name: "slash in region", args: map[string]any{keyRegion: "us/east-1"}},
+			{name: "query in region", args: map[string]any{keyRegion: "us-east-1?x=1"}},
+			{name: "traversal in region", args: map[string]any{keyRegion: pathTraversalValue}},
+			{name: "encoded separator in region", args: map[string]any{keyRegion: "us%2Feast-1"}},
+			{name: "fragment in region", args: map[string]any{keyRegion: "us-east-1#frag"}},
+			{name: "ampersand in region", args: map[string]any{keyRegion: "us-east-1&x=1"}},
+			{name: "space in region", args: map[string]any{keyRegion: "us east-1"}},
+			{name: "leading dash in region", args: map[string]any{keyRegion: "-us-east-1"}},
+		}
+
+		for _, testCase := range tests {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should not return an error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "result should be an error for %s", testCase.name)
+			})
+		}
+	})
+}
+
 // End-to-end verification of object storage bucket retrieval.
 func TestLinodeObjectStorageBucketGetTool(t *testing.T) {
 	t.Parallel()
@@ -118,7 +214,7 @@ func TestLinodeObjectStorageBucketGetTool(t *testing.T) {
 		bucket := linode.ObjectStorageBucket{
 			Label:    bucketTest,
 			Region:   regionUSEast1,
-			Hostname: "my-bucket.us-east-1.linodeobjects.com",
+			Hostname: bucketHostnameUSEast1,
 			Objects:  42,
 			Size:     1024,
 		}

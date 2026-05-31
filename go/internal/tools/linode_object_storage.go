@@ -55,6 +55,79 @@ func handleObjectStorageBucketsListRequest(ctx context.Context, request *mcp.Cal
 	return MarshalToolResponse(response)
 }
 
+// NewLinodeObjectStorageBucketListByRegionTool creates a tool for listing buckets in a region.
+func NewLinodeObjectStorageBucketListByRegionTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_object_storage_bucket_list_by_region",
+		mcp.WithDescription("Lists Object Storage buckets in a specific region for the authenticated user"),
+		mcp.WithString(
+			paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
+		),
+		mcp.WithString(
+			"region",
+			mcp.Required(),
+			mcp.Description("Region where buckets are located (e.g., 'us-east-1', 'us-southeast-1')"),
+		),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleObjectStorageBucketsListByRegionRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleObjectStorageBucketsListByRegionRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	region := request.GetString("region", "")
+
+	if region == "" {
+		return mcp.NewToolResultError("region is required"), nil
+	}
+
+	if !isSafeObjectStorageRegion(region) {
+		return mcp.NewToolResultError("region must not contain path separators, query separators, or traversal segments"), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	buckets, err := client.ListObjectStorageBucketsByRegion(ctx, region)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Object Storage buckets in region '%s': %v", region, err)), nil
+	}
+
+	response := struct {
+		Region  string                       `json:"region"`
+		Count   int                          `json:"count"`
+		Buckets []linode.ObjectStorageBucket `json:"buckets"`
+	}{
+		Region:  region,
+		Count:   len(buckets),
+		Buckets: buckets,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func isSafeObjectStorageRegion(region string) bool {
+	if region == "" || strings.HasPrefix(region, "-") || strings.HasSuffix(region, "-") || strings.Contains(region, "--") {
+		return false
+	}
+
+	for _, r := range region {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+			continue
+		}
+
+		return false
+	}
+
+	return true
+}
+
 // NewLinodeObjectStorageBucketGetTool creates a tool for getting a specific bucket.
 func NewLinodeObjectStorageBucketGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(

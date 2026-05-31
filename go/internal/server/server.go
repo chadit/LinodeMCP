@@ -1100,6 +1100,7 @@ func volumeToolEntries(cfg *config.Config) []toolEntry {
 func objectStorageToolEntries(cfg *config.Config) []toolEntry {
 	return entriesFromFactories(cfg, []toolFactory{
 		tools.NewLinodeObjectStorageBucketListTool,
+		tools.NewLinodeObjectStorageBucketListByRegionTool,
 		tools.NewLinodeObjectStorageBucketGetTool,
 		tools.NewLinodeObjectStorageBucketContentsTool,
 		tools.NewLinodeObjectStorageClusterListTool,

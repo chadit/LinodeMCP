@@ -144,6 +144,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 
 		// Object storage
 		{Name: "linode_object_storage_bucket_list", Capability: profiles.CapRead},
+		{Name: "linode_object_storage_bucket_list_by_region", Capability: profiles.CapRead},
 		{Name: "linode_object_storage_bucket_create", Capability: profiles.CapWrite},
 		{Name: "linode_object_storage_bucket_delete", Capability: profiles.CapDestroy},
 
