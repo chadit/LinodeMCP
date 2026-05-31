@@ -32,6 +32,13 @@ type ObjectStorageCluster struct {
 	Status string `json:"status"`
 }
 
+// ObjectStorageEndpoint represents an Object Storage endpoint.
+type ObjectStorageEndpoint struct {
+	Region       string  `json:"region"`
+	S3Endpoint   *string `json:"s3_endpoint"`
+	EndpointType string  `json:"endpoint_type"`
+}
+
 // ObjectStorageType represents Object Storage pricing and type info.
 type ObjectStorageType struct {
 	ID       string `json:"id"`

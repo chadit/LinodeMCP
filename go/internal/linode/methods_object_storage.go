@@ -8,13 +8,14 @@ import (
 )
 
 const (
-	endpointObjBuckets  = "/object-storage/buckets"
-	endpointObjClusters = "/object-storage/clusters"
-	endpointObjTypes    = "/object-storage/types"
-	endpointObjKeys     = "/object-storage/keys"
-	endpointObjQuotas   = "/object-storage/quotas"
-	endpointObjTransfer = "/object-storage/transfer"
-	endpointObjCancel   = "/object-storage/cancel"
+	endpointObjBuckets   = "/object-storage/buckets"
+	endpointObjClusters  = "/object-storage/clusters"
+	endpointObjEndpoints = "/object-storage/endpoints"
+	endpointObjTypes     = "/object-storage/types"
+	endpointObjKeys      = "/object-storage/keys"
+	endpointObjQuotas    = "/object-storage/quotas"
+	endpointObjTransfer  = "/object-storage/transfer"
+	endpointObjCancel    = "/object-storage/cancel"
 )
 
 // ListObjectStorageBuckets retrieves all Object Storage buckets.
@@ -133,6 +134,27 @@ func (c *Client) httpListObjectStorageClusters(ctx context.Context) ([]ObjectSto
 	defer drainClose(resp)
 
 	var response PaginatedResponse[ObjectStorageCluster]
+
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
+}
+
+// ListObjectStorageEndpoints retrieves Object Storage endpoints.
+func (c *Client) httpListObjectStorageEndpoints(ctx context.Context) ([]ObjectStorageEndpoint, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointObjEndpoints, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListObjectStorageEndpoints", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[ObjectStorageEndpoint]
 
 	if err := c.handleResponse(resp, &response); err != nil {
 		return nil, err

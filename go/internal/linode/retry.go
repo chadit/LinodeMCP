@@ -3499,6 +3499,21 @@ func (c *Client) ListObjectStorageClusters(ctx context.Context) ([]ObjectStorage
 	return clusters, err
 }
 
+// ListObjectStorageEndpoints retrieves Object Storage endpoints with automatic retry.
+func (c *Client) ListObjectStorageEndpoints(ctx context.Context) ([]ObjectStorageEndpoint, error) {
+	var endpoints []ObjectStorageEndpoint
+
+	err := c.executeWithRetry(ctx, "ListObjectStorageEndpoints", func() error {
+		var err error
+
+		endpoints, err = c.httpListObjectStorageEndpoints(ctx)
+
+		return err
+	})
+
+	return endpoints, err
+}
+
 // ListObjectStorageTypes retrieves Object Storage types with automatic retry.
 func (c *Client) ListObjectStorageTypes(ctx context.Context) ([]ObjectStorageType, error) {
 	var types []ObjectStorageType
