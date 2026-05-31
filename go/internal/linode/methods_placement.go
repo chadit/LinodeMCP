@@ -138,3 +138,29 @@ func (c *Client) httpDeletePlacementGroup(ctx context.Context, groupID int) erro
 
 	return nil
 }
+
+// UnassignPlacementGroup removes Linodes from a placement group.
+func (c *Client) httpUnassignPlacementGroup(ctx context.Context, groupID int, req *PlacementGroupUnassignRequest) (*PlacementGroup, error) {
+	if req == nil || len(req.Linodes) == 0 {
+		return nil, ErrPlacementGroupUnassignLinodesRequired
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointPlacementGroups + "/" + url.PathEscape(strconv.Itoa(groupID)) + "/unassign"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UnassignPlacementGroup", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var placementGroup PlacementGroup
+	if err := c.handleResponse(resp, &placementGroup); err != nil {
+		return nil, err
+	}
+
+	return &placementGroup, nil
+}

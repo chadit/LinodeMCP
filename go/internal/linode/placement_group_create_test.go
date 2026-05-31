@@ -13,13 +13,16 @@ import (
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
-const temporaryPlacementGroupCreateError = "temporary placement group create failure"
+const (
+	placementGroupTestLabel            = "pg-test"
+	temporaryPlacementGroupCreateError = "temporary placement group create failure"
+)
 
 func TestClientCreatePlacementGroupSuccess(t *testing.T) {
 	t.Parallel()
 
 	request := &linode.CreatePlacementGroupRequest{
-		Label:                "pg-test",
+		Label:                placementGroupTestLabel,
 		Region:               managedServiceRegion,
 		PlacementGroupType:   placementGroupTypeAntiAffinityTest,
 		PlacementGroupPolicy: placementGroupPolicyStrictTest,
