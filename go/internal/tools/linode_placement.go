@@ -12,6 +12,113 @@ import (
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
+// NewLinodePlacementGroupAssignTool creates a tool for assigning Linodes to a placement group.
+func NewLinodePlacementGroupAssignTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_placement_group_assign",
+		"Assigns one or more Linodes to a placement group.",
+		[]mcp.ToolOption{
+			mcp.WithString(
+				"group_id",
+				mcp.Required(),
+				mcp.Description("The ID of the placement group to assign Linodes to."),
+			),
+			mcp.WithArray(
+				"linodes",
+				mcp.Required(),
+				mcp.Description("Array of Linode IDs to assign to the placement group."),
+			),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm assigning Linodes to the placement group. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handlePlacementGroupAssignRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handlePlacementGroupAssignRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	groupID, err := parsePlacementGroupID(request.GetString("group_id", ""))
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	linodes, validationMessage := parsePlacementGroupLinodes(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	endpoint := fmt.Sprintf("/placement/groups/%d/assign", groupID)
+	req := linode.AssignPlacementGroupLinodesRequest{Linodes: linodes}
+
+	if IsDryRun(request) {
+		return RunDryRunPreviewWithBody(ctx, request, cfg, "linode_placement_group_assign", httpMethodPost, endpoint, req,
+			func(ctx context.Context, client *linode.Client) (any, error) {
+				return client.GetPlacementGroup(ctx, groupID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This assigns Linodes to a placement group. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	group, err := client.AssignPlacementGroupLinodes(ctx, groupID, &req)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to assign Linodes to placement group %d: %v", groupID, err)), nil
+	}
+
+	response := struct {
+		Message string                 `json:"message"`
+		Group   *linode.PlacementGroup `json:"placement_group"`
+	}{
+		Message: fmt.Sprintf("Assigned %d Linode(s) to placement group %d", len(linodes), groupID),
+		Group:   group,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+func parsePlacementGroupLinodes(request *mcp.CallToolRequest) ([]int, string) {
+	raw, exists := request.GetArguments()["linodes"]
+	if !exists {
+		return nil, ErrPlacementGroupLinodesRequired.Error()
+	}
+
+	rawLinodes, ok := raw.([]any)
+	if !ok {
+		return nil, ErrPlacementGroupLinodesJSON.Error()
+	}
+
+	if len(rawLinodes) == 0 {
+		return nil, ErrPlacementGroupLinodesEmpty.Error()
+	}
+
+	linodes := make([]int, 0, len(rawLinodes))
+	seen := make(map[int]struct{}, len(rawLinodes))
+
+	for _, rawLinode := range rawLinodes {
+		linodeID, ok := numberArgToInt(rawLinode)
+		if !ok || linodeID <= 0 {
+			return nil, ErrPlacementGroupLinodesPositive.Error()
+		}
+
+		if _, exists := seen[linodeID]; exists {
+			return nil, ErrPlacementGroupLinodesDuplicate.Error()
+		}
+
+		seen[linodeID] = struct{}{}
+		linodes = append(linodes, linodeID)
+	}
+
+	return linodes, ""
+}
+
 // NewLinodePlacementGroupDeleteTool creates a tool for deleting a placement group by ID.
 func NewLinodePlacementGroupDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(

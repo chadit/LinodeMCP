@@ -26,6 +26,12 @@ const (
 	keyPlacementIsCompliant     = "is_compliant"
 	keyPlacementGroupTypeJSON   = "placement_group_type"
 	keyPlacementGroupPolicyJSON = "placement_group_policy"
+	caseMissingGroupID          = "missing group id"
+	caseSlashGroupID            = "slash group id"
+	caseQueryGroupID            = "query group id"
+	caseTraversalGroupID        = "traversal group id"
+	placementGroupSlashValue    = "528/529"
+	placementGroupQueryValue    = "528?x=1"
 )
 
 func TestLinodePlacementGroupGetTool(t *testing.T) {
@@ -51,11 +57,11 @@ func TestLinodePlacementGroupGetTool(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing group id", args: map[string]any{}, wantContains: placementGroupIDRequired},
+		{name: caseMissingGroupID, args: map[string]any{}, wantContains: placementGroupIDRequired},
 		{name: "non-numeric group id", args: map[string]any{keyPlacementGroupID: notANumber}, wantContains: placementGroupIDError},
-		{name: "slash group id", args: map[string]any{keyPlacementGroupID: "528/529"}, wantContains: placementGroupIDError},
-		{name: "query group id", args: map[string]any{keyPlacementGroupID: "528?x=1"}, wantContains: placementGroupIDError},
-		{name: "traversal group id", args: map[string]any{keyPlacementGroupID: pathTraversalValue}, wantContains: placementGroupIDError},
+		{name: caseSlashGroupID, args: map[string]any{keyPlacementGroupID: placementGroupSlashValue}, wantContains: placementGroupIDError},
+		{name: caseQueryGroupID, args: map[string]any{keyPlacementGroupID: placementGroupQueryValue}, wantContains: placementGroupIDError},
+		{name: caseTraversalGroupID, args: map[string]any{keyPlacementGroupID: pathTraversalValue}, wantContains: placementGroupIDError},
 		{name: "zero group id", args: map[string]any{keyPlacementGroupID: "0"}, wantContains: placementGroupIDError},
 	}
 	for _, tt := range validationTests {
@@ -139,11 +145,11 @@ func TestLinodePlacementGroupDeleteTool(t *testing.T) {
 		{name: caseFalseConfirmRejected, args: map[string]any{keyPlacementGroupID: "528", keyConfirm: false}, wantContains: errConfirmEqualsTrue},
 		{name: caseStringConfirmRejected, args: map[string]any{keyPlacementGroupID: "528", keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
 		{name: caseNumericConfirmRejected, args: map[string]any{keyPlacementGroupID: "528", keyConfirm: 1}, wantContains: errConfirmEqualsTrue},
-		{name: "missing group id", args: map[string]any{keyConfirm: true}, wantContains: placementGroupIDRequired},
+		{name: caseMissingGroupID, args: map[string]any{keyConfirm: true}, wantContains: placementGroupIDRequired},
 		{name: "non-numeric group id", args: map[string]any{keyPlacementGroupID: notANumber, keyConfirm: true}, wantContains: placementGroupIDError},
-		{name: "slash group id", args: map[string]any{keyPlacementGroupID: "528/529", keyConfirm: true}, wantContains: placementGroupIDError},
-		{name: "query group id", args: map[string]any{keyPlacementGroupID: "528?x=1", keyConfirm: true}, wantContains: placementGroupIDError},
-		{name: "traversal group id", args: map[string]any{keyPlacementGroupID: pathTraversalValue, keyConfirm: true}, wantContains: placementGroupIDError},
+		{name: caseSlashGroupID, args: map[string]any{keyPlacementGroupID: placementGroupSlashValue, keyConfirm: true}, wantContains: placementGroupIDError},
+		{name: caseQueryGroupID, args: map[string]any{keyPlacementGroupID: placementGroupQueryValue, keyConfirm: true}, wantContains: placementGroupIDError},
+		{name: caseTraversalGroupID, args: map[string]any{keyPlacementGroupID: pathTraversalValue, keyConfirm: true}, wantContains: placementGroupIDError},
 		{name: "zero group id", args: map[string]any{keyPlacementGroupID: "0", keyConfirm: true}, wantContains: placementGroupIDError},
 	}
 	for _, tt := range validationTests {

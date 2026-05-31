@@ -1960,6 +1960,12 @@ func (c *Client) UpdatePlacementGroup(ctx context.Context, groupID int, request 
 	return c.httpUpdatePlacementGroup(ctx, groupID, request)
 }
 
+// AssignPlacementGroupLinodes assigns Linodes to a placement group without automatic retry.
+// Replaying this state-changing operation could repeat side effects after a transient failure.
+func (c *Client) AssignPlacementGroupLinodes(ctx context.Context, groupID int, req *AssignPlacementGroupLinodesRequest) (*PlacementGroup, error) {
+	return c.httpAssignPlacementGroupLinodes(ctx, groupID, req)
+}
+
 // ListPlacementGroups retrieves placement groups with automatic retry on transient failures.
 func (c *Client) ListPlacementGroups(ctx context.Context, page, pageSize int) (*PaginatedResponse[PlacementGroup], error) {
 	var placementGroups *PaginatedResponse[PlacementGroup]

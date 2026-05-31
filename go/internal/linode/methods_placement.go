@@ -32,6 +32,28 @@ func (c *Client) httpListPlacementGroups(ctx context.Context, page, pageSize int
 	return &response, nil
 }
 
+// AssignPlacementGroupLinodes assigns Linodes to a placement group.
+func (c *Client) httpAssignPlacementGroupLinodes(ctx context.Context, groupID int, req *AssignPlacementGroupLinodesRequest) (*PlacementGroup, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointPlacementGroups + "/" + url.PathEscape(strconv.Itoa(groupID)) + "/assign"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "AssignPlacementGroupLinodes", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var group PlacementGroup
+	if err := c.handleResponse(resp, &group); err != nil {
+		return nil, err
+	}
+
+	return &group, nil
+}
+
 // GetPlacementGroup retrieves a single placement group by ID.
 func (c *Client) httpGetPlacementGroup(ctx context.Context, groupID int) (*PlacementGroup, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

@@ -67,13 +67,12 @@ type DryRunDetails struct {
 	Warnings     []string
 }
 
-// DryRunRequest captures the HTTP method and path the mutating call
-// would have made. Body is intentionally omitted in Phase 1; if a
-// future phase needs to surface the request body (with sensitive
-// fields redacted), it lands here alongside Method and Path.
+// DryRunRequest captures the HTTP method, path, and optional sanitized body
+// the mutating call would have made.
 type DryRunRequest struct {
 	Method string `json:"method"`
 	Path   string `json:"path"`
+	Body   any    `json:"body,omitempty"`
 }
 
 // IsDryRun reports whether the request's dry_run argument is the
@@ -98,12 +97,18 @@ func IsDryRun(request *mcp.CallToolRequest) bool {
 func BuildDryRunResponse(
 	toolName, environment, method, path string,
 	currentState any,
+	body ...any,
 ) (*mcp.CallToolResult, error) {
+	request := DryRunRequest{Method: method, Path: path}
+	if len(body) > 0 {
+		request.Body = body[0]
+	}
+
 	return MarshalToolResponse(DryRunResponse{
 		DryRun:       true,
 		Tool:         toolName,
 		Environment:  environment,
-		WouldExecute: DryRunRequest{Method: method, Path: path},
+		WouldExecute: request,
 		CurrentState: currentState,
 	})
 }
@@ -199,4 +204,31 @@ func RunDryRunPreviewDetailed(
 	}
 
 	return BuildDryRunResponseDetailed(toolName, env, method, path, state, &details)
+}
+
+// RunDryRunPreviewWithBody is the shared dry-run branch for write tools whose
+// safety preview needs to include the sanitized request body.
+func RunDryRunPreviewWithBody(
+	ctx context.Context,
+	request *mcp.CallToolRequest,
+	cfg *config.Config,
+	toolName, method, path string,
+	body any,
+	fetchState func(ctx context.Context, client *linode.Client) (any, error),
+) (*mcp.CallToolResult, error) {
+	var state any
+
+	if fetchState != nil {
+		client, err := prepareClient(request, cfg)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		state, err = fetchState(ctx, client)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch state for dry-run: %v", err)), nil
+		}
+	}
+
+	return BuildDryRunResponse(toolName, request.GetString(paramEnvironment, ""), method, path, state, body)
 }
