@@ -1954,6 +1954,21 @@ func (c *Client) UpdateImage(ctx context.Context, imageID string, req *UpdateIma
 	return c.httpUpdateImage(ctx, imageID, req)
 }
 
+// ListPlacementGroups retrieves placement groups with automatic retry on transient failures.
+func (c *Client) ListPlacementGroups(ctx context.Context, page, pageSize int) (*PaginatedResponse[PlacementGroup], error) {
+	var placementGroups *PaginatedResponse[PlacementGroup]
+
+	err := c.executeWithRetry(ctx, "ListPlacementGroups", func() error {
+		var err error
+
+		placementGroups, err = c.httpListPlacementGroups(ctx, page, pageSize)
+
+		return err
+	})
+
+	return placementGroups, err
+}
+
 // ListImageShareGroups retrieves owned image share groups with automatic retry on transient failures.
 func (c *Client) ListImageShareGroups(ctx context.Context, page, pageSize int) (*PaginatedResponse[ImageShareGroup], error) {
 	var shareGroups *PaginatedResponse[ImageShareGroup]
