@@ -20,9 +20,10 @@ import (
 )
 
 const (
-	bucketHostnameUSEast1    = "my-bucket.us-east-1.linodeobjects.com"
-	keyObjectStorageQuotaID  = "obj_quota_id"
-	objectStorageQuotaTestID = "obj-buckets-us-sea-1.linodeobjects.com"
+	bucketHostnameUSEast1       = "my-bucket.us-east-1.linodeobjects.com"
+	keyObjectStorageQuotaID     = "obj_quota_id"
+	objectStorageEndpointUSEast = "us-east-1.linodeobjects.com"
+	objectStorageQuotaTestID    = "obj-buckets-us-sea-1.linodeobjects.com"
 )
 
 // End-to-end verification of object storage bucket listing.
@@ -448,7 +449,7 @@ func TestLinodeObjectStorageClustersListTool(t *testing.T) {
 		t.Parallel()
 
 		clusters := []linode.ObjectStorageCluster{
-			{ID: regionUSEast1, Region: regionUSEast, Domain: "us-east-1.linodeobjects.com", Status: "available"},
+			{ID: regionUSEast1, Region: regionUSEast, Domain: objectStorageEndpointUSEast, Status: "available"},
 			{ID: "eu-central-1", Region: "eu-central", Domain: "eu-central-1.linodeobjects.com", Status: "available"},
 		}
 
@@ -486,7 +487,111 @@ func TestLinodeObjectStorageClustersListTool(t *testing.T) {
 	})
 }
 
-// End-to-end verification of object storage type listing.
+// End-to-end verification of object storage endpoint listing.
+func TestLinodeObjectStorageEndpointsListTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	tool, _, handler := tools.NewLinodeObjectStorageEndpointListTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		assert.Equal(t, "linode_object_storage_endpoint_list", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		s3Endpoint := objectStorageEndpointUSEast
+		endpoints := []linode.ObjectStorageEndpoint{
+			{Region: regionUSEast, S3Endpoint: &s3Endpoint, EndpointType: "E0"},
+		}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/object-storage/endpoints", r.URL.Path, "request path should match endpoints route")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query params")
+			assert.Equal(t, http.MethodGet, r.Method, "request method should match endpoints route")
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyData:    endpoints,
+				keyPage:    1,
+				keyPages:   1,
+				keyResults: 1,
+			}), "encoding response should not fail")
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeObjectStorageEndpointListTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "result should not be an error")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, s3Endpoint, "response should contain endpoint host")
+		assert.Contains(t, textContent.Text, `"endpoint_type": "E0"`, "response should contain endpoint type")
+		assert.Contains(t, textContent.Text, `"count": 1`, "response should contain correct count")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/object-storage/endpoints", r.URL.Path, "request path should match endpoints route")
+			assert.Equal(t, http.MethodGet, r.Method, "request method should match endpoints route")
+			http.Error(w, `{"errors":[{"reason":"service unavailable"}]}`, http.StatusServiceUnavailable)
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeObjectStorageEndpointListTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "result should be an error for API failures")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to retrieve Object Storage endpoints", "response should describe operation failure")
+	})
+
+	t.Run("incomplete config", func(t *testing.T) {
+		t.Parallel()
+
+		incompleteCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: "", Token: ""}},
+			},
+		}
+		_, _, incompleteHandler := tools.NewLinodeObjectStorageEndpointListTool(incompleteCfg)
+
+		req := createRequestWithArgs(t, map[string]any{})
+		result, err := incompleteHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "result should be an error for incomplete config")
+	})
+}
+
 func TestLinodeObjectStorageTypeListTool(t *testing.T) {
 	t.Parallel()
 
@@ -583,7 +688,7 @@ func TestLinodeObjectStorageQuotasListTool(t *testing.T) {
 		t.Parallel()
 
 		quotas := []linode.ObjectStorageQuota{
-			{keyBetaID: quotaID, quotaIDKey: quotaID, "s3_endpoint": "us-east-1.linodeobjects.com"},
+			{keyBetaID: quotaID, quotaIDKey: quotaID, "s3_endpoint": objectStorageEndpointUSEast},
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

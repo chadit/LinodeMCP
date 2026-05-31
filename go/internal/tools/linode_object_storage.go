@@ -357,6 +357,46 @@ func handleObjectStorageClustersListRequest(ctx context.Context, request *mcp.Ca
 	return MarshalToolResponse(response)
 }
 
+// NewLinodeObjectStorageEndpointListTool creates a tool for listing Object Storage endpoints.
+func NewLinodeObjectStorageEndpointListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_object_storage_endpoint_list",
+		mcp.WithDescription("Lists Object Storage endpoints across regions"),
+		mcp.WithString(
+			paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
+		),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleObjectStorageEndpointListRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleObjectStorageEndpointListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	endpoints, err := client.ListObjectStorageEndpoints(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Object Storage endpoints: %v", err)), nil
+	}
+
+	response := struct {
+		Count     int                            `json:"count"`
+		Endpoints []linode.ObjectStorageEndpoint `json:"endpoints"`
+	}{
+		Count:     len(endpoints),
+		Endpoints: endpoints,
+	}
+
+	return MarshalToolResponse(response)
+}
+
 // NewLinodeObjectStorageTypeListTool creates a tool for listing Object Storage types and pricing.
 func NewLinodeObjectStorageTypeListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(

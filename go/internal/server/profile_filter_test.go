@@ -12,16 +12,17 @@ import (
 )
 
 const (
-	toolInstancesList      = "linode_instance_list"
-	toolInstanceCreate     = "linode_instance_create"
-	toolVolumesList        = "linode_volume_list"
-	toolInstanceVolumeList = "linode_instance_volume_list"
-	toolBucketAccessAllow  = "linode_object_storage_bucket_access_allow"
-	toolAccountPaymentGet  = "linode_account_payment_get"
-	toolMonitorAlertCreate = "linode_monitor_service_alert_definition_create"
-	toolMonitorTokenCreate = "linode_monitor_service_token_create"
-	toolMonitorAlertDelete = "linode_monitor_service_alert_definition_delete"
-	toolMonitorAlertUpdate = "linode_monitor_service_alert_definition_update"
+	toolObjectEndpointsList = "linode_object_storage_endpoint_list"
+	toolInstancesList       = "linode_instance_list"
+	toolInstanceCreate      = "linode_instance_create"
+	toolVolumesList         = "linode_volume_list"
+	toolInstanceVolumeList  = "linode_instance_volume_list"
+	toolBucketAccessAllow   = "linode_object_storage_bucket_access_allow"
+	toolAccountPaymentGet   = "linode_account_payment_get"
+	toolMonitorAlertCreate  = "linode_monitor_service_alert_definition_create"
+	toolMonitorTokenCreate  = "linode_monitor_service_token_create"
+	toolMonitorAlertDelete  = "linode_monitor_service_alert_definition_delete"
+	toolMonitorAlertUpdate  = "linode_monitor_service_alert_definition_update"
 )
 
 // toolNames extracts the registered tool name for each entry on the server.
@@ -58,6 +59,8 @@ func TestNewDefaultProfileFiltersToReadAndMeta(t *testing.T) {
 		"default profile must expose read tools like %s", toolInstancesList)
 	assert.Contains(t, names, toolAccountPaymentGet,
 		"default profile must expose read tools like %s", toolAccountPaymentGet)
+	assert.Contains(t, names, toolObjectEndpointsList,
+		"default profile must expose read tools like %s", toolObjectEndpointsList)
 	assert.Contains(t, names, toolInstanceVolumeList,
 		"default profile must expose read tools like %s", toolInstanceVolumeList)
 	assert.NotContains(t, names, toolInstanceCreate,
