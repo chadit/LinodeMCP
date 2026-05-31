@@ -22,6 +22,9 @@ var ErrRateLimitWaitCanceled = errors.New("rate limit wait canceled")
 // ErrUpdateImageRequestRequired is returned when UpdateImage is called without a request body.
 var ErrUpdateImageRequestRequired = errors.New("update image request is required")
 
+// ErrPlacementGroupUnassignLinodesRequired is returned when a placement group unassign request has no Linode IDs.
+var ErrPlacementGroupUnassignLinodesRequired = errors.New("linodes must include at least one ID")
+
 // ErrLinodeIDPositive is returned when a Linode ID argument is not positive.
 var ErrLinodeIDPositive = errors.New("linode_id must be a positive integer")
 

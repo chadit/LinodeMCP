@@ -30,6 +30,7 @@ const (
 	errPlacementGroupPolicyNonEmpty = "placement_group_policy must be a non-empty string"
 	errPlacementGroupTypeInvalid    = "placement_group_type must be anti_affinity:local"
 	errPlacementGroupPolicyInvalid  = "placement_group_policy must be strict or flexible"
+	placementGroupLinodesParam      = "linodes"
 )
 
 // NewLinodePlacementGroupListTool creates a tool for listing placement groups.
@@ -271,4 +272,73 @@ func requiredTrimmedString(request *mcp.CallToolRequest, name, missingMessage, i
 	}
 
 	return value, ""
+}
+
+// NewLinodePlacementGroupUnassignTool creates a tool for unassigning Linodes from a placement group.
+func NewLinodePlacementGroupUnassignTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_placement_group_unassign",
+		"Unassigns Linodes from a placement group.",
+		[]mcp.ToolOption{
+			mcp.WithString("group_id", mcp.Required(), mcp.Description("The ID of the placement group.")),
+			mcp.WithArray(placementGroupLinodesParam, mcp.Required(), mcp.Description("Linode IDs to unassign from the placement group.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description("Preview placement group unassignment without changing it.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm placement group unassignment. Ignored when dry_run=true.")),
+		},
+		handleLinodePlacementGroupUnassignRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleLinodePlacementGroupUnassignRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	groupID, err := parsePlacementGroupID(request.GetString("group_id", ""))
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	linodes, validationMessage := parsePlacementGroupLinodes(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	path := fmt.Sprintf("/placement/groups/%d/unassign", groupID)
+
+	req := linode.PlacementGroupUnassignRequest{Linodes: linodes}
+	if IsDryRun(request) {
+		return RunDryRunPreviewWithBody(ctx, request, cfg, "linode_placement_group_unassign", httpMethodPost, path, req,
+			func(ctx context.Context, client *linode.Client) (any, error) {
+				return client.GetPlacementGroup(ctx, groupID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This unassigns Linodes from a placement group. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	placementGroup, err := client.UnassignPlacementGroup(ctx, groupID, &req)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to unassign placement group %d: %v", groupID, err)), nil
+	}
+
+	response := struct {
+		Message        string                 `json:"message"`
+		PlacementGroup *linode.PlacementGroup `json:"placement_group"`
+	}{
+		Message:        fmt.Sprintf("Linodes unassigned from placement group %d successfully", groupID),
+		PlacementGroup: placementGroup,
+	}
+
+	result, err := MarshalToolResponse(response)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to format placement group response: %v", err)), nil
+	}
+
+	return result, nil
 }

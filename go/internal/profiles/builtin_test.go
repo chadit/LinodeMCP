@@ -46,6 +46,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_type_list", Capability: profiles.CapRead},
 		{Name: "linode_image_list", Capability: profiles.CapRead},
 		{Name: "linode_placement_group_create", Capability: profiles.CapWrite},
+		{Name: "linode_placement_group_unassign", Capability: profiles.CapWrite},
 		{Name: "linode_image_update", Capability: profiles.CapWrite},
 		{Name: "linode_image_sharegroups_list", Capability: profiles.CapRead},
 		{Name: "linode_image_sharegroup_get", Capability: profiles.CapRead},
@@ -658,4 +659,5 @@ func TestCategoriesIncludesPlacementGroupsInCompute(t *testing.T) {
 	assert.Contains(t, profiles.Categories("linode_placement_group_delete"), "compute")
 	assert.Contains(t, profiles.Categories("linode_placement_groups_list"), "compute")
 	assert.Contains(t, profiles.Categories("linode_placement_group_update"), "compute")
+	assert.Contains(t, profiles.Categories("linode_placement_group_unassign"), "compute")
 }

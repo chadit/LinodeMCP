@@ -1987,6 +1987,12 @@ func (c *Client) CreatePlacementGroup(ctx context.Context, req *CreatePlacementG
 	return c.httpCreatePlacementGroup(ctx, req)
 }
 
+// UnassignPlacementGroup removes Linodes from a placement group without automatic retry.
+// Replaying this unassign operation could repeat side effects after a transient failure.
+func (c *Client) UnassignPlacementGroup(ctx context.Context, groupID int, req *PlacementGroupUnassignRequest) (*PlacementGroup, error) {
+	return c.httpUnassignPlacementGroup(ctx, groupID, req)
+}
+
 // ListImageShareGroups retrieves owned image share groups with automatic retry on transient failures.
 func (c *Client) ListImageShareGroups(ctx context.Context, page, pageSize int) (*PaginatedResponse[ImageShareGroup], error) {
 	var shareGroups *PaginatedResponse[ImageShareGroup]

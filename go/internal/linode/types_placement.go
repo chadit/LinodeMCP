@@ -46,3 +46,8 @@ type UpdatePlacementGroupRequest struct {
 type AssignPlacementGroupLinodesRequest struct {
 	Linodes []int `json:"linodes"`
 }
+
+// PlacementGroupUnassignRequest represents the request body for unassigning Linodes from a placement group.
+type PlacementGroupUnassignRequest struct {
+	Linodes []int `json:"linodes,omitempty"`
+}
