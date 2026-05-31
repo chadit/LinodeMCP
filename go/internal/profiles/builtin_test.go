@@ -38,6 +38,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_placement_group_get", Capability: profiles.CapRead},
 		{Name: "linode_region_list", Capability: profiles.CapRead},
 		{Name: "linode_placement_groups_list", Capability: profiles.CapRead},
+		{Name: "linode_placement_group_update", Capability: profiles.CapWrite},
 		{Name: "linode_kernel_list", Capability: profiles.CapRead},
 		{Name: "linode_kernel_get", Capability: profiles.CapRead},
 		{Name: "linode_type_list", Capability: profiles.CapRead},
@@ -645,4 +646,11 @@ func TestCategoriesDatabasesTools(t *testing.T) {
 	assert.Contains(t, profiles.Categories("linode_database_postgresql_instance_suspend"), "databases")
 	assert.Contains(t, profiles.Categories("linode_database_instance_resume"), "databases")
 	assert.Contains(t, profiles.Categories("linode_database_postgresql_instance_resume"), "databases")
+}
+
+func TestCategoriesIncludesPlacementGroupsInCompute(t *testing.T) {
+	t.Parallel()
+
+	assert.Contains(t, profiles.Categories("linode_placement_groups_list"), "compute")
+	assert.Contains(t, profiles.Categories("linode_placement_group_update"), "compute")
 }
