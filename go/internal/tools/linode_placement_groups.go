@@ -16,6 +16,7 @@ const (
 	placementGroupsPageSizeMin = 25
 	placementGroupsPageSizeMax = 500
 
+	placementGroupIDParam           = "group_id"
 	placementGroupLabelParam        = "label"
 	placementGroupRegionParam       = "region"
 	placementGroupTypeParam         = "placement_group_type"
@@ -54,9 +55,9 @@ func handlePlacementGroupsListRequest(ctx context.Context, request *mcp.CallTool
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+	client, prepareFailure := prepareClient(request, cfg)
+	if prepareFailure != nil {
+		return mcp.NewToolResultError(prepareFailure.Error()), nil
 	}
 
 	placementGroups, err := client.ListPlacementGroups(ctx, page, pageSize)
@@ -65,6 +66,80 @@ func handlePlacementGroupsListRequest(ctx context.Context, request *mcp.CallTool
 	}
 
 	return FormatListResponse(placementGroups.Data, nil, "placement_groups")
+}
+
+// NewLinodePlacementGroupUpdateTool creates a tool for updating a placement group label.
+func NewLinodePlacementGroupUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_placement_group_update",
+		mcp.WithDescription("Updates one placement group label by ID."),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber(placementGroupIDParam, mcp.Required(), mcp.Description("Placement group ID to update.")),
+		mcp.WithString(placementGroupLabelParam, mcp.Required(), mcp.Description("New placement group label.")),
+		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm placement group update.")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handlePlacementGroupUpdateRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handlePlacementGroupUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	groupID, validationMessage := placementGroupIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	updateRequest, validationMessage := placementGroupUpdateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_placement_group_update", "PUT",
+			fmt.Sprintf("/placement/groups/%d", groupID), nil)
+	}
+
+	if result := RequireConfirm(request, "This updates a placement group. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, prepareFailure := prepareClient(request, cfg)
+	if prepareFailure != nil {
+		return mcp.NewToolResultError(prepareFailure.Error()), nil
+	}
+
+	placementGroup, updateFailure := client.UpdatePlacementGroup(ctx, groupID, updateRequest)
+	if updateFailure == nil {
+		return MarshalToolResponse(placementGroup)
+	}
+
+	return mcp.NewToolResultError("Failed to update linode_placement_group_update: " + updateFailure.Error()), nil
+}
+
+func placementGroupIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	groupID, validationMessage := optionalPaginationInt(request.GetArguments(), placementGroupIDParam, 1, 0)
+	if validationMessage != "" {
+		return 0, validationMessage
+	}
+
+	if groupID == 0 {
+		return 0, placementGroupIDParam + " is required"
+	}
+
+	return groupID, ""
+}
+
+func placementGroupUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdatePlacementGroupRequest, string) {
+	label, validationMessage := nonEmptyToolString(request.GetArguments()[placementGroupLabelParam], placementGroupLabelParam)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	return &linode.UpdatePlacementGroupRequest{Label: label}, ""
 }
 
 func placementGroupsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {

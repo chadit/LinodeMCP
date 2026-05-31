@@ -36,3 +36,8 @@ type CreatePlacementGroupRequest struct {
 	PlacementGroupType   string `json:"placement_group_type"`
 	PlacementGroupPolicy string `json:"placement_group_policy"`
 }
+
+// UpdatePlacementGroupRequest contains editable fields for PUT /placement/groups/{group_id}.
+type UpdatePlacementGroupRequest struct {
+	Label string `json:"label,omitempty"`
+}

@@ -1954,6 +1954,12 @@ func (c *Client) UpdateImage(ctx context.Context, imageID string, req *UpdateIma
 	return c.httpUpdateImage(ctx, imageID, req)
 }
 
+// UpdatePlacementGroup updates a placement group without retrying the mutating request.
+// Replaying this operation could repeat side effects after a transient failure.
+func (c *Client) UpdatePlacementGroup(ctx context.Context, groupID int, request *UpdatePlacementGroupRequest) (*PlacementGroup, error) {
+	return c.httpUpdatePlacementGroup(ctx, groupID, request)
+}
+
 // ListPlacementGroups retrieves placement groups with automatic retry on transient failures.
 func (c *Client) ListPlacementGroups(ctx context.Context, page, pageSize int) (*PaginatedResponse[PlacementGroup], error) {
 	var placementGroups *PaginatedResponse[PlacementGroup]

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 )
 
 const endpointPlacementGroups = "/placement/groups"
@@ -70,4 +72,26 @@ func (c *Client) httpCreatePlacementGroup(ctx context.Context, req *CreatePlacem
 	}
 
 	return &placementGroup, nil
+}
+
+// httpUpdatePlacementGroup updates a placement group label by ID.
+func (c *Client) httpUpdatePlacementGroup(ctx context.Context, groupID int, request *UpdatePlacementGroupRequest) (*PlacementGroup, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointPlacementGroups + "/" + url.PathEscape(strconv.Itoa(groupID))
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, request)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdatePlacementGroup", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var group PlacementGroup
+	if err := c.handleResponse(resp, &group); err != nil {
+		return nil, err
+	}
+
+	return &group, nil
 }

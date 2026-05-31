@@ -85,6 +85,8 @@ func Categories(toolName string) []string {
 		"linode_region_",
 		"linode_kernel_",
 		"linode_type_",
+		"linode_placement_group_",
+		"linode_placement_groups_",
 		"linode_image_",
 		"linode_stackscript_",
 	) {

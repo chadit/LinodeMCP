@@ -16,6 +16,7 @@ import (
 const (
 	placementGroupTypeAntiAffinityTest = "anti_affinity:local"
 	placementGroupPolicyStrictTest     = "strict"
+	placementGroupUpdatedLabel         = "pg-renamed"
 )
 
 func TestClientListPlacementGroupsSuccess(t *testing.T) {
@@ -111,4 +112,78 @@ func TestClientListPlacementGroupsRetriesReadOnlyRoute(t *testing.T) {
 	require.NotNil(t, result)
 	require.Len(t, result.Data, 1)
 	assert.Equal(t, int32(2), calls.Load(), "read-only placement group list should retry once")
+}
+
+func TestClientUpdatePlacementGroupSuccess(t *testing.T) {
+	t.Parallel()
+
+	request := &linode.UpdatePlacementGroupRequest{Label: placementGroupUpdatedLabel}
+	updated := linode.PlacementGroup{ID: 123, Label: placementGroupUpdatedLabel, Region: regionUSEast, PlacementGroupType: "anti_affinity:local", PlacementGroupPolicy: "strict", IsCompliant: true}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, "/placement/groups/123", r.URL.Path, "request path should include placement group ID")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		var body map[string]any
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		assert.Equal(t, placementGroupUpdatedLabel, body["label"])
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(updated))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	got, err := client.UpdatePlacementGroup(t.Context(), 123, request)
+
+	require.NoError(t, err, "UpdatePlacementGroup should succeed on 200 response")
+	require.NotNil(t, got, "result should not be nil")
+	assert.Equal(t, updated.ID, got.ID)
+	assert.Equal(t, updated.Label, got.Label)
+}
+
+func TestClientUpdatePlacementGroupAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, "/placement/groups/123", r.URL.Path, "request path should include placement group ID")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	got, err := client.UpdatePlacementGroup(t.Context(), 123, &linode.UpdatePlacementGroupRequest{Label: placementGroupUpdatedLabel})
+
+	require.Error(t, err, "UpdatePlacementGroup should propagate API errors")
+	assert.Nil(t, got)
+	assert.ErrorContains(t, err, errForbidden)
+}
+
+func TestClientUpdatePlacementGroupDoesNotRetryTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, "/placement/groups/123", r.URL.Path, "request path should include placement group ID")
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	_, err := client.UpdatePlacementGroup(t.Context(), 123, &linode.UpdatePlacementGroupRequest{Label: placementGroupUpdatedLabel})
+
+	require.Error(t, err, "UpdatePlacementGroup should return the transient error")
+	assert.Equal(t, int32(1), requestCount.Load(), "mutating placement group update must not be retried")
 }
