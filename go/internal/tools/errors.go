@@ -116,8 +116,13 @@ var (
 
 // Sentinel errors for placement group validation.
 var (
-	ErrPlacementGroupIDRequired = errors.New("group_id is required")
-	ErrPlacementGroupIDPositive = errors.New("group_id must be a positive integer")
+	ErrPlacementGroupIDRequired       = errors.New("group_id is required")
+	ErrPlacementGroupIDPositive       = errors.New("group_id must be a positive integer")
+	ErrPlacementGroupLinodesRequired  = errors.New("linodes is required")
+	ErrPlacementGroupLinodesJSON      = errors.New("linodes must be a JSON array of positive integer Linode IDs")
+	ErrPlacementGroupLinodesEmpty     = errors.New("linodes must include at least one Linode ID")
+	ErrPlacementGroupLinodesPositive  = errors.New("linodes must contain only positive integer Linode IDs")
+	ErrPlacementGroupLinodesDuplicate = errors.New("linodes entries must be unique")
 )
 
 // Sentinel errors for Phase 8.3 profile-builder draft tools. Callers

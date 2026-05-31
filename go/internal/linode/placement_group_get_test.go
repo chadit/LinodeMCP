@@ -19,6 +19,7 @@ const (
 	keyPlacementGroupPolicy = "placement_group_policy"
 	keyIsCompliant          = "is_compliant"
 	keyLinodeID             = "linode_id"
+	keyMembers              = "members"
 	keyRegion               = "region"
 	placementGroupTypeLocal = "anti_affinity:local"
 	placementGroupPolicy    = "strict"
@@ -45,7 +46,7 @@ func TestClientGetPlacementGroupRoute(t *testing.T) {
 			keyPlacementGroupType:   placementGroupTypeLocal,
 			keyPlacementGroupPolicy: placementGroupPolicy,
 			keyIsCompliant:          true,
-			"members": []map[string]any{{
+			keyMembers: []map[string]any{{
 				keyLinodeID:    123,
 				keyIsCompliant: true,
 			}},
@@ -96,7 +97,7 @@ func TestClientGetPlacementGroupRetriesTransientGET(t *testing.T) {
 		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			keyID: 528, keyLabel: "retry-placement", keyRegion: regionUSMIA,
 			keyPlacementGroupType: placementGroupTypeLocal, keyPlacementGroupPolicy: placementGroupPolicy,
-			keyIsCompliant: true, "members": []map[string]any{},
+			keyIsCompliant: true, keyMembers: []map[string]any{},
 		}), "encoding response should not fail")
 	}))
 	t.Cleanup(srv.Close)

@@ -35,6 +35,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		// Compute reads
 		{Name: toolInstancesList, Capability: profiles.CapRead},
 		{Name: "linode_instance_get", Capability: profiles.CapRead},
+		{Name: "linode_placement_group_assign", Capability: profiles.CapWrite},
 		{Name: "linode_placement_group_get", Capability: profiles.CapRead},
 		{Name: "linode_placement_group_delete", Capability: profiles.CapDestroy},
 		{Name: "linode_region_list", Capability: profiles.CapRead},
@@ -652,6 +653,9 @@ func TestCategoriesDatabasesTools(t *testing.T) {
 func TestCategoriesIncludesPlacementGroupsInCompute(t *testing.T) {
 	t.Parallel()
 
+	assert.Contains(t, profiles.Categories("linode_placement_group_assign"), "compute")
+	assert.Contains(t, profiles.Categories("linode_placement_group_get"), "compute")
+	assert.Contains(t, profiles.Categories("linode_placement_group_delete"), "compute")
 	assert.Contains(t, profiles.Categories("linode_placement_groups_list"), "compute")
 	assert.Contains(t, profiles.Categories("linode_placement_group_update"), "compute")
 }

@@ -41,3 +41,8 @@ type CreatePlacementGroupRequest struct {
 type UpdatePlacementGroupRequest struct {
 	Label string `json:"label,omitempty"`
 }
+
+// AssignPlacementGroupLinodesRequest represents the request body for assigning Linodes to a placement group.
+type AssignPlacementGroupLinodesRequest struct {
+	Linodes []int `json:"linodes"`
+}
