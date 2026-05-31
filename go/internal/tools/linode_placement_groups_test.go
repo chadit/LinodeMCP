@@ -190,7 +190,7 @@ func TestLinodePlacementGroupUpdateTool(t *testing.T) {
 			args        map[string]any
 			wantMessage string
 		}{
-			{name: "missing group_id", args: map[string]any{keyLabel: placementGroupUpdatedLabel, keyConfirm: true}, wantMessage: "group_id is required"},
+			{name: "missing group_id", args: map[string]any{keyLabel: placementGroupUpdatedLabel, keyConfirm: true}, wantMessage: placementGroupIDRequired},
 			{name: "zero group_id", args: map[string]any{placementGroupIDKey: 0, keyLabel: placementGroupUpdatedLabel, keyConfirm: true}, wantMessage: "group_id must be an integer greater than or equal to 1"},
 			{name: "string group_id", args: map[string]any{placementGroupIDKey: "123", keyLabel: placementGroupUpdatedLabel, keyConfirm: true}, wantMessage: placementGroupIDIntegerMessage},
 			{name: "fractional group_id", args: map[string]any{placementGroupIDKey: 123.5, keyLabel: placementGroupUpdatedLabel, keyConfirm: true}, wantMessage: placementGroupIDIntegerMessage},

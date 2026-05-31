@@ -4161,6 +4161,12 @@ func (c *Client) GetPlacementGroup(ctx context.Context, groupID int) (*Placement
 	return group, err
 }
 
+// DeletePlacementGroup deletes a placement group by ID without automatic retry.
+// Replaying this destructive operation could repeat side effects after a transient failure.
+func (c *Client) DeletePlacementGroup(ctx context.Context, groupID int) error {
+	return c.httpDeletePlacementGroup(ctx, groupID)
+}
+
 // CreateVPC creates a new VPC with automatic retry on transient failures.
 func (c *Client) CreateVPC(ctx context.Context, req CreateVPCRequest) (*VPC, error) {
 	var vpc *VPC
