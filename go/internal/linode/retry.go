@@ -3535,6 +3535,11 @@ func (c *Client) GetObjectStorageTransfer(ctx context.Context) (*ObjectStorageTr
 	return transfer, err
 }
 
+// CancelObjectStorage cancels Object Storage service without retrying the state-changing request.
+func (c *Client) CancelObjectStorage(ctx context.Context) error {
+	return c.httpCancelObjectStorage(ctx)
+}
+
 // GetObjectStorageBucketAccess retrieves bucket ACL/CORS settings with automatic retry.
 func (c *Client) GetObjectStorageBucketAccess(ctx context.Context, region, label string) (*ObjectStorageBucketAccess, error) {
 	var access *ObjectStorageBucketAccess

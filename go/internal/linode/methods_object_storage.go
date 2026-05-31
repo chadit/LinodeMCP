@@ -14,6 +14,7 @@ const (
 	endpointObjKeys     = "/object-storage/keys"
 	endpointObjQuotas   = "/object-storage/quotas"
 	endpointObjTransfer = "/object-storage/transfer"
+	endpointObjCancel   = "/object-storage/cancel"
 )
 
 // ListObjectStorageBuckets retrieves all Object Storage buckets.
@@ -244,6 +245,21 @@ func (c *Client) httpGetObjectStorageTransfer(ctx context.Context) (*ObjectStora
 	}
 
 	return &transfer, nil
+}
+
+// CancelObjectStorage cancels Object Storage service for the account.
+func (c *Client) httpCancelObjectStorage(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointObjCancel, nil)
+	if err != nil {
+		return &NetworkError{Operation: "CancelObjectStorage", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return c.handleResponse(resp, nil)
 }
 
 // GetObjectStorageBucketAccess retrieves ACL and CORS settings for a bucket.

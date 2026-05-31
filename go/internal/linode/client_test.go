@@ -812,6 +812,63 @@ func TestClientListObjectStorageBucketsByRegionEscapesPathParam(t *testing.T) {
 	require.NoError(t, err, "escaped path param should round-trip through the client")
 }
 
+func TestClientCancelObjectStorageSuccess(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/object-storage/cancel", r.URL.Path)
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Empty(t, r.URL.RawQuery)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := linode.NewClient(server.URL, "my-token", nil, linode.WithMaxRetries(0))
+	err := client.CancelObjectStorage(t.Context())
+	require.NoError(t, err, "CancelObjectStorage should succeed on 200 response")
+}
+
+func TestClientCancelObjectStorageAPIError(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/object-storage/cancel", r.URL.Path)
+		assert.Equal(t, http.MethodPost, r.Method)
+		w.WriteHeader(http.StatusBadRequest)
+		_, err := w.Write([]byte(`{"errors":[{"reason":"object storage cannot be canceled"}]}`))
+		assert.NoError(t, err)
+	}))
+	defer server.Close()
+
+	client := linode.NewClient(server.URL, "my-token", nil, linode.WithMaxRetries(0))
+	err := client.CancelObjectStorage(t.Context())
+
+	require.Error(t, err, "CancelObjectStorage should fail on API error")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
+	assert.Equal(t, http.StatusBadRequest, apiErr.StatusCode)
+}
+
+func TestClientCancelObjectStorageDoesNotRetry(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		assert.Equal(t, "/object-storage/cancel", r.URL.Path)
+		assert.Equal(t, http.MethodPost, r.Method)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	client := linode.NewClient(server.URL, "my-token", nil, linode.WithMaxRetries(3))
+	err := client.CancelObjectStorage(t.Context())
+	require.Error(t, err, "CancelObjectStorage should fail on 500 response")
+	assert.Equal(t, int32(1), calls.Load(), "CancelObjectStorage must not retry and replay a state-changing request")
+}
+
 func TestClientAllowObjectStorageBucketAccessSuccess(t *testing.T) {
 	t.Parallel()
 
