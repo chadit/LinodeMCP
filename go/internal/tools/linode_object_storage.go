@@ -604,6 +604,52 @@ func handleObjectStorageTransferRequest(ctx context.Context, request *mcp.CallTo
 	return MarshalToolResponse(transfer)
 }
 
+// NewLinodeObjectStorageQuotaGetTool creates a tool for getting a single Object Storage quota.
+func NewLinodeObjectStorageQuotaGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_object_storage_quota_get",
+		mcp.WithDescription("Gets details about a single Object Storage quota by ID"),
+		mcp.WithString(
+			paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
+		),
+		mcp.WithString(
+			"obj_quota_id",
+			mcp.Required(),
+			mcp.Description("The Object Storage quota ID to retrieve"),
+		),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleObjectStorageQuotaGetRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleObjectStorageQuotaGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	objQuotaID := request.GetString("obj_quota_id", "")
+	if objQuotaID == "" {
+		return mcp.NewToolResultError("obj_quota_id is required"), nil
+	}
+
+	if objQuotaID != strings.TrimSpace(objQuotaID) || strings.ContainsAny(objQuotaID, "/?#") || strings.Contains(objQuotaID, "..") {
+		return mcp.NewToolResultError("obj_quota_id must not contain path separators, query separators, fragments, or traversal segments"), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	quota, err := client.GetObjectStorageQuota(ctx, objQuotaID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Object Storage quota %s: %v", objQuotaID, err)), nil
+	}
+
+	return MarshalToolResponse(quota)
+}
+
 // NewLinodeObjectStorageBucketAccessGetTool creates a tool for getting bucket ACL/CORS settings.
 func NewLinodeObjectStorageBucketAccessGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
