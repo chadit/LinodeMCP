@@ -50,6 +50,21 @@ func (c *Client) GetProfile(ctx context.Context) (*Profile, error) {
 	return profile, err
 }
 
+// GetProfileApp retrieves one authorized OAuth app with automatic retry on transient failures.
+func (c *Client) GetProfileApp(ctx context.Context, appID int) (*ProfileApp, error) {
+	var app *ProfileApp
+
+	err := c.executeWithRetry(ctx, "GetProfileApp", func() error {
+		var err error
+
+		app, err = c.httpGetProfileApp(ctx, appID)
+
+		return err
+	})
+
+	return app, err
+}
+
 // GetProfileGrants retrieves the /profile/grants response with retry. Used
 // by Phase 6's profile loader to enumerate OAuth scopes; PATs return an
 // empty Grants struct here and the loader should inspect Profile.Scopes

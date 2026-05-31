@@ -30,6 +30,9 @@ const (
 	accountBetasPageSizeMax            = 500
 	accountOAuthClientsPageSizeMin     = 25
 	accountOAuthClientsPageSizeMax     = 500
+	profileAppIDParam                  = "app_id"
+	profileAppIDMaxFromJSON            = 9007199254740991
+	errProfileAppIDPositive            = "app_id must be a positive integer"
 	longviewClientsPageSizeMin         = 25
 	longviewClientsPageSizeMax         = 500
 	longviewSubscriptionsPageSizeMin   = 25
@@ -723,6 +726,22 @@ func NewLinodeAccountInvoiceItemsTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
 		},
 		handleLinodeAccountInvoiceItemsRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeProfileAppGetTool creates a tool for retrieving one profile authorized OAuth app.
+func NewLinodeProfileAppGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_profile_app_get",
+		"Gets one OAuth app authorization from the profile.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(profileAppIDParam, mcp.Required(),
+				mcp.Description("Profile authorized app ID.")),
+		},
+		handleLinodeProfileAppGetRequest,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -1539,6 +1558,49 @@ func accountBetasPaginationFromTool(request *mcp.CallToolRequest) (int, int, str
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeProfileAppGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	appID, validationMessage := profileAppIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	app, getFailure := client.GetProfileApp(ctx, appID)
+	if getFailure == nil {
+		return MarshalToolResponse(app)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_profile_app_get: " + getFailure.Error()), nil
+}
+
+func profileAppIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	raw, exists := request.GetArguments()[profileAppIDParam]
+	if !exists {
+		return 0, "app_id is required"
+	}
+
+	switch value := raw.(type) {
+	case int:
+		if value <= 0 {
+			return 0, errProfileAppIDPositive
+		}
+
+		return value, ""
+	case float64:
+		if value <= 0 || value > profileAppIDMaxFromJSON || value != float64(int64(value)) {
+			return 0, errProfileAppIDPositive
+		}
+
+		return int(value), ""
+	default:
+		return 0, errProfileAppIDPositive
+	}
 }
 
 func handleLinodeAccountOAuthClientsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
