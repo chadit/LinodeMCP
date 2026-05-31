@@ -26,6 +26,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_account_user_update", Capability: profiles.CapAdmin},
 		{Name: "linode_account_user_delete", Capability: profiles.CapDestroy},
 		{Name: "linode_account_oauth_clients", Capability: profiles.CapRead},
+		{Name: "linode_profile_apps", Capability: profiles.CapRead},
 		{Name: "linode_longview_plan", Capability: profiles.CapRead},
 		{Name: "linode_longview_subscriptions", Capability: profiles.CapRead},
 		{Name: "linode_longview_clients", Capability: profiles.CapRead},
@@ -568,10 +569,11 @@ func TestCategoriesIncludesAccountOAuthClientsInCore(t *testing.T) {
 	assert.Contains(t, profiles.Categories("linode_account_oauth_clients"), "core")
 }
 
-func TestCategoriesIncludesProfileAppGetInCore(t *testing.T) {
+func TestCategoriesIncludesProfileAppsInCore(t *testing.T) {
 	t.Parallel()
 
 	assert.Contains(t, profiles.Categories("linode_profile_app_get"), "core")
+	assert.Contains(t, profiles.Categories("linode_profile_apps"), "core")
 }
 
 func TestCategoriesIncludesMaintenancePoliciesInCore(t *testing.T) {

@@ -50,6 +50,7 @@ const (
 	oauthClientThumbnailURL      = "https://example.com/icon.png"
 	oauthClientLabel             = "my app"
 	oauthClientRedirectURI       = "https://example.com/callback"
+	profileAppScopesReadOnly     = "linodes:read_only"
 )
 
 // TestClientGetProfileSuccess verifies that GetProfile returns a fully
@@ -227,7 +228,7 @@ func TestClientGetProfileUnauthorized(t *testing.T) {
 func TestClientGetProfileAppSuccess(t *testing.T) {
 	t.Parallel()
 
-	want := linode.ProfileApp{ID: 12345, Label: "Example OAuth App", Scopes: "linodes:read_only", Website: "https://example.com"}
+	want := linode.ProfileApp{ID: 12345, Label: "Example OAuth App", Scopes: profileAppScopesReadOnly, Website: "https://example.com"}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
@@ -1559,6 +1560,98 @@ func TestClientListAccountAvailabilityAPIError(t *testing.T) {
 	require.NotNil(t, apiErr, "APIError should be present")
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
 	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+// TestClientListProfileAppsSuccess verifies ListProfileApps sends a GET
+// request to /profile/apps with pagination query parameters.
+func TestClientListProfileAppsSuccess(t *testing.T) {
+	t.Parallel()
+
+	thumbnailURL := "https://example.com/icon.png"
+	expiry := "2018-01-15T00:01:01"
+	apps := linode.PaginatedResponse[linode.AuthorizedApp]{
+		Data: []linode.AuthorizedApp{{ID: 123, Label: "example-app", Scopes: profileAppScopesReadOnly, Website: "example.org", Created: "2018-01-01T00:01:01", Expiry: &expiry, ThumbnailURL: &thumbnailURL}},
+		Page: 2, Pages: 3, Results: 75,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/profile/apps", r.URL.Path, "request path should be /profile/apps")
+		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(apps), "encoding profile apps response should not fail")
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.ListProfileApps(t.Context(), 2, 25)
+
+	require.NoError(t, err, "ListProfileApps should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, 2, result.Page)
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, "example-app", result.Data[0].Label)
+	assert.Equal(t, profileAppScopesReadOnly, result.Data[0].Scopes)
+	assert.Equal(t, "example.org", result.Data[0].Website)
+	require.NotNil(t, result.Data[0].ThumbnailURL)
+	assert.Equal(t, thumbnailURL, *result.Data[0].ThumbnailURL)
+}
+
+// TestClientListProfileAppsAPIError verifies ListProfileApps propagates API errors.
+func TestClientListProfileAppsAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/profile/apps", r.URL.Path, "request path should be /profile/apps")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.ListProfileApps(t.Context(), 0, 0)
+
+	require.Error(t, err, "ListProfileApps should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+// TestClientListProfileAppsRetriesTransientError verifies the read-only list retries transient failures.
+func TestClientListProfileAppsRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/profile/apps", r.URL.Path, "request path should be /profile/apps")
+
+		if attempts.Add(1) == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "temporary upstream failure"}}}))
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AuthorizedApp]{Data: []linode.AuthorizedApp{{ID: 123, Label: "example-app", Scopes: profileAppScopesReadOnly}}, Page: 1, Pages: 1, Results: 1}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	result, err := client.ListProfileApps(t.Context(), 0, 0)
+
+	require.NoError(t, err, "ListProfileApps should succeed after retry")
+	require.NotNil(t, result, "result should not be nil")
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, int32(2), attempts.Load(), "read-only list should retry one transient failure")
 }
 
 // TestClientListAccountOAuthClientsSuccess verifies ListAccountOAuthClients sends a GET
