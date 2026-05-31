@@ -19,7 +19,11 @@ import (
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
-const bucketHostnameUSEast1 = "my-bucket.us-east-1.linodeobjects.com"
+const (
+	bucketHostnameUSEast1    = "my-bucket.us-east-1.linodeobjects.com"
+	keyObjectStorageQuotaID  = "obj_quota_id"
+	objectStorageQuotaTestID = "obj-buckets-us-sea-1.linodeobjects.com"
+)
 
 // End-to-end verification of object storage bucket listing.
 func TestLinodeObjectStorageBucketsListTool(t *testing.T) {
@@ -974,6 +978,110 @@ func TestLinodeObjectStorageTransferTool(t *testing.T) {
 		_, _, incompleteHandler := tools.NewLinodeObjectStorageTransferTool(incompleteCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
+		result, err := incompleteHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "result should be an error for incomplete config")
+	})
+}
+
+// End-to-end verification of object storage quota retrieval.
+func TestLinodeObjectStorageQuotaGetTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	tool, _, handler := tools.NewLinodeObjectStorageQuotaGetTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		assert.Equal(t, "linode_object_storage_quota_get", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		quota := linode.ObjectStorageQuota{keyBetaID: objectStorageQuotaTestID, "quota": 250}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/object-storage/quotas/"+objectStorageQuotaTestID, r.URL.Path, "request path should match quota endpoint")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(quota), "encoding response should not fail")
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeObjectStorageQuotaGetTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyObjectStorageQuotaID: objectStorageQuotaTestID})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "result should not be an error")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, objectStorageQuotaTestID, "response should contain quota ID")
+		assert.Contains(t, textContent.Text, "250", "response should contain quota value")
+	})
+
+	t.Run("missing quota id", func(t *testing.T) {
+		t.Parallel()
+
+		req := createRequestWithArgs(t, map[string]any{})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "result should be an error for missing obj_quota_id")
+	})
+
+	t.Run("invalid path parameter values", func(t *testing.T) {
+		t.Parallel()
+
+		for _, invalid := range []string{"quota/extra", "quota?x=1", "quota#frag", "quota..extra", " quota"} {
+			t.Run(invalid, func(t *testing.T) {
+				t.Parallel()
+
+				req := createRequestWithArgs(t, map[string]any{keyObjectStorageQuotaID: invalid})
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should not return an error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid obj_quota_id should be rejected")
+
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, "obj_quota_id must not contain path separators", "error should mention unsafe path parameter")
+			})
+		}
+	})
+
+	t.Run("incomplete config", func(t *testing.T) {
+		t.Parallel()
+
+		incompleteCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: "", Token: ""}},
+			},
+		}
+		_, _, incompleteHandler := tools.NewLinodeObjectStorageQuotaGetTool(incompleteCfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyObjectStorageQuotaID: objectStorageQuotaTestID})
 		result, err := incompleteHandler(t.Context(), req)
 
 		require.NoError(t, err, "handler should not return an error")

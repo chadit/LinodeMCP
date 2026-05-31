@@ -268,6 +268,28 @@ func (c *Client) httpGetObjectStorageTransfer(ctx context.Context) (*ObjectStora
 	return &transfer, nil
 }
 
+// GetObjectStorageQuota retrieves a single Object Storage quota.
+func (c *Client) httpGetObjectStorageQuota(ctx context.Context, objQuotaID string) (*ObjectStorageQuota, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointObjQuotas+"/%s", url.PathEscape(objQuotaID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetObjectStorageQuota", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var quota ObjectStorageQuota
+	if err := c.handleResponse(resp, &quota); err != nil {
+		return nil, err
+	}
+
+	return &quota, nil
+}
+
 // CancelObjectStorage cancels Object Storage service for the account.
 func (c *Client) httpCancelObjectStorage(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

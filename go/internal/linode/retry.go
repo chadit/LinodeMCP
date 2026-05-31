@@ -3550,6 +3550,21 @@ func (c *Client) GetObjectStorageTransfer(ctx context.Context) (*ObjectStorageTr
 	return transfer, err
 }
 
+// GetObjectStorageQuota retrieves a single Object Storage quota with automatic retry.
+func (c *Client) GetObjectStorageQuota(ctx context.Context, objQuotaID string) (*ObjectStorageQuota, error) {
+	var quota *ObjectStorageQuota
+
+	err := c.executeWithRetry(ctx, "GetObjectStorageQuota", func() error {
+		var err error
+
+		quota, err = c.httpGetObjectStorageQuota(ctx, objQuotaID)
+
+		return err
+	})
+
+	return quota, err
+}
+
 // CancelObjectStorage cancels Object Storage service without retrying the state-changing request.
 func (c *Client) CancelObjectStorage(ctx context.Context) error {
 	return c.httpCancelObjectStorage(ctx)
