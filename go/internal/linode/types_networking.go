@@ -286,16 +286,6 @@ type Transfer struct {
 	Total float64 `json:"total"`
 }
 
-// NodeBalancerVPCConfig represents a VPC configuration for a NodeBalancer.
-type NodeBalancerVPCConfig struct {
-	ID                  int    `json:"id"`
-	IPv4Range           string `json:"ipv4_range"`
-	IPv4RangeAutoAssign *bool  `json:"ipv4_range_auto_assign"`
-	NodeBalancerID      int    `json:"nodebalancer_id"`
-	SubnetID            int    `json:"subnet_id"`
-	VPCID               *int   `json:"vpc_id"`
-}
-
 // NodeBalancerStats represents traffic and connection statistics for a NodeBalancer.
 type NodeBalancerStats struct {
 	Title       string                   `json:"title"`
