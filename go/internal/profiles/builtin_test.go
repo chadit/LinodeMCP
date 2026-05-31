@@ -36,6 +36,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: toolInstancesList, Capability: profiles.CapRead},
 		{Name: "linode_instance_get", Capability: profiles.CapRead},
 		{Name: "linode_region_list", Capability: profiles.CapRead},
+		{Name: "linode_placement_groups_list", Capability: profiles.CapRead},
 		{Name: "linode_kernel_list", Capability: profiles.CapRead},
 		{Name: "linode_kernel_get", Capability: profiles.CapRead},
 		{Name: "linode_type_list", Capability: profiles.CapRead},
