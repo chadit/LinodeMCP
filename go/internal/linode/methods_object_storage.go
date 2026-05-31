@@ -36,6 +36,29 @@ func (c *Client) httpListObjectStorageBuckets(ctx context.Context) ([]ObjectStor
 	return response.Data, nil
 }
 
+// ListObjectStorageBucketsByRegion retrieves Object Storage buckets in a region.
+func (c *Client) httpListObjectStorageBucketsByRegion(ctx context.Context, region string) ([]ObjectStorageBucket, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s", url.PathEscape(region))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListObjectStorageBucketsByRegion", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[ObjectStorageBucket]
+
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
+}
+
 // GetObjectStorageBucket retrieves a specific Object Storage bucket.
 func (c *Client) httpGetObjectStorageBucket(ctx context.Context, region, label string) (*ObjectStorageBucket, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

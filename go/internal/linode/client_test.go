@@ -760,6 +760,58 @@ func TestClientUpdateProfileAPIError(t *testing.T) {
 	assert.Equal(t, 400, apiErr.StatusCode)
 }
 
+func TestClientListObjectStorageBucketsByRegionSuccess(t *testing.T) {
+	t.Parallel()
+
+	buckets := []linode.ObjectStorageBucket{
+		{Label: "my-bucket", Region: "us-east-1", Hostname: "my-bucket.us-east-1.linodeobjects.com"},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/object-storage/buckets/us-east-1", r.URL.Path, "request path should match regional buckets endpoint")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query params")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyData:    buckets,
+			keyPage:    1,
+			keyPages:   1,
+			keyResults: 1,
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	result, err := client.ListObjectStorageBucketsByRegion(t.Context(), "us-east-1")
+
+	require.NoError(t, err, "ListObjectStorageBucketsByRegion should succeed on 200 response")
+	require.Len(t, result, 1, "response should include one bucket")
+	assert.Equal(t, "my-bucket", result[0].Label)
+}
+
+func TestClientListObjectStorageBucketsByRegionEscapesPathParam(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/object-storage/buckets/us%2Feast%3F1", r.URL.EscapedPath(), "path params should be escaped")
+		assert.Empty(t, r.URL.RawQuery, "path params must not become query params")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyData:    []linode.ObjectStorageBucket{},
+			keyPage:    1,
+			keyPages:   1,
+			keyResults: 0,
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	_, err := client.ListObjectStorageBucketsByRegion(t.Context(), "us/east?1")
+
+	require.NoError(t, err, "escaped path param should round-trip through the client")
+}
+
 func TestClientAllowObjectStorageBucketAccessSuccess(t *testing.T) {
 	t.Parallel()
 
