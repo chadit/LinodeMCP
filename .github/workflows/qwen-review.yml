@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write
+      pull-requests: read
     steps:
       - name: Check required secret
         id: secrets
@@ -38,46 +38,217 @@ jobs:
         if: steps.secrets.outputs.skip != 'true'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Execute Qwen Agent
+      - name: Install Qwen Code
         if: steps.secrets.outputs.skip != 'true'
-        uses: QwenLM/qwen-code-action@a08dc886c2094312d6cf2df08ba5fd0437c53339 # main
-        with:
-          openai_api_key: ${{ secrets.QWEN_API_KEY }}
-          openai_model: 'qwen3.6-plus'
-          prompt: |
-            You are a Senior Staff Backend Engineer conducting a strict architectural and code-level review.
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global @qwen-code/qwen-code@0.17.0
+          qwen --version
 
-            1. Run `gh pr diff ${{ github.event.pull_request.number }}` to fetch the changes. Pay close attention to the file paths and new line numbers.
-            2. Run `gh pr view ${{ github.event.pull_request.number }} --json title,body` for context.
-            3. Analyze the code against these specific constraints:
-
-            For Go files (.go):
-            - Flag goroutine leaks, unbuffered channels causing deadlocks, or missing context cancellations.
-            - Reject ignored errors (using `_`) unless a comment explicitly justifies it.
-            - Check for improper mutex lock scopes and potential race conditions.
-            - Ensure interfaces are defined where they are consumed, not where they are implemented.
-
-            For Python files (.py):
-            - Flag blocking I/O operations inside async contexts.
-            - Reject mutable default arguments in function definitions.
-            - Enforce type hinting for all new public function signatures.
-            - Flag silent exception swallowing.
-
-            4. Construct a formal GitHub PR Review JSON payload. Map your findings to the specific lines in the diff. ONLY comment on line numbers that are part of the additions/modifications in this PR.
-            Save it to a file named `review.json` using this exact schema:
-            {
-              "body": "Your high-level architectural summary of the changes.",
-              "event": "COMMENT",
-              "comments": [
-                {
-                  "path": "path/to/file.go",
-                  "line": 42,
-                  "body": "Specific feedback for this line."
-                }
-              ]
-            }
-
-            5. Post the review directly to the GitHub API by running:
-            `gh api -X POST repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews --input review.json`
+      - name: Prepare review input
+        if: steps.secrets.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p qwen-review
+          gh pr view "${PR_NUMBER}" --repo "${GH_REPO}" \
+            --json number,title,body,baseRefName,headRefName,headRefOid,author,changedFiles,additions,deletions \
+            > qwen-review/pr-context.json
+          gh pr diff "${PR_NUMBER}" --repo "${GH_REPO}" --patch > qwen-review/pr.diff
+
+          {
+            cat <<'EOF'
+          You are a Senior Staff Backend Engineer conducting a strict PR review.
+          Review only the provided PR metadata and unified diff. Do not use tools. Do not invent findings.
+          Return ONLY raw JSON. No markdown fences. No prose before or after JSON.
+
+          The JSON object must have exactly these keys:
+          - event: "COMMENT" or "REQUEST_CHANGES"
+          - body: string
+          - comments: array of objects with path, line, body
+
+          Rules:
+          - Use event "REQUEST_CHANGES" only for blocking correctness, security, data-loss, broken API contract, broken tests, or missing required tests for changed behavior.
+          - Use event "COMMENT" for non-blocking findings, weak confidence, style, maintainability, or no findings.
+          - Every comment must target only an added/modified RIGHT-side line present in the unified diff.
+          - If there are no line-specific findings, return comments: [] and explain in body.
+          - Focus on correctness, concurrency, route/API contract, error handling, tests, and security.
+          - Avoid style-only comments unless they indicate a real maintenance risk.
+
+          PR metadata JSON follows:
+          EOF
+            cat qwen-review/pr-context.json
+            printf '\n\nUnified diff follows:\n'
+            cat qwen-review/pr.diff
+          } > qwen-review/prompt.txt
+
+      - name: Run Qwen review
+        if: steps.secrets.outputs.skip != 'true'
+        id: qwen
+        continue-on-error: true
+        env:
+          OPENAI_API_KEY: ${{ secrets.QWEN_API_KEY }}
+          OPENAI_BASE_URL: https://coding-intl.dashscope.aliyuncs.com/v1
+          OPENAI_MODEL: qwen3.6-plus
+          QWEN_CODE_SUPPRESS_YOLO_WARNING: '1'
+        shell: bash
+        run: |
+          set +e
+          qwen --auth-type openai \
+            --approval-mode plan \
+            --max-tool-calls 0 \
+            --max-session-turns 4 \
+            --max-wall-time 180s \
+            --output-format text \
+            --prompt "$(cat qwen-review/prompt.txt)" \
+            > qwen-review/review.raw 2> qwen-review/qwen.stderr
+          rc=$?
+          set -e
+          echo "exit_code=${rc}" >> "${GITHUB_OUTPUT}"
+          echo "${rc}" > qwen-review/qwen.exitcode
+          exit "${rc}"
+
+      - name: Normalize review artifact
+        if: steps.secrets.outputs.skip != 'true'
+        id: normalize
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import json
+          import pathlib
+          import re
+          import sys
+
+          root = pathlib.Path('qwen-review')
+          raw_path = root / 'review.raw'
+          text = raw_path.read_text() if raw_path.exists() else ''
+          text = text.strip()
+          if text.startswith('```'):
+              text = re.sub(r'^```(?:json)?\s*', '', text)
+              text = re.sub(r'\s*```$', '', text).strip()
+
+          summary = {
+              'valid_json': False,
+              'valid_targets': False,
+              'event': None,
+              'comment_count': 0,
+              'invalid_comments': [],
+              'qwen_exit_code': int((root / 'qwen.exitcode').read_text().strip() or '1') if (root / 'qwen.exitcode').exists() else 1,
+          }
+
+          try:
+              review = json.loads(text)
+              if not isinstance(review, dict):
+                  raise ValueError('review must be a JSON object')
+              event = review.get('event')
+              if event == 'REQUEST_CHANGE':
+                  event = 'REQUEST_CHANGES'
+                  review['event'] = event
+              if event not in {'COMMENT', 'REQUEST_CHANGES'}:
+                  raise ValueError('event must be COMMENT or REQUEST_CHANGES')
+              if not isinstance(review.get('body'), str) or not review['body'].strip():
+                  raise ValueError('body must be a non-empty string')
+              if not isinstance(review.get('comments'), list):
+                  raise ValueError('comments must be an array')
+              for i, comment in enumerate(review['comments']):
+                  if not isinstance(comment, dict):
+                      raise ValueError(f'comments[{i}] must be an object')
+                  if not isinstance(comment.get('path'), str) or not comment['path']:
+                      raise ValueError(f'comments[{i}].path must be a non-empty string')
+                  if not isinstance(comment.get('line'), int) or comment['line'] < 1:
+                      raise ValueError(f'comments[{i}].line must be a positive integer')
+                  if not isinstance(comment.get('body'), str) or not comment['body'].strip():
+                      raise ValueError(f'comments[{i}].body must be a non-empty string')
+
+              summary['valid_json'] = True
+              summary['event'] = event
+              summary['comment_count'] = len(review['comments'])
+
+              added = {}
+              current = None
+              new_line = None
+              for diff_line in (root / 'pr.diff').read_text().splitlines():
+                  if diff_line.startswith('+++ b/'):
+                      current = diff_line[6:]
+                      added.setdefault(current, set())
+                      new_line = None
+                      continue
+                  if diff_line.startswith('@@'):
+                      match = re.search(r'\+(\d+)(?:,(\d+))?', diff_line)
+                      new_line = int(match.group(1)) if match else None
+                      continue
+                  if current and new_line is not None:
+                      if diff_line.startswith('+') and not diff_line.startswith('+++'):
+                          added[current].add(new_line)
+                          new_line += 1
+                      elif diff_line.startswith('-') and not diff_line.startswith('---'):
+                          pass
+                      else:
+                          new_line += 1
+
+              for i, comment in enumerate(review['comments']):
+                  if comment['line'] not in added.get(comment['path'], set()):
+                      summary['invalid_comments'].append({
+                          'index': i,
+                          'path': comment['path'],
+                          'line': comment['line'],
+                      })
+              summary['valid_targets'] = not summary['invalid_comments']
+              (root / 'review.json').write_text(json.dumps(review, indent=2) + '\n')
+          except Exception as exc:
+              summary['error'] = str(exc)
+
+          (root / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+          print(json.dumps(summary, indent=2))
+          print(f"event={summary['event'] or ''}")
+          print(f"valid_json={str(summary['valid_json']).lower()}")
+          print(f"valid_targets={str(summary['valid_targets']).lower()}")
+          with open(pathlib.Path(__import__('os').environ['GITHUB_OUTPUT']), 'a') as out:
+              print(f"event={summary['event'] or ''}", file=out)
+              print(f"valid_json={str(summary['valid_json']).lower()}", file=out)
+              print(f"valid_targets={str(summary['valid_targets']).lower()}", file=out)
+              print(f"qwen_exit_code={summary['qwen_exit_code']}", file=out)
+          PY
+
+      - name: Upload review artifact
+        if: steps.secrets.outputs.skip != 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qwen-review-pr-${{ github.event.pull_request.number }}
+          path: qwen-review/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Gate on Qwen result
+        if: steps.secrets.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          qwen_exit='${{ steps.normalize.outputs.qwen_exit_code }}'
+          valid_json='${{ steps.normalize.outputs.valid_json }}'
+          valid_targets='${{ steps.normalize.outputs.valid_targets }}'
+          event='${{ steps.normalize.outputs.event }}'
+
+          if [[ "${qwen_exit}" != "0" ]]; then
+            echo "::error title=Qwen review failed::Qwen exited with ${qwen_exit}. See qwen-review artifact."
+            exit 1
+          fi
+          if [[ "${valid_json}" != "true" ]]; then
+            echo "::error title=Qwen review invalid::Qwen did not return valid review JSON. See qwen-review artifact."
+            exit 1
+          fi
+          if [[ "${valid_targets}" != "true" ]]; then
+            echo "::error title=Qwen review invalid targets::One or more comments do not target added PR lines. See qwen-review artifact."
+            exit 1
+          fi
+          if [[ "${event}" == "REQUEST_CHANGES" ]]; then
+            echo "::error title=Qwen requested changes::Qwen returned REQUEST_CHANGES. Review the qwen-review artifact before merging."
+            exit 1
+          fi
+          echo "Qwen returned ${event}; no blocking review requested."
