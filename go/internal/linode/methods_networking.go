@@ -24,6 +24,7 @@ const (
 	endpointNetworkingVLANs       = "/networking/vlans"
 	endpointNodeBalancers         = "/nodebalancers"
 	endpointNodeBalancerTypes     = "/nodebalancers/types"
+	endpointNodeBalancerVPCs      = endpointNodeBalancers + "/%s/vpcs"
 	endpointNodeBalancerConfigs   = endpointNodeBalancers + "/%d/configs"
 	endpointNodeBalancerNodes     = endpointNodeBalancerConfigs + "/%d/nodes"
 )
@@ -121,6 +122,33 @@ func (c *Client) httpDeleteVLAN(ctx context.Context, regionID, label string) err
 	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
+}
+
+// ListNodeBalancerVPCs retrieves VPC configurations attached to a NodeBalancer.
+func (c *Client) httpListNodeBalancerVPCs(ctx context.Context, nodeBalancerID, page, pageSize int) (*PaginatedResponse[NodeBalancerVPCConfig], error) {
+	if nodeBalancerID <= 0 {
+		return nil, ErrNodeBalancerIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedNodeBalancerID := url.PathEscape(strconv.Itoa(nodeBalancerID))
+	endpoint := withPaginationQuery(fmt.Sprintf(endpointNodeBalancerVPCs, encodedNodeBalancerID), page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListNodeBalancerVPCs", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[NodeBalancerVPCConfig]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
 }
 
 // ListFirewallRules retrieves the rules for a Cloud Firewall.

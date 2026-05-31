@@ -577,6 +577,7 @@ func TestToolDescriptorsIncludesNodeBalancerConfigList(t *testing.T) {
 	descriptors := server.ToolDescriptors(&config.Config{})
 	assert.Contains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_list", Capability: profiles.CapRead})
 	assert.Contains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_firewall_list", Capability: profiles.CapRead})
+	assert.Contains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_vpc_list", Capability: profiles.CapRead})
 	assert.Contains(t, descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_get", Capability: profiles.CapRead})
 }
 
