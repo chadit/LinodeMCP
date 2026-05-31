@@ -13,6 +13,7 @@ import (
 const (
 	endpointProfile                      = "/profile"
 	endpointProfileGrants                = "/profile/grants"
+	endpointProfileApps                  = "/profile/apps"
 	endpointAccount                      = "/account"
 	endpointAccountTransfer              = "/account/transfer"
 	endpointAccountSettings              = "/account/settings"
@@ -66,6 +67,28 @@ func (c *Client) httpGetProfile(ctx context.Context) (*Profile, error) {
 	}
 
 	return &profile, nil
+}
+
+// httpGetProfileApp retrieves one authorized OAuth app from the profile.
+func (c *Client) httpGetProfileApp(ctx context.Context, appID int) (*ProfileApp, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointProfileApps + "/" + url.PathEscape(strconv.Itoa(appID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetProfileApp", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var app ProfileApp
+	if err := c.handleResponse(resp, &app); err != nil {
+		return nil, err
+	}
+
+	return &app, nil
 }
 
 // httpGetProfileGrants retrieves /profile/grants. Returns a Grants

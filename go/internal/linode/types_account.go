@@ -383,6 +383,14 @@ type AccountInvoiceItem struct {
 	UnitPrice float64 `json:"unit_price"`
 }
 
+// ProfileApp represents an OAuth app authorized for the current profile.
+type ProfileApp struct {
+	ID      int    `json:"id"`
+	Label   string `json:"label"`
+	Scopes  string `json:"scopes"`
+	Website string `json:"website"`
+}
+
 // OAuthClient represents an OAuth client registered on the account.
 type OAuthClient struct {
 	ID           string `json:"id"`

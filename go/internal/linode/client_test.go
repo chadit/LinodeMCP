@@ -224,6 +224,104 @@ func TestClientGetProfileUnauthorized(t *testing.T) {
 	assert.Equal(t, 401, apiErr.StatusCode, "status code should be 401 unauthorized")
 }
 
+func TestClientGetProfileAppSuccess(t *testing.T) {
+	t.Parallel()
+
+	want := linode.ProfileApp{ID: 12345, Label: "Example OAuth App", Scopes: "linodes:read_only", Website: "https://example.com"}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/profile/apps/12345", r.URL.Path, "request path should include app id")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(want))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	got, err := client.GetProfileApp(t.Context(), want.ID)
+
+	require.NoError(t, err, "GetProfileApp should succeed on 200 response")
+	require.NotNil(t, got, "result should not be nil")
+	assert.Equal(t, want, *got)
+}
+
+func TestClientGetProfileAppBuildsNumericPath(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/profile/apps/12345", r.URL.EscapedPath(), "request path should include the numeric app id segment")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.ProfileApp{ID: 12345}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetProfileApp(t.Context(), 12345)
+
+	require.NoError(t, err, "GetProfileApp should build the numeric app path")
+}
+
+func TestClientGetProfileAppAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/profile/apps/12345", r.URL.Path, "request path should include app id")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetProfileApp(t.Context(), 12345)
+
+	require.Error(t, err, "GetProfileApp should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+func TestClientGetProfileAppRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			assert.NoError(t, writeErr)
+
+			return
+		}
+
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/profile/apps/12345", r.URL.Path, "request path should include app id")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.ProfileApp{ID: 12345, Label: "Example OAuth App"}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	got, err := client.GetProfileApp(t.Context(), 12345)
+
+	require.NoError(t, err, "GetProfileApp should succeed after retry")
+	require.NotNil(t, got, "result should not be nil")
+	assert.Equal(t, 12345, got.ID)
+	assert.Equal(t, int32(2), requestCount.Load(), "read-only get should retry once then succeed")
+}
+
 func TestClientListAccountMaintenanceSuccess(t *testing.T) {
 	t.Parallel()
 
