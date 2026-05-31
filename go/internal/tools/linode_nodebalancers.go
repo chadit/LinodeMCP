@@ -40,6 +40,7 @@ const (
 	nodeBalancerConfigNodesPageSizeMax     = 500
 	nodeBalancerKeyID                      = "nodebalancer_id"
 	nodeBalancerKeyConfigID                = "config_id"
+	nodeBalancerKeyVPCConfigID             = "vpc_config_id"
 	nodeBalancerKeyNodeID                  = "node_id"
 )
 
@@ -441,6 +442,24 @@ func NewLinodeNodeBalancerStatsGetTool(cfg *config.Config) (mcp.Tool, profiles.C
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeNodeBalancerVPCConfigGetTool creates a tool for getting a NodeBalancer VPC configuration.
+func NewLinodeNodeBalancerVPCConfigGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_nodebalancer_vpc_config_get",
+		"Gets a VPC configuration for a specific NodeBalancer by IDs.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
+				mcp.Description("The ID of the NodeBalancer whose VPC configuration should be retrieved")),
+			mcp.WithNumber(nodeBalancerKeyVPCConfigID, mcp.Required(),
+				mcp.Description("The ID of the NodeBalancer VPC configuration to retrieve")),
+		},
+		handleLinodeNodeBalancerVPCConfigGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeNodeBalancerGetTool creates a tool for getting a single NodeBalancer.
 func NewLinodeNodeBalancerGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
@@ -650,6 +669,30 @@ func handleLinodeNodeBalancerConfigRebuildRequest(ctx context.Context, request *
 	}
 
 	return MarshalToolResponse(response)
+}
+
+func handleLinodeNodeBalancerVPCConfigGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	nodeBalancerID, validationMessage := nodeBalancerIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	vpcConfigID, validationMessage := nodeBalancerVPCConfigIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	vpcConfig, err := client.GetNodeBalancerVPCConfig(ctx, nodeBalancerID, vpcConfigID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve VPC configuration %d for NodeBalancer %d: %v", vpcConfigID, nodeBalancerID, err)), nil
+	}
+
+	return MarshalToolResponse(vpcConfig)
 }
 
 func handleLinodeNodeBalancerConfigListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -1162,6 +1205,20 @@ func optionalNodeBalancerConfigChoice(request *mcp.CallToolRequest, key string, 
 	}
 
 	return "", fmt.Sprintf("%s must be one of: %s", key, strings.Join(allowed, ", "))
+}
+
+func nodeBalancerVPCConfigIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	args := request.GetArguments()
+	if _, exists := args[nodeBalancerKeyVPCConfigID]; !exists {
+		return 0, "vpc_config_id is required"
+	}
+
+	vpcConfigID, validationMessage := optionalPaginationInt(args, nodeBalancerKeyVPCConfigID, 1, 0)
+	if validationMessage != "" {
+		return 0, validationMessage
+	}
+
+	return vpcConfigID, ""
 }
 
 func nodeBalancerConfigIDFromTool(request *mcp.CallToolRequest) (int, string) {

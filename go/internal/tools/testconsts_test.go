@@ -258,6 +258,7 @@ const (
 	errFirewallIDPositive         = "firewall_id must be a positive integer"
 	errFirewallDeviceIDPositive   = "device id must be a positive integer"
 	keyNodeBalancerID             = "nodebalancer_id"
+	keyVPCConfigID                = "vpc_config_id"
 	caseFractionalLinodeID        = "fractional linode id"
 	caseNegativeInterfaceID       = "negative interface id"
 	caseSeparatorLinodeID         = "separator linode id"

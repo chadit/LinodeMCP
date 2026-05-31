@@ -17,6 +17,7 @@ const (
 	keyIPv4Range       = "ipv4_range"
 	cidrV4             = "10.0.0.0/24"
 	keyNodeBalancerID  = "nodebalancer_id"
+	keyVPCID           = "vpc_id"
 	keyConfigID        = "config_id"
 	keyNodeID          = "node_id"
 	keyPort            = "port"

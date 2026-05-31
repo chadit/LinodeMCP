@@ -975,6 +975,38 @@ func (c *Client) httpGetNodeBalancer(ctx context.Context, nodeBalancerID int) (*
 	return &nodeBalancer, nil
 }
 
+// GetNodeBalancerVPCConfig retrieves a NodeBalancer VPC configuration by ID.
+func (c *Client) httpGetNodeBalancerVPCConfig(ctx context.Context, nodeBalancerID, vpcConfigID int) (*NodeBalancerVPCConfig, error) {
+	if nodeBalancerID <= 0 {
+		return nil, ErrNodeBalancerIDPositive
+	}
+
+	if vpcConfigID <= 0 {
+		return nil, ErrConfigIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedNodeBalancerID := url.PathEscape(strconv.Itoa(nodeBalancerID))
+	encodedVPCConfigID := url.PathEscape(strconv.Itoa(vpcConfigID))
+	endpoint := endpointNodeBalancers + "/" + encodedNodeBalancerID + "/vpcs/" + encodedVPCConfigID
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetNodeBalancerVPCConfig", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var config NodeBalancerVPCConfig
+	if err := c.handleResponse(resp, &config); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
+}
+
 // ListNodeBalancerConfigs retrieves configs for a NodeBalancer by its ID.
 func (c *Client) httpListNodeBalancerConfigs(ctx context.Context, nodeBalancerID int) ([]NodeBalancerConfig, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

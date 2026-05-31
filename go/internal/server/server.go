@@ -1044,6 +1044,7 @@ func networkingToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeNodeBalancerListTool,
 		tools.NewLinodeNodeBalancerGetTool,
 		tools.NewLinodeNodeBalancerStatsGetTool,
+		tools.NewLinodeNodeBalancerVPCConfigGetTool,
 		tools.NewLinodeNodeBalancerFirewallListTool,
 		tools.NewLinodeNodeBalancerFirewallUpdateTool,
 		tools.NewLinodeNodeBalancerVPCListTool,
