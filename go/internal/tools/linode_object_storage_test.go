@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/linode"
+	"github.com/chadit/LinodeMCP/internal/profiles"
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
@@ -1104,7 +1106,7 @@ func TestLinodeObjectStorageBucketDeleteTool(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, _, handler := tools.NewLinodeObjectStorageBucketDeleteTool(cfg)
+	tool, capability, handler := tools.NewLinodeObjectStorageBucketDeleteTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1112,6 +1114,7 @@ func TestLinodeObjectStorageBucketDeleteTool(t *testing.T) {
 		assert.Equal(t, "linode_object_storage_bucket_delete", tool.Name, "tool name should match")
 		assert.NotEmpty(t, tool.Description, "tool should have a description")
 		require.NotNil(t, handler, "handler should not be nil")
+		assert.Equal(t, profiles.CapDestroy, capability, "bucket delete should remain destroy-scoped")
 		assert.Contains(t, tool.Description, "WARNING", "description should contain WARNING")
 
 		props := tool.InputSchema.Properties
@@ -1191,6 +1194,147 @@ func TestLinodeObjectStorageBucketDeleteTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, "removed successfully", "response should confirm deletion")
+	})
+}
+
+func TestLinodeObjectStorageCancelTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	tool, capability, handler := tools.NewLinodeObjectStorageCancelTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		assert.Equal(t, "linode_object_storage_cancel", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+		assert.Equal(t, profiles.CapAdmin, capability, "Object Storage cancellation should be admin-scoped")
+		assert.Contains(t, tool.Description, "WARNING", "description should contain WARNING")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, "confirm", "schema should include confirm property")
+		assert.Contains(t, props, "dry_run", "schema should include dry_run property")
+	})
+
+	t.Run("validation", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			name string
+			args map[string]any
+		}{
+			{name: caseMissingConfirm, args: map[string]any{}},
+			{name: "false confirm", args: map[string]any{keyConfirm: false}},
+			{name: "string confirm rejected", args: map[string]any{keyConfirm: boolStringTrue}},
+			{name: "numeric confirm rejected", args: map[string]any{keyConfirm: 1}},
+		}
+
+		for _, testCase := range tests {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should not return an error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "result should be an error for %s", testCase.name)
+				assertErrorContains(t, result, errConfirmEqualsTrue)
+			})
+		}
+	})
+
+	t.Run("dry run skips destructive call", func(t *testing.T) {
+		t.Parallel()
+
+		var calls atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			calls.Add(1)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeObjectStorageCancelTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyDryRun: true})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "dry-run should not be an error")
+		assert.Equal(t, int32(0), calls.Load(), "dry-run must not call the destructive endpoint")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "POST")
+		assert.Contains(t, textContent.Text, "/object-storage/cancel")
+	})
+
+	t.Run("client error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/object-storage/cancel", r.URL.Path, "request path should match cancel endpoint")
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeObjectStorageCancelTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "result should be an error")
+		assertErrorContains(t, result, "Failed to cancel Object Storage")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/object-storage/cancel", r.URL.Path, "request path should match cancel endpoint")
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query params")
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeObjectStorageCancelTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "result should not be an error")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "cancellation requested successfully", "response should confirm cancellation")
 	})
 }
 

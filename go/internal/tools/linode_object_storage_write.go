@@ -147,6 +147,48 @@ func handleObjectStorageBucketDeleteRequest(ctx context.Context, request *mcp.Ca
 	})
 }
 
+// NewLinodeObjectStorageCancelTool creates a tool for canceling Object Storage service.
+func NewLinodeObjectStorageCancelTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_object_storage_cancel",
+		"Cancels Object Storage service for the account. WARNING: This changes account service state.",
+		[]mcp.ToolOption{
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be set to true to confirm Object Storage cancellation. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleObjectStorageCancelRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
+func handleObjectStorageCancelRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_object_storage_cancel", httpMethodPost, "/object-storage/cancel", nil)
+	}
+
+	if result := RequireConfirm(request, "This operation cancels Object Storage service for the account. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := client.CancelObjectStorage(ctx); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to cancel Object Storage: %v", err)), nil
+	}
+
+	return MarshalToolResponse(struct {
+		Message string `json:"message"`
+	}{
+		Message: "Object Storage cancellation requested successfully",
+	})
+}
+
 // NewLinodeObjectStorageBucketAccessAllowTool creates a tool for applying bucket access controls.
 func NewLinodeObjectStorageBucketAccessAllowTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
