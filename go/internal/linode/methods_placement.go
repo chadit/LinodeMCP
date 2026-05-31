@@ -95,3 +95,24 @@ func (c *Client) httpUpdatePlacementGroup(ctx context.Context, groupID int, requ
 
 	return &group, nil
 }
+
+// DeletePlacementGroup deletes a placement group by ID.
+func (c *Client) httpDeletePlacementGroup(ctx context.Context, groupID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointPlacementGroups + "/" + url.PathEscape(strconv.Itoa(groupID))
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeletePlacementGroup", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	if err := c.handleResponse(resp, nil); err != nil {
+		return err
+	}
+
+	return nil
+}

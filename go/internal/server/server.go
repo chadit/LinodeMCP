@@ -955,6 +955,7 @@ func computeToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeInstanceStatsByYearMonthTool,
 		tools.NewLinodeInstanceTransferGetTool,
 		tools.NewLinodePlacementGroupGetTool,
+		tools.NewLinodePlacementGroupDeleteTool,
 		tools.NewLinodeRegionListTool,
 		tools.NewLinodePlacementGroupListTool,
 		tools.NewLinodePlacementGroupUpdateTool,

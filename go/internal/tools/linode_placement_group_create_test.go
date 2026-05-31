@@ -44,14 +44,14 @@ func TestLinodePlacementGroupCreateTool(t *testing.T) {
 		props := tool.InputSchema.Properties
 		assert.Contains(t, props, "label", "schema should include label")
 		assert.Contains(t, props, "region", "schema should include region")
-		assert.Contains(t, props, "placement_group_type", "schema should include placement_group_type")
-		assert.Contains(t, props, "placement_group_policy", "schema should include placement_group_policy")
+		assert.Contains(t, props, keyPlacementGroupTypeJSON, "schema should include placement_group_type")
+		assert.Contains(t, props, keyPlacementGroupPolicyJSON, "schema should include placement_group_policy")
 		assert.Contains(t, props, keyDryRun, "schema should include dry_run")
 		assert.Contains(t, props, keyConfirm, "schema should include confirm")
 		assert.Contains(t, tool.InputSchema.Required, "label", "label must be marked required")
 		assert.Contains(t, tool.InputSchema.Required, "region", "region must be marked required")
-		assert.Contains(t, tool.InputSchema.Required, "placement_group_type", "placement_group_type must be marked required")
-		assert.Contains(t, tool.InputSchema.Required, "placement_group_policy", "placement_group_policy must be marked required")
+		assert.Contains(t, tool.InputSchema.Required, keyPlacementGroupTypeJSON, "placement_group_type must be marked required")
+		assert.Contains(t, tool.InputSchema.Required, keyPlacementGroupPolicyJSON, "placement_group_policy must be marked required")
 		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be marked required")
 	})
 
@@ -115,13 +115,13 @@ func TestLinodePlacementGroupCreateTool(t *testing.T) {
 			{name: caseNumericLabel, update: func(args map[string]any) { args["label"] = 123 }, wantMessage: errLabelNonEmpty},
 			{name: caseMissingRegion, update: func(args map[string]any) { delete(args, "region") }, wantMessage: "region is required"},
 			{name: "blank region", update: func(args map[string]any) { args["region"] = blankString }, wantMessage: errPlacementGroupRegionBlank},
-			{name: caseMissingType, update: func(args map[string]any) { delete(args, "placement_group_type") }, wantMessage: "placement_group_type is required"},
-			{name: "numeric type", update: func(args map[string]any) { args["placement_group_type"] = 123 }, wantMessage: "placement_group_type must be a non-empty string"},
-			{name: caseInvalidType, update: func(args map[string]any) { args["placement_group_type"] = "affinity:local" }, wantMessage: "placement_group_type must be anti_affinity:local"},
-			{name: "missing policy", update: func(args map[string]any) { delete(args, "placement_group_policy") }, wantMessage: "placement_group_policy is required"},
-			{name: "blank policy", update: func(args map[string]any) { args["placement_group_policy"] = blankString }, wantMessage: "placement_group_policy must be a non-empty string"},
-			{name: "numeric policy", update: func(args map[string]any) { args["placement_group_policy"] = 123 }, wantMessage: "placement_group_policy must be a non-empty string"},
-			{name: "invalid policy", update: func(args map[string]any) { args["placement_group_policy"] = "eventual" }, wantMessage: "placement_group_policy must be strict or flexible"},
+			{name: caseMissingType, update: func(args map[string]any) { delete(args, keyPlacementGroupTypeJSON) }, wantMessage: "placement_group_type is required"},
+			{name: "numeric type", update: func(args map[string]any) { args[keyPlacementGroupTypeJSON] = 123 }, wantMessage: "placement_group_type must be a non-empty string"},
+			{name: caseInvalidType, update: func(args map[string]any) { args[keyPlacementGroupTypeJSON] = "affinity:local" }, wantMessage: "placement_group_type must be anti_affinity:local"},
+			{name: "missing policy", update: func(args map[string]any) { delete(args, keyPlacementGroupPolicyJSON) }, wantMessage: "placement_group_policy is required"},
+			{name: "blank policy", update: func(args map[string]any) { args[keyPlacementGroupPolicyJSON] = blankString }, wantMessage: "placement_group_policy must be a non-empty string"},
+			{name: "numeric policy", update: func(args map[string]any) { args[keyPlacementGroupPolicyJSON] = 123 }, wantMessage: "placement_group_policy must be a non-empty string"},
+			{name: "invalid policy", update: func(args map[string]any) { args[keyPlacementGroupPolicyJSON] = "eventual" }, wantMessage: "placement_group_policy must be strict or flexible"},
 		}
 
 		for _, testCase := range cases {
@@ -248,10 +248,10 @@ func TestLinodePlacementGroupCreateTool(t *testing.T) {
 
 func placementGroupCreateArgs() map[string]any {
 	return map[string]any{
-		"label":                  placementGroupCreateLabel,
-		"region":                 placementGroupCreateRegion,
-		"placement_group_type":   placementGroupType,
-		"placement_group_policy": placementGroupCreatePolicy,
-		keyConfirm:               true,
+		"label":                     placementGroupCreateLabel,
+		"region":                    placementGroupCreateRegion,
+		keyPlacementGroupTypeJSON:   placementGroupType,
+		keyPlacementGroupPolicyJSON: placementGroupCreatePolicy,
+		keyConfirm:                  true,
 	}
 }
