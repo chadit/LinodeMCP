@@ -4119,6 +4119,21 @@ func (c *Client) GetVPC(ctx context.Context, vpcID int) (*VPC, error) {
 	return vpc, err
 }
 
+// GetPlacementGroup retrieves a single placement group by ID with automatic retry on transient failures.
+func (c *Client) GetPlacementGroup(ctx context.Context, groupID int) (*PlacementGroup, error) {
+	var group *PlacementGroup
+
+	err := c.executeWithRetry(ctx, "GetPlacementGroup", func() error {
+		var retryErr error
+
+		group, retryErr = c.httpGetPlacementGroup(ctx, groupID)
+
+		return retryErr
+	})
+
+	return group, err
+}
+
 // CreateVPC creates a new VPC with automatic retry on transient failures.
 func (c *Client) CreateVPC(ctx context.Context, req CreateVPCRequest) (*VPC, error) {
 	var vpc *VPC

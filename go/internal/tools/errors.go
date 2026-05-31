@@ -114,6 +114,12 @@ var (
 	ErrSubnetIDInvalid  = errors.New("subnet_id must be a valid integer")
 )
 
+// Sentinel errors for placement group validation.
+var (
+	ErrPlacementGroupIDRequired = errors.New("group_id is required")
+	ErrPlacementGroupIDPositive = errors.New("group_id must be a positive integer")
+)
+
 // Sentinel errors for Phase 8.3 profile-builder draft tools. Callers
 // match with errors.Is.
 var (
