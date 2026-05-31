@@ -3505,6 +3505,21 @@ func (c *Client) GetObjectStorageKey(ctx context.Context, keyID int) (*ObjectSto
 	return key, err
 }
 
+// GetObjectStorageQuotaUsage retrieves Object Storage quota usage with automatic retry.
+func (c *Client) GetObjectStorageQuotaUsage(ctx context.Context, quotaID string) (*ObjectStorageQuotaUsage, error) {
+	var usage *ObjectStorageQuotaUsage
+
+	err := c.executeWithRetry(ctx, "GetObjectStorageQuotaUsage", func() error {
+		var err error
+
+		usage, err = c.httpGetObjectStorageQuotaUsage(ctx, quotaID)
+
+		return err
+	})
+
+	return usage, err
+}
+
 // GetObjectStorageTransfer retrieves Object Storage transfer usage with automatic retry.
 func (c *Client) GetObjectStorageTransfer(ctx context.Context) (*ObjectStorageTransfer, error) {
 	var transfer *ObjectStorageTransfer

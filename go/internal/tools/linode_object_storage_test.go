@@ -716,6 +716,89 @@ func TestLinodeObjectStorageKeyGetTool(t *testing.T) {
 	})
 }
 
+// End-to-end verification of object storage quota usage retrieval.
+func TestLinodeObjectStorageQuotaUsageTool(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	tool, _, handler := tools.NewLinodeObjectStorageQuotaUsageTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		assert.Equal(t, "linode_object_storage_quota_usage", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		used := 10
+		usage := linode.ObjectStorageQuotaUsage{QuotaLimit: 100, Usage: &used}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/object-storage/quotas/obj-bucket-us-ord-1/usage", r.URL.Path, "request path should match quota usage endpoint")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(usage), "encoding response should not fail")
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeObjectStorageQuotaUsageTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{"quota_id": "obj-bucket-us-ord-1"})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "result should not be an error")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "100", "response should contain quota limit")
+		assert.Contains(t, textContent.Text, "10", "response should contain usage")
+	})
+
+	t.Run("missing quota id", func(t *testing.T) {
+		t.Parallel()
+
+		req := createRequestWithArgs(t, map[string]any{})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "result should be an error for missing quota_id")
+	})
+
+	t.Run("invalid quota id", func(t *testing.T) {
+		t.Parallel()
+
+		for _, quotaID := range []string{"obj/bucket", "obj?bucket", "obj..bucket"} {
+			t.Run(quotaID, func(t *testing.T) {
+				t.Parallel()
+
+				req := createRequestWithArgs(t, map[string]any{"quota_id": quotaID})
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should not return an error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "result should be an error for invalid quota_id")
+
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, "quota_id must not contain", "error should mention invalid quota_id")
+			})
+		}
+	})
+}
+
 // End-to-end verification of object storage transfer usage retrieval.
 func TestLinodeObjectStorageTransferTool(t *testing.T) {
 	t.Parallel()

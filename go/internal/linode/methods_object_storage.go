@@ -12,6 +12,7 @@ const (
 	endpointObjClusters = "/object-storage/clusters"
 	endpointObjTypes    = "/object-storage/types"
 	endpointObjKeys     = "/object-storage/keys"
+	endpointObjQuotas   = "/object-storage/quotas"
 	endpointObjTransfer = "/object-storage/transfer"
 )
 
@@ -201,6 +202,28 @@ func (c *Client) httpGetObjectStorageKey(ctx context.Context, keyID int) (*Objec
 	}
 
 	return &key, nil
+}
+
+// GetObjectStorageQuotaUsage retrieves usage data for a specific Object Storage quota.
+func (c *Client) httpGetObjectStorageQuotaUsage(ctx context.Context, quotaID string) (*ObjectStorageQuotaUsage, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointObjQuotas+"/%s/usage", url.PathEscape(quotaID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetObjectStorageQuotaUsage", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var usage ObjectStorageQuotaUsage
+	if err := c.handleResponse(resp, &usage); err != nil {
+		return nil, err
+	}
+
+	return &usage, nil
 }
 
 // GetObjectStorageTransfer retrieves Object Storage outbound data transfer usage.

@@ -132,6 +132,12 @@ type ObjectStorageKeyRegion struct {
 	S3Endpoint string `json:"s3_endpoint"`
 }
 
+// ObjectStorageQuotaUsage represents Object Storage quota usage data.
+type ObjectStorageQuotaUsage struct {
+	QuotaLimit int  `json:"quota_limit"`
+	Usage      *int `json:"usage"`
+}
+
 // ObjectStorageTransfer represents Object Storage transfer usage.
 type ObjectStorageTransfer struct {
 	UsedBytes int `json:"used"`

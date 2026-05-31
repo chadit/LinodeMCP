@@ -128,6 +128,22 @@ func isSafeObjectStorageRegion(region string) bool {
 	return true
 }
 
+func isSafeObjectStorageQuotaID(quotaID string) bool {
+	if quotaID == "" || strings.Contains(quotaID, "..") {
+		return false
+	}
+
+	for _, r := range quotaID {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '.' {
+			continue
+		}
+
+		return false
+	}
+
+	return true
+}
+
 // NewLinodeObjectStorageBucketGetTool creates a tool for getting a specific bucket.
 func NewLinodeObjectStorageBucketGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
@@ -467,6 +483,53 @@ func handleObjectStorageKeyGetRequest(ctx context.Context, request *mcp.CallTool
 	}
 
 	return MarshalToolResponse(key)
+}
+
+// NewLinodeObjectStorageQuotaUsageTool creates a tool for getting Object Storage quota usage.
+func NewLinodeObjectStorageQuotaUsageTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_object_storage_quota_usage",
+		mcp.WithDescription("Gets usage data for a specific Object Storage quota"),
+		mcp.WithString(
+			paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
+		),
+		mcp.WithString(
+			"quota_id",
+			mcp.Required(),
+			mcp.Description("The Object Storage quota ID to retrieve usage for"),
+		),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleObjectStorageQuotaUsageRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleObjectStorageQuotaUsageRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	quotaID := request.GetString("quota_id", "")
+
+	if quotaID == "" {
+		return mcp.NewToolResultError("quota_id is required"), nil
+	}
+
+	if !isSafeObjectStorageQuotaID(quotaID) {
+		return mcp.NewToolResultError("quota_id must not contain path separators, query separators, traversal segments, or unsupported characters"), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	usage, err := client.GetObjectStorageQuotaUsage(ctx, quotaID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Object Storage quota usage for %q: %v", quotaID, err)), nil
+	}
+
+	return MarshalToolResponse(usage)
 }
 
 // NewLinodeObjectStorageTransferTool creates a tool for getting Object Storage transfer usage.
