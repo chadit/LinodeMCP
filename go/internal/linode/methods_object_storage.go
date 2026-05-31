@@ -161,6 +161,27 @@ func (c *Client) httpListObjectStorageTypes(ctx context.Context) ([]ObjectStorag
 	return response.Data, nil
 }
 
+// ListObjectStorageQuotas retrieves Object Storage quotas for the account.
+func (c *Client) httpListObjectStorageQuotas(ctx context.Context) ([]ObjectStorageQuota, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointObjQuotas, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListObjectStorageQuotas", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[ObjectStorageQuota]
+
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
+}
+
 // ListObjectStorageKeys retrieves all Object Storage access keys.
 func (c *Client) httpListObjectStorageKeys(ctx context.Context) ([]ObjectStorageKey, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

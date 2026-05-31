@@ -1107,6 +1107,7 @@ func objectStorageToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeObjectStorageBucketContentsTool,
 		tools.NewLinodeObjectStorageClusterListTool,
 		tools.NewLinodeObjectStorageTypeListTool,
+		tools.NewLinodeObjectStorageQuotasListTool,
 		tools.NewLinodeObjectStorageKeyListTool,
 		tools.NewLinodeObjectStorageKeyGetTool,
 		tools.NewLinodeObjectStorageTransferTool,

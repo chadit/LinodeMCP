@@ -6685,3 +6685,86 @@ func TestClientUploadImageDoesNotRetry(t *testing.T) {
 	require.Error(t, err, "UploadImage should fail on 500 response")
 	assert.Equal(t, int32(1), calls.Load(), "UploadImage must not retry and replay a mutating request")
 }
+
+// TestClientListObjectStorageQuotasSuccess verifies that ListObjectStorageQuotas sends a
+// GET request to /object-storage/quotas with no query parameters or body.
+func TestClientListObjectStorageQuotasSuccess(t *testing.T) {
+	t.Parallel()
+
+	const (
+		quotaIDKey = "quota_id"
+		quotaID    = "endpoint-type-1"
+	)
+
+	quotas := []linode.ObjectStorageQuota{
+		{keyID: quotaID, quotaIDKey: quotaID, "s3_endpoint": "us-east-1.linodeobjects.com"},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/object-storage/quotas", r.URL.Path, "request path should be /object-storage/quotas")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		body, err := io.ReadAll(r.Body)
+		assert.NoError(t, err)
+		assert.Empty(t, body, "request should not include a body")
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyData:    quotas,
+			keyPage:    1,
+			keyPages:   1,
+			keyResults: 1,
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
+
+	got, err := client.ListObjectStorageQuotas(t.Context())
+
+	require.NoError(t, err, "ListObjectStorageQuotas should succeed on 200 response")
+	require.Len(t, got, 1, "one quota should be returned")
+	assert.Equal(t, quotaID, got[0][keyID])
+}
+
+// TestClientListObjectStorageQuotasRetriesReadOnlyGET verifies the read-only quotas
+// route can retry a transient server error without replaying a mutating request.
+func TestClientListObjectStorageQuotasRetriesReadOnlyGET(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/object-storage/quotas", r.URL.Path, "request path should be /object-storage/quotas")
+
+		if calls.Load() == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, err := w.Write([]byte(`{"errors":[{"reason":"temporary failure"}]}`))
+			assert.NoError(t, err)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyData:    []linode.ObjectStorageQuota{{keyID: "endpoint-type-1"}},
+			keyPage:    1,
+			keyPages:   1,
+			keyResults: 1,
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(3))
+
+	got, err := client.ListObjectStorageQuotas(t.Context())
+
+	require.NoError(t, err, "ListObjectStorageQuotas should retry and then succeed")
+	require.Len(t, got, 1, "one quota should be returned")
+	assert.Equal(t, int32(2), calls.Load(), "GET quotas should retry once after transient failure")
+}

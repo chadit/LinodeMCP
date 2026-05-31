@@ -397,6 +397,46 @@ func handleObjectStorageTypeListRequest(ctx context.Context, request *mcp.CallTo
 	return MarshalToolResponse(response)
 }
 
+// NewLinodeObjectStorageQuotasListTool creates a tool for listing Object Storage quotas.
+func NewLinodeObjectStorageQuotasListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_object_storage_quotas_list",
+		mcp.WithDescription("Lists Object Storage quotas on the account"),
+		mcp.WithString(
+			paramEnvironment,
+			mcp.Description(paramEnvironmentDesc),
+		),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleObjectStorageQuotasListRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleObjectStorageQuotasListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	quotas, err := client.ListObjectStorageQuotas(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Object Storage quotas: %v", err)), nil
+	}
+
+	response := struct {
+		Count  int                         `json:"count"`
+		Quotas []linode.ObjectStorageQuota `json:"quotas"`
+	}{
+		Count:  len(quotas),
+		Quotas: quotas,
+	}
+
+	return MarshalToolResponse(response)
+}
+
 // NewLinodeObjectStorageKeyListTool creates a tool for listing Object Storage access keys.
 func NewLinodeObjectStorageKeyListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
