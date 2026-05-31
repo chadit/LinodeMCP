@@ -28,3 +28,11 @@ type PlacementGroupMigrations struct {
 type PlacementGroupMigration struct {
 	LinodeID int `json:"linode_id"`
 }
+
+// CreatePlacementGroupRequest represents the request body for creating a placement group.
+type CreatePlacementGroupRequest struct {
+	Label                string `json:"label"`
+	Region               string `json:"region"`
+	PlacementGroupType   string `json:"placement_group_type"`
+	PlacementGroupPolicy string `json:"placement_group_policy"`
+}

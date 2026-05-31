@@ -51,3 +51,23 @@ func (c *Client) httpGetPlacementGroup(ctx context.Context, groupID int) (*Place
 
 	return &group, nil
 }
+
+// CreatePlacementGroup creates a Linode placement group.
+func (c *Client) httpCreatePlacementGroup(ctx context.Context, req *CreatePlacementGroupRequest) (*PlacementGroup, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointPlacementGroups, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreatePlacementGroup", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var placementGroup PlacementGroup
+	if err := c.handleResponse(resp, &placementGroup); err != nil {
+		return nil, err
+	}
+
+	return &placementGroup, nil
+}

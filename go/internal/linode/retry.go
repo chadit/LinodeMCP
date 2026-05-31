@@ -1969,6 +1969,12 @@ func (c *Client) ListPlacementGroups(ctx context.Context, page, pageSize int) (*
 	return placementGroups, err
 }
 
+// CreatePlacementGroup creates a placement group without automatic retry.
+// Replaying this create operation could repeat side effects after a transient failure.
+func (c *Client) CreatePlacementGroup(ctx context.Context, req *CreatePlacementGroupRequest) (*PlacementGroup, error) {
+	return c.httpCreatePlacementGroup(ctx, req)
+}
+
 // ListImageShareGroups retrieves owned image share groups with automatic retry on transient failures.
 func (c *Client) ListImageShareGroups(ctx context.Context, page, pageSize int) (*PaginatedResponse[ImageShareGroup], error) {
 	var shareGroups *PaginatedResponse[ImageShareGroup]

@@ -13,6 +13,11 @@ import (
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
+const (
+	placementGroupTypeAntiAffinityTest = "anti_affinity:local"
+	placementGroupPolicyStrictTest     = "strict"
+)
+
 func TestClientListPlacementGroupsSuccess(t *testing.T) {
 	t.Parallel()
 
@@ -21,8 +26,8 @@ func TestClientListPlacementGroupsSuccess(t *testing.T) {
 			ID:                   123,
 			Label:                "pg-east",
 			Region:               regionUSEast,
-			PlacementGroupType:   "anti_affinity:local",
-			PlacementGroupPolicy: "strict",
+			PlacementGroupType:   placementGroupTypeAntiAffinityTest,
+			PlacementGroupPolicy: placementGroupPolicyStrictTest,
 			IsCompliant:          true,
 		},
 	}
