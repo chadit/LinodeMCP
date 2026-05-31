@@ -3475,6 +3475,21 @@ func (c *Client) ListObjectStorageTypes(ctx context.Context) ([]ObjectStorageTyp
 	return types, err
 }
 
+// ListObjectStorageQuotas retrieves Object Storage quotas with automatic retry.
+func (c *Client) ListObjectStorageQuotas(ctx context.Context) ([]ObjectStorageQuota, error) {
+	var quotas []ObjectStorageQuota
+
+	err := c.executeWithRetry(ctx, "ListObjectStorageQuotas", func() error {
+		var err error
+
+		quotas, err = c.httpListObjectStorageQuotas(ctx)
+
+		return err
+	})
+
+	return quotas, err
+}
+
 // ListObjectStorageKeys retrieves all Object Storage access keys with automatic retry.
 func (c *Client) ListObjectStorageKeys(ctx context.Context) ([]ObjectStorageKey, error) {
 	var keys []ObjectStorageKey

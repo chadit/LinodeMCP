@@ -41,6 +41,9 @@ type ObjectStorageType struct {
 	Region   string `json:"region_prices,omitempty"`
 }
 
+// ObjectStorageQuota represents Object Storage quota metadata.
+type ObjectStorageQuota map[string]any
+
 // CreateObjectStorageBucketRequest represents the request body for creating an Object Storage bucket.
 type CreateObjectStorageBucketRequest struct {
 	Label       string `json:"label"`

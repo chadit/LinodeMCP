@@ -2,6 +2,7 @@ package tools_test
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -544,6 +545,121 @@ func TestLinodeObjectStorageTypeListTool(t *testing.T) {
 			},
 		}
 		_, _, incompleteHandler := tools.NewLinodeObjectStorageTypeListTool(incompleteCfg)
+
+		req := createRequestWithArgs(t, map[string]any{})
+		result, err := incompleteHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "result should be an error for incomplete config")
+	})
+}
+
+// End-to-end verification of object storage quota listing.
+func TestLinodeObjectStorageQuotasListTool(t *testing.T) {
+	t.Parallel()
+
+	const (
+		quotaIDKey = "quota_id"
+		quotaID    = "endpoint-type-1"
+	)
+
+	cfg := &config.Config{}
+	tool, _, handler := tools.NewLinodeObjectStorageQuotasListTool(cfg)
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		assert.Equal(t, "linode_object_storage_quotas_list", tool.Name, "tool name should match")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		quotas := []linode.ObjectStorageQuota{
+			{keyBetaID: quotaID, quotaIDKey: quotaID, "s3_endpoint": "us-east-1.linodeobjects.com"},
+		}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/object-storage/quotas", r.URL.Path, "request path should match quotas endpoint")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+
+			body, err := io.ReadAll(r.Body)
+			assert.NoError(t, err)
+			assert.Empty(t, body, "request should not include a body")
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyData:    quotas,
+				keyPage:    1,
+				keyPages:   1,
+				keyResults: 1,
+			}), "encoding response should not fail")
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeObjectStorageQuotasListTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "result should not be an error")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, quotaID, "response should contain quota ID")
+		assert.Contains(t, textContent.Text, `"count": 1`, "response should contain correct count")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/object-storage/quotas", r.URL.Path, "request path should match quotas endpoint")
+			w.WriteHeader(http.StatusInternalServerError)
+			_, err := w.Write([]byte(`{"errors":[{"reason":"quota service unavailable"}]}`))
+			assert.NoError(t, err)
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodeObjectStorageQuotasListTool(srvCfg)
+
+		req := createRequestWithArgs(t, map[string]any{})
+		result, err := srvHandler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "result should be an error")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to retrieve Object Storage quotas")
+	})
+
+	t.Run("incomplete config", func(t *testing.T) {
+		t.Parallel()
+
+		incompleteCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: "", Token: ""}},
+			},
+		}
+		_, _, incompleteHandler := tools.NewLinodeObjectStorageQuotasListTool(incompleteCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 		result, err := incompleteHandler(t.Context(), req)
