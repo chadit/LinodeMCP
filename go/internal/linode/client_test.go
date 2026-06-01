@@ -163,6 +163,53 @@ func TestClientGetProfileGrantsSuccess(t *testing.T) {
 	assert.Equal(t, linode.GrantPermission("read_only"), got.Domain[0].Permissions)
 }
 
+func TestClientGetProfilePreferencesSuccess(t *testing.T) {
+	t.Parallel()
+
+	preferences := linode.ProfilePreferences{
+		"desktop_notifications": true,
+		"sort_order":            "ascending",
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/profile/preferences", r.URL.Path, "request path should match profile preferences route")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, int64(0), r.ContentLength, "GET request should not send a body")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(preferences), "encoding preferences response should not fail")
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+	got, err := client.GetProfilePreferences(t.Context())
+
+	require.NoError(t, err, "GetProfilePreferences should succeed on 200 response")
+	require.NotNil(t, got)
+	assert.Equal(t, preferences, *got)
+}
+
+func TestClientGetProfilePreferencesUnauthorized(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/profile/preferences", r.URL.Path, "request path should match profile preferences route")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, err := w.Write([]byte(`{}`))
+		assert.NoError(t, err, "writing error response should not fail")
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "bad-token", nil, linode.WithMaxRetries(0))
+	_, err := client.GetProfilePreferences(t.Context())
+
+	require.Error(t, err, "GetProfilePreferences should fail on 401 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "GetProfilePreferences must return APIError on 401")
+	assert.Equal(t, http.StatusUnauthorized, apiErr.StatusCode)
+}
+
 // TestClientGetProfileGrantsPATEmpty verifies that a PAT (which doesn't use
 // OAuth grants) returning an empty grants payload still parses cleanly.
 // The Linode API returns 200 with zero-valued fields for this case; the

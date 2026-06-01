@@ -337,6 +337,112 @@ func TestLinodeProfileTool(t *testing.T) {
 	})
 }
 
+func TestLinodeProfilePreferencesTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeProfilePreferencesTool(cfg)
+
+		assert.Equal(t, "linode_profile_preferences", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+	})
+
+	t.Run("incomplete config", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeProfilePreferencesTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "tool errors are returned as error results, not Go errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "should return an error result for incomplete config")
+	})
+
+	t.Run("api failure", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/profile/preferences", r.URL.Path, "request path should match")
+			w.WriteHeader(http.StatusInternalServerError)
+			_, err := w.Write([]byte(`{}`))
+			assert.NoError(t, err, "writing error response should not fail")
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeProfilePreferencesTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "API errors should be returned as tool error results")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "should return an error result for API failures")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		preferences := linode.ProfilePreferences{
+			"desktop_notifications": true,
+			"sort_order":            "ascending",
+		}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/profile/preferences", r.URL.Path, "request path should match")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(preferences))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {
+					Label:  envLabelDefault,
+					Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+				},
+			},
+		}
+		_, _, handler := tools.NewLinodeProfilePreferencesTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "desktop_notifications", "response should contain preference keys")
+		assert.Contains(t, textContent.Text, "ascending", "response should contain preference values")
+	})
+}
+
 // End-to-end verification of the instance get workflow.
 func TestLinodeInstanceGetTool(t *testing.T) {
 	t.Parallel()

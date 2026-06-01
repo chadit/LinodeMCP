@@ -23,6 +23,19 @@ func NewLinodeProfileTool(cfg *config.Config) (mcp.Tool, profiles.Capability, fu
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeProfilePreferencesTool creates a tool for retrieving Linode profile preferences.
+func NewLinodeProfilePreferencesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newSimpleGetTool(
+		cfg, "linode_profile_preferences",
+		"Retrieves Linode user preference settings",
+		func(ctx context.Context, client *linode.Client) (any, error) {
+			return client.GetProfilePreferences(ctx)
+		},
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeProfileLoginsTool creates a tool for listing login history for the authenticated profile.
 func NewLinodeProfileLoginsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(

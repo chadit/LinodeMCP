@@ -18,6 +18,10 @@ type Profile struct {
 // ProfileDevice represents a trusted device on the authenticated profile.
 type ProfileDevice map[string]any
 
+// ProfilePreferences represents the authenticated user's preference settings.
+// The API can add preference keys over time, so keep the response map-backed.
+type ProfilePreferences map[string]any
+
 // ProfilePhoneNumberRequest contains fields for POST /profile/phone-number.
 type ProfilePhoneNumberRequest struct {
 	ISOCode     string `json:"iso_code"`
