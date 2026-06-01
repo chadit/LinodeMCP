@@ -12,6 +12,7 @@ import (
 
 const (
 	endpointProfile                      = "/profile"
+	endpointProfilePhoneNumber           = "/profile/phone-number"
 	endpointProfileGrants                = "/profile/grants"
 	endpointProfileApps                  = "/profile/apps"
 	endpointProfileDevices               = "/profile/devices"
@@ -69,6 +70,25 @@ func (c *Client) httpGetProfile(ctx context.Context) (*Profile, error) {
 	}
 
 	return &profile, nil
+}
+
+// httpSendProfilePhoneNumberVerificationCode sends a profile phone verification code.
+func (c *Client) httpSendProfilePhoneNumberVerificationCode(ctx context.Context, req *ProfilePhoneNumberRequest) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointProfilePhoneNumber, req)
+	if err != nil {
+		return &NetworkError{Operation: "SendProfilePhoneNumberVerificationCode", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	if err := c.handleResponse(resp, nil); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // httpListProfileDevices retrieves trusted devices for the authenticated profile.

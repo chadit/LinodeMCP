@@ -50,6 +50,11 @@ func (c *Client) GetProfile(ctx context.Context) (*Profile, error) {
 	return profile, err
 }
 
+// SendProfilePhoneNumberVerificationCode sends a verification code without retrying the non-idempotent POST.
+func (c *Client) SendProfilePhoneNumberVerificationCode(ctx context.Context, req *ProfilePhoneNumberRequest) error {
+	return c.httpSendProfilePhoneNumberVerificationCode(ctx, req)
+}
+
 // ListProfileDevices retrieves trusted devices with automatic retry on transient failures.
 func (c *Client) ListProfileDevices(ctx context.Context, page, pageSize int) (*PaginatedResponse[ProfileDevice], error) {
 	var devices *PaginatedResponse[ProfileDevice]

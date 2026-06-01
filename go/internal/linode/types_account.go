@@ -18,6 +18,12 @@ type Profile struct {
 // ProfileDevice represents a trusted device on the authenticated profile.
 type ProfileDevice map[string]any
 
+// ProfilePhoneNumberRequest contains fields for POST /profile/phone-number.
+type ProfilePhoneNumberRequest struct {
+	ISOCode     string `json:"iso_code"`
+	PhoneNumber string `json:"phone_number"`
+}
+
 // GrantPermission is one of "read_only", "read_write", or "" (no access).
 // The Linode API uses an explicit empty string when the OAuth grant carries
 // no permission on a resource, so we keep it as a string rather than an

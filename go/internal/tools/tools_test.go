@@ -50,6 +50,11 @@ const (
 	profileAppLabel                  = "Example OAuth App"
 	profileDeviceUserAgent           = "Mozilla/5.0"
 	profileDeviceLastAuthenticated   = "2024-01-02T03:04:05"
+	keyISOCode                       = "iso_code"
+	keyPhoneNumber                   = "phone_number"
+	profilePhoneISOCode              = "US"
+	profilePhoneNumber               = "+15551234567"
+	errISOCodeNonEmpty               = "iso_code must be a non-empty string"
 	invalidProfileIDSlash            = "12/345"
 	invalidProfileIDQuery            = "12?345"
 	errProfileAppIDRequired          = "app_id is required"
@@ -1980,6 +1985,208 @@ func TestLinodeProfileDevicesTool(t *testing.T) {
 	})
 }
 
+func TestLinodeProfilePhoneNumberSendTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeProfilePhoneNumberSendTool(cfg)
+
+		assert.Equal(t, "linode_profile_phone_number_send", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapWrite, capability, "tool should be a write tool")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+		assert.Contains(t, tool.InputSchema.Properties, keyISOCode, "schema should include iso_code")
+		assert.Contains(t, tool.InputSchema.Properties, keyPhoneNumber, "schema should include phone_number")
+		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "write tool must require confirm")
+		assert.Contains(t, tool.InputSchema.Properties, keyDryRun, "write tool should expose dry_run")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/profile/phone-number", r.URL.Path, "request path should be /profile/phone-number")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+
+			body, readErr := io.ReadAll(r.Body)
+			if !assert.NoError(t, readErr, "request body should be readable") {
+				return
+			}
+
+			assert.JSONEq(t, `{"iso_code":"US","phone_number":"+15551234567"}`, string(body), "request body should match API contract")
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeProfilePhoneNumberSendTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyISOCode: profilePhoneISOCode, keyPhoneNumber: profilePhoneNumber, keyConfirm: true})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+		assertErrorContains(t, result, "Profile phone number verification code sent successfully")
+	})
+
+	t.Run("dry run previews without post", func(t *testing.T) {
+		t.Parallel()
+
+		var calls atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			calls.Add(1)
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeProfilePhoneNumberSendTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyISOCode: profilePhoneISOCode, keyPhoneNumber: profilePhoneNumber, keyDryRun: true})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "dry run should not be an error result")
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		dryRun, dryRunOK := body["dry_run"].(bool)
+		require.True(t, dryRunOK, "dry_run should be a boolean")
+		assert.True(t, dryRun, "response should be a dry-run preview")
+
+		would, wouldOK := body["would_execute"].(map[string]any)
+		require.True(t, wouldOK, "dry run response should include would_execute")
+		assert.Equal(t, "POST", would["method"])
+		assert.Equal(t, "/profile/phone-number", would["path"])
+
+		previewBody, previewBodyOK := would["body"].(map[string]any)
+		require.True(t, previewBodyOK, "dry run response should include the request body")
+		assert.Equal(t, profilePhoneISOCode, previewBody[keyISOCode])
+		assert.Equal(t, profilePhoneNumber, previewBody[keyPhoneNumber])
+		assert.Equal(t, int32(0), calls.Load(), "dry run should not call the POST endpoint")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/profile/phone-number", r.URL.Path, "request path should be /profile/phone-number")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeProfilePhoneNumberSendTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyISOCode: profilePhoneISOCode, keyPhoneNumber: profilePhoneNumber, keyConfirm: true})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		assertErrorContains(t, result, "Failed to send linode_profile_phone_number_send")
+		assertErrorContains(t, result, errForbidden)
+	})
+
+	t.Run("confirm required before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name    string
+			confirm any
+		}{
+			{name: caseMissing},
+			{name: caseFalse, confirm: false},
+			{name: caseString, confirm: boolStringTrue},
+			{name: caseNumericConfirm, confirm: 1},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls atomic.Int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					calls.Add(1)
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeProfilePhoneNumberSendTool(cfg)
+
+				args := map[string]any{keyISOCode: profilePhoneISOCode, keyPhoneNumber: profilePhoneNumber}
+				if testCase.name != caseMissing {
+					args[keyConfirm] = testCase.confirm
+				}
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, args))
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "missing or non-true confirm should be an error result")
+				assertErrorContains(t, result, "Set confirm=true to proceed")
+				assert.Equal(t, int32(0), calls.Load(), "confirm rejection should not call the client")
+			})
+		}
+	})
+
+	t.Run("required arguments reject before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name        string
+			args        map[string]any
+			wantMessage string
+		}{
+			{name: "missing iso_code", args: map[string]any{keyPhoneNumber: profilePhoneNumber, keyConfirm: true}, wantMessage: errISOCodeNonEmpty},
+			{name: "blank iso_code", args: map[string]any{keyISOCode: blankString, keyPhoneNumber: profilePhoneNumber, keyConfirm: true}, wantMessage: errISOCodeNonEmpty},
+			{name: "numeric iso_code", args: map[string]any{keyISOCode: 1, keyPhoneNumber: profilePhoneNumber, keyConfirm: true}, wantMessage: errISOCodeNonEmpty},
+			{name: "missing phone_number", args: map[string]any{keyISOCode: profilePhoneISOCode, keyConfirm: true}, wantMessage: "phone_number must be a non-empty string"},
+			{name: "blank phone_number", args: map[string]any{keyISOCode: profilePhoneISOCode, keyPhoneNumber: blankString, keyConfirm: true}, wantMessage: "phone_number must be a non-empty string"},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls atomic.Int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					calls.Add(1)
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeProfilePhoneNumberSendTool(cfg)
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid input should be an error result")
+				assertErrorContains(t, result, testCase.wantMessage)
+				assert.Equal(t, int32(0), calls.Load(), "validation rejection should not call the client")
+			})
+		}
+	})
+}
+
 // End-to-end verification of profile OAuth app authorization retrieval.
 func TestLinodeProfileAppsTool(t *testing.T) {
 	t.Parallel()
@@ -3213,7 +3420,7 @@ func TestLinodeProfileAppDeleteTool(t *testing.T) {
 			{name: caseMissing},
 			{name: caseFalse, confirm: false},
 			{name: caseString, confirm: boolStringTrue},
-			{name: "numeric confirm", confirm: 1},
+			{name: caseNumericConfirm, confirm: 1},
 		}
 
 		for _, testCase := range cases {
