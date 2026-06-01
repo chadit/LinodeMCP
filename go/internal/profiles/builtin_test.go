@@ -31,6 +31,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_profile_tfa_disable", Capability: profiles.CapAdmin},
 		{Name: "linode_profile_tfa_enable_confirm", Capability: profiles.CapAdmin},
 		{Name: "linode_profile_tokens", Capability: profiles.CapRead},
+		{Name: "linode_profile_token_delete", Capability: profiles.CapDestroy},
 		{Name: "linode_profile_devices", Capability: profiles.CapRead},
 		{Name: "linode_profile_preferences_update", Capability: profiles.CapWrite},
 		{Name: "linode_longview_plan", Capability: profiles.CapRead},

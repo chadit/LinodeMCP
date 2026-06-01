@@ -307,6 +307,27 @@ func (c *Client) httpListProfileTokens(ctx context.Context, page, pageSize int) 
 	return &tokens, nil
 }
 
+// httpDeleteProfileToken revokes a personal access token for the authenticated profile.
+func (c *Client) httpDeleteProfileToken(ctx context.Context, tokenID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointProfileTokens + "/" + url.PathEscape(strconv.Itoa(tokenID))
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteProfileToken", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	if err := c.handleResponse(resp, nil); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // httpListProfileDevices retrieves trusted devices for the authenticated profile.
 func (c *Client) httpListProfileDevices(ctx context.Context, page, pageSize int) (*PaginatedResponse[ProfileDevice], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

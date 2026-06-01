@@ -132,6 +132,11 @@ func (c *Client) ListProfileTokens(ctx context.Context, page, pageSize int) (*Pa
 	return tokens, err
 }
 
+// DeleteProfileToken revokes a personal access token without retrying the destructive request.
+func (c *Client) DeleteProfileToken(ctx context.Context, tokenID int) error {
+	return c.httpDeleteProfileToken(ctx, tokenID)
+}
+
 // ListProfileDevices retrieves trusted devices with automatic retry on transient failures.
 func (c *Client) ListProfileDevices(ctx context.Context, page, pageSize int) (*PaginatedResponse[ProfileDevice], error) {
 	var devices *PaginatedResponse[ProfileDevice]

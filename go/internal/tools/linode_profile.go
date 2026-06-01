@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -254,6 +255,63 @@ func profileTokenCreateRequestFromTool(request *mcp.CallToolRequest) (linode.Cre
 	}
 
 	return body, ""
+}
+
+// NewLinodeProfileTokenDeleteTool creates a tool for revoking a personal access token.
+func NewLinodeProfileTokenDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_profile_token_delete",
+		"Revokes a personal access token for the authenticated profile. Pass dry_run=true to preview without revoking the token.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("token_id", mcp.Required(), mcp.Description("The personal access token ID to revoke.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm personal access token revocation. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeProfileTokenDeleteRequest,
+	)
+
+	return tool, profiles.CapDestroy, handler
+}
+
+func handleLinodeProfileTokenDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	tokenID, validationMessage := requiredPositiveToolInt(request, "token_id", "token_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	path := fmt.Sprintf("%s/%d", profileTokensPath, tokenID)
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_profile_token_delete", httpMethodDelete, path, nil)
+	}
+
+	if result := RequireConfirm(request, "This revokes a personal access token. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, prepErr := prepareClient(request, cfg)
+	if prepErr != nil {
+		return mcp.NewToolResultError(prepErr.Error()), nil
+	}
+
+	if deleteFailureMessage := deleteProfileTokenResult(ctx, client, tokenID); deleteFailureMessage != "" {
+		return mcp.NewToolResultError(deleteFailureMessage), nil
+	}
+
+	return MarshalToolResponse(map[string]any{
+		responseKeyMessage: "Profile token revoked successfully",
+		"token_id":         tokenID,
+	})
+}
+
+func deleteProfileTokenResult(ctx context.Context, client *linode.Client, tokenID int) string {
+	if deleteFailure := client.DeleteProfileToken(ctx, tokenID); deleteFailure != nil {
+		return "Failed to delete linode_profile_token_delete: " + deleteFailure.Error()
+	}
+
+	return ""
 }
 
 // NewLinodeProfileLoginsTool creates a tool for listing login history for the authenticated profile.
