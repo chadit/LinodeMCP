@@ -22,6 +22,7 @@ const (
 	endpointProfileApps                  = "/profile/apps"
 	endpointProfileDevices               = "/profile/devices"
 	endpointProfileTFADisable            = "/profile/tfa-disable"
+	endpointProfileTFAEnableConfirm      = "/profile/tfa-enable-confirm"
 	endpointAccount                      = "/account"
 	endpointAccountTransfer              = "/account/transfer"
 	endpointAccountSettings              = "/account/settings"
@@ -195,6 +196,30 @@ func (c *Client) httpDisableProfileTFA(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// httpConfirmProfileTFAEnable confirms two-factor authentication enablement for the profile.
+func (c *Client) httpConfirmProfileTFAEnable(ctx context.Context, req *ProfileTFAEnableConfirmRequest) (ProfileTFAEnableConfirmResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	if req == nil {
+		req = &ProfileTFAEnableConfirmRequest{}
+	}
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointProfileTFAEnableConfirm, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ConfirmProfileTFAEnable", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var result ProfileTFAEnableConfirmResponse
+	if err := c.handleResponse(resp, &result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 // httpListProfileSecurityQuestions lists available profile security questions.

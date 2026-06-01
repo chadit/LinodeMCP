@@ -188,6 +188,12 @@ func TestRequiredScopesReadVsWrite(t *testing.T) {
 			capability: profiles.CapAdmin,
 			want:       []profiles.Scope{profiles.ScopeAccountReadWrite},
 		},
+		{
+			name:       "profile tfa enable confirm",
+			toolName:   "linode_profile_tfa_enable_confirm",
+			capability: profiles.CapAdmin,
+			want:       []profiles.Scope{profiles.ScopeAccountReadWrite},
+		},
 	}
 
 	for _, tc := range tests {

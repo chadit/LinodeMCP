@@ -35,6 +35,14 @@ type ProfilePhoneNumberVerifyRequest struct {
 	OTPCode string `json:"otp_code"`
 }
 
+// ProfileTFAEnableConfirmRequest contains fields for POST /profile/tfa-enable-confirm.
+type ProfileTFAEnableConfirmRequest struct {
+	TFACode string `json:"tfa_code,omitempty"`
+}
+
+// ProfileTFAEnableConfirmResponse contains the response from POST /profile/tfa-enable-confirm.
+type ProfileTFAEnableConfirmResponse map[string]any
+
 // GrantPermission is one of "read_only", "read_write", or "" (no access).
 // The Linode API uses an explicit empty string when the OAuth grant carries
 // no permission on a resource, so we keep it as a string rather than an

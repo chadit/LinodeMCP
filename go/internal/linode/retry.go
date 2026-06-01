@@ -75,6 +75,11 @@ func (c *Client) DisableProfileTFA(ctx context.Context) error {
 	return c.httpDisableProfileTFA(ctx)
 }
 
+// ConfirmProfileTFAEnable confirms two-factor authentication enablement without retrying the security-state-changing POST.
+func (c *Client) ConfirmProfileTFAEnable(ctx context.Context, req *ProfileTFAEnableConfirmRequest) (ProfileTFAEnableConfirmResponse, error) {
+	return c.httpConfirmProfileTFAEnable(ctx, req)
+}
+
 // ListProfileSecurityQuestions lists available profile security questions with automatic retry on transient failures.
 func (c *Client) ListProfileSecurityQuestions(ctx context.Context) (*ProfileSecurityQuestions, error) {
 	var questions *ProfileSecurityQuestions
