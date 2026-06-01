@@ -1561,6 +1561,18 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListAccountBetas", e) from e
 
+    async def get_account_beta(self, beta_id: str) -> dict[str, Any]:
+        """Get an enrolled Beta program on the account."""
+        encoded_beta_id = quote(beta_id, safe="")
+        try:
+            response = await self.make_request(
+                "GET", f"/account/betas/{encoded_beta_id}"
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetAccountBeta", e) from e
+
     async def list_account_availability(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -7134,6 +7146,13 @@ class RetryableClient:
         """Update Linode account information with retry."""
         result: Account = await self._execute_with_retry(
             lambda: self.client.update_account(**fields)
+        )
+        return result
+
+    async def get_account_beta(self, beta_id: str) -> dict[str, Any]:
+        """Get an enrolled Beta program on the account with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_account_beta, beta_id
         )
         return result
 

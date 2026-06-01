@@ -469,6 +469,63 @@ async def test_retryable_get_account_agreements_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_get_account_beta_sends_exact_route() -> None:
+    """Test getting an account beta sends GET /account/betas/{betaId}."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data = {"id": "example-open", "label": "Example Open Beta"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_response = MagicMock()
+        mock_response.json.return_value = response_data
+        mock_request.return_value = mock_response
+
+        result = await client.get_account_beta("example-open")
+
+    mock_request.assert_called_once_with("GET", "/account/betas/example-open")
+    assert result == response_data
+
+
+async def test_get_account_beta_url_encodes_beta_id() -> None:
+    """Test account beta ID is URL-encoded at the client boundary."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"id": "example/open?query"}
+        mock_request.return_value = mock_response
+
+        await client.get_account_beta("example/open?query")
+
+    mock_request.assert_called_once_with("GET", "/account/betas/example%2Fopen%3Fquery")
+
+
+async def test_get_account_beta_wraps_http_errors() -> None:
+    """Test getting an account beta wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("Network error")
+
+        with pytest.raises(NetworkError, match="GetAccountBeta"):
+            await client.get_account_beta("example-open")
+
+
+async def test_retryable_get_account_beta_delegates_to_client() -> None:
+    """Test RetryableClient delegates account beta get to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+    response_data = {"id": "example-open"}
+
+    with patch.object(
+        retryable.client, "get_account_beta", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = response_data
+
+        result = await retryable.get_account_beta("example-open")
+
+    mock_get.assert_awaited_once_with("example-open")
+    assert result == response_data
+
+
 async def test_list_account_availability_sends_exact_route_with_query() -> None:
     """Account availability listing sends GET /account/availability."""
     client = Client("https://api.linode.com/v4", "test-token")

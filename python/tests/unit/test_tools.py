@@ -41,6 +41,7 @@ from linodemcp.profiles import Capability
 from linodemcp.tools import (
     create_linode_account_agreements_acknowledge_tool,
     create_linode_account_availability_list_tool,
+    create_linode_account_beta_get_tool,
     create_linode_account_support_ticket_attachment_create_tool,
     create_linode_account_support_ticket_close_tool,
     create_linode_account_support_ticket_create_tool,
@@ -161,6 +162,7 @@ from linodemcp.tools import (
     handle_linode_account,
     handle_linode_account_agreements_acknowledge,
     handle_linode_account_availability_list,
+    handle_linode_account_beta_get,
     handle_linode_account_support_ticket_attachment_create,
     handle_linode_account_support_ticket_close,
     handle_linode_account_support_ticket_create,
@@ -1037,6 +1039,72 @@ async def test_handle_linode_managed_stats(sample_config: Config) -> None:
         assert len(result) == 1
         assert json.loads(result[0].text) == response_data
         mock_client.get_managed_stats.assert_awaited_once_with()
+
+
+async def test_create_linode_account_beta_get_tool() -> None:
+    """Test linode_account_beta_get tool schema."""
+    tool, capability = create_linode_account_beta_get_tool()
+
+    assert tool.name == "linode_account_beta_get"
+    assert capability is Capability.Read
+    assert tool.inputSchema["required"] == ["beta_id"]
+    assert tool.inputSchema["properties"]["beta_id"]["type"] == "string"
+
+
+async def test_handle_linode_account_beta_get(sample_config: Config) -> None:
+    """Test linode_account_beta_get tool."""
+    response_data = {"id": "example-open", "label": "Example Open Beta"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_account_beta.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_beta_get(
+            {"beta_id": "example-open"}, sample_config
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.get_account_beta.assert_awaited_once_with("example-open")
+
+
+@pytest.mark.parametrize("arguments", [{}, {"beta_id": ""}, {"beta_id": "   "}])
+async def test_handle_linode_account_beta_get_requires_beta_id(
+    arguments: dict[str, Any], sample_config: Config
+) -> None:
+    """Account beta get requires a non-empty beta_id before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_account_beta_get(arguments, sample_config)
+
+    assert "beta_id is required" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_account_beta_get_rejects_non_string_beta_id(
+    sample_config: Config,
+) -> None:
+    """Account beta get rejects non-string beta_id values before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_account_beta_get({"beta_id": 123}, sample_config)
+
+    assert "beta_id must be a string" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize("beta_id", ["example/open", "example?open", ".."])
+async def test_handle_linode_account_beta_get_rejects_malformed_beta_id(
+    beta_id: str, sample_config: Config
+) -> None:
+    """Account beta get rejects malformed path separator/traversal values."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_account_beta_get(
+            {"beta_id": beta_id}, sample_config
+        )
+
+    assert "beta_id must not contain" in result[0].text
+    mock_client_class.assert_not_called()
 
 
 async def test_create_linode_account_availability_list_tool() -> None:
