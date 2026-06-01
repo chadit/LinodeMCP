@@ -42,6 +42,17 @@ type CreateSupportTicketAttachmentRequest struct {
 	File string `json:"file"`
 }
 
+// SupportTicketReply represents one reply returned by GET /support/tickets/{ticket_id}/replies.
+type SupportTicketReply struct {
+	Created     string `json:"created"`
+	CreatedBy   string `json:"created_by"`
+	Description string `json:"description"`
+	GravatarID  string `json:"gravatar_id"`
+	ID          int    `json:"id"`
+	Updated     string `json:"updated"`
+	UpdatedBy   string `json:"updated_by"`
+}
+
 // SupportTicketAttachment represents one attachment on a support ticket.
 type SupportTicketAttachment struct {
 	Filename string `json:"filename"`

@@ -12,10 +12,11 @@ import (
 )
 
 const (
-	supportTicketGetToolName   = "linode_support_ticket_get"
-	supportTicketIDParam       = "ticket_id"
-	errSupportTicketIDMissing  = "ticket_id is required"
-	errSupportTicketIDPositive = "ticket_id must be a positive integer"
+	supportTicketGetToolName     = "linode_support_ticket_get"
+	supportTicketRepliesToolName = "linode_support_ticket_replies"
+	supportTicketIDParam         = "ticket_id"
+	errSupportTicketIDMissing    = "ticket_id is required"
+	errSupportTicketIDPositive   = "ticket_id must be a positive integer"
 )
 
 // NewLinodeSupportTicketGetTool creates a tool for retrieving one support ticket.
@@ -166,4 +167,45 @@ func closeSupportTicketErrorMessage(ctx context.Context, client *linode.Client, 
 	}
 
 	return ""
+}
+
+// NewLinodeSupportTicketRepliesTool creates a tool for listing replies for one support ticket.
+func NewLinodeSupportTicketRepliesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		supportTicketRepliesToolName,
+		"Lists replies for one support ticket by ticket_id.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(supportTicketIDParam, mcp.Required(), mcp.Description("Numeric support ticket ID whose replies should be listed.")),
+			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		},
+		handleLinodeSupportTicketRepliesRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleLinodeSupportTicketRepliesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	ticketID, validationMessage := supportTicketIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	page, pageSize, validationMessage := supportTicketsPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	replies, listFailure := client.ListSupportTicketReplies(ctx, ticketID, page, pageSize)
+	if listFailure == nil {
+		return MarshalToolResponse(replies)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve " + supportTicketRepliesToolName + ": " + listFailure.Error()), nil
 }
