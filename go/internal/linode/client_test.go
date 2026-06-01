@@ -44,6 +44,9 @@ const (
 	oauthClientStatus            = "active"
 	keyRedirectURI               = "redirect_uri"
 	keyThumbnailURL              = "thumbnail_url"
+	keyUserAgent                 = "user_agent"
+	keyLastRemoteAddr            = "last_remote_addr"
+	keyLastAuthenticated         = "last_authenticated"
 	imageShareGroupDescription   = "shared CI images"
 	imageShareGroupUpdated       = "2025-04-15T22:44:02"
 	imageShareGroupCreated       = "2025-04-14T22:44:02"
@@ -51,6 +54,8 @@ const (
 	oauthClientLabel             = "my app"
 	oauthClientRedirectURI       = "https://example.com/callback"
 	profileAppScopesReadOnly     = "linodes:read_only"
+	profileDeviceUserAgent       = "Mozilla/5.0"
+	profileDeviceRemoteAddr      = "203.0.113.1"
 )
 
 // TestClientGetProfileSuccess verifies that GetProfile returns a fully
@@ -288,6 +293,99 @@ func TestClientGetProfileAppAPIError(t *testing.T) {
 	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
 	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
 	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+func TestClientGetProfileDeviceSuccess(t *testing.T) {
+	t.Parallel()
+
+	want := linode.ProfileDevice{keyID: float64(12345), keyUserAgent: profileDeviceUserAgent, keyLastRemoteAddr: profileDeviceRemoteAddr, keyLastAuthenticated: accountUserPasswordCreated}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "method should be GET")
+		assert.Equal(t, "/profile/devices/12345", r.URL.Path, "path should target trusted device")
+		assert.Empty(t, r.URL.RawQuery, "query should be empty")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(want))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	got, err := client.GetProfileDevice(t.Context(), 12345)
+
+	require.NoError(t, err, "GetProfileDevice should succeed on 200 response")
+	require.NotNil(t, got, "result should not be nil")
+	assert.Equal(t, want, *got)
+}
+
+func TestClientGetProfileDeviceBuildsNumericPath(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/profile/devices/12345", r.URL.Path, "path should include escaped device id")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.ProfileDevice{keyID: float64(12345)}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetProfileDevice(t.Context(), 12345)
+
+	require.NoError(t, err, "GetProfileDevice should build the numeric device path")
+}
+
+func TestClientGetProfileDeviceAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "method should be GET")
+		assert.Equal(t, "/profile/devices/12345", r.URL.Path, "path should target trusted device")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetProfileDevice(t.Context(), 12345)
+
+	require.Error(t, err, "GetProfileDevice should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	assert.Contains(t, apiErr.Message, errForbidden)
+}
+
+func TestClientGetProfileDeviceRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if requestCount.Add(1) == 1 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "server error"}}}))
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.ProfileDevice{keyID: float64(12345), keyUserAgent: profileDeviceUserAgent}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	got, err := client.GetProfileDevice(t.Context(), 12345)
+
+	require.NoError(t, err, "GetProfileDevice should succeed after retry")
+	require.NotNil(t, got, "result should not be nil")
+	assert.InEpsilon(t, float64(12345), (*got)[keyID], 0)
+	assert.Equal(t, int32(2), requestCount.Load(), "read-only GET should retry once")
 }
 
 func TestClientGetProfileAppRetriesTransientError(t *testing.T) {
