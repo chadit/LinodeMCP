@@ -35,6 +35,7 @@ const (
 	profilePhoneISOCodeParam           = "iso_code"
 	profilePhoneNumberParam            = "phone_number"
 	profilePhoneOTPCodeParam           = "otp_code"
+	profileTFACodeParam                = "tfa_code"
 	profileAppIDMaxFromJSON            = 9007199254740991
 	profileDeviceIDMaxFromJSON         = 9007199254740991
 	errProfileAppIDPositive            = "app_id must be a positive integer"
@@ -62,6 +63,7 @@ const (
 	profilePhoneNumberPath             = "/profile/phone-number"
 	profilePhoneNumberVerifyPath       = profilePhoneNumberPath + "/verify"
 	profileTFADisablePath              = "/profile/tfa-disable"
+	profileTFAEnableConfirmPath        = "/profile/tfa-enable-confirm"
 	accountEventsPath                  = "/account/events"
 	accountChildAccountsPath           = "/account/child-accounts"
 	longviewSubscriptionIDParam        = "longview_subscription_id"
@@ -826,6 +828,25 @@ func NewLinodeProfileTFADisableTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeProfileTFADisableRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
+// NewLinodeProfileTFAEnableConfirmTool creates a tool for confirming profile two-factor authentication enablement.
+func NewLinodeProfileTFAEnableConfirmTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_profile_tfa_enable_confirm",
+		"Confirms two-factor authentication enablement for the authenticated profile with a TFA code.",
+		[]mcp.ToolOption{
+			mcp.WithString(profileTFACodeParam, mcp.Required(),
+				mcp.Description("Two-factor authentication code to confirm enablement.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm enabling profile two-factor authentication. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeProfileTFAEnableConfirmRequest,
 	)
 
 	return tool, profiles.CapAdmin, handler
@@ -1902,6 +1923,51 @@ func disableProfileTFAErrorMessage(ctx context.Context, client *linode.Client) s
 	}
 
 	return ""
+}
+
+func handleLinodeProfileTFAEnableConfirmRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	body, validationMessage := profileTFAEnableConfirmRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreviewWithBody(ctx, request, cfg, "linode_profile_tfa_enable_confirm", httpMethodPost, profileTFAEnableConfirmPath, body, nil)
+	}
+
+	if result := RequireConfirm(request, "This enables two-factor authentication for the profile. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, prepErr := prepareClient(request, cfg)
+	if prepErr != nil {
+		return mcp.NewToolResultError(prepErr.Error()), nil
+	}
+
+	confirmed, confirmFailureMessage := confirmProfileTFAEnableResult(ctx, client, body)
+	if confirmFailureMessage != "" {
+		return mcp.NewToolResultError(confirmFailureMessage), nil
+	}
+
+	return MarshalToolResponse(confirmed)
+}
+
+func confirmProfileTFAEnableResult(ctx context.Context, client *linode.Client, body *linode.ProfileTFAEnableConfirmRequest) (linode.ProfileTFAEnableConfirmResponse, string) {
+	confirmed, err := client.ConfirmProfileTFAEnable(ctx, body)
+	if err != nil {
+		return nil, "Failed to confirm linode_profile_tfa_enable_confirm: " + err.Error()
+	}
+
+	return confirmed, ""
+}
+
+func profileTFAEnableConfirmRequestFromTool(request *mcp.CallToolRequest) (*linode.ProfileTFAEnableConfirmRequest, string) {
+	tfaCode, validationMessage := requiredStringArg(request.GetArguments(), profileTFACodeParam)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	return &linode.ProfileTFAEnableConfirmRequest{TFACode: tfaCode}, ""
 }
 
 func profilePhoneNumberVerifyRequestFromTool(request *mcp.CallToolRequest) (*linode.ProfilePhoneNumberVerifyRequest, string) {
