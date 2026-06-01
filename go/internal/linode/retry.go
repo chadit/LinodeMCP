@@ -85,7 +85,7 @@ func (c *Client) DeleteProfileApp(ctx context.Context, appID int) error {
 	return c.httpDeleteProfileApp(ctx, appID)
 }
 
-// GetProfileDevice retrieves one trusted profile device with automatic retry on transient failures.
+// GetProfileDevice retrieves one trusted device with automatic retry on transient failures.
 func (c *Client) GetProfileDevice(ctx context.Context, deviceID int) (*ProfileDevice, error) {
 	var device *ProfileDevice
 
@@ -98,6 +98,11 @@ func (c *Client) GetProfileDevice(ctx context.Context, deviceID int) (*ProfileDe
 	})
 
 	return device, err
+}
+
+// DeleteProfileDevice revokes one trusted device without retrying the destructive DELETE.
+func (c *Client) DeleteProfileDevice(ctx context.Context, deviceID int) error {
+	return c.httpDeleteProfileDevice(ctx, deviceID)
 }
 
 // GetProfileGrants retrieves the /profile/grants response with retry. Used

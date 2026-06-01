@@ -801,6 +801,25 @@ func NewLinodeProfileDeviceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeProfileDeviceRevokeTool creates a tool for revoking one profile trusted device.
+func NewLinodeProfileDeviceRevokeTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_profile_device_revoke",
+		"Revokes a trusted device from the authenticated profile.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(profileDeviceIDParam, mcp.Required(),
+				mcp.Description("Profile trusted device ID to revoke.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm revoking a trusted device. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeProfileDeviceRevokeRequest,
+	)
+
+	return tool, profiles.CapDestroy, handler
+}
+
 // NewLinodeAccountOAuthClientsTool creates a tool for listing OAuth clients registered on the account.
 func NewLinodeAccountOAuthClientsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -1684,39 +1703,27 @@ func handleLinodeProfileAppGetRequest(ctx context.Context, request *mcp.CallTool
 	return mcp.NewToolResultError("Failed to retrieve linode_profile_app_get: " + getFailure.Error()), nil
 }
 
+type profileRevokeTarget struct {
+	toolName       string
+	pathPrefix     string
+	idField        string
+	confirmMessage string
+	successMessage string
+	fetchState     func(context.Context, *linode.Client, int) (any, error)
+	deleteFailure  func(context.Context, *linode.Client, int) string
+}
+
 func handleLinodeProfileAppDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	appID, validationMessage := profileAppIDFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	if IsDryRun(request) {
-		return RunDryRunPreview(ctx, request, cfg, "linode_profile_app_delete", httpMethodDelete,
-			"/profile/apps/"+strconv.Itoa(appID),
-			func(ctx context.Context, c *linode.Client) (any, error) {
-				return c.GetProfileApp(ctx, appID)
-			})
-	}
-
-	if result := RequireConfirm(request, "This revokes OAuth app access. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if deleteFailureMessage := deleteProfileAppErrorMessage(ctx, client, appID); deleteFailureMessage != "" {
-		return mcp.NewToolResultError(deleteFailureMessage), nil
-	}
-
-	return MarshalToolResponse(struct {
-		Message string `json:"message"`
-		AppID   int    `json:"app_id"`
-	}{
-		Message: "Profile app access revoked successfully",
-		AppID:   appID,
+	return handleProfileRevokeRequest(ctx, request, cfg, profileAppIDFromTool, &profileRevokeTarget{
+		toolName:       "linode_profile_app_delete",
+		pathPrefix:     "/profile/apps/",
+		idField:        "app_id",
+		confirmMessage: "This revokes OAuth app access. Set confirm=true to proceed.",
+		successMessage: "Profile app access revoked successfully",
+		fetchState: func(ctx context.Context, c *linode.Client, id int) (any, error) {
+			return c.GetProfileApp(ctx, id)
+		},
+		deleteFailure: deleteProfileAppErrorMessage,
 	})
 }
 
@@ -1726,6 +1733,67 @@ func deleteProfileAppErrorMessage(ctx context.Context, client *linode.Client, ap
 	}
 
 	return ""
+}
+
+func handleLinodeProfileDeviceRevokeRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	return handleProfileRevokeRequest(ctx, request, cfg, profileDeviceIDFromTool, &profileRevokeTarget{
+		toolName:       "linode_profile_device_revoke",
+		pathPrefix:     "/profile/devices/",
+		idField:        "device_id",
+		confirmMessage: "This revokes a trusted device. Set confirm=true to proceed.",
+		successMessage: "Profile trusted device revoked successfully",
+		fetchState: func(ctx context.Context, c *linode.Client, id int) (any, error) {
+			return c.GetProfileDevice(ctx, id)
+		},
+		deleteFailure: deleteProfileDeviceErrorMessage,
+	})
+}
+
+func deleteProfileDeviceErrorMessage(ctx context.Context, client *linode.Client, deviceID int) string {
+	if err := client.DeleteProfileDevice(ctx, deviceID); err != nil {
+		return "Failed to delete linode_profile_device_revoke: " + err.Error()
+	}
+
+	return ""
+}
+
+func handleProfileRevokeRequest(
+	ctx context.Context,
+	request *mcp.CallToolRequest,
+	cfg *config.Config,
+	idFromTool func(*mcp.CallToolRequest) (int, string),
+	target *profileRevokeTarget,
+) (*mcp.CallToolResult, error) {
+	id, validationMessage := idFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, target.toolName, httpMethodDelete,
+			target.pathPrefix+strconv.Itoa(id),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return target.fetchState(ctx, c, id)
+			})
+	}
+
+	if result := RequireConfirm(request, target.confirmMessage); result != nil {
+		return result, nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if deleteFailureMessage := target.deleteFailure(ctx, client, id); deleteFailureMessage != "" {
+		return mcp.NewToolResultError(deleteFailureMessage), nil
+	}
+
+	return MarshalToolResponse(map[string]any{
+		"message":      target.successMessage,
+		target.idField: id,
+	})
 }
 
 func profileAppIDFromTool(request *mcp.CallToolRequest) (int, string) {

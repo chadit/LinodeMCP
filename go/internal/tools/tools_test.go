@@ -43,6 +43,8 @@ const (
 	keyClientID                      = "client_id"
 	keyAppID                         = "app_id"
 	keyDeviceID                      = "device_id"
+	keyUserAgent                     = "user_agent"
+	keyLastRemoteAddr                = "last_remote_addr"
 	profileAppID                     = 12345
 	profileDeviceID                  = 12345
 	profileAppLabel                  = "Example OAuth App"
@@ -1888,7 +1890,7 @@ func TestLinodeProfileDevicesTool(t *testing.T) {
 		t.Parallel()
 
 		devices := map[string]any{
-			keyData: []map[string]any{{keyID: 123, "user_agent": "Mozilla/5.0", "last_remote_addr": "192.0.2.1"}},
+			keyData: []map[string]any{{keyID: 123, keyUserAgent: "Mozilla/5.0", keyLastRemoteAddr: "192.0.2.1"}},
 			keyPage: 2, keyPages: 3, keyResults: 75,
 		}
 
@@ -3193,7 +3195,7 @@ func TestLinodeProfileDeviceGetTool(t *testing.T) {
 			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
 			w.Header().Set("Content-Type", "application/json")
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-				keyID: profileDeviceID, "user_agent": profileDeviceUserAgent, "last_authenticated": profileDeviceLastAuthenticated, "last_remote_addr": ip203_0_113_1,
+				keyID: profileDeviceID, keyUserAgent: profileDeviceUserAgent, "last_authenticated": profileDeviceLastAuthenticated, keyLastRemoteAddr: ip203_0_113_1,
 			}))
 		}))
 		defer srv.Close()
@@ -3273,6 +3275,188 @@ func TestLinodeProfileDeviceGetTool(t *testing.T) {
 				req := createRequestWithArgs(t, testCase.args)
 
 				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid device_id should be an error result")
+				assertErrorContains(t, result, testCase.want)
+				assert.Equal(t, int32(0), calls.Load(), "invalid device_id should not call the client")
+			})
+		}
+	})
+}
+
+func TestLinodeProfileDeviceRevokeTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeProfileDeviceRevokeTool(cfg)
+
+		assert.Equal(t, "linode_profile_device_revoke", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapDestroy, capability, "tool should be destructive")
+		require.NotNil(t, handler, "handler should not be nil")
+		assert.Contains(t, tool.InputSchema.Properties, keyDeviceID, "schema should include device_id")
+		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "destructive revoke tool must require confirm")
+		assert.Contains(t, tool.InputSchema.Properties, keyDryRun, "destructive revoke tool should expose dry_run")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			assert.Equal(t, "/profile/devices/12345", r.URL.Path, "request path should include device id")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeProfileDeviceRevokeTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyDeviceID: profileDeviceID, keyConfirm: true})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+		assertErrorContains(t, result, "Profile trusted device revoked successfully")
+	})
+
+	t.Run("dry run previews without delete", func(t *testing.T) {
+		t.Parallel()
+
+		var calls atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			calls.Add(1)
+			assert.Equal(t, http.MethodGet, r.Method, "dry run should fetch current device")
+			assert.Equal(t, "/profile/devices/12345", r.URL.Path, "request path should include device id")
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyID: profileDeviceID, "user_agent": "curl/8.0"}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeProfileDeviceRevokeTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyDeviceID: profileDeviceID, keyDryRun: true})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "dry run should not be an error result")
+		assertErrorContains(t, result, "dry_run")
+		assert.Equal(t, int32(1), calls.Load(), "dry run should perform only the preview GET")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			assert.Equal(t, "/profile/devices/12345", r.URL.Path, "request path should include device id")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeProfileDeviceRevokeTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyDeviceID: profileDeviceID, keyConfirm: true})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		assertErrorContains(t, result, "Failed to delete linode_profile_device_revoke")
+		assertErrorContains(t, result, errForbidden)
+	})
+
+	t.Run("confirm required before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name    string
+			confirm any
+		}{
+			{name: caseMissing},
+			{name: caseFalse, confirm: false},
+			{name: caseString, confirm: boolStringTrue},
+			{name: caseNumeric, confirm: 1},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls atomic.Int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					calls.Add(1)
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeProfileDeviceRevokeTool(cfg)
+
+				args := map[string]any{keyDeviceID: profileDeviceID}
+				if testCase.name != caseMissing {
+					args[keyConfirm] = testCase.confirm
+				}
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, args))
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "missing or non-true confirm should be an error result")
+				assertErrorContains(t, result, "Set confirm=true to proceed")
+				assert.Equal(t, int32(0), calls.Load(), "confirm rejection should not call the client")
+			})
+		}
+	})
+
+	t.Run("invalid device_id rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name string
+			args map[string]any
+			want string
+		}{
+			{name: caseMissing, args: map[string]any{keyConfirm: true}, want: errProfileDeviceIDRequired},
+			{name: caseZero, args: map[string]any{keyDeviceID: 0, keyConfirm: true}, want: errProfileDeviceIDPositive},
+			{name: caseNegative, args: map[string]any{keyDeviceID: -1, keyConfirm: true}, want: errProfileDeviceIDPositive},
+			{name: caseString, args: map[string]any{keyDeviceID: "67890", keyConfirm: true}, want: errProfileDeviceIDPositive},
+			{name: caseSlash, args: map[string]any{keyDeviceID: "67/890", keyConfirm: true}, want: errProfileDeviceIDPositive},
+			{name: caseQuery, args: map[string]any{keyDeviceID: "67?890", keyConfirm: true}, want: errProfileDeviceIDPositive},
+			{name: caseDotTraversal, args: map[string]any{keyDeviceID: pathTraversalValue, keyConfirm: true}, want: errProfileDeviceIDPositive},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls atomic.Int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					calls.Add(1)
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeProfileDeviceRevokeTool(cfg)
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
 
 				require.NoError(t, err, "handler should return validation as a tool error")
 				require.NotNil(t, result, "result should not be nil")
