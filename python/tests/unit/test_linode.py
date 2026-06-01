@@ -1046,6 +1046,66 @@ async def test_retryable_list_account_betas_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_list_account_child_accounts_sends_get_to_child_accounts_route() -> None:
+    """Test listing child accounts sends GET /account/child-accounts."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response_data: dict[str, Any] = {
+        "data": [
+            {
+                "euuid": "A1BC2DEF-34GH-567I-J890KLMN12O34P56",
+                "company": "Example Child",
+            }
+        ],
+        "page": 2,
+        "pages": 3,
+        "results": 51,
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.list_account_child_accounts(page=2, page_size=25)
+
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "GET", "/account/child-accounts?page=2&page_size=25"
+    )
+    await client.close()
+
+
+async def test_list_account_child_accounts_wraps_http_errors() -> None:
+    """Test listing child accounts wraps HTTP errors with operation context."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.list_account_child_accounts()
+
+    assert "ListAccountChildAccounts" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_list_account_child_accounts_delegates_to_client() -> None:
+    """Test RetryableClient delegates child account listing to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "list_account_child_accounts", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = {"data": [], "page": 1, "pages": 1, "results": 0}
+        result = await retryable.list_account_child_accounts(page=1, page_size=100)
+
+    assert result["data"] == []
+    mock_list.assert_awaited_once_with(page=1, page_size=100)
+    await retryable.close()
+
+
 async def test_list_tags_sends_get_to_tags_route() -> None:
     """Test listing account tags sends GET /tags."""
     client = Client("https://api.linode.com/v4", "test-token")
