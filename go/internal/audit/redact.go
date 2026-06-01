@@ -40,6 +40,7 @@ func RedactionFields() []string {
 		"ssl_key",
 		"ssh_keys",
 		"token",
+		"token_id",
 		"token_uuid",
 	}
 }

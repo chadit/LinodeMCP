@@ -137,6 +137,12 @@ func (c *Client) DeleteProfileToken(ctx context.Context, tokenID int) error {
 	return c.httpDeleteProfileToken(ctx, tokenID)
 }
 
+// UpdateProfileToken updates a personal access token without automatic retry.
+// Retrying can replay token changes after a transient error, so this method delegates exactly once.
+func (c *Client) UpdateProfileToken(ctx context.Context, tokenID string, request UpdateProfileTokenRequest) (*ProfileToken, error) {
+	return c.httpUpdateProfileToken(ctx, tokenID, request)
+}
+
 // ListProfileDevices retrieves trusted devices with automatic retry on transient failures.
 func (c *Client) ListProfileDevices(ctx context.Context, page, pageSize int) (*PaginatedResponse[ProfileDevice], error) {
 	var devices *PaginatedResponse[ProfileDevice]
