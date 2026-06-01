@@ -13,6 +13,7 @@ import (
 const (
 	endpointProfile                      = "/profile"
 	endpointProfilePreferences           = endpointProfile + "/preferences"
+	endpointProfileTFAEnable             = endpointProfile + "/tfa-enable"
 	endpointProfilePhoneNumber           = "/profile/phone-number"
 	endpointProfilePhoneNumberVerify     = endpointProfilePhoneNumber + "/verify"
 	endpointProfileGrants                = "/profile/grants"
@@ -98,6 +99,26 @@ func (c *Client) httpUpdateProfilePreferences(ctx context.Context, req ProfilePr
 	}
 
 	return preferences, nil
+}
+
+// httpEnableProfileTFA generates a two-factor authentication secret for the authenticated profile.
+func (c *Client) httpEnableProfileTFA(ctx context.Context) (ProfileTFAEnableResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointProfileTFAEnable, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "EnableProfileTFA", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var result ProfileTFAEnableResponse
+	if err := c.handleResponse(resp, &result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 // httpSendProfilePhoneNumberVerificationCode sends a profile phone verification code.

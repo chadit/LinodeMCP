@@ -171,6 +171,12 @@ func TestRequiredScopesReadVsWrite(t *testing.T) {
 			want:       []profiles.Scope{profiles.ScopeAccountReadWrite},
 		},
 		{
+			name:       "profile tfa enable",
+			toolName:   "linode_profile_tfa_enable",
+			capability: profiles.CapAdmin,
+			want:       []profiles.Scope{profiles.ScopeAccountReadWrite},
+		},
+		{
 			name:       "profile phone number delete",
 			toolName:   "linode_profile_phone_number_delete",
 			capability: profiles.CapDestroy,

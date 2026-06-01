@@ -598,6 +598,7 @@ func TestCategoriesIncludesProfileAppsInCore(t *testing.T) {
 	t.Parallel()
 
 	assert.Contains(t, profiles.Categories("linode_profile_login_get"), "core")
+	assert.Contains(t, profiles.Categories("linode_profile_tfa_enable"), "core")
 	assert.Contains(t, profiles.Categories("linode_profile_phone_number_send"), "core")
 	assert.Contains(t, profiles.Categories("linode_profile_phone_number_delete"), "core")
 	assert.Contains(t, profiles.Categories("linode_profile_phone_number_verify"), "core")

@@ -475,6 +475,62 @@ func TestClientGetProfileAppRetriesTransientError(t *testing.T) {
 	assert.Equal(t, int32(2), requestCount.Load(), "read-only get should retry once then succeed")
 }
 
+func TestClientEnableProfileTFASuccess(t *testing.T) {
+	t.Parallel()
+
+	response := linode.ProfileTFAEnableResponse{
+		"secret": "JBSWY3DPEHPK3PXP",
+		"expiry": "2026-01-01T00:00:00",
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/profile/tfa-enable", r.URL.Path, "request path should be /profile/tfa-enable")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+
+		body, readErr := io.ReadAll(r.Body)
+		if !assert.NoError(t, readErr, "request body should be readable") {
+			return
+		}
+
+		assert.Empty(t, string(body), "request body should be empty")
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(response))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	result, err := client.EnableProfileTFA(t.Context())
+
+	require.NoError(t, err, "EnableProfileTFA should succeed on 200 response")
+	assert.Equal(t, "JBSWY3DPEHPK3PXP", result["secret"], "secret should match the API response")
+	assert.Equal(t, "2026-01-01T00:00:00", result["expiry"], "expiry should match the API response")
+}
+
+func TestClientEnableProfileTFANoRetryOnTransientFailure(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/profile/tfa-enable", r.URL.Path, "request path should be /profile/tfa-enable")
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(2))
+	result, err := client.EnableProfileTFA(t.Context())
+
+	require.Error(t, err, "EnableProfileTFA should surface the transient API error")
+	assert.Nil(t, result, "result should be nil on failure")
+	assert.Equal(t, int32(1), calls.Load(), "non-idempotent TFA secret generation must not be retried")
+}
+
 func TestClientSendProfilePhoneNumberVerificationCodeSuccess(t *testing.T) {
 	t.Parallel()
 

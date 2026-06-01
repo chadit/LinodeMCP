@@ -740,6 +740,23 @@ func NewLinodeAccountInvoiceItemsTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeProfileTFAEnableTool creates a tool for generating a two-factor authentication secret.
+func NewLinodeProfileTFAEnableTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_profile_tfa_enable",
+		"Generates a two-factor authentication secret for the authenticated profile. The secret must be confirmed with the API before two-factor authentication is enabled.",
+		[]mcp.ToolOption{
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm generating a two-factor authentication secret. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeProfileTFAEnableRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
 // NewLinodeProfilePhoneNumberSendTool creates a tool for sending a profile phone verification code.
 func NewLinodeProfilePhoneNumberSendTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -2644,6 +2661,37 @@ func createAccountPaymentMethod(ctx context.Context, client *linode.Client, req 
 	}
 
 	return method, ""
+}
+
+func handleLinodeProfileTFAEnableRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_profile_tfa_enable", httpMethodPost, "/profile/tfa-enable", nil)
+	}
+
+	if result := RequireConfirm(request, "This generates a two-factor authentication secret. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	secret, enableFailureMessage := enableProfileTFA(ctx, client)
+	if enableFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to generate linode_profile_tfa_enable: " + enableFailureMessage), nil
+	}
+
+	return MarshalToolResponse(secret)
+}
+
+func enableProfileTFA(ctx context.Context, client *linode.Client) (linode.ProfileTFAEnableResponse, string) {
+	secret, err := client.EnableProfileTFA(ctx)
+	if err != nil {
+		return nil, err.Error()
+	}
+
+	return secret, ""
 }
 
 func handleLinodeAccountPaymentMethodDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
