@@ -157,6 +157,27 @@ func (c *Client) httpGetProfileDevice(ctx context.Context, deviceID int) (*Profi
 	return &device, nil
 }
 
+// httpDeleteProfileDevice revokes one trusted device from the profile.
+func (c *Client) httpDeleteProfileDevice(ctx context.Context, deviceID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointProfileDevices + "/" + url.PathEscape(strconv.Itoa(deviceID))
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteProfileDevice", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	if err := c.handleResponse(resp, nil); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // httpGetProfileGrants retrieves /profile/grants. Returns a Grants
 // struct for OAuth tokens; PATs return an empty payload by design (the
 // Linode API still returns 200 with zero-valued fields). Callers

@@ -887,8 +887,8 @@ func coreToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeProfileDevicesTool,
 		tools.NewLinodeProfileAppGetTool,
 		tools.NewLinodeProfileAppDeleteTool,
-
 		tools.NewLinodeProfileDeviceGetTool,
+		tools.NewLinodeProfileDeviceRevokeTool,
 		tools.NewLinodeAccountOAuthClientsTool,
 		tools.NewLinodeProfileAppsTool,
 		tools.NewLinodeLongviewClientsTool,
