@@ -1133,6 +1133,7 @@ func dnsToolEntries(cfg *config.Config) []toolEntry {
 func volumeToolEntries(cfg *config.Config) []toolEntry {
 	return entriesFromFactories(cfg, []toolFactory{
 		tools.NewLinodeVolumeListTool,
+		tools.NewLinodeVolumeTypeListTool,
 		tools.NewLinodeVolumeCreateTool,
 		tools.NewLinodeVolumeUpdateTool,
 		tools.NewLinodeVolumeAttachTool,

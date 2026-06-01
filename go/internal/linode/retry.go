@@ -3679,6 +3679,21 @@ func (c *Client) DeleteDomainRecord(ctx context.Context, domainID, recordID int)
 	})
 }
 
+// ListVolumeTypes retrieves all volume types with automatic retry on transient failures.
+func (c *Client) ListVolumeTypes(ctx context.Context) ([]VolumeType, error) {
+	var types []VolumeType
+
+	err := c.executeWithRetry(ctx, "ListVolumeTypes", func() error {
+		var err error
+
+		types, err = c.httpListVolumeTypes(ctx)
+
+		return err
+	})
+
+	return types, err
+}
+
 // CreateVolume creates a new volume with automatic retry on transient failures.
 func (c *Client) CreateVolume(ctx context.Context, req *CreateVolumeRequest) (*Volume, error) {
 	var volume *Volume

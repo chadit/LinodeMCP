@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	endpointVolumes = "/volumes"
-	endpointSSHKeys = "/profile/sshkeys"
+	endpointVolumes     = "/volumes"
+	endpointVolumeTypes = "/volumes/types"
+	endpointSSHKeys     = "/profile/sshkeys"
 )
 
 // ListVolumes retrieves all block storage volumes for the authenticated user.
@@ -24,6 +25,27 @@ func (c *Client) httpListVolumes(ctx context.Context) ([]Volume, error) {
 	defer drainClose(resp)
 
 	var response PaginatedResponse[Volume]
+
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
+}
+
+// ListVolumeTypes retrieves all block storage volume types.
+func (c *Client) httpListVolumeTypes(ctx context.Context) ([]VolumeType, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointVolumeTypes, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListVolumeTypes", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[VolumeType]
 
 	if err := c.handleResponse(resp, &response); err != nil {
 		return nil, err

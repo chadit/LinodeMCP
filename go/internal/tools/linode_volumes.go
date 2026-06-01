@@ -30,3 +30,19 @@ func NewLinodeVolumeListTool(cfg *config.Config) (mcp.Tool, profiles.Capability,
 
 	return tool, profiles.CapRead, handler
 }
+
+// NewLinodeVolumeTypeListTool creates a tool for listing Linode block storage volume types.
+func NewLinodeVolumeTypeListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newListTool(
+		cfg,
+		"linode_volume_type_list",
+		"Lists available Linode block storage volume types and pricing",
+		func(ctx context.Context, client *linode.Client) ([]linode.VolumeType, error) {
+			return client.ListVolumeTypes(ctx)
+		},
+		[]listFilterParam[linode.VolumeType]{},
+		"volume_types",
+	)
+
+	return tool, profiles.CapRead, handler
+}
