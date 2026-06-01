@@ -84,6 +84,91 @@ async def handle_linode_account_agreements_list(
     return await execute_tool(cfg, arguments, "list Linode account agreements", _call)
 
 
+_ACCOUNT_AGREEMENT_FIELDS = (
+    "billing_agreement",
+    "eu_model",
+    "master_service_agreement",
+    "privacy_policy",
+)
+
+
+def create_linode_account_agreements_acknowledge_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_agreements_acknowledge tool."""
+    return Tool(
+        name="linode_account_agreements_acknowledge",
+        description="Acknowledges agreements on the Linode account.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "billing_agreement": {
+                    "type": "boolean",
+                    "description": "Acknowledge the billing agreement",
+                },
+                "eu_model": {
+                    "type": "boolean",
+                    "description": "Acknowledge the EU model agreement",
+                },
+                "master_service_agreement": {
+                    "type": "boolean",
+                    "description": "Acknowledge the master service agreement",
+                },
+                "privacy_policy": {
+                    "type": "boolean",
+                    "description": "Acknowledge the privacy policy",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm this mutating operation. Ignored "
+                        "when dry_run=true."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_account_agreements_acknowledge(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_agreements_acknowledge tool request."""
+    agreements: dict[str, bool] = {}
+    for field in _ACCOUNT_AGREEMENT_FIELDS:
+        value = arguments.get(field)
+        if value is None:
+            continue
+        if not isinstance(value, bool):
+            return error_response(f"{field} must be a boolean")
+        agreements[field] = value
+
+    if not agreements:
+        return error_response("At least one account agreement field is required")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_account_agreements_acknowledge",
+            arguments.get("environment", ""),
+            "POST",
+            "/account/agreements",
+            None,
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This acknowledges account agreements. Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.acknowledge_account_agreements(agreements)
+
+    return await execute_tool(
+        cfg, arguments, "acknowledge Linode account agreements", _call
+    )
+
+
 def create_linode_account_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_update tool."""
     return Tool(

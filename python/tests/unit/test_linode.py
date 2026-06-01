@@ -523,6 +523,60 @@ async def test_retryable_list_account_availability_delegates_to_client() -> None
     await retryable.close()
 
 
+async def test_acknowledge_account_agreements_sends_post_body() -> None:
+    """Test acknowledging account agreements sends POST /account/agreements."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    payload = {
+        "billing_agreement": True,
+        "eu_model": True,
+        "master_service_agreement": False,
+        "privacy_policy": True,
+    }
+    response_data = {"accepted": True}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.acknowledge_account_agreements(payload)
+
+    assert result == response_data
+    mock_request.assert_called_once_with("POST", "/account/agreements", payload)
+    await client.close()
+
+
+async def test_acknowledge_account_agreements_wraps_http_errors() -> None:
+    """Test acknowledging account agreements wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.acknowledge_account_agreements({"eu_model": True})
+
+    assert "AcknowledgeAccountAgreements" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_acknowledge_account_agreements_does_not_replay() -> None:
+    """RetryableClient delegates agreement acknowledgement once without retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+    payload = {"eu_model": True}
+
+    with patch.object(
+        retryable.client, "acknowledge_account_agreements", new_callable=AsyncMock
+    ) as mock_acknowledge:
+        mock_acknowledge.side_effect = httpx.HTTPError("transient")
+        with pytest.raises(httpx.HTTPError):
+            await retryable.acknowledge_account_agreements(payload)
+
+    mock_acknowledge.assert_awaited_once_with(payload)
+    await retryable.close()
+
+
 async def test_update_account_sends_put_to_account_route() -> None:
     """Test updating account sends PUT /account."""
     client = Client("https://api.linode.com/v4", "test-token")

@@ -39,6 +39,7 @@ from linodemcp.linode import (
 )
 from linodemcp.profiles import Capability
 from linodemcp.tools import (
+    create_linode_account_agreements_acknowledge_tool,
     create_linode_account_availability_list_tool,
     create_linode_account_support_ticket_attachment_create_tool,
     create_linode_account_support_ticket_close_tool,
@@ -158,6 +159,7 @@ from linodemcp.tools import (
     create_linode_vpcs_list_tool,
     handle_hello,
     handle_linode_account,
+    handle_linode_account_agreements_acknowledge,
     handle_linode_account_availability_list,
     handle_linode_account_support_ticket_attachment_create,
     handle_linode_account_support_ticket_close,
@@ -832,6 +834,111 @@ async def test_handle_linode_account(sample_config: Config) -> None:
         assert "Test" in result[0].text
         assert "test@example.com" in result[0].text
         mock_client.get_account.assert_called_once()
+
+
+async def test_create_linode_account_agreements_acknowledge_tool() -> None:
+    """Test linode_account_agreements_acknowledge tool schema."""
+    tool, capability = create_linode_account_agreements_acknowledge_tool()
+
+    assert tool.name == "linode_account_agreements_acknowledge"
+    assert capability.name == "Write"
+    assert "eu_model" in tool.inputSchema["properties"]
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert "confirm" in tool.inputSchema.get("required", [])
+
+
+async def test_account_agreements_ack_schema_requires_confirm() -> None:
+    """The schema requires confirm for mutating acknowledgement calls."""
+    tool, _capability = create_linode_account_agreements_acknowledge_tool()
+
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert "confirm" in tool.inputSchema.get("required", [])
+
+
+async def test_handle_linode_account_agreements_acknowledge_dry_run(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews acknowledgement without confirm or client call."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_account_agreements_acknowledge(
+            {"eu_model": True, "dry_run": True}, sample_config
+        )
+
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_account_agreements_acknowledge"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/account/agreements"
+    assert body["current_state"] is None
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_account_agreements_acknowledge(
+    sample_config: Config,
+) -> None:
+    """Test linode_account_agreements_acknowledge tool."""
+    response_data = {"accepted": True}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.acknowledge_account_agreements.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_agreements_acknowledge(
+            {"eu_model": True, "privacy_policy": False, "confirm": True},
+            sample_config,
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.acknowledge_account_agreements.assert_awaited_once_with(
+        {"eu_model": True, "privacy_policy": False}
+    )
+
+
+@pytest.mark.parametrize("bad_confirm", [None, False, "true", 1])
+async def test_handle_linode_account_agreements_acknowledge_requires_boolean_confirm(
+    sample_config: Config, bad_confirm: object
+) -> None:
+    """Agreement acknowledgement rejects non-true confirm before client call."""
+    arguments: dict[str, object] = {"eu_model": True}
+    if bad_confirm is not None:
+        arguments["confirm"] = bad_confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_account_agreements_acknowledge(
+            arguments, sample_config
+        )
+
+    assert "confirm=true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_account_agreements_acknowledge_requires_field(
+    sample_config: Config,
+) -> None:
+    """Agreement acknowledgement requires at least one agreement field."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_account_agreements_acknowledge(
+            {"confirm": True}, sample_config
+        )
+
+    assert "At least one account agreement field" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_account_agreements_acknowledge_requires_boolean_field(
+    sample_config: Config,
+) -> None:
+    """Agreement acknowledgement rejects non-boolean agreement values."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_account_agreements_acknowledge(
+            {"confirm": True, "eu_model": "true"}, sample_config
+        )
+
+    assert "eu_model must be a boolean" in result[0].text
+    mock_client_class.assert_not_called()
 
 
 async def test_create_linode_account_update_tool() -> None:
