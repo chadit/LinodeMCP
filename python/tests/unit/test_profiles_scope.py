@@ -85,6 +85,11 @@ def test_meta_returns_empty() -> None:
             Capability.Read,
             [Scope.AccountReadOnly],
         ),
+        (
+            "linode_account_agreements_acknowledge",
+            Capability.Write,
+            [Scope.AccountReadWrite],
+        ),
         ("linode_profile", Capability.Read, [Scope.AccountReadOnly]),
     ],
 )
