@@ -955,6 +955,119 @@ async def test_account_agreements_list_dispatches_from_registry(
     mock_client.get_account_agreements.assert_awaited_once_with()
 
 
+async def test_account_availability_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Account availability get tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_availability_get_tool" in tools_mod.__all__
+    assert "handle_linode_account_availability_get" in tools_mod.__all__
+
+    srv = Server(sample_config)
+    assert "linode_account_availability_get" in srv.registered_tool_names
+
+
+async def test_account_availability_get_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Account availability get is callable through server dispatch."""
+    response_data: dict[str, object] = {
+        "available": ["Linodes", "NodeBalancers"],
+        "region": "us-east",
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_account_availability.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_account_availability_get", {"region_id": "us-east"}
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.get_account_availability.assert_awaited_once_with("us-east")
+
+
+async def test_account_availability_get_rejects_missing_region_id(
+    sample_config: Config,
+) -> None:
+    """Account availability get requires region_id before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_account_availability_get", {})
+
+    assert "region_id is required" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_account_availability_get_rejects_non_string_region_id(
+    sample_config: Config,
+) -> None:
+    """Account availability get rejects non-string region IDs."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_account_availability_get", {"region_id": 123}
+        )
+
+    assert "region_id must be a string" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_account_availability_get_rejects_blank_region_id(
+    sample_config: Config,
+) -> None:
+    """Account availability get rejects blank region IDs."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_account_availability_get", {"region_id": "   "}
+        )
+
+    assert "region_id is required" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "region_id", ["us/east", "us-east?x=1", "..", "å", "-", "US-EAST"]
+)
+async def test_account_availability_get_rejects_malformed_region_id(
+    sample_config: Config, region_id: str
+) -> None:
+    """Account availability get rejects malformed region path parameters."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_account_availability_get", {"region_id": region_id}
+        )
+
+    assert (
+        "region_id must be a lowercase region slug with letters, numbers, and hyphens"
+        in result[0].text
+    )
+    mock_client_class.assert_not_called()
+
+
+async def test_account_availability_get_schema_requires_region_id(
+    sample_config: Config,
+) -> None:
+    """Account availability get schema includes the required region path param."""
+    Server(sample_config)
+    entry = next(
+        item
+        for item in get_tool_registry()
+        if item.name == "linode_account_availability_get"
+    )
+
+    assert entry.tool.inputSchema["required"] == ["region_id"]
+    assert entry.tool.inputSchema["properties"]["region_id"]["type"] == "string"
+
+
 async def test_account_availability_list_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

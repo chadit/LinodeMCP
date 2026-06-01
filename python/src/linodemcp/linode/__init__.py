@@ -1548,6 +1548,17 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListAccountAvailability", e) from e
 
+    async def get_account_availability(self, region_id: str) -> dict[str, Any]:
+        """Get available Linode services for the account in a region."""
+        encoded_region_id = quote(region_id, safe="")
+        endpoint = f"/account/availability/{encoded_region_id}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetAccountAvailability", e) from e
+
     async def list_regions(self) -> list[Region]:
         """List Linode regions."""
         try:
@@ -7315,6 +7326,13 @@ class RetryableClient:
             lambda: self.client.list_account_availability(
                 page=page, page_size=page_size
             )
+        )
+        return result
+
+    async def get_account_availability(self, region_id: str) -> dict[str, Any]:
+        """Get available Linode services in a region with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_account_availability, region_id
         )
         return result
 

@@ -81,6 +81,11 @@ def test_meta_returns_empty() -> None:
             [Scope.AccountReadOnly],
         ),
         (
+            "linode_account_availability_get",
+            Capability.Read,
+            [Scope.AccountReadOnly],
+        ),
+        (
             "linode_account_availability_list",
             Capability.Read,
             [Scope.AccountReadOnly],

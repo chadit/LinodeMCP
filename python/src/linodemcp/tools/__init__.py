@@ -8,6 +8,7 @@ from linodemcp.tools.hello import (
 )
 from linodemcp.tools.linode_account import (
     create_linode_account_agreements_list_tool,
+    create_linode_account_availability_get_tool,
     create_linode_account_availability_list_tool,
     create_linode_account_support_ticket_attachment_create_tool,
     create_linode_account_support_ticket_close_tool,
@@ -25,6 +26,7 @@ from linodemcp.tools.linode_account import (
     create_linode_managed_stats_tool,
     handle_linode_account,
     handle_linode_account_agreements_list,
+    handle_linode_account_availability_get,
     handle_linode_account_availability_list,
     handle_linode_account_support_ticket_attachment_create,
     handle_linode_account_support_ticket_close,
@@ -609,6 +611,7 @@ __all__ = [
     "RetryableClient",
     "create_hello_tool",
     "create_linode_account_agreements_list_tool",
+    "create_linode_account_availability_get_tool",
     "create_linode_account_availability_list_tool",
     "create_linode_account_support_ticket_attachment_create_tool",
     "create_linode_account_support_ticket_close_tool",
@@ -869,6 +872,7 @@ __all__ = [
     "handle_hello",
     "handle_linode_account",
     "handle_linode_account_agreements_list",
+    "handle_linode_account_availability_get",
     "handle_linode_account_availability_list",
     "handle_linode_account_support_ticket_attachment_create",
     "handle_linode_account_support_ticket_close",

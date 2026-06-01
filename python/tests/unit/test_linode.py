@@ -494,6 +494,69 @@ async def test_list_account_availability_sends_exact_route_with_query() -> None:
     await client.close()
 
 
+async def test_get_account_availability_sends_exact_route() -> None:
+    """Account availability get sends GET /account/availability/{regionId}."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data = {"available": ["Linodes", "NodeBalancers"]}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.get_account_availability("us-east")
+
+    assert result == response_data
+    mock_request.assert_called_once_with("GET", "/account/availability/us-east")
+    await client.close()
+
+
+async def test_get_account_availability_url_encodes_region_id() -> None:
+    """Account availability get URL-encodes path parameters."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"available": []}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.get_account_availability("us/east")
+
+    mock_request.assert_called_once_with("GET", "/account/availability/us%2Feast")
+    await client.close()
+
+
+async def test_get_account_availability_wraps_http_errors() -> None:
+    """Account availability get wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.get_account_availability("us-east")
+
+    assert "GetAccountAvailability" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_get_account_availability_delegates_to_client() -> None:
+    """RetryableClient delegates account availability get to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "get_account_availability", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = {"available": []}
+        result = await retryable.get_account_availability("us-east")
+
+    assert result["available"] == []
+    mock_get.assert_awaited_once_with("us-east")
+    await retryable.close()
+
+
 async def test_list_account_availability_wraps_http_errors() -> None:
     """Account availability listing wraps HTTP errors."""
     client = Client("https://api.linode.com/v4", "test-token")

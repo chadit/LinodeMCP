@@ -188,6 +188,17 @@ async def handle_linode_account_update(
     return await execute_tool(cfg, arguments, "update Linode account", _call)
 
 
+_MIN_REGION_ID_PARTS = 2
+
+
+def _is_region_id(value: str) -> bool:
+    """Return True when value looks like a Linode region ID slug."""
+    parts = value.split("-")
+    return len(parts) >= _MIN_REGION_ID_PARTS and all(
+        part and all("0" <= c <= "9" or "a" <= c <= "z" for c in part) for part in parts
+    )
+
+
 def _optional_int_argument(
     arguments: dict[str, Any], name: str, minimum: int, maximum: int | None = None
 ) -> int | None:
@@ -242,6 +253,54 @@ async def handle_linode_account_availability_list(
         return await client.list_account_availability(page=page, page_size=page_size)
 
     return await execute_tool(cfg, arguments, "list Linode account availability", _call)
+
+
+def create_linode_account_availability_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_availability_get tool."""
+    return Tool(
+        name="linode_account_availability_get",
+        description=(
+            "Gets available Linode services for the account in a specific region."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "region_id": {
+                    "type": "string",
+                    "description": "Region ID to check (for example, 'us-east')",
+                },
+            },
+            "required": ["region_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_account_availability_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_availability_get tool request."""
+    raw_region_id = arguments.get("region_id")
+    if raw_region_id is None:
+        return error_response("region_id is required")
+    if not isinstance(raw_region_id, str):
+        return error_response("region_id must be a string")
+
+    region_id = raw_region_id.strip()
+    if not region_id:
+        return error_response("region_id is required")
+    if not _is_region_id(region_id):
+        return error_response(
+            "region_id must be a lowercase region slug with letters, "
+            "numbers, and hyphens"
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_account_availability(region_id)
+
+    return await execute_tool(
+        cfg, arguments, f"retrieve Linode account availability for {region_id}", _call
+    )
 
 
 def create_linode_account_tags_list_tool() -> tuple[Tool, Capability]:
