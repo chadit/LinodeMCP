@@ -461,6 +461,28 @@ func (c *Client) httpGetProfileGrants(ctx context.Context) (*Grants, error) {
 	return &grants, nil
 }
 
+// httpGetProfileToken retrieves one personal access token.
+func (c *Client) httpGetProfileToken(ctx context.Context, tokenID int) (*ProfileToken, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointProfileTokens + "/" + url.PathEscape(strconv.Itoa(tokenID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetProfileToken", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var token ProfileToken
+	if err := c.handleResponse(resp, &token); err != nil {
+		return nil, err
+	}
+
+	return &token, nil
+}
+
 // httpAnswerProfileSecurityQuestions answers the authenticated user's security questions via POST /v4/profile/security-questions.
 func (c *Client) httpAnswerProfileSecurityQuestions(ctx context.Context, req *AnswerProfileSecurityQuestionsRequest) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

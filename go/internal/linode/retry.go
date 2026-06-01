@@ -220,6 +220,21 @@ func (c *Client) GetProfileGrants(ctx context.Context) (*Grants, error) {
 	return grants, err
 }
 
+// GetProfileToken retrieves one personal access token with automatic retry on transient failures.
+func (c *Client) GetProfileToken(ctx context.Context, tokenID int) (*ProfileToken, error) {
+	var token *ProfileToken
+
+	err := c.executeWithRetry(ctx, "GetProfileToken", func() error {
+		var err error
+
+		token, err = c.httpGetProfileToken(ctx, tokenID)
+
+		return err
+	})
+
+	return token, err
+}
+
 // AnswerProfileSecurityQuestions answers profile security questions without retrying
 // the mutating request. Retrying can replay security state changes after a transient
 // error, so this method delegates exactly once.

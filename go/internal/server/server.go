@@ -922,6 +922,7 @@ func coreToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeAccountEventsTool,
 		tools.NewLinodeAccountUsersTool,
 		tools.NewLinodeAccountUserGetTool,
+		tools.NewLinodeProfileTokenGetTool,
 		tools.NewLinodeAccountUserGrantsTool,
 		tools.NewLinodeAccountUserGrantsUpdateTool,
 		tools.NewLinodeAccountUserUpdateTool,
