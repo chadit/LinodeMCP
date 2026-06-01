@@ -7,6 +7,26 @@ import (
 
 const endpointSupportTickets = "/support/tickets"
 
+// httpCreateSupportTicket opens a support ticket.
+func (c *Client) httpCreateSupportTicket(ctx context.Context, request *CreateSupportTicketRequest) (*SupportTicket, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointSupportTickets, request)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateSupportTicket", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all support methods use this pattern
+
+	var ticket SupportTicket
+	if err := c.handleResponse(resp, &ticket); err != nil {
+		return nil, err
+	}
+
+	return &ticket, nil
+}
+
 // httpListSupportTickets retrieves support tickets.
 func (c *Client) httpListSupportTickets(ctx context.Context, page, pageSize int) (*PaginatedResponse[SupportTicket], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

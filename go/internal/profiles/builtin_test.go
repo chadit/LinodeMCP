@@ -643,6 +643,7 @@ func TestCategoriesIncludesAccountUsersInCore(t *testing.T) {
 	assert.Contains(t, profiles.Categories("linode_account_user_update"), "core")
 	assert.Contains(t, profiles.Categories("linode_account_user_delete"), "core")
 	assert.Contains(t, profiles.Categories("linode_account_user_create"), "core")
+	assert.Contains(t, profiles.Categories("linode_account_support_ticket_create"), "core")
 	assert.Contains(t, profiles.Categories("linode_managed_contact_create"), "core")
 	assert.Contains(t, profiles.Categories("linode_managed_service_create"), "core")
 }

@@ -1393,6 +1393,13 @@ func (c *Client) CreateAccountUser(ctx context.Context, request *CreateAccountUs
 	return c.httpCreateAccountUser(ctx, request)
 }
 
+// CreateSupportTicket opens a support ticket without retrying the mutating request.
+// Retrying can create duplicate support tickets after a transient error, so this
+// method delegates exactly once.
+func (c *Client) CreateSupportTicket(ctx context.Context, request *CreateSupportTicketRequest) (*SupportTicket, error) {
+	return c.httpCreateSupportTicket(ctx, request)
+}
+
 // CreateManagedContact creates a managed contact without retrying the mutating
 // request. Managed contact creation is not guaranteed idempotent after a transient
 // error, so this method delegates exactly once.

@@ -1,5 +1,25 @@
 package linode
 
+// CreateSupportTicketRequest contains the request body for POST /support/tickets.
+type CreateSupportTicketRequest struct {
+	Bucket           *string `json:"bucket,omitempty"`
+	DatabaseID       *int    `json:"database_id,omitempty"`
+	Description      string  `json:"description"`
+	DomainID         *int    `json:"domain_id,omitempty"`
+	FirewallID       *int    `json:"firewall_id,omitempty"`
+	LinodeID         *int    `json:"linode_id,omitempty"`
+	LKEClusterID     *int    `json:"lkecluster_id,omitempty"`
+	LongviewClientID *int    `json:"longviewclient_id,omitempty"`
+	ManagedIssue     *string `json:"managed_issue,omitempty"`
+	NodeBalancerID   *int    `json:"nodebalancer_id,omitempty"`
+	Region           *string `json:"region,omitempty"`
+	Severity         *string `json:"severity,omitempty"`
+	Summary          string  `json:"summary"`
+	VLAN             *string `json:"vlan,omitempty"`
+	VolumeID         *int    `json:"volume_id,omitempty"`
+	VPCID            *int    `json:"vpc_id,omitempty"`
+}
+
 // SupportTicket represents one support ticket returned by GET /support/tickets.
 type SupportTicket struct {
 	Attachments []SupportTicketAttachment `json:"attachments"`
