@@ -60,6 +60,11 @@ func (c *Client) DeleteProfilePhoneNumber(ctx context.Context) error {
 	return c.httpDeleteProfilePhoneNumber(ctx)
 }
 
+// VerifyProfilePhoneNumber verifies a phone number without retrying the non-idempotent POST.
+func (c *Client) VerifyProfilePhoneNumber(ctx context.Context, req *ProfilePhoneNumberVerifyRequest) error {
+	return c.httpVerifyProfilePhoneNumber(ctx, req)
+}
+
 // ListProfileLogins retrieves profile login history with automatic retry on transient failures.
 func (c *Client) ListProfileLogins(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountLogin], error) {
 	var logins *PaginatedResponse[AccountLogin]

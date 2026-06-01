@@ -63,6 +63,7 @@ const (
 
 	// Common JSON request/response keys.
 	keyConfirm                   = "confirm"
+	keyOTPCode                   = "otp_code"
 	keyPort                      = "port"
 	keyProtocol                  = "protocol"
 	keySSLCert                   = "ssl_cert"
