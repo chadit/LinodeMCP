@@ -63,7 +63,95 @@ const (
 	profilePhoneISOCode          = "US"
 	profilePhoneNumber           = "+15551234567"
 	profilePhoneOTPCode          = "123456"
+	profileTokenExpiryFixture    = "2024-06-01T00:01:01"
+	profileTokenLabelFixture     = "ci-token"
+	profileTokenScopesFixture    = "linodes:read_only"
+	profileTokenSecretFixture    = "secret-token-value"
+	profileTokenScopesKey        = "scopes"
 )
+
+// TestClientCreateProfileTokenSuccess verifies CreateProfileToken sends a POST
+// request to /profile/tokens with the documented body and decodes the response.
+func TestClientCreateProfileTokenSuccess(t *testing.T) {
+	t.Parallel()
+
+	profileToken := linode.ProfileToken{keyCreated: "2024-05-01T00:01:01", keyTFAConfirmExpiry: profileTokenExpiryFixture, keyID: float64(321), keyLabel: profileTokenLabelFixture, profileTokenScopesKey: profileTokenScopesFixture, keyToken: profileTokenSecretFixture}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/profile/tokens", r.URL.Path, "request path should be /profile/tokens")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		var got linode.CreateProfileTokenRequest
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&got), "request body should be valid JSON")
+		assert.Equal(t, profileTokenExpiryFixture, got.Expiry)
+		assert.Equal(t, profileTokenLabelFixture, got.Label)
+		assert.Equal(t, profileTokenScopesFixture, got.Scopes)
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(profileToken))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	result, err := client.CreateProfileToken(t.Context(), linode.CreateProfileTokenRequest{Expiry: profileTokenExpiryFixture, Label: profileTokenLabelFixture, Scopes: profileTokenScopesFixture})
+
+	require.NoError(t, err, "CreateProfileToken should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.InEpsilon(t, float64(321), (*result)[keyID], 0.001)
+	assert.Equal(t, profileTokenLabelFixture, (*result)[keyLabel])
+	assert.Equal(t, profileTokenScopesFixture, (*result)[profileTokenScopesKey])
+	assert.Equal(t, profileTokenSecretFixture, (*result)[keyToken])
+}
+
+// TestClientCreateProfileTokenAPIError verifies API errors propagate.
+func TestClientCreateProfileTokenAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/profile/tokens", r.URL.Path, "request path should be /profile/tokens")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	_, err := client.CreateProfileToken(t.Context(), linode.CreateProfileTokenRequest{Label: profileTokenLabelFixture})
+
+	require.Error(t, err, "CreateProfileToken should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	require.NotNil(t, apiErr, "APIError should be present")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+// TestClientCreateProfileTokenDoesNotRetryTransientError verifies token
+// creation is not replayed after a transient failure.
+func TestClientCreateProfileTokenDoesNotRetryTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+	_, err := client.CreateProfileToken(t.Context(), linode.CreateProfileTokenRequest{Label: profileTokenLabelFixture})
+
+	require.Error(t, err, "CreateProfileToken should return the transient error")
+	assert.Equal(t, int32(1), requestCount.Load(), "personal access token creation must not be retried")
+}
 
 // TestClientGetProfileSuccess verifies that GetProfile returns a fully
 // populated Profile when the API responds with 200 OK and valid JSON.
