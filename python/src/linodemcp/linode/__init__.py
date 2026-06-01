@@ -1510,6 +1510,15 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetAccount", e) from e
 
+    async def get_account_agreements(self) -> dict[str, Any]:
+        """List agreements on the Linode account."""
+        try:
+            response = await self.make_request("GET", "/account/agreements")
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetAccountAgreements", e) from e
+
     async def update_account(self, **fields: Any) -> Account:
         """Update Linode account information."""
         body = {key: value for key, value in fields.items() if value is not None}
@@ -7035,6 +7044,13 @@ class RetryableClient:
     async def get_account(self) -> Account:
         """Get Linode account information with retry."""
         result: Account = await self._execute_with_retry(self.client.get_account)
+        return result
+
+    async def get_account_agreements(self) -> dict[str, Any]:
+        """List account agreements with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_account_agreements
+        )
         return result
 
     async def update_account(self, **fields: Any) -> Account:
