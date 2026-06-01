@@ -18,6 +18,9 @@ type Profile struct {
 // ProfileDevice represents a trusted device on the authenticated profile.
 type ProfileDevice map[string]any
 
+// ProfileToken represents a personal access token on the authenticated profile.
+type ProfileToken map[string]any
+
 // ProfileSecurityQuestions represents the response from GET /profile/security-questions.
 type ProfileSecurityQuestions map[string]any
 

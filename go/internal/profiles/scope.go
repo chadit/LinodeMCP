@@ -94,6 +94,7 @@ const (
 	categoryNodeBalancers = "nodebalancers"
 	categoryObjectStorage = "object_storage"
 	categoryStackScripts  = "stackscripts"
+	categoryTokens        = "tokens"
 	categoryVolumes       = "volumes"
 	categoryVPC           = "vpc"
 )
@@ -150,6 +151,8 @@ func scopeCategory(toolName string) string {
 	switch toolName {
 	case "linode_profile", "linode_profile_preferences", "linode_profile_preferences_update", "linode_profile_security_questions", "linode_profile_security_questions_answer", "linode_profile_tfa_enable", "linode_profile_tfa_enable_confirm", "linode_profile_phone_number_send", "linode_profile_phone_number_delete", "linode_profile_phone_number_verify", "linode_profile_tfa_disable", "linode_profile_devices", "linode_account":
 		return categoryAccount
+	case "linode_profile_tokens":
+		return categoryTokens
 	}
 
 	// Order matters: longer prefixes first.
@@ -205,6 +208,7 @@ func scopeMatrix() map[string][2]Scope {
 		categoryNodeBalancers: {ScopeNodeBalancersReadOnly, ScopeNodeBalancersReadWrite},
 		categoryObjectStorage: {ScopeObjectStorageReadOnly, ScopeObjectStorageReadWrite},
 		categoryStackScripts:  {ScopeStackScriptsReadOnly, ScopeStackScriptsReadWrite},
+		categoryTokens:        {ScopeTokensReadOnly, ScopeTokensReadWrite},
 		categoryVolumes:       {ScopeVolumesReadOnly, ScopeVolumesReadWrite},
 		categoryVPC:           {ScopeVPCReadOnly, ScopeVPCReadWrite},
 	}

@@ -110,6 +110,21 @@ func (c *Client) ListProfileLogins(ctx context.Context, page, pageSize int) (*Pa
 	return logins, err
 }
 
+// ListProfileTokens retrieves personal access tokens with automatic retry on transient failures.
+func (c *Client) ListProfileTokens(ctx context.Context, page, pageSize int) (*PaginatedResponse[ProfileToken], error) {
+	var tokens *PaginatedResponse[ProfileToken]
+
+	err := c.executeWithRetry(ctx, "ListProfileTokens", func() error {
+		var err error
+
+		tokens, err = c.httpListProfileTokens(ctx, page, pageSize)
+
+		return err
+	})
+
+	return tokens, err
+}
+
 // ListProfileDevices retrieves trusted devices with automatic retry on transient failures.
 func (c *Client) ListProfileDevices(ctx context.Context, page, pageSize int) (*PaginatedResponse[ProfileDevice], error) {
 	var devices *PaginatedResponse[ProfileDevice]

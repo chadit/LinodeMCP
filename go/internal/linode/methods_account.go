@@ -19,6 +19,7 @@ const (
 	endpointProfileGrants                = "/profile/grants"
 	endpointProfileSecurityQuestions     = "/profile/security-questions"
 	endpointProfileLogins                = "/profile/logins"
+	endpointProfileTokens                = "/profile/tokens"
 	endpointProfileApps                  = "/profile/apps"
 	endpointProfileDevices               = "/profile/devices"
 	endpointProfileTFADisable            = "/profile/tfa-disable"
@@ -262,6 +263,28 @@ func (c *Client) httpListProfileLogins(ctx context.Context, page, pageSize int) 
 	}
 
 	return &logins, nil
+}
+
+// httpListProfileTokens retrieves personal access tokens for the authenticated profile.
+func (c *Client) httpListProfileTokens(ctx context.Context, page, pageSize int) (*PaginatedResponse[ProfileToken], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointProfileTokens, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListProfileTokens", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var tokens PaginatedResponse[ProfileToken]
+	if err := c.handleResponse(resp, &tokens); err != nil {
+		return nil, err
+	}
+
+	return &tokens, nil
 }
 
 // httpListProfileDevices retrieves trusted devices for the authenticated profile.
