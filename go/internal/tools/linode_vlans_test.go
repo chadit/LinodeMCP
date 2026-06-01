@@ -224,8 +224,8 @@ func TestLinodeVLANDeleteTool(t *testing.T) {
 		}{
 			{name: caseMissingRegion, args: map[string]any{keyLabel: vlanLabelApp, keyConfirm: true}, wantMessage: errRegionIDRequired},
 			{name: caseMissingLabel, args: map[string]any{keyRegionID: regionUSEast, keyConfirm: true}, wantMessage: errLabelRequired},
-			{name: caseSlash, args: map[string]any{keyRegionID: "us/east", keyLabel: vlanLabelApp, keyConfirm: true}, wantMessage: errRegionIDSlug},
-			{name: caseQuery, args: map[string]any{keyRegionID: "us-east?x=1", keyLabel: vlanLabelApp, keyConfirm: true}, wantMessage: errRegionIDSlug},
+			{name: caseSlash, args: map[string]any{keyRegionID: regionIDSlashValue, keyLabel: vlanLabelApp, keyConfirm: true}, wantMessage: errRegionIDSlug},
+			{name: caseQuery, args: map[string]any{keyRegionID: regionIDQueryValue, keyLabel: vlanLabelApp, keyConfirm: true}, wantMessage: errRegionIDSlug},
 			{name: caseFragment, args: map[string]any{keyRegionID: "us-east#frag", keyLabel: vlanLabelApp, keyConfirm: true}, wantMessage: errRegionIDSlug},
 			{name: caseDotTraversal, args: map[string]any{keyRegionID: pathTraversalValue, keyLabel: vlanLabelApp, keyConfirm: true}, wantMessage: errRegionIDSlug},
 			{name: "region uppercase", args: map[string]any{keyRegionID: "US EAST", keyLabel: vlanLabelApp, keyConfirm: true}, wantMessage: errRegionIDSlug},
