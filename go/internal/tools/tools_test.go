@@ -1268,8 +1268,8 @@ func TestLinodeAccountAvailabilityGetTool(t *testing.T) {
 			wantMessage string
 		}{
 			{name: caseMissingRegion, args: map[string]any{}, wantMessage: "region_id is required"},
-			{name: caseEmpty, args: map[string]any{keyRegionID: ""}, wantMessage: "region_id must be a non-empty string"},
-			{name: caseNumber, args: map[string]any{keyRegionID: 123}, wantMessage: "region_id must be a non-empty string"},
+			{name: caseEmpty, args: map[string]any{keyRegionID: ""}, wantMessage: errRegionIDNonEmpty},
+			{name: caseNumber, args: map[string]any{keyRegionID: 123}, wantMessage: errRegionIDNonEmpty},
 			{name: caseSlash, args: map[string]any{keyRegionID: regionIDSlashValue}, wantMessage: errRegionIDSlug},
 			{name: caseQuery, args: map[string]any{keyRegionID: regionIDQueryValue}, wantMessage: errRegionIDSlug},
 			{name: caseDotTraversal, args: map[string]any{keyRegionID: pathTraversalValue}, wantMessage: errRegionIDSlug},

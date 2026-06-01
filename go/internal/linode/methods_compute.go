@@ -13,6 +13,7 @@ const (
 	endpointInstances                       = "/linode/instances"
 	endpointRegions                         = "/regions"
 	endpointRegionsAvailability             = "/regions/availability"
+	endpointRegionAvailability              = endpointRegions + "/%s/availability"
 	endpointKernels                         = "/linode/kernels"
 	endpointTypes                           = "/linode/types"
 	endpointImages                          = "/images"
@@ -177,6 +178,28 @@ func (c *Client) httpListRegionsAvailability(ctx context.Context) ([]RegionAvail
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpointRegionsAvailability, nil)
 	if err != nil {
 		return nil, &NetworkError{Operation: "ListRegionsAvailability", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[RegionAvailability]
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
+}
+
+// httpGetRegionAvailability retrieves compute type availability for one region.
+func (c *Client) httpGetRegionAvailability(ctx context.Context, regionID string) ([]RegionAvailability, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointRegionAvailability, url.PathEscape(regionID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetRegionAvailability", Err: err}
 	}
 
 	defer drainClose(resp)
