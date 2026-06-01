@@ -3,6 +3,8 @@ package linode
 import (
 	"context"
 	"net/http"
+	"net/url"
+	"strconv"
 )
 
 const endpointSupportTickets = "/support/tickets"
@@ -25,6 +27,28 @@ func (c *Client) httpCreateSupportTicket(ctx context.Context, request *CreateSup
 	}
 
 	return &ticket, nil
+}
+
+// httpGetSupportTicket retrieves one support ticket by ID.
+func (c *Client) httpGetSupportTicket(ctx context.Context, ticketID int) (SupportTicket, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointSupportTickets + "/" + url.PathEscape(strconv.Itoa(ticketID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return SupportTicket{}, &NetworkError{Operation: "GetSupportTicket", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all support ticket methods use this pattern
+
+	var ticket SupportTicket
+	if err := c.handleResponse(resp, &ticket); err != nil {
+		return SupportTicket{}, err
+	}
+
+	return ticket, nil
 }
 
 // httpListSupportTickets retrieves support tickets.

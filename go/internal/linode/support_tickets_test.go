@@ -13,6 +13,98 @@ import (
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
+const (
+	supportTicketLookupSummary  = "Cannot reach managed instance"
+	supportTicketLookupOpenedBy = "adevi"
+)
+
+// TestClientGetSupportTicketSuccess verifies GetSupportTicket sends a GET request to /support/tickets/{ticket_id}.
+func TestClientGetSupportTicketSuccess(t *testing.T) {
+	t.Parallel()
+
+	wantTicket := linode.SupportTicket{ID: 11111, Summary: supportTicketLookupSummary, Status: "ticket-open", OpenedBy: supportTicketLookupOpenedBy}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/support/tickets/11111", r.URL.Path, "request path should include ticket ID")
+		assert.Empty(t, r.URL.RawQuery, "get ticket should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(wantTicket))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.GetSupportTicket(t.Context(), 11111)
+
+	require.NoError(t, err, "GetSupportTicket should succeed on 200 response")
+	assert.Equal(t, wantTicket.ID, result.ID)
+	assert.Equal(t, wantTicket.Summary, result.Summary)
+	assert.Equal(t, wantTicket.Status, result.Status)
+}
+
+// TestClientGetSupportTicketAPIError verifies GetSupportTicket propagates API errors.
+func TestClientGetSupportTicketAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/support/tickets/11111", r.URL.Path, "request path should include ticket ID")
+		assert.Empty(t, r.URL.RawQuery, "get ticket should not include query parameters")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetSupportTicket(t.Context(), 11111)
+
+	require.Error(t, err, "GetSupportTicket should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	require.NotNil(t, apiErr, "APIError should be present")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+// TestClientGetSupportTicketRetriesTransientError verifies the read-only get retries transient failures.
+func TestClientGetSupportTicketRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			assert.NoError(t, writeErr)
+
+			return
+		}
+
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/support/tickets/11111", r.URL.Path, "request path should include ticket ID")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.SupportTicket{ID: 11111, Summary: supportTicketLookupSummary}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	result, err := client.GetSupportTicket(t.Context(), 11111)
+
+	require.NoError(t, err, "GetSupportTicket should succeed after retry")
+	assert.Equal(t, 11111, result.ID)
+	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+}
+
 // TestClientListSupportTicketsSuccess verifies ListSupportTickets sends a GET
 // request to /support/tickets with pagination query parameters.
 func TestClientListSupportTicketsSuccess(t *testing.T) {
@@ -111,7 +203,7 @@ func TestClientListSupportTicketsRetriesTransientError(t *testing.T) {
 		assert.Equal(t, "/support/tickets", r.URL.Path, "request path should be /support/tickets")
 		w.Header().Set("Content-Type", "application/json")
 		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.SupportTicket]{
-			Data: []linode.SupportTicket{{ID: 11111, Summary: "Cannot reach managed instance"}},
+			Data: []linode.SupportTicket{{ID: 11111, Summary: supportTicketLookupSummary}},
 		}))
 	}))
 	defer srv.Close()
