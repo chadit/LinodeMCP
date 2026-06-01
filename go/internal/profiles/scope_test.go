@@ -408,3 +408,10 @@ func TestScopeCatalogTokensNotFlaggedAsCredentials(t *testing.T) {
 	assert.Equal(t, profiles.ScopeTokensReadOnly, profiles.Scope("tokens:read_only"))
 	assert.Equal(t, profiles.ScopeTokensReadWrite, profiles.Scope("tokens:read_write"))
 }
+
+func TestRequiredScopesForTagDelete(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, []profiles.Scope{profiles.ScopeAccountReadWrite}, profiles.RequiredScopes("linode_tag_delete", profiles.CapDestroy))
+	assert.Contains(t, profiles.Categories("linode_tag_delete"), "core")
+}

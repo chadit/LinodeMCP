@@ -273,3 +273,88 @@ func TestClientCreateTagNoRetry(t *testing.T) {
 	assert.Nil(t, tag, "tag should be nil on error")
 	assert.Equal(t, int32(1), requestCount.Load(), "non-idempotent tag creation must not be retried")
 }
+
+func TestClientDeleteTagSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, "/tags/prod%2Fweb", r.URL.EscapedPath(), "request path should URL-encode tag label")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	err := client.DeleteTag(t.Context(), "prod/web")
+
+	require.NoError(t, err, "DeleteTag should succeed on 200 response")
+}
+
+func TestClientDeleteTagAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, "/tags/prod", r.URL.Path, "request path should be /tags/prod")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	err := client.DeleteTag(t.Context(), "prod")
+
+	require.Error(t, err, "DeleteTag should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	require.NotNil(t, apiErr, "APIError should be present")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+func TestClientDeleteTagNetworkError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	url := srv.URL
+	srv.Close()
+
+	client := linode.NewClient(url, "my-token", nil, linode.WithMaxRetries(0))
+
+	err := client.DeleteTag(t.Context(), "prod")
+
+	require.Error(t, err, "DeleteTag should fail when the server is unreachable")
+
+	var netErr *linode.NetworkError
+	require.ErrorAs(t, err, &netErr, "error should be a NetworkError")
+	require.NotNil(t, netErr, "NetworkError should be present")
+	assert.Equal(t, "DeleteTag", netErr.Operation)
+}
+
+func TestClientDeleteTagDoesNotRetryTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	err := client.DeleteTag(t.Context(), "prod")
+
+	require.Error(t, err, "DeleteTag should return the transient failure")
+	assert.Equal(t, int32(1), requestCount.Load(), "destructive DELETE must not be retried")
+}

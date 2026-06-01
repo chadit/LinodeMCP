@@ -1335,6 +1335,11 @@ func (c *Client) ListTaggedObjects(ctx context.Context, tagLabel string, page, p
 	return taggedObjects, err
 }
 
+// DeleteTag deletes a tag without retrying the destructive DELETE request.
+func (c *Client) DeleteTag(ctx context.Context, tagLabel string) error {
+	return c.httpDeleteTag(ctx, tagLabel)
+}
+
 // GetSupportTicket retrieves one support ticket with automatic retry on transient failures.
 func (c *Client) GetSupportTicket(ctx context.Context, ticketID int) (SupportTicket, error) {
 	var ticket SupportTicket

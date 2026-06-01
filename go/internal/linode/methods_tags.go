@@ -71,3 +71,20 @@ func (c *Client) httpCreateTag(ctx context.Context, req *CreateTagRequest) (*Tag
 
 	return &tag, nil
 }
+
+// httpDeleteTag deletes the supplied tag label from all objects on the account.
+func (c *Client) httpDeleteTag(ctx context.Context, tagLabel string) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointTags + "/" + url.PathEscape(tagLabel)
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteTag", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return c.handleResponse(resp, nil)
+}

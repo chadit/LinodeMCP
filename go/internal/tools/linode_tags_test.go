@@ -16,6 +16,173 @@ import (
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
+func TestLinodeTagDeleteTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeTagDeleteTool(cfg)
+
+		assert.Equal(t, "linode_tag_delete", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapDestroy, capability, "tool should be destructive")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, tagLabelParamTest, "schema should include tag_label")
+		assert.Contains(t, props, keyConfirm, "schema should include confirm")
+		assert.Contains(t, props, keyDryRun, "schema should include dry_run")
+		assert.Contains(t, tool.InputSchema.Required, tagLabelParamTest, "tag_label must be required")
+		assert.Contains(t, tool.InputSchema.Required, keyConfirm, "confirm must be required")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			assert.Equal(t, "/tags/prod%2Fweb", r.URL.EscapedPath(), "request path should URL-encode tag label")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeTagDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{tagLabelParamTest: envProd + "/web", keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, envProd, "response should include deleted tag label")
+	})
+
+	t.Run("confirm rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name string
+			args map[string]any
+		}{
+			{name: caseMissing, args: map[string]any{tagLabelParamTest: envProd}},
+			{name: caseFalse, args: map[string]any{tagLabelParamTest: envProd, keyConfirm: false}},
+			{name: caseString, args: map[string]any{tagLabelParamTest: envProd, keyConfirm: boolStringTrue}},
+			{name: "number", args: map[string]any{tagLabelParamTest: envProd, keyConfirm: 1}},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeTagDeleteTool(cfg)
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid confirm should be an error result")
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, "confirm must be true", "response should describe confirm requirement")
+			})
+		}
+	})
+
+	t.Run("invalid tag label rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name string
+			args map[string]any
+			want string
+		}{
+			{name: "missing tag", args: map[string]any{keyConfirm: true}, want: tagLabelRequiredMessage},
+			{name: caseEmpty, args: map[string]any{tagLabelParamTest: "", keyConfirm: true}, want: tagLabelRequiredMessage},
+			{name: "query", args: map[string]any{tagLabelParamTest: envProd + "?web", keyConfirm: true}, want: tagLabelPathErrorMessage},
+			{name: caseFragment, args: map[string]any{tagLabelParamTest: envProd + "#web", keyConfirm: true}, want: tagLabelPathErrorMessage},
+			{name: "tag label traversal", args: map[string]any{tagLabelParamTest: pathTraversalValue, keyConfirm: true}, want: tagLabelPathErrorMessage},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := &config.Config{}
+				_, _, handler := tools.NewLinodeTagDeleteTool(cfg)
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid tag label should be an error result")
+				textContent, ok := result.Content[0].(mcp.TextContent)
+				require.True(t, ok, "content should be TextContent")
+				assert.Contains(t, textContent.Text, testCase.want, "response should describe validation error")
+			})
+		}
+	})
+
+	t.Run("dry run previews without deleting", func(t *testing.T) {
+		t.Parallel()
+
+		cfg, methods := dryRunGetStateServer(t, "/tags/"+envProd+"/web", linode.PaginatedResponse[linode.TaggedObject]{
+			Data: []linode.TaggedObject{{keyLabel: taggedObjectLabelFixture}},
+		})
+		_, _, handler := tools.NewLinodeTagDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{tagLabelParamTest: envProd + "/web", keyDryRun: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "dry run should not be an error result")
+		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read current tag state")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "dry_run", "response should identify dry run")
+		assert.Contains(t, textContent.Text, "DELETE", "response should describe planned method")
+		assert.Contains(t, textContent.Text, "/tags/prod%2Fweb", "response should include encoded delete path")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			assert.Equal(t, "/tags/"+envProd, r.URL.Path, "request path should be /tags/prod")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeTagDeleteTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{tagLabelParamTest: envProd, keyConfirm: true})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "linode_tag_delete failed", "response should identify failed tool")
+		assert.Contains(t, textContent.Text, errForbidden, "response should include API error detail")
+	})
+}
+
 func TestLinodeTagsTool(t *testing.T) {
 	t.Parallel()
 

@@ -18,7 +18,7 @@ import (
 
 const (
 	tagLabelParamTest        = "tag_label"
-	tagLabelRequiredMessage  = "tag_label is required"
+	tagLabelRequiredMessage  = "tag_label must be a non-empty string"
 	tagLabelPathErrorMessage = "tag_label must not contain"
 	taggedObjectLabelFixture = "tagged-web-1"
 )
