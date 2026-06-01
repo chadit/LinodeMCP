@@ -747,6 +747,25 @@ func NewLinodeProfileAppGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeProfileAppDeleteTool creates a tool for revoking one profile authorized OAuth app.
+func NewLinodeProfileAppDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_profile_app_delete",
+		"Revokes OAuth app access from the authenticated profile.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(profileAppIDParam, mcp.Required(),
+				mcp.Description("Profile authorized app ID to revoke.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm revoking OAuth app access. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeProfileAppDeleteRequest,
+	)
+
+	return tool, profiles.CapDestroy, handler
+}
+
 // NewLinodeAccountOAuthClientsTool creates a tool for listing OAuth clients registered on the account.
 func NewLinodeAccountOAuthClientsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -1593,6 +1612,50 @@ func handleLinodeProfileAppGetRequest(ctx context.Context, request *mcp.CallTool
 	}
 
 	return mcp.NewToolResultError("Failed to retrieve linode_profile_app_get: " + getFailure.Error()), nil
+}
+
+func handleLinodeProfileAppDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	appID, validationMessage := profileAppIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_profile_app_delete", httpMethodDelete,
+			"/profile/apps/"+strconv.Itoa(appID),
+			func(ctx context.Context, c *linode.Client) (any, error) {
+				return c.GetProfileApp(ctx, appID)
+			})
+	}
+
+	if result := RequireConfirm(request, "This revokes OAuth app access. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if deleteFailureMessage := deleteProfileAppErrorMessage(ctx, client, appID); deleteFailureMessage != "" {
+		return mcp.NewToolResultError(deleteFailureMessage), nil
+	}
+
+	return MarshalToolResponse(struct {
+		Message string `json:"message"`
+		AppID   int    `json:"app_id"`
+	}{
+		Message: "Profile app access revoked successfully",
+		AppID:   appID,
+	})
+}
+
+func deleteProfileAppErrorMessage(ctx context.Context, client *linode.Client, appID int) string {
+	if err := client.DeleteProfileApp(ctx, appID); err != nil {
+		return "Failed to delete linode_profile_app_delete: " + err.Error()
+	}
+
+	return ""
 }
 
 func profileAppIDFromTool(request *mcp.CallToolRequest) (int, string) {

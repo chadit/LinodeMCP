@@ -2866,6 +2866,188 @@ func TestLinodeAccountChildAccountsTool(t *testing.T) {
 	})
 }
 
+func TestLinodeProfileAppDeleteTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeProfileAppDeleteTool(cfg)
+
+		assert.Equal(t, "linode_profile_app_delete", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapDestroy, capability, "tool should be destructive")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+		assert.Contains(t, tool.InputSchema.Properties, keyAppID, "schema should include app_id")
+		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "destructive delete tool must require confirm")
+		assert.Contains(t, tool.InputSchema.Properties, keyDryRun, "destructive delete tool should expose dry_run")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			assert.Equal(t, "/profile/apps/12345", r.URL.Path, "request path should include app id")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeProfileAppDeleteTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyAppID: profileAppID, keyConfirm: true})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+		assertErrorContains(t, result, "Profile app access revoked successfully")
+	})
+
+	t.Run("dry run previews without delete", func(t *testing.T) {
+		t.Parallel()
+
+		var deleteCalls atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "dry run should fetch current app")
+			assert.Equal(t, "/profile/apps/12345", r.URL.Path, "request path should include app id")
+			deleteCalls.Add(1)
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyID: profileAppID, keyLabel: profileAppLabel}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeProfileAppDeleteTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyAppID: profileAppID, keyDryRun: true})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "dry run should not be an error result")
+		assertErrorContains(t, result, "dry_run")
+		assert.Equal(t, int32(1), deleteCalls.Load(), "dry run should perform only the preview GET")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+			assert.Equal(t, "/profile/apps/12345", r.URL.Path, "request path should include app id")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeProfileAppDeleteTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyAppID: profileAppID, keyConfirm: true})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		assertErrorContains(t, result, "Failed to delete linode_profile_app_delete")
+		assertErrorContains(t, result, errForbidden)
+	})
+
+	t.Run("confirm required before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name    string
+			confirm any
+		}{
+			{name: caseMissing},
+			{name: caseFalse, confirm: false},
+			{name: caseString, confirm: boolStringTrue},
+			{name: "numeric confirm", confirm: 1},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls atomic.Int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					calls.Add(1)
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeProfileAppDeleteTool(cfg)
+
+				args := map[string]any{keyAppID: profileAppID}
+				if testCase.name != caseMissing {
+					args[keyConfirm] = testCase.confirm
+				}
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, args))
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "missing or non-true confirm should be an error result")
+				assertErrorContains(t, result, "Set confirm=true to proceed")
+				assert.Equal(t, int32(0), calls.Load(), "confirm rejection should not call the client")
+			})
+		}
+	})
+
+	t.Run("invalid app_id rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name string
+			args map[string]any
+			want string
+		}{
+			{name: caseMissing, args: map[string]any{keyConfirm: true}, want: errProfileAppIDRequired},
+			{name: caseZero, args: map[string]any{keyAppID: 0, keyConfirm: true}, want: errProfileAppIDPositive},
+			{name: caseString, args: map[string]any{keyAppID: "12345", keyConfirm: true}, want: errProfileAppIDPositive},
+			{name: caseSlash, args: map[string]any{keyAppID: "12/345", keyConfirm: true}, want: errProfileAppIDPositive},
+			{name: caseQuery, args: map[string]any{keyAppID: "12?345", keyConfirm: true}, want: errProfileAppIDPositive},
+			{name: caseDotTraversal, args: map[string]any{keyAppID: pathTraversalValue, keyConfirm: true}, want: errProfileAppIDPositive},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls atomic.Int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					calls.Add(1)
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeProfileAppDeleteTool(cfg)
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid app_id should be an error result")
+				assertErrorContains(t, result, testCase.want)
+				assert.Equal(t, int32(0), calls.Load(), "invalid app_id should not call the client")
+			})
+		}
+	})
+}
+
 func TestLinodeProfileAppGetTool(t *testing.T) {
 	t.Parallel()
 
