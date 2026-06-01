@@ -323,6 +323,49 @@ func TestClientGetProfileAppRetriesTransientError(t *testing.T) {
 	assert.Equal(t, int32(2), requestCount.Load(), "read-only get should retry once then succeed")
 }
 
+func TestClientDeleteProfileAppSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, "/profile/apps/12345", r.URL.Path, "request path should include app id")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	err := client.DeleteProfileApp(t.Context(), 12345)
+
+	require.NoError(t, err, "DeleteProfileApp should succeed on 200 response")
+}
+
+func TestClientDeleteProfileAppAPIErrorDoesNotRetry(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, "/profile/apps/12345", r.URL.Path, "request path should include app id")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "server error"}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	err := client.DeleteProfileApp(t.Context(), 12345)
+
+	require.Error(t, err, "DeleteProfileApp should fail on server error")
+	assert.Equal(t, int32(1), requestCount.Load(), "destructive delete must not be retried")
+}
+
 func TestClientListAccountMaintenanceSuccess(t *testing.T) {
 	t.Parallel()
 

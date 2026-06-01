@@ -65,6 +65,11 @@ func (c *Client) GetProfileApp(ctx context.Context, appID int) (*ProfileApp, err
 	return app, err
 }
 
+// DeleteProfileApp revokes access for one OAuth app without retrying the destructive DELETE.
+func (c *Client) DeleteProfileApp(ctx context.Context, appID int) error {
+	return c.httpDeleteProfileApp(ctx, appID)
+}
+
 // GetProfileGrants retrieves the /profile/grants response with retry. Used
 // by Phase 6's profile loader to enumerate OAuth scopes; PATs return an
 // empty Grants struct here and the loader should inspect Profile.Scopes

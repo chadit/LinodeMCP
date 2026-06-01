@@ -91,6 +91,27 @@ func (c *Client) httpGetProfileApp(ctx context.Context, appID int) (*ProfileApp,
 	return &app, nil
 }
 
+// httpDeleteProfileApp revokes access for one OAuth app authorized on the profile.
+func (c *Client) httpDeleteProfileApp(ctx context.Context, appID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointProfileApps + "/" + url.PathEscape(strconv.Itoa(appID))
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteProfileApp", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	if err := c.handleResponse(resp, nil); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // httpGetProfileGrants retrieves /profile/grants. Returns a Grants
 // struct for OAuth tokens; PATs return an empty payload by design (the
 // Linode API still returns 200 with zero-valued fields). Callers
