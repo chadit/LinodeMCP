@@ -6,8 +6,63 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/internal/config"
+	"github.com/chadit/LinodeMCP/internal/linode"
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
+
+const (
+	supportTicketGetToolName   = "linode_support_ticket_get"
+	supportTicketIDParam       = "ticket_id"
+	errSupportTicketIDMissing  = "ticket_id is required"
+	errSupportTicketIDPositive = "ticket_id must be a positive integer"
+)
+
+// NewLinodeSupportTicketGetTool creates a tool for retrieving one support ticket.
+func NewLinodeSupportTicketGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		supportTicketGetToolName,
+		"Gets one support ticket by ticket_id.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(supportTicketIDParam, mcp.Required(), mcp.Description("Numeric support ticket ID to retrieve.")),
+		},
+		handleLinodeSupportTicketGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func handleLinodeSupportTicketGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	ticketID, validationMessage := supportTicketIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	ticket, getFailureMessage := getSupportTicket(ctx, client, ticketID)
+	if getFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to retrieve " + supportTicketGetToolName + ": " + getFailureMessage), nil
+	}
+
+	return MarshalToolResponse(ticket)
+}
+
+func supportTicketIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	return requiredPositiveIntArgument(request, supportTicketIDParam, errSupportTicketIDMissing, errSupportTicketIDPositive)
+}
+
+func getSupportTicket(ctx context.Context, client *linode.Client, ticketID int) (linode.SupportTicket, string) {
+	ticket, err := client.GetSupportTicket(ctx, ticketID)
+	if err != nil {
+		return linode.SupportTicket{}, err.Error()
+	}
+
+	return ticket, ""
+}
 
 // NewLinodeSupportTicketsTool creates a tool for listing support tickets.
 func NewLinodeSupportTicketsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
