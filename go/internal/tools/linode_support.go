@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -80,6 +81,23 @@ func NewLinodeSupportTicketsTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeSupportTicketCloseTool creates a tool for closing one support ticket.
+func NewLinodeSupportTicketCloseTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_support_ticket_close",
+		"Closes one support ticket by ID. Pass dry_run=true to preview without closing.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(supportTicketIDParam, mcp.Required(), mcp.Description("Support ticket ID to close.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm closing the support ticket. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeSupportTicketCloseRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
 func handleLinodeSupportTicketsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	page, pageSize, validationMessage := supportTicketsPaginationFromTool(request)
 	if validationMessage != "" {
@@ -113,4 +131,39 @@ func supportTicketsPaginationFromTool(request *mcp.CallToolRequest) (int, int, s
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeSupportTicketCloseRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	ticketID, validationMessage := supportTicketIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	path := supportTicketsPath + "/" + strconv.Itoa(ticketID) + "/close"
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_support_ticket_close", httpMethodPost, path, nil)
+	}
+
+	if result := RequireConfirm(request, "This closes a support ticket. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, prepErr := prepareClient(request, cfg)
+	if prepErr != nil {
+		return mcp.NewToolResultError(prepErr.Error()), nil
+	}
+
+	if closeFailureMessage := closeSupportTicketErrorMessage(ctx, client, ticketID); closeFailureMessage != "" {
+		return mcp.NewToolResultError(closeFailureMessage), nil
+	}
+
+	return MarshalToolResponse(map[string]any{responseKeyMessage: "Support ticket closed successfully", "ticket_id": ticketID})
+}
+
+func closeSupportTicketErrorMessage(ctx context.Context, client *linode.Client, ticketID int) string {
+	if err := client.CloseSupportTicket(ctx, ticketID); err != nil {
+		return "Failed to close linode_support_ticket_close: " + err.Error()
+	}
+
+	return ""
 }

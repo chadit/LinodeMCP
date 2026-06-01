@@ -218,3 +218,67 @@ func TestClientListSupportTicketsRetriesTransientError(t *testing.T) {
 	assert.Equal(t, 11111, result.Data[0].ID)
 	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
+
+func TestClientCloseSupportTicketSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/support/tickets/11111/close", r.URL.Path, "request path should close the support ticket")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	err := client.CloseSupportTicket(t.Context(), 11111)
+
+	require.NoError(t, err, "CloseSupportTicket should succeed on 200 response")
+}
+
+func TestClientCloseSupportTicketAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/support/tickets/11111/close", r.URL.Path, "request path should close the support ticket")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	err := client.CloseSupportTicket(t.Context(), 11111)
+
+	require.Error(t, err, "CloseSupportTicket should propagate API errors")
+	assert.ErrorContains(t, err, errForbidden)
+}
+
+func TestClientCloseSupportTicketDoesNotRetryTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/support/tickets/11111/close", r.URL.Path, "request path should close the support ticket")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "temporary support ticket close failure"}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	err := client.CloseSupportTicket(t.Context(), 11111)
+
+	require.Error(t, err, "CloseSupportTicket should return the transient error")
+	assert.Equal(t, int32(1), requestCount.Load(), "mutating support ticket close must not be retried")
+}

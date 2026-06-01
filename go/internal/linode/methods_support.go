@@ -74,6 +74,7 @@ func (c *Client) httpCreateSupportTicketAttachment(ctx context.Context, ticketID
 }
 
 // httpListSupportTickets retrieves support tickets.
+
 func (c *Client) httpListSupportTickets(ctx context.Context, page, pageSize int) (*PaginatedResponse[SupportTicket], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
@@ -93,4 +94,19 @@ func (c *Client) httpListSupportTickets(ctx context.Context, page, pageSize int)
 	}
 
 	return &tickets, nil
+}
+
+// httpCloseSupportTicket closes one support ticket.
+func (c *Client) httpCloseSupportTicket(ctx context.Context, ticketID int) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointSupportTickets+"/"+url.PathEscape(strconv.Itoa(ticketID))+"/close", nil)
+	if err != nil {
+		return &NetworkError{Operation: "CloseSupportTicket", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all support methods use this pattern
+
+	return c.handleResponse(resp, nil)
 }
