@@ -97,6 +97,37 @@ func NewLinodeRegionAvailabilityListTool(cfg *config.Config) (mcp.Tool, profiles
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeRegionAvailabilityGetTool creates a tool for listing compute type availability in one region.
+func NewLinodeRegionAvailabilityGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_region_availability_get",
+		mcp.WithDescription("Lists compute instance type availability for a Linode region"),
+		mcp.WithString("region_id", mcp.Required(), mcp.Description("Region slug to inspect, for example 'us-east'")),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		regionID, validationMessage := regionAvailabilityRegionIDFromTool(&request)
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		client, err := prepareClient(&request, cfg)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		availability, failureMessage := getRegionAvailability(ctx, client, regionID)
+		if failureMessage != "" {
+			return mcp.NewToolResultError(failureMessage), nil
+		}
+
+		return MarshalToolResponse(availability)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
 func regionGetToolFailure(failure error) (*mcp.CallToolResult, error) {
 	return mcp.NewToolResultError("Failed to retrieve linode_region_get: " + failure.Error()), nil
 }
@@ -112,6 +143,28 @@ func regionIDFromTool(request *mcp.CallToolRequest) (string, string) {
 	}
 
 	return regionID, ""
+}
+
+func regionAvailabilityRegionIDFromTool(request *mcp.CallToolRequest) (string, string) {
+	regionID, validationMessage := requiredStringArg(request.GetArguments(), "region_id")
+	if validationMessage != "" {
+		return "", validationMessage
+	}
+
+	if err := validateRegionSlug(regionID); err != nil {
+		return "", "region_id " + err.Error()
+	}
+
+	return regionID, ""
+}
+
+func getRegionAvailability(ctx context.Context, client *linode.Client, regionID string) ([]linode.RegionAvailability, string) {
+	availability, err := client.GetRegionAvailability(ctx, regionID)
+	if err != nil {
+		return nil, "Failed to retrieve linode_region_availability_get: " + err.Error()
+	}
+
+	return availability, ""
 }
 
 func filterRegionsByCapability(regions []linode.Region, capabilityFilter string) []linode.Region {

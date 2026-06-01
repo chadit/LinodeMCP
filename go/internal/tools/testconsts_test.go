@@ -448,6 +448,7 @@ const (
 	errSSHKeyIDPositive            = "sshkey_id must be a positive integer"
 	errRegionRequired              = "region is required"
 	errRegionIDRequired            = "region_id is required"
+	errRegionIDNonEmpty            = "region_id must be a non-empty string"
 	errTypeRequired                = "type is required"
 	errFirewallIDRequired          = "firewall_id is required"
 	errLinodeIDRequired            = "linode_id is required"

@@ -9,24 +9,41 @@ import (
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
-func TestRegionAvailabilityListToolRegisteredAsRead(t *testing.T) {
+func TestRegionAvailabilityToolsRegisteredAsRead(t *testing.T) {
 	t.Parallel()
 
 	srv := newCapabilityTestServer(t)
 	infos := srv.ToolInfos()
 	require.NotEmpty(t, infos, "server must expose registered tools")
 
+	wantTools := map[string]struct {
+		wantRegionID bool
+	}{
+		"linode_region_availability_list": {},
+		"linode_region_availability_get":  {wantRegionID: true},
+	}
+
+	found := make(map[string]bool, len(wantTools))
+
 	for _, info := range infos {
-		if info.Name != "linode_region_availability_list" {
+		want, ok := wantTools[info.Name]
+		if !ok {
 			continue
 		}
 
-		assert.Equal(t, profiles.CapRead, info.Capability, "region availability list is a read-only route")
+		assert.Equal(t, profiles.CapRead, info.Capability, "region availability tools are read-only routes")
 		assert.Contains(t, info.InputSchema.Properties, "environment", "environment parameter should be exported")
 		assert.NotContains(t, info.InputSchema.Properties, "confirm", "read-only route should not require confirm")
 
-		return
+		if want.wantRegionID {
+			assert.Contains(t, info.InputSchema.Properties, "region_id", "region_id parameter should be exported")
+			assert.Contains(t, info.InputSchema.Required, "region_id", "region_id should be required")
+		}
+
+		found[info.Name] = true
 	}
 
-	t.Fatalf("linode_region_availability_list should be registered")
+	for name := range wantTools {
+		assert.True(t, found[name], "%s should be registered", name)
+	}
 }
