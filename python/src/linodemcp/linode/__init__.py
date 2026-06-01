@@ -1529,6 +1529,25 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateAccount", e) from e
 
+    async def list_account_availability(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List available Linode services for the account."""
+        endpoint = "/account/availability"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListAccountAvailability", e) from e
+
     async def list_regions(self) -> list[Region]:
         """List Linode regions."""
         try:
@@ -7287,6 +7306,17 @@ class RetryableClient:
     ) -> dict[str, Any]:
         """Assign IPv4s without replay retry."""
         return await self.client.assign_ipv4s(region, assignments)
+
+    async def list_account_availability(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List available Linode services for the account with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_account_availability(
+                page=page, page_size=page_size
+            )
+        )
+        return result
 
     async def list_tags(
         self, page: int | None = None, page_size: int | None = None

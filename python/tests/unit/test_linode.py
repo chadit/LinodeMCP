@@ -469,6 +469,60 @@ async def test_retryable_get_account_agreements_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_list_account_availability_sends_exact_route_with_query() -> None:
+    """Account availability listing sends GET /account/availability."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data = {
+        "data": [{"service": "Linodes", "available": True}],
+        "page": 2,
+        "pages": 3,
+        "results": 51,
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.list_account_availability(page=2, page_size=25)
+
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "GET", "/account/availability?page=2&page_size=25"
+    )
+    await client.close()
+
+
+async def test_list_account_availability_wraps_http_errors() -> None:
+    """Account availability listing wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.list_account_availability()
+
+    assert "ListAccountAvailability" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_list_account_availability_delegates_to_client() -> None:
+    """RetryableClient delegates account availability listing to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "list_account_availability", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = {"data": []}
+        result = await retryable.list_account_availability(page=2, page_size=25)
+
+    assert result["data"] == []
+    mock_list.assert_awaited_once_with(page=2, page_size=25)
+    await retryable.close()
+
+
 async def test_update_account_sends_put_to_account_route() -> None:
     """Test updating account sends PUT /account."""
     client = Client("https://api.linode.com/v4", "test-token")
