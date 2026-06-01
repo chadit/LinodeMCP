@@ -42,10 +42,18 @@ const (
 	keySecret                        = "secret"
 	keyClientID                      = "client_id"
 	keyAppID                         = "app_id"
+	keyDeviceID                      = "device_id"
 	profileAppID                     = 12345
+	profileDeviceID                  = 12345
 	profileAppLabel                  = "Example OAuth App"
+	profileDeviceUserAgent           = "Mozilla/5.0"
+	profileDeviceLastAuthenticated   = "2024-01-02T03:04:05"
+	invalidProfileIDSlash            = "12/345"
+	invalidProfileIDQuery            = "12?345"
 	errProfileAppIDRequired          = "app_id is required"
 	errProfileAppIDPositive          = "app_id must be a positive integer"
+	errProfileDeviceIDRequired       = "device_id is required"
+	errProfileDeviceIDPositive       = "device_id must be a positive integer"
 	oauthClientID                    = "client-123"
 	invalidClientIDSlash             = "client/123"
 	invalidClientIDQuery             = "client?123"
@@ -3126,8 +3134,8 @@ func TestLinodeProfileAppDeleteTool(t *testing.T) {
 			{name: caseMissing, args: map[string]any{keyConfirm: true}, want: errProfileAppIDRequired},
 			{name: caseZero, args: map[string]any{keyAppID: 0, keyConfirm: true}, want: errProfileAppIDPositive},
 			{name: caseString, args: map[string]any{keyAppID: "12345", keyConfirm: true}, want: errProfileAppIDPositive},
-			{name: caseSlash, args: map[string]any{keyAppID: "12/345", keyConfirm: true}, want: errProfileAppIDPositive},
-			{name: caseQuery, args: map[string]any{keyAppID: "12?345", keyConfirm: true}, want: errProfileAppIDPositive},
+			{name: caseSlash, args: map[string]any{keyAppID: invalidProfileIDSlash, keyConfirm: true}, want: errProfileAppIDPositive},
+			{name: caseQuery, args: map[string]any{keyAppID: invalidProfileIDQuery, keyConfirm: true}, want: errProfileAppIDPositive},
 			{name: caseDotTraversal, args: map[string]any{keyAppID: pathTraversalValue, keyConfirm: true}, want: errProfileAppIDPositive},
 		}
 
@@ -3153,6 +3161,124 @@ func TestLinodeProfileAppDeleteTool(t *testing.T) {
 				assert.True(t, result.IsError, "invalid app_id should be an error result")
 				assertErrorContains(t, result, testCase.want)
 				assert.Equal(t, int32(0), calls.Load(), "invalid app_id should not call the client")
+			})
+		}
+	})
+}
+
+func TestLinodeProfileDeviceGetTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeProfileDeviceGetTool(cfg)
+
+		assert.Equal(t, "linode_profile_device_get", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+		assert.Contains(t, tool.InputSchema.Properties, keyDeviceID, "schema should include device_id")
+		assert.NotContains(t, tool.InputSchema.Properties, keyConfirm, "read-only get tool must not require confirm")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/profile/devices/12345", r.URL.Path, "request path should include device id")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyID: profileDeviceID, "user_agent": profileDeviceUserAgent, "last_authenticated": profileDeviceLastAuthenticated, "last_remote_addr": ip203_0_113_1,
+			}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeProfileDeviceGetTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyDeviceID: profileDeviceID})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, profileDeviceUserAgent, "response should contain device user agent")
+		assert.Contains(t, textContent.Text, ip203_0_113_1, "response should contain last remote address")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/profile/devices/12345", r.URL.Path, "request path should include device id")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeProfileDeviceGetTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyDeviceID: profileDeviceID})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		assertErrorContains(t, result, "Failed to retrieve linode_profile_device_get")
+		assertErrorContains(t, result, errForbidden)
+	})
+
+	t.Run("invalid device_id rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name string
+			args map[string]any
+			want string
+		}{
+			{name: caseMissing, args: map[string]any{}, want: errProfileDeviceIDRequired},
+			{name: caseZero, args: map[string]any{keyDeviceID: 0}, want: errProfileDeviceIDPositive},
+			{name: caseNegative, args: map[string]any{keyDeviceID: -1}, want: errProfileDeviceIDPositive},
+			{name: "fractional device_id", args: map[string]any{keyDeviceID: 1.5}, want: errProfileDeviceIDPositive},
+			{name: caseString, args: map[string]any{keyDeviceID: "12345"}, want: errProfileDeviceIDPositive},
+			{name: caseSlash, args: map[string]any{keyDeviceID: invalidProfileIDSlash}, want: errProfileDeviceIDPositive},
+			{name: caseQuery, args: map[string]any{keyDeviceID: invalidProfileIDQuery}, want: errProfileDeviceIDPositive},
+			{name: caseDotTraversal, args: map[string]any{keyDeviceID: pathTraversalValue}, want: errProfileDeviceIDPositive},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls atomic.Int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					calls.Add(1)
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeProfileDeviceGetTool(cfg)
+				req := createRequestWithArgs(t, testCase.args)
+
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid device_id should be an error result")
+				assertErrorContains(t, result, testCase.want)
+				assert.Equal(t, int32(0), calls.Load(), "invalid device_id should not call the client")
 			})
 		}
 	})
@@ -3243,8 +3369,8 @@ func TestLinodeProfileAppGetTool(t *testing.T) {
 			{name: caseNegative, args: map[string]any{keyAppID: -1}, want: errProfileAppIDPositive},
 			{name: "fractional app_id", args: map[string]any{keyAppID: 1.5}, want: errProfileAppIDPositive},
 			{name: caseString, args: map[string]any{keyAppID: "12345"}, want: errProfileAppIDPositive},
-			{name: caseSlash, args: map[string]any{keyAppID: "12/345"}, want: errProfileAppIDPositive},
-			{name: caseQuery, args: map[string]any{keyAppID: "12?345"}, want: errProfileAppIDPositive},
+			{name: caseSlash, args: map[string]any{keyAppID: invalidProfileIDSlash}, want: errProfileAppIDPositive},
+			{name: caseQuery, args: map[string]any{keyAppID: invalidProfileIDQuery}, want: errProfileAppIDPositive},
 			{name: caseDotTraversal, args: map[string]any{keyAppID: pathTraversalValue}, want: errProfileAppIDPositive},
 		}
 

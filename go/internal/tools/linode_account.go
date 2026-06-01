@@ -31,8 +31,11 @@ const (
 	accountOAuthClientsPageSizeMin     = 25
 	accountOAuthClientsPageSizeMax     = 500
 	profileAppIDParam                  = "app_id"
+	profileDeviceIDParam               = "device_id"
 	profileAppIDMaxFromJSON            = 9007199254740991
+	profileDeviceIDMaxFromJSON         = 9007199254740991
 	errProfileAppIDPositive            = "app_id must be a positive integer"
+	errProfileDeviceIDPositive         = "device_id must be a positive integer"
 	longviewClientsPageSizeMin         = 25
 	longviewClientsPageSizeMax         = 500
 	longviewSubscriptionsPageSizeMin   = 25
@@ -780,6 +783,22 @@ func NewLinodeProfileAppDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 	)
 
 	return tool, profiles.CapDestroy, handler
+}
+
+// NewLinodeProfileDeviceGetTool creates a tool for retrieving one profile trusted device.
+func NewLinodeProfileDeviceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_profile_device_get",
+		"Gets one trusted device from the profile.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(profileDeviceIDParam, mcp.Required(),
+				mcp.Description("Profile trusted device ID.")),
+		},
+		handleLinodeProfileDeviceGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
 }
 
 // NewLinodeAccountOAuthClientsTool creates a tool for listing OAuth clients registered on the account.
@@ -1730,6 +1749,49 @@ func profileAppIDFromTool(request *mcp.CallToolRequest) (int, string) {
 		return int(value), ""
 	default:
 		return 0, errProfileAppIDPositive
+	}
+}
+
+func handleLinodeProfileDeviceGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	deviceID, validationMessage := profileDeviceIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	device, getFailure := client.GetProfileDevice(ctx, deviceID)
+	if getFailure == nil {
+		return MarshalToolResponse(device)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_profile_device_get: " + getFailure.Error()), nil
+}
+
+func profileDeviceIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	raw, exists := request.GetArguments()[profileDeviceIDParam]
+	if !exists {
+		return 0, "device_id is required"
+	}
+
+	switch value := raw.(type) {
+	case int:
+		if value <= 0 {
+			return 0, errProfileDeviceIDPositive
+		}
+
+		return value, ""
+	case float64:
+		if value <= 0 || value > profileDeviceIDMaxFromJSON || value != float64(int64(value)) {
+			return 0, errProfileDeviceIDPositive
+		}
+
+		return int(value), ""
+	default:
+		return 0, errProfileDeviceIDPositive
 	}
 }
 

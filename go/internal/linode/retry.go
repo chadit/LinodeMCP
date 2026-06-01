@@ -85,6 +85,21 @@ func (c *Client) DeleteProfileApp(ctx context.Context, appID int) error {
 	return c.httpDeleteProfileApp(ctx, appID)
 }
 
+// GetProfileDevice retrieves one trusted profile device with automatic retry on transient failures.
+func (c *Client) GetProfileDevice(ctx context.Context, deviceID int) (*ProfileDevice, error) {
+	var device *ProfileDevice
+
+	err := c.executeWithRetry(ctx, "GetProfileDevice", func() error {
+		var err error
+
+		device, err = c.httpGetProfileDevice(ctx, deviceID)
+
+		return err
+	})
+
+	return device, err
+}
+
 // GetProfileGrants retrieves the /profile/grants response with retry. Used
 // by Phase 6's profile loader to enumerate OAuth scopes; PATs return an
 // empty Grants struct here and the loader should inspect Profile.Scopes

@@ -570,6 +570,12 @@ func TestCategoriesIncludesAccountOAuthClientsInCore(t *testing.T) {
 	assert.Contains(t, profiles.Categories("linode_account_oauth_clients"), "core")
 }
 
+func TestCategoriesIncludesProfileDeviceGetInCore(t *testing.T) {
+	t.Parallel()
+
+	assert.Contains(t, profiles.Categories("linode_profile_device_get"), "core")
+}
+
 func TestCategoriesIncludesProfileAppsInCore(t *testing.T) {
 	t.Parallel()
 
