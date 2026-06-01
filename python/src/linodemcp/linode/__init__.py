@@ -1542,6 +1542,25 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateAccount", e) from e
 
+    async def list_account_betas(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List enrolled beta programs for the account."""
+        endpoint = "/account/betas"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListAccountBetas", e) from e
+
     async def list_account_availability(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -7101,6 +7120,15 @@ class RetryableClient:
     ) -> dict[str, Any]:
         """Acknowledge account agreements once without retry replay."""
         return await self.client.acknowledge_account_agreements(agreements)
+
+    async def list_account_betas(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List enrolled beta programs for the account with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_account_betas(page=page, page_size=page_size)
+        )
+        return result
 
     async def update_account(self, **fields: Any) -> Account:
         """Update Linode account information with retry."""
