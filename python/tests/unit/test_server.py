@@ -920,6 +920,42 @@ async def test_ipv6_pools_list_dispatches_from_registry(
     mock_client.list_ipv6_pools.assert_awaited_once_with()
 
 
+async def test_account_beta_enroll_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Account beta enroll tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    srv = Server(_full_access_config(sample_config))
+
+    assert "create_linode_account_beta_enroll_tool" in tools_mod.__all__
+    assert "handle_linode_account_beta_enroll" in tools_mod.__all__
+    assert "linode_account_beta_enroll" in srv.registered_tool_names
+
+
+async def test_account_beta_enroll_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Account beta enroll is callable through server dispatch."""
+    response_data = {"id": "distributed-beta", "label": "Distributed Beta"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.enroll_account_beta.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_beta_enroll",
+            {"id": "distributed-beta", "confirm": True},
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.enroll_account_beta.assert_awaited_once_with("distributed-beta")
+
+
 async def test_account_agreements_acknowledge_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

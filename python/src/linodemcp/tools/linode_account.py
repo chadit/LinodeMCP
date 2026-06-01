@@ -173,6 +173,74 @@ async def handle_linode_account_agreements_acknowledge(
     )
 
 
+def create_linode_account_beta_enroll_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_beta_enroll tool."""
+    return Tool(
+        name="linode_account_beta_enroll",
+        description=(
+            "Enrolls the Linode account in a Beta program. "
+            "Pass dry_run=true to preview without enrolling."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Beta program ID",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm this mutating operation. Ignored "
+                        "when dry_run=true."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["id"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_account_beta_enroll(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_beta_enroll tool request."""
+    raw_beta_id = arguments.get("id")
+    if raw_beta_id is None:
+        return error_response("id is required")
+    if not isinstance(raw_beta_id, str):
+        return error_response("id must be a string")
+
+    beta_id = raw_beta_id.strip()
+    if not beta_id:
+        return error_response("id is required")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_account_beta_enroll",
+            arguments.get("environment", ""),
+            "POST",
+            "/account/betas",
+            None,
+            request_body={"id": beta_id},
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This enrolls the account in a beta program. Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.enroll_account_beta(beta_id)
+
+    return await execute_tool(
+        cfg, arguments, f"enroll Linode account in beta {beta_id}", _call
+    )
+
+
 def create_linode_account_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_update tool."""
     return Tool(

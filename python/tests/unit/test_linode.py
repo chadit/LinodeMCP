@@ -697,6 +697,55 @@ async def test_retryable_acknowledge_account_agreements_does_not_replay() -> Non
     await retryable.close()
 
 
+async def test_enroll_account_beta_sends_post_body() -> None:
+    """Test beta enrollment sends POST /account/betas."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data = {"id": "distributed-beta", "label": "Distributed Beta"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.enroll_account_beta("distributed-beta")
+
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "POST", "/account/betas", {"id": "distributed-beta"}
+    )
+    await client.close()
+
+
+async def test_enroll_account_beta_wraps_http_errors() -> None:
+    """Test beta enrollment wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.enroll_account_beta("distributed-beta")
+
+    assert "EnrollAccountBeta" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_enroll_account_beta_does_not_replay() -> None:
+    """RetryableClient delegates beta enrollment once without retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "enroll_account_beta", new_callable=AsyncMock
+    ) as mock_enroll:
+        mock_enroll.side_effect = httpx.HTTPError("transient")
+        with pytest.raises(httpx.HTTPError):
+            await retryable.enroll_account_beta("distributed-beta")
+
+    mock_enroll.assert_awaited_once_with("distributed-beta")
+    await retryable.close()
+
+
 async def test_update_account_sends_put_to_account_route() -> None:
     """Test updating account sends PUT /account."""
     client = Client("https://api.linode.com/v4", "test-token")

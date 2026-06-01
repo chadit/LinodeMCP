@@ -140,3 +140,18 @@ def test_build_dry_run_response_null_current_state() -> None:
     )
     body = json.loads(out[0].text)
     assert body["current_state"] is None
+
+
+def test_build_dry_run_response_includes_request_body() -> None:
+    """Optional request_body is nested under the would_execute preview."""
+    response = build_dry_run_response(
+        "tool",
+        "",
+        "POST",
+        "/resource",
+        None,
+        request_body={"id": "beta"},
+    )
+
+    body = json.loads(response[0].text)
+    assert body["would_execute"]["body"] == {"id": "beta"}
