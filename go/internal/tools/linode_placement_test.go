@@ -32,6 +32,7 @@ const (
 	caseTraversalGroupID        = "traversal group id"
 	placementGroupSlashValue    = "528/529"
 	placementGroupQueryValue    = "528?x=1"
+	keyPlacementMembers         = "members"
 )
 
 func TestLinodePlacementGroupGetTool(t *testing.T) {
@@ -87,7 +88,7 @@ func TestLinodePlacementGroupGetTool(t *testing.T) {
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyBetaID: 528, keyLabel: placementGroupLabel, keyRegion: placementGroupRegion,
 				keyPlacementGroupTypeJSON: placementGroupTypeLocal, keyPlacementGroupPolicyJSON: placementGroupPolicy,
-				keyPlacementIsCompliant: true, "members": []map[string]any{{"linode_id": 123, keyPlacementIsCompliant: true}},
+				keyPlacementIsCompliant: true, keyPlacementMembers: []map[string]any{{keyLinodeID: 123, keyPlacementIsCompliant: true}},
 			}), "encoding response should not fail")
 		}))
 		defer srv.Close()
@@ -227,7 +228,7 @@ func TestLinodePlacementGroupDeleteTool(t *testing.T) {
 			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 				keyBetaID: 528, keyLabel: placementGroupLabel, keyRegion: placementGroupRegion,
 				keyPlacementGroupTypeJSON: placementGroupTypeLocal, keyPlacementGroupPolicyJSON: placementGroupPolicy,
-				keyPlacementIsCompliant: true, "members": []map[string]any{},
+				keyPlacementIsCompliant: true, keyPlacementMembers: []map[string]any{},
 			}), "encoding response should not fail")
 		}))
 		defer srv.Close()
@@ -248,6 +249,39 @@ func TestLinodePlacementGroupDeleteTool(t *testing.T) {
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, "dry_run", "response should be a dry-run preview")
 		assert.Equal(t, []string{http.MethodGet}, methodsSeen, "dry_run must not issue DELETE")
+	})
+
+	t.Run("dry run surfaces member Linodes as detached dependencies", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				keyBetaID: 528, keyLabel: placementGroupLabel, keyRegion: placementGroupRegion,
+				keyPlacementGroupTypeJSON: placementGroupTypeLocal, keyPlacementGroupPolicyJSON: placementGroupPolicy,
+				keyPlacementIsCompliant: true,
+				keyPlacementMembers:     []map[string]any{{keyLinodeID: 111}, {keyLinodeID: 222}},
+			}), "encoding response should not fail")
+		}))
+		defer srv.Close()
+
+		srvCfg := &config.Config{
+			Environments: map[string]config.EnvironmentConfig{
+				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+			},
+		}
+		_, _, srvHandler := tools.NewLinodePlacementGroupDeleteTool(srvCfg)
+
+		result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyPlacementGroupID: "528", keyDryRun: true}))
+
+		require.NoError(t, err, "handler should not return Go error")
+		require.False(t, result.IsError, "dry_run should not be a tool error")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "detached", "each member Linode should be a detached dependency")
+		assert.Contains(t, textContent.Text, "111", "member Linode IDs should be named")
+		assert.Contains(t, textContent.Text, "222", "member Linode IDs should be named")
+		assert.Contains(t, textContent.Text, "detaches 2 Linode", "preview should warn about detached members")
 	})
 
 	t.Run("client error", func(t *testing.T) {

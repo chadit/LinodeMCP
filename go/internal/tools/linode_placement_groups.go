@@ -307,9 +307,12 @@ func handleLinodePlacementGroupUnassignRequest(ctx context.Context, request *mcp
 
 	req := linode.PlacementGroupUnassignRequest{Linodes: linodes}
 	if IsDryRun(request) {
-		return RunDryRunPreviewWithBody(ctx, request, cfg, "linode_placement_group_unassign", httpMethodPost, path, req,
+		return RunDryRunPreviewWithBodyDetailed(ctx, request, cfg, "linode_placement_group_unassign", httpMethodPost, path, req,
 			func(ctx context.Context, client *linode.Client) (any, error) {
 				return client.GetPlacementGroup(ctx, groupID)
+			},
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return placementGroupMembershipSideEffects(ctx, linodes, groupID, "removed from")
 			})
 	}
 

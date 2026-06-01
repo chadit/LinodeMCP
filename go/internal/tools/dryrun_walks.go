@@ -1276,6 +1276,60 @@ func placementGroupUpdateSideEffects(ctx context.Context, label string) (DryRunD
 	return details, nil
 }
 
+// placementGroupMembershipSideEffects is the Tier B preview shared by
+// linode_placement_group_assign and linode_placement_group_unassign. It names
+// the Linodes whose membership changes; action is "assigned to" or "removed
+// from" (arg-only, no fetch).
+func placementGroupMembershipSideEffects(ctx context.Context, linodes []int, groupID int, action string) (DryRunDetails, error) {
+	var details DryRunDetails
+
+	if err := ctx.Err(); err != nil {
+		return details, fmt.Errorf("placement-group membership side-effect walk canceled: %w", err)
+	}
+
+	for _, linodeID := range linodes {
+		details.SideEffects = append(details.SideEffects,
+			fmt.Sprintf("Linode %d will be %s placement group %d.", linodeID, action, groupID))
+	}
+
+	return details, nil
+}
+
+// placementGroupDeleteDependencyWalk is the Tier A walk for
+// linode_placement_group_delete. Deleting a placement group detaches its
+// member Linodes; the instances themselves are not deleted, so each member is
+// surfaced as a detached dependency. State-only: members come from the destroy
+// FetchState, no extra GET.
+func placementGroupDeleteDependencyWalk(ctx context.Context, _ *linode.Client, state any) (DryRunDetails, error) {
+	var details DryRunDetails
+
+	if err := ctx.Err(); err != nil {
+		return details, fmt.Errorf("placement-group dependency walk canceled: %w", err)
+	}
+
+	group, ok := state.(*linode.PlacementGroup)
+	if !ok || group == nil {
+		return details, nil
+	}
+
+	for i := range group.Members {
+		details.Dependencies = append(details.Dependencies, DryRunDependency{
+			Kind:   dependencyKindInstance,
+			ID:     group.Members[i].LinodeID,
+			Action: dependencyActionDetached,
+			Note:   "Linode is removed from the placement group; the instance is not deleted.",
+		})
+	}
+
+	if len(group.Members) > 0 {
+		details.Warnings = append(details.Warnings, fmt.Sprintf(
+			"Deleting this placement group detaches %d Linode(s); the instances are not deleted.", len(group.Members),
+		))
+	}
+
+	return details, nil
+}
+
 // volumeDeleteDependencyWalk is the Tier A walk for linode_volume_delete. The
 // only cross-resource dependency is the instance the volume is attached to:
 // an attached volume detaches from its instance before it is destroyed. The

@@ -215,5 +215,7 @@ func TestLinodePlacementGroupAssignTool(t *testing.T) {
 		assert.Contains(t, textContent.Text, "/placement/groups/528/assign", "dry run should show target route")
 		assert.Contains(t, textContent.Text, "123", "dry run should show Linode IDs")
 		assert.Contains(t, textContent.Text, placementGroupLabel, "dry run should show current state")
+		assert.Contains(t, textContent.Text, "side_effects", "dry run should surface side effects")
+		assert.Contains(t, textContent.Text, "assigned to placement group 528", "side effect should describe the assignment")
 	})
 }

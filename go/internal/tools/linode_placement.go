@@ -53,9 +53,12 @@ func handlePlacementGroupAssignRequest(ctx context.Context, request *mcp.CallToo
 	req := linode.AssignPlacementGroupLinodesRequest{Linodes: linodes}
 
 	if IsDryRun(request) {
-		return RunDryRunPreviewWithBody(ctx, request, cfg, "linode_placement_group_assign", httpMethodPost, endpoint, req,
+		return RunDryRunPreviewWithBodyDetailed(ctx, request, cfg, "linode_placement_group_assign", httpMethodPost, endpoint, req,
 			func(ctx context.Context, client *linode.Client) (any, error) {
 				return client.GetPlacementGroup(ctx, groupID)
+			},
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return placementGroupMembershipSideEffects(ctx, linodes, groupID, "assigned to")
 			})
 	}
 
@@ -192,6 +195,7 @@ func handlePlacementGroupDeleteRequest(ctx context.Context, request *mcp.CallToo
 		FetchState: func(ctx context.Context, client *linode.Client) (any, error) {
 			return client.GetPlacementGroup(ctx, groupID)
 		},
+		DependencyWalk: placementGroupDeleteDependencyWalk,
 		Execute: func(ctx context.Context, client *linode.Client) error {
 			return client.DeletePlacementGroup(ctx, groupID)
 		},

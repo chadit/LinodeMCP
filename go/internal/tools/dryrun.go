@@ -122,17 +122,23 @@ func BuildDryRunResponseDetailed(
 	toolName, environment, method, path string,
 	currentState any,
 	details *DryRunDetails,
+	body ...any,
 ) (*mcp.CallToolResult, error) {
 	var detail DryRunDetails
 	if details != nil {
 		detail = *details
 	}
 
+	request := DryRunRequest{Method: method, Path: path}
+	if len(body) > 0 {
+		request.Body = body[0]
+	}
+
 	return MarshalToolResponse(DryRunResponse{
 		DryRun:       true,
 		Tool:         toolName,
 		Environment:  environment,
-		WouldExecute: DryRunRequest{Method: method, Path: path},
+		WouldExecute: request,
 		CurrentState: currentState,
 		Dependencies: detail.Dependencies,
 		SideEffects:  detail.SideEffects,
@@ -231,4 +237,51 @@ func RunDryRunPreviewWithBody(
 	}
 
 	return BuildDryRunResponse(toolName, request.GetString(paramEnvironment, ""), method, path, state, body)
+}
+
+// RunDryRunPreviewWithBodyDetailed is the Phase 2 variant of
+// RunDryRunPreviewWithBody: it threads an optional per-tool side-effect walk
+// (detailsFn) that runs after the state fetch, so body-carrying write tools
+// can surface side_effects/warnings alongside the sanitized request body. A
+// nil detailsFn reproduces RunDryRunPreviewWithBody's behavior.
+func RunDryRunPreviewWithBodyDetailed(
+	ctx context.Context,
+	request *mcp.CallToolRequest,
+	cfg *config.Config,
+	toolName, method, path string,
+	body any,
+	fetchState func(ctx context.Context, client *linode.Client) (any, error),
+	detailsFn func(ctx context.Context, client *linode.Client, state any) (DryRunDetails, error),
+) (*mcp.CallToolResult, error) {
+	var (
+		state  any
+		client *linode.Client
+	)
+
+	if fetchState != nil {
+		preparedClient, err := prepareClient(request, cfg)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		client = preparedClient
+
+		state, err = fetchState(ctx, client)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch state for dry-run: %v", err)), nil
+		}
+	}
+
+	env := request.GetString(paramEnvironment, "")
+
+	if detailsFn == nil {
+		return BuildDryRunResponse(toolName, env, method, path, state, body)
+	}
+
+	details, err := detailsFn(ctx, client, state)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to compute dry-run side effects: %v", err)), nil
+	}
+
+	return BuildDryRunResponseDetailed(toolName, env, method, path, state, &details, body)
 }

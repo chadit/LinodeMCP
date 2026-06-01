@@ -19253,10 +19253,13 @@ async def test_placement_group_update_dry_run_returns_preview(
 async def test_placement_group_delete_dry_run_returns_preview(
     sample_config: Config,
 ) -> None:
-    """dry_run=true fetches the group via GET and never deletes."""
+    """dry_run=true fetches the group via GET, surfaces members, never deletes."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_placement_group.return_value = {"id": 7}
+        mock_client.get_placement_group.return_value = {
+            "id": 7,
+            "members": [{"linode_id": 111}, {"linode_id": 222}],
+        }
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -19269,6 +19272,10 @@ async def test_placement_group_delete_dry_run_returns_preview(
         assert body["tool"] == "linode_placement_group_delete"
         assert body["would_execute"]["method"] == "DELETE"
         assert body["would_execute"]["path"] == "/placement/groups/7"
+        assert len(body["dependencies"]) == 2
+        assert {d["id"] for d in body["dependencies"]} == {111, 222}
+        assert all(d["action"] == "detached" for d in body["dependencies"])
+        assert len(body["warnings"]) == 1
         mock_client.get_placement_group.assert_awaited_once_with(7)
         mock_client.delete_placement_group.assert_not_called()
 
@@ -19292,6 +19299,9 @@ async def test_placement_group_assign_dry_run_returns_preview(
         assert body["tool"] == "linode_placement_group_assign"
         assert body["would_execute"]["method"] == "POST"
         assert body["would_execute"]["path"] == "/placement/groups/7/assign"
+        assert len(body["side_effects"]) == 1
+        assert "123" in body["side_effects"][0]
+        assert "assigned to placement group 7" in body["side_effects"][0]
         mock_client.get_placement_group.assert_awaited_once_with(7)
         mock_client.assign_placement_group.assert_not_called()
 
@@ -19315,6 +19325,9 @@ async def test_placement_group_unassign_dry_run_returns_preview(
         assert body["tool"] == "linode_placement_group_unassign"
         assert body["would_execute"]["method"] == "POST"
         assert body["would_execute"]["path"] == "/placement/groups/7/unassign"
+        assert len(body["side_effects"]) == 1
+        assert "123" in body["side_effects"][0]
+        assert "removed from placement group 7" in body["side_effects"][0]
         mock_client.get_placement_group.assert_awaited_once_with(7)
         mock_client.unassign_placement_group.assert_not_called()
 

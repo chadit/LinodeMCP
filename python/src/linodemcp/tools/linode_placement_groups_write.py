@@ -229,6 +229,36 @@ def create_linode_placement_group_delete_tool() -> tuple[Tool, Capability]:
     ), Capability.Destroy
 
 
+def _placement_group_delete_dependency_walk(group_state: Any) -> DryRunDetails:
+    """Phase 2 Tier A walk for placement group delete. The group state (already
+    fetched for current_state) carries the member Linodes; deleting the group
+    detaches them (the instances are not deleted). No extra API call.
+    """
+    details: DryRunDetails = {}
+    if not isinstance(group_state, dict):
+        return details
+
+    group = cast("dict[str, Any]", group_state)
+    members = cast("list[dict[str, Any]]", group.get("members", []))
+    dependencies: list[dict[str, Any]] = [
+        {
+            "kind": "instance",
+            "id": member.get("linode_id"),
+            "action": "detached",
+            "note": "Linode is removed from the placement group; "
+            "the instance is not deleted.",
+        }
+        for member in members
+    ]
+    if dependencies:
+        details["dependencies"] = dependencies
+        details["warnings"] = [
+            f"Deleting this placement group detaches {len(dependencies)} "
+            "Linode(s); the instances are not deleted."
+        ]
+    return details
+
+
 async def handle_linode_placement_group_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -242,6 +272,9 @@ async def handle_linode_placement_group_delete(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_placement_group(gid)
 
+        async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+            return _placement_group_delete_dependency_walk(state)
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -249,6 +282,7 @@ async def handle_linode_placement_group_delete(
             "DELETE",
             f"/placement/groups/{gid}",
             _fetch,
+            _walk,
         )
 
     if arguments.get("confirm") is not True:
@@ -350,6 +384,20 @@ def create_linode_placement_group_assign_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def _placement_group_membership_side_effects(
+    linodes: list[int], group_id: int, action: str
+) -> DryRunDetails:
+    """Tier B preview shared by assign/unassign. Names the Linodes whose
+    membership changes; action is 'assigned to' or 'removed from'.
+    """
+    return {
+        "side_effects": [
+            f"Linode {linode_id} will be {action} placement group {group_id}."
+            for linode_id in linodes
+        ]
+    }
+
+
 async def handle_linode_placement_group_assign(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -358,10 +406,13 @@ async def handle_linode_placement_group_assign(
         parsed = _parse_group_and_linodes(arguments)
         if isinstance(parsed, list):
             return parsed
-        gid, _ = parsed
+        gid, linodes = parsed
 
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_placement_group(gid)
+
+        async def _walk(_client: RetryableClient, _state: Any) -> DryRunDetails:
+            return _placement_group_membership_side_effects(linodes, gid, "assigned to")
 
         return await execute_dry_run(
             cfg,
@@ -370,6 +421,7 @@ async def handle_linode_placement_group_assign(
             "POST",
             f"/placement/groups/{gid}/assign",
             _fetch,
+            _walk,
         )
 
     if arguments.get("confirm") is not True:
@@ -415,10 +467,15 @@ async def handle_linode_placement_group_unassign(
         parsed = _parse_group_and_linodes(arguments)
         if isinstance(parsed, list):
             return parsed
-        gid, _ = parsed
+        gid, linodes = parsed
 
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_placement_group(gid)
+
+        async def _walk(_client: RetryableClient, _state: Any) -> DryRunDetails:
+            return _placement_group_membership_side_effects(
+                linodes, gid, "removed from"
+            )
 
         return await execute_dry_run(
             cfg,
@@ -427,6 +484,7 @@ async def handle_linode_placement_group_unassign(
             "POST",
             f"/placement/groups/{gid}/unassign",
             _fetch,
+            _walk,
         )
 
     if arguments.get("confirm") is not True:

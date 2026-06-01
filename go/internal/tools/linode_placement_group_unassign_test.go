@@ -140,44 +140,6 @@ func TestLinodePlacementGroupUnassignTool(t *testing.T) {
 		}
 	})
 
-	t.Run("dry_run returns preview without client call", func(t *testing.T) {
-		t.Parallel()
-
-		var calls int32
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			atomic.AddInt32(&calls, 1)
-			assert.Equal(t, http.MethodGet, r.Method, "dry_run should fetch current placement group state")
-			assert.Equal(t, "/placement/groups/789", r.URL.Path, "dry_run state path should match")
-			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(linode.PlacementGroup{ID: 789, Label: "pg-test", Region: placementGroupCreateRegion, PlacementGroupType: placementGroupType, PlacementGroupPolicy: placementGroupCreatePolicy, IsCompliant: true}))
-		}))
-		defer srv.Close()
-
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-		_, _, handler := tools.NewLinodePlacementGroupUnassignTool(cfg)
-
-		args := placementGroupUnassignArgs()
-		delete(args, keyConfirm)
-		args[keyDryRun] = true
-
-		result, err := handler(t.Context(), createRequestWithArgs(t, args))
-
-		require.NoError(t, err, "handler should not return transport error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "dry_run should return a preview")
-		textContent, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok, "content should be TextContent")
-		assert.Contains(t, textContent.Text, `"dry_run": true`)
-		assert.Contains(t, textContent.Text, `"method": "POST"`)
-		assert.Contains(t, textContent.Text, `"path": "/placement/groups/789/unassign"`)
-		assert.Contains(t, textContent.Text, `"body": {`)
-		assert.Contains(t, textContent.Text, `"linodes": [`)
-		assert.Contains(t, textContent.Text, `123`)
-		assert.Contains(t, textContent.Text, `456`)
-		assert.Equal(t, int32(1), calls, "unassign dry_run should only fetch current placement group state")
-	})
-
 	t.Run("api error", func(t *testing.T) {
 		t.Parallel()
 
@@ -243,4 +205,44 @@ func placementGroupUnassignArgs() map[string]any {
 		"linodes":           []any{float64(123), float64(456)},
 		keyConfirm:          true,
 	}
+}
+
+func TestLinodePlacementGroupUnassignToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	var calls int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		assert.Equal(t, http.MethodGet, r.Method, "dry_run should fetch current placement group state")
+		assert.Equal(t, "/placement/groups/789", r.URL.Path, "dry_run state path should match")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.PlacementGroup{ID: 789, Label: "pg-test", Region: placementGroupCreateRegion, PlacementGroupType: placementGroupType, PlacementGroupPolicy: placementGroupCreatePolicy, IsCompliant: true}))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodePlacementGroupUnassignTool(cfg)
+
+	args := placementGroupUnassignArgs()
+	delete(args, keyConfirm)
+	args[keyDryRun] = true
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, args))
+
+	require.NoError(t, err, "handler should not return transport error")
+	require.NotNil(t, result, "result should not be nil")
+	assert.False(t, result.IsError, "dry_run should return a preview")
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok, "content should be TextContent")
+	assert.Contains(t, textContent.Text, `"dry_run": true`)
+	assert.Contains(t, textContent.Text, `"method": "POST"`)
+	assert.Contains(t, textContent.Text, `"path": "/placement/groups/789/unassign"`)
+	assert.Contains(t, textContent.Text, `"body": {`)
+	assert.Contains(t, textContent.Text, `"linodes": [`)
+	assert.Contains(t, textContent.Text, `123`)
+	assert.Contains(t, textContent.Text, `456`)
+	assert.Contains(t, textContent.Text, "side_effects", "dry_run should surface side effects")
+	assert.Contains(t, textContent.Text, "removed from placement group 789", "side effect should describe the unassignment")
+	assert.Equal(t, int32(1), calls, "unassign dry_run should only fetch current placement group state")
 }
