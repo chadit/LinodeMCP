@@ -115,6 +115,28 @@ func (c *Client) httpGetProfileGrants(ctx context.Context) (*Grants, error) {
 	return &grants, nil
 }
 
+// httpListProfileApps retrieves OAuth app authorizations for the authenticated profile.
+func (c *Client) httpListProfileApps(ctx context.Context, page, pageSize int) (*PaginatedResponse[AuthorizedApp], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointProfileApps, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListProfileApps", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var apps PaginatedResponse[AuthorizedApp]
+	if err := c.handleResponse(resp, &apps); err != nil {
+		return nil, err
+	}
+
+	return &apps, nil
+}
+
 // GetAccount retrieves the authenticated user's account information from the Linode API.
 func (c *Client) httpGetAccount(ctx context.Context) (*Account, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

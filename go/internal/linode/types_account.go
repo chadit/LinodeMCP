@@ -391,6 +391,17 @@ type ProfileApp struct {
 	Website string `json:"website"`
 }
 
+// AuthorizedApp represents an OAuth app authorization for the authenticated profile.
+type AuthorizedApp struct {
+	ID           int     `json:"id"`
+	Label        string  `json:"label"`
+	Scopes       string  `json:"scopes"`
+	Website      string  `json:"website"`
+	Created      string  `json:"created"`
+	Expiry       *string `json:"expiry"`
+	ThumbnailURL *string `json:"thumbnail_url"`
+}
+
 // OAuthClient represents an OAuth client registered on the account.
 type OAuthClient struct {
 	ID           string `json:"id"`

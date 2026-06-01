@@ -83,6 +83,21 @@ func (c *Client) GetProfileGrants(ctx context.Context) (*Grants, error) {
 	return grants, err
 }
 
+// ListProfileApps retrieves OAuth app authorizations with automatic retry on transient failures.
+func (c *Client) ListProfileApps(ctx context.Context, page, pageSize int) (*PaginatedResponse[AuthorizedApp], error) {
+	var apps *PaginatedResponse[AuthorizedApp]
+
+	err := c.executeWithRetry(ctx, "ListProfileApps", func() error {
+		var err error
+
+		apps, err = c.httpListProfileApps(ctx, page, pageSize)
+
+		return err
+	})
+
+	return apps, err
+}
+
 // ListInstances retrieves all instances with automatic retry on transient failures.
 func (c *Client) ListInstances(ctx context.Context) ([]Instance, error) {
 	var instances []Instance
