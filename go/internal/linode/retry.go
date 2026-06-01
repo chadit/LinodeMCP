@@ -183,6 +183,13 @@ func (c *Client) GetProfileGrants(ctx context.Context) (*Grants, error) {
 	return grants, err
 }
 
+// AnswerProfileSecurityQuestions answers profile security questions without retrying
+// the mutating request. Retrying can replay security state changes after a transient
+// error, so this method delegates exactly once.
+func (c *Client) AnswerProfileSecurityQuestions(ctx context.Context, req *AnswerProfileSecurityQuestionsRequest) error {
+	return c.httpAnswerProfileSecurityQuestions(ctx, req)
+}
+
 // GetProfilePreferences retrieves profile preferences with automatic retry on transient failures.
 func (c *Client) GetProfilePreferences(ctx context.Context) (*ProfilePreferences, error) {
 	var preferences *ProfilePreferences
