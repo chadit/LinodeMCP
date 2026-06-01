@@ -86,8 +86,8 @@ func TestLinodeImageShareGroupByTokenGetTool(t *testing.T) {
 		t.Parallel()
 
 		invalidValues := map[string]any{
-			"slash":     tokenUUIDWithSlash,
-			"query":     tokenUUIDWithQuery,
+			caseSlash:   tokenUUIDWithSlash,
+			caseQuery:   tokenUUIDWithQuery,
 			"fragment":  tokenUUIDWithFragment,
 			caseDotdot:  tokenUUIDWithDotdot,
 			caseNotUUID: invalidTokenUUID,

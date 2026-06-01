@@ -147,6 +147,28 @@ func (c *Client) httpListRegions(ctx context.Context) ([]Region, error) {
 	return response.Data, nil
 }
 
+// GetRegion retrieves a single Linode region by its ID.
+func (c *Client) httpGetRegion(ctx context.Context, regionID string) (*Region, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointRegions + "/" + url.PathEscape(regionID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetRegion", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var region Region
+	if err := c.handleResponse(resp, &region); err != nil {
+		return nil, err
+	}
+
+	return &region, nil
+}
+
 // httpListRegionsAvailability retrieves compute type availability across regions.
 func (c *Client) httpListRegionsAvailability(ctx context.Context) ([]RegionAvailability, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

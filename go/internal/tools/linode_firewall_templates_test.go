@@ -169,7 +169,7 @@ func TestLinodeFirewallTemplateGetTool(t *testing.T) {
 	t.Run("rejects invalid slug before client call", func(t *testing.T) {
 		t.Parallel()
 
-		invalidSlugs := []string{"", "public/vpc", "public?x=1", "..", " public", "PUBLIC", "internal"}
+		invalidSlugs := []string{"", "public/vpc", "public?x=1", pathTraversalValue, " public", "PUBLIC", "internal"}
 		for _, slug := range invalidSlugs {
 			t.Run(slug, func(t *testing.T) {
 				t.Parallel()

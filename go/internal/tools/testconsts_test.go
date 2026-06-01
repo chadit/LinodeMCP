@@ -290,6 +290,9 @@ const (
 
 	// Linode region IDs commonly used in fixtures.
 	regionUSEast         = "us-east"
+	regionLabelNewark    = "Newark, NJ"
+	regionIDSlashValue   = "us/east"
+	regionIDQueryValue   = "us-east?x=1"
 	vlanLabelApp         = "app-vlan"
 	ipv6RangeFixture     = "2001:0db8::"
 	ipv6RouteTarget      = "2001:db8::1"

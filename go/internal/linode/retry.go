@@ -1754,6 +1754,21 @@ func (c *Client) ListRegions(ctx context.Context) ([]Region, error) {
 	return regions, err
 }
 
+// GetRegion retrieves a single region with automatic retry on transient failures.
+func (c *Client) GetRegion(ctx context.Context, regionID string) (*Region, error) {
+	var region *Region
+
+	err := c.executeWithRetry(ctx, "GetRegion", func() error {
+		var err error
+
+		region, err = c.httpGetRegion(ctx, regionID)
+
+		return err
+	})
+
+	return region, err
+}
+
 // ListRegionsAvailability retrieves compute type availability across regions with automatic retry on transient failures.
 func (c *Client) ListRegionsAvailability(ctx context.Context) ([]RegionAvailability, error) {
 	var availability []RegionAvailability

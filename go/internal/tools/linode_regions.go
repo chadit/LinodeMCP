@@ -42,6 +42,37 @@ func NewLinodeRegionListTool(cfg *config.Config) (mcp.Tool, profiles.Capability,
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeRegionGetTool creates a tool for retrieving one Linode region.
+func NewLinodeRegionGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_region_get",
+		mcp.WithDescription("Gets one Linode region by region ID"),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithString("region_id", mcp.Required(), mcp.Description("Region ID (for example, us-east)")),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		regionID, validationMessage := regionIDFromTool(&request)
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		client, err := prepareClient(&request, cfg)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		region, getErr := client.GetRegion(ctx, regionID)
+		if getErr != nil {
+			return regionGetToolFailure(getErr)
+		}
+
+		return MarshalToolResponse(region)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeRegionAvailabilityListTool creates a tool for listing compute type availability across regions.
 func NewLinodeRegionAvailabilityListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool := mcp.NewTool(
@@ -64,6 +95,23 @@ func NewLinodeRegionAvailabilityListTool(cfg *config.Config) (mcp.Tool, profiles
 	}
 
 	return tool, profiles.CapRead, handler
+}
+
+func regionGetToolFailure(failure error) (*mcp.CallToolResult, error) {
+	return mcp.NewToolResultError("Failed to retrieve linode_region_get: " + failure.Error()), nil
+}
+
+func regionIDFromTool(request *mcp.CallToolRequest) (string, string) {
+	regionID, validationMessage := requiredStringArg(request.GetArguments(), "region_id")
+	if validationMessage != "" {
+		return "", validationMessage
+	}
+
+	if err := validateRegionSlug(regionID); err != nil {
+		return "", "region_id must be a lowercase region slug containing only letters, numbers, and hyphens"
+	}
+
+	return regionID, ""
 }
 
 func filterRegionsByCapability(regions []linode.Region, capabilityFilter string) []linode.Region {

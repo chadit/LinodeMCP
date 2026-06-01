@@ -1269,9 +1269,9 @@ func TestLinodeAccountAvailabilityGetTool(t *testing.T) {
 		}{
 			{name: caseMissingRegion, args: map[string]any{}, wantMessage: "region_id is required"},
 			{name: caseEmpty, args: map[string]any{keyRegionID: ""}, wantMessage: "region_id must be a non-empty string"},
-			{name: "number", args: map[string]any{keyRegionID: 123}, wantMessage: "region_id must be a non-empty string"},
-			{name: caseSlash, args: map[string]any{keyRegionID: "us/east"}, wantMessage: errRegionIDSlug},
-			{name: caseQuery, args: map[string]any{keyRegionID: "us-east?x=1"}, wantMessage: errRegionIDSlug},
+			{name: caseNumber, args: map[string]any{keyRegionID: 123}, wantMessage: "region_id must be a non-empty string"},
+			{name: caseSlash, args: map[string]any{keyRegionID: regionIDSlashValue}, wantMessage: errRegionIDSlug},
+			{name: caseQuery, args: map[string]any{keyRegionID: regionIDQueryValue}, wantMessage: errRegionIDSlug},
 			{name: caseDotTraversal, args: map[string]any{keyRegionID: pathTraversalValue}, wantMessage: errRegionIDSlug},
 			{name: "whitespace", args: map[string]any{keyRegionID: "us east"}, wantMessage: errRegionIDSlug},
 			{name: "fragment", args: map[string]any{keyRegionID: "us-east#frag"}, wantMessage: errRegionIDSlug},
@@ -9482,7 +9482,7 @@ func TestLinodeRegionsListTool(t *testing.T) {
 		t.Parallel()
 
 		regions := []linode.Region{
-			{ID: regionUSEast, Label: "Newark, NJ", Country: countryUS, Capabilities: []string{"Linodes", serviceBlockStorage}, Status: statusOK},
+			{ID: regionUSEast, Label: regionLabelNewark, Country: countryUS, Capabilities: []string{"Linodes", serviceBlockStorage}, Status: statusOK},
 			{ID: regionEUWest, Label: "London, UK", Country: "uk", Capabilities: []string{"Linodes"}, Status: statusOK},
 		}
 
@@ -9525,7 +9525,7 @@ func TestLinodeRegionsListTool(t *testing.T) {
 		t.Parallel()
 
 		regions := []linode.Region{
-			{ID: regionUSEast, Label: "Newark, NJ", Country: countryUS, Status: statusOK},
+			{ID: regionUSEast, Label: regionLabelNewark, Country: countryUS, Status: statusOK},
 			{ID: regionUSWest, Label: "Fremont, CA", Country: countryUS, Status: statusOK},
 			{ID: regionEUWest, Label: "London, UK", Country: "uk", Status: statusOK},
 		}
@@ -10868,8 +10868,8 @@ func TestLinodeDomainZoneFileGetTool(t *testing.T) {
 			{name: caseMissing, set: false},
 			{name: caseZero, value: 0, set: true},
 			{name: "negative", value: -1, set: true},
-			{name: "slash", value: "1/2", set: true},
-			{name: "query", value: "1?x=2", set: true},
+			{name: caseSlash, value: "1/2", set: true},
+			{name: caseQuery, value: "1?x=2", set: true},
 			{name: "path traversal", value: pathTraversalValue, set: true},
 		}
 

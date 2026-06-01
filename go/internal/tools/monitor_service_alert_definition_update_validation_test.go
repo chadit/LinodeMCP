@@ -31,7 +31,7 @@ func TestLinodeMonitorServiceAlertDefinitionUpdateToolInvalidInput(t *testing.T)
 			{name: caseStringAlertID, mutate: func(args map[string]any) { args[monitorAlertIDParam] = "20000" }, wantMessage: monitorAlertIDPositiveError},
 			{name: "separator alert id", mutate: func(args map[string]any) { args[monitorAlertIDParam] = "1/2" }, wantMessage: monitorAlertIDPositiveError},
 			{name: "query alert id", mutate: func(args map[string]any) { args[monitorAlertIDParam] = "1?x=2" }, wantMessage: monitorAlertIDPositiveError},
-			{name: "traversal alert id", mutate: func(args map[string]any) { args[monitorAlertIDParam] = ".." }, wantMessage: monitorAlertIDPositiveError},
+			{name: "traversal alert id", mutate: func(args map[string]any) { args[monitorAlertIDParam] = pathTraversalValue }, wantMessage: monitorAlertIDPositiveError},
 			{name: caseNoUpdateFields, mutate: func(args map[string]any) {
 				delete(args, monitorAlertDefinitionLabelParam)
 				delete(args, monitorAlertDefinitionSeverityParam)
