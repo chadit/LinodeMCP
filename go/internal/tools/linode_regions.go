@@ -42,6 +42,30 @@ func NewLinodeRegionListTool(cfg *config.Config) (mcp.Tool, profiles.Capability,
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeRegionAvailabilityListTool creates a tool for listing compute type availability across regions.
+func NewLinodeRegionAvailabilityListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewTool(
+		"linode_region_availability_list",
+		mcp.WithDescription("Lists compute instance type availability across Linode regions"),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleListRequest(
+			ctx, &request, cfg,
+			func(ctx context.Context, client *linode.Client) ([]linode.RegionAvailability, error) {
+				return client.ListRegionsAvailability(ctx)
+			},
+			nil,
+			func(items []linode.RegionAvailability, appliedFilters []string) (*mcp.CallToolResult, error) {
+				return FormatListResponse(items, appliedFilters, "region availability")
+			},
+		)
+	}
+
+	return tool, profiles.CapRead, handler
+}
+
 func filterRegionsByCapability(regions []linode.Region, capabilityFilter string) []linode.Region {
 	filtered := make([]linode.Region, 0, len(regions))
 

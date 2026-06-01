@@ -979,6 +979,7 @@ func computeToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodePlacementGroupGetTool,
 		tools.NewLinodePlacementGroupDeleteTool,
 		tools.NewLinodeRegionListTool,
+		tools.NewLinodeRegionAvailabilityListTool,
 		tools.NewLinodePlacementGroupListTool,
 		tools.NewLinodePlacementGroupUpdateTool,
 		tools.NewLinodeKernelListTool,

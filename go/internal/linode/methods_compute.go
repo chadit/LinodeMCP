@@ -12,6 +12,7 @@ import (
 const (
 	endpointInstances                       = "/linode/instances"
 	endpointRegions                         = "/regions"
+	endpointRegionsAvailability             = "/regions/availability"
 	endpointKernels                         = "/linode/kernels"
 	endpointTypes                           = "/linode/types"
 	endpointImages                          = "/images"
@@ -139,6 +140,26 @@ func (c *Client) httpListRegions(ctx context.Context) ([]Region, error) {
 
 	var response PaginatedResponse[Region]
 
+	if err := c.handleResponse(resp, &response); err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
+}
+
+// httpListRegionsAvailability retrieves compute type availability across regions.
+func (c *Client) httpListRegionsAvailability(ctx context.Context) ([]RegionAvailability, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointRegionsAvailability, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListRegionsAvailability", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var response PaginatedResponse[RegionAvailability]
 	if err := c.handleResponse(resp, &response); err != nil {
 		return nil, err
 	}
