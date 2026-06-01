@@ -65,6 +65,21 @@ func (c *Client) ListProfileDevices(ctx context.Context, page, pageSize int) (*P
 	return devices, err
 }
 
+// GetProfileLogin retrieves one profile login with automatic retry on transient failures.
+func (c *Client) GetProfileLogin(ctx context.Context, loginID int) (*AccountLogin, error) {
+	var login *AccountLogin
+
+	err := c.executeWithRetry(ctx, "GetProfileLogin", func() error {
+		var err error
+
+		login, err = c.httpGetProfileLogin(ctx, loginID)
+
+		return err
+	})
+
+	return login, err
+}
+
 // GetProfileApp retrieves one authorized OAuth app with automatic retry on transient failures.
 func (c *Client) GetProfileApp(ctx context.Context, appID int) (*ProfileApp, error) {
 	var app *ProfileApp

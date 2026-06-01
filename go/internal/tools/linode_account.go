@@ -750,6 +750,22 @@ func NewLinodeProfileDevicesTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeProfileLoginGetTool creates a tool for retrieving one profile login.
+func NewLinodeProfileLoginGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_profile_login_get",
+		"Gets one login for the authenticated profile by ID.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("login_id", mcp.Required(),
+				mcp.Description("Profile login ID to retrieve.")),
+		},
+		handleLinodeProfileLoginGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeProfileAppGetTool creates a tool for retrieving one profile authorized OAuth app.
 func NewLinodeProfileAppGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -1682,6 +1698,25 @@ func profileDevicesPaginationFromTool(request *mcp.CallToolRequest) (int, int, s
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeProfileLoginGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	loginID, validationMessage := accountLoginIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	login, getFailure := client.GetProfileLogin(ctx, loginID)
+	if getFailure == nil {
+		return MarshalToolResponse(login)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_profile_login_get: " + getFailure.Error()), nil
 }
 
 func handleLinodeProfileAppGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

@@ -2622,7 +2622,7 @@ func TestLinodeAccountLoginsTool(t *testing.T) {
 		t.Parallel()
 
 		logins := linode.PaginatedResponse[linode.AccountLogin]{
-			Data:    []linode.AccountLogin{{ID: 123, Username: accountLoginUsername, IP: "203.0.113.10", Status: "successful"}},
+			Data:    []linode.AccountLogin{{ID: 123, Username: accountLoginUsername, IP: ip203_0_113_10, Status: statusSuccessful}},
 			Page:    2,
 			Pages:   3,
 			Results: 75,
@@ -2652,7 +2652,7 @@ func TestLinodeAccountLoginsTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, accountLoginUsername, "response should contain username")
-		assert.Contains(t, textContent.Text, "203.0.113.10", "response should contain login IP")
+		assert.Contains(t, textContent.Text, ip203_0_113_10, "response should contain login IP")
 	})
 
 	t.Run("api error", func(t *testing.T) {
@@ -2718,6 +2718,128 @@ func TestLinodeAccountLoginsTool(t *testing.T) {
 	})
 }
 
+// End-to-end verification of profile login retrieval.
+func TestLinodeProfileLoginGetTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeProfileLoginGetTool(cfg)
+
+		assert.Equal(t, "linode_profile_login_get", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapRead, capability, "tool should be read-only")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+
+		props := tool.InputSchema.Properties
+		assert.Contains(t, props, keyLoginID, "schema should include login_id")
+		assert.NotContains(t, props, keyConfirm, "read-only get tool must not require confirm")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		login := linode.AccountLogin{ID: 123, Username: accountLoginUsername, IP: ip203_0_113_10, Status: statusSuccessful}
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/profile/logins/123", r.URL.Path, "request path should include profile login ID")
+			assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(login))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeProfileLoginGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyLoginID: 123})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, accountLoginUsername, "response should contain username")
+		assert.Contains(t, textContent.Text, ip203_0_113_10, "response should contain login IP")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+			assert.Equal(t, "/profile/logins/123", r.URL.Path, "request path should include profile login ID")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeProfileLoginGetTool(cfg)
+
+		req := createRequestWithArgs(t, map[string]any{keyLoginID: 123})
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		textContent, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok, "content should be TextContent")
+		assert.Contains(t, textContent.Text, "Failed to retrieve linode_profile_login_get", "response should identify failed tool")
+		assert.Contains(t, textContent.Text, errForbidden, "response should include API error detail")
+	})
+
+	t.Run("invalid login_id rejects before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name string
+			args map[string]any
+		}{
+			{name: caseMissing, args: map[string]any{}},
+			{name: loginIDCaseZero, args: map[string]any{keyLoginID: 0}},
+			{name: loginIDCaseNegative, args: map[string]any{keyLoginID: -1}},
+			{name: loginIDCaseFractional, args: map[string]any{keyLoginID: 12.5}},
+			{name: "huge numeric", args: map[string]any{keyLoginID: 1e100}},
+			{name: "above safe integer", args: map[string]any{keyLoginID: 9007199254740992.0}},
+			{name: "path separator string", args: map[string]any{keyLoginID: pathSeparatorValue}},
+			{name: "query separator string", args: map[string]any{keyLoginID: "12?debug=true"}},
+			{name: "traversal string", args: map[string]any{keyLoginID: pathTraversalValue}},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				var called atomic.Bool
+
+				srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+					called.Store(true)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeProfileLoginGetTool(cfg)
+				req := createRequestWithArgs(t, testCase.args)
+				result, err := handler(t.Context(), req)
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid login_id should be an error result")
+				assert.False(t, called.Load(), "invalid login_id should be rejected before client call")
+			})
+		}
+	})
+}
+
 // End-to-end verification of account login retrieval.
 func TestLinodeAccountLoginGetTool(t *testing.T) {
 	t.Parallel()
@@ -2741,7 +2863,7 @@ func TestLinodeAccountLoginGetTool(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		login := linode.AccountLogin{ID: 123, Username: accountLoginUsername, IP: "203.0.113.10", Status: "successful"}
+		login := linode.AccountLogin{ID: 123, Username: accountLoginUsername, IP: ip203_0_113_10, Status: statusSuccessful}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
@@ -2767,7 +2889,7 @@ func TestLinodeAccountLoginGetTool(t *testing.T) {
 		textContent, ok := result.Content[0].(mcp.TextContent)
 		require.True(t, ok, "content should be TextContent")
 		assert.Contains(t, textContent.Text, accountLoginUsername, "response should contain username")
-		assert.Contains(t, textContent.Text, "203.0.113.10", "response should contain login IP")
+		assert.Contains(t, textContent.Text, ip203_0_113_10, "response should contain login IP")
 	})
 
 	t.Run("api error", func(t *testing.T) {
@@ -2810,7 +2932,7 @@ func TestLinodeAccountLoginGetTool(t *testing.T) {
 			{name: loginIDCaseFractional, args: map[string]any{keyLoginID: 12.5}},
 			{name: "huge numeric", args: map[string]any{keyLoginID: 1e100}},
 			{name: "above safe integer", args: map[string]any{keyLoginID: 9007199254740992.0}},
-			{name: "path separator string", args: map[string]any{keyLoginID: "12/34"}},
+			{name: "path separator string", args: map[string]any{keyLoginID: pathSeparatorValue}},
 			{name: "query separator string", args: map[string]any{keyLoginID: "12?debug=true"}},
 			{name: "traversal string", args: map[string]any{keyLoginID: pathTraversalValue}},
 		}

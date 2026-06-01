@@ -27,6 +27,7 @@ const (
 	accountEntityTransferExpiry  = "2021-02-12T16:37:03"
 	accountTransferRegion        = "us-east"
 	accountLoginUsername         = "account-login-user"
+	accountLoginIP               = "203.0.113.10"
 	accountUserEmail             = "user@example.com"
 	accountUserTypeDefault       = "default"
 	accountUserPasswordCreated   = "2024-01-02T03:04:05"
@@ -5335,7 +5336,7 @@ func TestClientListAccountLoginsSuccess(t *testing.T) {
 		Data: []linode.AccountLogin{{
 			Datetime:   accountUserPasswordCreated,
 			ID:         123,
-			IP:         "203.0.113.10",
+			IP:         accountLoginIP,
 			Restricted: false,
 			Status:     statusSuccessful,
 			Username:   accountLoginUsername,
@@ -5366,7 +5367,7 @@ func TestClientListAccountLoginsSuccess(t *testing.T) {
 	require.Len(t, result.Data, 1)
 	assert.Equal(t, 123, result.Data[0].ID)
 	assert.Equal(t, accountLoginUsername, result.Data[0].Username)
-	assert.Equal(t, "203.0.113.10", result.Data[0].IP)
+	assert.Equal(t, accountLoginIP, result.Data[0].IP)
 }
 
 // TestClientListAccountLoginsAPIError verifies ListAccountLogins propagates API errors.
@@ -5433,6 +5434,102 @@ func TestClientListAccountLoginsRetriesTransientError(t *testing.T) {
 	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
 
+// TestClientGetProfileLoginSuccess verifies GetProfileLogin sends a GET
+// request to /profile/logins/{loginId} and decodes the response.
+func TestClientGetProfileLoginSuccess(t *testing.T) {
+	t.Parallel()
+
+	login := linode.AccountLogin{
+		Datetime:   accountUserPasswordCreated,
+		ID:         123,
+		IP:         accountLoginIP,
+		Restricted: false,
+		Status:     statusSuccessful,
+		Username:   accountLoginUsername,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/profile/logins/123", r.URL.Path, "request path should include profile login ID")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(login))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.GetProfileLogin(t.Context(), 123)
+
+	require.NoError(t, err, "GetProfileLogin should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, 123, result.ID)
+	assert.Equal(t, accountLoginUsername, result.Username)
+	assert.Equal(t, accountLoginIP, result.IP)
+}
+
+// TestClientGetProfileLoginAPIError verifies GetProfileLogin propagates API errors.
+func TestClientGetProfileLoginAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/profile/logins/123", r.URL.Path, "request path should include profile login ID")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.GetProfileLogin(t.Context(), 123)
+
+	require.Error(t, err, "GetProfileLogin should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	require.NotNil(t, apiErr, "APIError should be present")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+// TestClientGetProfileLoginRetriesTransientError verifies the read-only get retries transient failures.
+func TestClientGetProfileLoginRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			assert.NoError(t, writeErr)
+
+			return
+		}
+
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/profile/logins/123", r.URL.Path, "request path should include profile login ID")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.AccountLogin{ID: 123, Username: accountLoginUsername}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	result, err := client.GetProfileLogin(t.Context(), 123)
+
+	require.NoError(t, err, "GetProfileLogin should succeed after retry")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, 123, result.ID)
+	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+}
+
 // TestClientGetAccountLoginSuccess verifies GetAccountLogin sends a GET
 // request to /account/logins/{loginId} and decodes the response.
 func TestClientGetAccountLoginSuccess(t *testing.T) {
@@ -5441,7 +5538,7 @@ func TestClientGetAccountLoginSuccess(t *testing.T) {
 	login := linode.AccountLogin{
 		Datetime:   accountUserPasswordCreated,
 		ID:         123,
-		IP:         "203.0.113.10",
+		IP:         accountLoginIP,
 		Restricted: false,
 		Status:     statusSuccessful,
 		Username:   accountLoginUsername,
@@ -5466,7 +5563,7 @@ func TestClientGetAccountLoginSuccess(t *testing.T) {
 	require.NotNil(t, result, "result should not be nil")
 	assert.Equal(t, 123, result.ID)
 	assert.Equal(t, accountLoginUsername, result.Username)
-	assert.Equal(t, "203.0.113.10", result.IP)
+	assert.Equal(t, accountLoginIP, result.IP)
 }
 
 // TestClientGetAccountLoginAPIError verifies GetAccountLogin propagates API errors.
