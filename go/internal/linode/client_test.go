@@ -623,6 +623,92 @@ func TestClientGetInstanceServerError(t *testing.T) {
 	assert.Equal(t, 500, apiErr.StatusCode, "status code should be 500 internal server error")
 }
 
+// TestClientListProfileDevicesSuccess verifies ListProfileDevices sends a GET request to /profile/devices.
+func TestClientListProfileDevicesSuccess(t *testing.T) {
+	t.Parallel()
+
+	devices := linode.PaginatedResponse[linode.ProfileDevice]{
+		Data: []linode.ProfileDevice{{keyID: float64(123), "user_agent": "Mozilla/5.0", "last_remote_addr": "192.0.2.1"}},
+		Page: 2, Pages: 3, Results: 75,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/profile/devices", r.URL.Path, "request path should be /profile/devices")
+		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(devices), "encoding profile devices response should not fail")
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.ListProfileDevices(t.Context(), 2, 25)
+
+	require.NoError(t, err, "ListProfileDevices should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, 2, result.Page)
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, "Mozilla/5.0", result.Data[0]["user_agent"])
+	assert.Equal(t, "192.0.2.1", result.Data[0]["last_remote_addr"])
+}
+
+// TestClientListProfileDevicesAPIError verifies ListProfileDevices propagates API errors.
+func TestClientListProfileDevicesAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/profile/devices", r.URL.Path, "request path should be /profile/devices")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.ListProfileDevices(t.Context(), 0, 0)
+
+	require.Error(t, err, "ListProfileDevices should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+// TestClientListProfileDevicesRetriesTransientError verifies the read-only list retries transient failures.
+func TestClientListProfileDevicesRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/profile/devices", r.URL.Path, "request path should be /profile/devices")
+
+		if attempts.Add(1) == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}))
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ProfileDevice]{Data: []linode.ProfileDevice{{keyID: float64(123)}}, Page: 1, Pages: 1, Results: 1}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	result, err := client.ListProfileDevices(t.Context(), 0, 0)
+
+	require.NoError(t, err, "ListProfileDevices should succeed after retry")
+	require.NotNil(t, result, "result should not be nil")
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, int32(2), attempts.Load(), "read-only list should retry one transient failure")
+}
+
 // TestClientGetProfileNetworkError verifies that GetProfile returns a
 // NetworkError when the server is unreachable.
 func TestClientGetProfileNetworkError(t *testing.T) {

@@ -15,6 +15,9 @@ type Profile struct {
 	Scopes             string `json:"scopes,omitempty"`
 }
 
+// ProfileDevice represents a trusted device on the authenticated profile.
+type ProfileDevice map[string]any
+
 // GrantPermission is one of "read_only", "read_write", or "" (no access).
 // The Linode API uses an explicit empty string when the OAuth grant carries
 // no permission on a resource, so we keep it as a string rather than an

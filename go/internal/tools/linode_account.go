@@ -731,6 +731,22 @@ func NewLinodeAccountInvoiceItemsTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeProfileDevicesTool creates a tool for listing trusted devices for the profile.
+func NewLinodeProfileDevicesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_profile_devices",
+		"Lists trusted devices for the authenticated profile.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		},
+		handleLinodeProfileDevicesRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeProfileAppGetTool creates a tool for retrieving one profile authorized OAuth app.
 func NewLinodeProfileAppGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -1588,6 +1604,41 @@ func accountBetasPaginationFromTool(request *mcp.CallToolRequest) (int, int, str
 	}
 
 	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountBetasPageSizeMin, accountBetasPageSizeMax)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	return page, pageSize, ""
+}
+
+func handleLinodeProfileDevicesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	page, pageSize, validationMessage := profileDevicesPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	devices, listFailure := client.ListProfileDevices(ctx, page, pageSize)
+	if listFailure == nil {
+		return MarshalToolResponse(devices)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_profile_devices: " + listFailure.Error()), nil
+}
+
+func profileDevicesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
+	args := request.GetArguments()
+
+	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountOAuthClientsPageSizeMin, accountOAuthClientsPageSizeMax)
 	if validationMessage != "" {
 		return 0, 0, validationMessage
 	}

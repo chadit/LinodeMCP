@@ -50,6 +50,21 @@ func (c *Client) GetProfile(ctx context.Context) (*Profile, error) {
 	return profile, err
 }
 
+// ListProfileDevices retrieves trusted devices with automatic retry on transient failures.
+func (c *Client) ListProfileDevices(ctx context.Context, page, pageSize int) (*PaginatedResponse[ProfileDevice], error) {
+	var devices *PaginatedResponse[ProfileDevice]
+
+	err := c.executeWithRetry(ctx, "ListProfileDevices", func() error {
+		var err error
+
+		devices, err = c.httpListProfileDevices(ctx, page, pageSize)
+
+		return err
+	})
+
+	return devices, err
+}
+
 // GetProfileApp retrieves one authorized OAuth app with automatic retry on transient failures.
 func (c *Client) GetProfileApp(ctx context.Context, appID int) (*ProfileApp, error) {
 	var app *ProfileApp

@@ -14,6 +14,7 @@ const (
 	endpointProfile                      = "/profile"
 	endpointProfileGrants                = "/profile/grants"
 	endpointProfileApps                  = "/profile/apps"
+	endpointProfileDevices               = "/profile/devices"
 	endpointAccount                      = "/account"
 	endpointAccountTransfer              = "/account/transfer"
 	endpointAccountSettings              = "/account/settings"
@@ -67,6 +68,28 @@ func (c *Client) httpGetProfile(ctx context.Context) (*Profile, error) {
 	}
 
 	return &profile, nil
+}
+
+// httpListProfileDevices retrieves trusted devices for the authenticated profile.
+func (c *Client) httpListProfileDevices(ctx context.Context, page, pageSize int) (*PaginatedResponse[ProfileDevice], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointProfileDevices, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListProfileDevices", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var devices PaginatedResponse[ProfileDevice]
+	if err := c.handleResponse(resp, &devices); err != nil {
+		return nil, err
+	}
+
+	return &devices, nil
 }
 
 // httpGetProfileApp retrieves one authorized OAuth app from the profile.
