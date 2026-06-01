@@ -168,6 +168,21 @@ func (c *Client) GetProfileGrants(ctx context.Context) (*Grants, error) {
 	return grants, err
 }
 
+// GetProfilePreferences retrieves profile preferences with automatic retry on transient failures.
+func (c *Client) GetProfilePreferences(ctx context.Context) (*ProfilePreferences, error) {
+	var preferences *ProfilePreferences
+
+	err := c.executeWithRetry(ctx, "GetProfilePreferences", func() error {
+		var err error
+
+		preferences, err = c.httpGetProfilePreferences(ctx)
+
+		return err
+	})
+
+	return preferences, err
+}
+
 // ListProfileApps retrieves OAuth app authorizations with automatic retry on transient failures.
 func (c *Client) ListProfileApps(ctx context.Context, page, pageSize int) (*PaginatedResponse[AuthorizedApp], error) {
 	var apps *PaginatedResponse[AuthorizedApp]

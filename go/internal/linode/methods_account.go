@@ -15,6 +15,7 @@ const (
 	endpointProfilePhoneNumber           = "/profile/phone-number"
 	endpointProfilePhoneNumberVerify     = endpointProfilePhoneNumber + "/verify"
 	endpointProfileGrants                = "/profile/grants"
+	endpointProfilePreferences           = "/profile/preferences"
 	endpointProfileLogins                = "/profile/logins"
 	endpointProfileApps                  = "/profile/apps"
 	endpointProfileDevices               = "/profile/devices"
@@ -304,6 +305,26 @@ func (c *Client) httpGetProfileGrants(ctx context.Context) (*Grants, error) {
 	}
 
 	return &grants, nil
+}
+
+// httpGetProfilePreferences retrieves /profile/preferences for the authenticated user.
+func (c *Client) httpGetProfilePreferences(ctx context.Context) (*ProfilePreferences, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointProfilePreferences, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetProfilePreferences", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	preferences := ProfilePreferences{}
+	if err := c.handleResponse(resp, &preferences); err != nil {
+		return nil, err
+	}
+
+	return &preferences, nil
 }
 
 // httpListProfileApps retrieves OAuth app authorizations for the authenticated profile.
