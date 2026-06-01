@@ -483,6 +483,49 @@ func TestClientSendProfilePhoneNumberVerificationCodeAPIErrorDoesNotRetry(t *tes
 	assert.Equal(t, int32(1), requestCount.Load(), "non-idempotent POST must not be retried")
 }
 
+func TestClientDeleteProfilePhoneNumberSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, "/profile/phone-number", r.URL.Path, "request path should be /profile/phone-number")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	err := client.DeleteProfilePhoneNumber(t.Context())
+
+	require.NoError(t, err, "DeleteProfilePhoneNumber should succeed on 200 response")
+}
+
+func TestClientDeleteProfilePhoneNumberAPIErrorDoesNotRetry(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
+		assert.Equal(t, http.MethodDelete, r.Method, "request method should be DELETE")
+		assert.Equal(t, "/profile/phone-number", r.URL.Path, "request path should be /profile/phone-number")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	err := client.DeleteProfilePhoneNumber(t.Context())
+
+	require.Error(t, err, "DeleteProfilePhoneNumber should fail on server error")
+	assert.Equal(t, int32(1), requestCount.Load(), "destructive DELETE must not be retried")
+}
+
 func TestClientDeleteProfileAppSuccess(t *testing.T) {
 	t.Parallel()
 

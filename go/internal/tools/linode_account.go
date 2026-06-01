@@ -758,6 +758,23 @@ func NewLinodeProfilePhoneNumberSendTool(cfg *config.Config) (mcp.Tool, profiles
 	return tool, profiles.CapWrite, handler
 }
 
+// NewLinodeProfilePhoneNumberDeleteTool creates a tool for deleting a profile phone number.
+func NewLinodeProfilePhoneNumberDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_profile_phone_number_delete",
+		"Deletes the authenticated profile phone number.",
+		[]mcp.ToolOption{
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm deleting the profile phone number. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeProfilePhoneNumberDeleteRequest,
+	)
+
+	return tool, profiles.CapDestroy, handler
+}
+
 // NewLinodeProfileDevicesTool creates a tool for listing trusted devices for the profile.
 func NewLinodeProfileDevicesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -1718,6 +1735,35 @@ func handleLinodeProfilePhoneNumberSendRequest(ctx context.Context, request *mcp
 func sendProfilePhoneNumberErrorMessage(ctx context.Context, client *linode.Client, body *linode.ProfilePhoneNumberRequest) string {
 	if err := client.SendProfilePhoneNumberVerificationCode(ctx, body); err != nil {
 		return "Failed to send linode_profile_phone_number_send: " + err.Error()
+	}
+
+	return ""
+}
+
+func handleLinodeProfilePhoneNumberDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_profile_phone_number_delete", httpMethodDelete, profilePhoneNumberPath, nil)
+	}
+
+	if result := RequireConfirm(request, "This deletes the profile phone number. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, prepErr := prepareClient(request, cfg)
+	if prepErr != nil {
+		return mcp.NewToolResultError(prepErr.Error()), nil
+	}
+
+	if deleteFailureMessage := deleteProfilePhoneNumberErrorMessage(ctx, client); deleteFailureMessage != "" {
+		return mcp.NewToolResultError(deleteFailureMessage), nil
+	}
+
+	return MarshalToolResponse(map[string]any{responseKeyMessage: "Profile phone number deleted successfully"})
+}
+
+func deleteProfilePhoneNumberErrorMessage(ctx context.Context, client *linode.Client) string {
+	if err := client.DeleteProfilePhoneNumber(ctx); err != nil {
+		return "Failed to delete profile phone number: " + err.Error()
 	}
 
 	return ""

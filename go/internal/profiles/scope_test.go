@@ -146,6 +146,12 @@ func TestRequiredScopesReadVsWrite(t *testing.T) {
 			capability: profiles.CapRead,
 			want:       []profiles.Scope{profiles.ScopeAccountReadOnly},
 		},
+		{
+			name:       "profile phone number delete",
+			toolName:   "linode_profile_phone_number_delete",
+			capability: profiles.CapDestroy,
+			want:       []profiles.Scope{profiles.ScopeAccountReadWrite},
+		},
 	}
 
 	for _, tc := range tests {

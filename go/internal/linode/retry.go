@@ -55,6 +55,11 @@ func (c *Client) SendProfilePhoneNumberVerificationCode(ctx context.Context, req
 	return c.httpSendProfilePhoneNumberVerificationCode(ctx, req)
 }
 
+// DeleteProfilePhoneNumber deletes the profile phone number without retrying the destructive DELETE.
+func (c *Client) DeleteProfilePhoneNumber(ctx context.Context) error {
+	return c.httpDeleteProfilePhoneNumber(ctx)
+}
+
 // ListProfileLogins retrieves profile login history with automatic retry on transient failures.
 func (c *Client) ListProfileLogins(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountLogin], error) {
 	var logins *PaginatedResponse[AccountLogin]

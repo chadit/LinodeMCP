@@ -91,6 +91,25 @@ func (c *Client) httpSendProfilePhoneNumberVerificationCode(ctx context.Context,
 	return nil
 }
 
+// httpDeleteProfilePhoneNumber deletes the authenticated profile's phone number.
+func (c *Client) httpDeleteProfilePhoneNumber(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpointProfilePhoneNumber, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteProfilePhoneNumber", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	if err := c.handleResponse(resp, nil); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // httpListProfileLogins retrieves login history for the authenticated profile.
 func (c *Client) httpListProfileLogins(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountLogin], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
