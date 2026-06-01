@@ -352,6 +352,25 @@ func (c *Client) httpGetProfileGrants(ctx context.Context) (*Grants, error) {
 	return &grants, nil
 }
 
+// httpAnswerProfileSecurityQuestions answers the authenticated user's security questions via POST /v4/profile/security-questions.
+func (c *Client) httpAnswerProfileSecurityQuestions(ctx context.Context, req *AnswerProfileSecurityQuestionsRequest) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointProfileSecurityQuestions, req)
+	if err != nil {
+		return &NetworkError{Operation: "AnswerProfileSecurityQuestions", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	if err := c.handleResponse(resp, nil); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // httpGetProfilePreferences retrieves /profile/preferences for the authenticated user.
 func (c *Client) httpGetProfilePreferences(ctx context.Context) (*ProfilePreferences, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

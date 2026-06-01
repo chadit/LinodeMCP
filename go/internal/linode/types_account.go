@@ -71,6 +71,11 @@ type Grants struct {
 	LKECluster   []Grant      `json:"lkecluster"`
 }
 
+// AnswerProfileSecurityQuestionsRequest contains the body for POST /profile/security-questions.
+type AnswerProfileSecurityQuestionsRequest struct {
+	SecurityQuestions string `json:"security_questions,omitempty"`
+}
+
 // UpdateAccountUserGrantsRequest contains editable grant sections for
 // PUT /account/users/{username}/grants. Pointer fields preserve the caller's
 // intent so omitted sections are not serialized, while empty arrays can still

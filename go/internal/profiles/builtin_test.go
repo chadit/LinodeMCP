@@ -214,6 +214,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_account_update", Capability: profiles.CapAdmin},
 		{Name: "linode_account_settings_update", Capability: profiles.CapAdmin},
 		{Name: "linode_account_settings_managed_enable", Capability: profiles.CapAdmin},
+		{Name: "linode_profile_security_questions_answer", Capability: profiles.CapAdmin},
 		{Name: "linode_firewall_settings_update", Capability: profiles.CapAdmin},
 		{Name: "linode_account_beta_enroll", Capability: profiles.CapAdmin},
 		{Name: "linode_account_cancel", Capability: profiles.CapAdmin},
@@ -359,6 +360,13 @@ func TestCapAdminExcludedFromEveryBuiltin(t *testing.T) {
 			profile.AllowedTools,
 			"linode_account_settings_managed_enable",
 			"profile %q must never include managed enable admin tool",
+			name,
+		)
+		assert.NotContainsf(
+			t,
+			profile.AllowedTools,
+			"linode_profile_security_questions_answer",
+			"profile %q must never include profile security questions admin tool",
 			name,
 		)
 		assert.NotContainsf(
@@ -570,6 +578,7 @@ func TestCategoriesIncludesProfilePreferencesInCore(t *testing.T) {
 	t.Parallel()
 
 	assert.Contains(t, profiles.Categories("linode_profile_preferences"), "core")
+	assert.Contains(t, profiles.Categories("linode_profile_security_questions_answer"), "core")
 }
 
 func TestCategoriesIncludesAccountOAuthClientsInCore(t *testing.T) {
