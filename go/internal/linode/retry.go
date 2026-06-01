@@ -65,6 +65,21 @@ func (c *Client) VerifyProfilePhoneNumber(ctx context.Context, req *ProfilePhone
 	return c.httpVerifyProfilePhoneNumber(ctx, req)
 }
 
+// ListProfileSecurityQuestions lists available profile security questions with automatic retry on transient failures.
+func (c *Client) ListProfileSecurityQuestions(ctx context.Context) (*ProfileSecurityQuestions, error) {
+	var questions *ProfileSecurityQuestions
+
+	err := c.executeWithRetry(ctx, "ListProfileSecurityQuestions", func() error {
+		var err error
+
+		questions, err = c.httpListProfileSecurityQuestions(ctx)
+
+		return err
+	})
+
+	return questions, err
+}
+
 // ListProfileLogins retrieves profile login history with automatic retry on transient failures.
 func (c *Client) ListProfileLogins(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountLogin], error) {
 	var logins *PaginatedResponse[AccountLogin]

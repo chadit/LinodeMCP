@@ -826,6 +826,7 @@ func coreToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewVersionTool,
 		tools.NewLinodeProfileTool,
 		tools.NewLinodeProfilePreferencesTool,
+		tools.NewLinodeProfileSecurityQuestionsTool,
 		tools.NewLinodeProfileLoginsTool,
 		tools.NewLinodeAccountTool,
 		tools.NewLinodeAccountTransferTool,

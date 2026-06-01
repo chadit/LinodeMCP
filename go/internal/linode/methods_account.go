@@ -16,6 +16,7 @@ const (
 	endpointProfilePhoneNumberVerify     = endpointProfilePhoneNumber + "/verify"
 	endpointProfileGrants                = "/profile/grants"
 	endpointProfilePreferences           = "/profile/preferences"
+	endpointProfileSecurityQuestions     = "/profile/security-questions"
 	endpointProfileLogins                = "/profile/logins"
 	endpointProfileApps                  = "/profile/apps"
 	endpointProfileDevices               = "/profile/devices"
@@ -129,6 +130,26 @@ func (c *Client) httpVerifyProfilePhoneNumber(ctx context.Context, req *ProfileP
 	}
 
 	return nil
+}
+
+// httpListProfileSecurityQuestions lists available profile security questions.
+func (c *Client) httpListProfileSecurityQuestions(ctx context.Context) (*ProfileSecurityQuestions, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointProfileSecurityQuestions, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListProfileSecurityQuestions", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var questions ProfileSecurityQuestions
+	if err := c.handleResponse(resp, &questions); err != nil {
+		return nil, err
+	}
+
+	return &questions, nil
 }
 
 // httpListProfileLogins retrieves login history for the authenticated profile.

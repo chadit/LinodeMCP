@@ -36,6 +36,19 @@ func NewLinodeProfilePreferencesTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeProfileSecurityQuestionsTool creates a tool for listing available profile security questions.
+func NewLinodeProfileSecurityQuestionsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newSimpleGetTool(
+		cfg, "linode_profile_security_questions",
+		"Lists available profile security questions for the authenticated profile",
+		func(ctx context.Context, client *linode.Client) (any, error) {
+			return client.ListProfileSecurityQuestions(ctx)
+		},
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
 // NewLinodeProfileLoginsTool creates a tool for listing login history for the authenticated profile.
 func NewLinodeProfileLoginsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
