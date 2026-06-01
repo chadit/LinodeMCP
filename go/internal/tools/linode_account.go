@@ -53,6 +53,7 @@ const (
 	longviewPlanPath                   = "/longview/plan"
 	accountSettingsPath                = "/account/settings"
 	accountUsersPath                   = "/account/users"
+	supportTicketsPath                 = "/support/tickets"
 	accountOAuthClientsPath            = "/account/oauth-clients"
 	accountPaymentsPath                = "/account/payments"
 	accountPaymentMethodsPath          = "/account/payment-methods"
@@ -108,6 +109,22 @@ const (
 	accountUserGrantsVPCParam          = "vpc"
 	accountUserGrantsLKEClusterParam   = "lkecluster"
 	accountUserEmailParam              = "email"
+	supportTicketSummaryParam          = "summary"
+	supportTicketDescriptionParam      = "description"
+	supportTicketBucketParam           = "bucket"
+	supportTicketDatabaseIDParam       = "database_id"
+	supportTicketDomainIDParam         = "domain_id"
+	supportTicketFirewallIDParam       = "firewall_id"
+	supportTicketLinodeIDParam         = "linode_id"
+	supportTicketLKEClusterIDParam     = "lkecluster_id"
+	supportTicketLongviewClientIDParam = "longviewclient_id"
+	supportTicketManagedIssueParam     = "managed_issue"
+	supportTicketNodeBalancerIDParam   = "nodebalancer_id"
+	supportTicketRegionParam           = "region"
+	supportTicketSeverityParam         = "severity"
+	supportTicketVLANParam             = "vlan"
+	supportTicketVolumeIDParam         = "volume_id"
+	supportTicketVPCIDParam            = "vpc_id"
 	managedContactNameParam            = "contact_name"
 	managedContactEmailParam           = "contact_email"
 	managedContactGroupParam           = "group"
@@ -121,6 +138,7 @@ const (
 	accountLoginsPageSizeMax           = 500
 	maxAccountLoginIDFromJSON          = 9007199254740991
 	maxAccountPaymentIDFromJSON        = 9007199254740991
+	maxSupportTicketResourceIDFromJSON = 9007199254740991
 	accountInvoicesPageSizeMin         = 25
 	accountInvoicesPageSizeMax         = 500
 	accountPaymentsPageSizeMin         = 25
@@ -584,6 +602,38 @@ func NewLinodeAccountUserCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountUserCreateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
+// NewLinodeAccountSupportTicketCreateTool creates a tool for opening support tickets.
+func NewLinodeAccountSupportTicketCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_support_ticket_create",
+		"Opens a support ticket for the authenticated account.",
+		[]mcp.ToolOption{
+			mcp.WithString(supportTicketSummaryParam, mcp.Required(), mcp.Description("Short summary for the support ticket.")),
+			mcp.WithString(supportTicketDescriptionParam, mcp.Required(), mcp.Description("Detailed support ticket description.")),
+			mcp.WithString(supportTicketBucketParam, mcp.Description("Object Storage bucket related to the ticket (optional).")),
+			mcp.WithNumber(supportTicketDatabaseIDParam, mcp.Description("Database ID related to the ticket (optional).")),
+			mcp.WithNumber(supportTicketDomainIDParam, mcp.Description("Domain ID related to the ticket (optional).")),
+			mcp.WithNumber(supportTicketFirewallIDParam, mcp.Description("Firewall ID related to the ticket (optional).")),
+			mcp.WithNumber(supportTicketLinodeIDParam, mcp.Description("Linode ID related to the ticket (optional).")),
+			mcp.WithNumber(supportTicketLKEClusterIDParam, mcp.Description("LKE cluster ID related to the ticket (optional).")),
+			mcp.WithNumber(supportTicketLongviewClientIDParam, mcp.Description("Longview client ID related to the ticket (optional).")),
+			mcp.WithString(supportTicketManagedIssueParam, mcp.Description("Managed issue identifier related to the ticket (optional).")),
+			mcp.WithNumber(supportTicketNodeBalancerIDParam, mcp.Description("NodeBalancer ID related to the ticket (optional).")),
+			mcp.WithString(supportTicketRegionParam, mcp.Description("Region related to the ticket (optional).")),
+			mcp.WithString(supportTicketSeverityParam, mcp.Description("Support ticket severity (optional).")),
+			mcp.WithString(supportTicketVLANParam, mcp.Description("VLAN related to the ticket (optional).")),
+			mcp.WithNumber(supportTicketVolumeIDParam, mcp.Description("Volume ID related to the ticket (optional).")),
+			mcp.WithNumber(supportTicketVPCIDParam, mcp.Description("VPC ID related to the ticket (optional).")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm support ticket creation. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeAccountSupportTicketCreateRequest,
 	)
 
 	return tool, profiles.CapAdmin, handler
@@ -3742,6 +3792,120 @@ func accountUserCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.Cre
 	}
 
 	return &linode.CreateAccountUserRequest{Username: username, Email: email}, ""
+}
+
+func handleLinodeAccountSupportTicketCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	createRequest, validationMessage := supportTicketCreateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreviewWithBody(ctx, request, cfg, "linode_account_support_ticket_create", httpMethodPost, supportTicketsPath, createRequest, nil)
+	}
+
+	if result := RequireConfirm(request, "This creates a support ticket. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	ticket, createFailure := client.CreateSupportTicket(ctx, createRequest)
+	if createFailure == nil {
+		return MarshalToolResponse(ticket)
+	}
+
+	return mcp.NewToolResultError("Failed to create linode_account_support_ticket_create: " + createFailure.Error()), nil
+}
+
+func supportTicketCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateSupportTicketRequest, string) {
+	args := request.GetArguments()
+
+	summary, validationMessage := requiredAccountUserString(args, supportTicketSummaryParam)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	description, validationMessage := requiredAccountUserString(args, supportTicketDescriptionParam)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	req := &linode.CreateSupportTicketRequest{Summary: summary, Description: description}
+
+	optionalStrings := []struct {
+		field string
+		set   func(string)
+	}{
+		{field: supportTicketBucketParam, set: func(value string) { req.Bucket = &value }},
+		{field: supportTicketManagedIssueParam, set: func(value string) { req.ManagedIssue = &value }},
+		{field: supportTicketRegionParam, set: func(value string) { req.Region = &value }},
+		{field: supportTicketSeverityParam, set: func(value string) { req.Severity = &value }},
+		{field: supportTicketVLANParam, set: func(value string) { req.VLAN = &value }},
+	}
+	for _, optional := range optionalStrings {
+		value, validationMessage := optionalSupportTicketString(args, optional.field)
+		if validationMessage != "" {
+			return nil, validationMessage
+		}
+
+		if value != "" {
+			optional.set(value)
+		}
+	}
+
+	optionalIDs := []struct {
+		field string
+		set   func(int)
+	}{
+		{field: supportTicketDatabaseIDParam, set: func(value int) { req.DatabaseID = &value }},
+		{field: supportTicketDomainIDParam, set: func(value int) { req.DomainID = &value }},
+		{field: supportTicketFirewallIDParam, set: func(value int) { req.FirewallID = &value }},
+		{field: supportTicketLinodeIDParam, set: func(value int) { req.LinodeID = &value }},
+		{field: supportTicketLKEClusterIDParam, set: func(value int) { req.LKEClusterID = &value }},
+		{field: supportTicketLongviewClientIDParam, set: func(value int) { req.LongviewClientID = &value }},
+		{field: supportTicketNodeBalancerIDParam, set: func(value int) { req.NodeBalancerID = &value }},
+		{field: supportTicketVolumeIDParam, set: func(value int) { req.VolumeID = &value }},
+		{field: supportTicketVPCIDParam, set: func(value int) { req.VPCID = &value }},
+	}
+	for _, optional := range optionalIDs {
+		value, validationMessage := optionalSupportTicketPositiveID(args, optional.field)
+		if validationMessage != "" {
+			return nil, validationMessage
+		}
+
+		if value > 0 {
+			optional.set(value)
+		}
+	}
+
+	return req, ""
+}
+
+func optionalSupportTicketString(args map[string]any, field string) (string, string) {
+	raw, rawPresent := args[field]
+	if !rawPresent || raw == nil {
+		return "", ""
+	}
+
+	return nonEmptyToolString(raw, field)
+}
+
+func optionalSupportTicketPositiveID(args map[string]any, field string) (int, string) {
+	raw, rawPresent := args[field]
+	if !rawPresent || raw == nil {
+		return 0, ""
+	}
+
+	value, ok := raw.(float64)
+	if !ok || value <= 0 || math.Trunc(value) != value || value > maxSupportTicketResourceIDFromJSON {
+		return 0, field + " must be a positive integer"
+	}
+
+	return int(value), ""
 }
 
 func handleLinodeManagedContactCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
