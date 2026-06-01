@@ -373,6 +373,7 @@ const (
 	ip192168_1_1                    = "192.168.1.1"
 	ip192168_1_2                    = "192.168.1.2"
 	ip203_0_113_1                   = "203.0.113.1"
+	ip203_0_113_10                  = "203.0.113.10"
 	rdnsTestExampleOrg              = "test.example.org"
 	subnetMaskFixture               = "255.255.255.0"
 	notANumber                      = "not-a-number"

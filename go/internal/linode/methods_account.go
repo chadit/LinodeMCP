@@ -15,6 +15,7 @@ const (
 	endpointProfileGrants                = "/profile/grants"
 	endpointProfileApps                  = "/profile/apps"
 	endpointProfileDevices               = "/profile/devices"
+	endpointProfileLogins                = "/profile/logins"
 	endpointAccount                      = "/account"
 	endpointAccountTransfer              = "/account/transfer"
 	endpointAccountSettings              = "/account/settings"
@@ -90,6 +91,28 @@ func (c *Client) httpListProfileDevices(ctx context.Context, page, pageSize int)
 	}
 
 	return &devices, nil
+}
+
+// httpGetProfileLogin retrieves one login from the authenticated profile.
+func (c *Client) httpGetProfileLogin(ctx context.Context, loginID int) (*AccountLogin, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointProfileLogins + "/" + url.PathEscape(strconv.Itoa(loginID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetProfileLogin", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var login AccountLogin
+	if err := c.handleResponse(resp, &login); err != nil {
+		return nil, err
+	}
+
+	return &login, nil
 }
 
 // httpGetProfileApp retrieves one authorized OAuth app from the profile.
