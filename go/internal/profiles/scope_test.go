@@ -88,7 +88,13 @@ func TestRequiredScopesReadVsWrite(t *testing.T) {
 		},
 		{
 			name:       "volume list",
-			toolName:   "linode_volume_list",
+			toolName:   toolVolumesList,
+			capability: profiles.CapRead,
+			want:       []profiles.Scope{profiles.ScopeVolumesReadOnly},
+		},
+		{
+			name:       "volume type list",
+			toolName:   toolVolumeTypeList,
 			capability: profiles.CapRead,
 			want:       []profiles.Scope{profiles.ScopeVolumesReadOnly},
 		},

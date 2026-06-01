@@ -16,6 +16,9 @@ type Volume struct {
 	HardwareType   string   `json:"hardware_type"`
 }
 
+// VolumeType represents a Linode block storage volume type.
+type VolumeType map[string]any
+
 // SSHKey represents an SSH key in a user's profile.
 type SSHKey struct {
 	ID      int    `json:"id"`
