@@ -10,6 +10,8 @@ import (
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
+const profileTokensPath = "/profile/tokens"
+
 // NewLinodeProfileTool creates a tool for retrieving Linode profile info.
 func NewLinodeProfileTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newSimpleGetTool(
@@ -162,6 +164,96 @@ func profileTokensPaginationFromTool(request *mcp.CallToolRequest) (int, int, st
 	}
 
 	return page, pageSize, ""
+}
+
+// NewLinodeProfileTokenCreateTool creates a tool for creating a personal access token.
+func NewLinodeProfileTokenCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_profile_token_create",
+		"Creates a personal access token for the authenticated profile. Pass dry_run=true to preview without creating a token.",
+		[]mcp.ToolOption{
+			mcp.WithString("expiry", mcp.Description("Token expiry timestamp (optional).")),
+			mcp.WithString("label", mcp.Description("Token label (optional).")),
+			mcp.WithString("scopes", mcp.Description("Token scopes string (optional).")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm personal access token creation. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeProfileTokenCreateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
+func handleLinodeProfileTokenCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	body, validationMessage := profileTokenCreateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreviewWithBody(ctx, request, cfg, "linode_profile_token_create", httpMethodPost, profileTokensPath, body, nil)
+	}
+
+	if result := RequireConfirm(request, "This creates a personal access token. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, prepErr := prepareClient(request, cfg)
+	if prepErr != nil {
+		return mcp.NewToolResultError(prepErr.Error()), nil
+	}
+
+	token, createFailureMessage := createProfileTokenResult(ctx, client, body)
+	if createFailureMessage != "" {
+		return mcp.NewToolResultError(createFailureMessage), nil
+	}
+
+	return MarshalToolResponse(token)
+}
+
+func createProfileTokenResult(ctx context.Context, client *linode.Client, body linode.CreateProfileTokenRequest) (*linode.ProfileToken, string) {
+	token, createFailure := client.CreateProfileToken(ctx, body)
+	if createFailure != nil {
+		return nil, "Failed to create linode_profile_token_create: " + createFailure.Error()
+	}
+
+	return token, ""
+}
+
+func profileTokenCreateRequestFromTool(request *mcp.CallToolRequest) (linode.CreateProfileTokenRequest, string) {
+	args := request.GetArguments()
+	body := linode.CreateProfileTokenRequest{}
+
+	if value, ok := args["expiry"]; ok {
+		expiry, valid := value.(string)
+		if !valid {
+			return body, "expiry must be a string"
+		}
+
+		body.Expiry = expiry
+	}
+
+	if value, ok := args["label"]; ok {
+		label, valid := value.(string)
+		if !valid {
+			return body, "label must be a string"
+		}
+
+		body.Label = label
+	}
+
+	if value, ok := args["scopes"]; ok {
+		scopes, valid := value.(string)
+		if !valid {
+			return body, "scopes must be a string"
+		}
+
+		body.Scopes = scopes
+	}
+
+	return body, ""
 }
 
 // NewLinodeProfileLoginsTool creates a tool for listing login history for the authenticated profile.

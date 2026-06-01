@@ -15,6 +15,13 @@ type Profile struct {
 	Scopes             string `json:"scopes,omitempty"`
 }
 
+// CreateProfileTokenRequest contains optional fields for POST /profile/tokens.
+type CreateProfileTokenRequest struct {
+	Expiry string `json:"expiry,omitempty"`
+	Label  string `json:"label,omitempty"`
+	Scopes string `json:"scopes,omitempty"`
+}
+
 // ProfileDevice represents a trusted device on the authenticated profile.
 type ProfileDevice map[string]any
 

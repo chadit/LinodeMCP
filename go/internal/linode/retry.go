@@ -50,6 +50,13 @@ func (c *Client) GetProfile(ctx context.Context) (*Profile, error) {
 	return profile, err
 }
 
+// CreateProfileToken creates a personal access token without retrying the
+// credential-creating request. Retrying can create multiple tokens after a
+// transient error, so this method delegates exactly once.
+func (c *Client) CreateProfileToken(ctx context.Context, req CreateProfileTokenRequest) (*ProfileToken, error) {
+	return c.httpCreateProfileToken(ctx, req)
+}
+
 // SendProfilePhoneNumberVerificationCode sends a verification code without retrying the non-idempotent POST.
 func (c *Client) SendProfilePhoneNumberVerificationCode(ctx context.Context, req *ProfilePhoneNumberRequest) error {
 	return c.httpSendProfilePhoneNumberVerificationCode(ctx, req)

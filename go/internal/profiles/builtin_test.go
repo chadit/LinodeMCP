@@ -584,6 +584,12 @@ func TestCategoriesIncludesProfilePreferencesInCore(t *testing.T) {
 	assert.Contains(t, profiles.Categories("linode_profile_security_questions_answer"), "core")
 }
 
+func TestCategoriesIncludesProfileTokenCreateInCore(t *testing.T) {
+	t.Parallel()
+
+	assert.Contains(t, profiles.Categories("linode_profile_token_create"), "core")
+}
+
 func TestCategoriesIncludesAccountOAuthClientsInCore(t *testing.T) {
 	t.Parallel()
 

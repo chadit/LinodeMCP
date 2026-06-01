@@ -13,13 +13,13 @@ import (
 const (
 	endpointProfile                      = "/profile"
 	endpointProfilePreferences           = endpointProfile + "/preferences"
+	endpointProfileTokens                = endpointProfile + "/tokens"
 	endpointProfileTFAEnable             = endpointProfile + "/tfa-enable"
 	endpointProfilePhoneNumber           = "/profile/phone-number"
 	endpointProfilePhoneNumberVerify     = endpointProfilePhoneNumber + "/verify"
 	endpointProfileGrants                = "/profile/grants"
 	endpointProfileSecurityQuestions     = "/profile/security-questions"
 	endpointProfileLogins                = "/profile/logins"
-	endpointProfileTokens                = "/profile/tokens"
 	endpointProfileApps                  = "/profile/apps"
 	endpointProfileDevices               = "/profile/devices"
 	endpointProfileTFADisable            = "/profile/tfa-disable"
@@ -77,6 +77,26 @@ func (c *Client) httpGetProfile(ctx context.Context) (*Profile, error) {
 	}
 
 	return &profile, nil
+}
+
+// httpCreateProfileToken creates a personal access token for the authenticated profile.
+func (c *Client) httpCreateProfileToken(ctx context.Context, req CreateProfileTokenRequest) (*ProfileToken, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointProfileTokens, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateProfileToken", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var token ProfileToken
+	if err := c.handleResponse(resp, &token); err != nil {
+		return nil, err
+	}
+
+	return &token, nil
 }
 
 // httpUpdateProfilePreferences updates the authenticated user's preferences.

@@ -186,6 +186,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_domain_zone_file_get":                        profiles.CapRead,
 		"linode_account_availability":                        profiles.CapRead,
 		"linode_profile_preferences":                         profiles.CapRead,
+		"linode_profile_token_create":                        profiles.CapAdmin,
 		"linode_profile_security_questions_answer":           profiles.CapAdmin,
 		"linode_profile_tfa_enable":                          profiles.CapAdmin,
 		"linode_account_transfer":                            profiles.CapRead,
