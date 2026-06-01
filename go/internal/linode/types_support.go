@@ -37,6 +37,11 @@ type SupportTicket struct {
 	UpdatedBy   string                    `json:"updated_by"`
 }
 
+// CreateSupportTicketAttachmentRequest contains the request body for POST /support/tickets/{ticket_id}/attachments.
+type CreateSupportTicketAttachmentRequest struct {
+	File string `json:"file"`
+}
+
 // SupportTicketAttachment represents one attachment on a support ticket.
 type SupportTicketAttachment struct {
 	Filename string `json:"filename"`

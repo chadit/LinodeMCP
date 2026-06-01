@@ -19,7 +19,7 @@ func (c *Client) httpCreateSupportTicket(ctx context.Context, request *CreateSup
 		return nil, &NetworkError{Operation: "CreateSupportTicket", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all support methods use this pattern
+	defer drainClose(resp)
 
 	var ticket SupportTicket
 	if err := c.handleResponse(resp, &ticket); err != nil {
@@ -41,7 +41,7 @@ func (c *Client) httpGetSupportTicket(ctx context.Context, ticketID int) (Suppor
 		return SupportTicket{}, &NetworkError{Operation: "GetSupportTicket", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all support ticket methods use this pattern
+	defer drainClose(resp)
 
 	var ticket SupportTicket
 	if err := c.handleResponse(resp, &ticket); err != nil {
@@ -49,6 +49,28 @@ func (c *Client) httpGetSupportTicket(ctx context.Context, ticketID int) (Suppor
 	}
 
 	return ticket, nil
+}
+
+// httpCreateSupportTicketAttachment creates an attachment for a support ticket.
+func (c *Client) httpCreateSupportTicketAttachment(ctx context.Context, ticketID int, request *CreateSupportTicketAttachmentRequest) (*SupportTicketAttachment, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointSupportTickets + "/" + url.PathEscape(strconv.Itoa(ticketID)) + "/attachments"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, request)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateSupportTicketAttachment", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var attachment SupportTicketAttachment
+	if err := c.handleResponse(resp, &attachment); err != nil {
+		return nil, err
+	}
+
+	return &attachment, nil
 }
 
 // httpListSupportTickets retrieves support tickets.
@@ -63,7 +85,7 @@ func (c *Client) httpListSupportTickets(ctx context.Context, page, pageSize int)
 		return nil, &NetworkError{Operation: "ListSupportTickets", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all list methods use this pattern
+	defer drainClose(resp)
 
 	var tickets PaginatedResponse[SupportTicket]
 	if err := c.handleResponse(resp, &tickets); err != nil {
