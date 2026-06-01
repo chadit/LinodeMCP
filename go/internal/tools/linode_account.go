@@ -3413,13 +3413,9 @@ func handleLinodeTaggedObjectsRequest(ctx context.Context, request *mcp.CallTool
 func taggedObjectsArgsFromTool(request *mcp.CallToolRequest) (string, int, int, string) {
 	args := request.GetArguments()
 
-	tagLabel, validationMessage := requiredStringArg(args, tagLabelParam)
+	tagLabel, validationMessage := tagLabelArgFromTool(request)
 	if validationMessage != "" {
-		return "", 0, 0, errTagLabelRequired
-	}
-
-	if strings.ContainsAny(tagLabel, "?#") || strings.Contains(tagLabel, "..") {
-		return "", 0, 0, errTagLabelPathParam
+		return "", 0, 0, validationMessage
 	}
 
 	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)

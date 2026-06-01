@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -37,6 +38,23 @@ func NewLinodeTagsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeTagDeleteTool creates a tool for deleting an account tag.
+func NewLinodeTagDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_tag_delete",
+		"Deletes a tag from all objects on the account.",
+		[]mcp.ToolOption{
+			mcp.WithString(tagLabelParam, mcp.Required(), mcp.Description("Tag label to delete.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm tag deletion. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeTagDeleteRequest,
+	)
+
+	return tool, profiles.CapDestroy, handler
+}
+
 func handleLinodeTagsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	page, pageSize, validationMessage := tagsPaginationFromTool(request)
 	if validationMessage != "" {
@@ -54,6 +72,52 @@ func handleLinodeTagsRequest(ctx context.Context, request *mcp.CallToolRequest, 
 	}
 
 	return mcp.NewToolResultError("Failed to retrieve linode_tags: " + listFailure.Error()), nil
+}
+
+func handleLinodeTagDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	tagLabel, validationMessage := deleteTagLabelArgFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	return RunDestructiveAction(ctx, request, cfg, &DestructiveAction{
+		ToolName:       "linode_tag_delete",
+		Method:         httpMethodDelete,
+		Path:           endpointPathTag(tagLabel),
+		ConfirmMessage: "confirm must be true to delete a tag",
+		FetchState: func(ctx context.Context, c *linode.Client) (any, error) {
+			return c.ListTaggedObjects(ctx, tagLabel, 0, 0)
+		},
+		Execute: func(ctx context.Context, c *linode.Client) error {
+			return c.DeleteTag(ctx, tagLabel)
+		},
+		Success: func() any {
+			return map[string]string{"deleted": tagLabel}
+		},
+	})
+}
+
+func tagLabelArgFromTool(request *mcp.CallToolRequest) (string, string) {
+	args := request.GetArguments()
+
+	tagLabel, validationMessage := requiredStringArg(args, tagLabelParam)
+	if validationMessage != "" {
+		return "", validationMessage
+	}
+
+	if strings.ContainsAny(tagLabel, "?#") || strings.Contains(tagLabel, "..") {
+		return "", errTagLabelPathParam
+	}
+
+	return tagLabel, ""
+}
+
+func endpointPathTag(tagLabel string) string {
+	return "/tags/" + url.PathEscape(tagLabel)
+}
+
+func deleteTagLabelArgFromTool(request *mcp.CallToolRequest) (string, string) {
+	return tagLabelArgFromTool(request)
 }
 
 func tagsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
