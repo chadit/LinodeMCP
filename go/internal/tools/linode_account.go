@@ -88,6 +88,11 @@ const (
 	errManagedCredentialPasswordReq    = "password is required"
 	accountEventsPageSizeMin           = 25
 	accountEventsPageSizeMax           = 500
+	taggedObjectsPageSizeMin           = 25
+	taggedObjectsPageSizeMax           = 500
+	tagLabelParam                      = "tag_label"
+	errTagLabelRequired                = "tag_label is required"
+	errTagLabelPathParam               = "tag_label must not contain '?', '#', or '..'"
 	accountUsersPageSizeMin            = 25
 	accountUsersPageSizeMax            = 500
 	accountUserUsernameParam           = "username"
@@ -458,6 +463,23 @@ func NewLinodeAccountEventsTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
 		},
 		handleLinodeAccountEventsRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeTaggedObjectsTool creates a tool for listing objects with a tag label.
+func NewLinodeTaggedObjectsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_tagged_objects",
+		"Lists Linode objects that have the supplied tag label.",
+		[]mcp.ToolOption{
+			mcp.WithString(tagLabelParam, mcp.Required(), mcp.Description("Tag label to list objects for.")),
+			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
+			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		},
+		handleLinodeTaggedObjectsRequest,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -3367,6 +3389,50 @@ func accountEventsPaginationFromTool(request *mcp.CallToolRequest) (int, int, st
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeTaggedObjectsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	tagLabel, page, pageSize, validationMessage := taggedObjectsArgsFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	taggedObjects, listFailure := client.ListTaggedObjects(ctx, tagLabel, page, pageSize)
+	if listFailure == nil {
+		return MarshalToolResponse(taggedObjects)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_tagged_objects: " + listFailure.Error()), nil
+}
+
+func taggedObjectsArgsFromTool(request *mcp.CallToolRequest) (string, int, int, string) {
+	args := request.GetArguments()
+
+	tagLabel, validationMessage := requiredStringArg(args, tagLabelParam)
+	if validationMessage != "" {
+		return "", 0, 0, errTagLabelRequired
+	}
+
+	if strings.ContainsAny(tagLabel, "?#") || strings.Contains(tagLabel, "..") {
+		return "", 0, 0, errTagLabelPathParam
+	}
+
+	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
+	if validationMessage != "" {
+		return "", 0, 0, validationMessage
+	}
+
+	pageSize, validationMessage := optionalPaginationInt(args, "page_size", taggedObjectsPageSizeMin, taggedObjectsPageSizeMax)
+	if validationMessage != "" {
+		return "", 0, 0, validationMessage
+	}
+
+	return tagLabel, page, pageSize, ""
 }
 
 func handleLinodeAccountUsersRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
