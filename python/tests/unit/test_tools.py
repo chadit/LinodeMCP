@@ -849,16 +849,16 @@ async def test_create_linode_account_beta_enroll_tool() -> None:
     assert tool.inputSchema["properties"]["id"]["type"] == "string"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert "id" in tool.inputSchema.get("required", [])
-    assert "confirm" not in tool.inputSchema.get("required", [])
+    assert "confirm" in tool.inputSchema.get("required", [])
 
 
 async def test_handle_linode_account_beta_enroll_dry_run(
     sample_config: Config,
 ) -> None:
-    """dry_run=true previews beta enrollment without confirm or client call."""
+    """dry_run=true previews beta enrollment without a client call."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         result = await handle_linode_account_beta_enroll(
-            {"id": "distributed-beta", "dry_run": True}, sample_config
+            {"id": "distributed-beta", "dry_run": True, "confirm": True}, sample_config
         )
 
     body = json.loads(result[0].text)
@@ -868,6 +868,19 @@ async def test_handle_linode_account_beta_enroll_dry_run(
     assert body["would_execute"]["path"] == "/account/betas"
     assert body["would_execute"]["body"] == {"id": "distributed-beta"}
     assert body["current_state"] is None
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_account_beta_enroll_dry_run_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """dry_run=true still requires explicit boolean confirm before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_account_beta_enroll(
+            {"id": "distributed-beta", "dry_run": True}, sample_config
+        )
+
+    assert "confirm=true" in result[0].text
     mock_client_class.assert_not_called()
 
 

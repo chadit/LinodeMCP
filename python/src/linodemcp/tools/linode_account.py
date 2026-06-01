@@ -193,13 +193,14 @@ def create_linode_account_beta_enroll_tool() -> tuple[Tool, Capability]:
                 "confirm": {
                     "type": "boolean",
                     "description": (
-                        "Set true to confirm this mutating operation. Ignored "
-                        "when dry_run=true."
+                        "Set true to acknowledge this mutating operation. "
+                        "Required even when dry_run=true; dry_run still "
+                        "avoids the client call."
                     ),
                 },
                 PARAM_DRY_RUN: DRY_RUN_PROP,
             },
-            "required": ["id"],
+            "required": ["id", "confirm"],
         },
     ), Capability.Write
 
@@ -218,6 +219,11 @@ async def handle_linode_account_beta_enroll(
     if not beta_id:
         return error_response("id is required")
 
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This enrolls the account in a beta program. Set confirm=true to proceed."
+        )
+
     if is_dry_run(arguments):
         return build_dry_run_response(
             "linode_account_beta_enroll",
@@ -226,11 +232,6 @@ async def handle_linode_account_beta_enroll(
             "/account/betas",
             None,
             request_body={"id": beta_id},
-        )
-
-    if arguments.get("confirm") is not True:
-        return error_response(
-            "This enrolls the account in a beta program. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
