@@ -242,6 +242,13 @@ type Region struct {
 	SiteType     string   `json:"site_type"`
 }
 
+// RegionAvailability represents compute instance type availability for a region.
+type RegionAvailability struct {
+	Region    string `json:"region"`
+	Plan      string `json:"plan"`
+	Available bool   `json:"available"`
+}
+
 // Resolver represents DNS resolvers for a region.
 type Resolver struct {
 	IPv4 string `json:"ipv4"`

@@ -1739,6 +1739,21 @@ func (c *Client) ListRegions(ctx context.Context) ([]Region, error) {
 	return regions, err
 }
 
+// ListRegionsAvailability retrieves compute type availability across regions with automatic retry on transient failures.
+func (c *Client) ListRegionsAvailability(ctx context.Context) ([]RegionAvailability, error) {
+	var availability []RegionAvailability
+
+	err := c.executeWithRetry(ctx, "ListRegionsAvailability", func() error {
+		var err error
+
+		availability, err = c.httpListRegionsAvailability(ctx)
+
+		return err
+	})
+
+	return availability, err
+}
+
 // ListKernels retrieves all Linode kernels with automatic retry on transient failures.
 func (c *Client) ListKernels(ctx context.Context, page, pageSize int) ([]Kernel, error) {
 	var kernels []Kernel
