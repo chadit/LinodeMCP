@@ -1305,6 +1305,21 @@ func (c *Client) ListAccountEvents(ctx context.Context, page, pageSize int) (*Pa
 	return events, err
 }
 
+// ListTaggedObjects retrieves objects with the supplied tag label with automatic retry on transient failures.
+func (c *Client) ListTaggedObjects(ctx context.Context, tagLabel string, page, pageSize int) (*PaginatedResponse[TaggedObject], error) {
+	var taggedObjects *PaginatedResponse[TaggedObject]
+
+	err := c.executeWithRetry(ctx, "ListTaggedObjects", func() error {
+		var err error
+
+		taggedObjects, err = c.httpListTaggedObjects(ctx, tagLabel, page, pageSize)
+
+		return err
+	})
+
+	return taggedObjects, err
+}
+
 // GetSupportTicket retrieves one support ticket with automatic retry on transient failures.
 func (c *Client) GetSupportTicket(ctx context.Context, ticketID int) (SupportTicket, error) {
 	var ticket SupportTicket
