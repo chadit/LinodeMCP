@@ -1422,6 +1422,13 @@ func (c *Client) CreateSupportTicketAttachment(ctx context.Context, ticketID int
 	return c.httpCreateSupportTicketAttachment(ctx, ticketID, request)
 }
 
+// CloseSupportTicket closes a support ticket without retrying the mutating request.
+// Retrying can replay ticket state changes after a transient error, so this
+// method delegates exactly once.
+func (c *Client) CloseSupportTicket(ctx context.Context, ticketID int) error {
+	return c.httpCloseSupportTicket(ctx, ticketID)
+}
+
 // CreateManagedContact creates a managed contact without retrying the mutating
 // request. Managed contact creation is not guaranteed idempotent after a transient
 // error, so this method delegates exactly once.
