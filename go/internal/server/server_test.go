@@ -240,6 +240,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_profile_phone_number_send":                      profiles.CapWrite,
 		"linode_profile_phone_number_delete":                    profiles.CapDestroy,
 		"linode_profile_phone_number_verify":                    profiles.CapWrite,
+		"linode_profile_tfa_disable":                            profiles.CapAdmin,
 		"linode_profile_logins":                                 profiles.CapRead,
 		"linode_profile_preferences_update":                     profiles.CapWrite,
 		"linode_profile_security_questions":                     profiles.CapRead,

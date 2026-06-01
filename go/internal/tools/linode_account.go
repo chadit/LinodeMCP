@@ -61,6 +61,7 @@ const (
 	accountPromoCodesPath              = "/account/promo-codes"
 	profilePhoneNumberPath             = "/profile/phone-number"
 	profilePhoneNumberVerifyPath       = profilePhoneNumberPath + "/verify"
+	profileTFADisablePath              = "/profile/tfa-disable"
 	accountEventsPath                  = "/account/events"
 	accountChildAccountsPath           = "/account/child-accounts"
 	longviewSubscriptionIDParam        = "longview_subscription_id"
@@ -794,6 +795,23 @@ func NewLinodeProfilePhoneNumberVerifyTool(cfg *config.Config) (mcp.Tool, profil
 	)
 
 	return tool, profiles.CapWrite, handler
+}
+
+// NewLinodeProfileTFADisableTool creates a tool for disabling profile two-factor authentication.
+func NewLinodeProfileTFADisableTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_profile_tfa_disable",
+		"Disables two-factor authentication for the authenticated profile.",
+		[]mcp.ToolOption{
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm disabling profile two-factor authentication. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeProfileTFADisableRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeProfileDevicesTool creates a tool for listing trusted devices for the profile.
@@ -1835,6 +1853,35 @@ func handleLinodeProfilePhoneNumberVerifyRequest(ctx context.Context, request *m
 func verifyProfilePhoneNumberErrorMessage(ctx context.Context, client *linode.Client, body *linode.ProfilePhoneNumberVerifyRequest) string {
 	if err := client.VerifyProfilePhoneNumber(ctx, body); err != nil {
 		return "Failed to verify linode_profile_phone_number_verify: " + err.Error()
+	}
+
+	return ""
+}
+
+func handleLinodeProfileTFADisableRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if IsDryRun(request) {
+		return RunDryRunPreview(ctx, request, cfg, "linode_profile_tfa_disable", httpMethodPost, profileTFADisablePath, nil)
+	}
+
+	if result := RequireConfirm(request, "This disables two-factor authentication for the profile. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, prepErr := prepareClient(request, cfg)
+	if prepErr != nil {
+		return mcp.NewToolResultError(prepErr.Error()), nil
+	}
+
+	if disableFailureMessage := disableProfileTFAErrorMessage(ctx, client); disableFailureMessage != "" {
+		return mcp.NewToolResultError(disableFailureMessage), nil
+	}
+
+	return MarshalToolResponse(map[string]any{responseKeyMessage: "Profile two-factor authentication disabled successfully"})
+}
+
+func disableProfileTFAErrorMessage(ctx context.Context, client *linode.Client) string {
+	if err := client.DisableProfileTFA(ctx); err != nil {
+		return "Failed to disable linode_profile_tfa_disable: " + err.Error()
 	}
 
 	return ""

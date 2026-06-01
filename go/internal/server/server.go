@@ -892,6 +892,7 @@ func coreToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeProfilePhoneNumberSendTool,
 		tools.NewLinodeProfilePhoneNumberDeleteTool,
 		tools.NewLinodeProfilePhoneNumberVerifyTool,
+		tools.NewLinodeProfileTFADisableTool,
 		tools.NewLinodeProfileDevicesTool,
 		tools.NewLinodeProfileAppGetTool,
 		tools.NewLinodeProfileAppDeleteTool,

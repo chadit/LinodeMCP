@@ -28,6 +28,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_account_oauth_clients", Capability: profiles.CapRead},
 		{Name: "linode_profile_apps", Capability: profiles.CapRead},
 		{Name: "linode_profile_security_questions", Capability: profiles.CapRead},
+		{Name: "linode_profile_tfa_disable", Capability: profiles.CapAdmin},
 		{Name: "linode_profile_devices", Capability: profiles.CapRead},
 		{Name: "linode_profile_preferences_update", Capability: profiles.CapWrite},
 		{Name: "linode_longview_plan", Capability: profiles.CapRead},
@@ -600,6 +601,7 @@ func TestCategoriesIncludesProfileAppsInCore(t *testing.T) {
 	assert.Contains(t, profiles.Categories("linode_profile_phone_number_send"), "core")
 	assert.Contains(t, profiles.Categories("linode_profile_phone_number_delete"), "core")
 	assert.Contains(t, profiles.Categories("linode_profile_phone_number_verify"), "core")
+	assert.Contains(t, profiles.Categories("linode_profile_tfa_disable"), "core")
 	assert.Contains(t, profiles.Categories("linode_profile_app_get"), "core")
 	assert.Contains(t, profiles.Categories("linode_profile_app_delete"), "core")
 	assert.Contains(t, profiles.Categories("linode_profile_device_revoke"), "core")

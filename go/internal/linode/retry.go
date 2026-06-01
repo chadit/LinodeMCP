@@ -65,6 +65,11 @@ func (c *Client) VerifyProfilePhoneNumber(ctx context.Context, req *ProfilePhone
 	return c.httpVerifyProfilePhoneNumber(ctx, req)
 }
 
+// DisableProfileTFA disables two-factor authentication without retrying the security-state-changing POST.
+func (c *Client) DisableProfileTFA(ctx context.Context) error {
+	return c.httpDisableProfileTFA(ctx)
+}
+
 // ListProfileSecurityQuestions lists available profile security questions with automatic retry on transient failures.
 func (c *Client) ListProfileSecurityQuestions(ctx context.Context) (*ProfileSecurityQuestions, error) {
 	var questions *ProfileSecurityQuestions
