@@ -328,6 +328,32 @@ func (c *Client) httpDeleteProfileToken(ctx context.Context, tokenID int) error 
 	return nil
 }
 
+// httpUpdateProfileToken updates one personal access token on the authenticated profile.
+func (c *Client) httpUpdateProfileToken(ctx context.Context, tokenID string, req UpdateProfileTokenRequest) (*ProfileToken, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	if req == nil {
+		req = UpdateProfileTokenRequest{}
+	}
+
+	endpoint := endpointProfileTokens + "/" + url.PathEscape(tokenID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateProfileToken", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var token ProfileToken
+	if err := c.handleResponse(resp, &token); err != nil {
+		return nil, err
+	}
+
+	return &token, nil
+}
+
 // httpListProfileDevices retrieves trusted devices for the authenticated profile.
 func (c *Client) httpListProfileDevices(ctx context.Context, page, pageSize int) (*PaginatedResponse[ProfileDevice], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

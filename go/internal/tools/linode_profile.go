@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -11,7 +12,12 @@ import (
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
-const profileTokensPath = "/profile/tokens"
+const (
+	profileTokensPath       = "/profile/tokens"
+	profileTokenFieldExpiry = "expiry"
+	profileTokenFieldLabel  = "label"
+	profileTokenFieldScopes = "scopes"
+)
 
 // NewLinodeProfileTool creates a tool for retrieving Linode profile info.
 func NewLinodeProfileTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
@@ -312,6 +318,92 @@ func deleteProfileTokenResult(ctx context.Context, client *linode.Client, tokenI
 	}
 
 	return ""
+}
+
+// NewLinodeProfileTokenUpdateTool creates a tool for updating a personal access token.
+func NewLinodeProfileTokenUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_profile_token_update",
+		"Updates a personal access token for the authenticated profile.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(profileTokenIDParam, mcp.Required(), mcp.Description("Personal access token ID.")),
+			mcp.WithString(profileTokenFieldExpiry, mcp.Description("Expiry timestamp to send in the update body.")),
+			mcp.WithString(profileTokenFieldLabel, mcp.Description("Token label.")),
+			mcp.WithString(profileTokenFieldScopes, mcp.Description("Token scopes.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm updating a personal access token. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeProfileTokenUpdateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
+func handleLinodeProfileTokenUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	tokenID, body, validationMessage := profileTokenUpdateFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	tokenIDString := strconv.Itoa(tokenID)
+
+	path := "/profile/tokens/" + tokenIDString
+	if IsDryRun(request) {
+		return RunDryRunPreviewWithBody(ctx, request, cfg, "linode_profile_token_update", httpMethodPut, path, body, nil)
+	}
+
+	if result := RequireConfirm(request, "This updates a personal access token. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	token, updateFailureMessage := updateProfileToken(ctx, client, tokenIDString, body)
+	if updateFailureMessage != "" {
+		return mcp.NewToolResultError("Failed to update linode_profile_token_update: " + updateFailureMessage), nil
+	}
+
+	return MarshalToolResponse(token)
+}
+
+func updateProfileToken(ctx context.Context, client *linode.Client, tokenID string, body linode.UpdateProfileTokenRequest) (*linode.ProfileToken, string) {
+	token, err := client.UpdateProfileToken(ctx, tokenID, body)
+	if err != nil {
+		return nil, err.Error()
+	}
+
+	return token, ""
+}
+
+func profileTokenUpdateFromTool(request *mcp.CallToolRequest) (int, linode.UpdateProfileTokenRequest, string) {
+	tokenID, validationMessage := profileTokenIDFromTool(request)
+	if validationMessage != "" {
+		return 0, nil, validationMessage
+	}
+
+	body := linode.UpdateProfileTokenRequest{}
+
+	args := request.GetArguments()
+	for _, key := range []string{profileTokenFieldExpiry, profileTokenFieldLabel, profileTokenFieldScopes} {
+		if raw, exists := args[key]; exists {
+			value, ok := raw.(string)
+			if !ok || value == "" {
+				return 0, nil, key + " must be a non-empty string"
+			}
+
+			body[key] = value
+		}
+	}
+
+	if len(body) == 0 {
+		return 0, nil, "at least one profile " + "token field is required"
+	}
+
+	return tokenID, body, ""
 }
 
 // NewLinodeProfileLoginsTool creates a tool for listing login history for the authenticated profile.

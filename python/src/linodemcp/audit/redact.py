@@ -45,6 +45,7 @@ def redaction_fields() -> list[str]:
         "ssl_key",
         "ssh_keys",
         "token",
+        "token_id",
         "token_uuid",
     ]
 
