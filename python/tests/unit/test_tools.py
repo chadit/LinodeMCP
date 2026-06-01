@@ -39,6 +39,7 @@ from linodemcp.linode import (
 )
 from linodemcp.profiles import Capability
 from linodemcp.tools import (
+    create_linode_account_availability_list_tool,
     create_linode_account_support_ticket_attachment_create_tool,
     create_linode_account_support_ticket_close_tool,
     create_linode_account_support_ticket_create_tool,
@@ -157,6 +158,7 @@ from linodemcp.tools import (
     create_linode_vpcs_list_tool,
     handle_hello,
     handle_linode_account,
+    handle_linode_account_availability_list,
     handle_linode_account_support_ticket_attachment_create,
     handle_linode_account_support_ticket_close,
     handle_linode_account_support_ticket_create,
@@ -928,6 +930,62 @@ async def test_handle_linode_managed_stats(sample_config: Config) -> None:
         assert len(result) == 1
         assert json.loads(result[0].text) == response_data
         mock_client.get_managed_stats.assert_awaited_once_with()
+
+
+async def test_create_linode_account_availability_list_tool() -> None:
+    """Test linode_account_availability_list tool schema."""
+    tool, capability = create_linode_account_availability_list_tool()
+
+    assert tool.name == "linode_account_availability_list"
+    assert capability is Capability.Read
+    assert "page" not in tool.inputSchema.get("required", [])
+    assert "page_size" not in tool.inputSchema.get("required", [])
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        ({"page": "2"}, "page must be an integer"),
+        ({"page": True}, "page must be an integer"),
+        ({"page": 0}, "page must be at least 1"),
+        ({"page_size": "25"}, "page_size must be an integer"),
+        ({"page_size": False}, "page_size must be an integer"),
+        ({"page_size": 24}, "page_size must be at least 25"),
+        ({"page_size": 501}, "page_size must be at most 500"),
+    ],
+)
+async def test_handle_linode_account_availability_list_rejects_invalid_pagination(
+    arguments: dict[str, Any], expected_error: str, sample_config: Config
+) -> None:
+    """Account availability listing validates pagination arguments."""
+    result = await handle_linode_account_availability_list(arguments, sample_config)
+
+    assert len(result) == 1
+    assert expected_error in result[0].text
+
+
+async def test_handle_linode_account_availability_list(sample_config: Config) -> None:
+    """Test linode_account_availability_list tool."""
+    response_data: dict[str, Any] = {
+        "data": [{"service": "Linodes", "available": True}],
+        "page": 2,
+        "pages": 3,
+        "results": 51,
+    }
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_account_availability.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_availability_list(
+            {"page": 2, "page_size": 25}, sample_config
+        )
+
+    assert len(result) == 1
+    assert json.loads(result[0].text) == response_data
+    mock_client.list_account_availability.assert_awaited_once_with(page=2, page_size=25)
 
 
 async def test_create_linode_account_tags_list_tool() -> None:
