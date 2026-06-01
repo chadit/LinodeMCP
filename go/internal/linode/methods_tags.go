@@ -51,3 +51,23 @@ func (c *Client) httpListTaggedObjects(ctx context.Context, tagLabel string, pag
 
 	return &taggedObjects, nil
 }
+
+// httpCreateTag creates a tag and optionally applies it to existing resources.
+func (c *Client) httpCreateTag(ctx context.Context, req *CreateTagRequest) (*Tag, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointTags, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateTag", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var tag Tag
+	if err := c.handleResponse(resp, &tag); err != nil {
+		return nil, err
+	}
+
+	return &tag, nil
+}

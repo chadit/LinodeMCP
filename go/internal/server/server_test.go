@@ -175,6 +175,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_image_create":                profiles.CapWrite,
 		"linode_image_replicate":             profiles.CapWrite,
 		"linode_image_update":                profiles.CapWrite,
+		"linode_tag_create":                  profiles.CapWrite,
 
 		"linode_image_sharegroup_images_add":                 profiles.CapWrite,
 		"linode_image_sharegroup_members_add":                profiles.CapWrite,

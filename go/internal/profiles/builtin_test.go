@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
@@ -630,6 +631,23 @@ func TestCategoriesIncludesMaintenancePoliciesInCore(t *testing.T) {
 	t.Parallel()
 
 	assert.Contains(t, profiles.Categories("linode_maintenance_policies"), "core")
+}
+
+func TestCategoriesIncludesTagCreateInCore(t *testing.T) {
+	t.Parallel()
+
+	assert.Contains(t, profiles.Categories("linode_tag_create"), "core")
+}
+
+func TestTagCreateExcludedFromNarrowBuiltinProfiles(t *testing.T) {
+	t.Parallel()
+
+	registry := []profiles.ToolDescriptor{{Name: "linode_tag_create", Capability: profiles.CapWrite}}
+	for _, profileName := range []string{profiles.BuiltinDefault, profiles.BuiltinReadonlyFull, profiles.BuiltinComputeAdmin, profiles.BuiltinNetworkAdmin, profiles.BuiltinKubernetesAdmin, profiles.BuiltinStorageAdmin} {
+		profile, err := profiles.ResolveActiveProfile(&config.Config{ActiveProfile: profileName}, registry)
+		require.NoError(t, err)
+		assert.NotContains(t, profile.AllowedTools, "linode_tag_create", "%s should not expose cross-resource tag creation", profileName)
+	}
 }
 
 func TestCategoriesIncludesAccountUsersInCore(t *testing.T) {

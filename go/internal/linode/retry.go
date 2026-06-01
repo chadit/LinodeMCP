@@ -3583,6 +3583,13 @@ func (c *Client) CloneDomain(ctx context.Context, domainID int, req *CloneDomain
 	return c.httpCloneDomain(ctx, domainID, req)
 }
 
+// CreateTag creates a tag without retrying the mutating request.
+// Retrying can create duplicate tag creations after a transient error, so this
+// method delegates exactly once.
+func (c *Client) CreateTag(ctx context.Context, req *CreateTagRequest) (*Tag, error) {
+	return c.httpCreateTag(ctx, req)
+}
+
 // CreateDomain creates a new domain with automatic retry on transient failures.
 func (c *Client) CreateDomain(ctx context.Context, req *CreateDomainRequest) (*Domain, error) {
 	var domain *Domain
