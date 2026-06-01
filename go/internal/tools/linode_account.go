@@ -111,6 +111,8 @@ const (
 	accountUserEmailParam              = "email"
 	supportTicketSummaryParam          = "summary"
 	supportTicketDescriptionParam      = "description"
+	supportTicketAttachmentFileParam   = "file"
+	supportTicketTicketIDParam         = "ticket_id"
 	supportTicketBucketParam           = "bucket"
 	supportTicketDatabaseIDParam       = "database_id"
 	supportTicketDomainIDParam         = "domain_id"
@@ -634,6 +636,24 @@ func NewLinodeAccountSupportTicketCreateTool(cfg *config.Config) (mcp.Tool, prof
 			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
 		},
 		handleLinodeAccountSupportTicketCreateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
+// NewLinodeAccountSupportTicketAttachmentCreateTool creates a tool for adding support ticket attachments.
+func NewLinodeAccountSupportTicketAttachmentCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_support_ticket_attachment_create",
+		"Creates an attachment on an existing support ticket.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(supportTicketTicketIDParam, mcp.Required(), mcp.Description("Support ticket ID to attach the file to.")),
+			mcp.WithString(supportTicketAttachmentFileParam, mcp.Required(), mcp.Description("Attachment file content or reference accepted by the Linode API.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm support ticket attachment creation. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeAccountSupportTicketAttachmentCreateRequest,
 	)
 
 	return tool, profiles.CapAdmin, handler
@@ -3906,6 +3926,63 @@ func optionalSupportTicketPositiveID(args map[string]any, field string) (int, st
 	}
 
 	return int(value), ""
+}
+
+func handleLinodeAccountSupportTicketAttachmentCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	ticketID, createRequest, validationMessage := supportTicketAttachmentCreateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	path := fmt.Sprintf("%s/%d/attachments", supportTicketsPath, ticketID)
+	if IsDryRun(request) {
+		return RunDryRunPreviewWithBody(ctx, request, cfg, "linode_account_support_ticket_attachment_create", httpMethodPost, path, createRequest, nil)
+	}
+
+	if result := RequireConfirm(request, "This creates a support ticket attachment. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	attachment, createFailure := client.CreateSupportTicketAttachment(ctx, ticketID, createRequest)
+	if createFailure == nil {
+		return MarshalToolResponse(attachment)
+	}
+
+	return mcp.NewToolResultError("Failed to create support ticket attachment: " + createFailure.Error()), nil
+}
+
+func supportTicketAttachmentCreateRequestFromTool(request *mcp.CallToolRequest) (int, *linode.CreateSupportTicketAttachmentRequest, string) {
+	args := request.GetArguments()
+
+	ticketID, validationMessage := requiredSupportTicketAttachmentTicketID(args)
+	if validationMessage != "" {
+		return 0, nil, validationMessage
+	}
+
+	file, validationMessage := requiredAccountUserString(args, supportTicketAttachmentFileParam)
+	if validationMessage != "" {
+		return 0, nil, validationMessage
+	}
+
+	return ticketID, &linode.CreateSupportTicketAttachmentRequest{File: file}, ""
+}
+
+func requiredSupportTicketAttachmentTicketID(args map[string]any) (int, string) {
+	if _, ok := args[supportTicketTicketIDParam]; !ok {
+		return 0, supportTicketTicketIDParam + " is required"
+	}
+
+	value, validationMessage := optionalSupportTicketPositiveID(args, supportTicketTicketIDParam)
+	if validationMessage != "" {
+		return 0, validationMessage
+	}
+
+	return value, ""
 }
 
 func handleLinodeManagedContactCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
