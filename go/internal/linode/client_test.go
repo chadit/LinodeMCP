@@ -19,6 +19,8 @@ import (
 
 const (
 	updateAccountEmail           = "account-updated@example.com"
+	profilePreferenceKeyTheme    = "theme"
+	profilePreferenceValueDark   = "dark"
 	statusPending                = "pending"
 	statusSuccessful             = "successful"
 	accountEntityTransferToken   = "transfer-token-example"
@@ -1325,7 +1327,8 @@ func TestClientMalformedJSONResponse(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`not json at all`))
+		_, err := w.Write([]byte(`not json at all`))
+		assert.NoError(t, err)
 	}))
 	defer srv.Close()
 
@@ -1379,8 +1382,93 @@ func TestClientUpdateProfileSuccess(t *testing.T) {
 	assert.Equal(t, "US/Eastern", result.Timezone)
 }
 
+// TestClientUpdateProfilePreferencesSuccess verifies that UpdateProfilePreferences
+// sends a PUT request to /profile/preferences with an empty JSON body.
+func TestClientUpdateProfilePreferencesSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPut, r.Method, "request method should be PUT")
+		assert.Equal(t, "/profile/preferences", r.URL.Path, "request path should be /profile/preferences")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		var body map[string]any
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		assert.Empty(t, body, "request body should be an empty JSON object")
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{profilePreferenceKeyTheme: profilePreferenceValueDark}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	result, err := client.UpdateProfilePreferences(t.Context(), nil)
+
+	require.NoError(t, err, "UpdateProfilePreferences should succeed on 200 response")
+	assert.Equal(t, profilePreferenceValueDark, result[profilePreferenceKeyTheme])
+}
+
 // TestClientUpdateProfileNetworkError verifies that UpdateProfile returns a
 // NetworkError when the HTTP request fails to reach the server.
+func TestClientUpdateProfilePreferencesAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, err := w.Write([]byte(`{"errors":[{"field":"theme","reason":"invalid preference"}]}`))
+		assert.NoError(t, err)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.UpdateProfilePreferences(t.Context(), linode.ProfilePreferences{profilePreferenceKeyTheme: profilePreferenceValueDark})
+
+	require.Error(t, err, "UpdateProfilePreferences should fail on 400 response")
+
+	var apiErr *linode.APIError
+
+	require.ErrorAs(t, err, &apiErr, "error should be an APIError")
+	assert.Equal(t, 400, apiErr.StatusCode)
+}
+
+func TestClientUpdateProfilePreferencesNetworkError(t *testing.T) {
+	t.Parallel()
+
+	client := linode.NewClient("http://127.0.0.1:1", "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.UpdateProfilePreferences(t.Context(), linode.ProfilePreferences{profilePreferenceKeyTheme: profilePreferenceValueDark})
+
+	require.Error(t, err, "UpdateProfilePreferences should fail when the server is unreachable")
+
+	var netErr *linode.NetworkError
+
+	assert.ErrorAs(t, err, &netErr, "error should be a NetworkError")
+}
+
+func TestClientUpdateProfilePreferencesMalformedJSON(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, err := w.Write([]byte(`not json at all`))
+		assert.NoError(t, err)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+	_, err := client.UpdateProfilePreferences(t.Context(), linode.ProfilePreferences{profilePreferenceKeyTheme: profilePreferenceValueDark})
+
+	require.Error(t, err, "UpdateProfilePreferences should fail when response body is not valid JSON")
+
+	var syntaxErr *json.SyntaxError
+
+	assert.ErrorAs(t, err, &syntaxErr, "error chain should contain a json.SyntaxError")
+}
+
 func TestClientUpdateProfileNetworkError(t *testing.T) {
 	t.Parallel()
 

@@ -5130,6 +5130,21 @@ func (c *Client) RescueInstance(ctx context.Context, linodeID int, req RescueIns
 	})
 }
 
+// UpdateProfilePreferences updates profile preferences with automatic retry on transient failures.
+func (c *Client) UpdateProfilePreferences(ctx context.Context, req ProfilePreferences) (ProfilePreferences, error) {
+	var preferences ProfilePreferences
+
+	err := c.executeWithRetry(ctx, "UpdateProfilePreferences", func() error {
+		var err error
+
+		preferences, err = c.httpUpdateProfilePreferences(ctx, req)
+
+		return err
+	})
+
+	return preferences, err
+}
+
 // ResetInstancePassword resets the root password with automatic retry on transient failures.
 func (c *Client) ResetInstancePassword(ctx context.Context, linodeID int, rootPass string) error {
 	return c.executeWithRetry(ctx, "ResetInstancePassword", func() error {

@@ -49,6 +49,70 @@ func NewLinodeProfileSecurityQuestionsTool(cfg *config.Config) (mcp.Tool, profil
 	return tool, profiles.CapRead, handler
 }
 
+// NewLinodeProfilePreferencesUpdateTool creates a tool for updating profile preferences.
+func NewLinodeProfilePreferencesUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_profile_preferences_update",
+		"Updates dashboard preferences for the authenticated profile.",
+		[]mcp.ToolOption{
+			mcp.WithObject("preferences", mcp.Required(),
+				mcp.Description("Preference fields to send as the JSON request body.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm updating profile preferences. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeProfilePreferencesUpdateRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleLinodeProfilePreferencesUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	body, validationMessage := profilePreferencesFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreviewWithBody(ctx, request, cfg, "linode_profile_preferences_update", httpMethodPut, "/profile/preferences", body, nil)
+	}
+
+	if result := RequireConfirm(request, "This updates profile preferences. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, prepErr := prepareClient(request, cfg)
+	if prepErr != nil {
+		return mcp.NewToolResultError(prepErr.Error()), nil
+	}
+
+	preferences, updateFailureMessage := updateProfilePreferencesResult(ctx, client, body)
+	if updateFailureMessage != "" {
+		return mcp.NewToolResultError(updateFailureMessage), nil
+	}
+
+	return MarshalToolResponse(preferences)
+}
+
+func updateProfilePreferencesResult(ctx context.Context, client *linode.Client, body linode.ProfilePreferences) (linode.ProfilePreferences, string) {
+	preferences, updateFailure := client.UpdateProfilePreferences(ctx, body)
+	if updateFailure != nil {
+		return nil, "Failed to update linode_profile_preferences_update: " + updateFailure.Error()
+	}
+
+	return preferences, ""
+}
+
+func profilePreferencesFromTool(request *mcp.CallToolRequest) (linode.ProfilePreferences, string) {
+	raw, ok := request.GetArguments()["preferences"].(map[string]any)
+	if !ok || len(raw) == 0 {
+		return nil, "preferences must be a non-empty object"
+	}
+
+	return linode.ProfilePreferences(raw), ""
+}
+
 // NewLinodeProfileLoginsTool creates a tool for listing login history for the authenticated profile.
 func NewLinodeProfileLoginsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(

@@ -12,10 +12,10 @@ import (
 
 const (
 	endpointProfile                      = "/profile"
+	endpointProfilePreferences           = endpointProfile + "/preferences"
 	endpointProfilePhoneNumber           = "/profile/phone-number"
 	endpointProfilePhoneNumberVerify     = endpointProfilePhoneNumber + "/verify"
 	endpointProfileGrants                = "/profile/grants"
-	endpointProfilePreferences           = "/profile/preferences"
 	endpointProfileSecurityQuestions     = "/profile/security-questions"
 	endpointProfileLogins                = "/profile/logins"
 	endpointProfileApps                  = "/profile/apps"
@@ -73,6 +73,30 @@ func (c *Client) httpGetProfile(ctx context.Context) (*Profile, error) {
 	}
 
 	return &profile, nil
+}
+
+// httpUpdateProfilePreferences updates the authenticated user's preferences.
+func (c *Client) httpUpdateProfilePreferences(ctx context.Context, req ProfilePreferences) (ProfilePreferences, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	if req == nil {
+		req = ProfilePreferences{}
+	}
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpointProfilePreferences, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateProfilePreferences", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	var preferences ProfilePreferences
+	if err := c.handleResponse(resp, &preferences); err != nil {
+		return nil, err
+	}
+
+	return preferences, nil
 }
 
 // httpSendProfilePhoneNumberVerificationCode sends a profile phone verification code.

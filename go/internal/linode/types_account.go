@@ -18,10 +18,6 @@ type Profile struct {
 // ProfileDevice represents a trusted device on the authenticated profile.
 type ProfileDevice map[string]any
 
-// ProfilePreferences represents the authenticated user's preference settings.
-// The API can add preference keys over time, so keep the response map-backed.
-type ProfilePreferences map[string]any
-
 // ProfileSecurityQuestions represents the response from GET /profile/security-questions.
 type ProfileSecurityQuestions map[string]any
 
@@ -640,6 +636,10 @@ type Promo struct {
 	ServiceType              string `json:"service_type"`
 	ThisMonthCreditRemaining string `json:"this_month_credit_remaining"`
 }
+
+// ProfilePreferences contains the authenticated user's dashboard preferences.
+// The API can add preference keys over time, so keep the response map-backed.
+type ProfilePreferences map[string]any
 
 // UpdateProfileRequest contains the updatable fields for PUT /v4/profile.
 // All fields are pointers so omitted fields are not sent in the request body.
