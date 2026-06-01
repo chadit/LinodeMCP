@@ -37,6 +37,11 @@ type CreateVolumeRequest struct {
 	Tags     []string `json:"tags,omitempty"`
 }
 
+// CloneVolumeRequest represents the request body for cloning a volume.
+type CloneVolumeRequest struct {
+	Label string `json:"label"`
+}
+
 // AttachVolumeRequest represents the request body for attaching a volume to a Linode.
 type AttachVolumeRequest struct {
 	LinodeID           int  `json:"linode_id"`

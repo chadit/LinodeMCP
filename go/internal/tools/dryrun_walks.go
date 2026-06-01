@@ -945,6 +945,31 @@ func volumeCreateSideEffects(ctx context.Context, label, region string, size, li
 	return details, nil
 }
 
+// volumeCloneSideEffects is the Tier B preview for linode_volume_clone. It
+// reports the cloned volume label and warns that cloning creates a billable volume.
+func volumeCloneSideEffects(ctx context.Context, state any, label string) (DryRunDetails, error) {
+	var details DryRunDetails
+
+	if err := ctx.Err(); err != nil {
+		return details, fmt.Errorf("volume-clone side-effect walk canceled: %w", err)
+	}
+
+	volume, ok := state.(*linode.Volume)
+	if !ok || volume == nil {
+		details.SideEffects = append(details.SideEffects,
+			fmt.Sprintf("A new volume labeled %q will be created from the source volume.", label))
+		details.Warnings = append(details.Warnings, "Billing for the cloned volume starts immediately on creation.")
+
+		return details, nil
+	}
+
+	details.SideEffects = append(details.SideEffects,
+		fmt.Sprintf("Volume %d (%q) will be cloned to a new volume labeled %q.", volume.ID, volume.Label, label))
+	details.Warnings = append(details.Warnings, "Billing for the cloned volume starts immediately on creation.")
+
+	return details, nil
+}
+
 // firewallCreateSideEffects is the Tier B preview for linode_firewall_create.
 // It reports the default inbound/outbound policies the new firewall would
 // carry (arg-only, no fetch).

@@ -160,6 +160,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: toolVolumesList, Capability: profiles.CapRead},
 		{Name: toolVolumeTypeList, Capability: profiles.CapRead},
 		{Name: toolVolumeCreate, Capability: profiles.CapWrite},
+		{Name: toolVolumeClone, Capability: profiles.CapWrite},
 		{Name: toolVolumeDelete, Capability: profiles.CapDestroy},
 		{Name: toolVolumeResize, Capability: profiles.CapWrite},
 

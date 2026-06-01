@@ -2589,9 +2589,9 @@ func TestLinodeVolumeAttachTool(t *testing.T) {
 		wantContains string
 	}{
 		{
-			name:         "missing volume id",
+			name:         caseMissingVolumeID,
 			args:         map[string]any{keyLinodeID: float64(123), keyConfirm: true},
-			wantContains: "volume_id is required",
+			wantContains: errVolumeIDRequired,
 		},
 		{
 			name:         caseMissingLinodeID,
@@ -2672,14 +2672,14 @@ func TestLinodeVolumeDetachTool(t *testing.T) {
 		assert.Contains(t, props, "volume_id", "schema should include volume_id property")
 	})
 
-	t.Run("missing volume id", func(t *testing.T) {
+	t.Run(caseMissingVolumeID, func(t *testing.T) {
 		t.Parallel()
 		req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
 		result, err := handler(t.Context(), req)
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "volume_id is required")
+		assertErrorContains(t, result, errVolumeIDRequired)
 	})
 
 	t.Run("successful detachment", func(t *testing.T) {
@@ -2744,9 +2744,9 @@ func TestLinodeVolumeResizeTool(t *testing.T) {
 			wantContains: errConfirmEqualsTrue,
 		},
 		{
-			name:         "missing volume id",
+			name:         caseMissingVolumeID,
 			args:         map[string]any{keySize: float64(100), keyConfirm: true},
-			wantContains: "volume_id is required",
+			wantContains: errVolumeIDRequired,
 		},
 		{
 			name: "missing size",
@@ -2969,7 +2969,7 @@ func TestLinodeVolumeDeleteTool(t *testing.T) {
 		require.NotNil(t, result)
 		assert.True(t, result.IsError,
 			"dry_run with missing volume_id must error out the same way the real call would")
-		assertErrorContains(t, result, "volume_id is required")
+		assertErrorContains(t, result, errVolumeIDRequired)
 	})
 }
 
@@ -3362,7 +3362,7 @@ func TestLinodeVolumeUpdateTool(t *testing.T) {
 		require.NoError(t, err, "handler should not return Go error")
 		require.NotNil(t, result, "handler should return a result")
 		assert.True(t, result.IsError, "result should be a tool error")
-		assertErrorContains(t, result, "volume_id is required")
+		assertErrorContains(t, result, errVolumeIDRequired)
 	})
 
 	t.Run("missing label and tags", func(t *testing.T) {

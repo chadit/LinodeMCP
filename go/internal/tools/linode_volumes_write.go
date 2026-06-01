@@ -73,6 +73,28 @@ func validateVolumeCreateArgs(label, region string, size, linodeID int) string {
 	return ""
 }
 
+func volumeCloneIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	raw, exists := request.GetArguments()["volume_id"]
+	if !exists {
+		return 0, "volume_id is required"
+	}
+
+	volumeID, ok := numberArgToInt(raw)
+	if !ok || volumeID <= 0 {
+		return 0, "volume_id must be a positive integer"
+	}
+
+	return volumeID, ""
+}
+
+func validateVolumeCloneLabel(label string) string {
+	if label == "" {
+		return errLabelRequired
+	}
+
+	return ""
+}
+
 func handleLinodeVolumeCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	label := request.GetString("label", "")
 	region := request.GetString("region", "")
@@ -123,6 +145,70 @@ func handleLinodeVolumeCreateRequest(ctx context.Context, request *mcp.CallToolR
 		Volume  *linode.Volume `json:"volume"`
 	}{
 		Message: fmt.Sprintf("Volume '%s' (ID: %d) created successfully in %s", volume.Label, volume.ID, volume.Region),
+		Volume:  volume,
+	}
+
+	return MarshalToolResponse(response)
+}
+
+// NewLinodeVolumeCloneTool creates a tool for cloning a volume.
+func NewLinodeVolumeCloneTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_volume_clone",
+		"Clones an existing block storage volume. WARNING: Billing starts immediately for the cloned volume. Pass dry_run=true to preview without cloning.",
+		[]mcp.ToolOption{
+			mcp.WithNumber("volume_id", mcp.Required(), mcp.Description("The ID of the source volume to clone")),
+			mcp.WithString("label", mcp.Required(), mcp.Description("A label for the cloned volume")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be set to true to confirm volume cloning. This operation incurs billing charges. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeVolumeCloneRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
+}
+
+func handleLinodeVolumeCloneRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	volumeID, msg := volumeCloneIDFromTool(request)
+	if msg != "" {
+		return mcp.NewToolResultError(msg), nil
+	}
+
+	label := request.GetString("label", "")
+	if msg := validateVolumeCloneLabel(label); msg != "" {
+		return mcp.NewToolResultError(msg), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_volume_clone", httpMethodPost,
+			fmt.Sprintf("/volumes/%d/clone", volumeID),
+			func(ctx context.Context, c *linode.Client) (any, error) { return c.GetVolume(ctx, volumeID) },
+			func(ctx context.Context, _ *linode.Client, state any) (DryRunDetails, error) {
+				return volumeCloneSideEffects(ctx, state, label)
+			})
+	}
+
+	if result := RequireConfirm(request, "This operation creates a billable cloned volume. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	volume, err := client.CloneVolume(ctx, volumeID, linode.CloneVolumeRequest{Label: label})
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to clone volume %d: %v", volumeID, err)), nil
+	}
+
+	response := struct {
+		Message string         `json:"message"`
+		Volume  *linode.Volume `json:"volume"`
+	}{
+		Message: fmt.Sprintf("Volume %d cloned successfully as %q", volumeID, volume.Label),
 		Volume:  volume,
 	}
 
