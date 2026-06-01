@@ -659,6 +659,24 @@ func NewLinodeAccountSupportTicketAttachmentCreateTool(cfg *config.Config) (mcp.
 	return tool, profiles.CapAdmin, handler
 }
 
+// NewLinodeAccountSupportTicketReplyCreateTool creates a tool for adding support ticket replies.
+func NewLinodeAccountSupportTicketReplyCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_account_support_ticket_reply_create",
+		"Creates a reply on an existing support ticket.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(supportTicketTicketIDParam, mcp.Required(), mcp.Description("Support ticket ID to reply to.")),
+			mcp.WithString(supportTicketDescriptionParam, mcp.Required(), mcp.Description("Reply description to add to the support ticket.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm support ticket reply creation. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeAccountSupportTicketReplyCreateRequest,
+	)
+
+	return tool, profiles.CapAdmin, handler
+}
+
 // NewLinodeManagedContactCreateTool creates a tool for creating managed contacts.
 func NewLinodeManagedContactCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newToolWithHandler(
@@ -3926,6 +3944,50 @@ func optionalSupportTicketPositiveID(args map[string]any, field string) (int, st
 	}
 
 	return int(value), ""
+}
+
+func handleLinodeAccountSupportTicketReplyCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	ticketID, createRequest, validationMessage := supportTicketReplyCreateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	path := fmt.Sprintf("%s/%d/replies", supportTicketsPath, ticketID)
+	if IsDryRun(request) {
+		return RunDryRunPreviewWithBody(ctx, request, cfg, "linode_account_support_ticket_reply_create", httpMethodPost, path, createRequest, nil)
+	}
+
+	if result := RequireConfirm(request, "This creates a support ticket reply. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	reply, createFailure := client.CreateSupportTicketReply(ctx, ticketID, createRequest)
+	if createFailure == nil {
+		return MarshalToolResponse(reply)
+	}
+
+	return mcp.NewToolResultError("Failed to create support ticket reply: " + createFailure.Error()), nil
+}
+
+func supportTicketReplyCreateRequestFromTool(request *mcp.CallToolRequest) (int, *linode.CreateSupportTicketReplyRequest, string) {
+	args := request.GetArguments()
+
+	ticketID, validationMessage := requiredSupportTicketAttachmentTicketID(args)
+	if validationMessage != "" {
+		return 0, nil, validationMessage
+	}
+
+	description, validationMessage := requiredAccountUserString(args, supportTicketDescriptionParam)
+	if validationMessage != "" {
+		return 0, nil, validationMessage
+	}
+
+	return ticketID, &linode.CreateSupportTicketReplyRequest{Description: description}, ""
 }
 
 func handleLinodeAccountSupportTicketAttachmentCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
