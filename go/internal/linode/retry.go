@@ -1305,6 +1305,21 @@ func (c *Client) ListAccountEvents(ctx context.Context, page, pageSize int) (*Pa
 	return events, err
 }
 
+// ListSupportTickets retrieves support tickets with automatic retry on transient failures.
+func (c *Client) ListSupportTickets(ctx context.Context, page, pageSize int) (*PaginatedResponse[SupportTicket], error) {
+	var tickets *PaginatedResponse[SupportTicket]
+
+	err := c.executeWithRetry(ctx, "ListSupportTickets", func() error {
+		var err error
+
+		tickets, err = c.httpListSupportTickets(ctx, page, pageSize)
+
+		return err
+	})
+
+	return tickets, err
+}
+
 // ListAccountUsers retrieves account users with automatic retry on transient failures.
 func (c *Client) ListAccountUsers(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountUser], error) {
 	var users *PaginatedResponse[AccountUser]
