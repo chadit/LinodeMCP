@@ -58,6 +58,8 @@ const (
 	profileAppScopesReadOnly     = "linodes:read_only"
 	profileDeviceUserAgent       = "Mozilla/5.0"
 	profileDeviceRemoteAddr      = "203.0.113.1"
+	profilePhoneISOCode          = "US"
+	profilePhoneNumber           = "+15551234567"
 )
 
 // TestClientGetProfileSuccess verifies that GetProfile returns a fully
@@ -421,6 +423,64 @@ func TestClientGetProfileAppRetriesTransientError(t *testing.T) {
 	require.NotNil(t, got, "result should not be nil")
 	assert.Equal(t, 12345, got.ID)
 	assert.Equal(t, int32(2), requestCount.Load(), "read-only get should retry once then succeed")
+}
+
+func TestClientSendProfilePhoneNumberVerificationCodeSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/profile/phone-number", r.URL.Path, "request path should be /profile/phone-number")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		var body map[string]string
+		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should be JSON") {
+			return
+		}
+
+		assert.Equal(t, profilePhoneISOCode, body["iso_code"])
+		assert.Equal(t, profilePhoneNumber, body["phone_number"])
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	err := client.SendProfilePhoneNumberVerificationCode(t.Context(), &linode.ProfilePhoneNumberRequest{
+		ISOCode:     profilePhoneISOCode,
+		PhoneNumber: profilePhoneNumber,
+	})
+
+	require.NoError(t, err, "SendProfilePhoneNumberVerificationCode should succeed on 200 response")
+}
+
+func TestClientSendProfilePhoneNumberVerificationCodeAPIErrorDoesNotRetry(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/profile/phone-number", r.URL.Path, "request path should be /profile/phone-number")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	err := client.SendProfilePhoneNumberVerificationCode(t.Context(), &linode.ProfilePhoneNumberRequest{
+		ISOCode:     profilePhoneISOCode,
+		PhoneNumber: profilePhoneNumber,
+	})
+
+	require.Error(t, err, "SendProfilePhoneNumberVerificationCode should fail on server error")
+	assert.Equal(t, int32(1), requestCount.Load(), "non-idempotent POST must not be retried")
 }
 
 func TestClientDeleteProfileAppSuccess(t *testing.T) {

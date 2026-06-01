@@ -32,6 +32,8 @@ const (
 	accountOAuthClientsPageSizeMax     = 500
 	profileAppIDParam                  = "app_id"
 	profileDeviceIDParam               = "device_id"
+	profilePhoneISOCodeParam           = "iso_code"
+	profilePhoneNumberParam            = "phone_number"
 	profileAppIDMaxFromJSON            = 9007199254740991
 	profileDeviceIDMaxFromJSON         = 9007199254740991
 	errProfileAppIDPositive            = "app_id must be a positive integer"
@@ -56,6 +58,7 @@ const (
 	accountBetasPath                   = "/account/betas"
 	accountCancelPath                  = "/account/cancel"
 	accountPromoCodesPath              = "/account/promo-codes"
+	profilePhoneNumberPath             = "/profile/phone-number"
 	accountEventsPath                  = "/account/events"
 	accountChildAccountsPath           = "/account/child-accounts"
 	longviewSubscriptionIDParam        = "longview_subscription_id"
@@ -732,6 +735,27 @@ func NewLinodeAccountInvoiceItemsTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeProfilePhoneNumberSendTool creates a tool for sending a profile phone verification code.
+func NewLinodeProfilePhoneNumberSendTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_profile_phone_number_send",
+		"Sends a verification code to a profile phone number.",
+		[]mcp.ToolOption{
+			mcp.WithString(profilePhoneISOCodeParam, mcp.Required(),
+				mcp.Description("ISO 3166-1 alpha-2 country code for the phone number.")),
+			mcp.WithString(profilePhoneNumberParam, mcp.Required(),
+				mcp.Description("Phone number that should receive the verification code.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm sending the verification code. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeProfilePhoneNumberSendRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeProfileDevicesTool creates a tool for listing trusted devices for the profile.
@@ -1663,6 +1687,56 @@ func accountBetasPaginationFromTool(request *mcp.CallToolRequest) (int, int, str
 	}
 
 	return page, pageSize, ""
+}
+
+func handleLinodeProfilePhoneNumberSendRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	body, validationMessage := profilePhoneNumberRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreviewWithBody(ctx, request, cfg, "linode_profile_phone_number_send", httpMethodPost, profilePhoneNumberPath, body, nil)
+	}
+
+	if result := RequireConfirm(request, "This sends a phone number verification code. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, prepErr := prepareClient(request, cfg)
+	if prepErr != nil {
+		return mcp.NewToolResultError(prepErr.Error()), nil
+	}
+
+	if sendFailureMessage := sendProfilePhoneNumberErrorMessage(ctx, client, body); sendFailureMessage != "" {
+		return mcp.NewToolResultError(sendFailureMessage), nil
+	}
+
+	return MarshalToolResponse(map[string]any{responseKeyMessage: "Profile phone number verification code sent successfully"})
+}
+
+func sendProfilePhoneNumberErrorMessage(ctx context.Context, client *linode.Client, body *linode.ProfilePhoneNumberRequest) string {
+	if err := client.SendProfilePhoneNumberVerificationCode(ctx, body); err != nil {
+		return "Failed to send linode_profile_phone_number_send: " + err.Error()
+	}
+
+	return ""
+}
+
+func profilePhoneNumberRequestFromTool(request *mcp.CallToolRequest) (*linode.ProfilePhoneNumberRequest, string) {
+	args := request.GetArguments()
+
+	isoCode, validationMessage := requiredStringArg(args, profilePhoneISOCodeParam)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	phoneNumber, validationMessage := requiredStringArg(args, profilePhoneNumberParam)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	return &linode.ProfilePhoneNumberRequest{ISOCode: isoCode, PhoneNumber: phoneNumber}, ""
 }
 
 func handleLinodeProfileDevicesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
