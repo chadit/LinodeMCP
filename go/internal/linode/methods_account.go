@@ -13,6 +13,7 @@ import (
 const (
 	endpointProfile                      = "/profile"
 	endpointProfilePhoneNumber           = "/profile/phone-number"
+	endpointProfilePhoneNumberVerify     = endpointProfilePhoneNumber + "/verify"
 	endpointProfileGrants                = "/profile/grants"
 	endpointProfileLogins                = "/profile/logins"
 	endpointProfileApps                  = "/profile/apps"
@@ -99,6 +100,25 @@ func (c *Client) httpDeleteProfilePhoneNumber(ctx context.Context) error {
 	resp, err := c.makeRequest(ctx, http.MethodDelete, endpointProfilePhoneNumber, nil)
 	if err != nil {
 		return &NetworkError{Operation: "DeleteProfilePhoneNumber", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	if err := c.handleResponse(resp, nil); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// httpVerifyProfilePhoneNumber verifies a profile phone number using an OTP code.
+func (c *Client) httpVerifyProfilePhoneNumber(ctx context.Context, req *ProfilePhoneNumberVerifyRequest) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointProfilePhoneNumberVerify, req)
+	if err != nil {
+		return &NetworkError{Operation: "VerifyProfilePhoneNumber", Err: err}
 	}
 
 	defer drainClose(resp)

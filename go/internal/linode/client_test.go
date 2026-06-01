@@ -60,6 +60,7 @@ const (
 	profileDeviceRemoteAddr      = "203.0.113.1"
 	profilePhoneISOCode          = "US"
 	profilePhoneNumber           = "+15551234567"
+	profilePhoneOTPCode          = "123456"
 )
 
 // TestClientGetProfileSuccess verifies that GetProfile returns a fully
@@ -524,6 +525,57 @@ func TestClientDeleteProfilePhoneNumberAPIErrorDoesNotRetry(t *testing.T) {
 
 	require.Error(t, err, "DeleteProfilePhoneNumber should fail on server error")
 	assert.Equal(t, int32(1), requestCount.Load(), "destructive DELETE must not be retried")
+}
+
+func TestClientVerifyProfilePhoneNumberSuccess(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/profile/phone-number/verify", r.URL.Path, "request path should be /profile/phone-number/verify")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		var body map[string]string
+		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should be JSON") {
+			return
+		}
+
+		assert.Equal(t, profilePhoneOTPCode, body["otp_code"])
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	err := client.VerifyProfilePhoneNumber(t.Context(), &linode.ProfilePhoneNumberVerifyRequest{OTPCode: profilePhoneOTPCode})
+
+	require.NoError(t, err, "VerifyProfilePhoneNumber should succeed on 200 response")
+}
+
+func TestClientVerifyProfilePhoneNumberAPIErrorDoesNotRetry(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/profile/phone-number/verify", r.URL.Path, "request path should be /profile/phone-number/verify")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: serverErrorReason}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	err := client.VerifyProfilePhoneNumber(t.Context(), &linode.ProfilePhoneNumberVerifyRequest{OTPCode: profilePhoneOTPCode})
+
+	require.Error(t, err, "VerifyProfilePhoneNumber should fail on server error")
+	assert.Equal(t, int32(1), requestCount.Load(), "non-idempotent POST must not be retried")
 }
 
 func TestClientDeleteProfileAppSuccess(t *testing.T) {

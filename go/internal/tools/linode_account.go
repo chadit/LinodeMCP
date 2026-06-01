@@ -34,6 +34,7 @@ const (
 	profileDeviceIDParam               = "device_id"
 	profilePhoneISOCodeParam           = "iso_code"
 	profilePhoneNumberParam            = "phone_number"
+	profilePhoneOTPCodeParam           = "otp_code"
 	profileAppIDMaxFromJSON            = 9007199254740991
 	profileDeviceIDMaxFromJSON         = 9007199254740991
 	errProfileAppIDPositive            = "app_id must be a positive integer"
@@ -59,6 +60,7 @@ const (
 	accountCancelPath                  = "/account/cancel"
 	accountPromoCodesPath              = "/account/promo-codes"
 	profilePhoneNumberPath             = "/profile/phone-number"
+	profilePhoneNumberVerifyPath       = profilePhoneNumberPath + "/verify"
 	accountEventsPath                  = "/account/events"
 	accountChildAccountsPath           = "/account/child-accounts"
 	longviewSubscriptionIDParam        = "longview_subscription_id"
@@ -773,6 +775,25 @@ func NewLinodeProfilePhoneNumberDeleteTool(cfg *config.Config) (mcp.Tool, profil
 	)
 
 	return tool, profiles.CapDestroy, handler
+}
+
+// NewLinodeProfilePhoneNumberVerifyTool creates a tool for verifying a profile phone number.
+func NewLinodeProfilePhoneNumberVerifyTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_profile_phone_number_verify",
+		"Verifies a profile phone number with a one-time SMS code.",
+		[]mcp.ToolOption{
+			mcp.WithString(profilePhoneOTPCodeParam, mcp.Required(),
+				mcp.Description("One-time SMS code sent to the profile phone number.")),
+			mcp.WithBoolean(paramConfirm, mcp.Required(),
+				mcp.Description("Must be true to confirm verifying the phone number. Ignored when dry_run=true.")),
+			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		},
+		handleLinodeProfilePhoneNumberVerifyRequest,
+	)
+
+	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeProfileDevicesTool creates a tool for listing trusted devices for the profile.
@@ -1783,6 +1804,49 @@ func profilePhoneNumberRequestFromTool(request *mcp.CallToolRequest) (*linode.Pr
 	}
 
 	return &linode.ProfilePhoneNumberRequest{ISOCode: isoCode, PhoneNumber: phoneNumber}, ""
+}
+
+func handleLinodeProfilePhoneNumberVerifyRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	body, validationMessage := profilePhoneNumberVerifyRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if IsDryRun(request) {
+		return RunDryRunPreviewWithBody(ctx, request, cfg, "linode_profile_phone_number_verify", httpMethodPost, profilePhoneNumberVerifyPath, body, nil)
+	}
+
+	if result := RequireConfirm(request, "This verifies a profile phone number. Set confirm=true to proceed."); result != nil {
+		return result, nil
+	}
+
+	client, prepErr := prepareClient(request, cfg)
+	if prepErr != nil {
+		return mcp.NewToolResultError(prepErr.Error()), nil
+	}
+
+	if verifyFailureMessage := verifyProfilePhoneNumberErrorMessage(ctx, client, body); verifyFailureMessage != "" {
+		return mcp.NewToolResultError(verifyFailureMessage), nil
+	}
+
+	return MarshalToolResponse(map[string]any{responseKeyMessage: "Profile phone number verified successfully"})
+}
+
+func verifyProfilePhoneNumberErrorMessage(ctx context.Context, client *linode.Client, body *linode.ProfilePhoneNumberVerifyRequest) string {
+	if err := client.VerifyProfilePhoneNumber(ctx, body); err != nil {
+		return "Failed to verify linode_profile_phone_number_verify: " + err.Error()
+	}
+
+	return ""
+}
+
+func profilePhoneNumberVerifyRequestFromTool(request *mcp.CallToolRequest) (*linode.ProfilePhoneNumberVerifyRequest, string) {
+	otpCode, validationMessage := requiredStringArg(request.GetArguments(), profilePhoneOTPCodeParam)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	return &linode.ProfilePhoneNumberVerifyRequest{OTPCode: otpCode}, ""
 }
 
 func handleLinodeProfileDevicesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

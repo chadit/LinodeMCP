@@ -54,7 +54,9 @@ const (
 	keyPhoneNumber                   = "phone_number"
 	profilePhoneISOCode              = "US"
 	profilePhoneNumber               = "+15551234567"
+	profilePhoneOTPCode              = "123456"
 	errISOCodeNonEmpty               = "iso_code must be a non-empty string"
+	errOTPCodeNonEmpty               = "otp_code must be a non-empty string"
 	invalidProfileIDSlash            = "12/345"
 	invalidProfileIDQuery            = "12?345"
 	errProfileAppIDRequired          = "app_id is required"
@@ -2318,6 +2320,204 @@ func TestLinodeProfilePhoneNumberDeleteTool(t *testing.T) {
 				assert.True(t, result.IsError, "missing or non-true confirm should be an error result")
 				assertErrorContains(t, result, "Set confirm=true to proceed")
 				assert.Equal(t, int32(0), calls.Load(), "confirm rejection should not call the client")
+			})
+		}
+	})
+}
+
+func TestLinodeProfilePhoneNumberVerifyTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeProfilePhoneNumberVerifyTool(cfg)
+
+		assert.Equal(t, "linode_profile_phone_number_verify", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapWrite, capability, "tool should be a write tool")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+		assert.Contains(t, tool.InputSchema.Properties, keyOTPCode, "schema should include otp_code")
+		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "write tool must require confirm")
+		assert.Contains(t, tool.InputSchema.Properties, keyDryRun, "write tool should expose dry_run")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/profile/phone-number/verify", r.URL.Path, "request path should be /profile/phone-number/verify")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+
+			body, readErr := io.ReadAll(r.Body)
+			if !assert.NoError(t, readErr, "request body should be readable") {
+				return
+			}
+
+			assert.JSONEq(t, `{"otp_code":"123456"}`, string(body), "request body should match API contract")
+
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeProfilePhoneNumberVerifyTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyOTPCode: profilePhoneOTPCode, keyConfirm: true})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+		assertErrorContains(t, result, "Profile phone number verified successfully")
+	})
+
+	t.Run("dry run previews without post", func(t *testing.T) {
+		t.Parallel()
+
+		var calls atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			calls.Add(1)
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeProfilePhoneNumberVerifyTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyOTPCode: profilePhoneOTPCode, keyDryRun: true})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "dry run should not be an error result")
+
+		var body map[string]any
+		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+		dryRun, dryRunOK := body["dry_run"].(bool)
+		require.True(t, dryRunOK, "dry_run should be a boolean")
+		assert.True(t, dryRun, "response should be a dry-run preview")
+
+		would, wouldOK := body["would_execute"].(map[string]any)
+		require.True(t, wouldOK, "dry run response should include would_execute")
+		assert.Equal(t, "POST", would["method"])
+		assert.Equal(t, "/profile/phone-number/verify", would["path"])
+
+		previewBody, previewBodyOK := would["body"].(map[string]any)
+		require.True(t, previewBodyOK, "dry run response should include the request body")
+		assert.Equal(t, profilePhoneOTPCode, previewBody[keyOTPCode])
+		assert.Equal(t, int32(0), calls.Load(), "dry run should not call the POST endpoint")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/profile/phone-number/verify", r.URL.Path, "request path should be /profile/phone-number/verify")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeProfilePhoneNumberVerifyTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyOTPCode: profilePhoneOTPCode, keyConfirm: true})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		assertErrorContains(t, result, "Failed to verify linode_profile_phone_number_verify")
+		assertErrorContains(t, result, errForbidden)
+	})
+
+	t.Run("confirm required before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name    string
+			confirm any
+		}{
+			{name: caseMissing},
+			{name: caseFalse, confirm: false},
+			{name: caseString, confirm: boolStringTrue},
+			{name: caseNumericConfirm, confirm: 1},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls atomic.Int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					calls.Add(1)
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeProfilePhoneNumberVerifyTool(cfg)
+
+				args := map[string]any{keyOTPCode: profilePhoneOTPCode}
+				if testCase.name != caseMissing {
+					args[keyConfirm] = testCase.confirm
+				}
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, args))
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "missing or non-true confirm should be an error result")
+				assertErrorContains(t, result, "Set confirm=true to proceed")
+				assert.Equal(t, int32(0), calls.Load(), "confirm rejection should not call the client")
+			})
+		}
+	})
+
+	t.Run("required arguments reject before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name        string
+			args        map[string]any
+			wantMessage string
+		}{
+			{name: "missing otp_code", args: map[string]any{keyConfirm: true}, wantMessage: errOTPCodeNonEmpty},
+			{name: "blank otp_code", args: map[string]any{keyOTPCode: blankString, keyConfirm: true}, wantMessage: errOTPCodeNonEmpty},
+			{name: "numeric otp_code", args: map[string]any{keyOTPCode: 1, keyConfirm: true}, wantMessage: errOTPCodeNonEmpty},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls atomic.Int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					calls.Add(1)
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeProfilePhoneNumberVerifyTool(cfg)
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "invalid input should be an error result")
+				assertErrorContains(t, result, testCase.wantMessage)
+				assert.Equal(t, int32(0), calls.Load(), "validation rejection should not call the client")
 			})
 		}
 	})

@@ -24,6 +24,11 @@ type ProfilePhoneNumberRequest struct {
 	PhoneNumber string `json:"phone_number"`
 }
 
+// ProfilePhoneNumberVerifyRequest contains fields for POST /profile/phone-number/verify.
+type ProfilePhoneNumberVerifyRequest struct {
+	OTPCode string `json:"otp_code"`
+}
+
 // GrantPermission is one of "read_only", "read_write", or "" (no access).
 // The Linode API uses an explicit empty string when the OAuth grant carries
 // no permission on a resource, so we keep it as a string rather than an
