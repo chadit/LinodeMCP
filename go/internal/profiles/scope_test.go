@@ -9,6 +9,36 @@ import (
 	"github.com/chadit/LinodeMCP/internal/profiles"
 )
 
+func TestRequiredScopesForTagCreate(t *testing.T) {
+	t.Parallel()
+
+	t.Run("read", func(t *testing.T) {
+		t.Parallel()
+
+		want := []profiles.Scope{
+			profiles.ScopeAccountReadOnly,
+			profiles.ScopeDomainsReadOnly,
+			profiles.ScopeLinodesReadOnly,
+			profiles.ScopeNodeBalancersReadOnly,
+			profiles.ScopeVolumesReadOnly,
+		}
+		assert.Equal(t, want, profiles.RequiredScopes("linode_tag_create", profiles.CapRead))
+	})
+
+	t.Run("write", func(t *testing.T) {
+		t.Parallel()
+
+		want := []profiles.Scope{
+			profiles.ScopeAccountReadWrite,
+			profiles.ScopeDomainsReadWrite,
+			profiles.ScopeLinodesReadWrite,
+			profiles.ScopeNodeBalancersReadWrite,
+			profiles.ScopeVolumesReadWrite,
+		}
+		assert.Equal(t, want, profiles.RequiredScopes("linode_tag_create", profiles.CapWrite))
+	})
+}
+
 // TestRequiredScopesMetaReturnsNil locks in the spec contract that
 // CapMeta tools (hello, version, profile builder) need no Linode scope
 // because they never touch the Linode API.

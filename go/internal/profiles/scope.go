@@ -116,6 +116,14 @@ func RequiredScopes(toolName string, capability Capability) []Scope {
 		return nil
 	}
 
+	if toolName == "linode_tag_create" {
+		if capability == CapRead {
+			return []Scope{ScopeAccountReadOnly, ScopeDomainsReadOnly, ScopeLinodesReadOnly, ScopeNodeBalancersReadOnly, ScopeVolumesReadOnly}
+		}
+
+		return []Scope{ScopeAccountReadWrite, ScopeDomainsReadWrite, ScopeLinodesReadWrite, ScopeNodeBalancersReadWrite, ScopeVolumesReadWrite}
+	}
+
 	category := scopeCategory(toolName)
 	if category == "" {
 		return nil

@@ -190,3 +190,86 @@ func TestClientListTaggedObjectsRetriesTransientError(t *testing.T) {
 	assert.Equal(t, nodeLabelWeb1, result.Data[0][keyLabel])
 	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
 }
+
+func TestClientCreateTagSuccess(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
+		assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+		assert.Equal(t, "/tags", r.URL.Path, "request path should be /tags")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer "+"test-token", r.Header.Get("Authorization"))
+
+		var body map[string]any
+		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&body), "request body should decode") {
+			return
+		}
+
+		assert.Equal(t, tagLabelFixture, body[keyLabel], "label should be sent")
+		assert.Equal(t, []any{float64(101), float64(102)}, body["linodes"], "linode IDs should be sent")
+		assert.Equal(t, []any{float64(201)}, body["domains"], "domain IDs should be sent")
+		assert.Equal(t, []any{float64(301)}, body["nodebalancers"], "nodebalancer IDs should be sent")
+		assert.Equal(t, []any{float64(401)}, body["volumes"], "volume IDs should be sent")
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.Tag{Label: tagLabelFixture}))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+	tag, err := client.CreateTag(t.Context(), &linode.CreateTagRequest{
+		Label:         tagLabelFixture,
+		Domains:       []int{201},
+		Linodes:       []int{101, 102},
+		NodeBalancers: []int{301},
+		Volumes:       []int{401},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, tag)
+	assert.Equal(t, tagLabelFixture, tag.Label, "tag label should match response")
+	assert.Equal(t, int32(1), requestCount.Load(), "request should be sent once")
+}
+
+func TestClientCreateTagNetworkError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	url := srv.URL
+	srv.Close()
+
+	client := linode.NewClient(url, "test-token", nil, linode.WithMaxRetries(0))
+	tag, err := client.CreateTag(t.Context(), &linode.CreateTagRequest{Label: tagLabelFixture})
+
+	require.Error(t, err, "CreateTag should fail when the server is unreachable")
+	assert.Nil(t, tag)
+
+	var netErr *linode.NetworkError
+	require.ErrorAs(t, err, &netErr, "error should be a NetworkError")
+	require.NotNil(t, netErr, "NetworkError should be present")
+	assert.Equal(t, "CreateTag", netErr.Operation)
+}
+
+func TestClientCreateTagNoRetry(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+		_, err := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+		assert.NoError(t, err, "writing error response should succeed")
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
+	tag, err := client.CreateTag(t.Context(), &linode.CreateTagRequest{Label: tagLabelFixture})
+
+	require.Error(t, err, "CreateTag should return the first transient error")
+	assert.Nil(t, tag, "tag should be nil on error")
+	assert.Equal(t, int32(1), requestCount.Load(), "non-idempotent tag creation must not be retried")
+}
