@@ -35,6 +35,21 @@ func defaultRetryConfig() retryConfig {
 	}
 }
 
+// ListTags retrieves tags with automatic retry on transient failures.
+func (c *Client) ListTags(ctx context.Context, page, pageSize int) (*PaginatedResponse[Tag], error) {
+	var tags *PaginatedResponse[Tag]
+
+	err := c.executeWithRetry(ctx, "ListTags", func() error {
+		var err error
+
+		tags, err = c.httpListTags(ctx, page, pageSize)
+
+		return err
+	})
+
+	return tags, err
+}
+
 // GetProfile retrieves the user profile with automatic retry on transient failures.
 func (c *Client) GetProfile(ctx context.Context) (*Profile, error) {
 	var profile *Profile

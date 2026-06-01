@@ -203,6 +203,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_longview_client_get":                         profiles.CapRead,
 		"linode_longview_subscription_get":                   profiles.CapRead,
 		"linode_account_maintenance":                         profiles.CapRead,
+		"linode_tags":                                        profiles.CapRead,
 		"linode_maintenance_policies":                        profiles.CapRead,
 		"linode_managed_contact_delete":                      profiles.CapDestroy,
 		"linode_managed_contacts":                            profiles.CapRead,

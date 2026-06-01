@@ -724,3 +724,9 @@ func TestCategoriesIncludesPlacementGroupsInCompute(t *testing.T) {
 	assert.Contains(t, profiles.Categories("linode_placement_group_update"), "compute")
 	assert.Contains(t, profiles.Categories("linode_placement_group_unassign"), "compute")
 }
+
+func TestCategoriesIncludesTagsInCore(t *testing.T) {
+	t.Parallel()
+
+	assert.Contains(t, profiles.Categories("linode_tags"), "core")
+}

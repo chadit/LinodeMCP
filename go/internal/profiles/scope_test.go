@@ -33,6 +33,12 @@ func TestRequiredScopesReadVsWrite(t *testing.T) {
 		want       []profiles.Scope
 	}{
 		{
+			name:       "tags list",
+			toolName:   "linode_tags",
+			capability: profiles.CapRead,
+			want:       []profiles.Scope{profiles.ScopeAccountReadOnly},
+		},
+		{
 			name:       "instances list read",
 			toolName:   toolInstancesList,
 			capability: profiles.CapRead,
