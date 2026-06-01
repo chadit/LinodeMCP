@@ -43,8 +43,11 @@ func handleLinodeProfileSecurityQuestionsAnswerRequest(ctx context.Context, requ
 	if IsDryRun(request) {
 		redactedReq := &linode.AnswerProfileSecurityQuestionsRequest{SecurityQuestions: "[redacted]"}
 
-		return RunDryRunPreviewWithBody(ctx, request, cfg, "linode_profile_security_questions_answer", httpMethodPost,
-			profileSecurityQuestionsPath, redactedReq, nil)
+		return RunDryRunPreviewWithBodyDetailed(ctx, request, cfg, "linode_profile_security_questions_answer", httpMethodPost,
+			profileSecurityQuestionsPath, redactedReq, nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return profileSecurityQuestionsAnswerSideEffects(ctx)
+			})
 	}
 
 	if result := RequireConfirm(request, "This submits profile security question answers. Set confirm=true to proceed."); result != nil {

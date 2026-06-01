@@ -220,4 +220,11 @@ func TestLinodeAccountSupportTicketAttachmentCreateToolDryRun(t *testing.T) {
 	bodyPreview, _ := would["body"].(map[string]any)
 	assert.Equal(t, supportTicketAttachmentFile, bodyPreview[supportTicketAttachmentFileParam])
 	assert.Nil(t, body["current_state"], "attachment create has no existing resource to preview")
+
+	sideEffects, _ := body["side_effects"].([]any)
+	require.Len(t, sideEffects, 1, "attachment create surfaces a side effect")
+
+	effect, gotString := sideEffects[0].(string)
+	require.True(t, gotString)
+	assert.Contains(t, effect, "ticket 123", "side effect should name the ticket")
 }

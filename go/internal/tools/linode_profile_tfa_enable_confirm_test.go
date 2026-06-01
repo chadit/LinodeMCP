@@ -105,6 +105,13 @@ func TestLinodeProfileTFAEnableConfirmTool(t *testing.T) {
 		require.True(t, bodyOK, "dry run response should include request body")
 		assert.Equal(t, "123456", wouldBody[keyTFACode])
 		assert.Equal(t, int32(0), calls.Load(), "dry run should not call the POST endpoint")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "confirming 2FA surfaces a side effect")
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, "enabled", "side effect should state 2FA is enabled")
 	})
 
 	t.Run("api error", func(t *testing.T) {

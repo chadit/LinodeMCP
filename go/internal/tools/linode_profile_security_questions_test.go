@@ -163,6 +163,8 @@ func TestLinodeProfileSecurityQuestionsAnswerTool(t *testing.T) {
 		require.True(t, hasBody, "would_execute body should be an object")
 		assert.Equal(t, "[redacted]", bodyValue[keySecurityQuestions])
 		assert.NotContains(t, textContent.Text, profileSecurityQuestionsPayload, "dry-run output must not expose answers")
+		assert.Contains(t, textContent.Text, "side_effects", "dry-run should surface a side effect")
+		assert.Contains(t, textContent.Text, "answers are saved", "side effect should describe the action")
 	})
 
 	t.Run("success", func(t *testing.T) {

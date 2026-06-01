@@ -153,6 +153,9 @@ func TestLinodeTagDeleteTool(t *testing.T) {
 		assert.Contains(t, textContent.Text, "dry_run", "response should identify dry run")
 		assert.Contains(t, textContent.Text, "DELETE", "response should describe planned method")
 		assert.Contains(t, textContent.Text, "/tags/prod%2Fweb", "response should include encoded delete path")
+		assert.Contains(t, textContent.Text, "dependencies", "delete should surface tagged objects as dependencies")
+		assert.Contains(t, textContent.Text, "removed", "tagged objects are untagged, not deleted")
+		assert.Contains(t, textContent.Text, "tagged object", "warning should state the tagged-object count")
 	})
 
 	t.Run("api error", func(t *testing.T) {
@@ -437,6 +440,8 @@ func TestLinodeTagCreateTool(t *testing.T) {
 		assert.Contains(t, textContent.Text, `"method": "POST"`)
 		assert.Contains(t, textContent.Text, `"path": "/tags"`)
 		assert.Contains(t, textContent.Text, tagCreateLabelFixture)
+		assert.Contains(t, textContent.Text, "side_effects")
+		assert.Contains(t, textContent.Text, "new tag")
 	})
 
 	t.Run("api error", func(t *testing.T) {

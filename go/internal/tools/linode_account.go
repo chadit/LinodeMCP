@@ -1910,17 +1910,27 @@ func accountBetasPaginationFromTool(request *mcp.CallToolRequest) (int, int, str
 	return page, pageSize, ""
 }
 
-func handleLinodeProfilePhoneNumberSendRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	body, validationMessage := profilePhoneNumberRequestFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
+// runProfilePhoneAction is the shared path for the phone-number send and
+// verify tools, which post a body to a /profile/phone-number route. It
+// previews with an arg-only side effect, then confirms and runs the caller's
+// client action (which returns an error message or "").
+func runProfilePhoneAction(
+	ctx context.Context,
+	request *mcp.CallToolRequest,
+	cfg *config.Config,
+	toolName, path, confirmMessage, successMessage string,
+	body any,
+	sideEffects func(context.Context) (DryRunDetails, error),
+	execute func(ctx context.Context, client *linode.Client) string,
+) (*mcp.CallToolResult, error) {
 	if IsDryRun(request) {
-		return RunDryRunPreviewWithBody(ctx, request, cfg, "linode_profile_phone_number_send", httpMethodPost, profilePhoneNumberPath, body, nil)
+		return RunDryRunPreviewWithBodyDetailed(ctx, request, cfg, toolName, httpMethodPost, path, body, nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return sideEffects(ctx)
+			})
 	}
 
-	if result := RequireConfirm(request, "This sends a phone number verification code. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, confirmMessage); result != nil {
 		return result, nil
 	}
 
@@ -1929,11 +1939,27 @@ func handleLinodeProfilePhoneNumberSendRequest(ctx context.Context, request *mcp
 		return mcp.NewToolResultError(prepErr.Error()), nil
 	}
 
-	if sendFailureMessage := sendProfilePhoneNumberErrorMessage(ctx, client, body); sendFailureMessage != "" {
-		return mcp.NewToolResultError(sendFailureMessage), nil
+	if failureMessage := execute(ctx, client); failureMessage != "" {
+		return mcp.NewToolResultError(failureMessage), nil
 	}
 
-	return MarshalToolResponse(map[string]any{responseKeyMessage: "Profile phone number verification code sent successfully"})
+	return MarshalToolResponse(map[string]any{responseKeyMessage: successMessage})
+}
+
+func handleLinodeProfilePhoneNumberSendRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	body, validationMessage := profilePhoneNumberRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	return runProfilePhoneAction(ctx, request, cfg,
+		"linode_profile_phone_number_send", profilePhoneNumberPath,
+		"This sends a phone number verification code. Set confirm=true to proceed.",
+		"Profile phone number verification code sent successfully",
+		body, profilePhoneNumberSendSideEffects,
+		func(ctx context.Context, client *linode.Client) string {
+			return sendProfilePhoneNumberErrorMessage(ctx, client, body)
+		})
 }
 
 func sendProfilePhoneNumberErrorMessage(ctx context.Context, client *linode.Client, body *linode.ProfilePhoneNumberRequest) string {
@@ -1995,24 +2021,14 @@ func handleLinodeProfilePhoneNumberVerifyRequest(ctx context.Context, request *m
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	if IsDryRun(request) {
-		return RunDryRunPreviewWithBody(ctx, request, cfg, "linode_profile_phone_number_verify", httpMethodPost, profilePhoneNumberVerifyPath, body, nil)
-	}
-
-	if result := RequireConfirm(request, "This verifies a profile phone number. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	client, prepErr := prepareClient(request, cfg)
-	if prepErr != nil {
-		return mcp.NewToolResultError(prepErr.Error()), nil
-	}
-
-	if verifyFailureMessage := verifyProfilePhoneNumberErrorMessage(ctx, client, body); verifyFailureMessage != "" {
-		return mcp.NewToolResultError(verifyFailureMessage), nil
-	}
-
-	return MarshalToolResponse(map[string]any{responseKeyMessage: "Profile phone number verified successfully"})
+	return runProfilePhoneAction(ctx, request, cfg,
+		"linode_profile_phone_number_verify", profilePhoneNumberVerifyPath,
+		"This verifies a profile phone number. Set confirm=true to proceed.",
+		"Profile phone number verified successfully",
+		body, profilePhoneNumberVerifySideEffects,
+		func(ctx context.Context, client *linode.Client) string {
+			return verifyProfilePhoneNumberErrorMessage(ctx, client, body)
+		})
 }
 
 func verifyProfilePhoneNumberErrorMessage(ctx context.Context, client *linode.Client, body *linode.ProfilePhoneNumberVerifyRequest) string {
@@ -2025,7 +2041,10 @@ func verifyProfilePhoneNumberErrorMessage(ctx context.Context, client *linode.Cl
 
 func handleLinodeProfileTFADisableRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	if IsDryRun(request) {
-		return RunDryRunPreview(ctx, request, cfg, "linode_profile_tfa_disable", httpMethodPost, profileTFADisablePath, nil)
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_profile_tfa_disable", httpMethodPost, profileTFADisablePath, nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return profileTFADisableSideEffects(ctx)
+			})
 	}
 
 	if result := RequireConfirm(request, "This disables two-factor authentication for the profile. Set confirm=true to proceed."); result != nil {
@@ -2059,7 +2078,10 @@ func handleLinodeProfileTFAEnableConfirmRequest(ctx context.Context, request *mc
 	}
 
 	if IsDryRun(request) {
-		return RunDryRunPreviewWithBody(ctx, request, cfg, "linode_profile_tfa_enable_confirm", httpMethodPost, profileTFAEnableConfirmPath, body, nil)
+		return RunDryRunPreviewWithBodyDetailed(ctx, request, cfg, "linode_profile_tfa_enable_confirm", httpMethodPost, profileTFAEnableConfirmPath, body, nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return profileTFAEnableConfirmSideEffects(ctx)
+			})
 	}
 
 	if result := RequireConfirm(request, "This enables two-factor authentication for the profile. Set confirm=true to proceed."); result != nil {
@@ -2858,7 +2880,10 @@ func createAccountPaymentMethod(ctx context.Context, client *linode.Client, req 
 
 func handleLinodeProfileTFAEnableRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	if IsDryRun(request) {
-		return RunDryRunPreview(ctx, request, cfg, "linode_profile_tfa_enable", httpMethodPost, "/profile/tfa-enable", nil)
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_profile_tfa_enable", httpMethodPost, "/profile/tfa-enable", nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return profileTFAEnableSideEffects(ctx)
+			})
 	}
 
 	if result := RequireConfirm(request, "This generates a two-factor authentication secret. Set confirm=true to proceed."); result != nil {
@@ -3901,7 +3926,10 @@ func handleLinodeAccountSupportTicketCreateRequest(ctx context.Context, request 
 	}
 
 	if IsDryRun(request) {
-		return RunDryRunPreviewWithBody(ctx, request, cfg, "linode_account_support_ticket_create", httpMethodPost, supportTicketsPath, createRequest, nil)
+		return RunDryRunPreviewWithBodyDetailed(ctx, request, cfg, "linode_account_support_ticket_create", httpMethodPost, supportTicketsPath, createRequest, nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return supportTicketCreateSideEffects(ctx, request.GetString("summary", ""))
+			})
 	}
 
 	if result := RequireConfirm(request, "This creates a support ticket. Set confirm=true to proceed."); result != nil {
@@ -4008,18 +4036,28 @@ func optionalSupportTicketPositiveID(args map[string]any, field string) (int, st
 	return int(value), ""
 }
 
-func handleLinodeAccountSupportTicketReplyCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	ticketID, createRequest, validationMessage := supportTicketReplyCreateRequestFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	path := fmt.Sprintf("%s/%d/replies", supportTicketsPath, ticketID)
+// runSupportTicketSubresourceCreate is the shared path for the reply and
+// attachment create tools, which post a body to a /support/tickets/{id}/<sub>
+// route. It previews with the ticket-scoped side effect, then confirms and
+// executes via the caller's typed client call.
+func runSupportTicketSubresourceCreate(
+	ctx context.Context,
+	request *mcp.CallToolRequest,
+	cfg *config.Config,
+	toolName, path, confirmMessage, failurePrefix string,
+	ticketID int,
+	body any,
+	sideEffects func(context.Context, int) (DryRunDetails, error),
+	execute func(ctx context.Context, client *linode.Client) (any, error),
+) (*mcp.CallToolResult, error) {
 	if IsDryRun(request) {
-		return RunDryRunPreviewWithBody(ctx, request, cfg, "linode_account_support_ticket_reply_create", httpMethodPost, path, createRequest, nil)
+		return RunDryRunPreviewWithBodyDetailed(ctx, request, cfg, toolName, httpMethodPost, path, body, nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return sideEffects(ctx, ticketID)
+			})
 	}
 
-	if result := RequireConfirm(request, "This creates a support ticket reply. Set confirm=true to proceed."); result != nil {
+	if result := RequireConfirm(request, confirmMessage); result != nil {
 		return result, nil
 	}
 
@@ -4028,12 +4066,29 @@ func handleLinodeAccountSupportTicketReplyCreateRequest(ctx context.Context, req
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	reply, createFailure := client.CreateSupportTicketReply(ctx, ticketID, createRequest)
+	created, createFailure := execute(ctx, client)
 	if createFailure == nil {
-		return MarshalToolResponse(reply)
+		return MarshalToolResponse(created)
 	}
 
-	return mcp.NewToolResultError("Failed to create support ticket reply: " + createFailure.Error()), nil
+	return mcp.NewToolResultError(failurePrefix + createFailure.Error()), nil
+}
+
+func handleLinodeAccountSupportTicketReplyCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	ticketID, createRequest, validationMessage := supportTicketReplyCreateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	return runSupportTicketSubresourceCreate(ctx, request, cfg,
+		"linode_account_support_ticket_reply_create",
+		fmt.Sprintf("%s/%d/replies", supportTicketsPath, ticketID),
+		"This creates a support ticket reply. Set confirm=true to proceed.",
+		"Failed to create support ticket reply: ",
+		ticketID, createRequest, supportTicketReplyCreateSideEffects,
+		func(ctx context.Context, client *linode.Client) (any, error) {
+			return client.CreateSupportTicketReply(ctx, ticketID, createRequest)
+		})
 }
 
 func supportTicketReplyCreateRequestFromTool(request *mcp.CallToolRequest) (int, *linode.CreateSupportTicketReplyRequest, string) {
@@ -4058,26 +4113,15 @@ func handleLinodeAccountSupportTicketAttachmentCreateRequest(ctx context.Context
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	path := fmt.Sprintf("%s/%d/attachments", supportTicketsPath, ticketID)
-	if IsDryRun(request) {
-		return RunDryRunPreviewWithBody(ctx, request, cfg, "linode_account_support_ticket_attachment_create", httpMethodPost, path, createRequest, nil)
-	}
-
-	if result := RequireConfirm(request, "This creates a support ticket attachment. Set confirm=true to proceed."); result != nil {
-		return result, nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	attachment, createFailure := client.CreateSupportTicketAttachment(ctx, ticketID, createRequest)
-	if createFailure == nil {
-		return MarshalToolResponse(attachment)
-	}
-
-	return mcp.NewToolResultError("Failed to create support ticket attachment: " + createFailure.Error()), nil
+	return runSupportTicketSubresourceCreate(ctx, request, cfg,
+		"linode_account_support_ticket_attachment_create",
+		fmt.Sprintf("%s/%d/attachments", supportTicketsPath, ticketID),
+		"This creates a support ticket attachment. Set confirm=true to proceed.",
+		"Failed to create support ticket attachment: ",
+		ticketID, createRequest, supportTicketAttachmentCreateSideEffects,
+		func(ctx context.Context, client *linode.Client) (any, error) {
+			return client.CreateSupportTicketAttachment(ctx, ticketID, createRequest)
+		})
 }
 
 func supportTicketAttachmentCreateRequestFromTool(request *mcp.CallToolRequest) (int, *linode.CreateSupportTicketAttachmentRequest, string) {
@@ -5901,7 +5945,10 @@ func handleLinodeAccountAgreementsAcknowledgeRequest(ctx context.Context, reques
 	}
 
 	if IsDryRun(request) {
-		return RunDryRunPreview(ctx, request, cfg, "linode_account_agreements_acknowledge", httpMethodPost, accountAgreementsPath, nil)
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_account_agreements_acknowledge", httpMethodPost, accountAgreementsPath, nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return accountAgreementsAcknowledgeSideEffects(ctx)
+			})
 	}
 
 	if result := RequireConfirm(request, "This acknowledges account agreements. Set confirm=true to proceed."); result != nil {

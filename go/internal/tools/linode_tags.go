@@ -88,6 +88,7 @@ func handleLinodeTagDeleteRequest(ctx context.Context, request *mcp.CallToolRequ
 		FetchState: func(ctx context.Context, c *linode.Client) (any, error) {
 			return c.ListTaggedObjects(ctx, tagLabel, 0, 0)
 		},
+		DependencyWalk: tagDeleteDependencyWalk,
 		Execute: func(ctx context.Context, c *linode.Client) error {
 			return c.DeleteTag(ctx, tagLabel)
 		},
@@ -166,7 +167,10 @@ func handleLinodeTagCreateRequest(ctx context.Context, request *mcp.CallToolRequ
 	}
 
 	if IsDryRun(request) {
-		return RunDryRunPreviewWithBody(ctx, request, cfg, "linode_tag_create", httpMethodPost, "/tags", req, nil)
+		return RunDryRunPreviewWithBodyDetailed(ctx, request, cfg, "linode_tag_create", httpMethodPost, "/tags", req, nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return tagCreateSideEffects(ctx, request.GetString("label", ""))
+			})
 	}
 
 	if result := RequireConfirm(request, "This creates a Linode tag. Set confirm=true to proceed."); result != nil {

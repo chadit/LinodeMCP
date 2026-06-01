@@ -536,6 +536,13 @@ func TestLinodeSupportTicketCloseTool(t *testing.T) {
 		require.True(t, ok, "would_execute should be an object")
 		assert.Equal(t, http.MethodPost, would["method"])
 		assert.Equal(t, "/support/tickets/11111/close", would["path"])
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "close surfaces a side effect")
+
+		effect, gotString := sideEffects[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, effect, "11111", "side effect should name the ticket")
 	})
 }
 

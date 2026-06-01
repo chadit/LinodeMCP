@@ -142,7 +142,10 @@ func handleLinodeSupportTicketCloseRequest(ctx context.Context, request *mcp.Cal
 
 	path := supportTicketsPath + "/" + strconv.Itoa(ticketID) + "/close"
 	if IsDryRun(request) {
-		return RunDryRunPreview(ctx, request, cfg, "linode_support_ticket_close", httpMethodPost, path, nil)
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_support_ticket_close", httpMethodPost, path, nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return supportTicketCloseSideEffects(ctx, ticketID)
+			})
 	}
 
 	if result := RequireConfirm(request, "This closes a support ticket. Set confirm=true to proceed."); result != nil {

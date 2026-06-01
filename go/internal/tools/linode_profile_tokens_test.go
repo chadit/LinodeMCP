@@ -294,6 +294,8 @@ func TestLinodeProfileTokenUpdateToolDryRun(t *testing.T) {
 	assert.Contains(t, textContent.Text, "PUT", "dry-run should show method")
 	assert.Contains(t, textContent.Text, "/profile/tokens/12345", "dry-run should show path")
 	assert.Contains(t, textContent.Text, profileTokenLabel, "dry-run should show body")
+	assert.Contains(t, textContent.Text, "side_effects", "dry-run should surface side effects")
+	assert.Contains(t, textContent.Text, "label is set to", "side effect should describe the label change")
 }
 
 func TestLinodeProfileTokenUpdateAPIError(t *testing.T) {

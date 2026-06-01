@@ -2245,6 +2245,8 @@ func TestLinodeProfileTFAEnableTool(t *testing.T) {
 		assert.False(t, result.IsError, "dry run should not be an error result")
 		assertErrorContains(t, result, "dry_run")
 		assertErrorContains(t, result, "/profile/tfa-enable")
+		assertErrorContains(t, result, "side_effects")
+		assertErrorContains(t, result, "must be confirmed")
 		assert.Equal(t, int32(0), calls.Load(), "dry run should not call the POST endpoint")
 	})
 
@@ -2407,6 +2409,9 @@ func TestLinodeProfilePhoneNumberSendTool(t *testing.T) {
 		assert.Equal(t, profilePhoneISOCode, previewBody[keyISOCode])
 		assert.Equal(t, profilePhoneNumber, previewBody[keyPhoneNumber])
 		assert.Equal(t, int32(0), calls.Load(), "dry run should not call the POST endpoint")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "phone-number send surfaces a side effect")
 	})
 
 	t.Run("api error", func(t *testing.T) {
@@ -2743,6 +2748,9 @@ func TestLinodeProfilePhoneNumberVerifyTool(t *testing.T) {
 		require.True(t, previewBodyOK, "dry run response should include the request body")
 		assert.Equal(t, profilePhoneOTPCode, previewBody[keyOTPCode])
 		assert.Equal(t, int32(0), calls.Load(), "dry run should not call the POST endpoint")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "phone-number verify surfaces a side effect")
 	})
 
 	t.Run("api error", func(t *testing.T) {

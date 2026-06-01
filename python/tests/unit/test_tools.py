@@ -872,6 +872,8 @@ async def test_handle_linode_account_agreements_acknowledge_dry_run(
     assert body["would_execute"]["method"] == "POST"
     assert body["would_execute"]["path"] == "/account/agreements"
     assert body["current_state"] is None
+    assert len(body["side_effects"]) == 1
+    assert "acknowledged" in body["side_effects"][0]
     mock_client_class.assert_not_called()
 
 
@@ -19740,6 +19742,8 @@ async def test_account_support_ticket_create_dry_run_returns_preview(
     assert body["would_execute"]["method"] == "POST"
     assert body["would_execute"]["path"] == "/support/tickets"
     assert body["current_state"] is None
+    assert len(body["side_effects"]) == 1
+    assert "opened" in body["side_effects"][0]
 
 
 async def test_account_support_ticket_close_dry_run_returns_preview(
@@ -19761,6 +19765,8 @@ async def test_account_support_ticket_close_dry_run_returns_preview(
         assert body["tool"] == "linode_account_support_ticket_close"
         assert body["would_execute"]["method"] == "POST"
         assert body["would_execute"]["path"] == "/support/tickets/42/close"
+        assert len(body["side_effects"]) == 1
+        assert "ticket 42" in body["side_effects"][0]
         mock_client.get_support_ticket.assert_awaited_once_with(42)
         mock_client.close_support_ticket.assert_not_called()
 
@@ -19785,6 +19791,8 @@ async def test_account_support_ticket_reply_create_dry_run_returns_preview(
         assert body["tool"] == "linode_account_support_ticket_reply_create"
         assert body["would_execute"]["method"] == "POST"
         assert body["would_execute"]["path"] == "/support/tickets/42/replies"
+        assert len(body["side_effects"]) == 1
+        assert "ticket 42" in body["side_effects"][0]
         mock_client.get_support_ticket.assert_awaited_once_with(42)
         mock_client.create_support_ticket_reply.assert_not_called()
 
@@ -19808,6 +19816,8 @@ async def test_account_support_ticket_attachment_create_dry_run_returns_preview(
         assert body["tool"] == "linode_account_support_ticket_attachment_create"
         assert body["would_execute"]["method"] == "POST"
         assert body["would_execute"]["path"] == "/support/tickets/42/attachments"
+        assert len(body["side_effects"]) == 1
+        assert "ticket 42" in body["side_effects"][0]
         mock_client.get_support_ticket.assert_awaited_once_with(42)
         mock_client.create_support_ticket_attachment.assert_not_called()
 
@@ -19838,6 +19848,7 @@ async def test_profile_preferences_update_dry_run_returns_preview(
         assert body["tool"] == "linode_profile_preferences_update"
         assert body["would_execute"]["method"] == "PUT"
         assert body["would_execute"]["path"] == "/profile/preferences"
+        assert len(body["side_effects"]) == 1
         mock_client.update_profile_preferences.assert_not_called()
 
 
@@ -19852,6 +19863,8 @@ async def test_profile_tfa_enable_dry_run_returns_preview(
     assert body["would_execute"]["path"] == "/profile/tfa-enable"
     assert body["current_state"] is None
     assert "secret" not in str(body["current_state"])
+    assert len(body["side_effects"]) == 1
+    assert "confirmed" in body["side_effects"][0]
 
 
 async def test_profile_tfa_disable_dry_run_returns_preview(
@@ -19863,6 +19876,9 @@ async def test_profile_tfa_disable_dry_run_returns_preview(
     assert body["tool"] == "linode_profile_tfa_disable"
     assert body["would_execute"]["path"] == "/profile/tfa-disable"
     assert body["current_state"] is None
+    assert len(body["side_effects"]) == 1
+    assert len(body["warnings"]) == 1
+    assert "security" in body["warnings"][0]
 
 
 async def test_profile_tfa_enable_confirm_dry_run_returns_preview(
@@ -19875,6 +19891,8 @@ async def test_profile_tfa_enable_confirm_dry_run_returns_preview(
     body = _profile_preview_body(result)
     assert body["tool"] == "linode_profile_tfa_enable_confirm"
     assert body["would_execute"]["path"] == "/profile/tfa-enable-confirm"
+    assert len(body["side_effects"]) == 1
+    assert "enabled" in body["side_effects"][0]
 
 
 async def test_profile_phone_number_send_dry_run_returns_preview(
@@ -19888,6 +19906,8 @@ async def test_profile_phone_number_send_dry_run_returns_preview(
     body = _profile_preview_body(result)
     assert body["tool"] == "linode_profile_phone_number_send"
     assert body["would_execute"]["path"] == "/profile/phone-number"
+    assert len(body["side_effects"]) == 1
+    assert "verification code" in body["side_effects"][0]
 
 
 async def test_profile_phone_number_verify_dry_run_returns_preview(
@@ -19900,6 +19920,8 @@ async def test_profile_phone_number_verify_dry_run_returns_preview(
     body = _profile_preview_body(result)
     assert body["tool"] == "linode_profile_phone_number_verify"
     assert body["would_execute"]["path"] == "/profile/phone-number/verify"
+    assert len(body["side_effects"]) == 1
+    assert "verified" in body["side_effects"][0]
 
 
 async def test_profile_phone_number_delete_dry_run_returns_preview(
@@ -19933,6 +19955,8 @@ async def test_profile_security_questions_answer_dry_run_returns_preview(
     body = _profile_preview_body(result)
     assert body["tool"] == "linode_profile_security_questions_answer"
     assert body["would_execute"]["path"] == "/profile/security-questions"
+    assert len(body["side_effects"]) == 1
+    assert "answers are saved" in body["side_effects"][0]
 
 
 async def test_profile_token_create_dry_run_returns_preview(
@@ -19948,6 +19972,10 @@ async def test_profile_token_create_dry_run_returns_preview(
     assert body["would_execute"]["path"] == "/profile/tokens"
     assert body["current_state"] is None
     assert "token" not in str(body["current_state"])
+    assert len(body["side_effects"]) == 1
+    assert "ci" in body["side_effects"][0]
+    assert len(body["warnings"]) == 1
+    assert "once" in body["warnings"][0]
 
 
 async def test_profile_token_update_dry_run_returns_preview(
@@ -19969,6 +19997,8 @@ async def test_profile_token_update_dry_run_returns_preview(
         assert body["tool"] == "linode_profile_token_update"
         assert body["would_execute"]["method"] == "PUT"
         assert body["would_execute"]["path"] == "/profile/tokens/9"
+        assert len(body["side_effects"]) == 1
+        assert "renamed" in body["side_effects"][0]
         mock_client.get_profile_token.assert_awaited_once_with(9)
         mock_client.update_profile_token.assert_not_called()
 

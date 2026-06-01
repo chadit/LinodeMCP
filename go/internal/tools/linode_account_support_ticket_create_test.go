@@ -317,4 +317,11 @@ func TestLinodeAccountSupportTicketCreateToolDryRun(t *testing.T) {
 	assert.InDelta(t, float64(12345), bodyPreview[keySupportTicketLinodeID], 0)
 	assert.Equal(t, supportTicketSeverity, bodyPreview["severity"])
 	assert.Nil(t, body["current_state"], "create has no existing resource to preview")
+
+	sideEffects, _ := body["side_effects"].([]any)
+	require.Len(t, sideEffects, 1, "create surfaces the new-ticket side effect")
+
+	effect, gotString := sideEffects[0].(string)
+	require.True(t, gotString)
+	assert.Contains(t, effect, supportTicketCreateSummary, "side effect should name the ticket summary")
 }

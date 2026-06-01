@@ -105,49 +105,6 @@ func TestLinodeProfileTokenCreateTool(t *testing.T) {
 		assert.Contains(t, textContent.Text, profileTokenSecretFixture, "response should contain token value")
 	})
 
-	t.Run("dry run previews body without client call", func(t *testing.T) {
-		t.Parallel()
-
-		var requestCount atomic.Int32
-
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			requestCount.Add(1)
-			w.WriteHeader(http.StatusInternalServerError)
-		}))
-		defer srv.Close()
-
-		cfg := profileTokenTestConfig(srv.URL)
-		_, _, handler := tools.NewLinodeProfileTokenCreateTool(cfg)
-
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-			keyExpiry:               profileTokenExpiryFixture,
-			profileTokenLabelParam:  profileTokenLabelFixture,
-			profileTokenScopesParam: profileTokenScopesFixture,
-			keyDryRun:               true,
-		}))
-
-		require.NoError(t, err, "handler should not return an error")
-		require.NotNil(t, result, "result should not be nil")
-		assert.False(t, result.IsError, "dry run should not be an error result")
-
-		var body map[string]any
-		require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
-		dryRun, dryRunOK := body[keyDryRun].(bool)
-		require.True(t, dryRunOK, "dry_run should be a boolean")
-		assert.True(t, dryRun, "response should be a dry-run preview")
-
-		would, wouldOK := body["would_execute"].(map[string]any)
-		require.True(t, wouldOK, "dry run response should include would_execute")
-		assert.Equal(t, "POST", would["method"])
-		assert.Equal(t, "/profile/tokens", would["path"])
-		wouldBody, bodyOK := would["body"].(map[string]any)
-		require.True(t, bodyOK, "dry run response should include request body")
-		assert.Equal(t, profileTokenExpiryFixture, wouldBody[keyExpiry])
-		assert.Equal(t, profileTokenLabelFixture, wouldBody[profileTokenLabelParam])
-		assert.Equal(t, profileTokenScopesFixture, wouldBody[profileTokenScopesParam])
-		assert.Equal(t, int32(0), requestCount.Load(), "dry run should not call the POST endpoint")
-	})
-
 	t.Run("api error returns tool error", func(t *testing.T) {
 		t.Parallel()
 
@@ -273,4 +230,58 @@ func profileTokenTestConfig(apiURL string) *config.Config {
 			},
 		},
 	}
+}
+
+func TestLinodeProfileTokenCreateToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	cfg := profileTokenTestConfig(srv.URL)
+	_, _, handler := tools.NewLinodeProfileTokenCreateTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyExpiry:               profileTokenExpiryFixture,
+		profileTokenLabelParam:  profileTokenLabelFixture,
+		profileTokenScopesParam: profileTokenScopesFixture,
+		keyDryRun:               true,
+	}))
+
+	require.NoError(t, err, "handler should not return an error")
+	require.NotNil(t, result, "result should not be nil")
+	assert.False(t, result.IsError, "dry run should not be an error result")
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal([]byte(dryRunResultText(t, result)), &body))
+	assert.Equal(t, true, body[keyDryRun], "response should be a dry-run preview")
+
+	would, wouldOK := body["would_execute"].(map[string]any)
+	require.True(t, wouldOK, "dry run response should include would_execute")
+	assert.Equal(t, "POST", would["method"])
+	assert.Equal(t, "/profile/tokens", would["path"])
+
+	wouldBody, bodyOK := would["body"].(map[string]any)
+	require.True(t, bodyOK, "dry run response should include request body")
+	assert.Equal(t, profileTokenLabelFixture, wouldBody[profileTokenLabelParam])
+	assert.Equal(t, int32(0), requestCount.Load(), "dry run should not call the POST endpoint")
+
+	sideEffects, _ := body["side_effects"].([]any)
+	require.Len(t, sideEffects, 1, "token create surfaces a side effect")
+
+	effect, gotString := sideEffects[0].(string)
+	require.True(t, gotString)
+	assert.Contains(t, effect, profileTokenLabelFixture, "side effect should name the token")
+
+	warnings, _ := body["warnings"].([]any)
+	require.Len(t, warnings, 1, "token create warns the secret is shown once")
+
+	warning, gotWarn := warnings[0].(string)
+	require.True(t, gotWarn)
+	assert.Contains(t, warning, "once", "warning should flag the one-time secret")
 }

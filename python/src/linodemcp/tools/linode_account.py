@@ -12,6 +12,7 @@ from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     ENV_PARAM_SCHEMA,
     PARAM_DRY_RUN,
+    DryRunDetails,
     build_dry_run_response,
     error_response,
     execute_dry_run,
@@ -154,6 +155,9 @@ async def handle_linode_account_agreements_acknowledge(
             "POST",
             "/account/agreements",
             None,
+            side_effects=[
+                "The selected account agreements are acknowledged for this account."
+            ],
         )
 
     if arguments.get("confirm") is not True:
@@ -825,12 +829,19 @@ async def handle_linode_account_support_ticket_create(
             _required_string_argument(arguments, "description")
         except (TypeError, ValueError) as exc:
             return error_response(str(exc))
+        summary = arguments.get("summary")
+        effect = (
+            f"A new support ticket {summary!r} will be opened."
+            if summary
+            else "A new support ticket will be opened."
+        )
         return build_dry_run_response(
             "linode_account_support_ticket_create",
             arguments.get("environment", ""),
             "POST",
             "/support/tickets",
             None,
+            side_effects=[effect],
         )
 
     if arguments.get("confirm") is not True:
@@ -1062,6 +1073,9 @@ async def handle_linode_account_support_ticket_close(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_support_ticket(tid)
 
+        async def _walk(_client: RetryableClient, _state: Any) -> DryRunDetails:
+            return {"side_effects": [f"Support ticket {tid} will be closed."]}
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -1069,6 +1083,7 @@ async def handle_linode_account_support_ticket_close(
             "POST",
             f"/support/tickets/{tid}/close",
             _fetch,
+            _walk,
         )
 
     if arguments.get("confirm") is not True:
@@ -1133,6 +1148,11 @@ async def handle_linode_account_support_ticket_reply_create(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_support_ticket(tid)
 
+        async def _walk(_client: RetryableClient, _state: Any) -> DryRunDetails:
+            return {
+                "side_effects": [f"A reply will be posted to support ticket {tid}."]
+            }
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -1140,6 +1160,7 @@ async def handle_linode_account_support_ticket_reply_create(
             "POST",
             f"/support/tickets/{tid}/replies",
             _fetch,
+            _walk,
         )
 
     if arguments.get("confirm") is not True:
@@ -1209,6 +1230,13 @@ async def handle_linode_account_support_ticket_attachment_create(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_support_ticket(tid)
 
+        async def _walk(_client: RetryableClient, _state: Any) -> DryRunDetails:
+            return {
+                "side_effects": [
+                    f"A file attachment will be uploaded to support ticket {tid}."
+                ]
+            }
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -1216,6 +1244,7 @@ async def handle_linode_account_support_ticket_attachment_create(
             "POST",
             f"/support/tickets/{tid}/attachments",
             _fetch,
+            _walk,
         )
 
     if arguments.get("confirm") is not True:

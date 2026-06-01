@@ -1320,6 +1320,298 @@ func placementGroupMembershipSideEffects(ctx context.Context, linodes []int, gro
 	return details, nil
 }
 
+// profileTokenCreateSideEffects is the Tier B preview for
+// linode_profile_token_create. It names the token and warns that the secret is
+// shown only once (credential-sensitive; arg-only, no fetch).
+func profileTokenCreateSideEffects(ctx context.Context, label string) (DryRunDetails, error) {
+	var details DryRunDetails
+
+	if err := ctx.Err(); err != nil {
+		return details, fmt.Errorf("profile-token-create side-effect walk canceled: %w", err)
+	}
+
+	effect := "A new personal access token will be created."
+	if label != "" {
+		effect = fmt.Sprintf("A new personal access token %q will be created.", label)
+	}
+
+	details.SideEffects = append(details.SideEffects, effect)
+	details.Warnings = append(details.Warnings, "The token secret is returned only once, at creation time.")
+
+	return details, nil
+}
+
+// profileTFADisableSideEffects is the Tier B preview for
+// linode_profile_tfa_disable. Disabling two-factor auth is a security
+// downgrade, so it carries a warning (arg-only, no fetch).
+func profileTFADisableSideEffects(ctx context.Context) (DryRunDetails, error) {
+	var details DryRunDetails
+
+	if err := ctx.Err(); err != nil {
+		return details, fmt.Errorf("profile-tfa-disable side-effect walk canceled: %w", err)
+	}
+
+	details.SideEffects = append(details.SideEffects, "Two-factor authentication is disabled for this profile.")
+	details.Warnings = append(details.Warnings, "Disabling two-factor authentication reduces account security.")
+
+	return details, nil
+}
+
+// profileTFAEnableSideEffects is the Tier B preview for
+// linode_profile_tfa_enable. It generates a 2FA secret that must still be
+// confirmed before 2FA is active (arg-only, no fetch).
+func profileTFAEnableSideEffects(ctx context.Context) (DryRunDetails, error) {
+	var details DryRunDetails
+
+	if err := ctx.Err(); err != nil {
+		return details, fmt.Errorf("profile-tfa-enable side-effect walk canceled: %w", err)
+	}
+
+	details.SideEffects = append(details.SideEffects,
+		"A new two-factor authentication secret is generated; it must be confirmed before two-factor authentication becomes active.")
+
+	return details, nil
+}
+
+// profileTFAEnableConfirmSideEffects is the Tier B preview for
+// linode_profile_tfa_enable_confirm. Confirming the secret turns 2FA on
+// (arg-only, no fetch).
+func profileTFAEnableConfirmSideEffects(ctx context.Context) (DryRunDetails, error) {
+	var details DryRunDetails
+
+	if err := ctx.Err(); err != nil {
+		return details, fmt.Errorf("profile-tfa-enable-confirm side-effect walk canceled: %w", err)
+	}
+
+	details.SideEffects = append(details.SideEffects, "Two-factor authentication is enabled for this profile.")
+
+	return details, nil
+}
+
+// profileTokenUpdateSideEffects is the Tier B preview for
+// linode_profile_token_update. The update tool changes the token's label
+// (arg-only, no fetch).
+func profileTokenUpdateSideEffects(ctx context.Context, label string) (DryRunDetails, error) {
+	var details DryRunDetails
+
+	if err := ctx.Err(); err != nil {
+		return details, fmt.Errorf("profile-token-update side-effect walk canceled: %w", err)
+	}
+
+	effect := "The personal access token is updated."
+	if label != "" {
+		effect = fmt.Sprintf("The personal access token's label is set to %q.", label)
+	}
+
+	details.SideEffects = append(details.SideEffects, effect)
+
+	return details, nil
+}
+
+// tagCreateSideEffects is the Tier B preview for linode_tag_create (arg-only).
+func tagCreateSideEffects(ctx context.Context, label string) (DryRunDetails, error) {
+	var details DryRunDetails
+
+	if err := ctx.Err(); err != nil {
+		return details, fmt.Errorf("tag-create side-effect walk canceled: %w", err)
+	}
+
+	effect := "A new tag will be created."
+	if label != "" {
+		effect = fmt.Sprintf("A new tag %q will be created.", label)
+	}
+
+	details.SideEffects = append(details.SideEffects, effect)
+
+	return details, nil
+}
+
+// supportTicketCreateSideEffects is the Tier B preview for
+// linode_account_support_ticket_create (arg-only).
+func supportTicketCreateSideEffects(ctx context.Context, summary string) (DryRunDetails, error) {
+	var details DryRunDetails
+
+	if err := ctx.Err(); err != nil {
+		return details, fmt.Errorf("support-ticket-create side-effect walk canceled: %w", err)
+	}
+
+	effect := "A new support ticket will be opened."
+	if summary != "" {
+		effect = fmt.Sprintf("A new support ticket %q will be opened.", summary)
+	}
+
+	details.SideEffects = append(details.SideEffects, effect)
+
+	return details, nil
+}
+
+// supportTicketReplyCreateSideEffects is the Tier B preview for
+// linode_account_support_ticket_reply_create (arg-only).
+func supportTicketReplyCreateSideEffects(ctx context.Context, ticketID int) (DryRunDetails, error) {
+	var details DryRunDetails
+
+	if err := ctx.Err(); err != nil {
+		return details, fmt.Errorf("support-ticket-reply-create side-effect walk canceled: %w", err)
+	}
+
+	details.SideEffects = append(details.SideEffects,
+		fmt.Sprintf("A reply will be posted to support ticket %d.", ticketID))
+
+	return details, nil
+}
+
+// supportTicketAttachmentCreateSideEffects is the Tier B preview for
+// linode_account_support_ticket_attachment_create (arg-only).
+func supportTicketAttachmentCreateSideEffects(ctx context.Context, ticketID int) (DryRunDetails, error) {
+	var details DryRunDetails
+
+	if err := ctx.Err(); err != nil {
+		return details, fmt.Errorf("support-ticket-attachment-create side-effect walk canceled: %w", err)
+	}
+
+	details.SideEffects = append(details.SideEffects,
+		fmt.Sprintf("A file attachment will be uploaded to support ticket %d.", ticketID))
+
+	return details, nil
+}
+
+// supportTicketCloseSideEffects is the Tier B preview for
+// linode_support_ticket_close (arg-only).
+func supportTicketCloseSideEffects(ctx context.Context, ticketID int) (DryRunDetails, error) {
+	var details DryRunDetails
+
+	if err := ctx.Err(); err != nil {
+		return details, fmt.Errorf("support-ticket-close side-effect walk canceled: %w", err)
+	}
+
+	details.SideEffects = append(details.SideEffects,
+		fmt.Sprintf("Support ticket %d will be closed.", ticketID))
+
+	return details, nil
+}
+
+// profilePreferencesUpdateSideEffects is the Tier B preview for
+// linode_profile_preferences_update (arg-only).
+func profilePreferencesUpdateSideEffects(ctx context.Context) (DryRunDetails, error) {
+	var details DryRunDetails
+
+	if err := ctx.Err(); err != nil {
+		return details, fmt.Errorf("profile-preferences-update side-effect walk canceled: %w", err)
+	}
+
+	details.SideEffects = append(details.SideEffects,
+		"The OAuth client's profile preferences are replaced with the supplied values.")
+
+	return details, nil
+}
+
+// profileSecurityQuestionsAnswerSideEffects is the Tier B preview for
+// linode_profile_security_questions_answer. The answers are security material,
+// so the side effect describes the action without echoing them (arg-only).
+func profileSecurityQuestionsAnswerSideEffects(ctx context.Context) (DryRunDetails, error) {
+	var details DryRunDetails
+
+	if err := ctx.Err(); err != nil {
+		return details, fmt.Errorf("profile-security-questions-answer side-effect walk canceled: %w", err)
+	}
+
+	details.SideEffects = append(details.SideEffects,
+		"The profile's security question answers are saved.")
+
+	return details, nil
+}
+
+// accountAgreementsAcknowledgeSideEffects is the Tier B preview for
+// linode_account_agreements_acknowledge (arg-only).
+func accountAgreementsAcknowledgeSideEffects(ctx context.Context) (DryRunDetails, error) {
+	var details DryRunDetails
+
+	if err := ctx.Err(); err != nil {
+		return details, fmt.Errorf("account-agreements-acknowledge side-effect walk canceled: %w", err)
+	}
+
+	details.SideEffects = append(details.SideEffects,
+		"The selected account agreements are acknowledged for this account.")
+
+	return details, nil
+}
+
+// profilePhoneNumberSendSideEffects is the Tier B preview for
+// linode_profile_phone_number_send. The phone number is PII, so the side
+// effect avoids echoing it (arg-only).
+func profilePhoneNumberSendSideEffects(ctx context.Context) (DryRunDetails, error) {
+	var details DryRunDetails
+
+	if err := ctx.Err(); err != nil {
+		return details, fmt.Errorf("profile-phone-number-send side-effect walk canceled: %w", err)
+	}
+
+	details.SideEffects = append(details.SideEffects,
+		"A verification code is sent to the supplied phone number.")
+
+	return details, nil
+}
+
+// profilePhoneNumberVerifySideEffects is the Tier B preview for
+// linode_profile_phone_number_verify (arg-only).
+func profilePhoneNumberVerifySideEffects(ctx context.Context) (DryRunDetails, error) {
+	var details DryRunDetails
+
+	if err := ctx.Err(); err != nil {
+		return details, fmt.Errorf("profile-phone-number-verify side-effect walk canceled: %w", err)
+	}
+
+	details.SideEffects = append(details.SideEffects,
+		"The phone number is verified and added to the profile.")
+
+	return details, nil
+}
+
+// tagDeleteDependencyWalk is the Tier A walk for linode_tag_delete. Deleting a
+// tag removes it from every object that carries it; those objects are not
+// deleted, so each is surfaced as a "removed" dependency. State-only: the
+// tagged objects come from the destroy FetchState (ListTaggedObjects).
+func tagDeleteDependencyWalk(ctx context.Context, _ *linode.Client, state any) (DryRunDetails, error) {
+	var details DryRunDetails
+
+	if err := ctx.Err(); err != nil {
+		return details, fmt.Errorf("tag-delete dependency walk canceled: %w", err)
+	}
+
+	resp, ok := state.(*linode.PaginatedResponse[linode.TaggedObject])
+	if !ok || resp == nil {
+		return details, nil
+	}
+
+	for i := range resp.Data {
+		object := resp.Data[i]
+
+		kind, _ := object["type"].(string)
+		if kind == "" {
+			kind = "resource"
+		}
+
+		dependency := DryRunDependency{
+			Kind:   kind,
+			Action: dependencyActionRemoved,
+			Note:   "Loses this tag; the resource itself is not deleted.",
+		}
+
+		if data, dataOK := object["data"].(map[string]any); dataOK {
+			dependency.ID = data["id"]
+		}
+
+		details.Dependencies = append(details.Dependencies, dependency)
+	}
+
+	if len(resp.Data) > 0 {
+		details.Warnings = append(details.Warnings, fmt.Sprintf(
+			"Deleting this tag removes it from %d tagged object(s); the objects are not deleted.", len(resp.Data)))
+	}
+
+	return details, nil
+}
+
 // placementGroupDeleteDependencyWalk is the Tier A walk for
 // linode_placement_group_delete. Deleting a placement group detaches its
 // member Linodes; the instances themselves are not deleted, so each member is

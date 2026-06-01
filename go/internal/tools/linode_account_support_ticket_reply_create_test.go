@@ -217,4 +217,11 @@ func TestLinodeAccountSupportTicketReplyCreateToolDryRun(t *testing.T) {
 	assert.Equal(t, "/support/tickets/123/replies", would["path"])
 	bodyPreview, _ := would["body"].(map[string]any)
 	assert.Equal(t, supportTicketReplyDescription, bodyPreview[keyDescription])
+
+	sideEffects, _ := body["side_effects"].([]any)
+	require.Len(t, sideEffects, 1, "reply create surfaces a side effect")
+
+	effect, gotString := sideEffects[0].(string)
+	require.True(t, gotString)
+	assert.Contains(t, effect, "ticket 123", "side effect should name the ticket")
 }

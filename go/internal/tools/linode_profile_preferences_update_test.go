@@ -101,6 +101,9 @@ func TestLinodeProfilePreferencesUpdateTool(t *testing.T) {
 		require.True(t, previewBodyOK, "dry run response should include the request body")
 		assert.Equal(t, profilePreferenceValueDark, previewBody[profilePreferenceKeyTheme], "dry run body should include preference fields")
 		assert.Equal(t, int32(0), calls.Load(), "dry run should not call the PUT endpoint")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "preferences update surfaces a side effect")
 	})
 
 	t.Run("api error", func(t *testing.T) {

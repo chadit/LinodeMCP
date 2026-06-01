@@ -84,7 +84,10 @@ func handleLinodeProfilePreferencesUpdateRequest(ctx context.Context, request *m
 	}
 
 	if IsDryRun(request) {
-		return RunDryRunPreviewWithBody(ctx, request, cfg, "linode_profile_preferences_update", httpMethodPut, "/profile/preferences", body, nil)
+		return RunDryRunPreviewWithBodyDetailed(ctx, request, cfg, "linode_profile_preferences_update", httpMethodPut, "/profile/preferences", body, nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return profilePreferencesUpdateSideEffects(ctx)
+			})
 	}
 
 	if result := RequireConfirm(request, "This updates profile preferences. Set confirm=true to proceed."); result != nil {
@@ -200,7 +203,10 @@ func handleLinodeProfileTokenCreateRequest(ctx context.Context, request *mcp.Cal
 	}
 
 	if IsDryRun(request) {
-		return RunDryRunPreviewWithBody(ctx, request, cfg, "linode_profile_token_create", httpMethodPost, profileTokensPath, body, nil)
+		return RunDryRunPreviewWithBodyDetailed(ctx, request, cfg, "linode_profile_token_create", httpMethodPost, profileTokensPath, body, nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return profileTokenCreateSideEffects(ctx, request.GetString("label", ""))
+			})
 	}
 
 	if result := RequireConfirm(request, "This creates a personal access token. Set confirm=true to proceed."); result != nil {
@@ -350,7 +356,10 @@ func handleLinodeProfileTokenUpdateRequest(ctx context.Context, request *mcp.Cal
 
 	path := "/profile/tokens/" + tokenIDString
 	if IsDryRun(request) {
-		return RunDryRunPreviewWithBody(ctx, request, cfg, "linode_profile_token_update", httpMethodPut, path, body, nil)
+		return RunDryRunPreviewWithBodyDetailed(ctx, request, cfg, "linode_profile_token_update", httpMethodPut, path, body, nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return profileTokenUpdateSideEffects(ctx, request.GetString("label", ""))
+			})
 	}
 
 	if result := RequireConfirm(request, "This updates a personal access token. Set confirm=true to proceed."); result != nil {

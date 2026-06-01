@@ -11,6 +11,7 @@ from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
     ENV_PARAM_SCHEMA,
     PARAM_DRY_RUN,
+    DryRunDetails,
     build_dry_run_response,
     error_response,
     execute_dry_run,
@@ -140,6 +141,14 @@ async def handle_linode_profile_preferences_update(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_profile_preferences()
 
+        async def _walk(_client: RetryableClient, _state: Any) -> DryRunDetails:
+            return {
+                "side_effects": [
+                    "The OAuth client's profile preferences are replaced with "
+                    "the supplied values."
+                ]
+            }
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -147,6 +156,7 @@ async def handle_linode_profile_preferences_update(
             "PUT",
             "/profile/preferences",
             _fetch,
+            _walk,
         )
 
     preferences_arg = arguments.get("preferences")
@@ -199,6 +209,10 @@ async def handle_linode_profile_tfa_enable(
             "POST",
             "/profile/tfa-enable",
             None,
+            side_effects=[
+                "A new two-factor authentication secret is generated; it must "
+                "be confirmed before two-factor authentication becomes active."
+            ],
         )
 
     if arguments.get("confirm") is not True:
@@ -256,6 +270,8 @@ async def handle_linode_profile_tfa_disable(
             "POST",
             "/profile/tfa-disable",
             None,
+            side_effects=["Two-factor authentication is disabled for this profile."],
+            warnings=["Disabling two-factor authentication reduces account security."],
         )
 
     if arguments.get("confirm") is not True:
@@ -315,6 +331,7 @@ async def handle_linode_profile_tfa_enable_confirm(
             "POST",
             "/profile/tfa-enable-confirm",
             None,
+            side_effects=["Two-factor authentication is enabled for this profile."],
         )
 
     tfa_code = arguments.get("tfa_code")
@@ -414,6 +431,7 @@ async def handle_linode_profile_phone_number_send(
             "POST",
             "/profile/phone-number",
             None,
+            side_effects=["A verification code is sent to the supplied phone number."],
         )
 
     parsed = _parse_phone_send(arguments)
@@ -475,6 +493,7 @@ async def handle_linode_profile_phone_number_verify(
             "POST",
             "/profile/phone-number/verify",
             None,
+            side_effects=["The phone number is verified and added to the profile."],
         )
 
     otp_code = arguments.get("otp_code")
@@ -624,6 +643,7 @@ async def handle_linode_profile_security_questions_answer(
             "POST",
             "/profile/security-questions",
             None,
+            side_effects=["The profile's security question answers are saved."],
         )
 
     if arguments.get("confirm") is not True:
@@ -709,12 +729,20 @@ async def handle_linode_profile_token_create(
         field_error = _token_create_error(arguments)
         if field_error is not None:
             return field_error
+        label = arguments.get("label")
+        effect = (
+            f"A new personal access token {label!r} will be created."
+            if label
+            else "A new personal access token will be created."
+        )
         return build_dry_run_response(
             "linode_profile_token_create",
             arguments.get("environment", ""),
             "POST",
             "/profile/tokens",
             None,
+            side_effects=[effect],
+            warnings=["The token secret is returned only once, at creation time."],
         )
 
     if arguments.get("confirm") is not True:
@@ -938,6 +966,16 @@ async def handle_linode_profile_token_update(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_profile_token(token_id)
 
+        label = arguments.get("label")
+
+        async def _walk(_client: RetryableClient, _state: Any) -> DryRunDetails:
+            effect = (
+                f"The personal access token's label is set to {label!r}."
+                if label
+                else "The personal access token is updated."
+            )
+            return {"side_effects": [effect]}
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -945,6 +983,7 @@ async def handle_linode_profile_token_update(
             "PUT",
             f"/profile/tokens/{token_id}",
             _fetch,
+            _walk,
         )
 
     parsed_id = _profile_required_id(arguments, "token_id")

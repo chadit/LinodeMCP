@@ -90,6 +90,9 @@ func TestLinodeAccountAgreementsAcknowledgeToolDryRun(t *testing.T) {
 		assert.Equal(t, "POST", would["method"])
 		assert.Equal(t, accountAgreementsTestPath, would["path"])
 		assert.Nil(t, body["current_state"], "no existing resource to preview")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "acknowledge surfaces a side effect")
 	})
 }
 

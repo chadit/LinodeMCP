@@ -91,6 +91,16 @@ func TestLinodeProfileTFADisableTool(t *testing.T) {
 		assert.Equal(t, "POST", would["method"])
 		assert.Equal(t, "/profile/tfa-disable", would["path"])
 		assert.Equal(t, int32(0), calls.Load(), "dry run should not call the POST endpoint")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "disabling 2FA surfaces a side effect")
+
+		warnings, _ := body["warnings"].([]any)
+		require.Len(t, warnings, 1, "disabling 2FA carries a security warning")
+
+		warning, gotString := warnings[0].(string)
+		require.True(t, gotString)
+		assert.Contains(t, warning, "security", "warning should flag the security downgrade")
 	})
 
 	t.Run("api error", func(t *testing.T) {
