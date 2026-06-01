@@ -3714,6 +3714,13 @@ func (c *Client) CreateVolume(ctx context.Context, req *CreateVolumeRequest) (*V
 	return volume, err
 }
 
+// CloneVolume clones an existing volume without automatic retry to avoid replaying resource creation.
+func (c *Client) CloneVolume(ctx context.Context, volumeID int, req CloneVolumeRequest) (*Volume, error) {
+	// CloneVolume intentionally bypasses executeWithRetry because this POST creates a
+	// new volume; replaying a transient failure can create duplicate volumes.
+	return c.httpCloneVolume(ctx, volumeID, req)
+}
+
 // AttachVolume attaches a volume to a Linode with automatic retry on transient failures.
 func (c *Client) AttachVolume(ctx context.Context, volumeID int, req AttachVolumeRequest) (*Volume, error) {
 	var volume *Volume

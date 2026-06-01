@@ -7,6 +7,7 @@ const (
 	toolVolumesList              = "linode_volume_list"
 	toolVolumeTypeList           = "linode_volume_type_list"
 	toolVolumeCreate             = "linode_volume_create"
+	toolVolumeClone              = "linode_volume_clone"
 	toolVolumeDelete             = "linode_volume_delete"
 	toolVolumeResize             = "linode_volume_resize"
 	toolProfile                  = "linode_profile"

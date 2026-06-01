@@ -25,6 +25,7 @@ func loaderCatalog() []profiles.ToolDescriptor {
 		{Name: toolInstanceDelete, Capability: profiles.CapDestroy},
 		{Name: toolVolumesList, Capability: profiles.CapRead},
 		{Name: toolVolumeCreate, Capability: profiles.CapWrite},
+		{Name: toolVolumeClone, Capability: profiles.CapWrite},
 		{Name: toolVolumeDelete, Capability: profiles.CapDestroy},
 		{Name: toolVolumeResize, Capability: profiles.CapWrite},
 	}
@@ -110,7 +111,7 @@ func TestResolveActiveProfileWildcardExpansion(t *testing.T) {
 	require.NoError(t, err)
 	assert.ElementsMatch(
 		t,
-		[]string{toolVolumesList, toolVolumeCreate, toolVolumeDelete, toolVolumeResize},
+		[]string{toolVolumesList, toolVolumeCreate, toolVolumeClone, toolVolumeDelete, toolVolumeResize},
 		got.AllowedTools,
 		"linode_volume_* must expand to every catalog entry with that prefix",
 	)

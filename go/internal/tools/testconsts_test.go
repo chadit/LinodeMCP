@@ -441,6 +441,8 @@ const (
 
 	// Validation error message values.
 	errLabelRequired               = "label is required"
+	errVolumeIDRequired            = "volume_id is required"
+	errVolumeIDPositive            = "volume_id must be a positive integer"
 	errLabelNoSeparators           = "label must not contain"
 	errLabelString                 = "label must be a string"
 	errCredentialIDPositive        = "credential_id must be a positive integer"
@@ -556,6 +558,7 @@ const (
 	caseNotUUID                   = "not_uuid"
 	caseNumeric                   = "numeric"
 	caseMissingLabel              = "missing label"
+	caseMissingVolumeID           = "missing volume id"
 	caseMissingAddress            = "missing address"
 	caseMissingRegion             = "missing region"
 	caseBlankRegion               = "blank region"

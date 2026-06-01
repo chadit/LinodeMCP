@@ -1136,6 +1136,7 @@ func volumeToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeVolumeListTool,
 		tools.NewLinodeVolumeTypeListTool,
 		tools.NewLinodeVolumeCreateTool,
+		tools.NewLinodeVolumeCloneTool,
 		tools.NewLinodeVolumeUpdateTool,
 		tools.NewLinodeVolumeAttachTool,
 		tools.NewLinodeVolumeDetachTool,

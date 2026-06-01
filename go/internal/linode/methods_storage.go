@@ -96,6 +96,28 @@ func (c *Client) httpCreateVolume(ctx context.Context, req *CreateVolumeRequest)
 	return &volume, nil
 }
 
+// CloneVolume clones an existing block storage volume.
+func (c *Client) httpCloneVolume(ctx context.Context, volumeID int, req CloneVolumeRequest) (*Volume, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointVolumes+"/%d/clone", volumeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CloneVolume", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var volume Volume
+	if err := c.handleResponse(resp, &volume); err != nil {
+		return nil, err
+	}
+
+	return &volume, nil
+}
+
 // AttachVolume attaches a volume to a Linode instance.
 func (c *Client) httpAttachVolume(ctx context.Context, volumeID int, req AttachVolumeRequest) (*Volume, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
