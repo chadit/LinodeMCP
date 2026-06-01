@@ -20,6 +20,11 @@ type CreateSupportTicketRequest struct {
 	VPCID            *int    `json:"vpc_id,omitempty"`
 }
 
+// CreateSupportTicketReplyRequest contains the request body for POST /support/tickets/{ticket_id}/replies.
+type CreateSupportTicketReplyRequest struct {
+	Description string `json:"description"`
+}
+
 // SupportTicket represents one support ticket returned by GET /support/tickets.
 type SupportTicket struct {
 	Attachments []SupportTicketAttachment `json:"attachments"`

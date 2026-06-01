@@ -1437,6 +1437,13 @@ func (c *Client) CreateSupportTicketAttachment(ctx context.Context, ticketID int
 	return c.httpCreateSupportTicketAttachment(ctx, ticketID, request)
 }
 
+// CreateSupportTicketReply creates a support ticket reply without retrying the mutating request.
+// Retrying can post duplicate replies after a transient error, so this method
+// delegates exactly once.
+func (c *Client) CreateSupportTicketReply(ctx context.Context, ticketID int, request *CreateSupportTicketReplyRequest) (*SupportTicketReply, error) {
+	return c.httpCreateSupportTicketReply(ctx, ticketID, request)
+}
+
 // CloseSupportTicket closes a support ticket without retrying the mutating request.
 // Retrying can replay ticket state changes after a transient error, so this
 // method delegates exactly once.

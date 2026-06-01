@@ -73,6 +73,28 @@ func (c *Client) httpCreateSupportTicketAttachment(ctx context.Context, ticketID
 	return &attachment, nil
 }
 
+// httpCreateSupportTicketReply creates a reply for an existing support ticket.
+func (c *Client) httpCreateSupportTicketReply(ctx context.Context, ticketID int, request *CreateSupportTicketReplyRequest) (*SupportTicketReply, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointSupportTickets + "/" + url.PathEscape(strconv.Itoa(ticketID)) + "/replies"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, request)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateSupportTicketReply", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var reply SupportTicketReply
+	if err := c.handleResponse(resp, &reply); err != nil {
+		return nil, err
+	}
+
+	return &reply, nil
+}
+
 // httpListSupportTickets retrieves support tickets.
 
 func (c *Client) httpListSupportTickets(ctx context.Context, page, pageSize int) (*PaginatedResponse[SupportTicket], error) {

@@ -25,6 +25,8 @@ const (
 	errSupportTicketID         = "ticket_id must be a positive integer"
 	errSupportTicketIDRequired = "ticket_id is required"
 	caseFractionalTicketID     = "fractional ticket id"
+	caseMissingTicketID        = "missing ticket id"
+	caseZeroTicketID           = "zero ticket id"
 )
 
 // End-to-end verification of support ticket listing.
@@ -442,9 +444,9 @@ func TestLinodeSupportTicketCloseTool(t *testing.T) {
 			name string
 			args map[string]any
 		}{
-			{name: "missing ticket id", args: map[string]any{keyConfirm: true}},
-			{name: "zero ticket id", args: map[string]any{supportTicketIDKey: float64(0), keyConfirm: true}},
-			{name: "fractional ticket id", args: map[string]any{supportTicketIDKey: float64(1.5), keyConfirm: true}},
+			{name: caseMissingTicketID, args: map[string]any{keyConfirm: true}},
+			{name: caseZeroTicketID, args: map[string]any{supportTicketIDKey: float64(0), keyConfirm: true}},
+			{name: caseFractionalTicketID, args: map[string]any{supportTicketIDKey: float64(1.5), keyConfirm: true}},
 			{name: "string ticket id", args: map[string]any{supportTicketIDKey: "11111", keyConfirm: true}},
 			{name: "slash ticket id", args: map[string]any{supportTicketIDKey: "11/111", keyConfirm: true}},
 			{name: "query ticket id", args: map[string]any{supportTicketIDKey: "11111?x=1", keyConfirm: true}},
