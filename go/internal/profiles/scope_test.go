@@ -140,6 +140,12 @@ func TestRequiredScopesReadVsWrite(t *testing.T) {
 			capability: profiles.CapRead,
 			want:       []profiles.Scope{profiles.ScopeAccountReadOnly},
 		},
+		{
+			name:       "profile devices read",
+			toolName:   "linode_profile_devices",
+			capability: profiles.CapRead,
+			want:       []profiles.Scope{profiles.ScopeAccountReadOnly},
+		},
 	}
 
 	for _, tc := range tests {
