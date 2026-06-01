@@ -20,6 +20,7 @@ const (
 	endpointProfileLogins                = "/profile/logins"
 	endpointProfileApps                  = "/profile/apps"
 	endpointProfileDevices               = "/profile/devices"
+	endpointProfileTFADisable            = "/profile/tfa-disable"
 	endpointAccount                      = "/account"
 	endpointAccountTransfer              = "/account/transfer"
 	endpointAccountSettings              = "/account/settings"
@@ -145,6 +146,25 @@ func (c *Client) httpVerifyProfilePhoneNumber(ctx context.Context, req *ProfileP
 	resp, err := c.makeRequest(ctx, http.MethodPost, endpointProfilePhoneNumberVerify, req)
 	if err != nil {
 		return &NetworkError{Operation: "VerifyProfilePhoneNumber", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	if err := c.handleResponse(resp, nil); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// httpDisableProfileTFA disables two-factor authentication for the profile.
+func (c *Client) httpDisableProfileTFA(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointProfileTFADisable, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DisableProfileTFA", Err: err}
 	}
 
 	defer drainClose(resp)
