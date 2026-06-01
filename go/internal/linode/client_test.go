@@ -968,6 +968,92 @@ func TestClientGetInstanceServerError(t *testing.T) {
 	assert.Equal(t, 500, apiErr.StatusCode, "status code should be 500 internal server error")
 }
 
+// TestClientListProfileSecurityQuestionsSuccess verifies ListProfileSecurityQuestions sends a GET request to /profile/security-questions.
+func TestClientListProfileSecurityQuestionsSuccess(t *testing.T) {
+	t.Parallel()
+
+	questions := linode.ProfileSecurityQuestions{
+		"security_questions": []map[string]any{{keyID: float64(1), "question": "What is your favorite color?"}},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/profile/security-questions", r.URL.Path, "request path should be /profile/security-questions")
+		assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"), "authorization header should use bearer token")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(questions), "encoding profile security questions response should not fail")
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.ListProfileSecurityQuestions(t.Context())
+
+	require.NoError(t, err, "ListProfileSecurityQuestions should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	items, ok := (*result)["security_questions"].([]any)
+	require.True(t, ok, "security_questions should decode as a JSON array")
+	require.Len(t, items, 1)
+	item, ok := items[0].(map[string]any)
+	require.True(t, ok, "security question entry should decode as an object")
+	assert.Equal(t, "What is your favorite color?", item["question"])
+}
+
+// TestClientListProfileSecurityQuestionsAPIError verifies ListProfileSecurityQuestions propagates API errors.
+func TestClientListProfileSecurityQuestionsAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/profile/security-questions", r.URL.Path, "request path should be /profile/security-questions")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.ListProfileSecurityQuestions(t.Context())
+
+	require.Error(t, err, "ListProfileSecurityQuestions should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+// TestClientListProfileSecurityQuestionsRetriesTransientError verifies the read-only list retries transient failures.
+func TestClientListProfileSecurityQuestionsRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/profile/security-questions", r.URL.Path, "request path should be /profile/security-questions")
+
+		if attempts.Add(1) == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errTemporaryFailure}}}))
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.ProfileSecurityQuestions{"security_questions": []map[string]any{{keyID: float64(1)}}}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	result, err := client.ListProfileSecurityQuestions(t.Context())
+
+	require.NoError(t, err, "ListProfileSecurityQuestions should succeed after retry")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, int32(2), attempts.Load(), "read-only list should retry one transient failure")
+}
+
 // TestClientListProfileDevicesSuccess verifies ListProfileDevices sends a GET request to /profile/devices.
 func TestClientListProfileDevicesSuccess(t *testing.T) {
 	t.Parallel()
