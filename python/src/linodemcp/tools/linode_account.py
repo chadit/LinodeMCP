@@ -61,6 +61,29 @@ async def handle_linode_account(
     return await execute_tool(cfg, arguments, "retrieve Linode account", _call)
 
 
+def create_linode_account_agreements_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_agreements_list tool."""
+    return Tool(
+        name="linode_account_agreements_list",
+        description="Lists agreements on the Linode account.",
+        inputSchema={
+            "type": "object",
+            "properties": ENV_PARAM_SCHEMA,
+        },
+    ), Capability.Read
+
+
+async def handle_linode_account_agreements_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_agreements_list tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_account_agreements()
+
+    return await execute_tool(cfg, arguments, "list Linode account agreements", _call)
+
+
 def create_linode_account_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_update tool."""
     return Tool(
