@@ -155,6 +155,109 @@ func TestClientListSupportTicketsSuccess(t *testing.T) {
 	assert.Equal(t, "instance", result.Data[0].Entity.Type)
 }
 
+// TestClientListSupportTicketRepliesSuccess verifies ListSupportTicketReplies sends a GET
+// request to /support/tickets/{ticket_id}/replies with pagination query parameters.
+func TestClientListSupportTicketRepliesSuccess(t *testing.T) {
+	t.Parallel()
+
+	replies := linode.PaginatedResponse[linode.SupportTicketReply]{
+		Data: []linode.SupportTicketReply{{
+			ID:          22222,
+			Description: "We are investigating this ticket.",
+			CreatedBy:   supportTicketLookupOpenedBy,
+		}},
+		Page:    2,
+		Pages:   3,
+		Results: 75,
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/support/tickets/11111/replies", r.URL.Path, "request path should include ticket ID and replies")
+		assert.Equal(t, "page=2&page_size=25", r.URL.RawQuery, "request query should include pagination")
+		assert.Equal(t, "Bearer my-token", r.Header.Get("Authorization"))
+
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(replies))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	result, err := client.ListSupportTicketReplies(t.Context(), 11111, 2, 25)
+
+	require.NoError(t, err, "ListSupportTicketReplies should succeed on 200 response")
+	require.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, 2, result.Page)
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, 22222, result.Data[0].ID)
+	assert.Equal(t, "We are investigating this ticket.", result.Data[0].Description)
+}
+
+// TestClientListSupportTicketRepliesAPIError verifies ListSupportTicketReplies propagates API errors.
+func TestClientListSupportTicketRepliesAPIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/support/tickets/11111/replies", r.URL.Path, "request path should include ticket ID and replies")
+		assert.Empty(t, r.URL.RawQuery, "omitted pagination should not include query parameters")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
+		assert.NoError(t, writeErr)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.ListSupportTicketReplies(t.Context(), 11111, 0, 0)
+
+	require.Error(t, err, "ListSupportTicketReplies should fail on 403 response")
+
+	var apiErr *linode.APIError
+	require.ErrorAs(t, err, &apiErr, "error should wrap APIError")
+	require.NotNil(t, apiErr, "APIError should be present")
+	assert.Equal(t, http.StatusForbidden, apiErr.StatusCode)
+	assert.Equal(t, errForbidden, apiErr.Message)
+}
+
+// TestClientListSupportTicketRepliesRetriesTransientError verifies the read-only list retries transient failures.
+func TestClientListSupportTicketRepliesRetriesTransientError(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := requestCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, writeErr := w.Write([]byte(`{"errors":[{"reason":"server error"}]}`))
+			assert.NoError(t, writeErr)
+
+			return
+		}
+
+		assert.Equal(t, http.MethodGet, r.Method, "request method should be GET")
+		assert.Equal(t, "/support/tickets/11111/replies", r.URL.Path, "request path should include ticket ID and replies")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.SupportTicketReply]{
+			Data: []linode.SupportTicketReply{{ID: 22222, Description: "We are investigating this ticket."}},
+		}))
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
+
+	result, err := client.ListSupportTicketReplies(t.Context(), 11111, 0, 0)
+
+	require.NoError(t, err, "ListSupportTicketReplies should succeed after retry")
+	require.NotNil(t, result, "result should not be nil")
+	require.Len(t, result.Data, 1)
+	assert.Equal(t, 22222, result.Data[0].ID)
+	assert.Equal(t, int32(2), requestCount.Load(), "should retry once then succeed")
+}
+
 // TestClientListSupportTicketsAPIError verifies ListSupportTickets propagates API errors.
 func TestClientListSupportTicketsAPIError(t *testing.T) {
 	t.Parallel()

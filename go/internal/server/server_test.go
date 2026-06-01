@@ -272,6 +272,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_account_oauth_client_reset_secret":              profiles.CapAdmin,
 		"linode_account_events":                                 profiles.CapRead,
 		"linode_support_ticket_get":                             profiles.CapRead,
+		"linode_support_ticket_replies":                         profiles.CapRead,
 		"linode_support_tickets":                                profiles.CapRead,
 		"linode_support_ticket_close":                           profiles.CapWrite,
 		"linode_account_users":                                  profiles.CapRead,

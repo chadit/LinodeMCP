@@ -110,3 +110,26 @@ func (c *Client) httpCloseSupportTicket(ctx context.Context, ticketID int) error
 
 	return c.handleResponse(resp, nil)
 }
+
+// httpListSupportTicketReplies retrieves replies for a support ticket.
+func (c *Client) httpListSupportTicketReplies(ctx context.Context, ticketID, page, pageSize int) (*PaginatedResponse[SupportTicketReply], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointSupportTickets + "/" + url.PathEscape(strconv.Itoa(ticketID)) + "/replies"
+	endpoint = withPaginationQuery(endpoint, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListSupportTicketReplies", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all list methods use this pattern
+
+	var replies PaginatedResponse[SupportTicketReply]
+	if err := c.handleResponse(resp, &replies); err != nil {
+		return nil, err
+	}
+
+	return &replies, nil
+}

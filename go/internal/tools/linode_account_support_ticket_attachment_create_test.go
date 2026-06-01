@@ -160,7 +160,7 @@ func TestLinodeAccountSupportTicketAttachmentCreateToolRejectsInvalidInput(t *te
 		args        map[string]any
 		wantMessage string
 	}{
-		{name: "missing ticket id", args: map[string]any{supportTicketAttachmentFileParam: supportTicketAttachmentFile, keyConfirm: true}, wantMessage: "ticket_id is required"},
+		{name: "missing ticket id", args: map[string]any{supportTicketAttachmentFileParam: supportTicketAttachmentFile, keyConfirm: true}, wantMessage: errSupportTicketIDRequired},
 		{name: "zero ticket id", args: map[string]any{supportTicketAttachmentTicketID: float64(0), supportTicketAttachmentFileParam: supportTicketAttachmentFile, keyConfirm: true}, wantMessage: errSupportTicketAttachmentIDPositive},
 		{name: "fractional ticket id", args: map[string]any{supportTicketAttachmentTicketID: float64(1.5), supportTicketAttachmentFileParam: supportTicketAttachmentFile, keyConfirm: true}, wantMessage: errSupportTicketAttachmentIDPositive},
 		{name: "string ticket id separator", args: map[string]any{supportTicketAttachmentTicketID: "123/attachments", supportTicketAttachmentFileParam: supportTicketAttachmentFile, keyConfirm: true}, wantMessage: errSupportTicketAttachmentIDPositive},
