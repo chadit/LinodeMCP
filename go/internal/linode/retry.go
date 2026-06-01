@@ -55,6 +55,11 @@ func (c *Client) SendProfilePhoneNumberVerificationCode(ctx context.Context, req
 	return c.httpSendProfilePhoneNumberVerificationCode(ctx, req)
 }
 
+// EnableProfileTFA generates a two-factor authentication secret without retrying the non-idempotent POST.
+func (c *Client) EnableProfileTFA(ctx context.Context) (ProfileTFAEnableResponse, error) {
+	return c.httpEnableProfileTFA(ctx)
+}
+
 // DeleteProfilePhoneNumber deletes the profile phone number without retrying the destructive DELETE.
 func (c *Client) DeleteProfilePhoneNumber(ctx context.Context) error {
 	return c.httpDeleteProfilePhoneNumber(ctx)

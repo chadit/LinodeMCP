@@ -21,6 +21,9 @@ type ProfileDevice map[string]any
 // ProfileSecurityQuestions represents the response from GET /profile/security-questions.
 type ProfileSecurityQuestions map[string]any
 
+// ProfileTFAEnableResponse represents the response from POST /profile/tfa-enable.
+type ProfileTFAEnableResponse map[string]any
+
 // ProfilePhoneNumberRequest contains fields for POST /profile/phone-number.
 type ProfilePhoneNumberRequest struct {
 	ISOCode     string `json:"iso_code"`

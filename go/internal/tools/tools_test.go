@@ -40,6 +40,7 @@ const (
 	keyID                            = "id"
 	keyStatus                        = "status"
 	keySecret                        = "secret"
+	keyExpiry                        = "expiry"
 	keyClientID                      = "client_id"
 	keyAppID                         = "app_id"
 	keyDeviceID                      = "device_id"
@@ -2168,6 +2169,150 @@ func TestLinodeProfileDevicesTool(t *testing.T) {
 				textContent, ok := result.Content[0].(mcp.TextContent)
 				require.True(t, ok, "content should be TextContent")
 				assert.Contains(t, textContent.Text, testCase.wantMessage, "response should describe validation error")
+			})
+		}
+	})
+}
+
+func TestLinodeProfileTFAEnableTool(t *testing.T) {
+	t.Parallel()
+
+	t.Run("definition", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{}
+		tool, capability, handler := tools.NewLinodeProfileTFAEnableTool(cfg)
+
+		assert.Equal(t, "linode_profile_tfa_enable", tool.Name, "tool name should match")
+		assert.Equal(t, profiles.CapAdmin, capability, "tool should require admin capability")
+		assert.NotEmpty(t, tool.Description, "tool should have a description")
+		require.NotNil(t, handler, "handler should not be nil")
+		assert.Contains(t, tool.InputSchema.Properties, keyConfirm, "secret generation tool must require confirm")
+		assert.Contains(t, tool.InputSchema.Properties, keyDryRun, "secret generation tool should expose dry_run")
+	})
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/profile/tfa-enable", r.URL.Path, "request path should be /profile/tfa-enable")
+			assert.Empty(t, r.URL.RawQuery, "request query should be empty")
+			assert.Equal(t, "Bearer "+tokenTest, r.Header.Get("Authorization"))
+
+			body, readErr := io.ReadAll(r.Body)
+			if !assert.NoError(t, readErr, "request body should be readable") {
+				return
+			}
+
+			assert.Empty(t, string(body), "request body should be empty")
+			w.Header().Set("Content-Type", "application/json")
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keySecret: "JBSWY3DPEHPK3PXP", keyExpiry: "2026-01-01T00:00:00"}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeProfileTFAEnableTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "should not be an error result")
+		assertErrorContains(t, result, "JBSWY3DPEHPK3PXP")
+	})
+
+	t.Run("dry run previews without post", func(t *testing.T) {
+		t.Parallel()
+
+		var calls atomic.Int32
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			calls.Add(1)
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeProfileTFAEnableTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyDryRun: true})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should not return an error")
+		require.NotNil(t, result, "result should not be nil")
+		assert.False(t, result.IsError, "dry run should not be an error result")
+		assertErrorContains(t, result, "dry_run")
+		assertErrorContains(t, result, "/profile/tfa-enable")
+		assert.Equal(t, int32(0), calls.Load(), "dry run should not call the POST endpoint")
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPost, r.Method, "request method should be POST")
+			assert.Equal(t, "/profile/tfa-enable", r.URL.Path, "request path should be /profile/tfa-enable")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}))
+		}))
+		defer srv.Close()
+
+		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+		_, _, handler := tools.NewLinodeProfileTFAEnableTool(cfg)
+		req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
+
+		result, err := handler(t.Context(), req)
+
+		require.NoError(t, err, "handler should return API failures as tool errors")
+		require.NotNil(t, result, "result should not be nil")
+		assert.True(t, result.IsError, "API failure should be an error result")
+		assertErrorContains(t, result, "Failed to generate linode_profile_tfa_enable")
+		assertErrorContains(t, result, errForbidden)
+	})
+
+	t.Run("confirm required before client", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name    string
+			confirm any
+		}{
+			{name: caseMissing},
+			{name: caseFalse, confirm: false},
+			{name: caseString, confirm: boolStringTrue},
+			{name: caseNumericConfirm, confirm: 1},
+		}
+
+		for _, testCase := range cases {
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				var calls atomic.Int32
+
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					calls.Add(1)
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer srv.Close()
+
+				cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+				_, _, handler := tools.NewLinodeProfileTFAEnableTool(cfg)
+
+				args := map[string]any{}
+				if testCase.name != caseMissing {
+					args[keyConfirm] = testCase.confirm
+				}
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, args))
+
+				require.NoError(t, err, "handler should return validation as a tool error")
+				require.NotNil(t, result, "result should not be nil")
+				assert.True(t, result.IsError, "missing or non-true confirm should be an error result")
+				assertErrorContains(t, result, "Set confirm=true to proceed")
+				assert.Equal(t, int32(0), calls.Load(), "confirm rejection should not call the client")
 			})
 		}
 	})
