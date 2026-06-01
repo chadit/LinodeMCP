@@ -14,9 +14,9 @@ const (
 	endpointProfile                      = "/profile"
 	endpointProfilePhoneNumber           = "/profile/phone-number"
 	endpointProfileGrants                = "/profile/grants"
+	endpointProfileLogins                = "/profile/logins"
 	endpointProfileApps                  = "/profile/apps"
 	endpointProfileDevices               = "/profile/devices"
-	endpointProfileLogins                = "/profile/logins"
 	endpointAccount                      = "/account"
 	endpointAccountTransfer              = "/account/transfer"
 	endpointAccountSettings              = "/account/settings"
@@ -89,6 +89,28 @@ func (c *Client) httpSendProfilePhoneNumberVerificationCode(ctx context.Context,
 	}
 
 	return nil
+}
+
+// httpListProfileLogins retrieves login history for the authenticated profile.
+func (c *Client) httpListProfileLogins(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountLogin], error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointProfileLogins, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListProfileLogins", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var logins PaginatedResponse[AccountLogin]
+	if err := c.handleResponse(resp, &logins); err != nil {
+		return nil, err
+	}
+
+	return &logins, nil
 }
 
 // httpListProfileDevices retrieves trusted devices for the authenticated profile.
