@@ -299,6 +299,49 @@ def _optional_int_argument(
     return value
 
 
+def create_linode_account_beta_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_beta_get tool."""
+    return Tool(
+        name="linode_account_beta_get",
+        description="Gets an enrolled Beta program on the Linode account.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "beta_id": {
+                    "type": "string",
+                    "description": "Beta program ID to retrieve",
+                },
+            },
+            "required": ["beta_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_account_beta_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_beta_get tool request."""
+    raw_beta_id = arguments.get("beta_id")
+    if raw_beta_id is None:
+        return error_response("beta_id is required")
+    if not isinstance(raw_beta_id, str):
+        return error_response("beta_id must be a string")
+
+    beta_id = raw_beta_id.strip()
+    if not beta_id:
+        return error_response("beta_id is required")
+    if "/" in beta_id or "?" in beta_id or ".." in beta_id:
+        return error_response("beta_id must not contain '/', '?', or '..'")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_account_beta(beta_id)
+
+    return await execute_tool(
+        cfg, arguments, f"retrieve Linode account beta {beta_id}", _call
+    )
+
+
 def create_linode_account_availability_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_availability_list tool."""
     return Tool(
