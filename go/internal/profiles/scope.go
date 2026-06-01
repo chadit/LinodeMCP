@@ -148,7 +148,7 @@ func RequiredScopes(toolName string, capability Capability) []Scope {
 // being shadowed by a more general linode_instance_ rule.
 func scopeCategory(toolName string) string {
 	switch toolName {
-	case "linode_profile", "linode_profile_phone_number_send", "linode_profile_devices", "linode_account":
+	case "linode_profile", "linode_profile_phone_number_send", "linode_profile_phone_number_delete", "linode_profile_devices", "linode_account":
 		return categoryAccount
 	}
 

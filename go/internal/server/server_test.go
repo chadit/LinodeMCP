@@ -236,6 +236,7 @@ func TestToolDescriptorsIncludesExpectedTools(t *testing.T) {
 		"linode_beta_get":                                       profiles.CapRead,
 		"linode_account_betas":                                  profiles.CapRead,
 		"linode_profile_phone_number_send":                      profiles.CapWrite,
+		"linode_profile_phone_number_delete":                    profiles.CapDestroy,
 		"linode_profile_logins":                                 profiles.CapRead,
 		"linode_profile_devices":                                profiles.CapRead,
 		"linode_profile_login_get":                              profiles.CapRead,
