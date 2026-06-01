@@ -153,6 +153,12 @@ func TestRequiredScopesReadVsWrite(t *testing.T) {
 			want:       []profiles.Scope{profiles.ScopeAccountReadOnly},
 		},
 		{
+			name:       "profile preferences update",
+			toolName:   "linode_profile_preferences_update",
+			capability: profiles.CapWrite,
+			want:       []profiles.Scope{profiles.ScopeAccountReadWrite},
+		},
+		{
 			name:       "profile devices read",
 			toolName:   "linode_profile_devices",
 			capability: profiles.CapRead,

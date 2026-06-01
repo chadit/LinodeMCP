@@ -16,6 +16,7 @@ import (
 const (
 	httpMethodDelete   = "DELETE"
 	httpMethodPost     = "POST"
+	httpMethodPut      = "PUT"
 	responseKeyMessage = "message"
 
 	// destroyConfirmMessage is the generic confirm gate for destroy tools
