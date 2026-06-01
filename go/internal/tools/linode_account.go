@@ -36,10 +36,12 @@ const (
 	profilePhoneNumberParam            = "phone_number"
 	profilePhoneOTPCodeParam           = "otp_code"
 	profileTFACodeParam                = "tfa_code"
+	profileTokenIDParam                = "token_id"
 	profileAppIDMaxFromJSON            = 9007199254740991
 	profileDeviceIDMaxFromJSON         = 9007199254740991
 	errProfileAppIDPositive            = "app_id must be a positive integer"
 	errProfileDeviceIDPositive         = "device_id must be a positive integer"
+	errProfileTokenIDPositive          = "token_id must be a positive integer"
 	longviewClientsPageSizeMin         = 25
 	longviewClientsPageSizeMax         = 500
 	longviewSubscriptionsPageSizeMin   = 25
@@ -467,6 +469,21 @@ func NewLinodeAccountUserGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 			mcp.WithString(accountUserUsernameParam, mcp.Required(), mcp.Description("Account username to retrieve.")),
 		},
 		handleLinodeAccountUserGetRequest,
+	)
+
+	return tool, profiles.CapRead, handler
+}
+
+// NewLinodeProfileTokenGetTool creates a tool for retrieving one personal access token.
+func NewLinodeProfileTokenGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool, handler := newToolWithHandler(
+		cfg,
+		"linode_profile_token_get",
+		"Gets one personal access token by ID.",
+		[]mcp.ToolOption{
+			mcp.WithNumber(profileTokenIDParam, mcp.Required(), mcp.Description("Personal access token ID to retrieve.")),
+		},
+		handleLinodeProfileTokenGetRequest,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -3316,6 +3333,29 @@ func handleLinodeAccountUserGetRequest(ctx context.Context, request *mcp.CallToo
 	}
 
 	return mcp.NewToolResultError("Failed to retrieve linode_account_user_get: " + getFailure.Error()), nil
+}
+
+func handleLinodeProfileTokenGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	tokenID, validationMessage := profileTokenIDFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	client, err := prepareClient(request, cfg)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	token, getFailure := client.GetProfileToken(ctx, tokenID)
+	if getFailure == nil {
+		return MarshalToolResponse(token)
+	}
+
+	return mcp.NewToolResultError("Failed to retrieve linode_profile_token_get: " + getFailure.Error()), nil
+}
+
+func profileTokenIDFromTool(request *mcp.CallToolRequest) (int, string) {
+	return requiredPositiveIntArgument(request, profileTokenIDParam, errProfileTokenIDPositive, errProfileTokenIDPositive)
 }
 
 func handleLinodeAccountUserGrantsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
