@@ -55,6 +55,21 @@ func (c *Client) SendProfilePhoneNumberVerificationCode(ctx context.Context, req
 	return c.httpSendProfilePhoneNumberVerificationCode(ctx, req)
 }
 
+// ListProfileLogins retrieves profile login history with automatic retry on transient failures.
+func (c *Client) ListProfileLogins(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountLogin], error) {
+	var logins *PaginatedResponse[AccountLogin]
+
+	err := c.executeWithRetry(ctx, "ListProfileLogins", func() error {
+		var err error
+
+		logins, err = c.httpListProfileLogins(ctx, page, pageSize)
+
+		return err
+	})
+
+	return logins, err
+}
+
 // ListProfileDevices retrieves trusted devices with automatic retry on transient failures.
 func (c *Client) ListProfileDevices(ctx context.Context, page, pageSize int) (*PaginatedResponse[ProfileDevice], error) {
 	var devices *PaginatedResponse[ProfileDevice]
