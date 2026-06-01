@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -13,7 +14,18 @@ import (
 	"github.com/chadit/LinodeMCP/internal/linode"
 )
 
-const regionAvailabilityPlanStandard = "g6-standard-1"
+const (
+	regionAvailabilityPlanStandard = "g6-standard-1"
+	regionAvailabilityHyphenRegion = "br-gru"
+)
+
+func singleRetryOpts() []linode.Option {
+	return []linode.Option{
+		linode.WithMaxRetries(1),
+		linode.WithBaseDelay(1 * time.Millisecond),
+		linode.WithMaxDelay(1 * time.Millisecond),
+	}
+}
 
 func TestClientListRegionsAvailabilitySuccess(t *testing.T) {
 	t.Parallel()
@@ -69,7 +81,7 @@ func TestClientListRegionsAvailabilityRetriesTransientError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := linode.NewClient(srv.URL, "token", nil, fastRetryOpts()...)
+	client := linode.NewClient(srv.URL, "token", nil, singleRetryOpts()...)
 	result, err := client.ListRegionsAvailability(t.Context())
 
 	require.NoError(t, err, "read-only availability list should succeed after retry")
@@ -126,6 +138,27 @@ func TestClientGetRegionAvailabilitySuccess(t *testing.T) {
 	assert.True(t, result[0].Available)
 }
 
+func TestClientGetRegionAvailabilityValidSlugWithHyphen(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/regions/br-gru/availability", r.URL.Path, "valid region slug should not be double encoded")
+		assert.Empty(t, r.URL.RawQuery, "request should not include query parameters")
+		w.Header().Set("Content-Type", "application/json")
+		assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			keyData: []linode.RegionAvailability{{Region: regionAvailabilityHyphenRegion, Plan: regionAvailabilityPlanStandard, Available: true}},
+		}), "encoding availability response should not fail")
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+	result, err := client.GetRegionAvailability(t.Context(), regionAvailabilityHyphenRegion)
+
+	require.NoError(t, err, "GetRegionAvailability should accept a valid hyphenated region slug")
+	require.Len(t, result, 1, "should return availability entry for the region")
+	assert.Equal(t, regionAvailabilityHyphenRegion, result[0].Region)
+}
+
 func TestClientGetRegionAvailabilityEscapesRegionID(t *testing.T) {
 	t.Parallel()
 
@@ -164,7 +197,7 @@ func TestClientGetRegionAvailabilityRetriesTransientError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := linode.NewClient(srv.URL, "token", nil, fastRetryOpts()...)
+	client := linode.NewClient(srv.URL, "token", nil, singleRetryOpts()...)
 	result, err := client.GetRegionAvailability(t.Context(), managedServiceRegion)
 
 	require.NoError(t, err, "read-only availability lookup should succeed after retry")
