@@ -1358,6 +1358,96 @@ async def test_account_settings_get_dispatches_from_registry(
     mock_client.get_account_settings.assert_awaited_once_with()
 
 
+async def test_account_settings_managed_enable_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Account managed enable tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_settings_managed_enable_tool" in tools_mod.__all__
+    assert "handle_linode_account_settings_managed_enable" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_account_settings_managed_enable_tool()
+    assert capability is Capability.Write
+    assert "confirm" in tool.inputSchema["required"]
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_account_settings_managed_enable" in srv.registered_tool_names
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_account_settings_managed_enable_rejects_non_true_confirm(
+    sample_config: Config,
+    confirm: object,
+) -> None:
+    """Account managed enable requires literal confirm=true before client calls."""
+    arguments: dict[str, object] = {}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_account_settings_managed_enable", arguments)
+
+    assert "Set confirm=true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_account_settings_managed_enable_dry_run_skips_client(
+    sample_config: Config,
+) -> None:
+    """Account managed enable dry run previews without calling the client."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_settings_managed_enable",
+            {"dry_run": True, "confirm": True},
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["would_execute"]["method"] == "POST"
+    assert payload["would_execute"]["path"] == "/account/settings/managed-enable"
+    mock_client_class.assert_not_called()
+
+
+async def test_account_settings_managed_enable_dry_run_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Account managed enable dry run still requires the confirm safety gate."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_settings_managed_enable", {"dry_run": True}
+        )
+
+    assert "Set confirm=true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_account_settings_managed_enable_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Account managed enable is callable through server dispatch."""
+    response_data: dict[str, object] = {"managed": True}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.enable_account_managed.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_settings_managed_enable", {"confirm": True}
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.enable_account_managed.assert_awaited_once_with()
+
+
 async def test_account_maintenance_list_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
