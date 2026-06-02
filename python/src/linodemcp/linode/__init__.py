@@ -2078,6 +2078,19 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("CreateMysqlDatabaseInstance", e) from e
 
+    async def create_postgresql_database_instance(
+        self, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Create or restore a PostgreSQL Managed Database instance."""
+        try:
+            response = await self.make_request(
+                "POST", "/databases/postgresql/instances", payload
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("CreatePostgresqlDatabaseInstance", e) from e
+
     async def delete_mysql_database_instance(
         self, instance_id: int | str
     ) -> dict[str, Any]:
@@ -8273,6 +8286,12 @@ class RetryableClient:
     ) -> dict[str, Any]:
         """Create or restore a MySQL Managed Database once without retry replay."""
         return await self.client.create_mysql_database_instance(payload)
+
+    async def create_postgresql_database_instance(
+        self, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Create or restore a PostgreSQL Managed Database once without retry replay."""
+        return await self.client.create_postgresql_database_instance(payload)
 
     async def delete_mysql_database_instance(
         self, instance_id: int | str
