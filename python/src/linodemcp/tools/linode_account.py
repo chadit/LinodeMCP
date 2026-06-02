@@ -1628,6 +1628,144 @@ async def handle_linode_account_cancel(
     return await execute_tool(cfg, arguments, "cancel Linode account", _call)
 
 
+_ACCOUNT_SETTINGS_BOOLEAN_FIELDS = frozenset(
+    {"backups_enabled", "managed", "network_helper"}
+)
+_ACCOUNT_SETTINGS_STRING_FIELDS = frozenset(
+    {
+        "interfaces_for_new_linodes",
+        "longview_subscription",
+        "maintenance_policy",
+        "object_storage",
+    }
+)
+_ACCOUNT_SETTINGS_UPDATE_FIELDS = tuple(
+    sorted(_ACCOUNT_SETTINGS_BOOLEAN_FIELDS | _ACCOUNT_SETTINGS_STRING_FIELDS)
+)
+_ACCOUNT_SETTINGS_ALLOWED_ARGUMENTS = frozenset(
+    {"environment", "confirm", PARAM_DRY_RUN, *_ACCOUNT_SETTINGS_UPDATE_FIELDS}
+)
+
+
+def create_linode_account_settings_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_settings_update tool."""
+    return Tool(
+        name="linode_account_settings_update",
+        description=(
+            "Updates Linode account-wide settings. "
+            "Pass dry_run=true to preview without updating."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "backups_enabled": {
+                    "type": "boolean",
+                    "description": "Whether backups are enabled by default",
+                },
+                "interfaces_for_new_linodes": {
+                    "type": "string",
+                    "description": "Default interface setting for new Linodes",
+                },
+                "longview_subscription": {
+                    "type": "string",
+                    "description": "Longview subscription tier",
+                },
+                "maintenance_policy": {
+                    "type": "string",
+                    "description": "Account maintenance policy",
+                },
+                "managed": {
+                    "type": "boolean",
+                    "description": "Whether Linode Managed is enabled",
+                },
+                "network_helper": {
+                    "type": "boolean",
+                    "description": "Whether Network Helper is enabled",
+                },
+                "object_storage": {
+                    "type": "string",
+                    "description": "Object Storage account setting",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm this mutating operation. Ignored "
+                        "when dry_run=true."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["confirm"],
+        },
+    ), Capability.Write
+
+
+def _account_settings_update_body_error(arguments: dict[str, Any]) -> str | None:
+    unknown_fields = set(arguments) - _ACCOUNT_SETTINGS_ALLOWED_ARGUMENTS
+    if unknown_fields:
+        fields = ", ".join(sorted(unknown_fields))
+        return f"Unsupported account settings field(s): {fields}"
+
+    for field in _ACCOUNT_SETTINGS_BOOLEAN_FIELDS:
+        value = arguments.get(field)
+        if value is not None and type(value) is not bool:
+            return f"{field} must be a boolean"
+
+    for field in _ACCOUNT_SETTINGS_STRING_FIELDS:
+        value = arguments.get(field)
+        if value is not None and not isinstance(value, str):
+            return f"{field} must be a string"
+
+    return None
+
+
+def _account_settings_update_body(arguments: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: arguments[key]
+        for key in _ACCOUNT_SETTINGS_UPDATE_FIELDS
+        if arguments.get(key) is not None
+    }
+
+
+async def handle_linode_account_settings_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_settings_update tool request."""
+    validation_error = _account_settings_update_body_error(arguments)
+    if validation_error is not None:
+        return error_response(validation_error)
+
+    update_fields = _account_settings_update_body(arguments)
+    if not update_fields:
+        return error_response("At least one account settings field is required")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_account_settings_update",
+            arguments.get("environment", ""),
+            "PUT",
+            "/account/settings",
+            None,
+            request_body=update_fields,
+            side_effects=["Linode account settings are updated."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates account settings. Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.update_account_settings(**update_fields)
+        return {
+            "message": "Account settings updated successfully",
+            "settings": result,
+        }
+
+    return await execute_tool(cfg, arguments, "update Linode account settings", _call)
+
+
 def create_linode_account_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_update tool."""
     return Tool(

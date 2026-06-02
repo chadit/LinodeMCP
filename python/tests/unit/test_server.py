@@ -646,6 +646,163 @@ async def test_firewall_rules_update_tool_is_exported_and_registered(
     assert "linode_firewall_rules_update" in srv.registered_tool_names
 
 
+async def test_account_settings_update_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Account settings update tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_settings_update_tool" in tools_mod.__all__
+    assert "handle_linode_account_settings_update" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_account_settings_update_tool()
+    assert tool.name == "linode_account_settings_update"
+    assert capability is Capability.Write
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert "confirm" in tool.inputSchema["required"]
+    assert "dry_run" in tool.inputSchema["properties"]
+
+    cfg = dataclasses.replace(
+        sample_config,
+        active_profile="account-settings-write",
+        profiles={
+            "account-settings-write": UserProfileConfig(
+                description="account settings write",
+                allowed_tools=("linode_account_settings_update",),
+            ),
+        },
+    )
+    srv = Server(cfg)
+    assert "linode_account_settings_update" in srv.registered_tool_names
+
+
+async def test_account_settings_update_handler_updates_settings(
+    sample_config: Config,
+) -> None:
+    """Account settings update handler returns updated settings."""
+    from linodemcp.tools import handle_linode_account_settings_update
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_account_settings.return_value = {
+            "network_helper": False,
+            "object_storage": "active",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_settings_update(
+            {
+                "network_helper": False,
+                "object_storage": "active",
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["message"] == "Account settings updated successfully"
+    assert payload["settings"] == {
+        "network_helper": False,
+        "object_storage": "active",
+    }
+    mock_client.update_account_settings.assert_awaited_once_with(
+        network_helper=False, object_storage="active"
+    )
+
+
+async def test_account_settings_update_dry_run_previews_without_update(
+    sample_config: Config,
+) -> None:
+    """Dry run previews the settings update without calling the update route."""
+    from linodemcp.tools import handle_linode_account_settings_update
+
+    result = await handle_linode_account_settings_update(
+        {"network_helper": False, "confirm": False, "dry_run": True},
+        sample_config,
+    )
+
+    payload = json.loads(result[0].text)
+    assert payload["tool"] == "linode_account_settings_update"
+    assert payload["would_execute"]["method"] == "PUT"
+    assert payload["would_execute"]["path"] == "/account/settings"
+    assert payload["would_execute"]["body"] == {"network_helper": False}
+    assert payload["side_effects"] == ["Linode account settings are updated."]
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_account_settings_update_requires_boolean_confirm(
+    sample_config: Config, confirm: Any
+) -> None:
+    """Live settings updates require explicit boolean confirm before client call."""
+    from linodemcp.tools import handle_linode_account_settings_update
+
+    arguments = {"network_helper": False}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_settings_update(arguments, sample_config)
+
+    assert "confirm=true" in result[0].text
+    mock_client.update_account_settings.assert_not_called()
+
+
+async def test_account_settings_update_requires_a_field(sample_config: Config) -> None:
+    """Settings update rejects empty route bodies before client calls."""
+    from linodemcp.tools import handle_linode_account_settings_update
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_settings_update(
+            {"confirm": True}, sample_config
+        )
+
+    assert "At least one account settings field" in result[0].text
+    mock_client.update_account_settings.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (
+            {"network_helper": "false", "confirm": True},
+            "network_helper must be a boolean",
+        ),
+        ({"managed": 1, "confirm": True}, "managed must be a boolean"),
+        ({"object_storage": True, "confirm": True}, "object_storage must be a string"),
+        (
+            {"maintenance_policy": 1, "confirm": True},
+            "maintenance_policy must be a string",
+        ),
+        (
+            {"network_helper": False, "extra_setting": "x", "confirm": True},
+            "Unsupported account settings field(s): extra_setting",
+        ),
+    ],
+)
+async def test_account_settings_update_rejects_invalid_fields(
+    sample_config: Config, arguments: dict[str, Any], message: str
+) -> None:
+    """Settings update validates route body fields before client calls."""
+    from linodemcp.tools import handle_linode_account_settings_update
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_settings_update(arguments, sample_config)
+
+    assert message in result[0].text
+    mock_client.update_account_settings.assert_not_called()
+
+
 async def test_firewall_settings_update_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

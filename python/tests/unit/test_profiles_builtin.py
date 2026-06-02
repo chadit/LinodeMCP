@@ -148,7 +148,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_profile_tfa_enable", Capability.Write),
         ToolDescriptor("linode_profile_tfa_enable_confirm", Capability.Write),
         # Admin tool (synthetic). Never selected by any built-in.
-        ToolDescriptor("linode_account_settings_update", Capability.Admin),
+        ToolDescriptor("linode_admin_synthetic", Capability.Admin),
         # Unknown tool (synthetic). Never selected; resolver ignores it.
         ToolDescriptor("linode_undiscovered_thing", Capability.Unknown),
     ]
@@ -324,7 +324,7 @@ def test_full_access_includes_every_mutator_except_admin() -> None:
         if tool.capability in (Capability.Write, Capability.Destroy)
     }
     assert mutators.issubset(full_tools)
-    assert "linode_account_settings_update" not in full_tools
+    assert "linode_admin_synthetic" not in full_tools
     assert "linode_undiscovered_thing" not in full_tools
 
 
