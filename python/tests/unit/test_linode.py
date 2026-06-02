@@ -1327,6 +1327,113 @@ async def test_get_account_oauth_client_url_encodes_client_id() -> None:
     await client.close()
 
 
+async def test_get_account_oauth_client_thumbnail_sends_exact_route() -> None:
+    """OAuth client thumbnail get sends the documented PNG route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    thumbnail = b"\x89PNG\r\n\x1a\n"
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.headers = {"Content-Type": "image/png"}
+    mock_response.content = thumbnail
+
+    with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.get_account_oauth_client_thumbnail("client-123")
+
+    assert result == {
+        "content_type": "image/png",
+        "encoding": "base64",
+        "data": "iVBORw0KGgo=",
+    }
+    mock_request.assert_awaited_once_with(
+        "GET",
+        "https://api.linode.com/v4/account/oauth-clients/client-123/thumbnail",
+        headers={
+            "Authorization": "Bearer test-token",
+            "Accept": "image/png",
+            "User-Agent": "LinodeMCP/1.0",
+        },
+    )
+    await client.close()
+
+
+async def test_get_account_oauth_client_thumbnail_url_encodes_client_id() -> None:
+    """OAuth client thumbnail get URL-encodes the client ID path parameter."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.headers = {"Content-Type": "image/png; charset=binary"}
+    mock_response.content = b"png"
+
+    with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.get_account_oauth_client_thumbnail("client/id?query")
+
+    assert result["content_type"] == "image/png"
+    assert result["data"] == "cG5n"
+    await_args = mock_request.await_args
+    assert await_args is not None
+    assert await_args.args == (
+        "GET",
+        "https://api.linode.com/v4/account/oauth-clients/client%2Fid%3Fquery/thumbnail",
+    )
+    await client.close()
+
+
+async def test_get_account_oauth_client_thumbnail_wraps_http_errors() -> None:
+    """OAuth client thumbnail get wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError, match="GetAccountOAuthClientThumbnail"):
+            await client.get_account_oauth_client_thumbnail("client-123")
+    await client.close()
+
+
+async def test_get_account_oauth_client_thumbnail_maps_http_status_errors() -> None:
+    """OAuth client thumbnail get maps non-2xx API responses."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 404
+    mock_response.headers = {"Content-Type": "application/json"}
+    mock_response.json.return_value = {"errors": [{"reason": "Not found"}]}
+    mock_response.content = b'{"errors":[{"reason":"Not found"}]}'
+
+    with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        with pytest.raises(APIError, match="Not found"):
+            await client.get_account_oauth_client_thumbnail("client-123")
+
+    mock_request.assert_awaited_once()
+    await client.close()
+
+
+async def test_retryable_get_account_oauth_client_thumbnail_delegates() -> None:
+    """Retryable OAuth client thumbnail get delegates to the client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+    response_data = {
+        "content_type": "image/png",
+        "encoding": "base64",
+        "data": "iVBORw0KGgo=",
+    }
+
+    with patch.object(
+        retryable.client, "get_account_oauth_client_thumbnail", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = response_data
+
+        result = await retryable.get_account_oauth_client_thumbnail("client-123")
+
+    assert result == response_data
+    mock_get.assert_awaited_once_with("client-123")
+    await retryable.close()
+
+
 async def test_get_account_oauth_client_wraps_http_errors() -> None:
     """OAuth client get wraps HTTP errors."""
     client = Client("https://api.linode.com/v4", "test-token")
