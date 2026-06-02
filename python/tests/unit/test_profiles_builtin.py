@@ -86,6 +86,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         # Databases.
         ToolDescriptor("linode_database_engine_get", Capability.Read),
         ToolDescriptor("linode_database_cluster_create", Capability.Write),
+        ToolDescriptor("linode_database_mysql_credentials_reset", Capability.Write),
         ToolDescriptor(
             "linode_database_mysql_instance_credentials_get", Capability.Write
         ),
@@ -325,6 +326,10 @@ def test_database_tools_require_database_read_scope() -> None:
         Scope.DatabasesReadWrite
     ]
     assert categories("linode_database_cluster_create") == ["databases"]
+    assert required_scopes(
+        "linode_database_mysql_credentials_reset", Capability.Write
+    ) == [Scope.DatabasesReadWrite]
+    assert categories("linode_database_mysql_credentials_reset") == ["databases"]
     assert required_scopes(
         "linode_database_mysql_instance_delete", Capability.Destroy
     ) == [Scope.DatabasesReadWrite]

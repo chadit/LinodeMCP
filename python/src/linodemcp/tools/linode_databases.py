@@ -622,6 +622,36 @@ async def handle_linode_database_engine_get(
     )
 
 
+def create_linode_database_mysql_credentials_reset_tool() -> tuple[Tool, Capability]:
+    """Create the linode_database_mysql_credentials_reset tool."""
+    return Tool(
+        name="linode_database_mysql_credentials_reset",
+        description=(
+            "Resets credentials for a MySQL Managed Database. Pass dry_run=true "
+            "to preview without resetting credentials."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "instance_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "MySQL Managed Database instance ID",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to confirm database credential reset."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["instance_id", "confirm"],
+        },
+    ), Capability.Write
+
+
 def create_linode_database_mysql_instance_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_database_mysql_instance_get tool."""
     return Tool(
@@ -824,6 +854,47 @@ async def handle_linode_database_instances_list(
         return await client.list_database_instances(page=page, page_size=page_size)
 
     return await execute_tool(cfg, arguments, "list Linode database instances", _call)
+
+
+async def handle_linode_database_mysql_credentials_reset(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_database_mysql_credentials_reset tool request."""
+    try:
+        instance_id = _required_positive_int_argument(arguments, "instance_id")
+    except ValueError as exc:
+        return error_response(str(exc))
+
+    encoded_instance_id = quote(str(instance_id), safe="")
+    reset_path = f"/databases/mysql/instances/{encoded_instance_id}/credentials/reset"
+
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_database_mysql_credentials_reset",
+            arguments.get("environment", ""),
+            "POST",
+            reset_path,
+            None,
+            side_effects=[
+                (
+                    f"MySQL Managed Database instance {instance_id} credentials "
+                    "will be reset."
+                )
+            ],
+            warnings=[
+                "Resetting credentials can disrupt clients using the old credentials."
+            ],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.reset_mysql_database_credentials(instance_id)
+
+    return await execute_tool(
+        cfg, arguments, "reset MySQL Managed Database credentials", _call
+    )
 
 
 async def handle_linode_database_mysql_instance_get(

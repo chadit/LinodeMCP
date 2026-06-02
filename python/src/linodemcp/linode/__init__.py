@@ -2110,6 +2110,19 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateMysqlDatabaseInstance", e) from e
 
+    async def reset_mysql_database_credentials(
+        self, instance_id: int | str
+    ) -> dict[str, Any]:
+        """Reset MySQL Managed Database credentials."""
+        encoded_instance_id = quote(str(instance_id), safe="")
+        endpoint = f"/databases/mysql/instances/{encoded_instance_id}/credentials/reset"
+        try:
+            response = await self.make_request("POST", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ResetMysqlDatabaseCredentials", e) from e
+
     async def list_account_child_accounts(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -8201,6 +8214,12 @@ class RetryableClient:
             self.client.get_database_mysql_instance_credentials, instance_id
         )
         return result
+
+    async def reset_mysql_database_credentials(
+        self, instance_id: int | str
+    ) -> dict[str, Any]:
+        """Reset MySQL Managed Database credentials once without retry replay."""
+        return await self.client.reset_mysql_database_credentials(instance_id)
 
     async def list_account_child_accounts(
         self, page: int | None = None, page_size: int | None = None
