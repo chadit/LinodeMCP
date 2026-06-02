@@ -2721,6 +2721,80 @@ async def test_account_invoice_get_schema_requires_invoice_id(
     assert entry.tool.inputSchema["properties"]["invoice_id"]["minimum"] == 1
 
 
+async def test_account_payment_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Account payment get tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_payment_get_tool" in tools_mod.__all__
+    assert "handle_linode_account_payment_get" in tools_mod.__all__
+
+    srv = Server(sample_config)
+    assert "linode_account_payment_get" in srv.registered_tool_names
+
+
+async def test_account_payment_get_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Account payment get is callable through server dispatch."""
+    response_data: dict[str, object] = {"id": 123, "usd": "10.00"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_account_payment.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_account_payment_get", {"payment_id": 123})
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.get_account_payment.assert_awaited_once_with(123)
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({}, "payment_id is required"),
+        ({"payment_id": "123"}, "payment_id must be an integer"),
+        ({"payment_id": True}, "payment_id must be an integer"),
+        ({"payment_id": 0}, "payment_id must be at least 1"),
+        ({"payment_id": "12/3"}, "payment_id must be an integer"),
+        ({"payment_id": "12?3"}, "payment_id must be an integer"),
+        ({"payment_id": ".."}, "payment_id must be an integer"),
+    ],
+)
+async def test_account_payment_get_rejects_invalid_payment_id(
+    sample_config: Config, arguments: dict[str, object], message: str
+) -> None:
+    """Account payment get rejects invalid IDs before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_account_payment_get", arguments)
+
+    assert message in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_account_payment_get_schema_requires_payment_id(
+    sample_config: Config,
+) -> None:
+    """Account payment get schema includes the required path param."""
+    Server(sample_config)
+    entry = next(
+        item
+        for item in get_tool_registry()
+        if item.name == "linode_account_payment_get"
+    )
+
+    assert entry.tool.inputSchema["required"] == ["payment_id"]
+    prop = entry.tool.inputSchema["properties"]["payment_id"]
+    assert prop["type"] == "integer"
+    assert prop["minimum"] == 1
+
+
 async def test_account_payment_method_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

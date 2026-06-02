@@ -1747,6 +1747,46 @@ async def handle_linode_account_invoice_get(
     )
 
 
+def create_linode_account_payment_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_payment_get tool."""
+    return Tool(
+        name="linode_account_payment_get",
+        description="Gets a payment on the Linode account by ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "payment_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Payment ID to retrieve",
+                },
+            },
+            "required": ["payment_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_account_payment_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_payment_get tool request."""
+    raw_payment_id = arguments.get("payment_id")
+    if raw_payment_id is None:
+        return error_response("payment_id is required")
+    if not isinstance(raw_payment_id, int) or isinstance(raw_payment_id, bool):
+        return error_response("payment_id must be an integer")
+    if raw_payment_id < 1:
+        return error_response("payment_id must be at least 1")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_account_payment(raw_payment_id)
+
+    return await execute_tool(
+        cfg, arguments, f"retrieve Linode account payment {raw_payment_id}", _call
+    )
+
+
 def create_linode_account_payment_method_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_payment_method_get tool."""
     return Tool(
