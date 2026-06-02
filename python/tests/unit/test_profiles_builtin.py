@@ -112,6 +112,8 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         # Object storage.
         ToolDescriptor("linode_object_storage_buckets_list", Capability.Read),
         ToolDescriptor("linode_object_storage_bucket_create", Capability.Write),
+        # Databases.
+        ToolDescriptor("linode_databases_engines_list", Capability.Read),
         # DNS.
         ToolDescriptor("linode_domains_list", Capability.Read),
         ToolDescriptor("linode_domain_create", Capability.Write),

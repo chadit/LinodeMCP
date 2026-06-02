@@ -8,6 +8,7 @@ import json
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import AsyncMock, Mock, patch
 
+import httpx
 import pytest
 from mcp.types import ListToolsRequest, ListToolsResult
 
@@ -1295,6 +1296,86 @@ async def test_account_logins_list_rejects_non_integer_pagination(
         result = await srv.dispatch("linode_account_logins_list", {"page": "2"})
 
     assert "page must be an integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_databases_engines_list_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Database engines list tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_databases_engines_list_tool" in tools_mod.__all__
+    assert "handle_linode_databases_engines_list" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_databases_engines_list_tool()
+    assert tool.name == "linode_databases_engines_list"
+    assert capability is Capability.Read
+    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
+    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+
+    registry = {entry.name: entry for entry in get_tool_registry()}
+    assert registry["linode_databases_engines_list"].capability is Capability.Read
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_databases_engines_list" in srv.registered_tool_names
+
+    list_tools = srv.mcp.request_handlers[ListToolsRequest]
+    result = await list_tools(ListToolsRequest(method="tools/list"))
+    list_result = cast("ListToolsResult", result.root)
+    assert "linode_databases_engines_list" in {tool.name for tool in list_result.tools}
+
+
+async def test_databases_engines_list_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Database engines list dispatch should call the retryable client."""
+    response_data: dict[str, object] = {
+        "data": [{"id": "mysql", "version": "8.0.26"}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_database_engines.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_databases_engines_list", {"page": 2, "page_size": 25}
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["engines"] == response_data["data"]
+    assert payload["count"] == 1
+    assert payload["page"] == 1
+    mock_client.list_database_engines.assert_awaited_once_with(page=2, page_size=25)
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({"page": 0}, "page must be at least 1"),
+        ({"page_size": 10}, "page_size must be at least 25"),
+        ({"page_size": 501}, "page_size must be at most 500"),
+        ({"page": "2"}, "page must be an integer"),
+        ({"page": True}, "page must be an integer"),
+    ],
+)
+async def test_databases_engines_list_rejects_invalid_pagination(
+    sample_config: Config, arguments: dict[str, object], message: str
+) -> None:
+    """Database engines list validates pagination before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_databases_engines_list", arguments)
+
+    assert message in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -5586,6 +5667,98 @@ class _JsonResponse:
 
     def json(self) -> dict[str, Any]:
         return self._data
+
+
+async def test_database_engines_client_sends_exact_route_and_query() -> None:
+    """Client database engines list sends the documented GET route and query."""
+    response_data: dict[str, Any] = {
+        "data": [{"id": "mysql", "version": "8.0.26"}],
+        "page": 2,
+        "pages": 3,
+        "results": 61,
+    }
+    client = Client("https://api.example.test/v4", "token")
+    client.make_request = AsyncMock(  # type: ignore[method-assign]
+        return_value=_JsonResponse(response_data)
+    )
+
+    try:
+        result = await client.list_database_engines(page=2, page_size=25)
+    finally:
+        await client.close()
+
+    assert result == response_data
+    client.make_request.assert_awaited_once_with(
+        "GET", "/databases/engines?page=2&page_size=25"
+    )
+
+
+async def test_database_engines_client_maps_http_errors() -> None:
+    """Client database engines list maps HTTP errors to NetworkError."""
+    client = Client("https://api.example.test/v4", "token")
+    client.make_request = AsyncMock(  # type: ignore[method-assign]
+        side_effect=httpx.HTTPError("boom")
+    )
+
+    try:
+        with pytest.raises(NetworkError, match="ListDatabaseEngines"):
+            await client.list_database_engines()
+    finally:
+        await client.close()
+
+    client.make_request.assert_awaited_once_with("GET", "/databases/engines")
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"page": 0}, "page must be an integer at least 1"),
+        ({"page": True}, "page must be an integer at least 1"),
+        ({"page": "2"}, "page must be an integer at least 1"),
+        ({"page_size": 10}, "page_size must be an integer between 25 and 500"),
+        ({"page_size": 501}, "page_size must be an integer between 25 and 500"),
+        ({"page_size": True}, "page_size must be an integer between 25 and 500"),
+        ({"page_size": "25"}, "page_size must be an integer between 25 and 500"),
+    ],
+)
+async def test_database_engines_client_rejects_invalid_pagination(
+    kwargs: dict[str, Any], message: str
+) -> None:
+    """Client database engines list validates pagination before requests."""
+    client = Client("https://api.example.test/v4", "token")
+    client.make_request = AsyncMock()  # type: ignore[method-assign]
+
+    try:
+        with pytest.raises(ValueError, match=message):
+            await client.list_database_engines(**kwargs)
+    finally:
+        await client.close()
+
+    client.make_request.assert_not_called()
+
+
+async def test_database_engines_retryable_client_delegates_with_pagination() -> None:
+    """Retryable database engines list delegates with pagination."""
+    response_data: dict[str, Any] = {
+        "data": [{"id": "postgresql", "version": "16"}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+    retry_client = RetryableClient("https://api.example.test/v4", "token")
+    retry_client.client.list_database_engines = AsyncMock(  # type: ignore[method-assign]
+        return_value=response_data
+    )
+
+    try:
+        result = await retry_client.list_database_engines(page=3, page_size=50)
+    finally:
+        await retry_client.close()
+
+    assert result == response_data
+    retry_client.client.list_database_engines.assert_awaited_once_with(
+        page=3, page_size=50
+    )
 
 
 @pytest.mark.parametrize("restricted", [True, False])

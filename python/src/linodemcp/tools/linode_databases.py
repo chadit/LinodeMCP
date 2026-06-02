@@ -125,6 +125,31 @@ def create_linode_database_instances_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def create_linode_databases_engines_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_databases_engines_list tool."""
+    return Tool(
+        name="linode_databases_engines_list",
+        description="Lists available Linode Managed Databases engines.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
+            },
+        },
+    ), Capability.Read
+
+
 async def handle_linode_database_engine_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -163,3 +188,28 @@ async def handle_linode_database_instances_list(
         return await client.list_database_instances(page=page, page_size=page_size)
 
     return await execute_tool(cfg, arguments, "list Linode database instances", _call)
+
+
+async def handle_linode_databases_engines_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_databases_engines_list tool request."""
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        data = await client.list_database_engines(page=page, page_size=page_size)
+        engines = data.get("data", [])
+        return {
+            "message": "Database engines listed",
+            "count": len(engines),
+            "engines": engines,
+            "page": data.get("page"),
+            "pages": data.get("pages"),
+            "results": data.get("results"),
+        }
+
+    return await execute_tool(cfg, arguments, "list database engines", _call)
