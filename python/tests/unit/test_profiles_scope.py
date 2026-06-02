@@ -165,6 +165,11 @@ def test_meta_returns_empty() -> None:
             [Scope.DatabasesReadWrite],
         ),
         (
+            "linode_database_mysql_instance_resume",
+            Capability.Write,
+            [Scope.DatabasesReadWrite],
+        ),
+        (
             "linode_database_mysql_instance_update",
             Capability.Write,
             [Scope.DatabasesReadWrite],
