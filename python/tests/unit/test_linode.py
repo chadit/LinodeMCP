@@ -1695,10 +1695,81 @@ async def test_retryable_get_account_service_transfer_delegates_to_client() -> N
     await retryable.close()
 
 
+async def test_accept_account_service_transfer_sends_exact_route() -> None:
+    """Service transfer accept sends POST /account/service-transfers/{token}/accept."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data = {
+        "token": "***",
+        "accepted": True,
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.accept_account_service_transfer("transfer-token")
+
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "POST", "/account/service-transfers/transfer-token/accept"
+    )
+    await client.close()
+
+
+async def test_accept_account_service_transfer_url_encodes_token() -> None:
+    """Service transfer accept URL-encodes the token path parameter."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"token": "transf...uery"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.accept_account_service_transfer("transfer/token?query")
+
+    mock_request.assert_called_once_with(
+        "POST", "/account/service-transfers/transfer%2Ftoken%3Fquery/accept"
+    )
+    await client.close()
+
+
+async def test_accept_account_service_transfer_wraps_http_errors() -> None:
+    """Service transfer accept wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.accept_account_service_transfer("transfer-token")
+
+    assert "AcceptAccountServiceTransfer" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_accept_account_service_transfer_delegates_once() -> None:
+    """RetryableClient delegates service transfer accept once without retry replay."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "accept_account_service_transfer", new_callable=AsyncMock
+    ) as mock_accept:
+        mock_accept.side_effect = [httpx.HTTPError("transient")]
+
+        with pytest.raises(httpx.HTTPError):
+            await retryable.accept_account_service_transfer("transfer-token")
+
+    mock_accept.assert_awaited_once_with("transfer-token")
+    await retryable.close()
+
+
 async def test_delete_account_service_transfer_sends_exact_route() -> None:
     """Service transfer delete sends DELETE /account/service-transfers/{token}."""
     client = Client("https://api.linode.com/v4", "test-token")
-    response_data = {"token": "transfer-token", "message": "canceled"}
+    response_data = {"token": "***", "message": "canceled"}
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = response_data
@@ -1720,7 +1791,7 @@ async def test_delete_account_service_transfer_url_encodes_token() -> None:
     client = Client("https://api.linode.com/v4", "test-token")
     mock_response = MagicMock()
     mock_response.status_code = 200
-    mock_response.json.return_value = {"token": "transfer/token?query"}
+    mock_response.json.return_value = {"token": "transf...uery"}
 
     with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response

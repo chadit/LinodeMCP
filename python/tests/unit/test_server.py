@@ -2530,6 +2530,118 @@ async def test_account_child_account_get_schema_requires_euuid(
     assert entry.tool.inputSchema["properties"]["euuid"]["type"] == "string"
 
 
+async def test_account_service_transfer_accept_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Service transfer accept tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_service_transfer_accept_tool" in tools_mod.__all__
+    assert "handle_linode_account_service_transfer_accept" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_account_service_transfer_accept_tool()
+    assert tool.name == "linode_account_service_transfer_accept"
+    assert capability is Capability.Write
+    assert tool.inputSchema["required"] == ["token", "confirm"]
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_account_service_transfer_accept" in srv.registered_tool_names
+
+
+async def test_account_service_transfer_accept_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Service transfer accept is callable through server dispatch."""
+    response_data: dict[str, object] = {
+        "token": "transfer-token",
+        "accepted": True,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.accept_account_service_transfer.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_service_transfer_accept",
+            {"token": "transfer-token", "confirm": True},
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.accept_account_service_transfer.assert_awaited_once_with(
+        "transfer-token"
+    )
+
+
+async def test_account_service_transfer_accept_dry_run_skips_client_call(
+    sample_config: Config,
+) -> None:
+    """Service transfer accept dry-run previews encoded route without client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_service_transfer_accept",
+            {"token": "transfer#token", "confirm": True, "dry_run": True},
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["would_execute"]["method"] == "POST"
+    assert (
+        payload["would_execute"]["path"]
+        == "/account/service-transfers/transfer%23token/accept"
+    )
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "confirm_value",
+    [None, False, "true", 1],
+)
+async def test_account_service_transfer_accept_requires_boolean_confirm(
+    sample_config: Config, confirm_value: object
+) -> None:
+    """Service transfer accept rejects non-true confirm before client calls."""
+    arguments: dict[str, object] = {"token": "transfer-token"}
+    if confirm_value is not None:
+        arguments["confirm"] = confirm_value
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_account_service_transfer_accept", arguments)
+
+    assert "Set confirm=true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({"confirm": True}, "token is required"),
+        ({"token": 123, "confirm": True}, "token must be a string"),
+        ({"token": "   ", "confirm": True}, "token is required"),
+        ({"token": " transfer-token", "confirm": True}, "token must not contain"),
+        ({"token": "transfer/token", "confirm": True}, "token must not contain"),
+        ({"token": "transfer?token", "confirm": True}, "token must not contain"),
+        ({"token": "..", "confirm": True}, "token must not contain"),
+    ],
+)
+async def test_account_service_transfer_accept_rejects_invalid_token(
+    sample_config: Config, arguments: dict[str, object], message: str
+) -> None:
+    """Service transfer accept rejects invalid token before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_account_service_transfer_accept", arguments)
+
+    assert message in result[0].text
+    mock_client_class.assert_not_called()
+
+
 async def test_account_service_transfer_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
