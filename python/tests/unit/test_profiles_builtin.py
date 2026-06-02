@@ -91,6 +91,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
             "linode_database_mysql_instance_credentials_get", Capability.Write
         ),
         ToolDescriptor("linode_database_mysql_instance_delete", Capability.Destroy),
+        ToolDescriptor("linode_database_mysql_instance_patch", Capability.Write),
         ToolDescriptor("linode_database_mysql_instance_update", Capability.Write),
         ToolDescriptor("linode_database_mysql_instances_list", Capability.Read),
         # Compute reads + mutations.
@@ -346,6 +347,10 @@ def test_database_tools_require_database_read_scope() -> None:
         Scope.DatabasesReadOnly
     ]
     assert categories("linode_database_mysql_instances_list") == ["databases"]
+    assert required_scopes(
+        "linode_database_mysql_instance_patch", Capability.Write
+    ) == [Scope.DatabasesReadWrite]
+    assert categories("linode_database_mysql_instance_patch") == ["databases"]
     assert categories("linode_database_mysql_instance_update") == ["databases"]
     assert required_scopes(
         "linode_database_mysql_instance_update", Capability.Write
