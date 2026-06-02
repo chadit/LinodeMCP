@@ -3462,6 +3462,29 @@ async def test_account_oauth_client_create_tool_is_exported_and_registered(
     assert "linode_account_oauth_client_create" in srv.registered_tool_names
 
 
+async def test_account_payment_method_create_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Payment method create tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_payment_method_create_tool" in tools_mod.__all__
+    assert "handle_linode_account_payment_method_create" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_account_payment_method_create_tool()
+    assert tool.name == "linode_account_payment_method_create"
+    assert capability is Capability.Write
+    assert tool.inputSchema["properties"]["type"]["enum"] == ["credit_card"]
+    assert tool.inputSchema["properties"]["data"]["type"] == "object"
+    assert tool.inputSchema["properties"]["is_default"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert "dry_run" in tool.inputSchema["properties"]
+    assert "confirm" in tool.inputSchema["required"]
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_account_payment_method_create" in srv.registered_tool_names
+
+
 async def test_account_oauth_client_delete_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
@@ -3645,6 +3668,176 @@ async def test_account_oauth_client_create_tool_propagates_client_error(
 
     assert "CreateAccountOAuthClient" in result[0].text
     mock_client.create_account_oauth_client.assert_awaited_once()
+
+
+async def test_account_payment_method_create_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Payment method create dispatches through the registered handler."""
+    mock_client = AsyncMock()
+    mock_client.create_account_payment_method = AsyncMock(
+        return_value={
+            "id": 123,
+            "type": "credit_card",
+            "is_default": True,
+        }
+    )
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_payment_method_create",
+            {
+                "type": "credit_card",
+                "data": {"nonce": "payment-token"},
+                "is_default": True,
+                "confirm": True,
+            },
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["type"] == "credit_card"
+    assert payload["is_default"] is True
+    mock_client.create_account_payment_method.assert_awaited_once_with(
+        "credit_card", {"nonce": "payment-token"}, True
+    )
+
+
+@pytest.mark.parametrize("confirm_value", [None, False, "true", 1])
+async def test_account_payment_method_create_requires_boolean_confirm(
+    sample_config: Config, confirm_value: object
+) -> None:
+    """Payment method create rejects missing/non-true confirm before client call."""
+    mock_client = AsyncMock()
+    mock_client.create_account_payment_method = AsyncMock()
+    arguments: dict[str, object] = {
+        "type": "credit_card",
+        "data": {"nonce": "payment-token"},
+        "is_default": True,
+    }
+    if confirm_value is not None:
+        arguments["confirm"] = confirm_value
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_account_payment_method_create", arguments)
+
+    assert "Set confirm=true" in result[0].text
+    mock_client.create_account_payment_method.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("type", None, "type is required"),
+        ("type", 123, "type must be a string"),
+        ("type", "   ", "type is required"),
+        ("type", "paypal", "type must be credit_card"),
+        ("data", None, "data is required"),
+        ("data", 123, "data must be an object"),
+        ("data", "payment-token", "data must be an object"),
+        ("is_default", None, "is_default must be a boolean"),
+        ("is_default", "true", "is_default must be a boolean"),
+        ("is_default", 1, "is_default must be a boolean"),
+    ],
+)
+async def test_account_payment_method_create_validates_required_arguments(
+    sample_config: Config, field: str, value: object, message: str
+) -> None:
+    """Payment method create validates required arguments before client call."""
+    mock_client = AsyncMock()
+    mock_client.create_account_payment_method = AsyncMock()
+    arguments: dict[str, object] = {
+        "type": "credit_card",
+        "data": {"nonce": "payment-token"},
+        "is_default": True,
+        "confirm": True,
+    }
+    if value is None:
+        arguments.pop(field)
+    else:
+        arguments[field] = value
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_account_payment_method_create", arguments)
+
+    assert message in result[0].text
+    mock_client.create_account_payment_method.assert_not_called()
+
+
+async def test_account_payment_method_create_dry_run_skips_client_call(
+    sample_config: Config,
+) -> None:
+    """Payment method create dry-run previews the request without creating."""
+    mock_client = AsyncMock()
+    mock_client.create_account_payment_method = AsyncMock()
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_payment_method_create",
+            {
+                "type": "credit_card",
+                "data": {"nonce": "payment-token"},
+                "is_default": True,
+                "confirm": False,
+                "dry_run": True,
+            },
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["tool"] == "linode_account_payment_method_create"
+    assert payload["would_execute"] == {
+        "method": "POST",
+        "path": "/account/payment-methods",
+        "body": {
+            "type": "credit_card",
+            "data": {"redacted": True},
+            "is_default": True,
+        },
+    }
+    assert "payment-token" not in result[0].text
+    mock_client.create_account_payment_method.assert_not_called()
+
+
+async def test_account_payment_method_create_tool_propagates_client_error(
+    sample_config: Config,
+) -> None:
+    """Payment method create reports client errors from dispatch."""
+    mock_client = AsyncMock()
+    mock_client.create_account_payment_method = AsyncMock(
+        side_effect=NetworkError("CreateAccountPaymentMethod", Exception("boom"))
+    )
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_payment_method_create",
+            {
+                "type": "credit_card",
+                "data": {"nonce": "payment-token"},
+                "is_default": True,
+                "confirm": True,
+            },
+        )
+
+    assert "CreateAccountPaymentMethod" in result[0].text
+    mock_client.create_account_payment_method.assert_awaited_once()
 
 
 async def test_account_oauth_client_delete_dispatches_from_registry(

@@ -1047,6 +1047,113 @@ async def handle_linode_account_oauth_client_create(
     )
 
 
+def create_linode_account_payment_method_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_payment_method_create tool."""
+    return Tool(
+        name="linode_account_payment_method_create",
+        description=(
+            "Adds a payment method to the Linode account. "
+            "Pass dry_run=true to preview without creating it."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "type": {
+                    "type": "string",
+                    "enum": ["credit_card"],
+                    "description": "Payment method type",
+                },
+                "data": {
+                    "type": "object",
+                    "description": "Payment method provider data",
+                },
+                "is_default": {
+                    "type": "boolean",
+                    "description": "Whether to make this the default payment method",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm live payment method creation. "
+                        "When dry_run=true, the request is previewed without "
+                        "creating the payment method."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["type", "data", "is_default", "confirm"],
+        },
+    ), Capability.Write
+
+
+def _payment_method_create_body(
+    arguments: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str | None]:
+    payment_type, payment_type_error = _required_nonempty_string_argument(
+        arguments, "type"
+    )
+    if payment_type_error is not None or payment_type is None:
+        return None, payment_type_error or "type is required"
+    if payment_type != "credit_card":
+        return None, "type must be credit_card"
+
+    payment_data = arguments.get("data")
+    if payment_data is None:
+        return None, "data is required"
+    if not isinstance(payment_data, dict):
+        return None, "data must be an object"
+
+    is_default = arguments.get("is_default")
+    if not isinstance(is_default, bool):
+        return None, "is_default must be a boolean"
+
+    return {
+        "type": payment_type,
+        "data": payment_data,
+        "is_default": is_default,
+    }, None
+
+
+async def handle_linode_account_payment_method_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_payment_method_create tool request."""
+    request_body, validation_error = _payment_method_create_body(arguments)
+    if validation_error is not None or request_body is None:
+        return error_response(validation_error or "payment method body is required")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_account_payment_method_create",
+            arguments.get("environment", ""),
+            "POST",
+            "/account/payment-methods",
+            None,
+            request_body={**request_body, "data": {"redacted": True}},
+            side_effects=[
+                "A new account payment method is created and may become the "
+                "default payment method."
+            ],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This creates an account payment method. Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.create_account_payment_method(
+            str(request_body["type"]),
+            cast("dict[str, Any]", request_body["data"]),
+            bool(request_body["is_default"]),
+        )
+
+    return await execute_tool(
+        cfg, arguments, "create Linode account payment method", _call
+    )
+
+
 def create_linode_account_cancel_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_cancel tool."""
     return Tool(
