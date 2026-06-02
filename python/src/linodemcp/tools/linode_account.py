@@ -242,6 +242,65 @@ async def handle_linode_account_beta_enroll(
     )
 
 
+def create_linode_account_cancel_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_cancel tool."""
+    return Tool(
+        name="linode_account_cancel",
+        description=(
+            "Cancels the Linode account. "
+            "Pass dry_run=true to preview without canceling."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "comments": {
+                    "type": "string",
+                    "description": "Optional cancellation comments",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm this destructive operation. Ignored "
+                        "when dry_run=true."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["confirm"],
+        },
+    ), Capability.Destroy
+
+
+async def handle_linode_account_cancel(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_cancel tool request."""
+    comments = arguments.get("comments")
+    if comments is not None and not isinstance(comments, str):
+        return error_response("comments must be a string")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_account_cancel",
+            arguments.get("environment", ""),
+            "POST",
+            "/account/cancel",
+            None,
+            request_body={"comments": comments} if comments is not None else None,
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This cancels the Linode account. Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.cancel_account(comments=comments)
+
+    return await execute_tool(cfg, arguments, "cancel Linode account", _call)
+
+
 def create_linode_account_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_update tool."""
     return Tool(
