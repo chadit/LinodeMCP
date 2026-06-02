@@ -2620,6 +2620,20 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetDatabasePostgreSQLConfig", e) from e
 
+    async def update_postgresql_database_instance(
+        self, instance_id: int, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update a PostgreSQL Managed Database instance."""
+        encoded_instance_id = quote(str(instance_id), safe="")
+        try:
+            response = await self.make_request(
+                "PUT", f"/databases/postgresql/instances/{encoded_instance_id}", payload
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdatePostgreSQLDatabaseInstance", e) from e
+
     async def list_volumes(self) -> list[Volume]:
         """List Linode block storage volumes."""
         try:
@@ -8651,6 +8665,14 @@ class RetryableClient:
             self.client.get_database_postgresql_config
         )
         return result
+
+    async def update_postgresql_database_instance(
+        self, instance_id: int, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update a PostgreSQL Managed Database once without retry replay."""
+        return await self.client.update_postgresql_database_instance(
+            instance_id, payload
+        )
 
     async def list_volumes(self) -> list[Volume]:
         """List Linode volumes with retry."""
