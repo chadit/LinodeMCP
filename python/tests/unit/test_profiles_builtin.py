@@ -100,6 +100,9 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
             "linode_database_postgresql_instance_delete", Capability.Destroy
         ),
         ToolDescriptor("linode_database_postgresql_instance_update", Capability.Write),
+        ToolDescriptor(
+            "linode_database_postgresql_instance_credentials_get", Capability.Write
+        ),
         ToolDescriptor("linode_database_postgresql_instances_list", Capability.Read),
         # Compute reads + mutations.
         ToolDescriptor("linode_instances_list", Capability.Read),
@@ -378,6 +381,12 @@ def test_database_tools_require_database_read_scope() -> None:
     ) == [Scope.DatabasesReadWrite]
     assert categories("linode_database_postgresql_instance_update") == ["databases"]
     assert required_scopes(
+        "linode_database_postgresql_instance_credentials_get", Capability.Write
+    ) == [Scope.DatabasesReadWrite]
+    assert categories("linode_database_postgresql_instance_credentials_get") == [
+        "databases"
+    ]
+    assert required_scopes(
         "linode_database_postgresql_instances_list", Capability.Read
     ) == [Scope.DatabasesReadOnly]
     assert categories("linode_database_postgresql_instances_list") == ["databases"]
@@ -396,10 +405,13 @@ def test_database_credentials_tool_is_not_readonly_profile_tool() -> None:
     catalog = _synthetic_catalog()
     profiles = builtin_profiles(catalog)
 
-    tool_name = "linode_database_mysql_instance_credentials_get"
-    assert tool_name not in profiles["default"].allowed_tools
-    assert tool_name not in profiles["readonly-full"].allowed_tools
-    assert tool_name in profiles["full-access"].allowed_tools
+    for tool_name in (
+        "linode_database_mysql_instance_credentials_get",
+        "linode_database_postgresql_instance_credentials_get",
+    ):
+        assert tool_name not in profiles["default"].allowed_tools
+        assert tool_name not in profiles["readonly-full"].allowed_tools
+        assert tool_name in profiles["full-access"].allowed_tools
 
 
 def test_account_payment_method_delete_is_account_category() -> None:

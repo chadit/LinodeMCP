@@ -981,6 +981,38 @@ def create_linode_database_mysql_instance_credentials_get_tool() -> tuple[
     ), Capability.Write
 
 
+def create_linode_database_postgresql_instance_credentials_get_tool() -> tuple[
+    Tool, Capability
+]:
+    """Create the linode_database_postgresql_instance_credentials_get tool."""
+    return Tool(
+        name="linode_database_postgresql_instance_credentials_get",
+        description=(
+            "Gets credentials for a PostgreSQL Managed Database instance. "
+            "This returns sensitive password material, requires confirm=true, "
+            "and requires a database write-capable profile. Pass dry_run=true "
+            "to preview without retrieving credentials."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "instance_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "PostgreSQL Managed Database instance ID",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to retrieve database credentials.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["instance_id", "confirm"],
+        },
+    ), Capability.Write
+
+
 def create_linode_database_mysql_instance_resume_tool() -> tuple[Tool, Capability]:
     """Create the linode_database_mysql_instance_resume tool."""
     return Tool(
@@ -1487,6 +1519,49 @@ async def handle_linode_database_mysql_instance_credentials_get(
         cfg,
         arguments,
         f"retrieve MySQL Managed Database credentials for instance {instance_id}",
+        _call,
+    )
+
+
+async def handle_linode_database_postgresql_instance_credentials_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_database_postgresql_instance_credentials_get tool request."""
+    try:
+        instance_id = _optional_int_argument(arguments, "instance_id", 1)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+    if instance_id is None:
+        return error_response("instance_id is required")
+
+    encoded_instance_id = quote(str(instance_id), safe="")
+    credentials_path = (
+        f"/databases/postgresql/instances/{encoded_instance_id}/credentials"
+    )
+
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_database_postgresql_instance_credentials_get",
+            arguments.get("environment", ""),
+            "GET",
+            credentials_path,
+            None,
+            side_effects=[
+                "PostgreSQL Managed Database credentials will be retrieved and exposed."
+            ],
+            warnings=["The response contains sensitive password material."],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_database_postgresql_instance_credentials(instance_id)
+
+    return await execute_tool(
+        cfg,
+        arguments,
+        f"retrieve PostgreSQL Managed Database credentials for instance {instance_id}",
         _call,
     )
 
