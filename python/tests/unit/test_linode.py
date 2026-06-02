@@ -3336,6 +3336,74 @@ async def test_retryable_list_database_instances_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_create_mysql_database_instance_sends_post_body() -> None:
+    """Creating a MySQL database sends POST /databases/mysql/instances."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    payload: dict[str, Any] = {
+        "label": "primary-db",
+        "type": "g6-dedicated-2",
+        "engine": "mysql/8.0",
+        "region": "us-east",
+        "allow_list": ["192.0.2.1/32"],
+        "cluster_size": 3,
+        "engine_config": {"binlog_retention_period": 600},
+        "fork": {"source": 123},
+        "private_network": "vpc-1",
+        "ssl_connection": True,
+    }
+    response_data = {"id": 123, "label": "primary-db"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.create_mysql_database_instance(payload)
+
+    assert result == response_data
+    mock_request.assert_awaited_once_with("POST", "/databases/mysql/instances", payload)
+    await client.close()
+
+
+async def test_create_mysql_database_instance_wraps_http_errors() -> None:
+    """Creating a MySQL database maps HTTP errors to NetworkError."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.create_mysql_database_instance({"label": "primary-db"})
+
+    assert "CreateMysqlDatabaseInstance" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_create_mysql_database_instance_delegates_once() -> None:
+    """Retryable create delegates once and does not replay POST failures."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+    payload = {
+        "label": "primary-db",
+        "type": "g6-dedicated-2",
+        "engine": "mysql/8.0",
+        "region": "us-east",
+    }
+
+    with patch.object(
+        retryable.client, "create_mysql_database_instance", new_callable=AsyncMock
+    ) as mock_create:
+        mock_create.side_effect = NetworkError(
+            "CreateMysqlDatabaseInstance", httpx.HTTPError("boom")
+        )
+
+        with pytest.raises(NetworkError):
+            await retryable.create_mysql_database_instance(payload)
+
+    mock_create.assert_awaited_once_with(payload)
+    await retryable.close()
+
+
 async def test_list_account_child_accounts_sends_get_to_child_accounts_route() -> None:
     """Test listing child accounts sends GET /account/child-accounts."""
     client = Client("https://api.linode.com/v4", "test-token")

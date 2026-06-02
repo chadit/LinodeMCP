@@ -314,6 +314,10 @@ def test_database_tools_require_database_read_scope() -> None:
         Scope.DatabasesReadOnly
     ]
     assert categories("linode_database_mysql_config_get") == ["databases"]
+    assert required_scopes("linode_database_cluster_create", Capability.Write) == [
+        Scope.DatabasesReadWrite
+    ]
+    assert categories("linode_database_cluster_create") == ["databases"]
 
 
 def test_account_payment_method_delete_is_account_category() -> None:
@@ -417,6 +421,7 @@ def test_read_only_profiles_have_no_write_scopes() -> None:
 def test_database_tool_category() -> None:
     """Database tools map to the databases profile category."""
     assert categories("linode_database_engine_get") == ["databases"]
+    assert categories("linode_database_cluster_create") == ["databases"]
 
 
 def test_full_access_scopes_match_expected_categories() -> None:

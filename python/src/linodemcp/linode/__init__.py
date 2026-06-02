@@ -2027,6 +2027,19 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListDatabaseInstances", e) from e
 
+    async def create_mysql_database_instance(
+        self, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Create or restore a MySQL Managed Database instance."""
+        try:
+            response = await self.make_request(
+                "POST", "/databases/mysql/instances", payload
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateMysqlDatabaseInstance", e) from e
+
     async def list_account_child_accounts(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -8069,6 +8082,12 @@ class RetryableClient:
             lambda: self.client.list_database_instances(page=page, page_size=page_size)
         )
         return result
+
+    async def create_mysql_database_instance(
+        self, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Create or restore a MySQL Managed Database once without retry replay."""
+        return await self.client.create_mysql_database_instance(payload)
 
     async def enroll_account_beta(self, beta_id: str) -> dict[str, Any]:
         """Enroll in an account beta once without retry replay."""

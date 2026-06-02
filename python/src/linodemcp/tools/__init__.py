@@ -171,10 +171,12 @@ from linodemcp.tools.linode_betas import (
     handle_linode_beta_get,
 )
 from linodemcp.tools.linode_databases import (
+    create_linode_database_cluster_create_tool,
     create_linode_database_engine_get_tool,
     create_linode_database_instances_list_tool,
     create_linode_database_mysql_config_get_tool,
     create_linode_databases_engines_list_tool,
+    handle_linode_database_cluster_create,
     handle_linode_database_engine_get,
     handle_linode_database_instances_list,
     handle_linode_database_mysql_config_get,
@@ -802,6 +804,7 @@ __all__ = [
     "create_linode_audit_summary_tool",
     "create_linode_beta_get_tool",
     "create_linode_betas_list_tool",
+    "create_linode_database_cluster_create_tool",
     "create_linode_database_engine_get_tool",
     "create_linode_database_instances_list_tool",
     "create_linode_database_mysql_config_get_tool",
@@ -1119,6 +1122,7 @@ __all__ = [
     "handle_linode_audit_summary",
     "handle_linode_beta_get",
     "handle_linode_betas_list",
+    "handle_linode_database_cluster_create",
     "handle_linode_database_engine_get",
     "handle_linode_database_instances_list",
     "handle_linode_database_mysql_config_get",
