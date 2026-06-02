@@ -103,6 +103,85 @@ async def handle_linode_account(
     return await execute_tool(cfg, arguments, "retrieve Linode account", _call)
 
 
+def create_linode_account_user_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_user_create tool."""
+    return Tool(
+        name="linode_account_user_create",
+        description="Creates a user on the Linode account.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "username": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Username for the new account user",
+                },
+                "email": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Email address for the new account user",
+                },
+                "restricted": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to create a restricted user; set false to create "
+                        "an unrestricted user."
+                    ),
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this mutating operation.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["username", "email", "restricted", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_account_user_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_user_create tool request."""
+    try:
+        username = _required_string_argument(arguments, "username")
+        email = _required_string_argument(arguments, "email")
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
+    restricted = arguments.get("restricted")
+    if type(restricted) is not bool:
+        return error_response("restricted is required and must be a boolean")
+
+    body = {"username": username, "email": email, "restricted": restricted}
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This creates an account user. Set confirm=true to proceed."
+        )
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_account_user_create",
+            arguments.get("environment", ""),
+            "POST",
+            "/account/users",
+            None,
+            side_effects=[
+                f"A new account user {username!r} will be created "
+                f"with restricted={restricted}."
+            ],
+            request_body=body,
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        user = await client.create_account_user(username, email, restricted)
+        return {"message": "Account user created successfully", "user": user}
+
+    return await execute_tool(cfg, arguments, "create Linode account user", _call)
+
+
 def create_linode_account_agreements_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_agreements_list tool."""
     return Tool(
