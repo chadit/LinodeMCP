@@ -3251,6 +3251,46 @@ async def test_list_betas_wraps_http_errors() -> None:
     await client.close()
 
 
+async def test_list_database_instances_sends_get_to_databases_instances_route() -> None:
+    """Test listing Managed Databases sends GET /databases/instances."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response_data: dict[str, Any] = {
+        "data": [{"id": 123, "label": "primary-db", "type": "g6-dedicated-2"}],
+        "page": 2,
+        "pages": 3,
+        "results": 51,
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.list_database_instances(page=2, page_size=25)
+
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "GET", "/databases/instances?page=2&page_size=25"
+    )
+    await client.close()
+
+
+async def test_list_database_instances_wraps_http_errors() -> None:
+    """Test listing Managed Databases wraps HTTP errors with operation context."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.list_database_instances()
+
+    assert "ListDatabaseInstances" in str(excinfo.value)
+    await client.close()
+
+
 async def test_retryable_list_account_betas_delegates_to_client() -> None:
     """Test RetryableClient delegates account beta listing to Client."""
     retryable = RetryableClient("https://api.linode.com/v4", "test-token")
@@ -3275,6 +3315,21 @@ async def test_retryable_list_betas_delegates_to_client() -> None:
     ) as mock_list:
         mock_list.return_value = {"data": [], "page": 1, "pages": 1, "results": 0}
         result = await retryable.list_betas(page=1, page_size=100)
+
+    assert result["data"] == []
+    mock_list.assert_awaited_once_with(page=1, page_size=100)
+    await retryable.close()
+
+
+async def test_retryable_list_database_instances_delegates_to_client() -> None:
+    """Test RetryableClient delegates Managed Database listing to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "list_database_instances", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = {"data": [], "page": 1, "pages": 1, "results": 0}
+        result = await retryable.list_database_instances(page=1, page_size=100)
 
     assert result["data"] == []
     mock_list.assert_awaited_once_with(page=1, page_size=100)
