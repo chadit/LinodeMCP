@@ -1164,6 +1164,43 @@ async def test_account_logins_list_rejects_boolean_pagination(
     mock_client_class.assert_not_called()
 
 
+async def test_account_settings_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Account settings get tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_settings_get_tool" in tools_mod.__all__
+    assert "handle_linode_account_settings_get" in tools_mod.__all__
+
+    srv = Server(sample_config)
+    assert "linode_account_settings_get" in srv.registered_tool_names
+
+
+async def test_account_settings_get_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Account settings get is callable through server dispatch."""
+    response_data: dict[str, object] = {
+        "backups_enabled": True,
+        "managed": False,
+        "network_helper": True,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_account_settings.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_account_settings_get", {})
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.get_account_settings.assert_awaited_once_with()
+
+
 async def test_account_maintenance_list_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

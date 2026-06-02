@@ -50,6 +50,7 @@ from linodemcp.tools import (
     create_linode_account_oauth_client_thumbnail_get_tool,
     create_linode_account_payment_method_delete_tool,
     create_linode_account_payment_method_get_tool,
+    create_linode_account_settings_get_tool,
     create_linode_account_support_ticket_attachment_create_tool,
     create_linode_account_support_ticket_close_tool,
     create_linode_account_support_ticket_create_tool,
@@ -179,6 +180,7 @@ from linodemcp.tools import (
     handle_linode_account_oauth_client_thumbnail_get,
     handle_linode_account_payment_method_delete,
     handle_linode_account_payment_method_get,
+    handle_linode_account_settings_get,
     handle_linode_account_support_ticket_attachment_create,
     handle_linode_account_support_ticket_close,
     handle_linode_account_support_ticket_create,
@@ -1313,6 +1315,37 @@ async def test_handle_linode_account_beta_get_rejects_malformed_beta_id(
 
     assert "beta_id must not contain" in result[0].text
     mock_client_class.assert_not_called()
+
+
+async def test_create_linode_account_settings_get_tool() -> None:
+    """Test linode_account_settings_get tool schema."""
+    tool, capability = create_linode_account_settings_get_tool()
+
+    assert tool.name == "linode_account_settings_get"
+    assert capability is Capability.Read
+    assert set(tool.inputSchema["properties"]) == {"environment"}
+    assert "required" not in tool.inputSchema
+
+
+async def test_handle_linode_account_settings_get(sample_config: Config) -> None:
+    """Test linode_account_settings_get tool."""
+    response_data: dict[str, Any] = {
+        "backups_enabled": True,
+        "managed": False,
+        "network_helper": True,
+    }
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_account_settings.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_settings_get({}, sample_config)
+
+    assert len(result) == 1
+    assert json.loads(result[0].text) == response_data
+    mock_client.get_account_settings.assert_awaited_once_with()
 
 
 async def test_create_linode_account_maintenance_list_tool() -> None:

@@ -1520,6 +1520,15 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetAccountAgreements", e) from e
 
+    async def get_account_settings(self) -> dict[str, Any]:
+        """Get settings for the Linode account."""
+        try:
+            response = await self.make_request("GET", "/account/settings")
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetAccountSettings", e) from e
+
     async def list_account_logins(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -7635,6 +7644,13 @@ class RetryableClient:
         """List account agreements with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_account_agreements
+        )
+        return result
+
+    async def get_account_settings(self) -> dict[str, Any]:
+        """Get account settings with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_account_settings
         )
         return result
 
