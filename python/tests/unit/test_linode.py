@@ -469,6 +469,57 @@ async def test_retryable_get_account_agreements_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_get_account_settings_sends_exact_route() -> None:
+    """Account settings get sends GET /account/settings."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data = {
+        "backups_enabled": True,
+        "managed": False,
+        "network_helper": True,
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.get_account_settings()
+
+    assert result == response_data
+    mock_request.assert_called_once_with("GET", "/account/settings")
+    await client.close()
+
+
+async def test_get_account_settings_wraps_http_errors() -> None:
+    """Account settings get wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.get_account_settings()
+
+    assert "GetAccountSettings" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_get_account_settings_delegates_to_client() -> None:
+    """RetryableClient delegates account settings get to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "get_account_settings", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = {"managed": False}
+        result = await retryable.get_account_settings()
+
+    assert result == {"managed": False}
+    mock_get.assert_awaited_once_with()
+    await retryable.close()
+
+
 async def test_list_account_maintenance_sends_exact_route() -> None:
     """Account maintenance listing sends GET /account/maintenance."""
     client = Client("https://api.linode.com/v4", "test-token")
