@@ -2104,6 +2104,19 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("DeleteMysqlDatabaseInstance", e) from e
 
+    async def delete_postgresql_database_instance(
+        self, instance_id: int | str
+    ) -> dict[str, Any]:
+        """Delete a PostgreSQL Managed Database instance."""
+        encoded_instance_id = quote(str(instance_id), safe="")
+        endpoint = f"/databases/postgresql/instances/{encoded_instance_id}"
+        try:
+            response = await self.make_request("DELETE", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("DeletePostgresqlDatabaseInstance", e) from e
+
     async def patch_mysql_database_instance(
         self, instance_id: int | str
     ) -> dict[str, Any]:
@@ -8325,6 +8338,12 @@ class RetryableClient:
     ) -> dict[str, Any]:
         """Delete a MySQL Managed Database once without retry replay."""
         return await self.client.delete_mysql_database_instance(instance_id)
+
+    async def delete_postgresql_database_instance(
+        self, instance_id: int | str
+    ) -> dict[str, Any]:
+        """Delete a PostgreSQL Managed Database once without retry replay."""
+        return await self.client.delete_postgresql_database_instance(instance_id)
 
     async def resume_mysql_database_instance(
         self, instance_id: int | str
