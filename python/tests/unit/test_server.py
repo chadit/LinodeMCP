@@ -1169,6 +1169,75 @@ async def test_account_invoices_list_rejects_boolean_pagination(
     mock_client_class.assert_not_called()
 
 
+async def test_account_invoice_items_list_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Account invoice items list tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_invoice_items_list_tool" in tools_mod.__all__
+    assert "handle_linode_account_invoice_items_list" in tools_mod.__all__
+
+    srv = Server(sample_config)
+    assert "linode_account_invoice_items_list" in srv.registered_tool_names
+
+
+async def test_account_invoice_items_list_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Account invoice items list is callable through server dispatch."""
+    response_data: dict[str, object] = {
+        "data": [{"label": "Compute Instance", "amount": 12.34}],
+        "page": 2,
+        "pages": 3,
+        "results": 51,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_account_invoice_items.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_account_invoice_items_list",
+            {"invoice_id": 123, "page": 2, "page_size": 25},
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.list_account_invoice_items.assert_awaited_once_with(
+        123, page=2, page_size=25
+    )
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        ({}, "invoice_id must be a positive integer"),
+        ({"invoice_id": 0}, "invoice_id must be a positive integer"),
+        ({"invoice_id": True}, "invoice_id must be a positive integer"),
+        ({"invoice_id": "123/456"}, "invoice_id must be a positive integer"),
+        ({"invoice_id": "123?456"}, "invoice_id must be a positive integer"),
+        ({"invoice_id": ".."}, "invoice_id must be a positive integer"),
+        ({"invoice_id": 123, "page": 0}, "page must be at least 1"),
+        ({"invoice_id": 123, "page_size": 10}, "page_size must be at least 25"),
+        ({"invoice_id": 123, "page": "2"}, "page must be an integer"),
+    ],
+)
+async def test_account_invoice_items_list_rejects_invalid_arguments(
+    arguments: dict[str, object], expected_error: str, sample_config: Config
+) -> None:
+    """Account invoice items list validates route inputs before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_account_invoice_items_list", arguments)
+
+    assert expected_error in result[0].text
+    mock_client_class.assert_not_called()
+
+
 async def test_account_event_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
