@@ -795,6 +795,81 @@ async def test_retryable_update_account_oauth_client_delegates_to_client() -> No
     await retryable.close()
 
 
+async def test_update_account_oauth_client_thumbnail_sends_route() -> None:
+    """OAuth client thumbnail update sends PUT with an empty JSON body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data = {"id": "client-1", "thumbnail_url": "https://example.com/t.png"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.update_account_oauth_client_thumbnail("client-1")
+
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "PUT", "/account/oauth-clients/client-1/thumbnail", {}
+    )
+    await client.close()
+
+
+async def test_update_account_oauth_client_thumbnail_encodes_client_id() -> None:
+    """OAuth client thumbnail update URL-encodes path separators."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"id": "client/123?query"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.update_account_oauth_client_thumbnail("client/123?query")
+
+    mock_request.assert_called_once_with(
+        "PUT", "/account/oauth-clients/client%2F123%3Fquery/thumbnail", {}
+    )
+    await client.close()
+
+
+async def test_update_account_oauth_client_thumbnail_wraps_http_errors() -> None:
+    """OAuth client thumbnail update wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.update_account_oauth_client_thumbnail("client-1")
+
+    assert "UpdateAccountOAuthClientThumbnail" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_update_account_oauth_client_thumbnail_delegates_once() -> None:
+    """RetryableClient delegates thumbnail update without replaying the write."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(
+            retryable.client,
+            "update_account_oauth_client_thumbnail",
+            new_callable=AsyncMock,
+        ) as mock_update,
+        patch.object(
+            retryable, "_execute_with_retry", new_callable=AsyncMock
+        ) as mock_retry,
+    ):
+        mock_update.return_value = {"id": "client-1"}
+        result = await retryable.update_account_oauth_client_thumbnail("client-1")
+
+    mock_update.assert_awaited_once_with("client-1")
+    mock_retry.assert_not_called()
+    assert result == {"id": "client-1"}
+    await retryable.close()
+
+
 async def test_list_account_events_sends_exact_route_with_query() -> None:
     """Account events listing sends GET /account/events."""
     client = Client("https://api.linode.com/v4", "test-token")

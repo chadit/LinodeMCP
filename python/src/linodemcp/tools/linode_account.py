@@ -252,6 +252,40 @@ def create_linode_account_oauth_client_update_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def create_linode_account_oauth_client_thumbnail_update_tool() -> tuple[
+    Tool, Capability
+]:
+    """Create the linode_account_oauth_client_thumbnail_update tool."""
+    return Tool(
+        name="linode_account_oauth_client_thumbnail_update",
+        description=(
+            "Updates an account OAuth client's thumbnail. "
+            "Pass dry_run=true to preview without updating."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "client_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": _ACCOUNT_OAUTH_CLIENT_ID_PATTERN_TEXT,
+                    "description": "OAuth client ID",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm this mutating operation. Ignored "
+                        "when dry_run=true."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["client_id", "confirm"],
+        },
+    ), Capability.Write
+
+
 def _validate_oauth_client_id(value: Any) -> str | None:
     """Validate an OAuth client ID tool argument."""
     if not isinstance(value, str):
@@ -313,6 +347,46 @@ async def handle_linode_account_oauth_client_update(
 
     return await execute_tool(
         cfg, arguments, "update Linode account OAuth client", _call
+    )
+
+
+async def handle_linode_account_oauth_client_thumbnail_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_oauth_client_thumbnail_update tool request."""
+    client_id = _validate_oauth_client_id(arguments.get("client_id"))
+    if client_id is None:
+        return error_response(
+            "client_id must be a non-empty ID without path separators, "
+            "query separators, or traversal segments"
+        )
+
+    encoded_client_id = quote(client_id, safe="")
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_account_oauth_client_thumbnail_update",
+            arguments.get("environment", ""),
+            "PUT",
+            f"/account/oauth-clients/{encoded_client_id}/thumbnail",
+            None,
+            request_body={},
+            side_effects=["The account OAuth client's thumbnail is updated."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates an OAuth client thumbnail. Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        oauth_client = await client.update_account_oauth_client_thumbnail(client_id)
+        return {
+            "message": "OAuth client thumbnail updated successfully",
+            "client": oauth_client,
+        }
+
+    return await execute_tool(
+        cfg, arguments, "update Linode account OAuth client thumbnail", _call
     )
 
 

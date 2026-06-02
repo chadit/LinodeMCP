@@ -1582,6 +1582,22 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateAccountOAuthClient", e) from e
 
+    async def update_account_oauth_client_thumbnail(
+        self, client_id: str
+    ) -> dict[str, Any]:
+        """Update an OAuth client's thumbnail on the Linode account."""
+        encoded_client_id = quote(str(client_id), safe="")
+        try:
+            response = await self.make_request(
+                "PUT",
+                f"/account/oauth-clients/{encoded_client_id}/thumbnail",
+                {},
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateAccountOAuthClientThumbnail", e) from e
+
     async def list_account_events(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -7480,6 +7496,12 @@ class RetryableClient:
             lambda: self.client.update_account_oauth_client(client_id, **fields)
         )
         return result
+
+    async def update_account_oauth_client_thumbnail(
+        self, client_id: str
+    ) -> dict[str, Any]:
+        """Update an account OAuth client thumbnail without replaying the write."""
+        return await self.client.update_account_oauth_client_thumbnail(client_id)
 
     async def list_account_events(
         self, page: int | None = None, page_size: int | None = None
