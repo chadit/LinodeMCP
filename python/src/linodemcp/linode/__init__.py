@@ -1540,6 +1540,15 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("EnableAccountManaged", e) from e
 
+    async def get_account_transfer(self) -> dict[str, Any]:
+        """Get network transfer usage for the Linode account."""
+        try:
+            response = await self.make_request("GET", "/account/transfer")
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetAccountTransfer", e) from e
+
     async def list_account_logins(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -7711,6 +7720,13 @@ class RetryableClient:
     async def enable_account_managed(self) -> dict[str, Any]:
         """Enable Linode Managed by delegating once without retry."""
         return await self.client.enable_account_managed()
+
+    async def get_account_transfer(self) -> dict[str, Any]:
+        """Get account network transfer usage with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_account_transfer
+        )
+        return result
 
     async def list_account_logins(
         self, page: int | None = None, page_size: int | None = None

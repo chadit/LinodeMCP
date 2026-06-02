@@ -279,6 +279,29 @@ async def handle_linode_account_settings_managed_enable(
     return await execute_tool(cfg, arguments, "enable Linode Managed", _call)
 
 
+def create_linode_account_transfer_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_transfer_get tool."""
+    return Tool(
+        name="linode_account_transfer_get",
+        description="Gets network transfer usage for the Linode account.",
+        inputSchema={
+            "type": "object",
+            "properties": ENV_PARAM_SCHEMA,
+        },
+    ), Capability.Read
+
+
+async def handle_linode_account_transfer_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_transfer_get tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_account_transfer()
+
+    return await execute_tool(cfg, arguments, "get Linode account transfer", _call)
+
+
 def create_linode_account_maintenance_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_maintenance_list tool."""
     return Tool(
