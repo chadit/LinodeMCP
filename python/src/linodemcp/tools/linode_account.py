@@ -165,6 +165,69 @@ async def handle_linode_account_event_get(
     return await execute_tool(cfg, arguments, "get Linode account event", _call)
 
 
+def create_linode_account_event_seen_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_event_seen tool."""
+    return Tool(
+        name="linode_account_event_seen",
+        description=(
+            "Marks a Linode account event as seen. "
+            "Pass dry_run=true to preview without marking the event seen."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "event_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Account event ID to mark as seen",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm this mutating operation. Ignored "
+                        "when dry_run=true."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["event_id", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_account_event_seen(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_event_seen tool request."""
+    event_id = arguments.get("event_id")
+    if not isinstance(event_id, int) or isinstance(event_id, bool) or event_id < 1:
+        return error_response("event_id must be a positive integer")
+
+    if is_dry_run(arguments):
+        # Dry-run previews the current event with a safe GET. The response
+        # still reports the POST that would run; it must not mark the event
+        # seen when dry_run=true.
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_account_event_seen",
+            "POST",
+            f"/account/events/{event_id}/seen",
+            lambda client: client.get_account_event(event_id),
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This marks an account event seen. Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.mark_account_event_seen(event_id)
+
+    return await execute_tool(cfg, arguments, "mark Linode account event seen", _call)
+
+
 _ACCOUNT_AGREEMENT_FIELDS = (
     "billing_agreement",
     "eu_model",
