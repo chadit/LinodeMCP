@@ -1794,6 +1794,16 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("CreateAccountPayment", e) from e
 
+    async def add_account_promo_credit(self, promo_code: str) -> dict[str, Any]:
+        """Add a promo credit to the Linode account."""
+        body = {"promo_code": promo_code}
+        try:
+            response = await self.make_request("POST", "/account/promo-codes", body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("AddAccountPromoCredit", e) from e
+
     async def delete_account_oauth_client(self, client_id: str) -> dict[str, Any]:
         """Delete an OAuth client on the Linode account."""
         encoded_client_id = quote(str(client_id), safe="")
@@ -7757,6 +7767,10 @@ class RetryableClient:
     ) -> dict[str, Any]:
         """Make an account payment once without retry replay."""
         return await self.client.create_account_payment(payment_method_id, usd)
+
+    async def add_account_promo_credit(self, promo_code: str) -> dict[str, Any]:
+        """Add an account promo credit once without retry replay."""
+        return await self.client.add_account_promo_credit(promo_code)
 
     async def delete_account_oauth_client(self, client_id: str) -> dict[str, Any]:
         """Delete an OAuth client once without retry replay."""
