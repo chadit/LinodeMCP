@@ -2617,6 +2617,81 @@ async def test_retryable_enroll_account_beta_does_not_replay() -> None:
     await retryable.close()
 
 
+async def test_update_account_settings_sends_put_to_settings_route() -> None:
+    """Account settings update sends PUT /account/settings."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data = {
+        "backups_enabled": True,
+        "interfaces_for_new_linodes": "linode_default",
+        "longview_subscription": "longview-10",
+        "maintenance_policy": "linode/migrate",
+        "managed": False,
+        "network_helper": True,
+        "object_storage": "active",
+    }
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.update_account_settings(
+            backups_enabled=True,
+            interfaces_for_new_linodes="linode_default",
+            longview_subscription="longview-10",
+            maintenance_policy="linode/migrate",
+            managed=False,
+            network_helper=True,
+            object_storage="active",
+            ignored=None,
+        )
+
+    assert result == response_data
+    mock_request.assert_awaited_once_with("PUT", "/account/settings", response_data)
+    await client.close()
+
+
+async def test_update_account_settings_rejects_empty_body() -> None:
+    """Account settings update requires at least one body field."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with pytest.raises(ValueError, match="At least one account settings field"):
+        await client.update_account_settings()
+
+    await client.close()
+
+
+async def test_update_account_settings_wraps_http_errors() -> None:
+    """Account settings update wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError, match="UpdateAccountSettings"):
+            await client.update_account_settings(network_helper=False)
+
+    await client.close()
+
+
+async def test_retryable_update_account_settings_does_not_replay_put() -> None:
+    """RetryableClient delegates account settings update once."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "update_account_settings", new_callable=AsyncMock
+    ) as mock_update:
+        mock_update.side_effect = httpx.HTTPError("transient")
+
+        with pytest.raises(httpx.HTTPError, match="transient"):
+            await retryable.update_account_settings(network_helper=False)
+
+    mock_update.assert_awaited_once_with(network_helper=False)
+    await retryable.close()
+
+
 async def test_update_account_sends_put_to_account_route() -> None:
     """Test updating account sends PUT /account."""
     client = Client("https://api.linode.com/v4", "test-token")

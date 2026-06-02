@@ -1767,6 +1767,19 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateAccount", e) from e
 
+    async def update_account_settings(self, **fields: Any) -> dict[str, Any]:
+        """Update Linode account settings."""
+        body = {key: value for key, value in fields.items() if value is not None}
+        if not body:
+            msg = "At least one account settings field is required"
+            raise ValueError(msg)
+        try:
+            response = await self.make_request("PUT", "/account/settings", body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateAccountSettings", e) from e
+
     async def create_account_oauth_client(
         self, label: str, redirect_uri: str
     ) -> dict[str, Any]:
@@ -7829,6 +7842,10 @@ class RetryableClient:
             lambda: self.client.update_account(**fields)
         )
         return result
+
+    async def update_account_settings(self, **fields: Any) -> dict[str, Any]:
+        """Update Linode account settings once without retry replay."""
+        return await self.client.update_account_settings(**fields)
 
     async def create_account_oauth_client(
         self, label: str, redirect_uri: str
