@@ -36,6 +36,7 @@ _OAUTH_CLIENT_UPDATE_FIELDS = (
 )
 _ACCOUNT_OAUTH_CLIENT_ID_PATTERN_TEXT = r"^[A-Za-z0-9][A-Za-z0-9_-]*$"
 _ACCOUNT_OAUTH_CLIENT_ID_PATTERN = re.compile(_ACCOUNT_OAUTH_CLIENT_ID_PATTERN_TEXT)
+_USD_AMOUNT_PATTERN = re.compile(r"^(?!0+(?:\.0{1,2})?$)\d+(?:\.\d{1,2})?$")
 
 
 def create_linode_account_tool() -> tuple[Tool, Capability]:
@@ -554,6 +555,98 @@ async def handle_linode_account_payment_methods_list(
     return await execute_tool(
         cfg, arguments, "list Linode account payment methods", _call
     )
+
+
+def create_linode_account_payment_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_payment_create tool."""
+    return Tool(
+        name="linode_account_payment_create",
+        description=(
+            "Makes a payment on the Linode account. "
+            "Pass dry_run=true to preview without creating a payment."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "payment_method_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Payment method ID to charge",
+                },
+                "usd": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": r"^(?!0+(?:\.0{1,2})?$)\d+(?:\.\d{1,2})?$",
+                    "description": "Payment amount in USD",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm live payment creation. "
+                        "When dry_run=true, the request is previewed without "
+                        "creating the payment."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["payment_method_id", "usd", "confirm"],
+        },
+    ), Capability.Write
+
+
+def _account_payment_create_body(
+    arguments: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str | None]:
+    payment_method_id = arguments.get("payment_method_id")
+    if payment_method_id is None:
+        return None, "payment_method_id is required"
+    if (
+        isinstance(payment_method_id, bool)
+        or not isinstance(payment_method_id, int)
+        or payment_method_id < 1
+    ):
+        return None, "payment_method_id must be a positive integer"
+
+    usd, usd_error = _required_nonempty_string_argument(arguments, "usd")
+    if usd_error is not None or usd is None:
+        return None, usd_error or "usd is required"
+    if _USD_AMOUNT_PATTERN.fullmatch(usd) is None:
+        return None, "usd must be a positive dollar amount with up to two decimals"
+
+    return {"payment_method_id": payment_method_id, "usd": usd}, None
+
+
+async def handle_linode_account_payment_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_payment_create tool request."""
+    request_body, validation_error = _account_payment_create_body(arguments)
+    if validation_error is not None or request_body is None:
+        return error_response(validation_error or "account payment body is required")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_account_payment_create",
+            arguments.get("environment", ""),
+            "POST",
+            "/account/payments",
+            None,
+            request_body=request_body,
+            side_effects=["A payment is created on the Linode account."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This creates an account payment. Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.create_account_payment(
+            request_body["payment_method_id"], str(request_body["usd"])
+        )
+
+    return await execute_tool(cfg, arguments, "create Linode account payment", _call)
 
 
 def create_linode_account_payment_method_delete_tool() -> tuple[Tool, Capability]:
