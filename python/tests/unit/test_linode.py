@@ -2788,6 +2788,61 @@ async def test_retryable_list_account_child_accounts_delegates_to_client() -> No
     await retryable.close()
 
 
+async def test_list_account_service_transfers_sends_get_route() -> None:
+    """Test listing account service transfers sends GET /account/service-transfers."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response_data: dict[str, Any] = {
+        "data": [{"token": "service-token-example", "status": "pending"}],
+        "page": 2,
+        "pages": 3,
+        "results": 51,
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.list_account_service_transfers(page=2, page_size=25)
+
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "GET", "/account/service-transfers?page=2&page_size=25"
+    )
+    await client.close()
+
+
+async def test_list_account_service_transfers_wraps_http_errors() -> None:
+    """Test listing account service transfers wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("temporary failure")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.list_account_service_transfers()
+
+    assert "ListAccountServiceTransfers" in str(exc_info.value)
+    await client.close()
+
+
+async def test_retryable_list_account_service_transfers_delegates_to_client() -> None:
+    """Test RetryableClient delegates account service transfer listing."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "list_account_service_transfers", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = {"data": [], "page": 1, "pages": 1, "results": 0}
+        result = await retryable.list_account_service_transfers(page=1, page_size=100)
+
+    assert result["data"] == []
+    mock_list.assert_awaited_once_with(page=1, page_size=100)
+    await retryable.close()
+
+
 async def test_get_account_invoice_sends_exact_route() -> None:
     """Account invoice get sends GET /account/invoices/{invoiceId}."""
     client = Client("https://api.linode.com/v4", "test-token")

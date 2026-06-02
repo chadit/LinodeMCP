@@ -3515,6 +3515,106 @@ async def test_account_child_accounts_list_rejects_invalid_page_size(
     mock_client.list_account_child_accounts.assert_not_called()
 
 
+async def test_account_service_transfers_list_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Account service transfers list tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_service_transfers_list_tool" in tools_mod.__all__
+    assert "handle_linode_account_service_transfers_list" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_account_service_transfers_list_tool()
+    assert tool.name == "linode_account_service_transfers_list"
+    assert capability is Capability.Read
+    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
+    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+
+    srv = Server(sample_config)
+    assert "linode_account_service_transfers_list" in srv.registered_tool_names
+
+
+async def test_account_service_transfers_list_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Account service transfers list is callable through server dispatch."""
+    response_data = {
+        "data": [{"token": "service-token-example", "status": "pending"}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_account_service_transfers.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_account_service_transfers_list", {"page": 1, "page_size": 25}
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.list_account_service_transfers.assert_awaited_once_with(
+        page=1, page_size=25
+    )
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        ({"page": 0}, "page must be at least 1"),
+        ({"page": "abc"}, "page must be an integer"),
+        ({"page": True}, "page must be an integer"),
+    ],
+)
+async def test_account_service_transfers_list_rejects_invalid_page(
+    sample_config: Config, arguments: dict[str, object], expected_error: str
+) -> None:
+    """Account service transfers list rejects invalid page before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_account_service_transfers_list", arguments)
+
+    assert expected_error in result[0].text
+    mock_client.list_account_service_transfers.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        ({"page_size": 24}, "page_size must be at least 25"),
+        ({"page_size": 501}, "page_size must be at most 500"),
+        ({"page_size": "abc"}, "page_size must be an integer"),
+        ({"page_size": False}, "page_size must be an integer"),
+    ],
+)
+async def test_account_service_transfers_list_rejects_invalid_page_size(
+    sample_config: Config, arguments: dict[str, object], expected_error: str
+) -> None:
+    """Account service transfers list rejects invalid page_size before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_account_service_transfers_list", arguments)
+
+    assert expected_error in result[0].text
+    mock_client.list_account_service_transfers.assert_not_called()
+
+
 async def test_account_child_account_token_create_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
