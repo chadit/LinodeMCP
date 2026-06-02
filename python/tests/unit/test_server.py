@@ -3075,6 +3075,47 @@ async def test_client_get_database_mysql_config_maps_http_error() -> None:
     await client.close()
 
 
+async def test_client_get_database_postgresql_config_uses_exact_path() -> None:
+    """Low-level client uses the documented PostgreSQL config route."""
+    response_data = {
+        "data": [
+            {
+                "name": "max_connections",
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 5000,
+            }
+        ]
+    }
+    response = Mock()
+    response.json.return_value = response_data
+    client = Client("https://api.linode.test/v4", "token")
+    with patch.object(
+        client, "make_request", AsyncMock(return_value=response)
+    ) as make_request:
+        result = await client.get_database_postgresql_config()
+
+    assert result == response_data
+    make_request.assert_awaited_once_with("GET", "/databases/postgresql/config")
+    await client.close()
+
+
+async def test_client_get_database_postgresql_config_maps_http_error() -> None:
+    """Low-level client maps PostgreSQL config HTTP failures to NetworkError."""
+    client = Client("https://api.linode.test/v4", "token")
+    with (
+        patch.object(
+            client,
+            "make_request",
+            AsyncMock(side_effect=httpx.ConnectError("boom")),
+        ),
+        pytest.raises(NetworkError, match="GetDatabasePostgreSQLConfig"),
+    ):
+        await client.get_database_postgresql_config()
+
+    await client.close()
+
+
 async def test_retryable_client_get_database_mysql_config_uses_retry_wrapper() -> None:
     """Read-only MySQL config get delegates through the retry wrapper."""
     response_data = {"data": [{"name": "connect_timeout"}]}
@@ -3095,6 +3136,28 @@ async def test_retryable_client_get_database_mysql_config_uses_retry_wrapper() -
     assert result == response_data
     execute_with_retry.assert_awaited_once()
     retry_client.client.get_database_mysql_config.assert_awaited_once_with()
+
+
+async def test_retryable_client_get_database_postgresql_config_retry_wrapper() -> None:
+    """Read-only PostgreSQL config get delegates through the retry wrapper."""
+    response_data = {"data": [{"name": "max_connections"}]}
+    retry_client = RetryableClient.__new__(RetryableClient)
+    retry_client.client = Mock()
+    retry_client.client.get_database_postgresql_config = AsyncMock(
+        return_value=response_data
+    )
+
+    async def _execute(call: Any, *args: Any) -> Any:
+        return await call(*args)
+
+    with patch.object(
+        retry_client, "_execute_with_retry", AsyncMock(side_effect=_execute)
+    ) as execute_with_retry:
+        result = await retry_client.get_database_postgresql_config()
+
+    assert result == response_data
+    execute_with_retry.assert_awaited_once()
+    retry_client.client.get_database_postgresql_config.assert_awaited_once_with()
 
 
 async def test_database_mysql_config_get_tool_is_exported_and_registered(
@@ -3141,6 +3204,54 @@ async def test_database_mysql_config_get_dispatches_from_registry(
 
     assert json.loads(result[0].text) == response_data
     mock_client.get_database_mysql_config.assert_awaited_once_with()
+
+
+async def test_database_postgresql_config_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """PostgreSQL config get tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+    from linodemcp.version import get_version_info
+
+    assert "create_linode_database_postgresql_config_get_tool" in tools_mod.__all__
+    assert "handle_linode_database_postgresql_config_get" in tools_mod.__all__
+
+    srv = Server(sample_config)
+    assert "linode_database_postgresql_config_get" in srv.registered_tool_names
+
+    entry = next(
+        item
+        for item in get_tool_registry()
+        if item.name == "linode_database_postgresql_config_get"
+    )
+    assert entry.capability == Capability.Read
+    assert entry.tool.inputSchema.get("required") is None
+    assert "environment" in entry.tool.inputSchema["properties"]
+    assert (
+        "linode_database_postgresql_config_get" in get_version_info().features["tools"]
+    )
+
+
+async def test_database_postgresql_config_get_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """PostgreSQL config get is callable through server dispatch."""
+    response_data: dict[str, object] = {
+        "data": [{"name": "max_connections", "type": "integer", "minimum": 1}]
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_database_postgresql_config.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_database_postgresql_config_get", {})
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.get_database_postgresql_config.assert_awaited_once_with()
 
 
 async def test_client_get_database_mysql_instance_uses_exact_encoded_path() -> None:

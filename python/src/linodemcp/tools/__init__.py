@@ -184,6 +184,7 @@ from linodemcp.tools.linode_databases import (
     create_linode_database_mysql_instance_ssl_get_tool,
     create_linode_database_mysql_instance_update_tool,
     create_linode_database_mysql_instances_list_tool,
+    create_linode_database_postgresql_config_get_tool,
     create_linode_databases_engines_list_tool,
     handle_linode_database_cluster_create,
     handle_linode_database_engine_get,
@@ -198,6 +199,7 @@ from linodemcp.tools.linode_databases import (
     handle_linode_database_mysql_instance_ssl_get,
     handle_linode_database_mysql_instance_update,
     handle_linode_database_mysql_instances_list,
+    handle_linode_database_postgresql_config_get,
     handle_linode_databases_engines_list,
 )
 from linodemcp.tools.linode_domain_records import (
@@ -835,6 +837,7 @@ __all__ = [
     "create_linode_database_mysql_instance_ssl_get_tool",
     "create_linode_database_mysql_instance_update_tool",
     "create_linode_database_mysql_instances_list_tool",
+    "create_linode_database_postgresql_config_get_tool",
     "create_linode_databases_engines_list_tool",
     "create_linode_domain_create_tool",
     "create_linode_domain_delete_tool",
@@ -1162,6 +1165,7 @@ __all__ = [
     "handle_linode_database_mysql_instance_ssl_get",
     "handle_linode_database_mysql_instance_update",
     "handle_linode_database_mysql_instances_list",
+    "handle_linode_database_postgresql_config_get",
     "handle_linode_databases_engines_list",
     "handle_linode_domain_create",
     "handle_linode_domain_delete",
