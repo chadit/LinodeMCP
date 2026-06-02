@@ -649,6 +649,96 @@ async def handle_linode_account_payment_create(
     return await execute_tool(cfg, arguments, "create Linode account payment", _call)
 
 
+def create_linode_account_service_transfer_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_service_transfer_create tool."""
+    return Tool(
+        name="linode_account_service_transfer_create",
+        description=(
+            "Requests a service transfer for Linode IDs on the account. "
+            "Pass dry_run=true to preview without creating a service transfer."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "linode_ids": {
+                    "type": "array",
+                    "items": {"type": "integer", "minimum": 1},
+                    "minItems": 1,
+                    "description": "Linode IDs to include in the service transfer",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm live service transfer creation. "
+                        "When dry_run=true, the request is previewed without "
+                        "creating the service transfer."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["linode_ids", "confirm"],
+        },
+    ), Capability.Write
+
+
+def _account_service_transfer_linode_ids(
+    arguments: dict[str, Any],
+) -> tuple[list[int] | None, str | None]:
+    raw_linode_ids = arguments.get("linode_ids")
+    if raw_linode_ids is None:
+        return None, "linode_ids is required"
+    if not isinstance(raw_linode_ids, list) or not raw_linode_ids:
+        return None, "linode_ids must be a non-empty list of positive integers"
+
+    raw_linode_id_list = cast("list[object]", raw_linode_ids)
+    linode_ids: list[int] = []
+    for raw_linode_id in raw_linode_id_list:
+        if (
+            isinstance(raw_linode_id, bool)
+            or not isinstance(raw_linode_id, int)
+            or raw_linode_id < 1
+        ):
+            return None, "linode_ids must be a non-empty list of positive integers"
+        linode_ids.append(raw_linode_id)
+    return linode_ids, None
+
+
+async def handle_linode_account_service_transfer_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_service_transfer_create tool request."""
+    linode_ids, validation_error = _account_service_transfer_linode_ids(arguments)
+    if validation_error is not None or linode_ids is None:
+        return error_response(validation_error or "linode_ids are required")
+
+    request_body = {"entities": {"linodes": linode_ids}}
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_account_service_transfer_create",
+            arguments.get("environment", ""),
+            "POST",
+            "/account/service-transfers",
+            None,
+            request_body=request_body,
+            side_effects=[
+                "A service transfer request is created for the listed Linodes."
+            ],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This creates an account service transfer. Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.create_account_service_transfer(linode_ids)
+
+    return await execute_tool(
+        cfg, arguments, "create Linode account service transfer", _call
+    )
+
+
 def create_linode_account_payment_method_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_payment_method_delete tool."""
     return Tool(

@@ -4023,6 +4023,33 @@ async def test_account_payment_create_tool_is_exported_and_registered(
     assert "linode_account_payment_create" in srv.registered_tool_names
 
 
+async def test_account_service_transfer_create_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Service transfer create tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_service_transfer_create_tool" in tools_mod.__all__
+    assert "handle_linode_account_service_transfer_create" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_account_service_transfer_create_tool()
+    assert tool.name == "linode_account_service_transfer_create"
+    assert capability is Capability.Write
+    assert tool.inputSchema["properties"]["linode_ids"]["type"] == "array"
+    assert tool.inputSchema["properties"]["linode_ids"]["minItems"] == 1
+    assert tool.inputSchema["properties"]["linode_ids"]["items"] == {
+        "type": "integer",
+        "minimum": 1,
+    }
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert "dry_run" in tool.inputSchema["properties"]
+    assert "linode_ids" in tool.inputSchema["required"]
+    assert "confirm" in tool.inputSchema["required"]
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_account_service_transfer_create" in srv.registered_tool_names
+
+
 async def test_account_payment_method_create_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
@@ -4429,6 +4456,141 @@ async def test_account_payment_create_tool_propagates_client_error(
 
     assert "CreateAccountPayment" in result[0].text
     mock_client.create_account_payment.assert_awaited_once()
+
+
+async def test_account_service_transfer_create_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Service transfer create dispatches through the registered handler."""
+    mock_client = AsyncMock()
+    mock_client.create_account_service_transfer = AsyncMock(
+        return_value={
+            "token": "service-transfer-token",
+            "status": "pending",
+            "entities": {"linodes": [123, 456]},
+        }
+    )
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_service_transfer_create",
+            {"linode_ids": [123, 456], "confirm": True},
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["token"] == "service-transfer-token"
+    assert payload["entities"]["linodes"] == [123, 456]
+    mock_client.create_account_service_transfer.assert_awaited_once_with([123, 456])
+
+
+@pytest.mark.parametrize("confirm_value", [None, False, "true", 1])
+async def test_account_service_transfer_create_requires_boolean_confirm(
+    sample_config: Config, confirm_value: object
+) -> None:
+    """Service transfer create rejects missing/non-true confirm first."""
+    mock_client = AsyncMock()
+    mock_client.create_account_service_transfer = AsyncMock()
+    arguments: dict[str, object] = {"linode_ids": [123]}
+    if confirm_value is not None:
+        arguments["confirm"] = confirm_value
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_account_service_transfer_create", arguments)
+
+    assert "Set confirm=true" in result[0].text
+    mock_client.create_account_service_transfer.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("value", "message"),
+    [
+        (None, "linode_ids is required"),
+        ([], "linode_ids must be a non-empty list of positive integers"),
+        ("123", "linode_ids must be a non-empty list of positive integers"),
+        ([0], "linode_ids must be a non-empty list of positive integers"),
+        ([-1], "linode_ids must be a non-empty list of positive integers"),
+        ([True], "linode_ids must be a non-empty list of positive integers"),
+        (["123"], "linode_ids must be a non-empty list of positive integers"),
+    ],
+)
+async def test_account_service_transfer_create_validates_linode_ids(
+    sample_config: Config, value: object, message: str
+) -> None:
+    """Service transfer create validates Linode IDs before client call."""
+    mock_client = AsyncMock()
+    mock_client.create_account_service_transfer = AsyncMock()
+    arguments: dict[str, object] = {"linode_ids": [123], "confirm": True}
+    if value is None:
+        arguments.pop("linode_ids")
+    else:
+        arguments["linode_ids"] = value
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_account_service_transfer_create", arguments)
+
+    assert message in result[0].text
+    mock_client.create_account_service_transfer.assert_not_called()
+
+
+async def test_account_service_transfer_create_dry_run_skips_client_call(
+    sample_config: Config,
+) -> None:
+    """Service transfer create dry-run previews without creating."""
+    mock_client = AsyncMock()
+    mock_client.create_account_service_transfer = AsyncMock()
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_service_transfer_create",
+            {"linode_ids": [123, 456], "confirm": False, "dry_run": True},
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["tool"] == "linode_account_service_transfer_create"
+    assert payload["would_execute"] == {
+        "method": "POST",
+        "path": "/account/service-transfers",
+        "body": {"entities": {"linodes": [123, 456]}},
+    }
+    mock_client.create_account_service_transfer.assert_not_called()
+
+
+async def test_account_service_transfer_create_tool_propagates_client_error(
+    sample_config: Config,
+) -> None:
+    """Service transfer create reports client errors from dispatch."""
+    mock_client = AsyncMock()
+    mock_client.create_account_service_transfer = AsyncMock(
+        side_effect=NetworkError("CreateAccountServiceTransfer", Exception("boom"))
+    )
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_service_transfer_create",
+            {"linode_ids": [123], "confirm": True},
+        )
+
+    assert "CreateAccountServiceTransfer" in result[0].text
+    mock_client.create_account_service_transfer.assert_awaited_once()
 
 
 async def test_account_payment_method_create_dispatches_from_registry(
