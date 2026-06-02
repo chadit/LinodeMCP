@@ -3615,6 +3615,58 @@ async def test_retryable_patch_mysql_database_instance_delegates_once() -> None:
     await retryable.close()
 
 
+async def test_resume_mysql_database_instance_sends_encoded_post() -> None:
+    """Resuming a MySQL database sends POST with an encoded instance ID."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data = {"id": 123, "label": "primary-db"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.resume_mysql_database_instance("123/456?")
+
+    assert result == response_data
+    mock_request.assert_awaited_once_with(
+        "POST", "/databases/mysql/instances/123%2F456%3F/resume"
+    )
+    await client.close()
+
+
+async def test_resume_mysql_database_instance_wraps_http_errors() -> None:
+    """Resuming a MySQL database maps HTTP errors to NetworkError."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.resume_mysql_database_instance(123)
+
+    assert "ResumeMysqlDatabaseInstance" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_resume_mysql_database_instance_delegates_once() -> None:
+    """Retryable resume delegates once and does not replay POST failures."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "resume_mysql_database_instance", new_callable=AsyncMock
+    ) as mock_resume:
+        mock_resume.side_effect = NetworkError(
+            "ResumeMysqlDatabaseInstance", httpx.HTTPError("boom")
+        )
+
+        with pytest.raises(NetworkError):
+            await retryable.resume_mysql_database_instance(123)
+
+    mock_resume.assert_awaited_once_with(123)
+    await retryable.close()
+
+
 async def test_list_account_child_accounts_sends_get_to_child_accounts_route() -> None:
     """Test listing child accounts sends GET /account/child-accounts."""
     client = Client("https://api.linode.com/v4", "test-token")

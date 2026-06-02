@@ -2109,6 +2109,19 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetDatabaseMySQLInstanceCredentials", e) from e
 
+    async def resume_mysql_database_instance(
+        self, instance_id: int | str
+    ) -> dict[str, Any]:
+        """Resume a MySQL Managed Database instance."""
+        encoded_instance_id = quote(str(instance_id), safe="")
+        endpoint = f"/databases/mysql/instances/{encoded_instance_id}/resume"
+        try:
+            response = await self.make_request("POST", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ResumeMysqlDatabaseInstance", e) from e
+
     async def update_mysql_database_instance(
         self, instance_id: int, payload: dict[str, Any]
     ) -> dict[str, Any]:
@@ -8201,6 +8214,12 @@ class RetryableClient:
     ) -> dict[str, Any]:
         """Delete a MySQL Managed Database once without retry replay."""
         return await self.client.delete_mysql_database_instance(instance_id)
+
+    async def resume_mysql_database_instance(
+        self, instance_id: int | str
+    ) -> dict[str, Any]:
+        """Resume a MySQL Managed Database once without retry replay."""
+        return await self.client.resume_mysql_database_instance(instance_id)
 
     async def update_mysql_database_instance(
         self, instance_id: int, payload: dict[str, Any]
