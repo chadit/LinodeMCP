@@ -870,6 +870,8 @@ async def test_handle_linode_account_beta_enroll_dry_run(
     assert body["would_execute"]["path"] == "/account/betas"
     assert body["would_execute"]["body"] == {"id": "distributed-beta"}
     assert body["current_state"] is None
+    assert len(body["side_effects"]) == 1
+    assert "distributed-beta" in body["side_effects"][0]
     mock_client_class.assert_not_called()
 
 

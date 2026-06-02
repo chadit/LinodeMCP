@@ -416,6 +416,7 @@ async def handle_linode_account_beta_enroll(
             "/account/betas",
             None,
             request_body={"id": beta_id},
+            side_effects=[f"The account is enrolled in beta program {beta_id!r}."],
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -472,6 +473,13 @@ async def handle_linode_account_cancel(
             "/account/cancel",
             None,
             request_body={"comments": comments} if comments is not None else None,
+            side_effects=[
+                "The Linode account is closed and all of its resources are removed."
+            ],
+            warnings=[
+                "Account cancellation is permanent and irreversible; every "
+                "resource on the account is destroyed and access is lost."
+            ],
         )
 
     if arguments.get("confirm") is not True:

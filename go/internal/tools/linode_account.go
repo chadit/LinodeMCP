@@ -4729,10 +4729,13 @@ func handleLinodeAccountChildAccountTokenRequest(ctx context.Context, request *m
 	if IsDryRun(request) {
 		// Credential-safe: fetch the child account metadata (not the proxy
 		// token) and preview the POST; the token is never surfaced.
-		return RunDryRunPreview(ctx, request, cfg, "linode_account_child_account_token", httpMethodPost,
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_account_child_account_token", httpMethodPost,
 			accountChildAccountsPath+"/"+euuid+"/token",
 			func(ctx context.Context, c *linode.Client) (any, error) {
 				return c.GetAccountChildAccount(ctx, euuid)
+			},
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return accountChildAccountTokenCreateSideEffects(ctx)
 			})
 	}
 
@@ -5310,7 +5313,10 @@ func handleLinodeAccountBetaEnrollRequest(ctx context.Context, request *mcp.Call
 	}
 
 	if IsDryRun(request) {
-		return RunDryRunPreview(ctx, request, cfg, "linode_account_beta_enroll", httpMethodPost, accountBetasPath, nil)
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_account_beta_enroll", httpMethodPost, accountBetasPath, nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return accountBetaEnrollSideEffects(ctx, req.ID)
+			})
 	}
 
 	if result := RequireConfirm(request, "This enrolls the account in a beta program. Set confirm=true to proceed."); result != nil {
@@ -6029,7 +6035,10 @@ func handleLinodeAccountCancelRequest(ctx context.Context, request *mcp.CallTool
 	}
 
 	if IsDryRun(request) {
-		return RunDryRunPreview(ctx, request, cfg, "linode_account_cancel", httpMethodPost, accountCancelPath, nil)
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_account_cancel", httpMethodPost, accountCancelPath, nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return accountCancelSideEffects(ctx)
+			})
 	}
 
 	if result := RequireConfirm(request, "This cancels the active account. Set confirm=true to proceed."); result != nil {

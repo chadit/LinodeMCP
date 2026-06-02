@@ -2352,6 +2352,9 @@ async def test_account_cancel_dry_run_skips_client_call(sample_config: Config) -
         "path": "/account/cancel",
         "body": {"comments": "No longer needed"},
     }
+    assert len(payload["side_effects"]) == 1
+    assert len(payload["warnings"]) == 1
+    assert "irreversible" in payload["warnings"][0]
     mock_client.cancel_account.assert_not_called()
 
 

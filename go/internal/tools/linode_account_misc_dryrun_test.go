@@ -126,6 +126,10 @@ func TestLinodeAccountBetaEnrollToolDryRun(t *testing.T) {
 		assert.Equal(t, "POST", would["method"])
 		assert.Equal(t, accountBetasTestPath, would["path"])
 		assert.Nil(t, body["current_state"], "no existing resource to preview")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "beta enroll surfaces a side effect")
+		assert.Contains(t, sideEffects[0], "beta-1", "side effect names the beta program")
 	})
 }
 
@@ -158,6 +162,13 @@ func TestLinodeAccountCancelToolDryRun(t *testing.T) {
 		assert.Equal(t, "POST", would["method"])
 		assert.Equal(t, accountCancelTestPath, would["path"])
 		assert.Nil(t, body["current_state"], "no existing resource to preview")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "cancel surfaces a side effect")
+
+		warnings, _ := body["warnings"].([]any)
+		require.Len(t, warnings, 1, "cancel surfaces an irreversibility warning")
+		assert.Contains(t, warnings[0], "irreversible", "warning flags the permanence")
 	})
 }
 
@@ -229,5 +240,9 @@ func TestLinodeAccountChildAccountTokenToolDryRun(t *testing.T) {
 		assert.Equal(t, "POST", would["method"])
 		assert.Equal(t, accountChildGetPath+"/token", would["path"])
 		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run reads the child account metadata only")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "token create surfaces a side effect")
+		assert.NotContains(t, sideEffects[0], "token=", "side effect must not echo a token value")
 	})
 }

@@ -1536,6 +1536,59 @@ func accountAgreementsAcknowledgeSideEffects(ctx context.Context) (DryRunDetails
 	return details, nil
 }
 
+// accountBetaEnrollSideEffects is the Tier B preview for
+// linode_account_beta_enroll (arg-only).
+func accountBetaEnrollSideEffects(ctx context.Context, betaID string) (DryRunDetails, error) {
+	var details DryRunDetails
+
+	if err := ctx.Err(); err != nil {
+		return details, fmt.Errorf("account-beta-enroll side-effect walk canceled: %w", err)
+	}
+
+	effect := "The account is enrolled in the requested beta program."
+	if betaID != "" {
+		effect = fmt.Sprintf("The account is enrolled in beta program %q.", betaID)
+	}
+
+	details.SideEffects = append(details.SideEffects, effect)
+
+	return details, nil
+}
+
+// accountCancelSideEffects is the Tier B preview for linode_account_cancel.
+// Cancellation is the most destructive account-level action, so the preview
+// carries a hard irreversibility warning (arg-only).
+func accountCancelSideEffects(ctx context.Context) (DryRunDetails, error) {
+	var details DryRunDetails
+
+	if err := ctx.Err(); err != nil {
+		return details, fmt.Errorf("account-cancel side-effect walk canceled: %w", err)
+	}
+
+	details.SideEffects = append(details.SideEffects,
+		"The Linode account is closed and all of its resources are removed.")
+	details.Warnings = append(details.Warnings,
+		"Account cancellation is permanent and irreversible; every resource on the account is destroyed and access is lost.")
+
+	return details, nil
+}
+
+// accountChildAccountTokenCreateSideEffects is the Tier B preview for
+// linode_account_child_account_token. The proxy token itself is never
+// surfaced; the side effect only states that a token is minted (arg-only).
+func accountChildAccountTokenCreateSideEffects(ctx context.Context) (DryRunDetails, error) {
+	var details DryRunDetails
+
+	if err := ctx.Err(); err != nil {
+		return details, fmt.Errorf("account-child-account-token-create side-effect walk canceled: %w", err)
+	}
+
+	details.SideEffects = append(details.SideEffects,
+		"A proxy user token is created for the selected child account.")
+
+	return details, nil
+}
+
 // profilePhoneNumberSendSideEffects is the Tier B preview for
 // linode_profile_phone_number_send. The phone number is PII, so the side
 // effect avoids echoing it (arg-only).
