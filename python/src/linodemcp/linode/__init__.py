@@ -1832,6 +1832,17 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetAccountOAuthClient", e) from e
 
+    async def reset_account_oauth_client_secret(self, client_id: str) -> dict[str, Any]:
+        """Reset an OAuth client secret by client ID."""
+        encoded_client_id = quote(client_id, safe="")
+        endpoint = f"/account/oauth-clients/{encoded_client_id}/reset-secret"
+        try:
+            response = await self.make_request("POST", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ResetAccountOAuthClientSecret", e) from e
+
     async def get_account_login(self, login_id: int) -> dict[str, Any]:
         """Get an account login by ID."""
         encoded_login_id = quote(str(login_id), safe="")
@@ -7545,6 +7556,10 @@ class RetryableClient:
     async def delete_account_oauth_client(self, client_id: str) -> dict[str, Any]:
         """Delete an OAuth client once without retry replay."""
         return await self.client.delete_account_oauth_client(client_id)
+
+    async def reset_account_oauth_client_secret(self, client_id: str) -> dict[str, Any]:
+        """Reset an OAuth client secret once without retry replay."""
+        return await self.client.reset_account_oauth_client_secret(client_id)
 
     async def cancel_account(self, comments: str | None = None) -> dict[str, Any]:
         """Cancel the Linode account once without retry replay."""

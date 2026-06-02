@@ -1356,6 +1356,73 @@ async def test_retryable_get_account_oauth_client_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_reset_account_oauth_client_secret_sends_exact_route() -> None:
+    """OAuth client secret reset sends the exact POST route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data = {"id": "client-123", "secret": "shown-once"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.reset_account_oauth_client_secret("client-123")
+
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "POST", "/account/oauth-clients/client-123/reset-secret"
+    )
+    await client.close()
+
+
+async def test_reset_account_oauth_client_secret_url_encodes_client_id() -> None:
+    """OAuth client secret reset URL-encodes the client_id path parameter."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"id": "client/id?query"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.reset_account_oauth_client_secret("client/id?query")
+
+    mock_request.assert_called_once_with(
+        "POST", "/account/oauth-clients/client%2Fid%3Fquery/reset-secret"
+    )
+    await client.close()
+
+
+async def test_reset_account_oauth_client_secret_wraps_http_errors() -> None:
+    """OAuth client secret reset wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.reset_account_oauth_client_secret("client-123")
+
+    assert "ResetAccountOAuthClientSecret" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_reset_account_oauth_client_secret_does_not_replay() -> None:
+    """RetryableClient delegates OAuth client secret reset once without retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "reset_account_oauth_client_secret", new_callable=AsyncMock
+    ) as mock_reset:
+        mock_reset.side_effect = httpx.HTTPError("transient")
+        with pytest.raises(httpx.HTTPError):
+            await retryable.reset_account_oauth_client_secret("client-123")
+
+    mock_reset.assert_awaited_once_with("client-123")
+    await retryable.close()
+
+
 async def test_list_account_availability_sends_exact_route_with_query() -> None:
     """Account availability listing sends GET /account/availability."""
     client = Client("https://api.linode.com/v4", "test-token")

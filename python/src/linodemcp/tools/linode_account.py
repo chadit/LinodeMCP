@@ -1235,23 +1235,98 @@ async def handle_linode_account_oauth_client_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_account_oauth_client_get tool request."""
-    raw_client_id = arguments.get("client_id")
-    if raw_client_id is None:
-        return error_response("client_id is required")
-    if not isinstance(raw_client_id, str):
-        return error_response("client_id must be a string")
-
-    client_id = raw_client_id.strip()
-    if not client_id:
-        return error_response("client_id is required")
-    if "/" in client_id or "?" in client_id or ".." in client_id:
-        return error_response("client_id must not contain '/', '?', or '..'")
+    client_id, error = _validated_oauth_client_id(arguments)
+    if error is not None or client_id is None:
+        return error_response(error or "client_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.get_account_oauth_client(client_id)
 
     return await execute_tool(
         cfg, arguments, f"retrieve Linode account OAuth client {client_id}", _call
+    )
+
+
+def create_linode_account_oauth_client_reset_secret_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_oauth_client_reset_secret tool."""
+    return Tool(
+        name="linode_account_oauth_client_reset_secret",
+        description=(
+            "Resets an OAuth client secret. The new secret is only shown once "
+            "in the response. Pass dry_run=true to preview without resetting."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "client_id": {
+                    "type": "string",
+                    "description": "OAuth client ID whose secret will be reset",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm live OAuth client secret reset. "
+                        "When dry_run=true, the request is previewed without "
+                        "resetting the secret."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["client_id", "confirm"],
+        },
+    ), Capability.Write
+
+
+def _validated_oauth_client_id(
+    arguments: dict[str, Any], name: str = "client_id"
+) -> tuple[str | None, str | None]:
+    raw_client_id = arguments.get(name)
+    if raw_client_id is None:
+        return None, f"{name} is required"
+    if not isinstance(raw_client_id, str):
+        return None, f"{name} must be a string"
+
+    client_id = raw_client_id.strip()
+    if not client_id:
+        return None, f"{name} is required"
+    if "/" in client_id or "?" in client_id or ".." in client_id:
+        return None, f"{name} must not contain '/', '?', or '..'"
+    return client_id, None
+
+
+async def handle_linode_account_oauth_client_reset_secret(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_oauth_client_reset_secret tool request."""
+    client_id, error = _validated_oauth_client_id(arguments)
+    if error is not None or client_id is None:
+        return error_response(error or "client_id is required")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_account_oauth_client_reset_secret",
+            arguments.get("environment", ""),
+            "POST",
+            f"/account/oauth-clients/{quote(client_id, safe='')}/reset-secret",
+            None,
+            side_effects=[
+                "The OAuth client secret is reset. The replacement secret is "
+                "shown once and cannot be retrieved later."
+            ],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This resets the OAuth client secret and returns a one-time secret. "
+            "Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.reset_account_oauth_client_secret(client_id)
+
+    return await execute_tool(
+        cfg, arguments, f"reset Linode account OAuth client secret {client_id}", _call
     )
 
 
