@@ -3537,6 +3537,55 @@ async def test_patch_mysql_database_instance_wraps_http_errors() -> None:
     await client.close()
 
 
+async def test_suspend_postgresql_database_instance_sends_encoded_post() -> None:
+    """Low-level client sends the documented PostgreSQL suspend route."""
+    response_data = {"id": 123, "label": "primary-db"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+    client = Client("https://api.linode.test/v4", "token")
+    with patch.object(
+        client, "make_request", AsyncMock(return_value=mock_response)
+    ) as make_request:
+        result = await client.suspend_postgresql_database_instance("123/456?")
+
+    assert result == response_data
+    make_request.assert_awaited_once_with(
+        "POST", "/databases/postgresql/instances/123%2F456%3F/suspend"
+    )
+    await client.close()
+
+
+async def test_suspend_postgresql_database_instance_wraps_http_errors() -> None:
+    """Low-level client maps PostgreSQL suspend HTTP failures to NetworkError."""
+    client = Client("https://api.linode.test/v4", "token")
+    with (
+        patch.object(
+            client, "make_request", AsyncMock(side_effect=httpx.ConnectError("boom"))
+        ),
+        pytest.raises(NetworkError, match="SuspendPostgreSQLDatabaseInstance"),
+    ):
+        await client.suspend_postgresql_database_instance(123)
+    await client.close()
+
+
+async def test_retryable_suspend_postgresql_database_instance_delegates_once() -> None:
+    """Retryable PostgreSQL suspend delegates once to avoid replaying side effects."""
+    retryable = RetryableClient("https://api.linode.test/v4", "token")
+    with patch.object(
+        retryable.client, "suspend_postgresql_database_instance", new_callable=AsyncMock
+    ) as suspend:
+        suspend.side_effect = NetworkError(
+            "SuspendPostgreSQLDatabaseInstance", httpx.HTTPError("boom")
+        )
+
+        with pytest.raises(NetworkError):
+            await retryable.suspend_postgresql_database_instance(123)
+
+    suspend.assert_awaited_once_with(123)
+    await retryable.close()
+
+
 async def test_retryable_create_mysql_database_instance_delegates_once() -> None:
     """Retryable create delegates once and does not replay POST failures."""
     retryable = RetryableClient("https://api.linode.com/v4", "test-token")

@@ -108,6 +108,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
             "linode_database_postgresql_instance_credentials_get", Capability.Write
         ),
         ToolDescriptor("linode_database_postgresql_instance_resume", Capability.Write),
+        ToolDescriptor("linode_database_postgresql_instance_suspend", Capability.Write),
         ToolDescriptor("linode_database_postgresql_instances_list", Capability.Read),
         # Compute reads + mutations.
         ToolDescriptor("linode_instances_list", Capability.Read),

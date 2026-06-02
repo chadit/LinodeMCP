@@ -210,6 +210,11 @@ def test_meta_returns_empty() -> None:
             [Scope.DatabasesReadWrite],
         ),
         (
+            "linode_database_postgresql_instance_suspend",
+            Capability.Write,
+            [Scope.DatabasesReadWrite],
+        ),
+        (
             "linode_database_postgresql_instance_credentials_get",
             Capability.Write,
             [Scope.DatabasesReadWrite],

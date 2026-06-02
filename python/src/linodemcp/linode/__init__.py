@@ -2273,6 +2273,19 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ResumePostgreSQLDatabaseInstance", e) from e
 
+    async def suspend_postgresql_database_instance(
+        self, instance_id: int | str
+    ) -> dict[str, Any]:
+        """Suspend a PostgreSQL Managed Database instance."""
+        encoded_instance_id = quote(str(instance_id), safe="")
+        endpoint = f"/databases/postgresql/instances/{encoded_instance_id}/suspend"
+        try:
+            response = await self.make_request("POST", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("SuspendPostgreSQLDatabaseInstance", e) from e
+
     async def update_mysql_database_instance(
         self, instance_id: int, payload: dict[str, Any]
     ) -> dict[str, Any]:
@@ -8482,6 +8495,12 @@ class RetryableClient:
             self.client.get_database_postgresql_instance_ssl, instance_id
         )
         return result
+
+    async def suspend_postgresql_database_instance(
+        self, instance_id: int | str
+    ) -> dict[str, Any]:
+        """Suspend a PostgreSQL Managed Database once without retry replay."""
+        return await self.client.suspend_postgresql_database_instance(instance_id)
 
     async def get_database_mysql_instance_ssl(
         self, instance_id: int | str
