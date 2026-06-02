@@ -1553,6 +1553,26 @@ async def test_create_account_oauth_client_sends_post_body() -> None:
     await client.close()
 
 
+async def test_delete_account_oauth_client_sends_delete_to_encoded_route() -> None:
+    """OAuth client deletion sends DELETE with an encoded client ID path."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data = {"id": "client/123", "deleted": True}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.delete_account_oauth_client("client/123")
+
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "DELETE", "/account/oauth-clients/client%2F123"
+    )
+    await client.close()
+
+
 async def test_create_account_oauth_client_wraps_http_errors() -> None:
     """OAuth client creation wraps HTTP errors."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -1567,6 +1587,35 @@ async def test_create_account_oauth_client_wraps_http_errors() -> None:
 
     assert "CreateAccountOAuthClient" in str(excinfo.value)
     await client.close()
+
+
+async def test_delete_account_oauth_client_wraps_http_errors() -> None:
+    """OAuth client deletion wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.delete_account_oauth_client("client-123")
+
+    assert "DeleteAccountOAuthClient" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_delete_account_oauth_client_does_not_replay() -> None:
+    """RetryableClient delegates OAuth client deletion once without retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "delete_account_oauth_client", new_callable=AsyncMock
+    ) as mock_delete:
+        mock_delete.side_effect = httpx.HTTPError("transient")
+        with pytest.raises(httpx.HTTPError):
+            await retryable.delete_account_oauth_client("client-123")
+
+    mock_delete.assert_awaited_once_with("client-123")
+    await retryable.close()
 
 
 async def test_retryable_create_account_oauth_client_does_not_replay() -> None:

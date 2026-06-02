@@ -52,6 +52,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_account_oauth_clients_list", Capability.Read),
         ToolDescriptor("linode_account_child_account_token_create", Capability.Write),
         ToolDescriptor("linode_account_oauth_client_create", Capability.Write),
+        ToolDescriptor("linode_account_oauth_client_delete", Capability.Destroy),
         # Compute reads + mutations.
         ToolDescriptor("linode_instances_list", Capability.Read),
         ToolDescriptor("linode_instance_get", Capability.Read),

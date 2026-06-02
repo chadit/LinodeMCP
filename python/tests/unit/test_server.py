@@ -3076,6 +3076,31 @@ async def test_account_oauth_client_create_tool_is_exported_and_registered(
     assert "linode_account_oauth_client_create" in srv.registered_tool_names
 
 
+async def test_account_oauth_client_delete_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """OAuth client delete tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_oauth_client_delete_tool" in tools_mod.__all__
+    assert "handle_linode_account_oauth_client_delete" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_account_oauth_client_delete_tool()
+    assert tool.name == "linode_account_oauth_client_delete"
+    assert capability is Capability.Destroy
+    assert tool.inputSchema["properties"]["client_id"]["minLength"] == 1
+    assert (
+        tool.inputSchema["properties"]["client_id"]["pattern"]
+        == r"^[A-Za-z0-9][A-Za-z0-9_-]*$"
+    )
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert "dry_run" in tool.inputSchema["properties"]
+    assert "confirm" in tool.inputSchema["required"]
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_account_oauth_client_delete" in srv.registered_tool_names
+
+
 async def test_account_oauth_client_create_dispatches_from_registry(
     sample_config: Config,
 ) -> None:
@@ -3234,6 +3259,131 @@ async def test_account_oauth_client_create_tool_propagates_client_error(
 
     assert "CreateAccountOAuthClient" in result[0].text
     mock_client.create_account_oauth_client.assert_awaited_once()
+
+
+async def test_account_oauth_client_delete_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """OAuth client delete dispatches through the registered handler."""
+    mock_client = AsyncMock()
+    mock_client.delete_account_oauth_client = AsyncMock(
+        return_value={"id": "client-123", "deleted": True}
+    )
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_oauth_client_delete",
+            {"client_id": "client-123", "confirm": True},
+        )
+
+    assert json.loads(result[0].text) == {"id": "client-123", "deleted": True}
+    mock_client.delete_account_oauth_client.assert_awaited_once_with("client-123")
+
+
+@pytest.mark.parametrize("confirm_value", [None, False, "true", 1])
+async def test_account_oauth_client_delete_requires_boolean_confirm(
+    sample_config: Config, confirm_value: object
+) -> None:
+    """OAuth client delete rejects missing/non-true confirm before client call."""
+    mock_client = AsyncMock()
+    mock_client.delete_account_oauth_client = AsyncMock()
+    arguments: dict[str, object] = {"client_id": "client-123"}
+    if confirm_value is not None:
+        arguments["confirm"] = confirm_value
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_account_oauth_client_delete", arguments)
+
+    assert "Set confirm=true" in result[0].text
+    mock_client.delete_account_oauth_client.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("client_id", "message"),
+    [
+        (None, "client_id is required"),
+        (123, "client_id must be a string"),
+        ("   ", "client_id is required"),
+        ("client/123", "client_id must contain only"),
+        ("client?123", "client_id must contain only"),
+        ("..", "client_id must contain only"),
+    ],
+)
+async def test_account_oauth_client_delete_validates_client_id(
+    sample_config: Config, client_id: object, message: str
+) -> None:
+    """OAuth client delete validates client_id before client calls."""
+    mock_client = AsyncMock()
+    mock_client.delete_account_oauth_client = AsyncMock()
+    arguments: dict[str, object] = {"confirm": True}
+    if client_id is not None:
+        arguments["client_id"] = client_id
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_account_oauth_client_delete", arguments)
+
+    assert message in result[0].text
+    mock_client.delete_account_oauth_client.assert_not_called()
+
+
+async def test_account_oauth_client_delete_dry_run_skips_client_call(
+    sample_config: Config,
+) -> None:
+    """OAuth client delete dry-run previews the request without deleting."""
+    mock_client = AsyncMock()
+    mock_client.delete_account_oauth_client = AsyncMock()
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_oauth_client_delete",
+            {"client_id": "client-123", "confirm": False, "dry_run": True},
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["tool"] == "linode_account_oauth_client_delete"
+    assert payload["would_execute"] == {
+        "method": "DELETE",
+        "path": "/account/oauth-clients/client-123",
+    }
+    mock_client.delete_account_oauth_client.assert_not_called()
+
+
+async def test_account_oauth_client_delete_tool_propagates_client_error(
+    sample_config: Config,
+) -> None:
+    """OAuth client delete reports client errors from dispatch."""
+    mock_client = AsyncMock()
+    mock_client.delete_account_oauth_client = AsyncMock(
+        side_effect=NetworkError("DeleteAccountOAuthClient", Exception("boom"))
+    )
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_oauth_client_delete",
+            {"client_id": "client-123", "confirm": True},
+        )
+
+    assert "DeleteAccountOAuthClient" in result[0].text
+    mock_client.delete_account_oauth_client.assert_awaited_once_with("client-123")
 
 
 async def test_account_cancel_tool_is_exported_and_registered(
