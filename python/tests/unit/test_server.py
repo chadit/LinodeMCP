@@ -2570,6 +2570,124 @@ async def test_account_service_transfer_get_schema_requires_token(
     assert entry.tool.inputSchema["properties"]["token"]["type"] == "string"
 
 
+async def test_account_service_transfer_delete_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Service transfer delete tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_service_transfer_delete_tool" in tools_mod.__all__
+    assert "handle_linode_account_service_transfer_delete" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_account_service_transfer_delete" in srv.registered_tool_names
+
+
+async def test_account_service_transfer_delete_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Service transfer delete is callable through server dispatch."""
+    response_data: dict[str, object] = {"token": "transfer-token"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_account_service_transfer.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_service_transfer_delete",
+            {"token": "transfer-token", "confirm": True},
+        )
+
+    assert json.loads(result[0].text) == {
+        "message": "Service transfer canceled successfully",
+        "result": response_data,
+    }
+    mock_client.delete_account_service_transfer.assert_awaited_once_with(
+        "transfer-token"
+    )
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({}, "token is required"),
+        ({"token": 123, "confirm": True}, "token must be a string"),
+        ({"token": "   ", "confirm": True}, "token is required"),
+        ({"token": " transfer-token", "confirm": True}, "token must not contain"),
+        ({"token": "transfer/token", "confirm": True}, "token must not contain"),
+        ({"token": "transfer?token", "confirm": True}, "token must not contain"),
+        ({"token": "..", "confirm": True}, "token must not contain"),
+    ],
+)
+async def test_account_service_transfer_delete_rejects_invalid_token(
+    sample_config: Config, arguments: dict[str, object], message: str
+) -> None:
+    """Service transfer delete rejects invalid token before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_account_service_transfer_delete", arguments)
+
+    assert message in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_account_service_transfer_delete_requires_boolean_confirm(
+    sample_config: Config, confirm: object
+) -> None:
+    """Service transfer delete requires explicit confirm=true before client calls."""
+    arguments: dict[str, object] = {"token": "transfer-token"}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_account_service_transfer_delete", arguments)
+
+    assert "Set confirm=true to proceed" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_account_service_transfer_delete_dry_run_encodes_token(
+    sample_config: Config,
+) -> None:
+    """Service transfer delete dry-run previews the encoded DELETE route."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_service_transfer_delete",
+            {"token": "transfer#token", "confirm": False, "dry_run": True},
+        )
+
+    body = json.loads(result[0].text)
+    assert body["would_execute"]["method"] == "DELETE"
+    assert (
+        body["would_execute"]["path"] == "/account/service-transfers/transfer%23token"
+    )
+    mock_client_class.assert_not_called()
+
+
+async def test_account_service_transfer_delete_schema(
+    sample_config: Config,
+) -> None:
+    """Service transfer delete schema requires token and confirm."""
+    Server(_full_access_config(sample_config))
+    entry = next(
+        item
+        for item in get_tool_registry()
+        if item.name == "linode_account_service_transfer_delete"
+    )
+
+    assert entry.tool.inputSchema["required"] == ["token", "confirm"]
+    assert entry.tool.inputSchema["properties"]["token"]["type"] == "string"
+    assert entry.tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert entry.tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+
+
 async def test_account_oauth_client_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

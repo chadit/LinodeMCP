@@ -69,6 +69,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_account_oauth_client_delete", Capability.Destroy),
         ToolDescriptor("linode_account_payment_method_create", Capability.Write),
         ToolDescriptor("linode_account_promo_credit_add", Capability.Write),
+        ToolDescriptor("linode_account_service_transfer_delete", Capability.Destroy),
         ToolDescriptor("linode_account_service_transfer_get", Capability.Read),
         # Compute reads + mutations.
         ToolDescriptor("linode_instances_list", Capability.Read),
@@ -287,6 +288,11 @@ def test_storage_admin_includes_backups_but_not_other_compute() -> None:
 def test_account_payment_method_delete_is_account_category() -> None:
     """Payment-method deletion is an account destroy tool."""
     assert categories("linode_account_payment_method_delete") == ["account"]
+
+
+def test_account_service_transfer_delete_is_account_category() -> None:
+    """Service-transfer deletion is an account destroy tool."""
+    assert categories("linode_account_service_transfer_delete") == ["account"]
 
 
 def test_profile_app_revoke_is_account_category() -> None:
