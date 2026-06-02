@@ -105,6 +105,7 @@ _TOOL_CATEGORIES: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     ("block_storage", ("linode_volume_", "linode_volumes_")),
+    ("databases", ("linode_database_", "linode_databases_")),
     ("object_storage", ("linode_object_storage_",)),
     # dns lists ``linode_domain_record_`` before ``linode_domain_`` for the
     # same longest-prefix reason; all three share the same category so the

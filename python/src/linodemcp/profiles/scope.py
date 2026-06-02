@@ -94,6 +94,7 @@ class Scope(StrEnum):
 # keeps the prefix dispatcher and the scope catalog from drifting on the
 # literal spelling.
 _CAT_ACCOUNT = "account"
+_CAT_DATABASES = "databases"
 _CAT_DOMAINS = "domains"
 _CAT_FIREWALL = "firewall"
 _CAT_IMAGES = "images"
@@ -115,6 +116,7 @@ def _scope_matrix() -> dict[str, tuple[Scope, Scope]]:
     """
     return {
         _CAT_ACCOUNT: (Scope.AccountReadOnly, Scope.AccountReadWrite),
+        _CAT_DATABASES: (Scope.DatabasesReadOnly, Scope.DatabasesReadWrite),
         _CAT_DOMAINS: (Scope.DomainsReadOnly, Scope.DomainsReadWrite),
         _CAT_FIREWALL: (Scope.FirewallReadOnly, Scope.FirewallReadWrite),
         _CAT_IMAGES: (Scope.ImagesReadOnly, Scope.ImagesReadWrite),
@@ -147,6 +149,7 @@ def _prefix_table() -> list[tuple[tuple[str, ...], str]]:
     """
     return [
         (("linode_account_",), _CAT_ACCOUNT),
+        (("linode_database_", "linode_databases_"), _CAT_DATABASES),
         (("linode_object_storage_",), _CAT_OBJECT_STORAGE),
         (("linode_lke_",), _CAT_LKE),
         (("linode_nodebalancer_", "linode_nodebalancers_"), _CAT_NODEBALANCERS),

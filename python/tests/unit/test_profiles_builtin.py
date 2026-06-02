@@ -38,6 +38,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_account", Capability.Read),
         ToolDescriptor("linode_account_betas_list", Capability.Read),
         ToolDescriptor("linode_betas_list", Capability.Read),
+        ToolDescriptor("linode_database_instances_list", Capability.Read),
         ToolDescriptor("linode_account_child_accounts_list", Capability.Read),
         ToolDescriptor("linode_account_user_create", Capability.Write),
         ToolDescriptor("linode_account_service_transfers_list", Capability.Read),
@@ -295,6 +296,14 @@ def test_storage_admin_includes_backups_but_not_other_compute() -> None:
     assert "linode_object_storage_bucket_create" in storage_tools
     # No general compute write access.
     assert "linode_instance_create" not in storage_tools
+
+
+def test_database_tools_require_database_read_scope() -> None:
+    """Managed Database tools require the database token scope."""
+    assert required_scopes("linode_database_instances_list", Capability.Read) == [
+        Scope.DatabasesReadOnly
+    ]
+    assert categories("linode_database_instances_list") == ["databases"]
 
 
 def test_account_payment_method_delete_is_account_category() -> None:
