@@ -606,6 +606,34 @@ def create_linode_database_postgresql_instances_list_tool() -> tuple[Tool, Capab
     ), Capability.Read
 
 
+def create_linode_database_postgresql_instance_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_database_postgresql_instance_delete tool."""
+    return Tool(
+        name="linode_database_postgresql_instance_delete",
+        description=(
+            "Deletes a PostgreSQL Managed Database. Pass dry_run=true to "
+            "preview without deleting."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "instance_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "PostgreSQL Managed Database instance ID",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm database deletion.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["instance_id", "confirm"],
+        },
+    ), Capability.Destroy
+
+
 def create_linode_database_mysql_instance_patch_tool() -> tuple[Tool, Capability]:
     """Create the linode_database_mysql_instance_patch tool."""
     return Tool(
@@ -1273,6 +1301,42 @@ async def handle_linode_database_postgresql_instances_list(
 
     return await execute_tool(
         cfg, arguments, "list Linode PostgreSQL database instances", _call
+    )
+
+
+async def handle_linode_database_postgresql_instance_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_database_postgresql_instance_delete tool request."""
+    try:
+        instance_id = _required_positive_int_argument(arguments, "instance_id")
+    except ValueError as exc:
+        return error_response(str(exc))
+
+    encoded_instance_id = quote(str(instance_id), safe="")
+    delete_path = f"/databases/postgresql/instances/{encoded_instance_id}"
+
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_database_postgresql_instance_delete",
+            arguments.get("environment", ""),
+            "DELETE",
+            delete_path,
+            None,
+            side_effects=[
+                f"PostgreSQL Managed Database instance {instance_id} will be deleted."
+            ],
+            warnings=["Deleting a Managed Database is destructive."],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.delete_postgresql_database_instance(instance_id)
+
+    return await execute_tool(
+        cfg, arguments, "delete PostgreSQL Managed Database", _call
     )
 
 
