@@ -2154,6 +2154,21 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetDatabasePostgreSQLInstance", e) from e
 
+    async def reset_postgresql_database_credentials(
+        self, instance_id: int | str
+    ) -> dict[str, Any]:
+        """Reset PostgreSQL Managed Database credentials."""
+        encoded_instance_id = quote(str(instance_id), safe="")
+        endpoint = (
+            f"/databases/postgresql/instances/{encoded_instance_id}/credentials/reset"
+        )
+        try:
+            response = await self.make_request("POST", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ResetPostgresqlDatabaseCredentials", e) from e
+
     async def get_database_mysql_instance_ssl(
         self, instance_id: int | str
     ) -> dict[str, Any]:
@@ -8401,6 +8416,12 @@ class RetryableClient:
             self.client.get_database_postgresql_instance, instance_id
         )
         return result
+
+    async def reset_postgresql_database_credentials(
+        self, instance_id: int | str
+    ) -> dict[str, Any]:
+        """Reset PostgreSQL Managed Database credentials once without retry replay."""
+        return await self.client.reset_postgresql_database_credentials(instance_id)
 
     async def get_database_mysql_instance_ssl(
         self, instance_id: int | str
