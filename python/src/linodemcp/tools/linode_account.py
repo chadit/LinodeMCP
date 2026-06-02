@@ -1800,6 +1800,27 @@ async def handle_linode_account_child_account_get(
     )
 
 
+def _normalize_account_service_transfer_token(
+    raw_token: Any,
+) -> tuple[str | None, str | None]:
+    if raw_token is None:
+        message = "token is required"
+    elif not isinstance(raw_token, str):
+        message = "token must be a string"
+    else:
+        token = raw_token.strip()
+        if not token:
+            message = "token is required"
+        elif token != raw_token or "/" in token or "?" in token or ".." in token:
+            message = (
+                "token must not contain path separators, "
+                "query separators, or traversal segments"
+            )
+        else:
+            return token, None
+    return None, message
+
+
 def create_linode_account_service_transfer_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_service_transfer_get tool."""
     return Tool(
@@ -1823,26 +1844,81 @@ async def handle_linode_account_service_transfer_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_account_service_transfer_get tool request."""
-    raw_token = arguments.get("token")
-    if raw_token is None:
-        return error_response("token is required")
-    if not isinstance(raw_token, str):
-        return error_response("token must be a string")
-
-    token = raw_token.strip()
-    if not token:
-        return error_response("token is required")
-    if token != raw_token or "/" in token or "?" in token or ".." in token:
-        return error_response(
-            "token must not contain path separators, "
-            "query separators, or traversal segments"
-        )
+    token, message = _normalize_account_service_transfer_token(arguments.get("token"))
+    if token is None:
+        return error_response(message or "token is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return await client.get_account_service_transfer(token)
 
     return await execute_tool(
         cfg, arguments, f"retrieve Linode account service transfer {token}", _call
+    )
+
+
+def create_linode_account_service_transfer_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_service_transfer_delete tool."""
+    return Tool(
+        name="linode_account_service_transfer_delete",
+        description=(
+            "Cancels an account service transfer request by token. "
+            "Pass dry_run=true to preview without canceling."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "token": {
+                    "type": "string",
+                    "description": "Service transfer token to cancel",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm this destructive operation. Ignored "
+                        "when dry_run=true."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["token", "confirm"],
+        },
+    ), Capability.Destroy
+
+
+async def handle_linode_account_service_transfer_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_service_transfer_delete tool request."""
+    token, message = _normalize_account_service_transfer_token(arguments.get("token"))
+    if token is None:
+        return error_response(message or "token is required")
+
+    encoded_token = quote(token, safe="")
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_account_service_transfer_delete",
+            arguments.get("environment", ""),
+            "DELETE",
+            f"/account/service-transfers/{encoded_token}",
+            None,
+            side_effects=["The selected account service transfer is canceled."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This cancels a service transfer. Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.delete_account_service_transfer(token)
+        return {
+            "message": "Service transfer canceled successfully",
+            "result": result,
+        }
+
+    return await execute_tool(
+        cfg, arguments, f"cancel Linode account service transfer {token}", _call
     )
 
 

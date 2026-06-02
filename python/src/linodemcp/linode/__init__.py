@@ -1956,6 +1956,17 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetAccountServiceTransfer", e) from e
 
+    async def delete_account_service_transfer(self, token: str) -> dict[str, Any]:
+        """Cancel an account service transfer request by token."""
+        encoded_token = quote(token, safe="")
+        endpoint = f"/account/service-transfers/{encoded_token}"
+        try:
+            response = await self.make_request("DELETE", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteAccountServiceTransfer", e) from e
+
     async def get_account_invoice(self, invoice_id: int) -> dict[str, Any]:
         """Get an invoice by ID."""
         encoded_invoice_id = quote(str(invoice_id), safe="")
@@ -7860,6 +7871,10 @@ class RetryableClient:
             self.client.get_account_service_transfer, token
         )
         return result
+
+    async def delete_account_service_transfer(self, token: str) -> dict[str, Any]:
+        """Cancel an account service transfer request once without retry replay."""
+        return await self.client.delete_account_service_transfer(token)
 
     async def get_account_invoice(self, invoice_id: int) -> dict[str, Any]:
         """Get an invoice by ID with retry."""
