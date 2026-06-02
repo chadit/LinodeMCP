@@ -14481,3 +14481,81 @@ async def test_monitor_dashboards_handler_rejects_malformed_service_type(
         "Error: service_type is required and must contain only letters, "
         "numbers, '_' or '-'"
     )
+
+
+async def test_update_account_user_sends_put_to_encoded_user_route() -> None:
+    """Updating an account user sends PUT to the encoded user route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_body = {"username": "new-user", "email": "new@example.com"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_body
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.update_account_user(
+            "old/user",
+            username="new-user",
+            email="new@example.com",
+            restricted=False,
+            ssh_keys=["ssh-rsa AAA"],
+        )
+
+    assert result == response_body
+    mock_request.assert_called_once_with(
+        "PUT",
+        "/account/users/old%2Fuser",
+        {
+            "username": "new-user",
+            "email": "new@example.com",
+            "restricted": False,
+            "ssh_keys": ["ssh-rsa AAA"],
+        },
+    )
+    await client.close()
+
+
+async def test_update_account_user_rejects_empty_body() -> None:
+    """Empty account user update bodies are rejected before request dispatch."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(ValueError, match="At least one account user field"),
+    ):
+        await client.update_account_user("user")
+
+    mock_request.assert_not_called()
+    await client.close()
+
+
+async def test_retryable_update_account_user_delegates_once() -> None:
+    """Retryable account user update delegates once to avoid replaying mutation."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+    response_body = {"username": "new-user"}
+
+    with patch.object(
+        client.client, "update_account_user", new_callable=AsyncMock
+    ) as mock_update:
+        mock_update.return_value = response_body
+
+        result = await client.update_account_user("old-user", username="new-user")
+
+    assert result == response_body
+    mock_update.assert_awaited_once_with("old-user", username="new-user")
+    await client.close()
+
+
+async def test_update_account_user_wraps_http_errors() -> None:
+    """HTTP errors from account user updates are wrapped."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.update_account_user("old-user", email="new@example.com")
+
+    assert "UpdateAccountUser" in str(excinfo.value)
+    await client.close()

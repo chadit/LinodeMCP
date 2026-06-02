@@ -1841,6 +1841,79 @@ _ACCOUNT_SETTINGS_ALLOWED_ARGUMENTS = frozenset(
     {"environment", "confirm", PARAM_DRY_RUN, *_ACCOUNT_SETTINGS_UPDATE_FIELDS}
 )
 
+_ACCOUNT_USER_UPDATE_BOOLEAN_FIELDS = frozenset({"restricted"})
+_ACCOUNT_USER_UPDATE_STRING_FIELDS = frozenset({"email", "username"})
+_ACCOUNT_USER_UPDATE_LIST_FIELDS = frozenset({"ssh_keys"})
+_ACCOUNT_USER_UPDATE_FIELDS = tuple(
+    sorted(
+        _ACCOUNT_USER_UPDATE_BOOLEAN_FIELDS
+        | _ACCOUNT_USER_UPDATE_STRING_FIELDS
+        | _ACCOUNT_USER_UPDATE_LIST_FIELDS
+    )
+)
+_ACCOUNT_USER_UPDATE_ALLOWED_ARGUMENTS = frozenset(
+    {
+        "environment",
+        "confirm",
+        PARAM_DRY_RUN,
+        "current_username",
+        *_ACCOUNT_USER_UPDATE_FIELDS,
+    }
+)
+_ACCOUNT_USER_USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def _validate_account_username(value: object) -> tuple[str | None, str | None]:
+    if value is None:
+        return None, "current_username is required"
+    if not isinstance(value, str):
+        return None, "current_username must be a string"
+    username = value.strip()
+    if not username:
+        return None, "current_username is required"
+    if username != value or not _ACCOUNT_USER_USERNAME_PATTERN.fullmatch(username):
+        return (
+            None,
+            "current_username must contain only letters, numbers, underscores, "
+            "and hyphens",
+        )
+    return username, None
+
+
+def _account_user_update_body_error(arguments: dict[str, Any]) -> str | None:
+    unknown_fields = set(arguments) - _ACCOUNT_USER_UPDATE_ALLOWED_ARGUMENTS
+    if unknown_fields:
+        fields = ", ".join(sorted(unknown_fields))
+        return f"Unsupported account user field(s): {fields}"
+
+    for field in _ACCOUNT_USER_UPDATE_BOOLEAN_FIELDS:
+        value = arguments.get(field)
+        if value is not None and type(value) is not bool:
+            return f"{field} must be a boolean"
+
+    for field in _ACCOUNT_USER_UPDATE_STRING_FIELDS:
+        value = arguments.get(field)
+        if value is not None and not isinstance(value, str):
+            return f"{field} must be a string"
+
+    value = arguments.get("ssh_keys")
+    if value is not None:
+        if not isinstance(value, list):
+            return "ssh_keys must be a list of strings"
+        ssh_keys = cast("list[object]", value)
+        if any(not isinstance(item, str) for item in ssh_keys):
+            return "ssh_keys must be a list of strings"
+
+    return None
+
+
+def _account_user_update_body(arguments: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: arguments[key]
+        for key in _ACCOUNT_USER_UPDATE_FIELDS
+        if arguments.get(key) is not None
+    }
+
 
 def create_linode_account_settings_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_settings_update tool."""
@@ -2063,6 +2136,93 @@ async def handle_linode_account_update(
         }
 
     return await execute_tool(cfg, arguments, "update Linode account", _call)
+
+
+def create_linode_account_user_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_user_update tool."""
+    return Tool(
+        name="linode_account_user_update",
+        description=(
+            "Updates an account user by username. "
+            "Pass dry_run=true to preview without updating."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "current_username": {
+                    "type": "string",
+                    "description": "Current username to update",
+                },
+                "email": {"type": "string", "description": "User email address"},
+                "restricted": {
+                    "type": "boolean",
+                    "description": "Whether the user is restricted",
+                },
+                "ssh_keys": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "SSH keys for the user",
+                },
+                "username": {"type": "string", "description": "New username"},
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm this mutating operation. "
+                        "When dry_run=true, the request is previewed without "
+                        "updating the user."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["current_username", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_account_user_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_user_update tool request."""
+    current_username, username_error = _validate_account_username(
+        arguments.get("current_username")
+    )
+    if username_error is not None or current_username is None:
+        return error_response(username_error or "current_username is required")
+
+    validation_error = _account_user_update_body_error(arguments)
+    if validation_error is not None:
+        return error_response(validation_error)
+
+    update_fields = _account_user_update_body(arguments)
+    if not update_fields:
+        return error_response("At least one account user field is required")
+
+    if is_dry_run(arguments):
+        encoded_username = quote(current_username, safe="")
+        return build_dry_run_response(
+            "linode_account_user_update",
+            arguments.get("environment", ""),
+            "PUT",
+            f"/account/users/{encoded_username}",
+            None,
+            request_body=update_fields,
+            side_effects=["The account user is updated."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates an account user. Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.update_account_user(current_username, **update_fields)
+        return {
+            "message": "Account user updated successfully",
+            "user": result,
+        }
+
+    return await execute_tool(cfg, arguments, "update Linode account user", _call)
 
 
 _MIN_REGION_ID_PARTS = 2

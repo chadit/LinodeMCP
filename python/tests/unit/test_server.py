@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+from mcp.types import ListToolsRequest, ListToolsResult
 
 from linodemcp.config import BuiltinOverride, UserProfileConfig
 from linodemcp.linode import Client, NetworkError, Profile, RetryableClient
@@ -8753,3 +8754,318 @@ async def test_firewall_device_delete_dry_run_still_rejects_negative_ids(
 
     assert len(result) == 1
     assert "firewall_id must be a positive integer" in result[0].text
+
+
+async def test_account_user_update_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Account user update tool is exported and server-registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_user_update_tool" in tools_mod.__all__
+    assert "handle_linode_account_user_update" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_account_user_update_tool()
+    assert tool.name == "linode_account_user_update"
+    assert capability is Capability.Write
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert "confirm" in tool.inputSchema["required"]
+
+    cfg = dataclasses.replace(
+        sample_config,
+        active_profile="account-user-write",
+        profiles={
+            "account-user-write": UserProfileConfig(
+                description="account user write",
+                allowed_tools=("linode_account_user_update",),
+            ),
+        },
+    )
+    srv = Server(cfg)
+    assert "linode_account_user_update" in srv.registered_tool_names
+
+    list_tools = srv.mcp.request_handlers[ListToolsRequest]
+    result = await list_tools(ListToolsRequest(method="tools/list"))
+    list_result = cast("ListToolsResult", result.root)
+    assert "linode_account_user_update" in {tool.name for tool in list_result.tools}
+
+
+async def test_account_user_update_handler_updates_user(
+    sample_config: Config,
+) -> None:
+    """Account user update handler returns the updated user."""
+    from linodemcp.tools import handle_linode_account_user_update
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_account_user = AsyncMock(
+            return_value={
+                "username": "new-user",
+                "email": "new@example.com",
+            }
+        )
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = mock_client
+        mock_client_class.return_value = mock_context
+
+        result = await handle_linode_account_user_update(
+            {
+                "current_username": "old-user",
+                "username": "new-user",
+                "email": "new@example.com",
+                "restricted": False,
+                "ssh_keys": ["ssh-rsa AAA"],
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["message"] == "Account user updated successfully"
+    assert payload["user"]["username"] == "new-user"
+    mock_client.update_account_user.assert_awaited_once_with(
+        "old-user",
+        username="new-user",
+        email="new@example.com",
+        restricted=False,
+        ssh_keys=["ssh-rsa AAA"],
+    )
+
+
+async def test_account_user_update_dry_run_encodes_username(
+    sample_config: Config,
+) -> None:
+    """Dry run previews the encoded account user update path."""
+    from linodemcp.tools import handle_linode_account_user_update
+
+    result = await handle_linode_account_user_update(
+        {
+            "current_username": "old-user",
+            "email": "new@example.com",
+            "confirm": True,
+            "dry_run": True,
+        },
+        sample_config,
+    )
+
+    payload = json.loads(result[0].text)
+    assert payload["tool"] == "linode_account_user_update"
+    assert payload["would_execute"]["method"] == "PUT"
+    assert payload["would_execute"]["path"] == "/account/users/old-user"
+    assert payload["would_execute"]["body"] == {"email": "new@example.com"}
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_account_user_update_requires_boolean_confirm(
+    sample_config: Config, confirm: object
+) -> None:
+    """Live account user updates require explicit boolean confirm."""
+    from linodemcp.tools import handle_linode_account_user_update
+
+    arguments: dict[str, object] = {
+        "current_username": "old-user",
+        "email": "new@example.com",
+    }
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = mock_client
+        mock_client_class.return_value = mock_context
+        result = await handle_linode_account_user_update(arguments, sample_config)
+
+    assert "confirm=true" in result[0].text
+    mock_client.update_account_user.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "current_username",
+    [
+        "bad/user",
+        "bad?user",
+        "bad#user",
+        "bad..user",
+        " bad ",
+        "bad user",
+        "bad\nuser",
+    ],
+)
+async def test_account_user_update_rejects_invalid_current_username(
+    sample_config: Config, current_username: str
+) -> None:
+    """Malformed account usernames are rejected before client calls."""
+    from linodemcp.tools import handle_linode_account_user_update
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client_class.return_value = mock_client
+        result = await handle_linode_account_user_update(
+            {
+                "current_username": current_username,
+                "email": "new@example.com",
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+    assert "current_username must contain only" in result[0].text
+    mock_client.update_account_user.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "current_username",
+    [
+        "bad/user",
+        "bad?user",
+        "bad#user",
+        "bad..user",
+        " bad ",
+        "bad user",
+        "bad\nuser",
+    ],
+)
+async def test_account_user_update_dry_run_rejects_invalid_current_username(
+    sample_config: Config, current_username: str
+) -> None:
+    """Dry-run rejects malformed account usernames before preview construction."""
+    from linodemcp.tools import handle_linode_account_user_update
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client_class.return_value = mock_client
+        result = await handle_linode_account_user_update(
+            {
+                "current_username": current_username,
+                "email": "new@example.com",
+                "confirm": True,
+                "dry_run": True,
+            },
+            sample_config,
+        )
+
+    assert "current_username must contain only" in result[0].text
+    mock_client.update_account_user.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (
+            {"current_username": "old-user", "confirm": True},
+            "At least one account user field",
+        ),
+        (
+            {"current_username": "old-user", "confirm": True, "unknown": "x"},
+            "Unsupported account user field",
+        ),
+        (
+            {
+                "current_username": "old-user",
+                "confirm": True,
+                "email": False,
+            },
+            "email must be a string",
+        ),
+        (
+            {
+                "current_username": "old-user",
+                "confirm": True,
+                "username": 123,
+            },
+            "username must be a string",
+        ),
+        (
+            {
+                "current_username": "old-user",
+                "confirm": True,
+                "restricted": "false",
+            },
+            "restricted must be a boolean",
+        ),
+        (
+            {
+                "current_username": "old-user",
+                "confirm": True,
+                "ssh_keys": "ssh-rsa AAA",
+            },
+            "ssh_keys must be a list of strings",
+        ),
+        (
+            {"current_username": "old-user", "confirm": True, "ssh_keys": [1]},
+            "ssh_keys must be a list of strings",
+        ),
+        (
+            {
+                "current_username": "old-user",
+                "confirm": True,
+                "last_login": "2025-01-01T00:00:00",
+            },
+            "Unsupported account user field",
+        ),
+        (
+            {
+                "current_username": "old-user",
+                "confirm": True,
+                "password_created": "2025-01-01T00:00:00",
+            },
+            "Unsupported account user field",
+        ),
+        (
+            {"current_username": "old-user", "confirm": True, "tfa_enabled": True},
+            "Unsupported account user field",
+        ),
+        (
+            {
+                "current_username": "old-user",
+                "confirm": True,
+                "verified_phone_number": "+15551234567",
+            },
+            "Unsupported account user field",
+        ),
+    ],
+)
+async def test_account_user_update_rejects_invalid_fields(
+    sample_config: Config, arguments: dict[str, object], message: str
+) -> None:
+    """Account user update validates route body fields before client calls."""
+    from linodemcp.tools import handle_linode_account_user_update
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = mock_client
+        mock_client_class.return_value = mock_context
+        result = await handle_linode_account_user_update(arguments, sample_config)
+
+    assert message in result[0].text
+    mock_client.update_account_user.assert_not_called()
+
+
+async def test_account_user_update_client_error_is_reported(
+    sample_config: Config,
+) -> None:
+    """Account user update handler reports client failures."""
+    from linodemcp.tools import handle_linode_account_user_update
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_account_user = AsyncMock(
+            side_effect=NetworkError("UpdateAccountUser", Exception("boom"))
+        )
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = mock_client
+        mock_client_class.return_value = mock_context
+
+        result = await handle_linode_account_user_update(
+            {
+                "current_username": "old-user",
+                "email": "new@example.com",
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+    assert "Failed to update Linode account user" in result[0].text
