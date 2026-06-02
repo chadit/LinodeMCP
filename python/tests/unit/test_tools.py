@@ -48,6 +48,7 @@ from linodemcp.tools import (
     create_linode_account_maintenance_list_tool,
     create_linode_account_oauth_client_get_tool,
     create_linode_account_oauth_client_thumbnail_get_tool,
+    create_linode_account_payment_method_get_tool,
     create_linode_account_support_ticket_attachment_create_tool,
     create_linode_account_support_ticket_close_tool,
     create_linode_account_support_ticket_create_tool,
@@ -175,6 +176,7 @@ from linodemcp.tools import (
     handle_linode_account_maintenance_list,
     handle_linode_account_oauth_client_get,
     handle_linode_account_oauth_client_thumbnail_get,
+    handle_linode_account_payment_method_get,
     handle_linode_account_support_ticket_attachment_create,
     handle_linode_account_support_ticket_close,
     handle_linode_account_support_ticket_create,
@@ -2001,6 +2003,93 @@ async def test_handle_linode_account_oauth_client_get(
         assert len(result) == 1
         assert json.loads(result[0].text) == response_data
         mock_client.get_account_oauth_client.assert_awaited_once_with("client-123")
+
+
+async def test_create_linode_account_payment_method_get_tool() -> None:
+    """Test linode_account_payment_method_get tool schema."""
+    tool, capability = create_linode_account_payment_method_get_tool()
+
+    assert tool.name == "linode_account_payment_method_get"
+    assert capability is Capability.Read
+    assert tool.inputSchema["required"] == ["payment_method_id"]
+    assert tool.inputSchema["properties"]["payment_method_id"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["payment_method_id"]["minimum"] == 1
+
+
+async def test_handle_linode_account_payment_method_get_requires_payment_method_id(
+    sample_config: Config,
+) -> None:
+    """Payment method retrieval requires payment_method_id."""
+    result = await handle_linode_account_payment_method_get({}, sample_config)
+
+    assert len(result) == 1
+    assert "payment_method_id is required" in result[0].text
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({"payment_method_id": "123"}, "payment_method_id must be an integer"),
+        ({"payment_method_id": True}, "payment_method_id must be an integer"),
+        ({"payment_method_id": 0}, "payment_method_id must be at least 1"),
+        ({"payment_method_id": "12/3"}, "payment_method_id must be an integer"),
+        ({"payment_method_id": "12?3"}, "payment_method_id must be an integer"),
+        ({"payment_method_id": ".."}, "payment_method_id must be an integer"),
+    ],
+)
+async def test_handle_linode_account_payment_method_get_rejects_bad_id(
+    sample_config: Config, arguments: dict[str, object], message: str
+) -> None:
+    """Payment method retrieval rejects malformed payment_method_id values."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_account_payment_method_get(
+            arguments, sample_config
+        )
+
+    assert len(result) == 1
+    assert message in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_account_payment_method_get(
+    sample_config: Config,
+) -> None:
+    """Test linode_account_payment_method_get tool."""
+    response_data: dict[str, Any] = {"id": 123, "type": "credit_card"}
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_account_payment_method.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_payment_method_get(
+            {"payment_method_id": 123}, sample_config
+        )
+
+        assert len(result) == 1
+        assert json.loads(result[0].text) == response_data
+        mock_client.get_account_payment_method.assert_awaited_once_with(123)
+
+
+async def test_handle_linode_account_payment_method_get_reports_client_errors(
+    sample_config: Config,
+) -> None:
+    """Test payment method get handler reports client errors."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_account_payment_method.side_effect = RuntimeError("boom")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_payment_method_get(
+            {"payment_method_id": 123}, sample_config
+        )
+
+    assert len(result) == 1
+    assert "Failed to retrieve Linode account payment method" in result[0].text
+    assert "boom" in result[0].text
 
 
 async def test_create_linode_account_oauth_client_thumbnail_get_tool() -> None:
