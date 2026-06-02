@@ -179,6 +179,11 @@ def test_meta_returns_empty() -> None:
             Capability.Read,
             [Scope.DatabasesReadOnly],
         ),
+        (
+            "linode_database_postgresql_instances_list",
+            Capability.Read,
+            [Scope.DatabasesReadOnly],
+        ),
     ],
 )
 def test_read_vs_write_per_category(
