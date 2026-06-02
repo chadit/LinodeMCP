@@ -5011,6 +5011,290 @@ async def test_account_betas_list_dispatches_from_registry(
     mock_client.list_account_betas.assert_awaited_once_with(page=1, page_size=25)
 
 
+async def test_database_cluster_create_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """MySQL database create tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_database_cluster_create_tool" in tools_mod.__all__
+    assert "handle_linode_database_cluster_create" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_database_cluster_create_tool()
+    assert tool.name == "linode_database_cluster_create"
+    assert capability is Capability.Write
+    assert set(tool.inputSchema["required"]) == {
+        "label",
+        "type",
+        "engine",
+        "region",
+        "confirm",
+    }
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_database_cluster_create" in srv.registered_tool_names
+
+
+async def test_database_cluster_create_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """MySQL database create is callable through server dispatch."""
+    response_data = {"id": 123, "label": "primary-db"}
+    arguments: dict[str, Any] = {
+        "label": "primary-db",
+        "type": "g6-dedicated-2",
+        "engine": "mysql/8.0",
+        "region": "us-east",
+        "allow_list": ["192.0.2.1/32"],
+        "cluster_size": 3,
+        "engine_config": {"binlog_retention_period": 600},
+        "fork": {"source": 456},
+        "private_network": "vpc-1",
+        "ssl_connection": True,
+        "confirm": True,
+    }
+    expected_payload = {
+        key: value for key, value in arguments.items() if key != "confirm"
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_mysql_database_instance.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_database_cluster_create", arguments)
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.create_mysql_database_instance.assert_awaited_once_with(
+        expected_payload
+    )
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_database_cluster_create_rejects_non_true_confirm(
+    sample_config: Config, confirm: object
+) -> None:
+    """MySQL database create requires literal confirm=true before client calls."""
+    arguments: dict[str, Any] = {
+        "label": "primary-db",
+        "type": "g6-dedicated-2",
+        "engine": "mysql/8.0",
+        "region": "us-east",
+    }
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_database_cluster_create", arguments)
+
+    assert "Set confirm=true to proceed" in result[0].text
+    mock_client.create_mysql_database_instance.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        (
+            {
+                "type": "g6-dedicated-2",
+                "engine": "mysql/8.0",
+                "region": "us-east",
+                "confirm": True,
+            },
+            "label is required",
+        ),
+        (
+            {
+                "label": "primary-db",
+                "type": "g6-dedicated-2",
+                "engine": "mysql/8.0",
+                "region": "us-east",
+                "cluster_size": True,
+                "confirm": True,
+            },
+            "cluster_size must be an integer",
+        ),
+        (
+            {
+                "label": "primary-db",
+                "type": "g6-dedicated-2",
+                "engine": "mysql/8.0",
+                "region": "us-east",
+                "ssl_connection": "true",
+                "confirm": True,
+            },
+            "ssl_connection must be a boolean",
+        ),
+        (
+            {
+                "label": "primary-db",
+                "type": "g6-dedicated-2",
+                "engine": "mysql/8.0",
+                "region": "us-east",
+                "unknown": "value",
+                "confirm": True,
+            },
+            "unsupported argument: unknown",
+        ),
+        (
+            {
+                "label": "primary-db",
+                "engine": "mysql/8.0",
+                "region": "us-east",
+                "confirm": True,
+            },
+            "type is required",
+        ),
+        (
+            {
+                "label": "primary-db",
+                "type": "g6-dedicated-2",
+                "region": "us-east",
+                "confirm": True,
+            },
+            "engine is required",
+        ),
+        (
+            {
+                "label": "primary-db",
+                "type": "g6-dedicated-2",
+                "engine": "mysql/8.0",
+                "confirm": True,
+            },
+            "region is required",
+        ),
+        (
+            {
+                "label": " primary-db",
+                "type": "g6-dedicated-2",
+                "engine": "mysql/8.0",
+                "region": "us-east",
+                "confirm": True,
+            },
+            "label must not include leading or trailing whitespace",
+        ),
+        (
+            {
+                "label": "primary-db",
+                "type": "g6-dedicated-2",
+                "engine": "mysql/8.0",
+                "region": "us-east",
+                "allow_list": ["192.0.2.1/32", ""],
+                "confirm": True,
+            },
+            "allow_list must be an array of non-empty strings",
+        ),
+        (
+            {
+                "label": "primary-db",
+                "type": "g6-dedicated-2",
+                "engine": "mysql/8.0",
+                "region": "us-east",
+                "cluster_size": 0,
+                "confirm": True,
+            },
+            "cluster_size must be at least 1",
+        ),
+        (
+            {
+                "label": "primary-db",
+                "type": "g6-dedicated-2",
+                "engine": "mysql/8.0",
+                "region": "us-east",
+                "engine_config": [],
+                "confirm": True,
+            },
+            "engine_config must be an object",
+        ),
+        (
+            {
+                "label": "primary-db",
+                "type": "g6-dedicated-2",
+                "engine": "mysql/8.0",
+                "region": "us-east",
+                "fork": "source-1",
+                "confirm": True,
+            },
+            "fork must be an object",
+        ),
+        (
+            {
+                "label": "primary-db",
+                "type": "g6-dedicated-2",
+                "engine": "mysql/8.0",
+                "region": "us-east",
+                "private_network": "",
+                "confirm": True,
+            },
+            "private_network must be a non-empty string",
+        ),
+    ],
+)
+async def test_database_cluster_create_rejects_invalid_arguments(
+    sample_config: Config, arguments: dict[str, object], expected_error: str
+) -> None:
+    """MySQL database create rejects invalid inputs before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_database_cluster_create", arguments)
+
+    assert expected_error in result[0].text
+    mock_client.create_mysql_database_instance.assert_not_called()
+
+
+async def test_database_cluster_create_dry_run_previews_without_client_call(
+    sample_config: Config,
+) -> None:
+    """MySQL database create dry-run returns the POST preview and body."""
+    arguments: dict[str, Any] = {
+        "label": "primary-db",
+        "type": "g6-dedicated-2",
+        "engine": "mysql/8.0",
+        "region": "us-east",
+        "confirm": True,
+        "dry_run": True,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_database_cluster_create", arguments)
+
+    payload = json.loads(result[0].text)
+    assert payload["dry_run"] is True
+    assert payload["would_execute"] == {
+        "method": "POST",
+        "path": "/databases/mysql/instances",
+        "body": {
+            "label": "primary-db",
+            "type": "g6-dedicated-2",
+            "engine": "mysql/8.0",
+            "region": "us-east",
+        },
+    }
+    mock_client.create_mysql_database_instance.assert_not_called()
+
+
 async def test_database_instances_list_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
