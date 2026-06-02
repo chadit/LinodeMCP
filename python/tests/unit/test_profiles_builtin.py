@@ -107,6 +107,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_types_list", Capability.Read),
         ToolDescriptor("linode_database_mysql_config_get", Capability.Read),
         ToolDescriptor("linode_database_mysql_instance_get", Capability.Read),
+        ToolDescriptor("linode_database_mysql_instance_ssl_get", Capability.Read),
         ToolDescriptor("linode_images_list", Capability.Read),
         ToolDescriptor("linode_stackscripts_list", Capability.Read),
         # Compute deep (backups, disks, ips).
@@ -340,6 +341,10 @@ def test_database_tools_require_database_read_scope() -> None:
         Scope.DatabasesReadOnly
     ]
     assert categories("linode_database_mysql_instance_get") == ["databases"]
+    assert required_scopes(
+        "linode_database_mysql_instance_ssl_get", Capability.Read
+    ) == [Scope.DatabasesReadOnly]
+    assert categories("linode_database_mysql_instance_ssl_get") == ["databases"]
     assert required_scopes(
         "linode_database_mysql_instance_credentials_get", Capability.Write
     ) == [Scope.DatabasesReadWrite]
