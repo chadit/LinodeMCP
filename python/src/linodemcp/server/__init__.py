@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 import time
 from collections.abc import Awaitable, Callable
@@ -35,6 +36,10 @@ from linodemcp.tools import (
     handle_version,
 )
 from linodemcp.tools.linode_profile_builder import set_tool_catalog_provider
+from linodemcp.tools.linode_profile_can_run import (
+    set_can_run_active_profile_provider,
+    set_can_run_catalog_provider,
+)
 from linodemcp.tools.linode_profile_draft import (
     set_draft_registry,
     set_profile_resolver,
@@ -82,6 +87,12 @@ class ToolEntry:
     tool: Tool
     capability: Capability
     handle_fn: Callable[..., Awaitable[list[Any]]]
+    # takes_config is True when the handler's signature accepts the Config
+    # second argument. API tools take ``(arguments, cfg)``; CapMeta tools
+    # that never touch the Linode API take ``(arguments,)`` only. Dispatch
+    # reads this so it calls each handler with the right arity (computed
+    # once at registry build, not per request).
+    takes_config: bool
 
 
 def _build_tool_registry() -> list[ToolEntry]:
@@ -125,10 +136,31 @@ def _build_tool_registry() -> list[ToolEntry]:
                 tool=tool,
                 capability=capability,
                 handle_fn=handle_fn,
+                takes_config=_handler_takes_config(handle_fn),
             )
         )
 
     return entries
+
+
+def _handler_takes_config(handle_fn: Callable[..., Awaitable[list[Any]]]) -> bool:
+    """Report whether a tool handler accepts the Config second positional arg.
+
+    API handlers are ``async def handle_x(arguments, cfg)``; CapMeta handlers
+    that never touch the Linode API are ``async def handle_x(arguments)``.
+    Dispatch uses this to call each handler with the correct arity instead of
+    assuming every handler takes config (which crashed CapMeta tools).
+    """
+    # arguments + cfg; a handler with both positional params takes config.
+    arity_with_config = 2
+    positional = [
+        param
+        for param in inspect.signature(handle_fn).parameters.values()
+        if param.kind
+        in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+    ]
+
+    return len(positional) >= arity_with_config
 
 
 _TOOL_REGISTRY = _build_tool_registry()
@@ -235,6 +267,11 @@ class Server:
         # lambda over get_config_path so LINODEMCP_CONFIG_PATH env
         # overrides apply at call time.
         set_save_config_path_provider(lambda: str(get_config_path()))
+        # Phase 3 (dry-run spec): wire the pre-check tool's catalog and
+        # active-profile bridges. The active-profile lambda reads
+        # self._active_profile at call time, so it reflects reload_profile.
+        set_can_run_catalog_provider(lambda: self._descriptors)
+        set_can_run_active_profile_provider(lambda: self._active_profile)
         self._active_profile = resolve_active_profile(config, self._descriptors)
         self._allowed_tool_names = frozenset(self._active_profile.allowed_tools)
         # _allowed_entries and _config_handlers are declared+initialized
@@ -403,7 +440,10 @@ class Server:
             case "version":
                 return await handle_version(arguments)
             case _ if name in self._config_handlers:
-                return await self._config_handlers[name](arguments, self.config)
+                handler = self._config_handlers[name]
+                if self._config_takes_config[name]:
+                    return await handler(arguments, self.config)
+                return await handler(arguments)
             case _:
                 msg = f"Unknown tool: {name}"
                 raise ValueError(msg)
@@ -435,6 +475,9 @@ class Server:
         self._allowed_entries: list[ToolEntry] = allowed_entries
         self._config_handlers: dict[str, Callable[..., Awaitable[list[Any]]]] = {
             entry.name: entry.handle_fn for entry in allowed_entries
+        }
+        self._config_takes_config: dict[str, bool] = {
+            entry.name: entry.takes_config for entry in allowed_entries
         }
 
     def _register_tools(self) -> None:

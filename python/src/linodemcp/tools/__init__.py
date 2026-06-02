@@ -668,6 +668,10 @@ from linodemcp.tools.linode_profile import (
     handle_linode_profile_token_update,
     handle_linode_profile_tokens_list,
 )
+from linodemcp.tools.linode_profile_can_run import (
+    create_linode_profile_can_run_tool,
+    handle_linode_profile_can_run,
+)
 from linodemcp.tools.linode_regions import (
     create_linode_regions_availability_get_tool,
     create_linode_regions_availability_list_tool,
@@ -1056,6 +1060,7 @@ __all__ = [
     "create_linode_profile_app_get_tool",
     "create_linode_profile_app_revoke_tool",
     "create_linode_profile_apps_list_tool",
+    "create_linode_profile_can_run_tool",
     "create_linode_profile_device_get_tool",
     "create_linode_profile_device_revoke_tool",
     "create_linode_profile_devices_list_tool",
@@ -1398,6 +1403,7 @@ __all__ = [
     "handle_linode_profile_app_get",
     "handle_linode_profile_app_revoke",
     "handle_linode_profile_apps_list",
+    "handle_linode_profile_can_run",
     "handle_linode_profile_device_get",
     "handle_linode_profile_device_revoke",
     "handle_linode_profile_devices_list",
