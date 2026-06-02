@@ -1519,6 +1519,25 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetAccountAgreements", e) from e
 
+    async def list_account_events(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List events on the Linode account."""
+        endpoint = "/account/events"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListAccountEvents", e) from e
+
     async def acknowledge_account_agreements(
         self, agreements: dict[str, bool]
     ) -> dict[str, Any]:
@@ -7177,6 +7196,15 @@ class RetryableClient:
         """List account agreements with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_account_agreements
+        )
+        return result
+
+    async def list_account_events(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List account events with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_account_events(page=page, page_size=page_size)
         )
         return result
 
