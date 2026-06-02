@@ -1362,6 +1362,72 @@ async def handle_linode_account_payment_method_create(
     )
 
 
+def create_linode_account_promo_credit_add_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_promo_credit_add tool."""
+    return Tool(
+        name="linode_account_promo_credit_add",
+        description=(
+            "Adds a promo credit to the Linode account. "
+            "Pass dry_run=true to preview without applying the promo code."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "promo_code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Promo code to apply to the account",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm applying this promo code. "
+                        "Required even when dry_run=true; dry_run still "
+                        "avoids the client call."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["promo_code", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_account_promo_credit_add(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_promo_credit_add tool request."""
+    promo_code, promo_code_error = _required_nonempty_string_argument(
+        arguments, "promo_code"
+    )
+    if promo_code_error is not None or promo_code is None:
+        return error_response(promo_code_error or "promo_code is required")
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This applies a promo credit to the account. Set confirm=true to proceed."
+        )
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_account_promo_credit_add",
+            arguments.get("environment", ""),
+            "POST",
+            "/account/promo-codes",
+            None,
+            request_body={"promo_code": promo_code},
+            side_effects=[
+                "The promo code is applied to the account and may add account credit."
+            ],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.add_account_promo_credit(promo_code)
+
+    return await execute_tool(cfg, arguments, "add Linode account promo credit", _call)
+
+
 def create_linode_account_cancel_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_cancel tool."""
     return Tool(
