@@ -2145,6 +2145,17 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetAccountLogin", e) from e
 
+    async def get_account_user(self, username: str) -> dict[str, Any]:
+        """Get an account user by username."""
+        encoded_username = quote(username, safe="")
+        endpoint = f"/account/users/{encoded_username}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetAccountUser", e) from e
+
     async def enroll_account_beta(self, beta_id: str) -> dict[str, Any]:
         """Enroll the account in a beta program."""
         try:
@@ -8032,6 +8043,13 @@ class RetryableClient:
         """Get an account login by ID with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_account_login, login_id
+        )
+        return result
+
+    async def get_account_user(self, username: str) -> dict[str, Any]:
+        """Get an account user by username with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_account_user, username
         )
         return result
 
