@@ -1831,6 +1831,23 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("CreateAccountUser", e) from e
 
+    async def update_account_user(
+        self, current_username: str, **fields: Any
+    ) -> dict[str, Any]:
+        """Update an account user by username."""
+        body = {key: value for key, value in fields.items() if value is not None}
+        if not body:
+            msg = "At least one account user field is required"
+            raise ValueError(msg)
+        encoded_username = quote(current_username, safe="")
+        endpoint = f"/account/users/{encoded_username}"
+        try:
+            response = await self.make_request("PUT", endpoint, body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateAccountUser", e) from e
+
     async def create_account_oauth_client(
         self, label: str, redirect_uri: str
     ) -> dict[str, Any]:
@@ -7934,6 +7951,12 @@ class RetryableClient:
     ) -> dict[str, Any]:
         """Create an account user once without retry replay."""
         return await self.client.create_account_user(username, email, restricted)
+
+    async def update_account_user(
+        self, current_username: str, **fields: Any
+    ) -> dict[str, Any]:
+        """Update an account user once without retry replay."""
+        return await self.client.update_account_user(current_username, **fields)
 
     async def create_account_oauth_client(
         self, label: str, redirect_uri: str
