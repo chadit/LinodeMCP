@@ -3386,6 +3386,158 @@ async def test_account_oauth_client_delete_tool_propagates_client_error(
     mock_client.delete_account_oauth_client.assert_awaited_once_with("client-123")
 
 
+async def test_account_oauth_client_reset_secret_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """OAuth client secret reset tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_oauth_client_reset_secret_tool" in tools_mod.__all__
+    assert "handle_linode_account_oauth_client_reset_secret" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_account_oauth_client_reset_secret_tool()
+    assert tool.name == "linode_account_oauth_client_reset_secret"
+    assert capability is Capability.Write
+    assert tool.inputSchema["properties"]["client_id"]["type"] == "string"
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert "dry_run" in tool.inputSchema["properties"]
+    assert "client_id" in tool.inputSchema["required"]
+    assert "confirm" in tool.inputSchema["required"]
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_account_oauth_client_reset_secret" in srv.registered_tool_names
+
+
+async def test_account_oauth_client_reset_secret_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """OAuth client secret reset dispatches through the registered handler."""
+    mock_client = AsyncMock()
+    mock_client.reset_account_oauth_client_secret = AsyncMock(
+        return_value={"id": "client-123", "secret": "shown-once"}
+    )
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_oauth_client_reset_secret",
+            {"client_id": "client-123", "confirm": True},
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["secret"] == "shown-once"
+    mock_client.reset_account_oauth_client_secret.assert_awaited_once_with("client-123")
+
+
+@pytest.mark.parametrize("confirm_value", [None, False, "true", 1])
+async def test_account_oauth_client_reset_secret_requires_boolean_confirm(
+    sample_config: Config, confirm_value: object
+) -> None:
+    """OAuth client secret reset rejects missing/non-true confirm before client call."""
+    mock_client = AsyncMock()
+    mock_client.reset_account_oauth_client_secret = AsyncMock()
+    arguments: dict[str, object] = {"client_id": "client-123"}
+    if confirm_value is not None:
+        arguments["confirm"] = confirm_value
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_oauth_client_reset_secret", arguments
+        )
+
+    assert "Set confirm=true" in result[0].text
+    mock_client.reset_account_oauth_client_secret.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("client_id", "message"),
+    [
+        (None, "client_id is required"),
+        (123, "client_id must be a string"),
+        ("   ", "client_id is required"),
+        ("client/123", "client_id must not contain"),
+        ("client?123", "client_id must not contain"),
+        ("..", "client_id must not contain"),
+    ],
+)
+async def test_account_oauth_client_reset_secret_validates_client_id(
+    sample_config: Config, client_id: object, message: str
+) -> None:
+    """OAuth client secret reset validates client_id before client call."""
+    mock_client = AsyncMock()
+    mock_client.reset_account_oauth_client_secret = AsyncMock()
+    arguments: dict[str, object] = {"confirm": True}
+    if client_id is not None:
+        arguments["client_id"] = client_id
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_oauth_client_reset_secret", arguments
+        )
+
+    assert message in result[0].text
+    mock_client.reset_account_oauth_client_secret.assert_not_called()
+
+
+async def test_account_oauth_client_reset_secret_dry_run_skips_client_call(
+    sample_config: Config,
+) -> None:
+    """OAuth client secret reset dry-run previews the request without resetting."""
+    mock_client = AsyncMock()
+    mock_client.reset_account_oauth_client_secret = AsyncMock()
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_oauth_client_reset_secret",
+            {"client_id": "client#123", "confirm": False, "dry_run": True},
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["tool"] == "linode_account_oauth_client_reset_secret"
+    assert payload["would_execute"] == {
+        "method": "POST",
+        "path": "/account/oauth-clients/client%23123/reset-secret",
+    }
+    mock_client.reset_account_oauth_client_secret.assert_not_called()
+
+
+async def test_account_oauth_client_reset_secret_tool_propagates_client_error(
+    sample_config: Config,
+) -> None:
+    """OAuth client secret reset reports client errors from dispatch."""
+    mock_client = AsyncMock()
+    mock_client.reset_account_oauth_client_secret = AsyncMock(
+        side_effect=NetworkError("ResetAccountOAuthClientSecret", Exception("boom"))
+    )
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_oauth_client_reset_secret",
+            {"client_id": "client-123", "confirm": True},
+        )
+
+    assert "ResetAccountOAuthClientSecret" in result[0].text
+    mock_client.reset_account_oauth_client_secret.assert_awaited_once_with("client-123")
+
+
 async def test_account_cancel_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
