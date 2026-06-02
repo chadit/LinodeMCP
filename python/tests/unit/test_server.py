@@ -1616,6 +1616,145 @@ async def test_account_child_accounts_list_rejects_invalid_page_size(
     mock_client.list_account_child_accounts.assert_not_called()
 
 
+async def test_account_child_account_token_create_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Child-account token create tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_child_account_token_create_tool" in tools_mod.__all__
+    assert "handle_linode_account_child_account_token_create" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_account_child_account_token_create_tool()
+    assert tool.name == "linode_account_child_account_token_create"
+    assert capability is Capability.Write
+    assert tool.inputSchema["properties"]["euuid"]["minLength"] == 1
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert "confirm" in tool.inputSchema["required"]
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_account_child_account_token_create" in srv.registered_tool_names
+
+
+async def test_account_child_account_token_create_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Child-account token create is callable through server dispatch."""
+    response_data = {"token": "proxy-token", "expiry": "2026-06-02T00:00:00"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_account_child_account_token.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_child_account_token_create",
+            {"euuid": "A1BC2DEF-34GH-567I-J890KLMN12O34P56", "confirm": True},
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.create_account_child_account_token.assert_awaited_once_with(
+        "A1BC2DEF-34GH-567I-J890KLMN12O34P56"
+    )
+
+
+@pytest.mark.parametrize("confirm_value", [None, False, "true", 1])
+async def test_account_child_account_token_create_requires_confirm(
+    sample_config: Config, confirm_value: object
+) -> None:
+    """Token creation rejects missing or non-literal confirm before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        arguments: dict[str, object] = {"euuid": "A1BC2DEF-34GH-567I-J890KLMN12O34P56"}
+        if confirm_value is not None:
+            arguments["confirm"] = confirm_value
+        result = await srv.dispatch(
+            "linode_account_child_account_token_create", arguments
+        )
+
+    assert "Set confirm=true" in result[0].text
+    mock_client.create_account_child_account_token.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "euuid",
+    [
+        None,
+        "",
+        "   ",
+        123,
+        "child/account",
+        "child?account",
+        "child#account",
+        "..",
+        "%2F",
+        "%3F",
+        "%23",
+        "%2e%2e",
+        "child-123",
+        "A1BC2DEF-34GH-567I-J890KLMN12O34P5/",
+    ],
+)
+async def test_account_child_account_token_create_rejects_invalid_euuid(
+    sample_config: Config, euuid: object
+) -> None:
+    """Token creation validates child-account path parameter before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        arguments: dict[str, object] = {"confirm": True}
+        if euuid is not None:
+            arguments["euuid"] = euuid
+        result = await srv.dispatch(
+            "linode_account_child_account_token_create", arguments
+        )
+
+    assert "euuid must match the child account EUUID format" in result[0].text
+    mock_client.create_account_child_account_token.assert_not_called()
+
+
+async def test_account_child_account_token_create_dry_run_skips_client(
+    sample_config: Config,
+) -> None:
+    """Token creation dry-run previews request without calling the client."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_child_account_token_create",
+            {
+                "euuid": "A1BC2DEF-34GH-567I-J890KLMN12O34P56",
+                "confirm": True,
+                "dry_run": True,
+            },
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["dry_run"] is True
+    assert payload["would_execute"] == {
+        "method": "POST",
+        "path": "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56/token",
+    }
+    mock_client.create_account_child_account_token.assert_not_called()
+
+
 async def test_account_tags_list_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
