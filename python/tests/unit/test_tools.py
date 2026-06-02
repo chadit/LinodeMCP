@@ -48,6 +48,7 @@ from linodemcp.tools import (
     create_linode_account_maintenance_list_tool,
     create_linode_account_oauth_client_get_tool,
     create_linode_account_oauth_client_thumbnail_get_tool,
+    create_linode_account_payment_method_delete_tool,
     create_linode_account_payment_method_get_tool,
     create_linode_account_support_ticket_attachment_create_tool,
     create_linode_account_support_ticket_close_tool,
@@ -176,6 +177,7 @@ from linodemcp.tools import (
     handle_linode_account_maintenance_list,
     handle_linode_account_oauth_client_get,
     handle_linode_account_oauth_client_thumbnail_get,
+    handle_linode_account_payment_method_delete,
     handle_linode_account_payment_method_get,
     handle_linode_account_support_ticket_attachment_create,
     handle_linode_account_support_ticket_close,
@@ -490,6 +492,94 @@ def test_create_linode_profile_preferences_get_tool() -> None:
     assert tool.name == "linode_profile_preferences_get"
     assert capability == Capability.Read
     assert "required" not in tool.inputSchema
+
+
+def test_create_linode_account_payment_method_delete_tool() -> None:
+    """Account payment method delete tool exposes confirm-gated schema."""
+    tool, capability = create_linode_account_payment_method_delete_tool()
+
+    assert tool.name == "linode_account_payment_method_delete"
+    assert capability == Capability.Destroy
+    assert tool.inputSchema["required"] == ["payment_method_id", "confirm"]
+    assert tool.inputSchema["properties"]["payment_method_id"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+
+
+async def test_handle_linode_account_payment_method_delete_success(
+    sample_config: Config,
+) -> None:
+    """Handler deletes a payment method with confirm=true."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_account_payment_method.return_value = {}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_payment_method_delete(
+            {"payment_method_id": 123, "confirm": True}, sample_config
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["message"] == "Payment method deleted successfully"
+    assert payload["result"] == {}
+    mock_client.delete_account_payment_method.assert_awaited_once_with(123)
+
+
+async def test_handle_linode_account_payment_method_delete_dry_run(
+    sample_config: Config,
+) -> None:
+    """Dry-run previews the DELETE route without calling the client."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_account_payment_method_delete(
+            {"payment_method_id": 456, "confirm": False, "dry_run": True},
+            sample_config,
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["dry_run"] is True
+    assert payload["would_execute"]["method"] == "DELETE"
+    assert payload["would_execute"]["path"] == "/account/payment-methods/456"
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_handle_linode_account_payment_method_delete_requires_boolean_confirm(
+    sample_config: Config, confirm: object
+) -> None:
+    """Missing or non-true confirm values are rejected before client calls."""
+    arguments: dict[str, object] = {"payment_method_id": 123}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_account_payment_method_delete(
+            arguments, sample_config
+        )
+
+    assert "Set confirm=true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "payment_method_id", [None, 0, -1, True, "1", "1/2", "1?x", ".."]
+)
+async def test_handle_linode_account_payment_method_delete_validates_id(
+    sample_config: Config, payment_method_id: object
+) -> None:
+    """Malformed payment method IDs are rejected before client calls."""
+    arguments: dict[str, object] = {"confirm": True}
+    if payment_method_id is not None:
+        arguments["payment_method_id"] = payment_method_id
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_account_payment_method_delete(
+            arguments, sample_config
+        )
+
+    assert "payment_method_id must be a positive integer" in result[0].text
+    mock_client_class.assert_not_called()
 
 
 async def test_handle_linode_profile_preferences_get_success(

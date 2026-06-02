@@ -994,6 +994,41 @@ async def test_account_agreements_acknowledge_dispatches_from_registry(
     )
 
 
+async def test_account_payment_method_delete_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Account payment-method delete tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    srv = Server(_full_access_config(sample_config))
+
+    assert "create_linode_account_payment_method_delete_tool" in tools_mod.__all__
+    assert "handle_linode_account_payment_method_delete" in tools_mod.__all__
+    assert "linode_account_payment_method_delete" in srv.registered_tool_names
+
+
+async def test_account_payment_method_delete_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Account payment-method delete is callable through server dispatch."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_account_payment_method.return_value = {}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_payment_method_delete",
+            {"payment_method_id": 123, "confirm": True},
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["message"] == "Payment method deleted successfully"
+    mock_client.delete_account_payment_method.assert_awaited_once_with(123)
+
+
 async def test_account_agreements_list_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

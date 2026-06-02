@@ -515,6 +515,80 @@ async def handle_linode_account_payment_methods_list(
     )
 
 
+def create_linode_account_payment_method_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_payment_method_delete tool."""
+    return Tool(
+        name="linode_account_payment_method_delete",
+        description=(
+            "Deletes a payment method on the Linode account. "
+            "Pass dry_run=true to preview without deleting."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "payment_method_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Payment method ID to delete",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm this destructive operation. Ignored "
+                        "when dry_run=true."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["payment_method_id", "confirm"],
+        },
+    ), Capability.Destroy
+
+
+async def handle_linode_account_payment_method_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_payment_method_delete tool request."""
+    payment_method_id = arguments.get("payment_method_id")
+    if (
+        not isinstance(payment_method_id, int)
+        or isinstance(payment_method_id, bool)
+        or payment_method_id < 1
+    ):
+        return error_response("payment_method_id must be a positive integer")
+
+    encoded_payment_method_id = quote(str(payment_method_id), safe="")
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_account_payment_method_delete",
+            arguments.get("environment", ""),
+            "DELETE",
+            f"/account/payment-methods/{encoded_payment_method_id}",
+            None,
+            side_effects=["The selected account payment method is deleted."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This deletes a payment method. Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.delete_account_payment_method(payment_method_id)
+        return {
+            "message": "Payment method deleted successfully",
+            "result": result,
+        }
+
+    return await execute_tool(
+        cfg,
+        arguments,
+        f"delete Linode account payment method {payment_method_id}",
+        _call,
+    )
+
+
 def create_linode_account_notifications_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_notifications_list tool."""
     return Tool(
