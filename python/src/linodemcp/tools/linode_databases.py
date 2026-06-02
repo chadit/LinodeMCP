@@ -1101,6 +1101,34 @@ def create_linode_database_mysql_instance_resume_tool() -> tuple[Tool, Capabilit
     ), Capability.Write
 
 
+def create_linode_database_postgresql_instance_resume_tool() -> tuple[Tool, Capability]:
+    """Create the linode_database_postgresql_instance_resume tool."""
+    return Tool(
+        name="linode_database_postgresql_instance_resume",
+        description=(
+            "Resumes a PostgreSQL Managed Database. Requires confirm=true; pass "
+            "dry_run=true to preview without resuming."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "instance_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "PostgreSQL Managed Database instance ID",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm database resume.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["instance_id", "confirm"],
+        },
+    ), Capability.Write
+
+
 def create_linode_database_mysql_config_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_database_mysql_config_get tool."""
     return Tool(
@@ -1734,6 +1762,40 @@ async def handle_linode_database_mysql_instance_resume(
 
     return await execute_tool(
         cfg, arguments, f"resume MySQL Managed Database {instance_id}", _call
+    )
+
+
+async def handle_linode_database_postgresql_instance_resume(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_database_postgresql_instance_resume tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
+
+    instance_id, error = _validate_instance_id(arguments.get("instance_id"))
+    if error is not None or instance_id is None:
+        return error_response(error or "instance_id is required")
+
+    encoded_instance_id = quote(str(instance_id), safe="")
+    resume_path = f"/databases/postgresql/instances/{encoded_instance_id}/resume"
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_database_postgresql_instance_resume",
+            arguments.get("environment", ""),
+            "POST",
+            resume_path,
+            None,
+            side_effects=[
+                f"PostgreSQL Managed Database {instance_id} will be resumed."
+            ],
+            warnings=["Resuming a Managed Database changes service state."],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.resume_postgresql_database_instance(instance_id)
+
+    return await execute_tool(
+        cfg, arguments, f"resume PostgreSQL Managed Database {instance_id}", _call
     )
 
 

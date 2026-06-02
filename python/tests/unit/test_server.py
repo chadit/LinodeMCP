@@ -7267,6 +7267,116 @@ async def test_database_mysql_instance_resume_dry_run_previews_without_client_ca
     mock_client_class.assert_not_called()
 
 
+async def test_database_postgresql_instance_resume_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """PostgreSQL Managed Database resume tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_database_postgresql_instance_resume_tool" in tools_mod.__all__
+    assert "handle_linode_database_postgresql_instance_resume" in tools_mod.__all__
+
+    tool, capability = (
+        tools_mod.create_linode_database_postgresql_instance_resume_tool()
+    )
+    assert tool.name == "linode_database_postgresql_instance_resume"
+    assert capability is Capability.Write
+    assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert tool.inputSchema["required"] == ["instance_id", "confirm"]
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_database_postgresql_instance_resume" in srv.registered_tool_names
+
+
+async def test_database_postgresql_instance_resume_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """PostgreSQL Managed Database resume is callable through server dispatch."""
+    response_data = {"id": 123, "label": "primary-db"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.resume_postgresql_database_instance.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_postgresql_instance_resume",
+            {"instance_id": 123, "confirm": True},
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.resume_postgresql_database_instance.assert_awaited_once_with(123)
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_database_postgresql_instance_resume_requires_boolean_confirm(
+    sample_config: Config, confirm: object
+) -> None:
+    """PostgreSQL database resume rejects non-true confirm before client calls."""
+    arguments: dict[str, object] = {"instance_id": 123}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_postgresql_instance_resume", arguments
+        )
+
+    assert "Set confirm=true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        ({"confirm": True}, "instance_id is required"),
+        ({"instance_id": 0, "confirm": True}, "instance_id must be at least 1"),
+        ({"instance_id": True, "confirm": True}, "instance_id must be an integer"),
+        ({"instance_id": "123/456", "confirm": True}, "instance_id must be an integer"),
+        ({"instance_id": "123?456", "confirm": True}, "instance_id must be an integer"),
+        ({"instance_id": "..", "confirm": True}, "instance_id must be an integer"),
+    ],
+)
+async def test_database_postgresql_instance_resume_rejects_invalid_instance_id(
+    sample_config: Config, arguments: dict[str, object], expected_error: str
+) -> None:
+    """PostgreSQL database resume rejects invalid path params before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_postgresql_instance_resume", arguments
+        )
+
+    assert expected_error in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_database_postgresql_instance_resume_dry_run_previews_without_client_call(
+    sample_config: Config,
+) -> None:
+    """PostgreSQL database resume dry-run returns the POST preview."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_postgresql_instance_resume",
+            {"instance_id": 123, "confirm": True, "dry_run": True},
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["dry_run"] is True
+    assert payload["would_execute"] == {
+        "method": "POST",
+        "path": "/databases/postgresql/instances/123/resume",
+    }
+    mock_client_class.assert_not_called()
+
+
 async def test_suspend_mysql_database_instance_sends_encoded_post() -> None:
     """Low-level client sends the documented MySQL suspend route."""
     response_data = {"id": 123, "label": "primary-db"}
