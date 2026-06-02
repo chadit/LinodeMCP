@@ -26,6 +26,8 @@ _CHILD_ACCOUNT_EUUID_PATTERN = re.compile(
     r"^[A-Za-z0-9]{8}-[A-Za-z0-9]{4}-[A-Za-z0-9]{4}-[A-Za-z0-9]{16}$"
 )
 _OAUTH_CLIENT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+_ACCOUNT_USERNAME_PATTERN_TEXT = r"^[A-Za-z0-9][A-Za-z0-9_-]*$"
+_ACCOUNT_USERNAME_PATTERN = re.compile(_ACCOUNT_USERNAME_PATTERN_TEXT)
 
 
 def _validate_service_transfer_token(value: object) -> tuple[str | None, str | None]:
@@ -2656,6 +2658,52 @@ async def handle_linode_account_login_get(
 
     return await execute_tool(
         cfg, arguments, f"retrieve Linode account login {raw_login_id}", _call
+    )
+
+
+def create_linode_account_user_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_user_get tool."""
+    return Tool(
+        name="linode_account_user_get",
+        description="Gets an account user by username.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "username": {
+                    "type": "string",
+                    "pattern": _ACCOUNT_USERNAME_PATTERN_TEXT,
+                    "description": "Username to retrieve",
+                },
+            },
+            "required": ["username"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_account_user_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_user_get tool request."""
+    raw_username = arguments.get("username")
+    if raw_username is None:
+        return error_response("username is required")
+    if not isinstance(raw_username, str):
+        return error_response("username must be a string")
+
+    username = raw_username.strip()
+    if not username:
+        return error_response("username is required")
+    if username != raw_username or not _ACCOUNT_USERNAME_PATTERN.fullmatch(username):
+        return error_response(
+            "username must contain only letters, numbers, underscores, or hyphens"
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_account_user(username)
+
+    return await execute_tool(
+        cfg, arguments, f"retrieve Linode account user {username}", _call
     )
 
 

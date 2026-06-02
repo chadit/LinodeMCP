@@ -6,12 +6,12 @@ import asyncio
 import dataclasses
 import json
 from typing import TYPE_CHECKING, Any, cast
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
 from linodemcp.config import BuiltinOverride, UserProfileConfig
-from linodemcp.linode import NetworkError, Profile
+from linodemcp.linode import Client, NetworkError, Profile, RetryableClient
 from linodemcp.profiles import (
     ActiveProfileDisabledError,
     ActiveProfileUnknownError,
@@ -3808,6 +3808,117 @@ async def test_account_login_get_schema_requires_login_id(
     assert entry.tool.inputSchema["required"] == ["login_id"]
     assert entry.tool.inputSchema["properties"]["login_id"]["type"] == "integer"
     assert entry.tool.inputSchema["properties"]["login_id"]["minimum"] == 1
+
+
+async def test_client_get_account_user_uses_exact_encoded_path() -> None:
+    """Low-level client uses the documented account user route."""
+    response_data = {"username": "alice-dev"}
+    response = Mock()
+    response.json.return_value = response_data
+    client = Client("https://api.linode.test/v4", "token")
+    with patch.object(
+        client, "make_request", AsyncMock(return_value=response)
+    ) as make_request:
+        result = await client.get_account_user("alice/dev")
+
+    assert result == response_data
+    make_request.assert_awaited_once_with("GET", "/account/users/alice%2Fdev")
+    await client.close()
+
+
+async def test_retryable_client_get_account_user_uses_retry_wrapper() -> None:
+    """Read-only account user get delegates through the retry wrapper."""
+    response_data = {"username": "alice-dev"}
+    retry_client = RetryableClient.__new__(RetryableClient)
+    retry_client.client = Mock()
+    retry_client.client.get_account_user = AsyncMock(return_value=response_data)
+
+    async def _execute(call: Any, *args: Any) -> Any:
+        return await call(*args)
+
+    with patch.object(
+        retry_client, "_execute_with_retry", AsyncMock(side_effect=_execute)
+    ) as execute_with_retry:
+        result = await retry_client.get_account_user("alice-dev")
+
+    assert result == response_data
+    execute_with_retry.assert_awaited_once()
+    retry_client.client.get_account_user.assert_awaited_once_with("alice-dev")
+
+
+async def test_account_user_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Account user get tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_user_get_tool" in tools_mod.__all__
+    assert "handle_linode_account_user_get" in tools_mod.__all__
+
+    srv = Server(sample_config)
+    assert "linode_account_user_get" in srv.registered_tool_names
+
+
+async def test_account_user_get_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Account user get is callable through server dispatch."""
+    response_data: dict[str, object] = {"username": "alice-dev", "restricted": True}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_account_user.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_account_user_get", {"username": "alice-dev"}
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.get_account_user.assert_awaited_once_with("alice-dev")
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({}, "username is required"),
+        ({"username": ""}, "username is required"),
+        ({"username": " alice"}, "username must contain only"),
+        ({"username": 123}, "username must be a string"),
+        ({"username": True}, "username must be a string"),
+        ({"username": "alice/dev"}, "username must contain only"),
+        ({"username": "alice?dev"}, "username must contain only"),
+        ({"username": ".."}, "username must contain only"),
+    ],
+)
+async def test_account_user_get_rejects_invalid_username(
+    sample_config: Config, arguments: dict[str, object], message: str
+) -> None:
+    """Account user get rejects invalid username before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_account_user_get", arguments)
+
+    assert message in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_account_user_get_schema_requires_username(
+    sample_config: Config,
+) -> None:
+    """Account user get schema includes the required username path param."""
+    Server(sample_config)
+    entry = next(
+        item for item in get_tool_registry() if item.name == "linode_account_user_get"
+    )
+
+    assert entry.tool.inputSchema["required"] == ["username"]
+    username_schema = entry.tool.inputSchema["properties"]["username"]
+    assert username_schema["type"] == "string"
+    assert username_schema["pattern"] == "^[A-Za-z0-9][A-Za-z0-9_-]*$"
 
 
 async def test_account_availability_get_tool_is_exported_and_registered(
