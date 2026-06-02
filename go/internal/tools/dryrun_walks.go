@@ -1589,6 +1589,22 @@ func accountChildAccountTokenCreateSideEffects(ctx context.Context) (DryRunDetai
 	return details, nil
 }
 
+// accountEventSeenSideEffects is the Tier B preview for
+// linode_account_event_seen. The Linode API marks the given event and every
+// earlier event as seen, so the preview surfaces that wider effect (arg-only).
+func accountEventSeenSideEffects(ctx context.Context) (DryRunDetails, error) {
+	var details DryRunDetails
+
+	if err := ctx.Err(); err != nil {
+		return details, fmt.Errorf("account-event-seen side-effect walk canceled: %w", err)
+	}
+
+	details.SideEffects = append(details.SideEffects,
+		"The specified account event and all earlier events are marked as seen.")
+
+	return details, nil
+}
+
 // profilePhoneNumberSendSideEffects is the Tier B preview for
 // linode_profile_phone_number_send. The phone number is PII, so the side
 // effect avoids echoing it (arg-only).

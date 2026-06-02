@@ -203,6 +203,10 @@ func TestLinodeAccountEventSeenToolDryRun(t *testing.T) {
 		assert.Equal(t, "POST", would["method"])
 		assert.Equal(t, accountEventGetPath+"/seen", would["path"])
 		assert.Equal(t, []string{http.MethodGet}, *methods, "dry_run must only read state via GET")
+
+		sideEffects, _ := body["side_effects"].([]any)
+		require.Len(t, sideEffects, 1, "event seen surfaces a side effect")
+		assert.Contains(t, sideEffects[0], "earlier events", "side effect notes the wider mark-seen behavior")
 	})
 }
 

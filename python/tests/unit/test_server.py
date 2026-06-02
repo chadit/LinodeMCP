@@ -1350,6 +1350,8 @@ async def test_account_event_seen_dry_run_fetches_event_without_marking_seen(
         "path": "/account/events/123/seen",
     }
     assert payload["current_state"] == current_event
+    assert len(payload["side_effects"]) == 1
+    assert "earlier events" in payload["side_effects"][0]
     mock_client.get_account_event.assert_awaited_once_with(123)
     mock_client.mark_account_event_seen.assert_not_called()
 

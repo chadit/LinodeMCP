@@ -4931,10 +4931,13 @@ func handleLinodeAccountEventSeenRequest(ctx context.Context, request *mcp.CallT
 	}
 
 	if IsDryRun(request) {
-		return RunDryRunPreview(ctx, request, cfg, "linode_account_event_seen", httpMethodPost,
+		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_account_event_seen", httpMethodPost,
 			fmt.Sprintf(accountEventsPath+"/%d/seen", eventID),
 			func(ctx context.Context, c *linode.Client) (any, error) {
 				return c.GetAccountEvent(ctx, eventID)
+			},
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return accountEventSeenSideEffects(ctx)
 			})
 	}
 

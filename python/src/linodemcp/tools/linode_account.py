@@ -249,6 +249,14 @@ async def handle_linode_account_event_seen(
         # Dry-run previews the current event with a safe GET. The response
         # still reports the POST that would run; it must not mark the event
         # seen when dry_run=true.
+        async def _walk(_client: RetryableClient, _state: Any) -> DryRunDetails:
+            return {
+                "side_effects": [
+                    "The specified account event and all earlier events are "
+                    "marked as seen."
+                ]
+            }
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -256,6 +264,7 @@ async def handle_linode_account_event_seen(
             "POST",
             f"/account/events/{event_id}/seen",
             lambda client: client.get_account_event(event_id),
+            details_fn=_walk,
         )
 
     if arguments.get("confirm") is not True:
