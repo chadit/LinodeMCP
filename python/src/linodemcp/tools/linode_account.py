@@ -1644,6 +1644,52 @@ async def handle_linode_account_child_account_get(
     )
 
 
+def create_linode_account_service_transfer_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_service_transfer_get tool."""
+    return Tool(
+        name="linode_account_service_transfer_get",
+        description="Gets an account service transfer request by token.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "token": {
+                    "type": "string",
+                    "description": "Service transfer token to retrieve",
+                },
+            },
+            "required": ["token"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_account_service_transfer_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_service_transfer_get tool request."""
+    raw_token = arguments.get("token")
+    if raw_token is None:
+        return error_response("token is required")
+    if not isinstance(raw_token, str):
+        return error_response("token must be a string")
+
+    token = raw_token.strip()
+    if not token:
+        return error_response("token is required")
+    if token != raw_token or "/" in token or "?" in token or ".." in token:
+        return error_response(
+            "token must not contain path separators, "
+            "query separators, or traversal segments"
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_account_service_transfer(token)
+
+    return await execute_tool(
+        cfg, arguments, f"retrieve Linode account service transfer {token}", _call
+    )
+
+
 def create_linode_account_oauth_client_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_oauth_client_get tool."""
     return Tool(
