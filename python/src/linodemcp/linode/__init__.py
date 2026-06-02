@@ -1587,6 +1587,17 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListAccountUsers", e) from e
 
+    async def delete_account_user(self, username: str) -> dict[str, Any]:
+        """Delete a user on the Linode account."""
+        encoded_username = quote(str(username), safe="")
+        endpoint = f"/account/users/{encoded_username}"
+        try:
+            response = await self.make_request("DELETE", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteAccountUser", e) from e
+
     async def list_account_maintenance(self) -> dict[str, Any]:
         """List maintenances on the Linode account."""
         try:
@@ -7785,6 +7796,10 @@ class RetryableClient:
             lambda: self.client.list_account_users(page=page, page_size=page_size)
         )
         return result
+
+    async def delete_account_user(self, username: str) -> dict[str, Any]:
+        """Delete an account user by delegating once without retry."""
+        return await self.client.delete_account_user(username)
 
     async def list_account_maintenance(self) -> dict[str, Any]:
         """List account maintenance with retry."""

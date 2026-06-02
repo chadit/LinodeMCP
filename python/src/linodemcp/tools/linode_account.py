@@ -2900,6 +2900,93 @@ async def handle_linode_account_login_get(
     )
 
 
+def create_linode_account_user_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_user_delete tool."""
+    return Tool(
+        name="linode_account_user_delete",
+        description=(
+            "Deletes a user from the Linode account by username. "
+            "Pass dry_run=true to preview without deleting."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "username": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": _ACCOUNT_USERNAME_PATTERN_TEXT,
+                    "description": "Username to delete from the account",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm account user deletion.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["username", "confirm"],
+        },
+    ), Capability.Destroy
+
+
+def _validate_account_user_delete_username(
+    value: object,
+) -> tuple[str | None, str | None]:
+    """Validate an account username supplied by the delete tool."""
+    if value is None:
+        return None, "username is required"
+    if not isinstance(value, str):
+        return None, "username must be a string"
+
+    username = value.strip()
+    if not username:
+        return None, "username is required"
+    if username != value or not _ACCOUNT_USERNAME_PATTERN.fullmatch(username):
+        return (
+            None,
+            "username must contain only letters, numbers, underscores, or hyphens",
+        )
+    return username, None
+
+
+async def handle_linode_account_user_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_user_delete tool request."""
+    username, message = _validate_account_user_delete_username(
+        arguments.get("username")
+    )
+    if username is None:
+        return error_response(message or "username is required")
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This deletes an account user. Set confirm=true to proceed."
+        )
+
+    encoded_username = quote(username, safe="")
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_account_user_delete",
+            arguments.get("environment", ""),
+            "DELETE",
+            f"/account/users/{encoded_username}",
+            None,
+            side_effects=["The selected account user is deleted."],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.delete_account_user(username)
+        return {
+            "message": "Account user deleted successfully",
+            "result": result,
+        }
+
+    return await execute_tool(
+        cfg, arguments, f"delete Linode account user {username}", _call
+    )
+
+
 def create_linode_account_user_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_user_get tool."""
     return Tool(

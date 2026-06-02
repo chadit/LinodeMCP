@@ -871,6 +871,70 @@ async def test_retryable_list_account_users_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_delete_account_user_sends_exact_route() -> None:
+    """Account user deletion sends DELETE /account/users/{username}."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data: dict[str, object] = {}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.delete_account_user("alice")
+
+    assert result == response_data
+    mock_request.assert_called_once_with("DELETE", "/account/users/alice")
+    await client.close()
+
+
+async def test_delete_account_user_url_encodes_username() -> None:
+    """Account user deletion URL-encodes username at the client boundary."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.delete_account_user("team/user?x")
+
+    mock_request.assert_called_once_with("DELETE", "/account/users/team%2Fuser%3Fx")
+    await client.close()
+
+
+async def test_delete_account_user_wraps_http_errors() -> None:
+    """Account user deletion wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.delete_account_user("alice")
+
+    assert "DeleteAccountUser" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_delete_account_user_delegates_once() -> None:
+    """RetryableClient does not replay destructive account user deletion."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "delete_account_user", new_callable=AsyncMock
+    ) as mock_delete:
+        mock_delete.side_effect = httpx.HTTPError("temporary")
+
+        with pytest.raises(httpx.HTTPError):
+            await retryable.delete_account_user("alice")
+
+    mock_delete.assert_awaited_once_with("alice")
+    await retryable.close()
+
+
 async def test_list_account_oauth_clients_sends_exact_route_with_query() -> None:
     """Account OAuth clients listing sends GET /account/oauth-clients."""
     client = Client("https://api.linode.com/v4", "test-token")
