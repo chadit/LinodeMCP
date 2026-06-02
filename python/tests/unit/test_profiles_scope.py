@@ -126,6 +126,11 @@ def test_meta_returns_empty() -> None:
             [Scope.AccountReadWrite],
         ),
         (
+            "linode_account_payment_create",
+            Capability.Write,
+            [Scope.AccountReadWrite],
+        ),
+        (
             "linode_account_payment_method_create",
             Capability.Write,
             [Scope.AccountReadWrite],
