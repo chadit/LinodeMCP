@@ -85,6 +85,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_account_user_update", Capability.Write),
         # Databases.
         ToolDescriptor("linode_database_engine_get", Capability.Read),
+        ToolDescriptor("linode_database_type_get", Capability.Read),
         ToolDescriptor("linode_database_cluster_create", Capability.Write),
         ToolDescriptor("linode_database_mysql_credentials_reset", Capability.Write),
         ToolDescriptor(
@@ -537,6 +538,7 @@ def test_read_only_profiles_have_no_write_scopes() -> None:
 def test_database_tool_category() -> None:
     """Database tools map to the databases profile category."""
     assert categories("linode_database_engine_get") == ["databases"]
+    assert categories("linode_database_type_get") == ["databases"]
     assert categories("linode_database_cluster_create") == ["databases"]
     assert categories("linode_database_postgresql_instance_create") == ["databases"]
 

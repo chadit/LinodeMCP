@@ -346,6 +346,23 @@ def _validate_engine_id(value: object) -> tuple[str | None, str | None]:
     return engine_id, None
 
 
+def _validate_database_type_id(value: Any) -> tuple[str | None, str | None]:
+    """Validate a database type ID path parameter."""
+    if not isinstance(value, str):
+        return None, "type_id must be a string"
+    type_id = value.strip()
+    if not type_id:
+        return None, "type_id is required"
+    if type_id != value:
+        return None, "type_id must not include leading or trailing whitespace"
+    if ".." in type_id or not re.fullmatch(r"[A-Za-z0-9._-]+", type_id):
+        return (
+            None,
+            "type_id must use letters, numbers, dots, underscores, and hyphens",
+        )
+    return type_id, None
+
+
 def _optional_int_argument(
     arguments: dict[str, Any], name: str, minimum: int, maximum: int | None = None
 ) -> int | None:
@@ -406,6 +423,40 @@ def create_linode_database_engine_get_tool() -> tuple[Tool, Capability]:
                 },
             },
             "required": ["engine_id"],
+        },
+    ), Capability.Read
+
+
+def create_linode_database_type_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_database_type_get tool."""
+    return Tool(
+        name="linode_database_type_get",
+        description="Gets details for a Managed Databases type.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "type_id": {
+                    "type": "string",
+                    "description": (
+                        "Managed Databases type ID, for example g6-dedicated-2"
+                    ),
+                },
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": (
+                        "Page of results to return when the API includes paginated data"
+                    ),
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
+            },
+            "required": ["type_id"],
         },
     ), Capability.Read
 
@@ -940,6 +991,28 @@ async def handle_linode_database_engine_get(
 
     return await execute_tool(
         cfg, arguments, f"retrieve Managed Databases engine {engine_id}", _call
+    )
+
+
+async def handle_linode_database_type_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_database_type_get tool request."""
+    type_id, error = _validate_database_type_id(arguments.get("type_id"))
+    if error is not None or type_id is None:
+        return error_response(error or "type_id is required")
+
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_database_type(type_id, page=page, page_size=page_size)
+
+    return await execute_tool(
+        cfg, arguments, f"retrieve Managed Databases type {type_id}", _call
     )
 
 
