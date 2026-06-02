@@ -400,6 +400,26 @@ async def handle_linode_database_engine_get(
     )
 
 
+def create_linode_database_mysql_instance_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_database_mysql_instance_get tool."""
+    return Tool(
+        name="linode_database_mysql_instance_get",
+        description="Gets a MySQL Managed Database instance.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "instance_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "MySQL Managed Database instance ID",
+                },
+            },
+            "required": ["instance_id"],
+        },
+    ), Capability.Read
+
+
 def create_linode_database_mysql_config_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_database_mysql_config_get tool."""
     return Tool(
@@ -460,6 +480,25 @@ async def handle_linode_database_instances_list(
         return await client.list_database_instances(page=page, page_size=page_size)
 
     return await execute_tool(cfg, arguments, "list Linode database instances", _call)
+
+
+async def handle_linode_database_mysql_instance_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_database_mysql_instance_get tool request."""
+    try:
+        instance_id = _optional_int_argument(arguments, "instance_id", 1)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+    if instance_id is None:
+        return error_response("instance_id is required")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_database_mysql_instance(instance_id)
+
+    return await execute_tool(
+        cfg, arguments, f"retrieve MySQL Managed Database instance {instance_id}", _call
+    )
 
 
 async def handle_linode_database_mysql_config_get(

@@ -3143,6 +3143,141 @@ async def test_database_mysql_config_get_dispatches_from_registry(
     mock_client.get_database_mysql_config.assert_awaited_once_with()
 
 
+async def test_client_get_database_mysql_instance_uses_exact_encoded_path() -> None:
+    """Low-level client uses the documented MySQL database instance route."""
+    response_data = {"id": 123, "label": "primary-db", "engine": "mysql"}
+    response = Mock()
+    response.json.return_value = response_data
+    client = Client("https://api.linode.test/v4", "token")
+    with patch.object(
+        client, "make_request", AsyncMock(return_value=response)
+    ) as make_request:
+        result = await client.get_database_mysql_instance(123)
+
+    assert result == response_data
+    make_request.assert_awaited_once_with("GET", "/databases/mysql/instances/123")
+    await client.close()
+
+
+async def test_client_get_database_mysql_instance_maps_http_error() -> None:
+    """Low-level client maps HTTP failures to NetworkError."""
+    client = Client("https://api.linode.test/v4", "token")
+    with (
+        patch.object(
+            client,
+            "make_request",
+            AsyncMock(side_effect=httpx.ConnectError("boom")),
+        ),
+        pytest.raises(NetworkError, match="GetDatabaseMySQLInstance"),
+    ):
+        await client.get_database_mysql_instance(123)
+
+    await client.close()
+
+
+async def test_retryable_client_get_database_mysql_instance_uses_retry_wrapper() -> (
+    None
+):
+    """Read-only MySQL database instance get delegates through retry."""
+    response_data = {"id": 123, "label": "primary-db"}
+    retry_client = RetryableClient.__new__(RetryableClient)
+    retry_client.client = Mock()
+    retry_client.client.get_database_mysql_instance = AsyncMock(
+        return_value=response_data
+    )
+
+    async def _execute(call: Any, *args: Any) -> Any:
+        return await call(*args)
+
+    with patch.object(
+        retry_client, "_execute_with_retry", AsyncMock(side_effect=_execute)
+    ) as execute_with_retry:
+        result = await retry_client.get_database_mysql_instance(123)
+
+    assert result == response_data
+    execute_with_retry.assert_awaited_once()
+    retry_client.client.get_database_mysql_instance.assert_awaited_once_with(123)
+
+
+async def test_database_mysql_instance_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """MySQL database instance get tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+    from linodemcp.version import get_version_info
+
+    assert "create_linode_database_mysql_instance_get_tool" in tools_mod.__all__
+    assert "handle_linode_database_mysql_instance_get" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_database_mysql_instance_get_tool()
+    assert tool.name == "linode_database_mysql_instance_get"
+    assert capability is Capability.Read
+    assert tool.inputSchema["required"] == ["instance_id"]
+    assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
+
+    srv = Server(sample_config)
+    assert "linode_database_mysql_instance_get" in srv.registered_tool_names
+
+    entry = next(
+        item
+        for item in get_tool_registry()
+        if item.name == "linode_database_mysql_instance_get"
+    )
+    assert entry.capability == Capability.Read
+    assert "linode_database_mysql_instance_get" in get_version_info().features["tools"]
+
+
+async def test_database_mysql_instance_get_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """MySQL database instance get is callable through server dispatch."""
+    response_data: dict[str, object] = {"id": 123, "label": "primary-db"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_database_mysql_instance.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_database_mysql_instance_get", {"instance_id": 123}
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.get_database_mysql_instance.assert_awaited_once_with(123)
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        ({}, "instance_id is required"),
+        ({"instance_id": 0}, "instance_id must be at least 1"),
+        ({"instance_id": "123"}, "instance_id must be an integer"),
+        ({"instance_id": True}, "instance_id must be an integer"),
+        ({"instance_id": "1/2"}, "instance_id must be an integer"),
+        ({"instance_id": "1?x=y"}, "instance_id must be an integer"),
+        ({"instance_id": ".."}, "instance_id must be an integer"),
+    ],
+)
+async def test_database_mysql_instance_get_rejects_invalid_instance_id(
+    sample_config: Config, arguments: dict[str, object], expected_error: str
+) -> None:
+    """MySQL instance get rejects malformed path params before calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_database_mysql_instance_get", arguments)
+
+    assert expected_error in result[0].text
+    mock_client.get_database_mysql_instance.assert_not_called()
+
+
 async def test_account_beta_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
