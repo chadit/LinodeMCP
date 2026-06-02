@@ -1636,6 +1636,25 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListAccountInvoices", e) from e
 
+    async def list_account_payments(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List payments on the Linode account."""
+        endpoint = "/account/payments"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListAccountPayments", e) from e
+
     async def list_account_payment_methods(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -7588,6 +7607,15 @@ class RetryableClient:
         """List account invoices with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             lambda: self.client.list_account_invoices(page=page, page_size=page_size)
+        )
+        return result
+
+    async def list_account_payments(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List account payments with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_account_payments(page=page, page_size=page_size)
         )
         return result
 
