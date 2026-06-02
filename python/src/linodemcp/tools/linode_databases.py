@@ -326,6 +326,31 @@ def create_linode_database_cluster_create_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def create_linode_database_mysql_instances_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_database_mysql_instances_list tool."""
+    return Tool(
+        name="linode_database_mysql_instances_list",
+        description="Lists MySQL Managed Database instances.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
+            },
+        },
+    ), Capability.Read
+
+
 def create_linode_database_instances_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_database_instances_list tool."""
     return Tool(
@@ -511,6 +536,26 @@ async def handle_linode_database_mysql_config_get(
 
     return await execute_tool(
         cfg, arguments, "retrieve MySQL Managed Database advanced parameters", _call
+    )
+
+
+async def handle_linode_database_mysql_instances_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_database_mysql_instances_list tool request."""
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.list_mysql_database_instances(
+            page=page, page_size=page_size
+        )
+
+    return await execute_tool(
+        cfg, arguments, "list Linode MySQL database instances", _call
     )
 
 
