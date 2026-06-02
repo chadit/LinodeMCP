@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from typing import TYPE_CHECKING, Any, cast
+from urllib.parse import quote
 
 from mcp.types import TextContent, Tool
 
@@ -231,6 +232,15 @@ def _optional_int_argument(
     return value
 
 
+def _required_positive_int_argument(arguments: dict[str, Any], name: str) -> int:
+    """Parse a required positive integer path parameter."""
+    value = arguments.get(name)
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        msg = f"{name} must be a positive integer"
+        raise ValueError(msg)
+    return value
+
+
 def create_linode_database_engine_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_database_engine_get tool."""
     return Tool(
@@ -324,6 +334,34 @@ def create_linode_database_cluster_create_tool() -> tuple[Tool, Capability]:
             "required": ["label", "type", "engine", "region", "confirm"],
         },
     ), Capability.Write
+
+
+def create_linode_database_mysql_instance_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_database_mysql_instance_delete tool."""
+    return Tool(
+        name="linode_database_mysql_instance_delete",
+        description=(
+            "Deletes a MySQL Managed Database. Pass dry_run=true to preview "
+            "without deleting."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "instance_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "MySQL Managed Database instance ID",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm database deletion.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["instance_id", "confirm"],
+        },
+    ), Capability.Destroy
 
 
 def create_linode_database_mysql_instances_list_tool() -> tuple[Tool, Capability]:
@@ -489,6 +527,40 @@ async def handle_linode_database_cluster_create(
         return await client.create_mysql_database_instance(payload)
 
     return await execute_tool(cfg, arguments, "create MySQL Managed Database", _call)
+
+
+async def handle_linode_database_mysql_instance_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_database_mysql_instance_delete tool request."""
+    try:
+        instance_id = _required_positive_int_argument(arguments, "instance_id")
+    except ValueError as exc:
+        return error_response(str(exc))
+
+    encoded_instance_id = quote(str(instance_id), safe="")
+    delete_path = f"/databases/mysql/instances/{encoded_instance_id}"
+
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_database_mysql_instance_delete",
+            arguments.get("environment", ""),
+            "DELETE",
+            delete_path,
+            None,
+            side_effects=[
+                f"MySQL Managed Database instance {instance_id} will be deleted."
+            ],
+            warnings=["Deleting a Managed Database is destructive."],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.delete_mysql_database_instance(instance_id)
+
+    return await execute_tool(cfg, arguments, "delete MySQL Managed Database", _call)
 
 
 async def handle_linode_database_instances_list(

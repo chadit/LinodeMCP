@@ -2059,6 +2059,19 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("CreateMysqlDatabaseInstance", e) from e
 
+    async def delete_mysql_database_instance(
+        self, instance_id: int | str
+    ) -> dict[str, Any]:
+        """Delete a MySQL Managed Database instance."""
+        encoded_instance_id = quote(str(instance_id), safe="")
+        endpoint = f"/databases/mysql/instances/{encoded_instance_id}"
+        try:
+            response = await self.make_request("DELETE", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteMysqlDatabaseInstance", e) from e
+
     async def get_database_mysql_instance(self, instance_id: int) -> dict[str, Any]:
         """Get a MySQL Managed Database instance by ID."""
         encoded_instance_id = quote(str(instance_id), safe="")
@@ -8129,6 +8142,12 @@ class RetryableClient:
     ) -> dict[str, Any]:
         """Create or restore a MySQL Managed Database once without retry replay."""
         return await self.client.create_mysql_database_instance(payload)
+
+    async def delete_mysql_database_instance(
+        self, instance_id: int | str
+    ) -> dict[str, Any]:
+        """Delete a MySQL Managed Database once without retry replay."""
+        return await self.client.delete_mysql_database_instance(instance_id)
 
     async def enroll_account_beta(self, beta_id: str) -> dict[str, Any]:
         """Enroll in an account beta once without retry replay."""
