@@ -469,6 +469,55 @@ async def test_retryable_get_account_agreements_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_list_account_maintenance_sends_exact_route() -> None:
+    """Account maintenance listing sends GET /account/maintenance."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data: dict[str, Any] = {
+        "data": [{"entity": {"id": 123, "type": "linode"}, "status": "pending"}],
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.list_account_maintenance()
+
+    assert result == response_data
+    mock_request.assert_called_once_with("GET", "/account/maintenance")
+    await client.close()
+
+
+async def test_list_account_maintenance_wraps_http_errors() -> None:
+    """Account maintenance listing wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.list_account_maintenance()
+
+    assert "ListAccountMaintenance" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_list_account_maintenance_delegates_to_client() -> None:
+    """RetryableClient delegates account maintenance listing to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "list_account_maintenance", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = {"data": []}
+        result = await retryable.list_account_maintenance()
+
+    mock_list.assert_awaited_once_with()
+    assert result == {"data": []}
+    await retryable.close()
+
+
 async def test_get_account_beta_sends_exact_route() -> None:
     """Test getting an account beta sends GET /account/betas/{betaId}."""
     client = Client("https://api.linode.com/v4", "test-token")

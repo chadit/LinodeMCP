@@ -1129,6 +1129,41 @@ async def test_account_logins_list_rejects_boolean_pagination(
     mock_client_class.assert_not_called()
 
 
+async def test_account_maintenance_list_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Account maintenance list tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_maintenance_list_tool" in tools_mod.__all__
+    assert "handle_linode_account_maintenance_list" in tools_mod.__all__
+
+    srv = Server(sample_config)
+    assert "linode_account_maintenance_list" in srv.registered_tool_names
+
+
+async def test_account_maintenance_list_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Account maintenance list is callable through server dispatch."""
+    response_data: dict[str, object] = {
+        "data": [{"entity": {"id": 123, "type": "linode"}, "status": "pending"}],
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_account_maintenance.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_account_maintenance_list", {})
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.list_account_maintenance.assert_awaited_once_with()
+
+
 async def test_account_events_list_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

@@ -1538,6 +1538,15 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListAccountLogins", e) from e
 
+    async def list_account_maintenance(self) -> dict[str, Any]:
+        """List maintenances on the Linode account."""
+        try:
+            response = await self.make_request("GET", "/account/maintenance")
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListAccountMaintenance", e) from e
+
     async def list_account_events(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -7318,6 +7327,13 @@ class RetryableClient:
         """List account logins with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             lambda: self.client.list_account_logins(page=page, page_size=page_size)
+        )
+        return result
+
+    async def list_account_maintenance(self) -> dict[str, Any]:
+        """List account maintenance with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.list_account_maintenance
         )
         return result
 
