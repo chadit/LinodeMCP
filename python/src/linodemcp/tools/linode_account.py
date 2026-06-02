@@ -1021,6 +1021,49 @@ async def handle_linode_account_child_account_get(
     )
 
 
+def create_linode_account_oauth_client_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_oauth_client_get tool."""
+    return Tool(
+        name="linode_account_oauth_client_get",
+        description="Gets an OAuth client by client ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "client_id": {
+                    "type": "string",
+                    "description": "OAuth client ID to retrieve",
+                },
+            },
+            "required": ["client_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_account_oauth_client_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_oauth_client_get tool request."""
+    raw_client_id = arguments.get("client_id")
+    if raw_client_id is None:
+        return error_response("client_id is required")
+    if not isinstance(raw_client_id, str):
+        return error_response("client_id must be a string")
+
+    client_id = raw_client_id.strip()
+    if not client_id:
+        return error_response("client_id is required")
+    if "/" in client_id or "?" in client_id or ".." in client_id:
+        return error_response("client_id must not contain '/', '?', or '..'")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_account_oauth_client(client_id)
+
+    return await execute_tool(
+        cfg, arguments, f"retrieve Linode account OAuth client {client_id}", _call
+    )
+
+
 def create_linode_account_invoice_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_invoice_get tool."""
     return Tool(

@@ -82,6 +82,7 @@ def test_meta_returns_empty() -> None:
         ),
         ("linode_account_beta_get", Capability.Read, [Scope.AccountReadOnly]),
         ("linode_account_child_account_get", Capability.Read, [Scope.AccountReadOnly]),
+        ("linode_account_oauth_client_get", Capability.Read, [Scope.AccountReadOnly]),
         ("linode_account_invoice_get", Capability.Read, [Scope.AccountReadOnly]),
         (
             "linode_account_agreements_list",

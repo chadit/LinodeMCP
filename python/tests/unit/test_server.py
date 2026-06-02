@@ -1983,6 +1983,82 @@ async def test_account_child_account_get_schema_requires_euuid(
     assert entry.tool.inputSchema["properties"]["euuid"]["type"] == "string"
 
 
+async def test_account_oauth_client_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """OAuth client get tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_oauth_client_get_tool" in tools_mod.__all__
+    assert "handle_linode_account_oauth_client_get" in tools_mod.__all__
+
+    srv = Server(sample_config)
+    assert "linode_account_oauth_client_get" in srv.registered_tool_names
+
+
+async def test_account_oauth_client_get_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """OAuth client get is callable through server dispatch."""
+    response_data: dict[str, object] = {
+        "id": "client-123",
+        "label": "Example OAuth Client",
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_account_oauth_client.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_account_oauth_client_get", {"client_id": "client-123"}
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.get_account_oauth_client.assert_awaited_once_with("client-123")
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({}, "client_id is required"),
+        ({"client_id": 123}, "client_id must be a string"),
+        ({"client_id": "   "}, "client_id is required"),
+        ({"client_id": "client/id"}, "client_id must not contain"),
+        ({"client_id": "client?id"}, "client_id must not contain"),
+        ({"client_id": ".."}, "client_id must not contain"),
+    ],
+)
+async def test_account_oauth_client_get_rejects_invalid_client_id(
+    sample_config: Config, arguments: dict[str, object], message: str
+) -> None:
+    """OAuth client get rejects invalid client_id before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_account_oauth_client_get", arguments)
+
+    assert message in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_account_oauth_client_get_schema_requires_client_id(
+    sample_config: Config,
+) -> None:
+    """OAuth client get schema includes the required client_id path param."""
+    Server(sample_config)
+    entry = next(
+        item
+        for item in get_tool_registry()
+        if item.name == "linode_account_oauth_client_get"
+    )
+
+    assert entry.tool.inputSchema["required"] == ["client_id"]
+    assert entry.tool.inputSchema["properties"]["client_id"]["type"] == "string"
+
+
 async def test_account_invoice_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
