@@ -578,6 +578,69 @@ async def test_retryable_list_account_events_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_get_account_event_sends_exact_route() -> None:
+    """Account event get sends GET /account/events/{eventId}."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data = {"id": 123, "action": "linode_create", "status": "finished"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.get_account_event(123)
+
+    assert result == response_data
+    mock_request.assert_called_once_with("GET", "/account/events/123")
+    await client.close()
+
+
+async def test_get_account_event_url_encodes_event_id() -> None:
+    """Account event get URL-encodes the event_id path parameter."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"id": "1/2?x"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.get_account_event(cast("int", "1/2?x"))
+
+    mock_request.assert_called_once_with("GET", "/account/events/1%2F2%3Fx")
+    await client.close()
+
+
+async def test_get_account_event_wraps_http_errors() -> None:
+    """Account event get wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.get_account_event(123)
+
+    assert "GetAccountEvent" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_get_account_event_delegates_to_client() -> None:
+    """RetryableClient delegates account event get to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "get_account_event", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = {"id": 123}
+        result = await retryable.get_account_event(123)
+
+    mock_get.assert_awaited_once_with(123)
+    assert result == {"id": 123}
+    await retryable.close()
+
+
 async def test_get_account_child_account_sends_exact_route() -> None:
     """Child account get sends GET /account/child-accounts/{euuId}."""
     client = Client("https://api.linode.com/v4", "test-token")

@@ -1069,6 +1069,55 @@ async def test_account_events_list_dispatches_from_registry(
     mock_client.list_account_events.assert_awaited_once_with(page=2, page_size=25)
 
 
+async def test_account_event_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Account event get tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_event_get_tool" in tools_mod.__all__
+    assert "handle_linode_account_event_get" in tools_mod.__all__
+
+    srv = Server(sample_config)
+    assert "linode_account_event_get" in srv.registered_tool_names
+
+
+async def test_account_event_get_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Account event get is callable through server dispatch."""
+    response_data: dict[str, object] = {
+        "id": 123,
+        "action": "linode_create",
+        "status": "finished",
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_account_event.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_account_event_get", {"event_id": 123})
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.get_account_event.assert_awaited_once_with(123)
+
+
+async def test_account_event_get_rejects_invalid_event_id(
+    sample_config: Config,
+) -> None:
+    """Account event get validates event_id before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_account_event_get", {"event_id": "1/2"})
+
+    assert "event_id must be a positive integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
 async def test_account_events_list_rejects_invalid_page(
     sample_config: Config,
 ) -> None:

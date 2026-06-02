@@ -126,6 +126,40 @@ async def handle_linode_account_events_list(
     return await execute_tool(cfg, arguments, "list Linode account events", _call)
 
 
+def create_linode_account_event_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_event_get tool."""
+    return Tool(
+        name="linode_account_event_get",
+        description="Gets a Linode account event by ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "event_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Account event ID to retrieve",
+                },
+            },
+            "required": ["event_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_account_event_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_event_get tool request."""
+    event_id = arguments.get("event_id")
+    if not isinstance(event_id, int) or isinstance(event_id, bool) or event_id < 1:
+        return error_response("event_id must be a positive integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_account_event(event_id)
+
+    return await execute_tool(cfg, arguments, "get Linode account event", _call)
+
+
 _ACCOUNT_AGREEMENT_FIELDS = (
     "billing_agreement",
     "eu_model",
