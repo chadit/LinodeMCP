@@ -6961,6 +6961,281 @@ async def test_database_mysql_instance_update_dry_run_previews_without_client_ca
     mock_client.update_mysql_database_instance.assert_not_called()
 
 
+async def test_client_update_postgresql_database_instance_exact_path_body() -> None:
+    """Client sends the documented PostgreSQL database update route and body."""
+    response_data = {"id": 321, "label": "pg-primary"}
+    response = _JsonResponse(response_data)
+    payload = {"label": "pg-primary", "updates": {"hour_of_day": 3}}
+    client = Client("https://api.linode.test/v4", "token")
+    with patch.object(
+        client, "make_request", AsyncMock(return_value=response)
+    ) as make_request:
+        result = await client.update_postgresql_database_instance(321, payload)
+
+    assert result == response_data
+    make_request.assert_awaited_once_with(
+        "PUT", "/databases/postgresql/instances/321", payload
+    )
+    await client.close()
+
+
+async def test_client_update_postgresql_database_instance_encodes_path_param() -> None:
+    """Client URL-encodes the PostgreSQL instance ID path parameter boundary."""
+    response = _JsonResponse({"id": 321})
+    payload = {"label": "pg-primary"}
+    client = Client("https://api.linode.test/v4", "token")
+    with patch.object(
+        client, "make_request", AsyncMock(return_value=response)
+    ) as make_request:
+        await client.update_postgresql_database_instance(cast("Any", "32/1?"), payload)
+
+    make_request.assert_awaited_once_with(
+        "PUT", "/databases/postgresql/instances/32%2F1%3F", payload
+    )
+    await client.close()
+
+
+async def test_client_update_postgresql_database_instance_maps_http_error() -> None:
+    """Client maps PostgreSQL database update HTTP failures to NetworkError."""
+    client = Client("https://api.linode.test/v4", "token")
+    with (
+        patch.object(
+            client, "make_request", AsyncMock(side_effect=httpx.ConnectError("boom"))
+        ),
+        pytest.raises(NetworkError, match="UpdatePostgreSQLDatabaseInstance"),
+    ):
+        await client.update_postgresql_database_instance(321, {"label": "pg-primary"})
+    await client.close()
+
+
+async def test_retryable_client_update_postgresql_db_delegates_without_retry() -> None:
+    """Mutating PostgreSQL database update is not replayed through retry wrapper."""
+    retry_client = RetryableClient("https://api.example.test/v4", "token")
+    retry_client.client.update_postgresql_database_instance = AsyncMock(  # type: ignore[method-assign]
+        side_effect=NetworkError("UpdatePostgresqlDatabaseInstance", Exception("boom"))
+    )
+    try:
+        with pytest.raises(NetworkError):
+            await retry_client.update_postgresql_database_instance(
+                321, {"label": "pg-primary"}
+            )
+    finally:
+        await retry_client.close()
+
+    retry_client.client.update_postgresql_database_instance.assert_awaited_once_with(
+        321, {"label": "pg-primary"}
+    )
+
+
+async def test_database_postgresql_instance_update_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """PostgreSQL database update tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+    from linodemcp.version import get_version_info
+
+    assert "create_linode_database_postgresql_instance_update_tool" in tools_mod.__all__
+    assert "handle_linode_database_postgresql_instance_update" in tools_mod.__all__
+
+    tool, capability = (
+        tools_mod.create_linode_database_postgresql_instance_update_tool()
+    )
+    assert tool.name == "linode_database_postgresql_instance_update"
+    assert capability is Capability.Write
+    assert set(tool.inputSchema["required"]) == {"instance_id", "confirm"}
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_database_postgresql_instance_update" in srv.registered_tool_names
+    assert (
+        "linode_database_postgresql_instance_update"
+        in get_version_info().features["tools"]
+    )
+
+
+async def test_database_postgresql_instance_update_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """PostgreSQL database update is callable through server dispatch."""
+    response_data = {"id": 321, "label": "pg-primary"}
+    arguments: dict[str, Any] = {
+        "instance_id": 321,
+        "allow_list": ["192.0.2.10/32"],
+        "engine_config": {"shared_buffers": "1GB"},
+        "label": "pg-primary",
+        "private_network": {"vpc_id": 456},
+        "type": "g6-dedicated-4",
+        "updates": {"hour_of_day": 3},
+        "version": "16",
+        "confirm": True,
+    }
+    expected_payload = {
+        key: value
+        for key, value in arguments.items()
+        if key not in {"instance_id", "confirm"}
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_postgresql_database_instance.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_postgresql_instance_update", arguments
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.update_postgresql_database_instance.assert_awaited_once_with(
+        321, expected_payload
+    )
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_database_postgresql_instance_update_rejects_non_true_confirm(
+    sample_config: Config, confirm: object
+) -> None:
+    """PostgreSQL database update requires literal confirm=true before client calls."""
+    arguments: dict[str, Any] = {"instance_id": 321, "label": "pg-primary"}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_postgresql_instance_update", arguments
+        )
+
+    assert "Set confirm=true to proceed" in result[0].text
+    mock_client.update_postgresql_database_instance.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        ({"label": "pg-primary", "confirm": True}, "instance_id is required"),
+        (
+            {"instance_id": "321", "label": "pg-primary", "confirm": True},
+            "instance_id must be an integer",
+        ),
+        (
+            {"instance_id": "32/1", "label": "pg-primary", "confirm": True},
+            "instance_id must be an integer",
+        ),
+        (
+            {"instance_id": "32?1", "label": "pg-primary", "confirm": True},
+            "instance_id must be an integer",
+        ),
+        (
+            {"instance_id": "..", "label": "pg-primary", "confirm": True},
+            "instance_id must be an integer",
+        ),
+        (
+            {"instance_id": True, "label": "pg-primary", "confirm": True},
+            "instance_id must be an integer",
+        ),
+        (
+            {"instance_id": 0, "label": "pg-primary", "confirm": True},
+            "instance_id must be at least 1",
+        ),
+        (
+            {"instance_id": 321, "confirm": True},
+            "at least one update field is required",
+        ),
+        (
+            {"instance_id": 321, "unknown": "value", "confirm": True},
+            "unsupported argument: unknown",
+        ),
+        (
+            {"instance_id": 321, "allow_list": [""], "confirm": True},
+            "allow_list must be an array of non-empty strings",
+        ),
+        (
+            {"instance_id": 321, "engine_config": [], "confirm": True},
+            "engine_config must be an object",
+        ),
+        (
+            {"instance_id": 321, "private_network": "vpc", "confirm": True},
+            "private_network must be an object or null",
+        ),
+        (
+            {"instance_id": 321, "updates": "weekly", "confirm": True},
+            "updates must be an object",
+        ),
+        (
+            {"instance_id": 321, "label": " pg-primary", "confirm": True},
+            "label must not include leading or trailing whitespace",
+        ),
+        (
+            {"instance_id": 321, "type": 42, "confirm": True},
+            "type must be a string",
+        ),
+        (
+            {"instance_id": 321, "version": "", "confirm": True},
+            "version must be a non-empty string",
+        ),
+    ],
+)
+async def test_database_postgresql_instance_update_rejects_invalid_arguments(
+    sample_config: Config, arguments: dict[str, object], expected_error: str
+) -> None:
+    """PostgreSQL database update rejects invalid inputs before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_postgresql_instance_update", arguments
+        )
+
+    assert expected_error in result[0].text
+    mock_client.update_postgresql_database_instance.assert_not_called()
+
+
+async def test_database_postgresql_instance_update_dry_run_previews_without_client_call(
+    sample_config: Config,
+) -> None:
+    """PostgreSQL database update dry-run returns the PUT preview and body."""
+    arguments: dict[str, Any] = {
+        "instance_id": 321,
+        "label": "pg-primary",
+        "confirm": True,
+        "dry_run": True,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_postgresql_instance_update", arguments
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["dry_run"] is True
+    assert payload["would_execute"] == {
+        "method": "PUT",
+        "path": "/databases/postgresql/instances/321",
+        "body": {"label": "pg-primary"},
+    }
+    mock_client.update_postgresql_database_instance.assert_not_called()
+
+
 async def test_database_mysql_instance_patch_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

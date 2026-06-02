@@ -38,7 +38,7 @@ _CREATE_DATABASE_OPTIONAL_FIELDS = (
 _CREATE_DATABASE_ALLOWED_FIELDS = (
     _CREATE_DATABASE_REQUIRED_FIELDS + _CREATE_DATABASE_OPTIONAL_FIELDS
 )
-_UPDATE_MYSQL_OPTIONAL_FIELDS = (
+_UPDATE_DATABASE_OPTIONAL_FIELDS = (
     "allow_list",
     "engine_config",
     "label",
@@ -293,14 +293,14 @@ def _copy_mysql_update_objects(
     return _copy_mysql_update_object_or_null(arguments, payload, "private_network")
 
 
-def _build_mysql_database_update_payload(
+def _build_database_update_payload(
     arguments: dict[str, Any],
 ) -> tuple[dict[str, Any] | None, str | None]:
     payload: dict[str, Any] = {}
     for field in arguments:
         if field in ("environment", "confirm", PARAM_DRY_RUN, "instance_id"):
             continue
-        if field not in _UPDATE_MYSQL_OPTIONAL_FIELDS:
+        if field not in _UPDATE_DATABASE_OPTIONAL_FIELDS:
             return None, f"unsupported argument: {field}"
 
     for field in ("label", "type", "version"):
@@ -699,6 +699,54 @@ def create_linode_database_mysql_instance_update_tool() -> tuple[Tool, Capabilit
                     "description": "Maintenance update settings",
                 },
                 "version": {"type": "string", "description": "MySQL version"},
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm database update.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["instance_id", "confirm"],
+        },
+    ), Capability.Write
+
+
+def create_linode_database_postgresql_instance_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_database_postgresql_instance_update tool."""
+    return Tool(
+        name="linode_database_postgresql_instance_update",
+        description=(
+            "Updates a PostgreSQL Managed Database. Requires confirm=true; pass "
+            "dry_run=true to preview without updating."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "instance_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "PostgreSQL Managed Database instance ID",
+                },
+                "allow_list": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "IPv4/IPv6 addresses or ranges allowed to connect",
+                },
+                "engine_config": {
+                    "type": "object",
+                    "description": "Engine-specific configuration",
+                },
+                "label": {"type": "string", "description": "Database label"},
+                "private_network": {
+                    "type": ["object", "null"],
+                    "description": "Private network configuration",
+                },
+                "type": {"type": "string", "description": "Linode database plan type"},
+                "updates": {
+                    "type": "object",
+                    "description": "Maintenance update settings",
+                },
+                "version": {"type": "string", "description": "PostgreSQL version"},
                 "confirm": {
                     "type": "boolean",
                     "description": "Must be true to confirm database update.",
@@ -1145,7 +1193,7 @@ async def handle_linode_database_mysql_instance_update(
     if error is not None or instance_id is None:
         return error_response(error or "instance_id is required")
 
-    payload, error = _build_mysql_database_update_payload(arguments)
+    payload, error = _build_database_update_payload(arguments)
     if error is not None or payload is None:
         return error_response(error or "invalid database update arguments")
 
@@ -1167,6 +1215,44 @@ async def handle_linode_database_mysql_instance_update(
 
     return await execute_tool(
         cfg, arguments, f"update MySQL Managed Database {instance_id}", _call
+    )
+
+
+async def handle_linode_database_postgresql_instance_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_database_postgresql_instance_update tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
+
+    instance_id, error = _validate_instance_id(arguments.get("instance_id"))
+    if error is not None or instance_id is None:
+        return error_response(error or "instance_id is required")
+
+    payload, error = _build_database_update_payload(arguments)
+    if error is not None or payload is None:
+        return error_response(error or "invalid database update arguments")
+
+    encoded_instance_id = quote(str(instance_id), safe="")
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_database_postgresql_instance_update",
+            arguments.get("environment", ""),
+            "PUT",
+            f"/databases/postgresql/instances/{encoded_instance_id}",
+            None,
+            side_effects=[
+                f"PostgreSQL Managed Database {instance_id} will be updated."
+            ],
+            warnings=["Updating a Managed Database can change service behavior."],
+            request_body=payload,
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.update_postgresql_database_instance(instance_id, payload)
+
+    return await execute_tool(
+        cfg, arguments, f"update PostgreSQL Managed Database {instance_id}", _call
     )
 
 
