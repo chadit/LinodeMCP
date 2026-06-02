@@ -6601,6 +6601,160 @@ async def test_database_mysql_instances_list_rejects_invalid_page_size(
     mock_client_class.assert_not_called()
 
 
+async def test_client_list_postgresql_database_instances_uses_exact_query() -> None:
+    """Client sends the documented PostgreSQL database instances list route."""
+    client = Client("https://api.linode.test/v4", "token")
+    response_data = {
+        "data": [{"id": 456, "label": "pg-db"}],
+        "page": 2,
+        "pages": 3,
+        "results": 75,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as make_request:
+        make_request.return_value = _JsonResponse(response_data)
+        result = await client.list_postgresql_database_instances(page=2, page_size=25)
+
+    assert result == response_data
+    make_request.assert_awaited_once_with(
+        "GET", "/databases/postgresql/instances?page=2&page_size=25"
+    )
+    await client.close()
+
+
+async def test_retryable_client_list_postgresql_databases_uses_retry() -> None:
+    """Retryable PostgreSQL list delegates through retry."""
+    retry_client = RetryableClient("https://api.example.test/v4", "token")
+    response_data = {
+        "data": [{"id": 456, "label": "pg-db"}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+    retry_client.client.list_postgresql_database_instances = AsyncMock(  # type: ignore[method-assign]
+        return_value=response_data
+    )
+
+    with patch.object(
+        retry_client, "_execute_with_retry", new_callable=AsyncMock
+    ) as execute_with_retry:
+
+        async def run_call(call: Any) -> dict[str, Any]:
+            result = await call()
+            return cast("dict[str, Any]", result)
+
+        execute_with_retry.side_effect = run_call
+        result = await retry_client.list_postgresql_database_instances(
+            page=1, page_size=50
+        )
+
+    assert result == response_data
+    execute_with_retry.assert_awaited_once()
+    retry_client.client.list_postgresql_database_instances.assert_awaited_once_with(
+        page=1, page_size=50
+    )
+    await retry_client.client.close()
+
+
+async def test_database_postgresql_instances_list_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """PostgreSQL Managed Database list tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+    from linodemcp.version import get_version_info
+
+    assert "create_linode_database_postgresql_instances_list_tool" in tools_mod.__all__
+    assert "handle_linode_database_postgresql_instances_list" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_database_postgresql_instances_list_tool()
+    assert tool.name == "linode_database_postgresql_instances_list"
+    assert capability is Capability.Read
+    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
+    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+
+    srv = Server(sample_config)
+    assert "linode_database_postgresql_instances_list" in srv.registered_tool_names
+    assert "linode_database_postgresql_instances_list" in get_version_info().features[
+        "tools"
+    ].split(",")
+
+
+async def test_database_postgresql_instances_list_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """PostgreSQL Managed Database list is callable through server dispatch."""
+    response_data = {
+        "data": [{"id": 456, "label": "pg-db"}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_postgresql_database_instances.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_database_postgresql_instances_list",
+            {"page": 1, "page_size": 25},
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.list_postgresql_database_instances.assert_awaited_once_with(
+        page=1, page_size=25
+    )
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        ({"page": 0}, "page must be at least 1"),
+        ({"page": "1"}, "page must be an integer"),
+        ({"page": True}, "page must be an integer"),
+    ],
+)
+async def test_database_postgresql_instances_list_rejects_invalid_page(
+    sample_config: Config, arguments: dict[str, object], expected_error: str
+) -> None:
+    """PostgreSQL Managed Database list rejects invalid page before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_database_postgresql_instances_list", arguments
+        )
+
+    assert expected_error in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        ({"page_size": 24}, "page_size must be at least 25"),
+        ({"page_size": 501}, "page_size must be at most 500"),
+        ({"page_size": "25"}, "page_size must be an integer"),
+        ({"page_size": False}, "page_size must be an integer"),
+    ],
+)
+async def test_database_postgresql_instances_list_rejects_invalid_page_size(
+    sample_config: Config, arguments: dict[str, object], expected_error: str
+) -> None:
+    """PostgreSQL Managed Database list rejects invalid page_size."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_database_postgresql_instances_list", arguments
+        )
+
+    assert expected_error in result[0].text
+    mock_client_class.assert_not_called()
+
+
 async def test_database_instances_list_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

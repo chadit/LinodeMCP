@@ -95,6 +95,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_database_mysql_instance_resume", Capability.Write),
         ToolDescriptor("linode_database_mysql_instance_update", Capability.Write),
         ToolDescriptor("linode_database_mysql_instances_list", Capability.Read),
+        ToolDescriptor("linode_database_postgresql_instances_list", Capability.Read),
         # Compute reads + mutations.
         ToolDescriptor("linode_instances_list", Capability.Read),
         ToolDescriptor("linode_instance_get", Capability.Read),
@@ -362,6 +363,10 @@ def test_database_tools_require_database_read_scope() -> None:
         Scope.DatabasesReadOnly
     ]
     assert categories("linode_database_mysql_instances_list") == ["databases"]
+    assert required_scopes(
+        "linode_database_postgresql_instances_list", Capability.Read
+    ) == [Scope.DatabasesReadOnly]
+    assert categories("linode_database_postgresql_instances_list") == ["databases"]
     assert required_scopes(
         "linode_database_mysql_instance_patch", Capability.Write
     ) == [Scope.DatabasesReadWrite]
