@@ -5812,7 +5812,279 @@ async def test_database_cluster_create_dry_run_previews_without_client_call(
             "region": "us-east",
         },
     }
+
     mock_client.create_mysql_database_instance.assert_not_called()
+
+
+async def test_client_create_postgresql_db_sends_exact_route_and_body() -> None:
+    """Client sends the documented PostgreSQL database create route and body."""
+    payload = {
+        "label": "primary-pg",
+        "type": "g6-dedicated-2",
+        "engine": "postgresql/17",
+        "region": "us-east",
+    }
+    response_data = {"id": 321, "label": "primary-pg"}
+    response = Mock()
+    response.json.return_value = response_data
+    client = Client("https://api.linode.test/v4", "token")
+    with patch.object(
+        client, "make_request", AsyncMock(return_value=response)
+    ) as make_request:
+        result = await client.create_postgresql_database_instance(payload)
+
+    assert result == response_data
+    make_request.assert_awaited_once_with(
+        "POST", "/databases/postgresql/instances", payload
+    )
+    await client.close()
+
+
+async def test_client_create_postgresql_database_instance_maps_http_error() -> None:
+    """Client maps PostgreSQL database create HTTP errors to NetworkError."""
+    client = Client("https://api.linode.test/v4", "token")
+    with (
+        patch.object(
+            client, "make_request", AsyncMock(side_effect=httpx.ConnectError("boom"))
+        ),
+        pytest.raises(NetworkError, match="CreatePostgresqlDatabaseInstance"),
+    ):
+        await client.create_postgresql_database_instance(
+            {
+                "label": "primary-pg",
+                "type": "g6-dedicated-2",
+                "engine": "postgresql/17",
+                "region": "us-east",
+            }
+        )
+    await client.close()
+
+
+async def test_retryable_create_postgresql_db_delegates_without_retry() -> None:
+    """PostgreSQL database create delegates once to avoid replaying creates."""
+    retry_client = RetryableClient("https://api.example.test/v4", "token")
+    retry_client.client.create_postgresql_database_instance = AsyncMock(  # type: ignore[method-assign]
+        side_effect=NetworkError("CreatePostgresqlDatabaseInstance", Exception("boom"))
+    )
+
+    with pytest.raises(NetworkError, match="CreatePostgresqlDatabaseInstance"):
+        await retry_client.create_postgresql_database_instance({"label": "primary-pg"})
+
+    retry_client.client.create_postgresql_database_instance.assert_awaited_once_with(
+        {"label": "primary-pg"}
+    )
+    await retry_client.close()
+
+
+async def test_database_postgresql_instance_create_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """PostgreSQL database create tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_database_postgresql_instance_create_tool" in tools_mod.__all__
+    assert "handle_linode_database_postgresql_instance_create" in tools_mod.__all__
+
+    tool, capability = (
+        tools_mod.create_linode_database_postgresql_instance_create_tool()
+    )
+    assert tool.name == "linode_database_postgresql_instance_create"
+    assert capability is Capability.Write
+    assert set(tool.inputSchema["required"]) == {
+        "label",
+        "type",
+        "engine",
+        "region",
+        "confirm",
+    }
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_database_postgresql_instance_create" in srv.registered_tool_names
+
+
+async def test_database_postgresql_instance_create_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """PostgreSQL database create is callable through server dispatch."""
+    response_data = {"id": 321, "label": "primary-pg"}
+    arguments: dict[str, Any] = {
+        "label": "primary-pg",
+        "type": "g6-dedicated-2",
+        "engine": "postgresql/17",
+        "region": "us-east",
+        "allow_list": ["192.0.2.1/32"],
+        "cluster_size": 3,
+        "engine_config": {"shared_buffers": "256MB"},
+        "fork": {"source": 456},
+        "private_network": "vpc-1",
+        "ssl_connection": True,
+        "confirm": True,
+    }
+    expected_payload = {
+        key: value for key, value in arguments.items() if key != "confirm"
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_postgresql_database_instance.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_postgresql_instance_create", arguments
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.create_postgresql_database_instance.assert_awaited_once_with(
+        expected_payload
+    )
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_database_postgresql_instance_create_rejects_non_true_confirm(
+    sample_config: Config, confirm: object
+) -> None:
+    """PostgreSQL database create requires literal confirm=true before client calls."""
+    arguments: dict[str, Any] = {
+        "label": "primary-pg",
+        "type": "g6-dedicated-2",
+        "engine": "postgresql/17",
+        "region": "us-east",
+    }
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_postgresql_instance_create", arguments
+        )
+
+    assert "Set confirm=true to proceed" in result[0].text
+    mock_client.create_postgresql_database_instance.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        (
+            {
+                "type": "g6-dedicated-2",
+                "engine": "postgresql/17",
+                "region": "us-east",
+                "confirm": True,
+            },
+            "label is required",
+        ),
+        (
+            {
+                "label": "primary-pg",
+                "type": "g6-dedicated-2",
+                "engine": "postgresql/17",
+                "region": "us-east",
+                "cluster_size": True,
+                "confirm": True,
+            },
+            "cluster_size must be an integer",
+        ),
+        (
+            {
+                "label": "primary-pg",
+                "type": "g6-dedicated-2",
+                "engine": "postgresql/17",
+                "region": "us-east",
+                "unknown": "value",
+                "confirm": True,
+            },
+            "unsupported argument: unknown",
+        ),
+        (
+            {
+                "label": "primary-pg",
+                "type": "g6-dedicated-2",
+                "engine": "mysql/8.0",
+                "region": "us-east",
+                "confirm": True,
+            },
+            "engine must be a PostgreSQL engine ID",
+        ),
+        (
+            {
+                "label": "primary-pg",
+                "type": "g6-dedicated-2",
+                "engine": "postgresql/",
+                "region": "us-east",
+                "confirm": True,
+            },
+            "engine must be a PostgreSQL engine ID",
+        ),
+    ],
+)
+async def test_database_postgresql_instance_create_rejects_invalid_arguments(
+    sample_config: Config, arguments: dict[str, object], expected_error: str
+) -> None:
+    """PostgreSQL database create rejects invalid inputs before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_postgresql_instance_create", arguments
+        )
+
+    assert expected_error in result[0].text
+    mock_client.create_postgresql_database_instance.assert_not_called()
+
+
+async def test_database_postgresql_instance_create_dry_run_previews_without_client_call(
+    sample_config: Config,
+) -> None:
+    """PostgreSQL database create dry-run returns the POST preview and body."""
+    arguments: dict[str, Any] = {
+        "label": "primary-pg",
+        "type": "g6-dedicated-2",
+        "engine": "postgresql/17",
+        "region": "us-east",
+        "confirm": True,
+        "dry_run": True,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_postgresql_instance_create", arguments
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["dry_run"] is True
+    assert payload["would_execute"] == {
+        "method": "POST",
+        "path": "/databases/postgresql/instances",
+        "body": {
+            "label": "primary-pg",
+            "type": "g6-dedicated-2",
+            "engine": "postgresql/17",
+            "region": "us-east",
+        },
+    }
+    mock_client.create_postgresql_database_instance.assert_not_called()
 
 
 async def test_database_mysql_credentials_reset_tool_is_exported_and_registered(

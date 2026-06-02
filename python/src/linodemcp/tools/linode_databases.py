@@ -26,8 +26,8 @@ if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 _DATABASE_ENGINE_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
-_CREATE_MYSQL_REQUIRED_FIELDS = ("label", "type", "engine", "region")
-_CREATE_MYSQL_OPTIONAL_FIELDS = (
+_CREATE_DATABASE_REQUIRED_FIELDS = ("label", "type", "engine", "region")
+_CREATE_DATABASE_OPTIONAL_FIELDS = (
     "allow_list",
     "cluster_size",
     "engine_config",
@@ -35,8 +35,8 @@ _CREATE_MYSQL_OPTIONAL_FIELDS = (
     "private_network",
     "ssl_connection",
 )
-_CREATE_MYSQL_ALLOWED_FIELDS = (
-    _CREATE_MYSQL_REQUIRED_FIELDS + _CREATE_MYSQL_OPTIONAL_FIELDS
+_CREATE_DATABASE_ALLOWED_FIELDS = (
+    _CREATE_DATABASE_REQUIRED_FIELDS + _CREATE_DATABASE_OPTIONAL_FIELDS
 )
 _UPDATE_MYSQL_OPTIONAL_FIELDS = (
     "allow_list",
@@ -65,19 +65,19 @@ def _validate_non_empty_string(
     return normalized, None
 
 
-def _validate_allowed_mysql_database_fields(arguments: dict[str, Any]) -> str | None:
+def _validate_allowed_database_create_fields(arguments: dict[str, Any]) -> str | None:
     for field in arguments:
         if field in ("environment", "confirm", PARAM_DRY_RUN):
             continue
-        if field not in _CREATE_MYSQL_ALLOWED_FIELDS:
+        if field not in _CREATE_DATABASE_ALLOWED_FIELDS:
             return f"unsupported argument: {field}"
     return None
 
 
-def _copy_mysql_required_fields(
+def _copy_database_required_fields(
     arguments: dict[str, Any], payload: dict[str, Any]
 ) -> str | None:
-    for field in _CREATE_MYSQL_REQUIRED_FIELDS:
+    for field in _CREATE_DATABASE_REQUIRED_FIELDS:
         value, error = _validate_non_empty_string(arguments, field)
         if error is not None or value is None:
             return error or f"{field} is required"
@@ -85,7 +85,7 @@ def _copy_mysql_required_fields(
     return None
 
 
-def _copy_mysql_allow_list(
+def _copy_database_allow_list(
     arguments: dict[str, Any], payload: dict[str, Any]
 ) -> str | None:
     if "allow_list" not in arguments:
@@ -100,7 +100,7 @@ def _copy_mysql_allow_list(
     return None
 
 
-def _copy_mysql_cluster_size(
+def _copy_database_cluster_size(
     arguments: dict[str, Any], payload: dict[str, Any]
 ) -> str | None:
     if "cluster_size" not in arguments:
@@ -114,7 +114,7 @@ def _copy_mysql_cluster_size(
     return None
 
 
-def _copy_mysql_object_field(
+def _copy_database_object_field(
     arguments: dict[str, Any], payload: dict[str, Any], name: str
 ) -> str | None:
     if name not in arguments:
@@ -126,7 +126,7 @@ def _copy_mysql_object_field(
     return None
 
 
-def _copy_mysql_private_network(
+def _copy_database_private_network(
     arguments: dict[str, Any], payload: dict[str, Any]
 ) -> str | None:
     if "private_network" not in arguments:
@@ -138,7 +138,7 @@ def _copy_mysql_private_network(
     return None
 
 
-def _copy_mysql_ssl_connection(
+def _copy_database_ssl_connection(
     arguments: dict[str, Any], payload: dict[str, Any]
 ) -> str | None:
     if "ssl_connection" not in arguments:
@@ -150,26 +150,28 @@ def _copy_mysql_ssl_connection(
     return None
 
 
-def _copy_mysql_engine_config(
+def _copy_database_engine_config(
     arguments: dict[str, Any], payload: dict[str, Any]
 ) -> str | None:
-    return _copy_mysql_object_field(arguments, payload, "engine_config")
+    return _copy_database_object_field(arguments, payload, "engine_config")
 
 
-def _copy_mysql_fork(arguments: dict[str, Any], payload: dict[str, Any]) -> str | None:
-    return _copy_mysql_object_field(arguments, payload, "fork")
+def _copy_database_fork(
+    arguments: dict[str, Any], payload: dict[str, Any]
+) -> str | None:
+    return _copy_database_object_field(arguments, payload, "fork")
 
 
-def _copy_mysql_optional_fields(
+def _copy_database_create_optional_fields(
     arguments: dict[str, Any], payload: dict[str, Any]
 ) -> str | None:
     validators: tuple[Callable[[dict[str, Any], dict[str, Any]], str | None], ...] = (
-        _copy_mysql_allow_list,
-        _copy_mysql_cluster_size,
-        _copy_mysql_engine_config,
-        _copy_mysql_fork,
-        _copy_mysql_private_network,
-        _copy_mysql_ssl_connection,
+        _copy_database_allow_list,
+        _copy_database_cluster_size,
+        _copy_database_engine_config,
+        _copy_database_fork,
+        _copy_database_private_network,
+        _copy_database_ssl_connection,
     )
     for validator in validators:
         error = validator(arguments, payload)
@@ -178,19 +180,39 @@ def _copy_mysql_optional_fields(
     return None
 
 
-def _build_mysql_database_payload(
+def _build_database_create_payload(
     arguments: dict[str, Any],
 ) -> tuple[dict[str, Any] | None, str | None]:
     payload: dict[str, Any] = {}
-    error = _validate_allowed_mysql_database_fields(arguments)
+    error = _validate_allowed_database_create_fields(arguments)
     if error is not None:
         return None, error
-    error = _copy_mysql_required_fields(arguments, payload)
+    error = _copy_database_required_fields(arguments, payload)
     if error is not None:
         return None, error
-    error = _copy_mysql_optional_fields(arguments, payload)
+    error = _copy_database_create_optional_fields(arguments, payload)
     if error is not None:
         return None, error
+    return payload, None
+
+
+def _build_mysql_database_payload(
+    arguments: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str | None]:
+    return _build_database_create_payload(arguments)
+
+
+def _build_postgresql_database_payload(
+    arguments: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str | None]:
+    payload, error = _build_database_create_payload(arguments)
+    if error is not None or payload is None:
+        return None, error
+    engine = payload["engine"]
+    if not engine.lower().startswith(
+        "postgresql/"
+    ) or not _DATABASE_ENGINE_ID_PATTERN.fullmatch(engine):
+        return None, "engine must be a PostgreSQL engine ID"
     return payload, None
 
 
@@ -406,6 +428,65 @@ def create_linode_database_cluster_create_tool() -> tuple[Tool, Capability]:
                 "engine": {
                     "type": "string",
                     "description": "MySQL engine ID, for example mysql/8.0",
+                },
+                "region": {"type": "string", "description": "Target region"},
+                "allow_list": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "IPv4/IPv6 addresses or ranges allowed to connect",
+                },
+                "cluster_size": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Number of nodes in the database cluster",
+                },
+                "engine_config": {
+                    "type": "object",
+                    "description": "Engine-specific configuration",
+                },
+                "fork": {
+                    "type": "object",
+                    "description": "Restore/fork source configuration",
+                },
+                "private_network": {
+                    "type": "string",
+                    "description": "Private network identifier",
+                },
+                "ssl_connection": {
+                    "type": "boolean",
+                    "description": "Whether to enable SSL connection requirements",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Must be true to confirm database creation or restore."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["label", "type", "engine", "region", "confirm"],
+        },
+    ), Capability.Write
+
+
+def create_linode_database_postgresql_instance_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_database_postgresql_instance_create tool."""
+    return Tool(
+        name="linode_database_postgresql_instance_create",
+        description=(
+            "Creates or restores a PostgreSQL Managed Database. WARNING: this can "
+            "create a billable resource. Pass dry_run=true to preview without "
+            "creating."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "label": {"type": "string", "description": "Database label"},
+                "type": {"type": "string", "description": "Linode database plan type"},
+                "engine": {
+                    "type": "string",
+                    "description": "PostgreSQL engine ID, for example postgresql/17",
                 },
                 "region": {"type": "string", "description": "Target region"},
                 "allow_list": {
@@ -910,6 +991,40 @@ async def handle_linode_database_cluster_create(
         return await client.create_mysql_database_instance(payload)
 
     return await execute_tool(cfg, arguments, "create MySQL Managed Database", _call)
+
+
+async def handle_linode_database_postgresql_instance_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_database_postgresql_instance_create tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
+
+    payload, error = _build_postgresql_database_payload(arguments)
+    if error is not None or payload is None:
+        return error_response(error or "invalid database create arguments")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_database_postgresql_instance_create",
+            arguments.get("environment", ""),
+            "POST",
+            "/databases/postgresql/instances",
+            None,
+            side_effects=[
+                f"A PostgreSQL Managed Database {payload['label']!r} will be "
+                "created or restored."
+            ],
+            warnings=["Creating a Managed Database can incur billing."],
+            request_body=payload,
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.create_postgresql_database_instance(payload)
+
+    return await execute_tool(
+        cfg, arguments, "create PostgreSQL Managed Database", _call
+    )
 
 
 async def handle_linode_database_mysql_instance_delete(
