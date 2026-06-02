@@ -1715,6 +1715,17 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("CreateAccountOAuthClient", e) from e
 
+    async def delete_account_oauth_client(self, client_id: str) -> dict[str, Any]:
+        """Delete an OAuth client on the Linode account."""
+        encoded_client_id = quote(str(client_id), safe="")
+        endpoint = f"/account/oauth-clients/{encoded_client_id}"
+        try:
+            response = await self.make_request("DELETE", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteAccountOAuthClient", e) from e
+
     async def cancel_account(self, comments: str | None = None) -> dict[str, Any]:
         """Cancel the Linode account."""
         body: dict[str, Any] = {}
@@ -7530,6 +7541,10 @@ class RetryableClient:
     ) -> dict[str, Any]:
         """Create an OAuth client once without retry replay."""
         return await self.client.create_account_oauth_client(label, redirect_uri)
+
+    async def delete_account_oauth_client(self, client_id: str) -> dict[str, Any]:
+        """Delete an OAuth client once without retry replay."""
+        return await self.client.delete_account_oauth_client(client_id)
 
     async def cancel_account(self, comments: str | None = None) -> dict[str, Any]:
         """Cancel the Linode account once without retry replay."""

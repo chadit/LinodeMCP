@@ -3,6 +3,7 @@
 import re
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import quote
 
 from mcp.types import TextContent, Tool
 
@@ -33,6 +34,8 @@ _OAUTH_CLIENT_UPDATE_FIELDS = (
     "status",
     "thumbnail_url",
 )
+_ACCOUNT_OAUTH_CLIENT_ID_PATTERN_TEXT = r"^[A-Za-z0-9][A-Za-z0-9_-]*$"
+_ACCOUNT_OAUTH_CLIENT_ID_PATTERN = re.compile(_ACCOUNT_OAUTH_CLIENT_ID_PATTERN_TEXT)
 
 
 def create_linode_account_tool() -> tuple[Tool, Capability]:
@@ -288,7 +291,7 @@ async def handle_linode_account_oauth_client_update(
             "linode_account_oauth_client_update",
             arguments.get("environment", ""),
             "PUT",
-            f"/account/oauth-clients/{client_id}",
+            f"/account/oauth-clients/{quote(client_id, safe='')}",
             None,
             side_effects=["The selected OAuth client configuration is updated."],
             request_body=update_fields,
@@ -799,6 +802,35 @@ def create_linode_account_oauth_client_create_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def create_linode_account_oauth_client_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_oauth_client_delete tool."""
+    return Tool(
+        name="linode_account_oauth_client_delete",
+        description=(
+            "Deletes an account OAuth client by client ID. "
+            "Pass dry_run=true to preview without deleting."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "client_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": _ACCOUNT_OAUTH_CLIENT_ID_PATTERN_TEXT,
+                    "description": "OAuth client ID to delete",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm OAuth client deletion.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["client_id", "confirm"],
+        },
+    ), Capability.Destroy
+
+
 def _required_nonempty_string_argument(
     arguments: dict[str, Any], name: str
 ) -> tuple[str | None, str | None]:
@@ -811,6 +843,49 @@ def _required_nonempty_string_argument(
     if not value:
         return None, f"{name} is required"
     return value, None
+
+
+def _validate_account_oauth_client_id(value: str) -> str | None:
+    if not _ACCOUNT_OAUTH_CLIENT_ID_PATTERN.fullmatch(value):
+        return "client_id must contain only letters, numbers, underscores, or hyphens"
+    return None
+
+
+async def handle_linode_account_oauth_client_delete(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_oauth_client_delete tool request."""
+    client_id, client_id_error = _required_nonempty_string_argument(
+        arguments, "client_id"
+    )
+    if client_id_error is not None or client_id is None:
+        return error_response(client_id_error or "client_id is required")
+
+    validation_error = _validate_account_oauth_client_id(client_id)
+    if validation_error is not None:
+        return error_response(validation_error)
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_account_oauth_client_delete",
+            arguments.get("environment", ""),
+            "DELETE",
+            f"/account/oauth-clients/{quote(client_id, safe='')}",
+            None,
+            side_effects=["The account OAuth client is deleted."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This deletes an OAuth client. Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.delete_account_oauth_client(client_id)
+
+    return await execute_tool(
+        cfg, arguments, f"delete Linode account OAuth client {client_id}", _call
+    )
 
 
 async def handle_linode_account_oauth_client_create(
