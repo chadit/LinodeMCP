@@ -1081,6 +1081,85 @@ async def test_account_beta_get_rejects_malformed_beta_id(
     mock_client_class.assert_not_called()
 
 
+async def test_account_child_account_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Child account get tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_child_account_get_tool" in tools_mod.__all__
+    assert "handle_linode_account_child_account_get" in tools_mod.__all__
+
+    srv = Server(sample_config)
+    assert "linode_account_child_account_get" in srv.registered_tool_names
+
+
+async def test_account_child_account_get_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Child account get is callable through server dispatch."""
+    response_data: dict[str, object] = {
+        "euuid": "A1BC2DEF-34GH-567I-J890KLMN12O34P56",
+        "company": "Example Child",
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_account_child_account.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_account_child_account_get",
+            {"euuid": "A1BC2DEF-34GH-567I-J890KLMN12O34P56"},
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.get_account_child_account.assert_awaited_once_with(
+        "A1BC2DEF-34GH-567I-J890KLMN12O34P56"
+    )
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({}, "euuid is required"),
+        ({"euuid": 123}, "euuid must be a string"),
+        ({"euuid": "   "}, "euuid is required"),
+        ({"euuid": "child/account"}, "euuid must not contain"),
+        ({"euuid": "child?account"}, "euuid must not contain"),
+        ({"euuid": ".."}, "euuid must not contain"),
+    ],
+)
+async def test_account_child_account_get_rejects_invalid_euuid(
+    sample_config: Config, arguments: dict[str, object], message: str
+) -> None:
+    """Child account get rejects invalid euuid before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_account_child_account_get", arguments)
+
+    assert message in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_account_child_account_get_schema_requires_euuid(
+    sample_config: Config,
+) -> None:
+    """Child account get schema includes the required euuid path param."""
+    Server(sample_config)
+    entry = next(
+        item
+        for item in get_tool_registry()
+        if item.name == "linode_account_child_account_get"
+    )
+
+    assert entry.tool.inputSchema["required"] == ["euuid"]
+    assert entry.tool.inputSchema["properties"]["euuid"]["type"] == "string"
+
+
 async def test_account_availability_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

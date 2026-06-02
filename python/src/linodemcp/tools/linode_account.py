@@ -474,6 +474,49 @@ async def handle_linode_account_beta_get(
     )
 
 
+def create_linode_account_child_account_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_child_account_get tool."""
+    return Tool(
+        name="linode_account_child_account_get",
+        description="Gets a child account by EUUID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "euuid": {
+                    "type": "string",
+                    "description": "Child account EUUID to retrieve",
+                },
+            },
+            "required": ["euuid"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_account_child_account_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_child_account_get tool request."""
+    raw_euuid = arguments.get("euuid")
+    if raw_euuid is None:
+        return error_response("euuid is required")
+    if not isinstance(raw_euuid, str):
+        return error_response("euuid must be a string")
+
+    euuid = raw_euuid.strip()
+    if not euuid:
+        return error_response("euuid is required")
+    if "/" in euuid or "?" in euuid or ".." in euuid:
+        return error_response("euuid must not contain '/', '?', or '..'")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_account_child_account(euuid)
+
+    return await execute_tool(
+        cfg, arguments, f"retrieve Linode child account {euuid}", _call
+    )
+
+
 def create_linode_account_availability_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_availability_list tool."""
     return Tool(
