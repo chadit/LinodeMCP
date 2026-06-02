@@ -1330,6 +1330,44 @@ async def handle_linode_account_oauth_client_reset_secret(
     )
 
 
+def create_linode_account_oauth_client_thumbnail_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_oauth_client_thumbnail_get tool."""
+    return Tool(
+        name="linode_account_oauth_client_thumbnail_get",
+        description="Gets an OAuth client's thumbnail by client ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "client_id": {
+                    "type": "string",
+                    "description": "OAuth client ID whose thumbnail to retrieve",
+                },
+            },
+            "required": ["client_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_account_oauth_client_thumbnail_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_oauth_client_thumbnail_get tool request."""
+    client_id, error = _validated_oauth_client_id(arguments)
+    if error is not None or client_id is None:
+        return error_response(error or "client_id is required")
+
+    async def _call(client: RetryableClient) -> dict[str, str]:
+        return await client.get_account_oauth_client_thumbnail(client_id)
+
+    return await execute_tool(
+        cfg,
+        arguments,
+        f"retrieve Linode account OAuth client thumbnail {client_id}",
+        _call,
+    )
+
+
 def create_linode_account_invoice_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_invoice_get tool."""
     return Tool(

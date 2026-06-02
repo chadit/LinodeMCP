@@ -47,6 +47,7 @@ from linodemcp.tools import (
     create_linode_account_invoice_items_list_tool,
     create_linode_account_maintenance_list_tool,
     create_linode_account_oauth_client_get_tool,
+    create_linode_account_oauth_client_thumbnail_get_tool,
     create_linode_account_support_ticket_attachment_create_tool,
     create_linode_account_support_ticket_close_tool,
     create_linode_account_support_ticket_create_tool,
@@ -173,6 +174,7 @@ from linodemcp.tools import (
     handle_linode_account_invoice_items_list,
     handle_linode_account_maintenance_list,
     handle_linode_account_oauth_client_get,
+    handle_linode_account_oauth_client_thumbnail_get,
     handle_linode_account_support_ticket_attachment_create,
     handle_linode_account_support_ticket_close,
     handle_linode_account_support_ticket_create,
@@ -1999,6 +2001,88 @@ async def test_handle_linode_account_oauth_client_get(
         assert len(result) == 1
         assert json.loads(result[0].text) == response_data
         mock_client.get_account_oauth_client.assert_awaited_once_with("client-123")
+
+
+async def test_create_linode_account_oauth_client_thumbnail_get_tool() -> None:
+    """Test linode_account_oauth_client_thumbnail_get tool schema."""
+    tool, capability = create_linode_account_oauth_client_thumbnail_get_tool()
+
+    assert tool.name == "linode_account_oauth_client_thumbnail_get"
+    assert capability is Capability.Read
+    assert tool.inputSchema["required"] == ["client_id"]
+    assert tool.inputSchema["properties"]["client_id"]["type"] == "string"
+
+
+async def test_handle_linode_account_oauth_client_thumbnail_get_requires_client_id(
+    sample_config: Config,
+) -> None:
+    """OAuth client thumbnail retrieval requires client_id."""
+    result = await handle_linode_account_oauth_client_thumbnail_get({}, sample_config)
+
+    assert len(result) == 1
+    assert "client_id" in result[0].text
+
+
+async def test_handle_linode_account_oauth_client_thumbnail_get_rejects_bad_client_id(
+    sample_config: Config,
+) -> None:
+    """OAuth client thumbnail retrieval rejects malformed client IDs."""
+    for bad_client_id in (123, "   ", "client/id", "client?id", ".."):
+        result = await handle_linode_account_oauth_client_thumbnail_get(
+            {"client_id": bad_client_id}, sample_config
+        )
+
+        assert len(result) == 1
+        assert "client_id" in result[0].text
+
+
+async def test_handle_linode_account_oauth_client_thumbnail_get(
+    sample_config: Config,
+) -> None:
+    """Test linode_account_oauth_client_thumbnail_get tool."""
+    response_data: dict[str, Any] = {
+        "content_type": "image/png",
+        "encoding": "base64",
+        "data": "iVBORw0KGgo=",
+    }
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_account_oauth_client_thumbnail.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_oauth_client_thumbnail_get(
+            {"client_id": "client-123"}, sample_config
+        )
+
+        assert len(result) == 1
+        assert json.loads(result[0].text) == response_data
+        mock_client.get_account_oauth_client_thumbnail.assert_awaited_once_with(
+            "client-123"
+        )
+
+
+async def test_handle_linode_account_oauth_client_thumbnail_get_reports_client_errors(
+    sample_config: Config,
+) -> None:
+    """Test OAuth client thumbnail get handler reports client errors."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_account_oauth_client_thumbnail.side_effect = RuntimeError(
+            "boom"
+        )
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_oauth_client_thumbnail_get(
+            {"client_id": "client-123"}, sample_config
+        )
+
+    assert len(result) == 1
+    assert "Failed to retrieve Linode account OAuth client thumbnail" in result[0].text
+    assert "boom" in result[0].text
 
 
 async def test_handle_linode_account_oauth_client_get_reports_client_errors(

@@ -48,6 +48,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_account_maintenance_list", Capability.Read),
         ToolDescriptor("linode_account_notifications_list", Capability.Read),
         ToolDescriptor("linode_account_oauth_client_get", Capability.Read),
+        ToolDescriptor("linode_account_oauth_client_thumbnail_get", Capability.Read),
         ToolDescriptor("linode_account_oauth_client_update", Capability.Write),
         ToolDescriptor("linode_account_oauth_clients_list", Capability.Read),
         ToolDescriptor("linode_account_oauth_client_reset_secret", Capability.Write),

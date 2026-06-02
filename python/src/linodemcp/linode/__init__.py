@@ -1,6 +1,7 @@
 """Linode API client."""
 
 import asyncio
+import base64
 import enum
 import ipaddress
 import logging
@@ -1842,6 +1843,31 @@ class Client:
             return data
         except httpx.HTTPError as e:
             raise NetworkError("ResetAccountOAuthClientSecret", e) from e
+
+    async def get_account_oauth_client_thumbnail(
+        self, client_id: str
+    ) -> dict[str, str]:
+        """Get an OAuth client's PNG thumbnail by client ID."""
+        encoded_client_id = quote(client_id, safe="")
+        endpoint = f"/account/oauth-clients/{encoded_client_id}/thumbnail"
+        url = self.base_url + endpoint
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Accept": "image/png",
+            "User-Agent": "LinodeMCP/1.0",
+        }
+        try:
+            response = await self.client.request("GET", url, headers=headers)
+            if response.status_code >= HTTP_BAD_REQUEST:
+                self._handle_error_response(response)
+            content_type = response.headers.get("Content-Type", "image/png")
+            return {
+                "content_type": content_type.split(";", 1)[0],
+                "encoding": "base64",
+                "data": base64.b64encode(response.content).decode("ascii"),
+            }
+        except httpx.HTTPError as e:
+            raise NetworkError("GetAccountOAuthClientThumbnail", e) from e
 
     async def get_account_login(self, login_id: int) -> dict[str, Any]:
         """Get an account login by ID."""
@@ -7590,6 +7616,15 @@ class RetryableClient:
         """Get an OAuth client by client ID with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_account_oauth_client, client_id
+        )
+        return result
+
+    async def get_account_oauth_client_thumbnail(
+        self, client_id: str
+    ) -> dict[str, str]:
+        """Get an OAuth client's PNG thumbnail by client ID with retry."""
+        result: dict[str, str] = await self._execute_with_retry(
+            self.client.get_account_oauth_client_thumbnail, client_id
         )
         return result
 
