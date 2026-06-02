@@ -43,6 +43,7 @@ from linodemcp.tools import (
     create_linode_account_availability_list_tool,
     create_linode_account_beta_enroll_tool,
     create_linode_account_beta_get_tool,
+    create_linode_account_event_get_tool,
     create_linode_account_support_ticket_attachment_create_tool,
     create_linode_account_support_ticket_close_tool,
     create_linode_account_support_ticket_create_tool,
@@ -165,6 +166,7 @@ from linodemcp.tools import (
     handle_linode_account_availability_list,
     handle_linode_account_beta_enroll,
     handle_linode_account_beta_get,
+    handle_linode_account_event_get,
     handle_linode_account_support_ticket_attachment_create,
     handle_linode_account_support_ticket_close,
     handle_linode_account_support_ticket_create,
@@ -1976,6 +1978,73 @@ async def test_handle_linode_account_support_ticket_replies_list(
         mock_client.list_support_ticket_replies.assert_awaited_once_with(
             123, page=2, page_size=25
         )
+
+
+async def test_create_linode_account_event_get_tool() -> None:
+    """Test account event get tool schema."""
+    tool, capability = create_linode_account_event_get_tool()
+
+    assert tool.name == "linode_account_event_get"
+    assert capability is Capability.Read
+    assert tool.inputSchema["required"] == ["event_id"]
+
+
+async def test_handle_linode_account_event_get(sample_config: Config) -> None:
+    """Test account event get handler."""
+    response_data: dict[str, Any] = {
+        "id": 123,
+        "action": "linode_create",
+        "status": "finished",
+    }
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_account_event.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_event_get({"event_id": 123}, sample_config)
+
+    assert len(result) == 1
+    assert json.loads(result[0].text) == response_data
+    mock_client.get_account_event.assert_awaited_once_with(123)
+
+
+@pytest.mark.parametrize(
+    "event_id", [None, 0, -1, "123", "1/2", "1?x", "..", True, 1.5]
+)
+async def test_handle_linode_account_event_get_validates_event_id(
+    sample_config: Config, event_id: Any
+) -> None:
+    """Account event get validates event_id before client calls."""
+    arguments: dict[str, Any] = {}
+    if event_id is not None:
+        arguments["event_id"] = event_id
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_account_event_get(arguments, sample_config)
+
+    assert len(result) == 1
+    assert "event_id must be a positive integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_account_event_get_reports_client_errors(
+    sample_config: Config,
+) -> None:
+    """Account event get reports client errors."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_account_event.side_effect = RuntimeError("boom")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_event_get({"event_id": 123}, sample_config)
+
+    assert len(result) == 1
+    assert "Failed to get Linode account event" in result[0].text
+    assert "boom" in result[0].text
 
 
 async def test_handle_linode_account_support_ticket_replies_list_reports_client_errors(
