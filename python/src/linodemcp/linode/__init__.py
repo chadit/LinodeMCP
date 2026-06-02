@@ -1859,6 +1859,19 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateAccountUser", e) from e
 
+    async def update_account_user_grants(
+        self, username: str, grants: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update grants for an account user."""
+        encoded_username = quote(username, safe="")
+        endpoint = f"/account/users/{encoded_username}/grants"
+        try:
+            response = await self.make_request("PUT", endpoint, grants)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateAccountUserGrants", e) from e
+
     async def create_account_oauth_client(
         self, label: str, redirect_uri: str
     ) -> dict[str, Any]:
@@ -7983,6 +7996,12 @@ class RetryableClient:
     ) -> dict[str, Any]:
         """Update an account user once without retry replay."""
         return await self.client.update_account_user(current_username, **fields)
+
+    async def update_account_user_grants(
+        self, username: str, grants: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update account user grants once without retry replay."""
+        return await self.client.update_account_user_grants(username, grants)
 
     async def create_account_oauth_client(
         self, label: str, redirect_uri: str

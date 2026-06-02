@@ -4168,6 +4168,347 @@ async def test_account_user_grants_get_schema_requires_username(
     assert username_schema["pattern"] == "^[A-Za-z0-9][A-Za-z0-9_-]*$"
 
 
+async def test_client_update_account_user_grants_sends_exact_route_and_body() -> None:
+    """Client user grants update sends the documented PUT body."""
+    response_data = {
+        "global": {"account_access": "read_only", "add_linodes": True},
+        "linode": [{"id": 123, "permissions": "read_write"}],
+        "volume": [{"id": 456, "permissions": None}],
+    }
+    response = Mock()
+    response.json.return_value = response_data
+    client = Client("https://api.linode.test/v4", "token")
+    with patch.object(
+        client, "make_request", AsyncMock(return_value=response)
+    ) as make_request:
+        result = await client.update_account_user_grants(
+            "alice/dev",
+            {
+                "global": {"account_access": "read_only", "add_linodes": True},
+                "linode": [{"id": 123, "permissions": "read_write"}],
+                "volume": [{"id": 456, "permissions": None}],
+            },
+        )
+
+    assert result == response_data
+    make_request.assert_awaited_once_with(
+        "PUT",
+        "/account/users/alice%2Fdev/grants",
+        {
+            "global": {"account_access": "read_only", "add_linodes": True},
+            "linode": [{"id": 123, "permissions": "read_write"}],
+            "volume": [{"id": 456, "permissions": None}],
+        },
+    )
+    await client.close()
+
+
+async def test_retryable_client_update_account_user_grants_does_not_replay() -> None:
+    """Mutating grants update delegates once without generic retry replay."""
+    retry_client = RetryableClient("https://api.example.test/v4", "token")
+    retry_client.client.update_account_user_grants = AsyncMock(  # type: ignore[method-assign]
+        side_effect=NetworkError("UpdateAccountUserGrants", Exception("boom"))
+    )
+    try:
+        with pytest.raises(NetworkError):
+            await retry_client.update_account_user_grants(
+                "alice-dev", {"global": {"account_access": "read_only"}}
+            )
+    finally:
+        await retry_client.close()
+
+    retry_client.client.update_account_user_grants.assert_awaited_once_with(
+        "alice-dev", {"global": {"account_access": "read_only"}}
+    )
+
+
+async def test_account_user_grants_update_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Account user grants update tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_user_grants_update_tool" in tools_mod.__all__
+    assert "handle_linode_account_user_grants_update" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_account_user_grants_update_tool()
+    assert tool.name == "linode_account_user_grants_update"
+    assert capability is Capability.Write
+    assert tool.inputSchema["properties"]["username"]["pattern"] == (
+        "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+    )
+    assert tool.inputSchema["properties"]["global"]["type"] == "object"
+    assert tool.inputSchema["properties"]["linode"]["type"] == "array"
+    assert tool.inputSchema["properties"]["linode"]["items"]["required"] == [
+        "id",
+        "permissions",
+    ]
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert tool.inputSchema["required"] == ["username", "confirm"]
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_account_user_grants_update" in srv.registered_tool_names
+
+
+async def test_account_user_grants_update_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Account user grants update dispatches through the registered handler."""
+    response_data = {
+        "global": {"account_access": "read_only", "add_linodes": True},
+        "linode": [{"id": 123, "permissions": "read_write"}],
+    }
+    mock_client = AsyncMock()
+    mock_client.update_account_user_grants = AsyncMock(return_value=response_data)
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_user_grants_update",
+            {
+                "username": "alice-dev",
+                "global": {"account_access": "read_only", "add_linodes": True},
+                "linode": [{"id": 123, "permissions": "read_write"}],
+                "confirm": True,
+            },
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["message"] == "Account user grants updated successfully"
+    assert payload["grants"] == response_data
+    mock_client.update_account_user_grants.assert_awaited_once_with(
+        "alice-dev",
+        {
+            "global": {"account_access": "read_only", "add_linodes": True},
+            "linode": [{"id": 123, "permissions": "read_write"}],
+        },
+    )
+
+
+@pytest.mark.parametrize("confirm_value", [None, False, "true", 1])
+async def test_account_user_grants_update_requires_boolean_confirm(
+    sample_config: Config, confirm_value: object
+) -> None:
+    """Account user grants update rejects non-true confirm before client call."""
+    mock_client = AsyncMock()
+    mock_client.update_account_user_grants = AsyncMock()
+    arguments: dict[str, object] = {
+        "username": "alice-dev",
+        "global": {"account_access": "read_only"},
+    }
+    if confirm_value is not None:
+        arguments["confirm"] = confirm_value
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_account_user_grants_update", arguments)
+
+    assert "Set confirm=true" in result[0].text
+    mock_client.update_account_user_grants.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "username",
+    [None, "", "   ", 123, True, "alice/dev", "alice?dev", ".."],
+)
+async def test_account_user_grants_update_rejects_invalid_username(
+    sample_config: Config, username: object
+) -> None:
+    """Account user grants update validates username before client calls."""
+    mock_client = AsyncMock()
+    mock_client.update_account_user_grants = AsyncMock()
+    arguments: dict[str, object] = {
+        "global": {"account_access": "read_only"},
+        "confirm": True,
+    }
+    if username is not None:
+        arguments["username"] = username
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_account_user_grants_update", arguments)
+
+    assert "username" in result[0].text
+    mock_client.update_account_user_grants.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        ({"username": "alice-dev", "confirm": True}, "at least one grant field"),
+        (
+            {"username": "alice-dev", "global": "admin", "confirm": True},
+            "global must be an object",
+        ),
+        (
+            {
+                "username": "alice-dev",
+                "global": {"account_access": "admin"},
+                "confirm": True,
+            },
+            "global.account_access must be 'read_only', 'read_write', or null",
+        ),
+        (
+            {
+                "username": "alice-dev",
+                "global": {"add_linodes": "true"},
+                "confirm": True,
+            },
+            "global.add_linodes must be a boolean",
+        ),
+        (
+            {
+                "username": "alice-dev",
+                "global": {"unknown": True},
+                "confirm": True,
+            },
+            "global has unknown fields: unknown",
+        ),
+        (
+            {"username": "alice-dev", "linode": "read_only", "confirm": True},
+            "linode must be an array of grant objects",
+        ),
+        (
+            {"username": "alice-dev", "linode": ["read_only"], "confirm": True},
+            "linode[0] must be an object",
+        ),
+        (
+            {
+                "username": "alice-dev",
+                "linode": [{"permissions": "read_only"}],
+                "confirm": True,
+            },
+            "linode[0].id must be an integer",
+        ),
+        (
+            {
+                "username": "alice-dev",
+                "linode": [{"id": 123}],
+                "confirm": True,
+            },
+            "linode[0].permissions is required",
+        ),
+        (
+            {
+                "username": "alice-dev",
+                "linode": [{"id": True, "permissions": "read_only"}],
+                "confirm": True,
+            },
+            "linode[0].id must be an integer",
+        ),
+        (
+            {
+                "username": "alice-dev",
+                "linode": [{"id": 123, "permissions": "admin"}],
+                "confirm": True,
+            },
+            "linode[0].permissions must be 'read_only', 'read_write', or null",
+        ),
+        (
+            {
+                "username": "alice-dev",
+                "linode": [{"id": 123, "permissions": "read_only", "label": "web"}],
+                "confirm": True,
+            },
+            "linode[0] has unknown fields: label",
+        ),
+        (
+            {"username": "alice-dev", "unknown": "read_only", "confirm": True},
+            "unknown grant update fields: unknown",
+        ),
+    ],
+)
+async def test_account_user_grants_update_rejects_invalid_body(
+    sample_config: Config, arguments: dict[str, object], expected_error: str
+) -> None:
+    """Account user grants update validates the body before client calls."""
+    mock_client = AsyncMock()
+    mock_client.update_account_user_grants = AsyncMock()
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_account_user_grants_update", arguments)
+
+    assert expected_error in result[0].text
+    mock_client.update_account_user_grants.assert_not_called()
+
+
+async def test_account_user_grants_update_dry_run_skips_client_call(
+    sample_config: Config,
+) -> None:
+    """Account user grants update dry-run previews the encoded request."""
+    mock_client = AsyncMock()
+    mock_client.update_account_user_grants = AsyncMock()
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_user_grants_update",
+            {
+                "username": "alice-dev",
+                "global": {"account_access": "read_only", "add_linodes": True},
+                "volume": [{"id": 456, "permissions": None}],
+                "confirm": True,
+                "dry_run": True,
+            },
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["tool"] == "linode_account_user_grants_update"
+    assert payload["would_execute"] == {
+        "method": "PUT",
+        "path": "/account/users/alice-dev/grants",
+        "body": {
+            "global": {"account_access": "read_only", "add_linodes": True},
+            "volume": [{"id": 456, "permissions": None}],
+        },
+    }
+    mock_client.update_account_user_grants.assert_not_called()
+
+
+async def test_account_user_grants_update_tool_propagates_client_error(
+    sample_config: Config,
+) -> None:
+    """Account user grants update reports client errors from dispatch."""
+    mock_client = AsyncMock()
+    mock_client.update_account_user_grants = AsyncMock(
+        side_effect=NetworkError("UpdateAccountUserGrants", Exception("boom"))
+    )
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_user_grants_update",
+            {
+                "username": "alice-dev",
+                "global": {"account_access": "read_only"},
+                "confirm": True,
+            },
+        )
+
+    assert "UpdateAccountUserGrants" in result[0].text
+    mock_client.update_account_user_grants.assert_awaited_once_with(
+        "alice-dev", {"global": {"account_access": "read_only"}}
+    )
+
+
 async def test_account_availability_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
