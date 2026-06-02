@@ -2917,6 +2917,42 @@ async def test_account_events_list_rejects_boolean_pagination(
     mock_client_class.assert_not_called()
 
 
+async def test_client_get_beta_uses_exact_encoded_path() -> None:
+    """Low-level client uses the documented beta program route."""
+    response_data = {"id": "example-open", "label": "Example Open Beta"}
+    response = Mock()
+    response.json.return_value = response_data
+    client = Client("https://api.linode.test/v4", "token")
+    with patch.object(
+        client, "make_request", AsyncMock(return_value=response)
+    ) as make_request:
+        result = await client.get_beta("example/open")
+
+    assert result == response_data
+    make_request.assert_awaited_once_with("GET", "/betas/example%2Fopen")
+    await client.close()
+
+
+async def test_retryable_client_get_beta_uses_retry_wrapper() -> None:
+    """Read-only beta get delegates through the retry wrapper."""
+    response_data = {"id": "example-open", "label": "Example Open Beta"}
+    retry_client = RetryableClient.__new__(RetryableClient)
+    retry_client.client = Mock()
+    retry_client.client.get_beta = AsyncMock(return_value=response_data)
+
+    async def _execute(call: Any, *args: Any) -> Any:
+        return await call(*args)
+
+    with patch.object(
+        retry_client, "_execute_with_retry", AsyncMock(side_effect=_execute)
+    ) as execute_with_retry:
+        result = await retry_client.get_beta("example-open")
+
+    assert result == response_data
+    execute_with_retry.assert_awaited_once()
+    retry_client.client.get_beta.assert_awaited_once_with("example-open")
+
+
 async def test_account_beta_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
@@ -2966,6 +3002,69 @@ async def test_account_beta_get_rejects_malformed_beta_id(
         )
 
     assert "beta_id must not contain" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_beta_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Beta get tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_beta_get_tool" in tools_mod.__all__
+    assert "handle_linode_beta_get" in tools_mod.__all__
+
+    srv = Server(sample_config)
+    assert "linode_beta_get" in srv.registered_tool_names
+
+    entry = next(item for item in get_tool_registry() if item.name == "linode_beta_get")
+    assert entry.tool.inputSchema["required"] == ["beta_id"]
+    assert entry.tool.inputSchema["properties"]["beta_id"]["type"] == "string"
+
+
+async def test_beta_get_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Beta get is callable through server dispatch."""
+    response_data: dict[str, object] = {
+        "id": "example-open",
+        "label": "Example Open Beta",
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_beta.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_beta_get", {"beta_id": "example-open"})
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.get_beta.assert_awaited_once_with("example-open")
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        ({}, "beta_id is required"),
+        ({"beta_id": 123}, "beta_id must be a string"),
+        ({"beta_id": ""}, "beta_id is required"),
+        ({"beta_id": "example/open"}, "beta_id must contain only"),
+        ({"beta_id": "example?open"}, "beta_id must contain only"),
+        ({"beta_id": ".."}, "beta_id must contain only"),
+    ],
+)
+async def test_beta_get_rejects_malformed_beta_id(
+    sample_config: Config, arguments: dict[str, object], expected_error: str
+) -> None:
+    """Beta get rejects malformed beta_id before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_beta_get", arguments)
+
+    assert expected_error in result[0].text
     mock_client_class.assert_not_called()
 
 
