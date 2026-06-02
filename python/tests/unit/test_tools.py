@@ -45,6 +45,7 @@ from linodemcp.tools import (
     create_linode_account_beta_get_tool,
     create_linode_account_event_get_tool,
     create_linode_account_invoice_items_list_tool,
+    create_linode_account_maintenance_list_tool,
     create_linode_account_support_ticket_attachment_create_tool,
     create_linode_account_support_ticket_close_tool,
     create_linode_account_support_ticket_create_tool,
@@ -169,6 +170,7 @@ from linodemcp.tools import (
     handle_linode_account_beta_get,
     handle_linode_account_event_get,
     handle_linode_account_invoice_items_list,
+    handle_linode_account_maintenance_list,
     handle_linode_account_support_ticket_attachment_create,
     handle_linode_account_support_ticket_close,
     handle_linode_account_support_ticket_create,
@@ -1215,6 +1217,35 @@ async def test_handle_linode_account_beta_get_rejects_malformed_beta_id(
 
     assert "beta_id must not contain" in result[0].text
     mock_client_class.assert_not_called()
+
+
+async def test_create_linode_account_maintenance_list_tool() -> None:
+    """Test linode_account_maintenance_list tool schema."""
+    tool, capability = create_linode_account_maintenance_list_tool()
+
+    assert tool.name == "linode_account_maintenance_list"
+    assert capability is Capability.Read
+    assert set(tool.inputSchema["properties"]) == {"environment"}
+    assert "required" not in tool.inputSchema
+
+
+async def test_handle_linode_account_maintenance_list(sample_config: Config) -> None:
+    """Test linode_account_maintenance_list tool."""
+    response_data: dict[str, Any] = {
+        "data": [{"entity": {"id": 123, "type": "linode"}, "status": "pending"}],
+    }
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_account_maintenance.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_maintenance_list({}, sample_config)
+
+    assert len(result) == 1
+    assert json.loads(result[0].text) == response_data
+    mock_client.list_account_maintenance.assert_awaited_once_with()
 
 
 async def test_create_linode_account_availability_list_tool() -> None:
