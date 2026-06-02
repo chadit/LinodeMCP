@@ -1405,6 +1405,118 @@ async def test_account_oauth_client_update_requires_update_field(
     mock_client_class.assert_not_called()
 
 
+async def test_account_oauth_client_thumbnail_update_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Account OAuth client thumbnail update tool is exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert (
+        "create_linode_account_oauth_client_thumbnail_update_tool" in tools_mod.__all__
+    )
+    assert "handle_linode_account_oauth_client_thumbnail_update" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_account_oauth_client_thumbnail_update" in srv.registered_tool_names
+
+
+async def test_account_oauth_client_thumbnail_update_schema_requires_confirm() -> None:
+    """Thumbnail update schema requires boolean confirm and dry_run."""
+    registry = {entry.name: entry for entry in get_tool_registry()}
+    tool = registry["linode_account_oauth_client_thumbnail_update"].tool
+
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert "confirm" in tool.inputSchema["required"]
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert (
+        tool.inputSchema["properties"]["client_id"]["pattern"]
+        == r"^[A-Za-z0-9][A-Za-z0-9_-]*$"
+    )
+
+
+async def test_account_oauth_client_thumbnail_update_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Thumbnail update is callable through server dispatch."""
+    response_data = {"id": "client-1", "thumbnail_url": "https://example.com/t.png"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_account_oauth_client_thumbnail.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_oauth_client_thumbnail_update",
+            {"client_id": "client-1", "confirm": True},
+        )
+
+    assert json.loads(result[0].text) == {
+        "message": "OAuth client thumbnail updated successfully",
+        "client": response_data,
+    }
+    mock_client.update_account_oauth_client_thumbnail.assert_awaited_once_with(
+        "client-1"
+    )
+
+
+async def test_account_oauth_client_thumbnail_update_dry_run_skips_client_call(
+    sample_config: Config,
+) -> None:
+    """Thumbnail update dry-run previews encoded path without client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_oauth_client_thumbnail_update",
+            {"client_id": "client-1", "confirm": False, "dry_run": True},
+        )
+
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["would_execute"] == {
+        "method": "PUT",
+        "path": "/account/oauth-clients/client-1/thumbnail",
+        "body": {},
+    }
+    mock_client_class.assert_not_called()
+
+
+async def test_account_oauth_client_thumbnail_update_requires_confirm_true(
+    sample_config: Config,
+) -> None:
+    """Thumbnail update rejects non-true confirm values before client calls."""
+    for confirm in (None, False, "true", 1):
+        args: dict[str, object] = {"client_id": "client-1"}
+        if confirm is not None:
+            args["confirm"] = confirm
+        with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+            srv = Server(_full_access_config(sample_config))
+            result = await srv.dispatch(
+                "linode_account_oauth_client_thumbnail_update", args
+            )
+
+        assert "Set confirm=true" in result[0].text
+        mock_client_class.assert_not_called()
+
+
+async def test_account_oauth_client_thumbnail_update_rejects_invalid_client_id(
+    sample_config: Config,
+) -> None:
+    """Thumbnail update validates client_id before client calls."""
+    for client_id in ("client/1", "client?1", "..", " client-1", ""):
+        with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+            srv = Server(_full_access_config(sample_config))
+            result = await srv.dispatch(
+                "linode_account_oauth_client_thumbnail_update",
+                {"client_id": client_id, "confirm": True},
+            )
+
+        assert "client_id must be" in result[0].text
+        mock_client_class.assert_not_called()
+
+
 async def test_account_events_list_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
