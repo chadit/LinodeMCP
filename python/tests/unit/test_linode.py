@@ -3435,6 +3435,40 @@ async def test_create_mysql_database_instance_wraps_http_errors() -> None:
     await client.close()
 
 
+async def test_delete_mysql_database_instance_sends_encoded_delete() -> None:
+    """Deleting a MySQL database sends DELETE with an encoded instance ID."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data = {"id": 123, "label": "primary-db"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.delete_mysql_database_instance("123/456")
+
+    assert result == response_data
+    mock_request.assert_awaited_once_with(
+        "DELETE", "/databases/mysql/instances/123%2F456"
+    )
+    await client.close()
+
+
+async def test_delete_mysql_database_instance_wraps_http_errors() -> None:
+    """Deleting a MySQL database maps HTTP errors to NetworkError."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.delete_mysql_database_instance(123)
+
+    assert "DeleteMysqlDatabaseInstance" in str(excinfo.value)
+    await client.close()
+
+
 async def test_retryable_create_mysql_database_instance_delegates_once() -> None:
     """Retryable create delegates once and does not replay POST failures."""
     retryable = RetryableClient("https://api.linode.com/v4", "test-token")
@@ -3456,6 +3490,24 @@ async def test_retryable_create_mysql_database_instance_delegates_once() -> None
             await retryable.create_mysql_database_instance(payload)
 
     mock_create.assert_awaited_once_with(payload)
+    await retryable.close()
+
+
+async def test_retryable_delete_mysql_database_instance_delegates_once() -> None:
+    """Retryable delete delegates once and does not replay DELETE failures."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "delete_mysql_database_instance", new_callable=AsyncMock
+    ) as mock_delete:
+        mock_delete.side_effect = NetworkError(
+            "DeleteMysqlDatabaseInstance", httpx.HTTPError("boom")
+        )
+
+        with pytest.raises(NetworkError):
+            await retryable.delete_mysql_database_instance(123)
+
+    mock_delete.assert_awaited_once_with(123)
     await retryable.close()
 
 

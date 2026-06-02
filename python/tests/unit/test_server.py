@@ -5430,6 +5430,110 @@ async def test_database_cluster_create_dry_run_previews_without_client_call(
     mock_client.create_mysql_database_instance.assert_not_called()
 
 
+async def test_database_mysql_instance_delete_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """MySQL Managed Database delete tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_database_mysql_instance_delete_tool" in tools_mod.__all__
+    assert "handle_linode_database_mysql_instance_delete" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_database_mysql_instance_delete_tool()
+    assert tool.name == "linode_database_mysql_instance_delete"
+    assert capability is Capability.Destroy
+    assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert tool.inputSchema["required"] == ["instance_id", "confirm"]
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_database_mysql_instance_delete" in srv.registered_tool_names
+
+
+async def test_database_mysql_instance_delete_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """MySQL Managed Database delete is callable through server dispatch."""
+    response_data = {"id": 123, "label": "primary-db"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_mysql_database_instance.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_mysql_instance_delete",
+            {"instance_id": 123, "confirm": True},
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.delete_mysql_database_instance.assert_awaited_once_with(123)
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_database_mysql_instance_delete_requires_boolean_confirm(
+    sample_config: Config, confirm: object
+) -> None:
+    """MySQL database delete rejects non-true confirm before client calls."""
+    arguments: dict[str, object] = {"instance_id": 123}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_database_mysql_instance_delete", arguments)
+
+    assert "Set confirm=true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"confirm": True},
+        {"instance_id": 0, "confirm": True},
+        {"instance_id": True, "confirm": True},
+        {"instance_id": "123/456", "confirm": True},
+        {"instance_id": "123?456", "confirm": True},
+        {"instance_id": "..", "confirm": True},
+    ],
+)
+async def test_database_mysql_instance_delete_rejects_invalid_instance_id(
+    sample_config: Config, arguments: dict[str, object]
+) -> None:
+    """MySQL database delete rejects invalid path params before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_database_mysql_instance_delete", arguments)
+
+    assert "instance_id must be a positive integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_database_mysql_instance_delete_dry_run_encodes_path(
+    sample_config: Config,
+) -> None:
+    """MySQL database delete dry-run returns the DELETE preview."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_mysql_instance_delete",
+            {"instance_id": 123, "confirm": True, "dry_run": True},
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["dry_run"] is True
+    assert payload["would_execute"] == {
+        "method": "DELETE",
+        "path": "/databases/mysql/instances/123",
+    }
+    mock_client_class.assert_not_called()
+
+
 async def test_database_instances_list_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
