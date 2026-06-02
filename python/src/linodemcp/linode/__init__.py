@@ -1902,6 +1902,17 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetAccountChildAccount", e) from e
 
+    async def get_account_service_transfer(self, token: str) -> dict[str, Any]:
+        """Get an account service transfer request by token."""
+        encoded_token = quote(token, safe="")
+        endpoint = f"/account/service-transfers/{encoded_token}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetAccountServiceTransfer", e) from e
+
     async def get_account_invoice(self, invoice_id: int) -> dict[str, Any]:
         """Get an invoice by ID."""
         encoded_invoice_id = quote(str(invoice_id), safe="")
@@ -7776,6 +7787,13 @@ class RetryableClient:
         """Get a child account by EUUID with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_account_child_account, euuid
+        )
+        return result
+
+    async def get_account_service_transfer(self, token: str) -> dict[str, Any]:
+        """Get an account service transfer request by token with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_account_service_transfer, token
         )
         return result
 
