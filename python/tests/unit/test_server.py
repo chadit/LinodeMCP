@@ -1069,6 +1069,106 @@ async def test_account_events_list_dispatches_from_registry(
     mock_client.list_account_events.assert_awaited_once_with(page=2, page_size=25)
 
 
+async def test_account_invoices_list_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Account invoices list tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_invoices_list_tool" in tools_mod.__all__
+    assert "handle_linode_account_invoices_list" in tools_mod.__all__
+
+    srv = Server(sample_config)
+    assert "linode_account_invoices_list" in srv.registered_tool_names
+
+
+async def test_account_invoices_list_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Account invoices list is callable through server dispatch."""
+    response_data: dict[str, object] = {
+        "data": [{"id": 123, "label": "Invoice #123"}],
+        "page": 2,
+        "pages": 3,
+        "results": 51,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_account_invoices.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_account_invoices_list", {"page": 2, "page_size": 25}
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.list_account_invoices.assert_awaited_once_with(page=2, page_size=25)
+
+
+async def test_account_invoices_list_rejects_invalid_page(
+    sample_config: Config,
+) -> None:
+    """Account invoices list validates page before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_account_invoices_list", {"page": 0})
+
+    assert "page must be at least 1" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_account_invoices_list_rejects_invalid_page_size(
+    sample_config: Config,
+) -> None:
+    """Account invoices list validates page_size before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_account_invoices_list", {"page_size": 10})
+
+    assert "page_size must be at least 25" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_account_invoices_list_rejects_non_integer_pagination(
+    sample_config: Config,
+) -> None:
+    """Account invoices list rejects non-integer pagination before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_account_invoices_list", {"page": "2"})
+
+    assert "page must be an integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_account_invoices_list_rejects_oversized_page_size(
+    sample_config: Config,
+) -> None:
+    """Account invoices list enforces page_size upper bound before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_account_invoices_list", {"page_size": 501})
+
+    assert "page_size must be at most 500" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_account_invoices_list_rejects_boolean_pagination(
+    sample_config: Config,
+) -> None:
+    """Account invoices list rejects bool pagination before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_account_invoices_list", {"page": True})
+
+    assert "page must be an integer" in result[0].text
+    mock_client_class.assert_not_called()
+
+
 async def test_account_event_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
