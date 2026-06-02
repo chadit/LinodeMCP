@@ -794,6 +794,78 @@ async def test_update_account_sends_put_to_account_route() -> None:
     await client.close()
 
 
+async def test_cancel_account_sends_post_to_account_cancel_route() -> None:
+    """Canceling an account sends POST /account/cancel with comments."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"survey_link": "https://example.com/survey"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.cancel_account(comments="No longer needed")
+
+    assert result == {"survey_link": "https://example.com/survey"}
+    mock_request.assert_called_once_with(
+        "POST", "/account/cancel", {"comments": "No longer needed"}
+    )
+
+    await client.close()
+
+
+async def test_cancel_account_without_comments_sends_empty_body() -> None:
+    """Canceling an account without comments sends an empty JSON body."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.cancel_account()
+
+    assert result == {}
+    mock_request.assert_called_once_with("POST", "/account/cancel", {})
+
+    await client.close()
+
+
+async def test_cancel_account_wraps_http_errors() -> None:
+    """Canceling account wraps HTTP transport errors with route context."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.cancel_account(comments="cancel")
+
+    assert exc_info.value.operation == "CancelAccount"
+
+    await client.close()
+
+
+async def test_retryable_cancel_account_does_not_retry_transient_errors() -> None:
+    """Account cancellation is delegated once to avoid replaying side effects."""
+    client = AsyncMock()
+    client.cancel_account.side_effect = httpx.HTTPError("temporary failure")
+    retryable = RetryableClient(
+        "https://api.linode.com/v4",
+        "test-token",
+        retry_config=RetryConfig(max_retries=3),
+    )
+    retryable.client = client
+
+    with pytest.raises(httpx.HTTPError):
+        await retryable.cancel_account(comments="cancel")
+
+    client.cancel_account.assert_awaited_once_with(comments="cancel")
+
+
 async def test_update_instance_ip_sends_put_to_instance_ip_route() -> None:
     """Updating instance IP RDNS sends PUT to the exact route."""
     client = Client("https://api.linode.com/v4", "test-token")

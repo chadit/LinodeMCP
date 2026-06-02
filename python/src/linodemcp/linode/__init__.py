@@ -1542,6 +1542,18 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateAccount", e) from e
 
+    async def cancel_account(self, comments: str | None = None) -> dict[str, Any]:
+        """Cancel the Linode account."""
+        body: dict[str, Any] = {}
+        if comments is not None:
+            body["comments"] = comments
+        try:
+            response = await self.make_request("POST", "/account/cancel", body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("CancelAccount", e) from e
+
     async def list_account_betas(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -7163,6 +7175,10 @@ class RetryableClient:
             lambda: self.client.update_account(**fields)
         )
         return result
+
+    async def cancel_account(self, comments: str | None = None) -> dict[str, Any]:
+        """Cancel the Linode account once without retry replay."""
+        return await self.client.cancel_account(comments=comments)
 
     async def get_account_beta(self, beta_id: str) -> dict[str, Any]:
         """Get an enrolled Beta program on the account with retry."""

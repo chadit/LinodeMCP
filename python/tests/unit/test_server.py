@@ -1553,6 +1553,119 @@ async def test_account_support_ticket_replies_list_dispatches_from_registry(
     )
 
 
+async def test_account_cancel_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Account cancel tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_cancel_tool" in tools_mod.__all__
+    assert "handle_linode_account_cancel" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_account_cancel" in srv.registered_tool_names
+
+    tool = next(
+        item.tool
+        for item in get_tool_registry()
+        if item.name == "linode_account_cancel"
+    )
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert "dry_run" in tool.inputSchema["properties"]
+    assert "confirm" in tool.inputSchema.get("required", [])
+
+
+async def test_account_cancel_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Account cancel is callable through server dispatch."""
+    response_data = {"survey_link": "https://example.com/survey"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.cancel_account.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_cancel",
+            {"comments": "No longer needed", "confirm": True},
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.cancel_account.assert_awaited_once_with(comments="No longer needed")
+
+
+@pytest.mark.parametrize("confirm_value", [None, False, "true", 1])
+async def test_account_cancel_requires_explicit_boolean_confirm(
+    sample_config: Config, confirm_value: Any
+) -> None:
+    """Account cancel rejects missing or non-true confirm before client calls."""
+    arguments: dict[str, Any] = {"comments": "No longer needed"}
+    if confirm_value is not None:
+        arguments["confirm"] = confirm_value
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_account_cancel", arguments)
+
+    if confirm_value is None:
+        assert "confirm" in result[0].text
+    else:
+        assert "Set confirm=true to proceed" in result[0].text
+    mock_client.cancel_account.assert_not_called()
+
+
+async def test_account_cancel_dry_run_skips_client_call(sample_config: Config) -> None:
+    """Account cancel dry-run previews without requiring confirm."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_cancel",
+            {"comments": "No longer needed", "confirm": False, "dry_run": True},
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["tool"] == "linode_account_cancel"
+    assert payload["would_execute"] == {
+        "method": "POST",
+        "path": "/account/cancel",
+        "body": {"comments": "No longer needed"},
+    }
+    mock_client.cancel_account.assert_not_called()
+
+
+async def test_account_cancel_rejects_non_string_comments(
+    sample_config: Config,
+) -> None:
+    """Account cancel validates optional comments before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_cancel", {"comments": 123, "confirm": True}
+        )
+
+    assert "comments must be a string" in result[0].text
+    mock_client.cancel_account.assert_not_called()
+
+
 async def test_account_support_ticket_close_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
