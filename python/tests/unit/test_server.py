@@ -2843,6 +2843,188 @@ async def test_account_support_ticket_replies_list_dispatches_from_registry(
     )
 
 
+async def test_account_oauth_client_create_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """OAuth client create tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_oauth_client_create_tool" in tools_mod.__all__
+    assert "handle_linode_account_oauth_client_create" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_account_oauth_client_create_tool()
+    assert tool.name == "linode_account_oauth_client_create"
+    assert capability is Capability.Write
+    assert tool.inputSchema["properties"]["label"]["minLength"] == 1
+    assert tool.inputSchema["properties"]["redirect_uri"]["minLength"] == 1
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert "dry_run" in tool.inputSchema["properties"]
+    assert "confirm" in tool.inputSchema["required"]
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_account_oauth_client_create" in srv.registered_tool_names
+
+
+async def test_account_oauth_client_create_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """OAuth client create dispatches through the registered handler."""
+    mock_client = AsyncMock()
+    mock_client.create_account_oauth_client = AsyncMock(
+        return_value={
+            "id": "client-123",
+            "label": "demo-client",
+            "redirect_uri": "https://example.com/cb",
+            "secret": "shown-once",
+        }
+    )
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_oauth_client_create",
+            {
+                "label": "demo-client",
+                "redirect_uri": "https://example.com/cb",
+                "confirm": True,
+            },
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["label"] == "demo-client"
+    assert payload["secret"] == "shown-once"
+    mock_client.create_account_oauth_client.assert_awaited_once_with(
+        "demo-client", "https://example.com/cb"
+    )
+
+
+@pytest.mark.parametrize("confirm_value", [None, False, "true", 1])
+async def test_account_oauth_client_create_requires_boolean_confirm(
+    sample_config: Config, confirm_value: object
+) -> None:
+    """OAuth client create rejects missing/non-true confirm before client call."""
+    mock_client = AsyncMock()
+    mock_client.create_account_oauth_client = AsyncMock()
+    arguments: dict[str, object] = {
+        "label": "demo-client",
+        "redirect_uri": "https://example.com/cb",
+    }
+    if confirm_value is not None:
+        arguments["confirm"] = confirm_value
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_account_oauth_client_create", arguments)
+
+    assert "Set confirm=true" in result[0].text
+    mock_client.create_account_oauth_client.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("label", None, "label is required"),
+        ("label", 123, "label must be a string"),
+        ("label", "   ", "label is required"),
+        ("redirect_uri", None, "redirect_uri is required"),
+        ("redirect_uri", 123, "redirect_uri must be a string"),
+        ("redirect_uri", "   ", "redirect_uri is required"),
+    ],
+)
+async def test_account_oauth_client_create_validates_required_arguments(
+    sample_config: Config, field: str, value: object, message: str
+) -> None:
+    """OAuth client create validates required string arguments first."""
+    mock_client = AsyncMock()
+    mock_client.create_account_oauth_client = AsyncMock()
+    arguments: dict[str, object] = {
+        "label": "demo-client",
+        "redirect_uri": "https://example.com/cb",
+        "confirm": True,
+    }
+    if value is None:
+        arguments.pop(field)
+    else:
+        arguments[field] = value
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_account_oauth_client_create", arguments)
+
+    assert message in result[0].text
+    mock_client.create_account_oauth_client.assert_not_called()
+
+
+async def test_account_oauth_client_create_dry_run_skips_client_call(
+    sample_config: Config,
+) -> None:
+    """OAuth client create dry-run previews the request without creating."""
+    mock_client = AsyncMock()
+    mock_client.create_account_oauth_client = AsyncMock()
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_oauth_client_create",
+            {
+                "label": "demo-client",
+                "redirect_uri": "https://example.com/cb",
+                "confirm": False,
+                "dry_run": True,
+            },
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["tool"] == "linode_account_oauth_client_create"
+    assert payload["would_execute"] == {
+        "method": "POST",
+        "path": "/account/oauth-clients",
+        "body": {
+            "label": "demo-client",
+            "redirect_uri": "https://example.com/cb",
+        },
+    }
+    mock_client.create_account_oauth_client.assert_not_called()
+
+
+async def test_account_oauth_client_create_tool_propagates_client_error(
+    sample_config: Config,
+) -> None:
+    """OAuth client create reports client errors from dispatch."""
+    mock_client = AsyncMock()
+    mock_client.create_account_oauth_client = AsyncMock(
+        side_effect=NetworkError("CreateAccountOAuthClient", Exception("boom"))
+    )
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_oauth_client_create",
+            {
+                "label": "demo-client",
+                "redirect_uri": "https://example.com/cb",
+                "confirm": True,
+            },
+        )
+
+    assert "CreateAccountOAuthClient" in result[0].text
+    mock_client.create_account_oauth_client.assert_awaited_once()
+
+
 async def test_account_cancel_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

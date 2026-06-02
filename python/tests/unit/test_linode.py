@@ -1384,6 +1384,65 @@ async def test_retryable_acknowledge_account_agreements_does_not_replay() -> Non
     await retryable.close()
 
 
+async def test_create_account_oauth_client_sends_post_body() -> None:
+    """OAuth client creation sends POST /account/oauth-clients."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    payload = {"label": "demo-client", "redirect_uri": "https://example.com/cb"}
+    response_data = {
+        "id": "client-123",
+        "label": "demo-client",
+        "redirect_uri": "https://example.com/cb",
+        "secret": "shown-once",
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.create_account_oauth_client(
+            "demo-client", "https://example.com/cb"
+        )
+
+    assert result == response_data
+    mock_request.assert_called_once_with("POST", "/account/oauth-clients", payload)
+    await client.close()
+
+
+async def test_create_account_oauth_client_wraps_http_errors() -> None:
+    """OAuth client creation wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.create_account_oauth_client(
+                "demo-client", "https://example.com/cb"
+            )
+
+    assert "CreateAccountOAuthClient" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_create_account_oauth_client_does_not_replay() -> None:
+    """RetryableClient delegates OAuth client creation once without retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "create_account_oauth_client", new_callable=AsyncMock
+    ) as mock_create:
+        mock_create.side_effect = httpx.HTTPError("transient")
+        with pytest.raises(httpx.HTTPError):
+            await retryable.create_account_oauth_client(
+                "demo-client", "https://example.com/cb"
+            )
+
+    mock_create.assert_awaited_once_with("demo-client", "https://example.com/cb")
+    await retryable.close()
+
+
 async def test_enroll_account_beta_sends_post_body() -> None:
     """Test beta enrollment sends POST /account/betas."""
     client = Client("https://api.linode.com/v4", "test-token")
