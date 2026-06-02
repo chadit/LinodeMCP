@@ -2182,6 +2182,19 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ResetPostgresqlDatabaseCredentials", e) from e
 
+    async def get_database_postgresql_instance_ssl(
+        self, instance_id: int | str
+    ) -> dict[str, Any]:
+        """Get a PostgreSQL Managed Database SSL certificate by instance ID."""
+        encoded_instance_id = quote(str(instance_id), safe="")
+        endpoint = f"/databases/postgresql/instances/{encoded_instance_id}/ssl"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetDatabasePostgreSQLInstanceSSL", e) from e
+
     async def get_database_mysql_instance_ssl(
         self, instance_id: int | str
     ) -> dict[str, Any]:
@@ -8460,6 +8473,15 @@ class RetryableClient:
     ) -> dict[str, Any]:
         """Reset PostgreSQL Managed Database credentials once without retry replay."""
         return await self.client.reset_postgresql_database_credentials(instance_id)
+
+    async def get_database_postgresql_instance_ssl(
+        self, instance_id: int | str
+    ) -> dict[str, Any]:
+        """Get a PostgreSQL Managed Database SSL certificate with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_database_postgresql_instance_ssl, instance_id
+        )
+        return result
 
     async def get_database_mysql_instance_ssl(
         self, instance_id: int | str

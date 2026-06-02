@@ -122,6 +122,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_database_mysql_config_get", Capability.Read),
         ToolDescriptor("linode_database_postgresql_config_get", Capability.Read),
         ToolDescriptor("linode_database_postgresql_instance_create", Capability.Write),
+        ToolDescriptor("linode_database_postgresql_instance_ssl_get", Capability.Read),
         ToolDescriptor("linode_database_mysql_instance_get", Capability.Read),
         ToolDescriptor("linode_database_mysql_instance_ssl_get", Capability.Read),
         ToolDescriptor("linode_images_list", Capability.Read),
@@ -349,6 +350,10 @@ def test_database_tools_require_database_read_scope() -> None:
         "linode_database_postgresql_instance_create", Capability.Write
     ) == [Scope.DatabasesReadWrite]
     assert categories("linode_database_postgresql_instance_create") == ["databases"]
+    assert required_scopes(
+        "linode_database_postgresql_instance_ssl_get", Capability.Read
+    ) == [Scope.DatabasesReadOnly]
+    assert categories("linode_database_postgresql_instance_ssl_get") == ["databases"]
     assert required_scopes("linode_database_cluster_create", Capability.Write) == [
         Scope.DatabasesReadWrite
     ]
