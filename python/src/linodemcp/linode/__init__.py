@@ -2180,6 +2180,19 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetDatabaseMySQLInstanceCredentials", e) from e
 
+    async def get_database_postgresql_instance_credentials(
+        self, instance_id: int
+    ) -> dict[str, Any]:
+        """Get credentials for a PostgreSQL Managed Database instance."""
+        encoded_instance_id = quote(str(instance_id), safe="")
+        endpoint = f"/databases/postgresql/instances/{encoded_instance_id}/credentials"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetDatabasePostgreSQLInstanceCredentials", e) from e
+
     async def resume_mysql_database_instance(
         self, instance_id: int | str
     ) -> dict[str, Any]:
@@ -8404,6 +8417,15 @@ class RetryableClient:
         """Get MySQL Managed Database credentials with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_database_mysql_instance_credentials, instance_id
+        )
+        return result
+
+    async def get_database_postgresql_instance_credentials(
+        self, instance_id: int
+    ) -> dict[str, Any]:
+        """Get PostgreSQL Managed Database credentials with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_database_postgresql_instance_credentials, instance_id
         )
         return result
 

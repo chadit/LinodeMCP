@@ -3666,6 +3666,180 @@ async def test_database_mysql_instance_credentials_get_dry_run_previews(
     mock_client_class.assert_not_called()
 
 
+async def test_client_get_database_postgresql_credentials_route_and_errors() -> None:
+    """Low-level client uses the documented PostgreSQL credentials route."""
+    response_data = {"username": "linode", "password": "secret"}
+    response = Mock()
+    response.json.return_value = response_data
+    client = Client("https://api.linode.test/v4", "token")
+    with patch.object(
+        client, "make_request", AsyncMock(return_value=response)
+    ) as make_request:
+        result = await client.get_database_postgresql_instance_credentials(123)
+    assert result == response_data
+    make_request.assert_awaited_once_with(
+        "GET", "/databases/postgresql/instances/123/credentials"
+    )
+    await client.close()
+
+    error_client = Client("https://api.linode.test/v4", "token")
+    with (
+        patch.object(
+            error_client,
+            "make_request",
+            AsyncMock(side_effect=httpx.ConnectError("boom")),
+        ),
+        pytest.raises(NetworkError, match="GetDatabasePostgreSQLInstanceCredentials"),
+    ):
+        await error_client.get_database_postgresql_instance_credentials(123)
+    await error_client.close()
+
+
+async def test_retryable_client_get_database_postgresql_credentials_retries() -> None:
+    """Read-only PostgreSQL credentials get delegates through retry."""
+    response_data = {"username": "linode", "password": "secret"}
+    retry_client = RetryableClient.__new__(RetryableClient)
+    retry_client.client = Mock()
+    retry_client.client.get_database_postgresql_instance_credentials = AsyncMock(
+        return_value=response_data
+    )
+
+    async def _execute(call: Any, *args: Any) -> Any:
+        return await call(*args)
+
+    with patch.object(
+        retry_client, "_execute_with_retry", AsyncMock(side_effect=_execute)
+    ) as execute_with_retry:
+        result = await retry_client.get_database_postgresql_instance_credentials(123)
+    assert result == response_data
+    execute_with_retry.assert_awaited_once()
+    retry_client.client.get_database_postgresql_instance_credentials.assert_awaited_once_with(
+        123
+    )
+
+
+async def test_database_postgresql_credentials_get_tool_registration(
+    sample_config: Config,
+) -> None:
+    """PostgreSQL credentials get tool is exported and gated as write."""
+    from linodemcp import tools as tools_mod
+    from linodemcp.version import get_version_info
+
+    assert (
+        "create_linode_database_postgresql_instance_credentials_get_tool"
+        in tools_mod.__all__
+    )
+    assert (
+        "handle_linode_database_postgresql_instance_credentials_get"
+        in tools_mod.__all__
+    )
+    tool, capability = (
+        tools_mod.create_linode_database_postgresql_instance_credentials_get_tool()
+    )
+    assert tool.name == "linode_database_postgresql_instance_credentials_get"
+    assert capability is Capability.Write
+    assert "sensitive password material" in (tool.description or "")
+    assert tool.inputSchema["required"] == ["instance_id", "confirm"]
+    assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert tool.name not in Server(sample_config).registered_tool_names
+    assert tool.name in Server(_full_access_config(sample_config)).registered_tool_names
+    assert tool.name in get_version_info().features["tools"]
+    entry = next(item for item in get_tool_registry() if item.name == tool.name)
+    assert entry.capability == Capability.Write
+
+
+async def test_database_postgresql_credentials_get_dispatches(
+    sample_config: Config,
+) -> None:
+    """PostgreSQL credentials get returns the client response."""
+    response_data: dict[str, object] = {"username": "linode", "password": "secret"}
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_database_postgresql_instance_credentials.return_value = (
+            response_data
+        )
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_postgresql_instance_credentials_get",
+            {"instance_id": 123, "confirm": True},
+        )
+    assert json.loads(result[0].text) == response_data
+    mock_client.get_database_postgresql_instance_credentials.assert_awaited_once_with(
+        123
+    )
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        ({}, "instance_id is required"),
+        ({"instance_id": 0}, "instance_id must be at least 1"),
+        ({"instance_id": "123"}, "instance_id must be an integer"),
+        ({"instance_id": True}, "instance_id must be an integer"),
+        ({"instance_id": "1/2"}, "instance_id must be an integer"),
+        ({"instance_id": "1?x=y"}, "instance_id must be an integer"),
+        ({"instance_id": ".."}, "instance_id must be an integer"),
+    ],
+)
+async def test_database_postgresql_credentials_get_rejects_bad_instance_id(
+    sample_config: Config, arguments: dict[str, object], expected_error: str
+) -> None:
+    """Malformed path params are rejected before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_postgresql_instance_credentials_get", arguments
+        )
+    assert expected_error in result[0].text
+    mock_client.get_database_postgresql_instance_credentials.assert_not_called()
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_database_postgresql_credentials_get_requires_confirm(
+    sample_config: Config, confirm: object
+) -> None:
+    """Non-true confirm values are rejected before client calls."""
+    arguments: dict[str, object] = {"instance_id": 123}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_postgresql_instance_credentials_get", arguments
+        )
+    assert "Set confirm=true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_database_postgresql_credentials_get_dry_run_previews(
+    sample_config: Config,
+) -> None:
+    """Dry-run previews the GET route without constructing a client."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_postgresql_instance_credentials_get",
+            {"instance_id": 123, "confirm": True, "dry_run": True},
+        )
+    payload = json.loads(result[0].text)
+    assert payload["dry_run"] is True
+    assert payload["would_execute"] == {
+        "method": "GET",
+        "path": "/databases/postgresql/instances/123/credentials",
+    }
+    assert "sensitive password material" in payload["warnings"][0]
+    mock_client_class.assert_not_called()
+
+
 async def test_client_get_database_mysql_instance_ssl_uses_exact_encoded_path() -> None:
     """Low-level client uses the documented MySQL database SSL route."""
     response_data = {"ssl_ca_certificate": "-----BEGIN CERTIFICATE-----"}
