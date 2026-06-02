@@ -44,6 +44,7 @@ from linodemcp.tools import (
     create_linode_account_beta_enroll_tool,
     create_linode_account_beta_get_tool,
     create_linode_account_event_get_tool,
+    create_linode_account_invoice_items_list_tool,
     create_linode_account_support_ticket_attachment_create_tool,
     create_linode_account_support_ticket_close_tool,
     create_linode_account_support_ticket_create_tool,
@@ -167,6 +168,7 @@ from linodemcp.tools import (
     handle_linode_account_beta_enroll,
     handle_linode_account_beta_get,
     handle_linode_account_event_get,
+    handle_linode_account_invoice_items_list,
     handle_linode_account_support_ticket_attachment_create,
     handle_linode_account_support_ticket_close,
     handle_linode_account_support_ticket_create,
@@ -1989,6 +1991,88 @@ async def test_create_linode_account_event_get_tool() -> None:
     assert tool.name == "linode_account_event_get"
     assert capability is Capability.Read
     assert tool.inputSchema["required"] == ["event_id"]
+
+
+async def test_create_linode_account_invoice_items_list_tool() -> None:
+    """Test linode_account_invoice_items_list tool schema."""
+    tool, capability = create_linode_account_invoice_items_list_tool()
+
+    assert tool.name == "linode_account_invoice_items_list"
+    assert capability is Capability.Read
+    assert tool.inputSchema.get("required") == ["invoice_id"]
+    properties = tool.inputSchema.get("properties", {})
+    assert properties["invoice_id"]["minimum"] == 1
+    assert properties["page_size"]["maximum"] == 500
+
+
+async def test_handle_linode_account_invoice_items_list(sample_config: Config) -> None:
+    """Test linode_account_invoice_items_list tool."""
+    response_data = {
+        "data": [{"label": "Compute Instance", "amount": 12.34}],
+        "page": 2,
+        "pages": 3,
+        "results": 51,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_account_invoice_items.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_invoice_items_list(
+            {"invoice_id": 123, "page": 2, "page_size": 25}, sample_config
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.list_account_invoice_items.assert_awaited_once_with(
+        123, page=2, page_size=25
+    )
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        ({}, "invoice_id must be a positive integer"),
+        ({"invoice_id": 0}, "invoice_id must be a positive integer"),
+        ({"invoice_id": False}, "invoice_id must be a positive integer"),
+        ({"invoice_id": "123/456"}, "invoice_id must be a positive integer"),
+        ({"invoice_id": "123?456"}, "invoice_id must be a positive integer"),
+        ({"invoice_id": ".."}, "invoice_id must be a positive integer"),
+        ({"invoice_id": 123, "page": True}, "page must be an integer"),
+        ({"invoice_id": 123, "page_size": 501}, "page_size must be at most 500"),
+    ],
+)
+async def test_handle_linode_account_invoice_items_list_rejects_invalid_arguments(
+    arguments: dict[str, Any], expected_error: str, sample_config: Config
+) -> None:
+    """Account invoice items list validates arguments before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_account_invoice_items_list(
+            arguments, sample_config
+        )
+
+    assert expected_error in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_account_invoice_items_list_reports_client_errors(
+    sample_config: Config,
+) -> None:
+    """Account invoice items list reports client errors."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_account_invoice_items.side_effect = RuntimeError("boom")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_invoice_items_list(
+            {"invoice_id": 123}, sample_config
+        )
+
+    assert "boom" in result[0].text
 
 
 async def test_handle_linode_account_event_get(sample_config: Config) -> None:

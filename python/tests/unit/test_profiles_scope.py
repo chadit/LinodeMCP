@@ -75,6 +75,11 @@ def test_meta_returns_empty() -> None:
         ("linode_firewall_settings_get", Capability.Read, [Scope.AccountReadOnly]),
         ("linode_firewall_settings_update", Capability.Write, [Scope.AccountReadWrite]),
         ("linode_account", Capability.Read, [Scope.AccountReadOnly]),
+        (
+            "linode_account_invoice_items_list",
+            Capability.Read,
+            [Scope.AccountReadOnly],
+        ),
         ("linode_account_beta_get", Capability.Read, [Scope.AccountReadOnly]),
         ("linode_account_child_account_get", Capability.Read, [Scope.AccountReadOnly]),
         ("linode_account_invoice_get", Capability.Read, [Scope.AccountReadOnly]),
