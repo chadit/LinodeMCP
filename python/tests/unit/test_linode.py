@@ -1501,6 +1501,69 @@ async def test_retryable_list_account_child_accounts_delegates_to_client() -> No
     await retryable.close()
 
 
+async def test_get_account_invoice_sends_exact_route() -> None:
+    """Account invoice get sends GET /account/invoices/{invoiceId}."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data = {"id": 123, "label": "Invoice 123", "total": 42.5}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.get_account_invoice(123)
+
+    assert result == response_data
+    mock_request.assert_called_once_with("GET", "/account/invoices/123")
+    await client.close()
+
+
+async def test_get_account_invoice_url_encodes_invoice_id() -> None:
+    """Account invoice get URL-encodes the invoice_id path parameter."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"id": "12/3?x"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.get_account_invoice(cast("int", "12/3?x"))
+
+    mock_request.assert_called_once_with("GET", "/account/invoices/12%2F3%3Fx")
+    await client.close()
+
+
+async def test_get_account_invoice_wraps_http_errors() -> None:
+    """Account invoice get wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.get_account_invoice(123)
+
+    assert "GetAccountInvoice" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_get_account_invoice_delegates_to_client() -> None:
+    """RetryableClient delegates account invoice get to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "get_account_invoice", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = {"id": 123}
+        result = await retryable.get_account_invoice(123)
+
+    mock_get.assert_awaited_once_with(123)
+    assert result == {"id": 123}
+    await retryable.close()
+
+
 async def test_list_tags_sends_get_to_tags_route() -> None:
     """Test listing account tags sends GET /tags."""
     client = Client("https://api.linode.com/v4", "test-token")
