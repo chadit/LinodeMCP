@@ -198,6 +198,7 @@ from linodemcp.tools.linode_databases import (
     create_linode_database_postgresql_instance_update_tool,
     create_linode_database_postgresql_instances_list_tool,
     create_linode_databases_engines_list_tool,
+    create_linode_databases_types_list_tool,
     handle_linode_database_cluster_create,
     handle_linode_database_engine_get,
     handle_linode_database_instances_list,
@@ -225,6 +226,7 @@ from linodemcp.tools.linode_databases import (
     handle_linode_database_postgresql_instance_update,
     handle_linode_database_postgresql_instances_list,
     handle_linode_databases_engines_list,
+    handle_linode_databases_types_list,
 )
 from linodemcp.tools.linode_domain_records import (
     create_linode_domain_record_create_tool,
@@ -875,6 +877,7 @@ __all__ = [
     "create_linode_database_postgresql_instance_update_tool",
     "create_linode_database_postgresql_instances_list_tool",
     "create_linode_databases_engines_list_tool",
+    "create_linode_databases_types_list_tool",
     "create_linode_domain_create_tool",
     "create_linode_domain_delete_tool",
     "create_linode_domain_get_tool",
@@ -1215,6 +1218,7 @@ __all__ = [
     "handle_linode_database_postgresql_instance_update",
     "handle_linode_database_postgresql_instances_list",
     "handle_linode_databases_engines_list",
+    "handle_linode_databases_types_list",
     "handle_linode_domain_create",
     "handle_linode_domain_delete",
     "handle_linode_domain_get",

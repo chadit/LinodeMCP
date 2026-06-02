@@ -894,6 +894,31 @@ def create_linode_databases_engines_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def create_linode_databases_types_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_databases_types_list tool."""
+    return Tool(
+        name="linode_databases_types_list",
+        description="Lists available Linode Managed Databases types.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "page": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Page of results to return",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "minimum": 25,
+                    "maximum": 500,
+                    "description": "Number of results per page",
+                },
+            },
+        },
+    ), Capability.Read
+
+
 async def handle_linode_database_engine_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -1976,3 +2001,28 @@ async def handle_linode_databases_engines_list(
         }
 
     return await execute_tool(cfg, arguments, "list database engines", _call)
+
+
+async def handle_linode_databases_types_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_databases_types_list tool request."""
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        data = await client.list_database_types(page=page, page_size=page_size)
+        database_types = data.get("data", [])
+        return {
+            "message": "Database types listed",
+            "count": len(database_types),
+            "types": database_types,
+            "page": data.get("page"),
+            "pages": data.get("pages"),
+            "results": data.get("results"),
+        }
+
+    return await execute_tool(cfg, arguments, "list database types", _call)
