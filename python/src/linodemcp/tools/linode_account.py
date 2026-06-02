@@ -645,6 +645,100 @@ async def handle_linode_account_beta_enroll(
     )
 
 
+def create_linode_account_oauth_client_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_oauth_client_create tool."""
+    return Tool(
+        name="linode_account_oauth_client_create",
+        description=(
+            "Creates an account OAuth client. The client secret is only "
+            "shown once in the response. Pass dry_run=true to preview "
+            "without creating the client."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Label for the OAuth client",
+                },
+                "redirect_uri": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Redirect URI for the OAuth client",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm live OAuth client creation. "
+                        "When dry_run=true, the request is previewed without "
+                        "creating the client."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["label", "redirect_uri", "confirm"],
+        },
+    ), Capability.Write
+
+
+def _required_nonempty_string_argument(
+    arguments: dict[str, Any], name: str
+) -> tuple[str | None, str | None]:
+    raw_value = arguments.get(name)
+    if raw_value is None:
+        return None, f"{name} is required"
+    if not isinstance(raw_value, str):
+        return None, f"{name} must be a string"
+    value = raw_value.strip()
+    if not value:
+        return None, f"{name} is required"
+    return value, None
+
+
+async def handle_linode_account_oauth_client_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_oauth_client_create tool request."""
+    label, label_error = _required_nonempty_string_argument(arguments, "label")
+    if label_error is not None or label is None:
+        return error_response(label_error or "label is required")
+
+    redirect_uri, redirect_uri_error = _required_nonempty_string_argument(
+        arguments, "redirect_uri"
+    )
+    if redirect_uri_error is not None or redirect_uri is None:
+        return error_response(redirect_uri_error or "redirect_uri is required")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_account_oauth_client_create",
+            arguments.get("environment", ""),
+            "POST",
+            "/account/oauth-clients",
+            None,
+            request_body={"label": label, "redirect_uri": redirect_uri},
+            side_effects=[
+                "A new account OAuth client is created. The returned client "
+                "secret is shown once and cannot be retrieved later."
+            ],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This creates an OAuth client and returns a one-time secret. "
+            "Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.create_account_oauth_client(label, redirect_uri)
+
+    return await execute_tool(
+        cfg, arguments, f"create Linode account OAuth client {label}", _call
+    )
+
+
 def create_linode_account_cancel_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_cancel tool."""
     return Tool(

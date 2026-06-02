@@ -1688,6 +1688,18 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateAccount", e) from e
 
+    async def create_account_oauth_client(
+        self, label: str, redirect_uri: str
+    ) -> dict[str, Any]:
+        """Create an OAuth client on the Linode account."""
+        body = {"label": label, "redirect_uri": redirect_uri}
+        try:
+            response = await self.make_request("POST", "/account/oauth-clients", body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateAccountOAuthClient", e) from e
+
     async def cancel_account(self, comments: str | None = None) -> dict[str, Any]:
         """Cancel the Linode account."""
         body: dict[str, Any] = {}
@@ -7477,6 +7489,12 @@ class RetryableClient:
             lambda: self.client.update_account(**fields)
         )
         return result
+
+    async def create_account_oauth_client(
+        self, label: str, redirect_uri: str
+    ) -> dict[str, Any]:
+        """Create an OAuth client once without retry replay."""
+        return await self.client.create_account_oauth_client(label, redirect_uri)
 
     async def cancel_account(self, comments: str | None = None) -> dict[str, Any]:
         """Cancel the Linode account once without retry replay."""
