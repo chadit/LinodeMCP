@@ -9911,3 +9911,108 @@ async def test_account_user_update_client_error_is_reported(
         )
 
     assert "Failed to update Linode account user" in result[0].text
+
+
+async def test_database_engine_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Database engine get tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_database_engine_get_tool" in tools_mod.__all__
+    assert "handle_linode_database_engine_get" in tools_mod.__all__
+
+    srv = Server(sample_config)
+    assert "linode_database_engine_get" in srv.registered_tool_names
+
+    entry = next(
+        item
+        for item in get_tool_registry()
+        if item.name == "linode_database_engine_get"
+    )
+    assert entry.tool.inputSchema["required"] == ["engine_id"]
+    assert entry.tool.inputSchema["properties"]["engine_id"]["type"] == "string"
+    assert entry.tool.inputSchema["properties"]["page"]["minimum"] == 1
+    assert entry.tool.inputSchema["properties"]["page_size"]["minimum"] == 25
+    assert entry.tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+
+
+async def test_database_engine_get_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Database engine get is callable through server dispatch."""
+    response_data: dict[str, object] = {
+        "id": "mysql/8.0.26",
+        "engine": "mysql",
+        "version": "8.0.26",
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_database_engine.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_database_engine_get",
+            {"engine_id": "mysql/8.0.26", "page": 2, "page_size": 25},
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.get_database_engine.assert_awaited_once_with(
+        "mysql/8.0.26", page=2, page_size=25
+    )
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        ({}, "engine_id is required"),
+        ({"engine_id": 123}, "engine_id must be a string"),
+        ({"engine_id": ""}, "engine_id is required"),
+        (
+            {"engine_id": " mysql/8.0.26"},
+            "engine_id must not include leading or trailing whitespace",
+        ),
+        ({"engine_id": "mysql?8.0.26"}, "engine_id must not contain"),
+        ({"engine_id": "mysql#8.0.26"}, "engine_id must not contain"),
+        ({"engine_id": ".."}, "engine_id must not contain"),
+        ({"engine_id": "mysql"}, "engine_id must use the documented"),
+        ({"engine_id": "/mysql/8.0.26"}, "engine_id must use the documented"),
+        ({"engine_id": "mysql//8.0.26"}, "engine_id must use the documented"),
+        ({"engine_id": "mysql/8.0.26/extra"}, "engine_id must use the documented"),
+        ({"engine_id": "mysql/8.0.26$"}, "engine_id must use the documented"),
+        (
+            {"engine_id": "mysql/8.0.26", "page": "2"},
+            "page must be an integer",
+        ),
+        (
+            {"engine_id": "mysql/8.0.26", "page": 0},
+            "page must be at least 1",
+        ),
+        (
+            {"engine_id": "mysql/8.0.26", "page_size": 24},
+            "page_size must be at least 25",
+        ),
+        (
+            {"engine_id": "mysql/8.0.26", "page_size": 501},
+            "page_size must be at most 500",
+        ),
+        (
+            {"engine_id": "mysql/8.0.26", "page_size": True},
+            "page_size must be an integer",
+        ),
+    ],
+)
+async def test_database_engine_get_rejects_invalid_arguments(
+    sample_config: Config, arguments: dict[str, object], expected_error: str
+) -> None:
+    """Database engine get rejects invalid arguments before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_database_engine_get", arguments)
+
+    assert expected_error in result[0].text
+    mock_client_class.assert_not_called()
