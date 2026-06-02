@@ -520,6 +520,54 @@ async def test_retryable_get_account_settings_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_enable_account_managed_sends_exact_route() -> None:
+    """Account managed enable sends POST /account/settings/managed-enable."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data = {"managed": True}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.enable_account_managed()
+
+    assert result == response_data
+    mock_request.assert_called_once_with("POST", "/account/settings/managed-enable")
+    await client.close()
+
+
+async def test_enable_account_managed_wraps_http_errors() -> None:
+    """Account managed enable wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.enable_account_managed()
+
+    assert "EnableAccountManaged" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_enable_account_managed_delegates_once_without_retry() -> None:
+    """RetryableClient does not replay account managed enable on errors."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "enable_account_managed", new_callable=AsyncMock
+    ) as mock_enable:
+        mock_enable.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(httpx.HTTPError):
+            await retryable.enable_account_managed()
+
+    mock_enable.assert_awaited_once_with()
+    await retryable.close()
+
+
 async def test_list_account_maintenance_sends_exact_route() -> None:
     """Account maintenance listing sends GET /account/maintenance."""
     client = Client("https://api.linode.com/v4", "test-token")

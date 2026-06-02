@@ -188,6 +188,56 @@ async def handle_linode_account_settings_get(
     return await execute_tool(cfg, arguments, "get Linode account settings", _call)
 
 
+def create_linode_account_settings_managed_enable_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_settings_managed_enable tool."""
+    return Tool(
+        name="linode_account_settings_managed_enable",
+        description=(
+            "Enables Linode Managed for the account. Pass dry_run=true to "
+            "preview without enabling it."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm enabling or previewing Linode Managed."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_account_settings_managed_enable(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_settings_managed_enable tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This enables Linode Managed. Set confirm=true to proceed."
+        )
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_account_settings_managed_enable",
+            arguments.get("environment", ""),
+            "POST",
+            "/account/settings/managed-enable",
+            None,
+            side_effects=["Linode Managed is enabled for this account."],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.enable_account_managed()
+
+    return await execute_tool(cfg, arguments, "enable Linode Managed", _call)
+
+
 def create_linode_account_maintenance_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_maintenance_list tool."""
     return Tool(
