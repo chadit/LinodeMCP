@@ -1971,7 +1971,7 @@ class Client:
     async def list_account_betas(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
-        """List enrolled beta programs for the account."""
+        """List enrolled Beta programs for the account."""
         endpoint = "/account/betas"
         params: dict[str, int] = {}
         if page is not None:
@@ -1986,6 +1986,25 @@ class Client:
             return data
         except httpx.HTTPError as e:
             raise NetworkError("ListAccountBetas", e) from e
+
+    async def list_betas(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List available Beta programs."""
+        endpoint = "/betas"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListBetas", e) from e
 
     async def list_account_child_accounts(
         self, page: int | None = None, page_size: int | None = None
@@ -7949,9 +7968,18 @@ class RetryableClient:
     async def list_account_betas(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
-        """List enrolled beta programs for the account with retry."""
+        """List enrolled Beta programs for the account with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             lambda: self.client.list_account_betas(page=page, page_size=page_size)
+        )
+        return result
+
+    async def list_betas(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List available Beta programs with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_betas(page=page, page_size=page_size)
         )
         return result
 
