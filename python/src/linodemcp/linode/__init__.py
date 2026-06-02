@@ -1611,6 +1611,17 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListAccountChildAccounts", e) from e
 
+    async def create_account_child_account_token(self, euuid: str) -> dict[str, Any]:
+        """Create a proxy user token for a child account."""
+        encoded_euuid = quote(euuid, safe="")
+        endpoint = f"/account/child-accounts/{encoded_euuid}/token"
+        try:
+            response = await self.make_request("POST", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateAccountChildAccountToken", e) from e
+
     async def get_account_beta(self, beta_id: str) -> dict[str, Any]:
         """Get an enrolled Beta program on the account."""
         encoded_beta_id = quote(beta_id, safe="")
@@ -7237,6 +7248,10 @@ class RetryableClient:
             )
         )
         return result
+
+    async def create_account_child_account_token(self, euuid: str) -> dict[str, Any]:
+        """Create a child account proxy token once without retry replay."""
+        return await self.client.create_account_child_account_token(euuid)
 
     async def update_account(self, **fields: Any) -> Account:
         """Update Linode account information with retry."""

@@ -1219,6 +1219,59 @@ async def test_list_account_child_accounts_wraps_http_errors() -> None:
     await client.close()
 
 
+async def test_create_account_child_account_token_sends_post_to_encoded_route() -> None:
+    """Create proxy token sends POST to encoded child-account route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response_data = {"token": "proxy-token", "expiry": "2026-06-02T00:00:00"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.create_account_child_account_token("child/account")
+
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "POST", "/account/child-accounts/child%2Faccount/token"
+    )
+    await client.close()
+
+
+async def test_create_account_child_account_token_wraps_http_errors() -> None:
+    """Creating a child-account proxy token wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.create_account_child_account_token("child-123")
+
+    assert "CreateAccountChildAccountToken" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_create_account_child_account_token_delegates_once() -> None:
+    """Retryable wrapper must not replay child-account token creation."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client,
+        "create_account_child_account_token",
+        new_callable=AsyncMock,
+    ) as mock_create:
+        mock_create.side_effect = httpx.HTTPError("transient")
+
+        with pytest.raises(httpx.HTTPError):
+            await retryable.create_account_child_account_token("child-123")
+
+    mock_create.assert_awaited_once_with("child-123")
+    await retryable.close()
+
+
 async def test_retryable_list_account_child_accounts_delegates_to_client() -> None:
     """Test RetryableClient delegates child account listing to Client."""
     retryable = RetryableClient("https://api.linode.com/v4", "test-token")

@@ -1,5 +1,6 @@
 """Linode account tool - authenticated user account information."""
 
+import re
 from pathlib import Path
 from typing import Any, cast
 
@@ -18,6 +19,10 @@ from linodemcp.tools.helpers import (
     execute_dry_run,
     execute_tool,
     is_dry_run,
+)
+
+_CHILD_ACCOUNT_EUUID_PATTERN = re.compile(
+    r"^[A-Za-z0-9]{8}-[A-Za-z0-9]{4}-[A-Za-z0-9]{4}-[A-Za-z0-9]{16}$"
 )
 
 
@@ -728,6 +733,86 @@ async def handle_linode_account_child_accounts_list(
 
     return await execute_tool(
         cfg, arguments, "list Linode account child accounts", _call
+    )
+
+
+def create_linode_account_child_account_token_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_child_account_token_create tool."""
+    return Tool(
+        name="linode_account_child_account_token_create",
+        description=(
+            "Creates a proxy user token for a child account. "
+            "Pass dry_run=true to preview without creating a token."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "euuid": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Child account EUUID",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm this credential-creating operation. "
+                        "Required even when dry_run=true; dry_run still avoids "
+                        "the client call."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["euuid", "confirm"],
+        },
+    ), Capability.Write
+
+
+def _validate_child_account_euuid(value: Any) -> str | None:
+    """Validate a child account EUUID tool argument."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return None
+
+    euuid = value.strip()
+    if not euuid:
+        return None
+    if _CHILD_ACCOUNT_EUUID_PATTERN.fullmatch(euuid) is None:
+        return None
+    return euuid
+
+
+async def handle_linode_account_child_account_token_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_child_account_token_create tool request."""
+    euuid = _validate_child_account_euuid(arguments.get("euuid"))
+    if euuid is None:
+        return error_response("euuid must match the child account EUUID format")
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This creates a child account proxy token. Set confirm=true to proceed."
+        )
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_account_child_account_token_create",
+            arguments.get("environment", ""),
+            "POST",
+            f"/account/child-accounts/{euuid}/token",
+            None,
+            side_effects=[
+                "A proxy user token is created for the selected child account."
+            ],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.create_account_child_account_token(euuid)
+
+    return await execute_tool(
+        cfg, arguments, "create Linode account child account proxy token", _call
     )
 
 
