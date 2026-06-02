@@ -96,6 +96,11 @@ def test_meta_returns_empty() -> None:
             Capability.Write,
             [Scope.AccountReadWrite],
         ),
+        (
+            "linode_account_beta_enroll",
+            Capability.Write,
+            [Scope.AccountReadWrite],
+        ),
         ("linode_profile", Capability.Read, [Scope.AccountReadOnly]),
     ],
 )

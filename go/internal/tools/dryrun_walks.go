@@ -1606,7 +1606,8 @@ func tagDeleteDependencyWalk(ctx context.Context, _ *linode.Client, state any) (
 
 	if len(resp.Data) > 0 {
 		details.Warnings = append(details.Warnings, fmt.Sprintf(
-			"Deleting this tag removes it from %d tagged object(s); the objects are not deleted.", len(resp.Data)))
+			"Deleting this tag removes it from %d tagged object(s); the objects are not deleted.", len(resp.Data),
+		))
 	}
 
 	return details, nil

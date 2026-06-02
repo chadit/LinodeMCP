@@ -100,6 +100,7 @@ def build_dry_run_response(
     side_effects: list[str] | None = None,
     billing_delta: dict[str, Any] | None = None,
     warnings: list[str] | None = None,
+    request_body: Any | None = None,
 ) -> list[TextContent]:
     """Build the v0 dry-run wire shape and wrap it as MCP text content.
 
@@ -126,6 +127,8 @@ def build_dry_run_response(
         body["billing_delta"] = billing_delta
     if warnings:
         body["warnings"] = warnings
+    if request_body is not None:
+        body["would_execute"]["body"] = request_body
 
     return [
         TextContent(

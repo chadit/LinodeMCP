@@ -41,6 +41,7 @@ from linodemcp.profiles import Capability
 from linodemcp.tools import (
     create_linode_account_agreements_acknowledge_tool,
     create_linode_account_availability_list_tool,
+    create_linode_account_beta_enroll_tool,
     create_linode_account_beta_get_tool,
     create_linode_account_support_ticket_attachment_create_tool,
     create_linode_account_support_ticket_close_tool,
@@ -162,6 +163,7 @@ from linodemcp.tools import (
     handle_linode_account,
     handle_linode_account_agreements_acknowledge,
     handle_linode_account_availability_list,
+    handle_linode_account_beta_enroll,
     handle_linode_account_beta_get,
     handle_linode_account_support_ticket_attachment_create,
     handle_linode_account_support_ticket_close,
@@ -836,6 +838,106 @@ async def test_handle_linode_account(sample_config: Config) -> None:
         assert "Test" in result[0].text
         assert "test@example.com" in result[0].text
         mock_client.get_account.assert_called_once()
+
+
+async def test_create_linode_account_beta_enroll_tool() -> None:
+    """Test linode_account_beta_enroll tool schema."""
+    tool, capability = create_linode_account_beta_enroll_tool()
+
+    assert tool.name == "linode_account_beta_enroll"
+    assert capability is Capability.Write
+    assert tool.inputSchema["properties"]["id"]["type"] == "string"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert "id" in tool.inputSchema.get("required", [])
+    assert "confirm" in tool.inputSchema.get("required", [])
+
+
+async def test_handle_linode_account_beta_enroll_dry_run(
+    sample_config: Config,
+) -> None:
+    """dry_run=true previews beta enrollment without a client call."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_account_beta_enroll(
+            {"id": "distributed-beta", "dry_run": True, "confirm": True}, sample_config
+        )
+
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["tool"] == "linode_account_beta_enroll"
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/account/betas"
+    assert body["would_execute"]["body"] == {"id": "distributed-beta"}
+    assert body["current_state"] is None
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_account_beta_enroll_dry_run_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """dry_run=true still requires explicit boolean confirm before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_account_beta_enroll(
+            {"id": "distributed-beta", "dry_run": True}, sample_config
+        )
+
+    assert "confirm=true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_account_beta_enroll(
+    sample_config: Config,
+) -> None:
+    """Test linode_account_beta_enroll tool."""
+    response_data = {"id": "distributed-beta", "label": "Distributed Beta"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.enroll_account_beta.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_account_beta_enroll(
+            {"id": "distributed-beta", "confirm": True}, sample_config
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.enroll_account_beta.assert_awaited_once_with("distributed-beta")
+
+
+@pytest.mark.parametrize("bad_confirm", [None, False, "true", 1])
+async def test_handle_linode_account_beta_enroll_requires_boolean_confirm(
+    sample_config: Config, bad_confirm: object
+) -> None:
+    """Beta enrollment rejects non-true confirm before client call."""
+    arguments: dict[str, object] = {"id": "distributed-beta"}
+    if bad_confirm is not None:
+        arguments["confirm"] = bad_confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_account_beta_enroll(arguments, sample_config)
+
+    assert "confirm=true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        ({"confirm": True}, "id is required"),
+        ({"id": 123, "confirm": True}, "id must be a string"),
+        ({"id": "   ", "confirm": True}, "id is required"),
+    ],
+)
+async def test_handle_linode_account_beta_enroll_rejects_invalid_id(
+    sample_config: Config, arguments: dict[str, object], expected_error: str
+) -> None:
+    """Beta enrollment validates the required beta id before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_account_beta_enroll(arguments, sample_config)
+
+    assert expected_error in result[0].text
+    mock_client_class.assert_not_called()
 
 
 async def test_create_linode_account_agreements_acknowledge_tool() -> None:
