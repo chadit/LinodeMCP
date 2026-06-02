@@ -1677,6 +1677,83 @@ async def handle_linode_account_payment_method_get(
     )
 
 
+def create_linode_account_payment_method_make_default_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_payment_method_make_default tool."""
+    return Tool(
+        name="linode_account_payment_method_make_default",
+        description=(
+            "Sets a payment method as the default for the Linode account. "
+            "Pass dry_run=true to preview without changing the default."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "payment_method_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Payment method ID to set as default",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm this mutating operation. Ignored "
+                        "when dry_run=true."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["payment_method_id", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_account_payment_method_make_default(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_payment_method_make_default tool request."""
+    raw_payment_method_id = arguments.get("payment_method_id")
+    if raw_payment_method_id is None:
+        return error_response("payment_method_id is required")
+    if not isinstance(raw_payment_method_id, int) or isinstance(
+        raw_payment_method_id, bool
+    ):
+        return error_response("payment_method_id must be an integer")
+    if raw_payment_method_id < 1:
+        return error_response("payment_method_id must be at least 1")
+
+    encoded_payment_method_id = quote(str(raw_payment_method_id), safe="")
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_account_payment_method_make_default",
+            arguments.get("environment", ""),
+            "POST",
+            f"/account/payment-methods/{encoded_payment_method_id}/make-default",
+            None,
+            request_body={},
+            side_effects=["The selected account payment method becomes the default."],
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This changes the default payment method. Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.make_account_payment_method_default(raw_payment_method_id)
+        return {
+            "message": "Default payment method updated successfully",
+            "payment_method": result,
+        }
+
+    return await execute_tool(
+        cfg,
+        arguments,
+        f"set Linode account payment method {raw_payment_method_id} as default",
+        _call,
+    )
+
+
 def create_linode_account_login_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_login_get tool."""
     return Tool(
