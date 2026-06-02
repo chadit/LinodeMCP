@@ -1118,6 +1118,142 @@ async def test_account_event_get_rejects_invalid_event_id(
     mock_client_class.assert_not_called()
 
 
+async def test_account_event_seen_tool_is_exported_registered_and_profiled(
+    sample_config: Config,
+) -> None:
+    """Account event seen tool should be exported, registered, and profiled."""
+    from linodemcp import tools as tools_mod
+    from linodemcp.profiles.builtin import categories
+
+    assert "create_linode_account_event_seen_tool" in tools_mod.__all__
+    assert "handle_linode_account_event_seen" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_account_event_seen_tool()
+    assert tool.name == "linode_account_event_seen"
+    assert capability is Capability.Write
+    assert tool.inputSchema["properties"]["event_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert set(tool.inputSchema["required"]) == {"event_id", "confirm"}
+    assert "account" in categories("linode_account_event_seen")
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_account_event_seen" in srv.registered_tool_names
+
+
+async def test_account_event_seen_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Account event seen is callable through server dispatch."""
+    response_data: dict[str, object] = {}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.mark_account_event_seen.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_event_seen", {"event_id": 123, "confirm": True}
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.mark_account_event_seen.assert_awaited_once_with(123)
+
+
+async def test_account_event_seen_handler_calls_retryable_wrapper(
+    sample_config: Config,
+) -> None:
+    """Account event seen handler calls the RetryableClient wrapper method."""
+    response_data: dict[str, object] = {}
+
+    with patch(
+        "linodemcp.linode.RetryableClient.mark_account_event_seen",
+        new_callable=AsyncMock,
+    ) as mock_mark_seen:
+        mock_mark_seen.return_value = response_data
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_event_seen", {"event_id": 123, "confirm": True}
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_mark_seen.assert_awaited_once_with(123)
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        ({"confirm": True}, "event_id must be a positive integer"),
+        ({"event_id": 0, "confirm": True}, "event_id must be a positive integer"),
+        ({"event_id": True, "confirm": True}, "event_id must be a positive integer"),
+        ({"event_id": "1/2", "confirm": True}, "event_id must be a positive integer"),
+        ({"event_id": "1?2", "confirm": True}, "event_id must be a positive integer"),
+        ({"event_id": "..", "confirm": True}, "event_id must be a positive integer"),
+    ],
+)
+async def test_account_event_seen_rejects_invalid_event_id(
+    sample_config: Config, arguments: dict[str, object], expected_error: str
+) -> None:
+    """Account event seen validates event_id before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_account_event_seen", arguments)
+
+    assert expected_error in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize("confirm_value", [None, False, "true", 1, 0])
+async def test_account_event_seen_requires_explicit_true_confirm(
+    sample_config: Config, confirm_value: object
+) -> None:
+    """Account event seen rejects missing/non-true confirm before client calls."""
+    arguments: dict[str, object] = {"event_id": 123}
+    if confirm_value is not None:
+        arguments["confirm"] = confirm_value
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_account_event_seen", arguments)
+
+    assert "Set confirm=true to proceed" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_account_event_seen_dry_run_fetches_event_without_marking_seen(
+    sample_config: Config,
+) -> None:
+    """Account event seen dry-run fetches current state without mutating."""
+    current_event = {"id": 123, "seen": False}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_account_event.return_value = current_event
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_event_seen",
+            {"event_id": 123, "confirm": False, "dry_run": True},
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["tool"] == "linode_account_event_seen"
+    assert payload["dry_run"] is True
+    assert payload["would_execute"] == {
+        "method": "POST",
+        "path": "/account/events/123/seen",
+    }
+    assert payload["current_state"] == current_event
+    mock_client.get_account_event.assert_awaited_once_with(123)
+    mock_client.mark_account_event_seen.assert_not_called()
+
+
 async def test_account_events_list_rejects_invalid_page(
     sample_config: Config,
 ) -> None:

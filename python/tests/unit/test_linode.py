@@ -641,6 +641,87 @@ async def test_retryable_get_account_event_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_mark_account_event_seen_sends_exact_route() -> None:
+    """Account event seen sends POST /account/events/{eventId}/seen."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data: dict[str, Any] = {}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.mark_account_event_seen(123)
+
+    assert result == response_data
+    mock_request.assert_called_once_with("POST", "/account/events/123/seen")
+    await client.close()
+
+
+async def test_mark_account_event_seen_url_encodes_event_id() -> None:
+    """Account event seen URL-encodes the event_id path parameter."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.mark_account_event_seen(cast("int", "1/2?x"))
+
+    mock_request.assert_called_once_with("POST", "/account/events/1%2F2%3Fx/seen")
+    await client.close()
+
+
+async def test_mark_account_event_seen_wraps_http_errors() -> None:
+    """Account event seen wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.mark_account_event_seen(123)
+
+    assert "MarkAccountEventSeen" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_mark_account_event_seen_delegates_without_retry() -> None:
+    """RetryableClient delegates mark seen once without retry replay."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "mark_account_event_seen", new_callable=AsyncMock
+    ) as mock_mark:
+        mock_mark.return_value = {}
+        result = await retryable.mark_account_event_seen(123)
+
+    mock_mark.assert_awaited_once_with(123)
+    assert result == {}
+    await retryable.close()
+
+
+async def test_retryable_mark_account_event_seen_does_not_replay_transient_errors() -> (
+    None
+):
+    """Mutating mark-seen is not retried after a transient failure."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "mark_account_event_seen", new_callable=AsyncMock
+    ) as mock_mark:
+        mock_mark.side_effect = httpx.HTTPError("temporary")
+
+        with pytest.raises(httpx.HTTPError):
+            await retryable.mark_account_event_seen(123)
+
+    mock_mark.assert_awaited_once_with(123)
+    await retryable.close()
+
+
 async def test_get_account_child_account_sends_exact_route() -> None:
     """Child account get sends GET /account/child-accounts/{euuId}."""
     client = Client("https://api.linode.com/v4", "test-token")

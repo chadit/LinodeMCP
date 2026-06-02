@@ -1549,6 +1549,17 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetAccountEvent", e) from e
 
+    async def mark_account_event_seen(self, event_id: int) -> dict[str, Any]:
+        """Mark an account event as seen."""
+        encoded_event_id = quote(str(event_id), safe="")
+        endpoint = f"/account/events/{encoded_event_id}/seen"
+        try:
+            response = await self.make_request("POST", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("MarkAccountEventSeen", e) from e
+
     async def acknowledge_account_agreements(
         self, agreements: dict[str, bool]
     ) -> dict[str, Any]:
@@ -7236,6 +7247,10 @@ class RetryableClient:
             self.client.get_account_event, event_id
         )
         return result
+
+    async def mark_account_event_seen(self, event_id: int) -> dict[str, Any]:
+        """Mark an account event seen once without retry replay."""
+        return await self.client.mark_account_event_seen(event_id)
 
     async def acknowledge_account_agreements(
         self, agreements: dict[str, bool]
