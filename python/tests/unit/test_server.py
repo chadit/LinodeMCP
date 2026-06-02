@@ -1545,6 +1545,79 @@ async def test_account_child_account_get_schema_requires_euuid(
     assert entry.tool.inputSchema["properties"]["euuid"]["type"] == "string"
 
 
+async def test_account_invoice_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Account invoice get tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_invoice_get_tool" in tools_mod.__all__
+    assert "handle_linode_account_invoice_get" in tools_mod.__all__
+
+    srv = Server(sample_config)
+    assert "linode_account_invoice_get" in srv.registered_tool_names
+
+
+async def test_account_invoice_get_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Account invoice get is callable through server dispatch."""
+    response_data: dict[str, object] = {"id": 123, "label": "Invoice 123"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_account_invoice.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_account_invoice_get", {"invoice_id": 123})
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.get_account_invoice.assert_awaited_once_with(123)
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({}, "invoice_id is required"),
+        ({"invoice_id": "123"}, "invoice_id must be an integer"),
+        ({"invoice_id": True}, "invoice_id must be an integer"),
+        ({"invoice_id": 0}, "invoice_id must be at least 1"),
+        ({"invoice_id": "12/3"}, "invoice_id must be an integer"),
+        ({"invoice_id": "12?3"}, "invoice_id must be an integer"),
+        ({"invoice_id": ".."}, "invoice_id must be an integer"),
+    ],
+)
+async def test_account_invoice_get_rejects_invalid_invoice_id(
+    sample_config: Config, arguments: dict[str, object], message: str
+) -> None:
+    """Account invoice get rejects invalid invoice_id before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_account_invoice_get", arguments)
+
+    assert message in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_account_invoice_get_schema_requires_invoice_id(
+    sample_config: Config,
+) -> None:
+    """Account invoice get schema includes the required invoice_id path param."""
+    Server(sample_config)
+    entry = next(
+        item
+        for item in get_tool_registry()
+        if item.name == "linode_account_invoice_get"
+    )
+
+    assert entry.tool.inputSchema["required"] == ["invoice_id"]
+    assert entry.tool.inputSchema["properties"]["invoice_id"]["type"] == "integer"
+    assert entry.tool.inputSchema["properties"]["invoice_id"]["minimum"] == 1
+
+
 async def test_account_availability_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

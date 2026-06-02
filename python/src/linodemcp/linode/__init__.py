@@ -1686,6 +1686,17 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetAccountChildAccount", e) from e
 
+    async def get_account_invoice(self, invoice_id: int) -> dict[str, Any]:
+        """Get an invoice by ID."""
+        encoded_invoice_id = quote(str(invoice_id), safe="")
+        endpoint = f"/account/invoices/{encoded_invoice_id}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetAccountInvoice", e) from e
+
     async def enroll_account_beta(self, beta_id: str) -> dict[str, Any]:
         """Enroll the account in a beta program."""
         try:
@@ -7336,6 +7347,13 @@ class RetryableClient:
         """Get a child account by EUUID with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_account_child_account, euuid
+        )
+        return result
+
+    async def get_account_invoice(self, invoice_id: int) -> dict[str, Any]:
+        """Get an invoice by ID with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_account_invoice, invoice_id
         )
         return result
 
