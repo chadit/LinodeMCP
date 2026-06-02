@@ -2619,6 +2619,42 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetDatabaseEngine", e) from e
 
+    async def get_database_type(
+        self, type_id: object, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """Get a Managed Databases type."""
+        if not isinstance(type_id, str):
+            raise TypeError("type_id must be a string")
+        if not type_id or type_id.strip() != type_id:
+            raise ValueError("type_id is required")
+        if ".." in type_id or not re.fullmatch(r"[A-Za-z0-9._-]+", type_id):
+            raise ValueError(
+                "type_id must use letters, numbers, dots, underscores, and hyphens"
+            )
+        encoded_type_id = quote(type_id, safe="")
+        endpoint = f"/databases/types/{encoded_type_id}"
+        params: dict[str, int] = {}
+        if page is not None:
+            if type(page) is not int or page < 1:
+                raise ValueError("page must be an integer at least 1")
+            params["page"] = page
+        if page_size is not None:
+            if (
+                type(page_size) is not int
+                or page_size < MIN_PAGE_SIZE
+                or page_size > MAX_PAGE_SIZE
+            ):
+                raise ValueError("page_size must be an integer between 25 and 500")
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetDatabaseType", e) from e
+
     async def list_regions(self) -> list[Region]:
         """List Linode regions."""
         try:
@@ -8800,6 +8836,17 @@ class RetryableClient:
         result: dict[str, Any] = await self._execute_with_retry(
             lambda: self.client.get_database_engine(
                 engine_id, page=page, page_size=page_size
+            )
+        )
+        return result
+
+    async def get_database_type(
+        self, type_id: str, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """Get a Managed Databases type with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.get_database_type(
+                type_id, page=page, page_size=page_size
             )
         )
         return result
