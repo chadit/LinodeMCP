@@ -93,6 +93,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_database_mysql_instance_delete", Capability.Destroy),
         ToolDescriptor("linode_database_mysql_instance_patch", Capability.Write),
         ToolDescriptor("linode_database_mysql_instance_resume", Capability.Write),
+        ToolDescriptor("linode_database_mysql_instance_suspend", Capability.Write),
         ToolDescriptor("linode_database_mysql_instance_update", Capability.Write),
         ToolDescriptor("linode_database_mysql_instances_list", Capability.Read),
         ToolDescriptor("linode_database_postgresql_instances_list", Capability.Read),
