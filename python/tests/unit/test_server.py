@@ -1270,6 +1270,141 @@ async def test_account_oauth_clients_list_rejects_boolean_pagination(
     mock_client_class.assert_not_called()
 
 
+async def test_account_oauth_client_update_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Account OAuth client update tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_oauth_client_update_tool" in tools_mod.__all__
+    assert "handle_linode_account_oauth_client_update" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_account_oauth_client_update" in srv.registered_tool_names
+
+
+async def test_account_oauth_client_update_schema_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Account OAuth client update schema requires boolean confirm and dry_run."""
+    registry = {entry.name: entry for entry in get_tool_registry()}
+    tool = registry["linode_account_oauth_client_update"].tool
+
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert "confirm" in tool.inputSchema["required"]
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert "id" not in tool.inputSchema["properties"]
+
+
+async def test_account_oauth_client_update_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Account OAuth client update is callable through server dispatch."""
+    response_data = {"id": "client-1", "label": "Updated"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_account_oauth_client.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_oauth_client_update",
+            {"client_id": "client-1", "label": "Updated", "confirm": True},
+        )
+
+    assert json.loads(result[0].text) == {
+        "message": "OAuth client updated successfully",
+        "client": response_data,
+    }
+    mock_client.update_account_oauth_client.assert_awaited_once_with(
+        "client-1", label="Updated"
+    )
+
+
+async def test_account_oauth_client_update_dry_run_skips_client_call(
+    sample_config: Config,
+) -> None:
+    """Account OAuth client update dry-run previews without client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_oauth_client_update",
+            {
+                "client_id": "client-1",
+                "label": "Updated",
+                "confirm": False,
+                "dry_run": True,
+            },
+        )
+
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["would_execute"]["method"] == "PUT"
+    assert body["would_execute"]["path"] == "/account/oauth-clients/client-1"
+    assert body["would_execute"]["body"] == {"label": "Updated"}
+    mock_client_class.assert_not_called()
+
+
+async def test_account_oauth_client_update_requires_confirm_true(
+    sample_config: Config,
+) -> None:
+    """Account OAuth client update rejects non-true confirm values."""
+    for confirm in (None, False, "true", 1):
+        args: dict[str, object] = {"client_id": "client-1", "label": "Updated"}
+        if confirm is not None:
+            args["confirm"] = confirm
+        with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+            srv = Server(_full_access_config(sample_config))
+            result = await srv.dispatch("linode_account_oauth_client_update", args)
+
+        assert "Set confirm=true" in result[0].text
+        mock_client_class.assert_not_called()
+
+
+async def test_account_oauth_client_update_rejects_invalid_client_id(
+    sample_config: Config,
+) -> None:
+    """Account OAuth client update validates client_id before client calls."""
+    for client_id in ("client/1", "client?1", "..", " client-1", ""):
+        with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+            srv = Server(_full_access_config(sample_config))
+            result = await srv.dispatch(
+                "linode_account_oauth_client_update",
+                {"client_id": client_id, "label": "Updated", "confirm": True},
+            )
+
+        assert "client_id must be" in result[0].text
+        mock_client_class.assert_not_called()
+
+
+async def test_account_oauth_client_update_requires_update_field(
+    sample_config: Config,
+) -> None:
+    """Account OAuth client update requires a documented body field."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_oauth_client_update",
+            {"client_id": "client-1", "confirm": True},
+        )
+
+    assert "At least one OAuth client field is required" in result[0].text
+    mock_client_class.assert_not_called()
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_oauth_client_update",
+            {"client_id": "client-1", "id": "different-client", "confirm": True},
+        )
+
+    assert "At least one OAuth client field is required" in result[0].text
+    mock_client_class.assert_not_called()
+
+
 async def test_account_events_list_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

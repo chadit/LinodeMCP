@@ -24,6 +24,15 @@ from linodemcp.tools.helpers import (
 _CHILD_ACCOUNT_EUUID_PATTERN = re.compile(
     r"^[A-Za-z0-9]{8}-[A-Za-z0-9]{4}-[A-Za-z0-9]{4}-[A-Za-z0-9]{16}$"
 )
+_OAUTH_CLIENT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+_OAUTH_CLIENT_UPDATE_FIELDS = (
+    "label",
+    "public",
+    "redirect_uri",
+    "secret",
+    "status",
+    "thumbnail_url",
+)
 
 
 def create_linode_account_tool() -> tuple[Tool, Capability]:
@@ -194,6 +203,113 @@ async def handle_linode_account_oauth_clients_list(
 
     return await execute_tool(
         cfg, arguments, "list Linode account OAuth clients", _call
+    )
+
+
+def create_linode_account_oauth_client_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_oauth_client_update tool."""
+    return Tool(
+        name="linode_account_oauth_client_update",
+        description=(
+            "Updates one Linode account OAuth client. "
+            "Pass dry_run=true to preview without updating."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "client_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "OAuth client ID",
+                },
+                "label": {"type": "string", "description": "OAuth client label"},
+                "public": {
+                    "type": "boolean",
+                    "description": "Whether the client is public",
+                },
+                "redirect_uri": {"type": "string", "description": "OAuth redirect URI"},
+                "secret": {"type": "string", "description": "OAuth client secret"},
+                "status": {"type": "string", "description": "OAuth client status"},
+                "thumbnail_url": {
+                    "type": "string",
+                    "description": "OAuth client thumbnail URL",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm this mutating operation. Ignored "
+                        "when dry_run=true."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["client_id", "confirm"],
+        },
+    ), Capability.Write
+
+
+def _validate_oauth_client_id(value: Any) -> str | None:
+    """Validate an OAuth client ID tool argument."""
+    if not isinstance(value, str):
+        return None
+    client_id = value.strip()
+    if (
+        not client_id
+        or client_id != value
+        or _OAUTH_CLIENT_ID_PATTERN.fullmatch(client_id) is None
+        or ".." in client_id
+    ):
+        return None
+    return client_id
+
+
+async def handle_linode_account_oauth_client_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_oauth_client_update tool request."""
+    client_id = _validate_oauth_client_id(arguments.get("client_id"))
+    if client_id is None:
+        return error_response(
+            "client_id must be a non-empty ID without path separators, "
+            "query separators, or traversal segments"
+        )
+
+    update_fields = {
+        key: arguments.get(key)
+        for key in _OAUTH_CLIENT_UPDATE_FIELDS
+        if arguments.get(key) is not None
+    }
+    if not update_fields:
+        return error_response("At least one OAuth client field is required")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_account_oauth_client_update",
+            arguments.get("environment", ""),
+            "PUT",
+            f"/account/oauth-clients/{client_id}",
+            None,
+            side_effects=["The selected OAuth client configuration is updated."],
+            request_body=update_fields,
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates an OAuth client. Set confirm=true to proceed."
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        oauth_client = await client.update_account_oauth_client(
+            client_id, **update_fields
+        )
+        return {
+            "message": "OAuth client updated successfully",
+            "client": oauth_client,
+        }
+
+    return await execute_tool(
+        cfg, arguments, "update Linode account OAuth client", _call
     )
 
 
