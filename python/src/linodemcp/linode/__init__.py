@@ -1893,6 +1893,17 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetAccountOAuthClient", e) from e
 
+    async def get_account_payment(self, payment_id: int) -> dict[str, Any]:
+        """Get an account payment by ID."""
+        encoded_payment_id = quote(str(payment_id), safe="")
+        endpoint = f"/account/payments/{encoded_payment_id}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetAccountPayment", e) from e
+
     async def get_account_payment_method(
         self, payment_method_id: int
     ) -> dict[str, Any]:
@@ -7733,6 +7744,13 @@ class RetryableClient:
         """Get an OAuth client by client ID with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_account_oauth_client, client_id
+        )
+        return result
+
+    async def get_account_payment(self, payment_id: int) -> dict[str, Any]:
+        """Get an account payment by ID with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_account_payment, payment_id
         )
         return result
 

@@ -43,6 +43,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_account_invoice_get", Capability.Read),
         ToolDescriptor("linode_account_invoice_items_list", Capability.Read),
         ToolDescriptor("linode_account_invoices_list", Capability.Read),
+        ToolDescriptor("linode_account_payment_get", Capability.Read),
         ToolDescriptor("linode_account_payment_methods_list", Capability.Read),
         ToolDescriptor("linode_account_payment_method_delete", Capability.Destroy),
         ToolDescriptor("linode_account_login_get", Capability.Read),

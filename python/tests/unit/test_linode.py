@@ -5185,6 +5185,70 @@ def test_is_retryable_network_error() -> None:
     assert is_retryable(NetworkError("operation", Exception("error")))
 
 
+async def test_get_account_payment_sends_get_to_exact_route() -> None:
+    """Getting an account payment sends GET /account/payments/{id}."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data: dict[str, Any] = {"id": 123, "usd": "10.00"}
+    response = MagicMock()
+    response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        result = await client.get_account_payment(123)
+
+    assert result == response_data
+    mock_request.assert_awaited_once_with("GET", "/account/payments/123")
+    await client.close()
+
+
+async def test_get_account_payment_encodes_path_param() -> None:
+    """Client URL-encodes the payment path parameter boundary."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {"id": "123/456?query"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        result = await client.get_account_payment("123/456?query")  # type: ignore[arg-type]
+
+    assert result == {"id": "123/456?query"}
+    mock_request.assert_awaited_once_with("GET", "/account/payments/123%2F456%3Fquery")
+    await client.close()
+
+
+async def test_get_account_payment_wraps_http_errors() -> None:
+    """HTTP errors from payment reads are wrapped."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.get_account_payment(123)
+
+    assert "GetAccountPayment" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_get_account_payment_delegates_to_client() -> None:
+    """Retryable payment get delegates to the base client."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+    response_data: dict[str, Any] = {"id": 123, "usd": "10.00"}
+
+    with patch.object(
+        client.client, "get_account_payment", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = response_data
+
+        result = await client.get_account_payment(123)
+
+    assert result == response_data
+    mock_get.assert_awaited_once_with(123)
+    await client.close()
+
+
 async def test_get_account_payment_method_sends_get_to_exact_route() -> None:
     """Getting an account payment method sends GET /account/payment-methods/{id}."""
     client = Client("https://api.linode.com/v4", "test-token")
