@@ -173,8 +173,10 @@ from linodemcp.tools.linode_betas import (
 from linodemcp.tools.linode_databases import (
     create_linode_database_engine_get_tool,
     create_linode_database_instances_list_tool,
+    create_linode_databases_engines_list_tool,
     handle_linode_database_engine_get,
     handle_linode_database_instances_list,
+    handle_linode_databases_engines_list,
 )
 from linodemcp.tools.linode_domain_records import (
     create_linode_domain_record_create_tool,
@@ -800,6 +802,7 @@ __all__ = [
     "create_linode_betas_list_tool",
     "create_linode_database_engine_get_tool",
     "create_linode_database_instances_list_tool",
+    "create_linode_databases_engines_list_tool",
     "create_linode_domain_create_tool",
     "create_linode_domain_delete_tool",
     "create_linode_domain_get_tool",
@@ -1115,6 +1118,7 @@ __all__ = [
     "handle_linode_betas_list",
     "handle_linode_database_engine_get",
     "handle_linode_database_instances_list",
+    "handle_linode_databases_engines_list",
     "handle_linode_domain_create",
     "handle_linode_domain_delete",
     "handle_linode_domain_get",
