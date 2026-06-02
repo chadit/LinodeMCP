@@ -28,6 +28,171 @@ _CHILD_ACCOUNT_EUUID_PATTERN = re.compile(
 _OAUTH_CLIENT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 _ACCOUNT_USERNAME_PATTERN_TEXT = r"^[A-Za-z0-9][A-Za-z0-9_-]*$"
 _ACCOUNT_USERNAME_PATTERN = re.compile(_ACCOUNT_USERNAME_PATTERN_TEXT)
+_ACCOUNT_GRANT_FIELDS = (
+    "database",
+    "domain",
+    "firewall",
+    "global",
+    "image",
+    "linode",
+    "longview",
+    "nodebalancer",
+    "stackscript",
+    "volume",
+    "vpc",
+)
+_VALID_GRANT_PERMISSIONS = {"read_only", "read_write"}
+_GLOBAL_PERMISSION_FIELDS = {"account_access"}
+_GLOBAL_BOOLEAN_FIELDS = {
+    "add_databases",
+    "add_domains",
+    "add_firewalls",
+    "add_images",
+    "add_linodes",
+    "add_longview",
+    "add_nodebalancers",
+    "add_stackscripts",
+    "add_volumes",
+    "add_vpcs",
+    "cancel_account",
+    "longview_subscription",
+}
+_GLOBAL_NULLABLE_BOOLEAN_FIELDS = {"child_account_access"}
+_RESOURCE_GRANT_FIELDS = tuple(
+    field for field in _ACCOUNT_GRANT_FIELDS if field != "global"
+)
+
+
+def _validate_account_username(value: object) -> tuple[str | None, str | None]:
+    """Validate a finite account username path parameter."""
+    if value is None:
+        return None, "username is required"
+    if not isinstance(value, str):
+        return None, "username must be a string"
+
+    username = value.strip()
+    if not username:
+        return None, "username is required"
+    if username != value or not _ACCOUNT_USERNAME_PATTERN.fullmatch(username):
+        return (
+            None,
+            "username must contain only letters, numbers, underscores, or hyphens",
+        )
+    return username, None
+
+
+def _validate_resource_grant_entry(
+    field: str, entry: object, index: int
+) -> tuple[dict[str, int | str | None] | None, str | None]:
+    """Validate one per-resource grant entry."""
+    if not isinstance(entry, dict):
+        return None, f"{field}[{index}] must be an object"
+    typed_entry = cast("dict[str, Any]", entry)
+    allowed_entry_keys: set[str] = {"id", "permissions"}
+    unknown_keys = sorted(set(typed_entry) - allowed_entry_keys)
+    if unknown_keys:
+        return None, f"{field}[{index}] has unknown fields: " + ", ".join(unknown_keys)
+
+    resource_id = typed_entry.get("id")
+    if not isinstance(resource_id, int) or isinstance(resource_id, bool):
+        return None, f"{field}[{index}].id must be an integer"
+
+    if "permissions" not in typed_entry:
+        return None, f"{field}[{index}].permissions is required"
+
+    permissions = typed_entry.get("permissions")
+    if permissions is not None and (
+        not isinstance(permissions, str) or permissions not in _VALID_GRANT_PERMISSIONS
+    ):
+        return (
+            None,
+            f"{field}[{index}].permissions must be 'read_only', 'read_write', or null",
+        )
+    return {"id": resource_id, "permissions": permissions}, None
+
+
+def _validate_resource_grants(
+    field: str, value: object
+) -> tuple[list[dict[str, int | str | None]] | None, str | None]:
+    """Validate a per-resource grant list."""
+    if not isinstance(value, list):
+        return None, f"{field} must be an array of grant objects"
+
+    entries = cast("list[object]", value)
+    grants: list[dict[str, int | str | None]] = []
+    for index, entry in enumerate(entries):
+        grant, error = _validate_resource_grant_entry(field, entry, index)
+        if error is not None or grant is None:
+            return None, error or f"{field}[{index}] is invalid"
+        grants.append(grant)
+    return grants, None
+
+
+def _validate_global_grants(
+    value: object,
+) -> tuple[dict[str, str | bool | None] | None, str | None]:
+    """Validate the global grants object."""
+    if not isinstance(value, dict):
+        return None, "global must be an object"
+
+    typed_value = cast("dict[str, Any]", value)
+    allowed_keys: set[str] = (
+        _GLOBAL_PERMISSION_FIELDS
+        | _GLOBAL_BOOLEAN_FIELDS
+        | _GLOBAL_NULLABLE_BOOLEAN_FIELDS
+    )
+    unknown_keys = sorted(set(typed_value) - allowed_keys)
+    if unknown_keys:
+        return None, "global has unknown fields: " + ", ".join(unknown_keys)
+
+    grants: dict[str, str | bool | None] = {}
+    for field, grant_value in typed_value.items():
+        if field in _GLOBAL_PERMISSION_FIELDS:
+            if grant_value is not None and (
+                not isinstance(grant_value, str)
+                or grant_value not in _VALID_GRANT_PERMISSIONS
+            ):
+                return (
+                    None,
+                    f"global.{field} must be 'read_only', 'read_write', or null",
+                )
+        elif field in _GLOBAL_BOOLEAN_FIELDS:
+            if type(grant_value) is not bool:
+                return None, f"global.{field} must be a boolean"
+        elif type(grant_value) is not bool and grant_value is not None:
+            return None, f"global.{field} must be a boolean or null"
+        grants[field] = grant_value
+    return grants, None
+
+
+def _collect_account_user_grants(
+    arguments: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Collect and validate account user grant update fields."""
+    allowed_keys = {"environment", "username", "confirm", PARAM_DRY_RUN}
+    allowed_keys.update(_ACCOUNT_GRANT_FIELDS)
+    unknown_keys = sorted(set(arguments) - allowed_keys)
+    if unknown_keys:
+        return None, "unknown grant update fields: " + ", ".join(unknown_keys)
+
+    grants: dict[str, Any] = {}
+    if "global" in arguments:
+        global_grants, error = _validate_global_grants(arguments["global"])
+        if error is not None or global_grants is None:
+            return None, error or "global is invalid"
+        grants["global"] = global_grants
+
+    for field in _RESOURCE_GRANT_FIELDS:
+        if field not in arguments:
+            continue
+        resource_grants, error = _validate_resource_grants(field, arguments[field])
+        if error is not None or resource_grants is None:
+            return None, error or f"{field} is invalid"
+        grants[field] = resource_grants
+
+    if not grants:
+        return None, "at least one grant field is required"
+    return grants, None
 
 
 def _validate_service_transfer_token(value: object) -> tuple[str | None, str | None]:
@@ -180,6 +345,104 @@ async def handle_linode_account_user_create(
         return {"message": "Account user created successfully", "user": user}
 
     return await execute_tool(cfg, arguments, "create Linode account user", _call)
+
+
+def create_linode_account_user_grants_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_user_grants_update tool."""
+    resource_grant_schema = {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "id": {
+                    "type": "integer",
+                    "description": "Resource ID this grant applies to",
+                },
+                "permissions": {
+                    "type": ["string", "null"],
+                    "enum": ["read_only", "read_write", None],
+                    "description": "Grant level; use null to remove access",
+                },
+            },
+            "required": ["id", "permissions"],
+        },
+    }
+    grant_props: dict[str, dict[str, Any]] = {
+        field: resource_grant_schema.copy() for field in _RESOURCE_GRANT_FIELDS
+    }
+    grant_props["global"] = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "account_access": {
+                "type": ["string", "null"],
+                "enum": ["read_only", "read_write", None],
+            },
+            **{field: {"type": "boolean"} for field in _GLOBAL_BOOLEAN_FIELDS},
+            "child_account_access": {"type": ["boolean", "null"]},
+        },
+    }
+    return Tool(
+        name="linode_account_user_grants_update",
+        description="Updates grants for an account user.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "username": {
+                    "type": "string",
+                    "pattern": _ACCOUNT_USERNAME_PATTERN_TEXT,
+                    "description": "Username whose grants will be updated",
+                },
+                **grant_props,
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this mutating operation.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["username", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_account_user_grants_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_user_grants_update tool request."""
+    username, username_error = _validate_account_username(arguments.get("username"))
+    if username_error is not None or username is None:
+        return error_response(username_error or "username is required")
+
+    grants, grants_error = _collect_account_user_grants(arguments)
+    if grants_error is not None or grants is None:
+        return error_response(grants_error or "at least one grant field is required")
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates account user grants. Set confirm=true to proceed."
+        )
+
+    encoded_username = quote(username, safe="")
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_account_user_grants_update",
+            arguments.get("environment", ""),
+            "PUT",
+            f"/account/users/{encoded_username}/grants",
+            None,
+            side_effects=[f"Account grants for user {username!r} will be updated."],
+            request_body=grants,
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.update_account_user_grants(username, grants)
+        return {"message": "Account user grants updated successfully", "grants": result}
+
+    return await execute_tool(
+        cfg, arguments, f"update Linode account user grants for {username}", _call
+    )
 
 
 def create_linode_account_agreements_list_tool() -> tuple[Tool, Capability]:
@@ -1863,7 +2126,9 @@ _ACCOUNT_USER_UPDATE_ALLOWED_ARGUMENTS = frozenset(
 _ACCOUNT_USER_USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
-def _validate_account_username(value: object) -> tuple[str | None, str | None]:
+def _validate_account_user_update_username(
+    value: object,
+) -> tuple[str | None, str | None]:
     if value is None:
         return None, "current_username is required"
     if not isinstance(value, str):
@@ -2184,7 +2449,7 @@ async def handle_linode_account_user_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_account_user_update tool request."""
-    current_username, username_error = _validate_account_username(
+    current_username, username_error = _validate_account_user_update_username(
         arguments.get("current_username")
     )
     if username_error is not None or current_username is None:
