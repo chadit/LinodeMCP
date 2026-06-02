@@ -1711,6 +1711,69 @@ async def test_retryable_get_account_invoice_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_get_account_login_sends_exact_route() -> None:
+    """Account login get sends GET /account/logins/{loginId}."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data = {"id": 456, "username": "alice", "status": "successful"}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.get_account_login(456)
+
+    assert result == response_data
+    mock_request.assert_called_once_with("GET", "/account/logins/456")
+    await client.close()
+
+
+async def test_get_account_login_url_encodes_login_id() -> None:
+    """Account login get URL-encodes the login_id path parameter."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"id": "45/6?x"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.get_account_login(cast("int", "45/6?x"))
+
+    mock_request.assert_called_once_with("GET", "/account/logins/45%2F6%3Fx")
+    await client.close()
+
+
+async def test_get_account_login_wraps_http_errors() -> None:
+    """Account login get wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.get_account_login(456)
+
+    assert "GetAccountLogin" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_get_account_login_delegates_to_client() -> None:
+    """RetryableClient delegates account login get to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "get_account_login", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = {"id": 456}
+        result = await retryable.get_account_login(456)
+
+    mock_get.assert_awaited_once_with(456)
+    assert result == {"id": 456}
+    await retryable.close()
+
+
 async def test_list_tags_sends_get_to_tags_route() -> None:
     """Test listing account tags sends GET /tags."""
     client = Client("https://api.linode.com/v4", "test-token")

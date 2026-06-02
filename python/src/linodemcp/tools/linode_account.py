@@ -858,6 +858,46 @@ async def handle_linode_account_invoice_get(
     )
 
 
+def create_linode_account_login_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_login_get tool."""
+    return Tool(
+        name="linode_account_login_get",
+        description="Gets an account login by login ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "login_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Login ID to retrieve",
+                },
+            },
+            "required": ["login_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_account_login_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_login_get tool request."""
+    raw_login_id = arguments.get("login_id")
+    if raw_login_id is None:
+        return error_response("login_id is required")
+    if not isinstance(raw_login_id, int) or isinstance(raw_login_id, bool):
+        return error_response("login_id must be an integer")
+    if raw_login_id < 1:
+        return error_response("login_id must be at least 1")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_account_login(raw_login_id)
+
+    return await execute_tool(
+        cfg, arguments, f"retrieve Linode account login {raw_login_id}", _call
+    )
+
+
 def create_linode_account_availability_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_availability_list tool."""
     return Tool(
