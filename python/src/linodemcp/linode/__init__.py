@@ -1804,6 +1804,20 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("AddAccountPromoCredit", e) from e
 
+    async def create_account_service_transfer(
+        self, linode_ids: list[int]
+    ) -> dict[str, Any]:
+        """Request a service transfer for Linode entities."""
+        body = {"entities": {"linodes": linode_ids}}
+        try:
+            response = await self.make_request(
+                "POST", "/account/service-transfers", body
+            )
+            data_response: dict[str, Any] = response.json()
+            return data_response
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateAccountServiceTransfer", e) from e
+
     async def delete_account_oauth_client(self, client_id: str) -> dict[str, Any]:
         """Delete an OAuth client on the Linode account."""
         encoded_client_id = quote(str(client_id), safe="")
@@ -7801,6 +7815,12 @@ class RetryableClient:
     async def add_account_promo_credit(self, promo_code: str) -> dict[str, Any]:
         """Add an account promo credit once without retry replay."""
         return await self.client.add_account_promo_credit(promo_code)
+
+    async def create_account_service_transfer(
+        self, linode_ids: list[int]
+    ) -> dict[str, Any]:
+        """Request an account service transfer once without retry replay."""
+        return await self.client.create_account_service_transfer(linode_ids)
 
     async def delete_account_oauth_client(self, client_id: str) -> dict[str, Any]:
         """Delete an OAuth client once without retry replay."""

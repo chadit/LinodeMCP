@@ -2151,6 +2151,29 @@ async def test_add_account_promo_credit_sends_post_body() -> None:
     await client.close()
 
 
+async def test_create_account_service_transfer_sends_post_body() -> None:
+    """Service transfer creation sends POST /account/service-transfers."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    payload = {"entities": {"linodes": [123, 456]}}
+    response_data = {
+        "token": "service-transfer-token",
+        "status": "pending",
+        "entities": {"linodes": [123, 456]},
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.create_account_service_transfer([123, 456])
+
+    assert result == response_data
+    mock_request.assert_called_once_with("POST", "/account/service-transfers", payload)
+    await client.close()
+
+
 async def test_delete_account_oauth_client_sends_delete_to_encoded_route() -> None:
     """OAuth client deletion sends DELETE with an encoded client ID path."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -2231,6 +2254,20 @@ async def test_add_account_promo_credit_wraps_http_errors() -> None:
     await client.close()
 
 
+async def test_create_account_service_transfer_wraps_http_errors() -> None:
+    """Service transfer creation wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.create_account_service_transfer([123])
+
+    assert "CreateAccountServiceTransfer" in str(excinfo.value)
+    await client.close()
+
+
 async def test_delete_account_oauth_client_wraps_http_errors() -> None:
     """OAuth client deletion wraps HTTP errors."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -2306,6 +2343,21 @@ async def test_retryable_add_account_promo_credit_does_not_replay() -> None:
             await retryable.add_account_promo_credit("PROMO123")
 
     mock_add.assert_awaited_once_with("PROMO123")
+    await retryable.close()
+
+
+async def test_retryable_create_account_service_transfer_does_not_replay() -> None:
+    """RetryableClient delegates service transfer creation once without retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "create_account_service_transfer", new_callable=AsyncMock
+    ) as mock_create:
+        mock_create.side_effect = httpx.HTTPError("transient")
+        with pytest.raises(httpx.HTTPError):
+            await retryable.create_account_service_transfer([123])
+
+    mock_create.assert_awaited_once_with([123])
     await retryable.close()
 
 
