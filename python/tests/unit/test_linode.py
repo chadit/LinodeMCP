@@ -992,6 +992,76 @@ async def test_retryable_list_account_invoices_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_list_account_payments_sends_exact_route_with_query() -> None:
+    """Account payments listing sends GET /account/payments."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data = {
+        "data": [{"id": 123, "date": "2024-01-02T03:04:05"}],
+        "page": 2,
+        "pages": 3,
+        "results": 51,
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.list_account_payments(page=2, page_size=25)
+
+    assert result == response_data
+    mock_request.assert_called_once_with("GET", "/account/payments?page=2&page_size=25")
+    await client.close()
+
+
+async def test_list_account_payments_sends_exact_route_without_query() -> None:
+    """Account payments listing omits query parameters when none are provided."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data = {"data": [{"id": 123}], "page": 1, "pages": 1, "results": 1}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.list_account_payments()
+
+    assert result == response_data
+    mock_request.assert_called_once_with("GET", "/account/payments")
+    await client.close()
+
+
+async def test_list_account_payments_wraps_http_errors() -> None:
+    """Account payments listing wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.list_account_payments()
+
+    assert "ListAccountPayments" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_list_account_payments_delegates_to_client() -> None:
+    """RetryableClient delegates account payment listing to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "list_account_payments", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = {"data": [], "page": 1, "pages": 1, "results": 0}
+        result = await retryable.list_account_payments(page=1, page_size=100)
+
+    mock_list.assert_awaited_once_with(page=1, page_size=100)
+    assert result == {"data": [], "page": 1, "pages": 1, "results": 0}
+    await retryable.close()
+
+
 async def test_list_account_payment_methods_sends_exact_route_with_query() -> None:
     """Account payment method listing sends GET /account/payment-methods."""
     client = Client("https://api.linode.com/v4", "test-token")
