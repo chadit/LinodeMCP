@@ -39,7 +39,6 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_account_betas_list", Capability.Read),
         ToolDescriptor("linode_betas_list", Capability.Read),
         ToolDescriptor("linode_database_instances_list", Capability.Read),
-        ToolDescriptor("linode_database_mysql_instances_list", Capability.Read),
         ToolDescriptor("linode_account_child_accounts_list", Capability.Read),
         ToolDescriptor("linode_account_user_create", Capability.Write),
         ToolDescriptor("linode_account_service_transfers_list", Capability.Read),
@@ -88,6 +87,8 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_database_engine_get", Capability.Read),
         ToolDescriptor("linode_database_cluster_create", Capability.Write),
         ToolDescriptor("linode_database_mysql_instance_delete", Capability.Destroy),
+        ToolDescriptor("linode_database_mysql_instance_update", Capability.Write),
+        ToolDescriptor("linode_database_mysql_instances_list", Capability.Read),
         # Compute reads + mutations.
         ToolDescriptor("linode_instances_list", Capability.Read),
         ToolDescriptor("linode_instance_get", Capability.Read),
@@ -313,10 +314,6 @@ def test_database_tools_require_database_read_scope() -> None:
         Scope.DatabasesReadOnly
     ]
     assert categories("linode_database_instances_list") == ["databases"]
-    assert required_scopes("linode_database_mysql_instances_list", Capability.Read) == [
-        Scope.DatabasesReadOnly
-    ]
-    assert categories("linode_database_mysql_instances_list") == ["databases"]
     assert required_scopes("linode_database_mysql_config_get", Capability.Read) == [
         Scope.DatabasesReadOnly
     ]
@@ -333,6 +330,14 @@ def test_database_tools_require_database_read_scope() -> None:
         Scope.DatabasesReadOnly
     ]
     assert categories("linode_database_mysql_instance_get") == ["databases"]
+    assert required_scopes("linode_database_mysql_instances_list", Capability.Read) == [
+        Scope.DatabasesReadOnly
+    ]
+    assert categories("linode_database_mysql_instances_list") == ["databases"]
+    assert categories("linode_database_mysql_instance_update") == ["databases"]
+    assert required_scopes(
+        "linode_database_mysql_instance_update", Capability.Write
+    ) == [Scope.DatabasesReadWrite]
 
 
 def test_account_payment_method_delete_is_account_category() -> None:
