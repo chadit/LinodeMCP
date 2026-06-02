@@ -1878,6 +1878,25 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListAccountChildAccounts", e) from e
 
+    async def list_account_service_transfers(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List service transfers for the account."""
+        endpoint = "/account/service-transfers"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListAccountServiceTransfers", e) from e
+
     async def create_account_child_account_token(self, euuid: str) -> dict[str, Any]:
         """Create a proxy user token for a child account."""
         encoded_euuid = quote(euuid, safe="")
@@ -7732,6 +7751,17 @@ class RetryableClient:
         """List child accounts for the account with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             lambda: self.client.list_account_child_accounts(
+                page=page, page_size=page_size
+            )
+        )
+        return result
+
+    async def list_account_service_transfers(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List account service transfers with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_account_service_transfers(
                 page=page, page_size=page_size
             )
         )
