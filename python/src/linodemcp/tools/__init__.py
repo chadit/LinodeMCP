@@ -164,6 +164,10 @@ from linodemcp.tools.linode_audit_summary import (
     create_linode_audit_summary_tool,
     handle_linode_audit_summary,
 )
+from linodemcp.tools.linode_betas import (
+    create_linode_beta_get_tool,
+    handle_linode_beta_get,
+)
 from linodemcp.tools.linode_domain_records import (
     create_linode_domain_record_create_tool,
     create_linode_domain_record_delete_tool,
@@ -784,6 +788,7 @@ __all__ = [
     "create_linode_audit_recent_tool",
     "create_linode_audit_report_tool",
     "create_linode_audit_summary_tool",
+    "create_linode_beta_get_tool",
     "create_linode_domain_create_tool",
     "create_linode_domain_delete_tool",
     "create_linode_domain_get_tool",
@@ -1095,6 +1100,7 @@ __all__ = [
     "handle_linode_audit_recent",
     "handle_linode_audit_report",
     "handle_linode_audit_summary",
+    "handle_linode_beta_get",
     "handle_linode_domain_create",
     "handle_linode_domain_delete",
     "handle_linode_domain_get",

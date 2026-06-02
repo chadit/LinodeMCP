@@ -2261,6 +2261,17 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetAccountAvailability", e) from e
 
+    async def get_beta(self, beta_id: str) -> dict[str, Any]:
+        """Get an available Beta program."""
+        encoded_beta_id = quote(beta_id, safe="")
+        endpoint = f"/betas/{encoded_beta_id}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetBeta", e) from e
+
     async def list_regions(self) -> list[Region]:
         """List Linode regions."""
         try:
@@ -8143,6 +8154,13 @@ class RetryableClient:
         """List grants for an account user by username with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_account_user_grants, username
+        )
+        return result
+
+    async def get_beta(self, beta_id: str) -> dict[str, Any]:
+        """Get an available Beta program with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_beta, beta_id
         )
         return result
 
