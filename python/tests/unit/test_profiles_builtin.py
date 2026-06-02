@@ -102,6 +102,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor(
             "linode_database_postgresql_instance_delete", Capability.Destroy
         ),
+        ToolDescriptor("linode_database_postgresql_instance_patch", Capability.Write),
         ToolDescriptor("linode_database_postgresql_instance_update", Capability.Write),
         ToolDescriptor(
             "linode_database_postgresql_instance_credentials_get", Capability.Write
@@ -383,6 +384,10 @@ def test_database_tools_require_database_read_scope() -> None:
         Scope.DatabasesReadOnly
     ]
     assert categories("linode_database_mysql_instances_list") == ["databases"]
+    assert required_scopes(
+        "linode_database_postgresql_instance_patch", Capability.Write
+    ) == [Scope.DatabasesReadWrite]
+    assert categories("linode_database_postgresql_instance_patch") == ["databases"]
     assert required_scopes(
         "linode_database_postgresql_instance_update", Capability.Write
     ) == [Scope.DatabasesReadWrite]

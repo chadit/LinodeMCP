@@ -662,6 +662,34 @@ def create_linode_database_mysql_instance_patch_tool() -> tuple[Tool, Capability
     ), Capability.Write
 
 
+def create_linode_database_postgresql_instance_patch_tool() -> tuple[Tool, Capability]:
+    """Create the linode_database_postgresql_instance_patch tool."""
+    return Tool(
+        name="linode_database_postgresql_instance_patch",
+        description=(
+            "Applies pending patches to a PostgreSQL Managed Database. Pass "
+            "dry_run=true to preview without patching."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "instance_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "PostgreSQL Managed Database instance ID",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm database patching.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["instance_id", "confirm"],
+        },
+    ), Capability.Write
+
+
 def create_linode_database_mysql_instance_suspend_tool() -> tuple[Tool, Capability]:
     """Create the linode_database_mysql_instance_suspend tool."""
     return Tool(
@@ -1436,6 +1464,42 @@ async def handle_linode_database_mysql_instance_patch(
         return await client.patch_mysql_database_instance(instance_id)
 
     return await execute_tool(cfg, arguments, "patch MySQL Managed Database", _call)
+
+
+async def handle_linode_database_postgresql_instance_patch(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_database_postgresql_instance_patch tool request."""
+    try:
+        instance_id = _required_positive_int_argument(arguments, "instance_id")
+    except ValueError as exc:
+        return error_response(str(exc))
+
+    encoded_instance_id = quote(str(instance_id), safe="")
+    patch_path = f"/databases/postgresql/instances/{encoded_instance_id}/patch"
+
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_database_postgresql_instance_patch",
+            arguments.get("environment", ""),
+            "POST",
+            patch_path,
+            None,
+            side_effects=[
+                f"Pending patches will be applied to PostgreSQL Managed Database "
+                f"instance {instance_id}."
+            ],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.patch_postgresql_database_instance(instance_id)
+
+    return await execute_tool(
+        cfg, arguments, "patch PostgreSQL Managed Database", _call
+    )
 
 
 async def handle_linode_database_instances_list(
