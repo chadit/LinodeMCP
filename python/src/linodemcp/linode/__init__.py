@@ -2553,6 +2553,15 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetDatabaseMySQLConfig", e) from e
 
+    async def get_database_postgresql_config(self) -> dict[str, Any]:
+        """List PostgreSQL Managed Database advanced parameters."""
+        try:
+            response = await self.make_request("GET", "/databases/postgresql/config")
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetDatabasePostgreSQLConfig", e) from e
+
     async def list_volumes(self) -> list[Volume]:
         """List Linode block storage volumes."""
         try:
@@ -8543,6 +8552,13 @@ class RetryableClient:
         """List MySQL Managed Database advanced parameters with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_database_mysql_config
+        )
+        return result
+
+    async def get_database_postgresql_config(self) -> dict[str, Any]:
+        """List PostgreSQL Managed Database advanced parameters with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_database_postgresql_config
         )
         return result
 

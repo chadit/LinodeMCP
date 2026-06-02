@@ -813,6 +813,20 @@ def create_linode_database_mysql_config_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def create_linode_database_postgresql_config_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_database_postgresql_config_get tool."""
+    return Tool(
+        name="linode_database_postgresql_config_get",
+        description="Lists PostgreSQL Managed Database advanced parameters.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+            },
+        },
+    ), Capability.Read
+
+
 async def handle_linode_database_cluster_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -1128,6 +1142,22 @@ async def handle_linode_database_mysql_config_get(
 
     return await execute_tool(
         cfg, arguments, "retrieve MySQL Managed Database advanced parameters", _call
+    )
+
+
+async def handle_linode_database_postgresql_config_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_database_postgresql_config_get tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_database_postgresql_config()
+
+    return await execute_tool(
+        cfg,
+        arguments,
+        "retrieve PostgreSQL Managed Database advanced parameters",
+        _call,
     )
 
 
