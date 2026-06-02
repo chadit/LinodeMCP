@@ -38,6 +38,11 @@ def test_meta_returns_empty() -> None:
             Capability.Read,
             [Scope.DatabasesReadOnly],
         ),
+        (
+            "linode_databases_types_list",
+            Capability.Read,
+            [Scope.DatabasesReadOnly],
+        ),
         ("linode_domain_delete", Capability.Destroy, [Scope.DomainsReadWrite]),
         ("linode_lke_cluster_regenerate", Capability.Write, [Scope.LKEReadWrite]),
         (

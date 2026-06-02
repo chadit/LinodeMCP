@@ -2695,6 +2695,33 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListDatabaseEngines", e) from e
 
+    async def list_database_types(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List available Linode Managed Databases types."""
+        endpoint = "/databases/types"
+        params: dict[str, int] = {}
+        if page is not None:
+            if type(page) is not int or page < 1:
+                raise ValueError("page must be an integer at least 1")
+            params["page"] = page
+        if page_size is not None:
+            if (
+                type(page_size) is not int
+                or page_size < MIN_PAGE_SIZE
+                or page_size > MAX_PAGE_SIZE
+            ):
+                raise ValueError("page_size must be an integer between 25 and 500")
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("ListDatabaseTypes", e) from e
+
     async def get_database_mysql_config(self) -> dict[str, Any]:
         """List MySQL Managed Database advanced parameters."""
         try:
@@ -8790,6 +8817,15 @@ class RetryableClient:
         """List database engines with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             lambda: self.client.list_database_engines(page=page, page_size=page_size)
+        )
+        return result
+
+    async def list_database_types(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List database types with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_database_types(page=page, page_size=page_size)
         )
         return result
 

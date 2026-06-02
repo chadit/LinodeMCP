@@ -144,6 +144,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_object_storage_bucket_create", Capability.Write),
         # Databases.
         ToolDescriptor("linode_databases_engines_list", Capability.Read),
+        ToolDescriptor("linode_databases_types_list", Capability.Read),
         # DNS.
         ToolDescriptor("linode_domains_list", Capability.Read),
         ToolDescriptor("linode_domain_create", Capability.Write),
@@ -351,6 +352,7 @@ def test_database_tools_require_database_read_scope() -> None:
         "linode_database_postgresql_instance_create", Capability.Write
     ) == [Scope.DatabasesReadWrite]
     assert categories("linode_database_postgresql_instance_create") == ["databases"]
+    assert categories("linode_databases_types_list") == ["databases"]
     assert required_scopes(
         "linode_database_postgresql_instance_ssl_get", Capability.Read
     ) == [Scope.DatabasesReadOnly]
