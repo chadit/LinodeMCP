@@ -26,6 +26,27 @@ _CHILD_ACCOUNT_EUUID_PATTERN = re.compile(
     r"^[A-Za-z0-9]{8}-[A-Za-z0-9]{4}-[A-Za-z0-9]{4}-[A-Za-z0-9]{16}$"
 )
 _OAUTH_CLIENT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def _validate_service_transfer_token(value: object) -> tuple[str | None, str | None]:
+    """Validate a service transfer token supplied by an MCP caller."""
+    if value is None:
+        return None, "token is required"
+    if not isinstance(value, str):
+        return None, "token must be a string"
+
+    token = value.strip()
+    if not token:
+        return None, "token is required"
+    if token != value or "/" in token or "?" in token or ".." in token:
+        return (
+            None,
+            "token must not contain path separators, "
+            "query separators, or traversal segments",
+        )
+    return token, None
+
+
 _OAUTH_CLIENT_UPDATE_FIELDS = (
     "label",
     "public",
@@ -1823,25 +1844,68 @@ async def handle_linode_account_child_account_get(
     )
 
 
-def _normalize_account_service_transfer_token(
-    raw_token: Any,
-) -> tuple[str | None, str | None]:
-    if raw_token is None:
-        message = "token is required"
-    elif not isinstance(raw_token, str):
-        message = "token must be a string"
-    else:
-        token = raw_token.strip()
-        if not token:
-            message = "token is required"
-        elif token != raw_token or "/" in token or "?" in token or ".." in token:
-            message = (
-                "token must not contain path separators, "
-                "query separators, or traversal segments"
-            )
-        else:
-            return token, None
-    return None, message
+def create_linode_account_service_transfer_accept_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_service_transfer_accept tool."""
+    return Tool(
+        name="linode_account_service_transfer_accept",
+        description=(
+            "Accepts an account service transfer request by token. "
+            "Pass dry_run=true to preview without accepting the transfer."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "token": {
+                    "type": "string",
+                    "description": "Service transfer token to accept",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true to confirm this mutating operation. "
+                        "Required even when dry_run=true; dry_run still avoids "
+                        "the client call."
+                    ),
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["token", "confirm"],
+        },
+    ), Capability.Write
+
+
+async def handle_linode_account_service_transfer_accept(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_service_transfer_accept tool request."""
+    token, validation_error = _validate_service_transfer_token(arguments.get("token"))
+    if validation_error is not None:
+        return error_response(validation_error)
+    token = cast("str", token)
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This accepts an account service transfer. Set confirm=true to proceed."
+        )
+
+    if is_dry_run(arguments):
+        encoded_token = quote(token, safe="")
+        return build_dry_run_response(
+            "linode_account_service_transfer_accept",
+            arguments.get("environment", ""),
+            "POST",
+            f"/account/service-transfers/{encoded_token}/accept",
+            None,
+            side_effects=["The service transfer is accepted for the Linode account."],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.accept_account_service_transfer(token)
+
+    return await execute_tool(
+        cfg, arguments, f"accept Linode account service transfer {token}", _call
+    )
 
 
 def create_linode_account_service_transfer_get_tool() -> tuple[Tool, Capability]:
@@ -1867,7 +1931,7 @@ async def handle_linode_account_service_transfer_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_account_service_transfer_get tool request."""
-    token, message = _normalize_account_service_transfer_token(arguments.get("token"))
+    token, message = _validate_service_transfer_token(arguments.get("token"))
     if token is None:
         return error_response(message or "token is required")
 
@@ -1913,7 +1977,7 @@ async def handle_linode_account_service_transfer_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_account_service_transfer_delete tool request."""
-    token, message = _normalize_account_service_transfer_token(arguments.get("token"))
+    token, message = _validate_service_transfer_token(arguments.get("token"))
     if token is None:
         return error_response(message or "token is required")
 
