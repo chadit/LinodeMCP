@@ -195,6 +195,11 @@ def test_meta_returns_empty() -> None:
             [Scope.DatabasesReadWrite],
         ),
         (
+            "linode_database_postgresql_instance_patch",
+            Capability.Write,
+            [Scope.DatabasesReadWrite],
+        ),
+        (
             "linode_database_postgresql_instance_update",
             Capability.Write,
             [Scope.DatabasesReadWrite],
