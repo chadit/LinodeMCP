@@ -44,6 +44,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_account_invoice_items_list", Capability.Read),
         ToolDescriptor("linode_account_invoices_list", Capability.Read),
         ToolDescriptor("linode_account_payment_methods_list", Capability.Read),
+        ToolDescriptor("linode_account_payment_method_delete", Capability.Destroy),
         ToolDescriptor("linode_account_login_get", Capability.Read),
         ToolDescriptor("linode_account_logins_list", Capability.Read),
         ToolDescriptor("linode_account_maintenance_list", Capability.Read),
@@ -274,6 +275,11 @@ def test_storage_admin_includes_backups_but_not_other_compute() -> None:
     assert "linode_object_storage_bucket_create" in storage_tools
     # No general compute write access.
     assert "linode_instance_create" not in storage_tools
+
+
+def test_account_payment_method_delete_is_account_category() -> None:
+    """Payment-method deletion is an account destroy tool."""
+    assert categories("linode_account_payment_method_delete") == ["account"]
 
 
 def test_profile_app_revoke_is_account_category() -> None:

@@ -1774,6 +1774,19 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("DeleteAccountOAuthClient", e) from e
 
+    async def delete_account_payment_method(
+        self, payment_method_id: int | str
+    ) -> dict[str, Any]:
+        """Delete a payment method on the Linode account."""
+        encoded_payment_method_id = quote(str(payment_method_id), safe="")
+        endpoint = f"/account/payment-methods/{encoded_payment_method_id}"
+        try:
+            response = await self.make_request("DELETE", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteAccountPaymentMethod", e) from e
+
     async def cancel_account(self, comments: str | None = None) -> dict[str, Any]:
         """Cancel the Linode account."""
         body: dict[str, Any] = {}
@@ -7684,6 +7697,12 @@ class RetryableClient:
     async def reset_account_oauth_client_secret(self, client_id: str) -> dict[str, Any]:
         """Reset an OAuth client secret once without retry replay."""
         return await self.client.reset_account_oauth_client_secret(client_id)
+
+    async def delete_account_payment_method(
+        self, payment_method_id: int | str
+    ) -> dict[str, Any]:
+        """Delete an account payment method once without retry replay."""
+        return await self.client.delete_account_payment_method(payment_method_id)
 
     async def cancel_account(self, comments: str | None = None) -> dict[str, Any]:
         """Cancel the Linode account once without retry replay."""
