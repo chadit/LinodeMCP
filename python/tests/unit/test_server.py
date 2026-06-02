@@ -5534,46 +5534,276 @@ async def test_database_mysql_instance_delete_dry_run_encodes_path(
     mock_client_class.assert_not_called()
 
 
-async def test_database_instances_list_tool_is_exported_and_registered(
+async def test_client_update_mysql_database_instance_uses_exact_path_and_body() -> None:
+    """Client sends the documented MySQL database update route and body."""
+    response_data = {"id": 123, "label": "primary-db"}
+    response = _JsonResponse(response_data)
+    payload = {"label": "primary-db", "updates": {"hour_of_day": 2}}
+    client = Client("https://api.linode.test/v4", "token")
+    with patch.object(
+        client, "make_request", AsyncMock(return_value=response)
+    ) as make_request:
+        result = await client.update_mysql_database_instance(123, payload)
+
+    assert result == response_data
+    make_request.assert_awaited_once_with(
+        "PUT", "/databases/mysql/instances/123", payload
+    )
+    await client.close()
+
+
+async def test_client_update_mysql_database_instance_encodes_path_param() -> None:
+    """Client URL-encodes the documented path parameter boundary."""
+    response = _JsonResponse({"id": 123})
+    payload = {"label": "primary-db"}
+    client = Client("https://api.linode.test/v4", "token")
+    with patch.object(
+        client, "make_request", AsyncMock(return_value=response)
+    ) as make_request:
+        await client.update_mysql_database_instance(cast("Any", "12/3?"), payload)
+
+    make_request.assert_awaited_once_with(
+        "PUT", "/databases/mysql/instances/12%2F3%3F", payload
+    )
+    await client.close()
+
+
+async def test_client_update_mysql_database_instance_maps_http_error() -> None:
+    """Client maps MySQL database update HTTP failures to NetworkError."""
+    client = Client("https://api.linode.test/v4", "token")
+    with (
+        patch.object(
+            client, "make_request", AsyncMock(side_effect=httpx.ConnectError("boom"))
+        ),
+        pytest.raises(NetworkError, match="UpdateMysqlDatabaseInstance"),
+    ):
+        await client.update_mysql_database_instance(123, {"label": "primary-db"})
+    await client.close()
+
+
+async def test_retryable_client_update_mysql_db_delegates_without_retry() -> None:
+    """Mutating MySQL database update is not replayed through retry wrapper."""
+    retry_client = RetryableClient("https://api.example.test/v4", "token")
+    retry_client.client.update_mysql_database_instance = AsyncMock(  # type: ignore[method-assign]
+        side_effect=NetworkError("UpdateMysqlDatabaseInstance", Exception("boom"))
+    )
+    try:
+        with pytest.raises(NetworkError):
+            await retry_client.update_mysql_database_instance(
+                123, {"label": "primary-db"}
+            )
+    finally:
+        await retry_client.close()
+
+    retry_client.client.update_mysql_database_instance.assert_awaited_once_with(
+        123, {"label": "primary-db"}
+    )
+
+
+async def test_database_mysql_instance_update_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
-    """Managed Database list tool remains exported and registered."""
+    """MySQL database update tool should be exported and registered."""
     from linodemcp import tools as tools_mod
 
-    assert "create_linode_database_instances_list_tool" in tools_mod.__all__
-    assert "handle_linode_database_instances_list" in tools_mod.__all__
+    assert "create_linode_database_mysql_instance_update_tool" in tools_mod.__all__
+    assert "handle_linode_database_mysql_instance_update" in tools_mod.__all__
 
-    tool, capability = tools_mod.create_linode_database_instances_list_tool()
-    assert tool.name == "linode_database_instances_list"
-    assert capability is Capability.Read
-    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
-    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+    tool, capability = tools_mod.create_linode_database_mysql_instance_update_tool()
+    assert tool.name == "linode_database_mysql_instance_update"
+    assert capability is Capability.Write
+    assert set(tool.inputSchema["required"]) == {"instance_id", "confirm"}
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
 
-    srv = Server(sample_config)
-    assert "linode_database_instances_list" in srv.registered_tool_names
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_database_mysql_instance_update" in srv.registered_tool_names
 
 
-async def test_database_instances_list_dispatches_from_registry(
+async def test_database_mysql_instance_update_dispatches_from_registry(
     sample_config: Config,
 ) -> None:
-    """Managed Database list remains callable through server dispatch."""
-    response_data: dict[str, Any] = {"data": [], "page": 1, "pages": 1, "results": 0}
+    """MySQL database update is callable through server dispatch."""
+    response_data = {"id": 123, "label": "primary-db"}
+    arguments: dict[str, Any] = {
+        "instance_id": 123,
+        "allow_list": ["192.0.2.1/32"],
+        "engine_config": {"binlog_retention_period": 600},
+        "label": "primary-db",
+        "private_network": {"vpc_id": 456},
+        "type": "g6-dedicated-4",
+        "updates": {"hour_of_day": 2},
+        "version": "8.0.35",
+        "confirm": True,
+    }
+    expected_payload = {
+        key: value
+        for key, value in arguments.items()
+        if key not in {"instance_id", "confirm"}
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_database_instances.return_value = response_data
+        mock_client.update_mysql_database_instance.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
 
-        srv = Server(sample_config)
-        result = await srv.dispatch(
-            "linode_database_instances_list", {"page": 1, "page_size": 25}
-        )
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_database_mysql_instance_update", arguments)
 
     assert json.loads(result[0].text) == response_data
-    mock_client.list_database_instances.assert_awaited_once_with(page=1, page_size=25)
+    mock_client.update_mysql_database_instance.assert_awaited_once_with(
+        123, expected_payload
+    )
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_database_mysql_instance_update_rejects_non_true_confirm(
+    sample_config: Config, confirm: object
+) -> None:
+    """MySQL database update requires literal confirm=true before client calls."""
+    arguments: dict[str, Any] = {"instance_id": 123, "label": "primary-db"}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_database_mysql_instance_update", arguments)
+
+    assert "Set confirm=true to proceed" in result[0].text
+    mock_client.update_mysql_database_instance.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        ({"label": "primary-db", "confirm": True}, "instance_id is required"),
+        (
+            {"instance_id": "123", "label": "primary-db", "confirm": True},
+            "instance_id must be an integer",
+        ),
+        (
+            {"instance_id": "12/3", "label": "primary-db", "confirm": True},
+            "instance_id must be an integer",
+        ),
+        (
+            {"instance_id": "12?3", "label": "primary-db", "confirm": True},
+            "instance_id must be an integer",
+        ),
+        (
+            {"instance_id": "12#3", "label": "primary-db", "confirm": True},
+            "instance_id must be an integer",
+        ),
+        (
+            {"instance_id": "..", "label": "primary-db", "confirm": True},
+            "instance_id must be an integer",
+        ),
+        (
+            {"instance_id": True, "label": "primary-db", "confirm": True},
+            "instance_id must be an integer",
+        ),
+        (
+            {"instance_id": 0, "label": "primary-db", "confirm": True},
+            "instance_id must be at least 1",
+        ),
+        (
+            {"instance_id": 123, "confirm": True},
+            "at least one update field is required",
+        ),
+        (
+            {"instance_id": 123, "unknown": "value", "confirm": True},
+            "unsupported argument: unknown",
+        ),
+        (
+            {"instance_id": 123, "allow_list": [""], "confirm": True},
+            "allow_list must be an array of non-empty strings",
+        ),
+        (
+            {"instance_id": 123, "engine_config": [], "confirm": True},
+            "engine_config must be an object",
+        ),
+        (
+            {"instance_id": 123, "engine_config": None, "confirm": True},
+            "engine_config must be an object",
+        ),
+        (
+            {"instance_id": 123, "private_network": "vpc", "confirm": True},
+            "private_network must be an object or null",
+        ),
+        (
+            {"instance_id": 123, "updates": "weekly", "confirm": True},
+            "updates must be an object",
+        ),
+        (
+            {"instance_id": 123, "updates": None, "confirm": True},
+            "updates must be an object",
+        ),
+        (
+            {"instance_id": 123, "label": " primary-db", "confirm": True},
+            "label must not include leading or trailing whitespace",
+        ),
+        (
+            {"instance_id": 123, "type": 42, "confirm": True},
+            "type must be a string",
+        ),
+        (
+            {"instance_id": 123, "version": "", "confirm": True},
+            "version must be a non-empty string",
+        ),
+    ],
+)
+async def test_database_mysql_instance_update_rejects_invalid_arguments(
+    sample_config: Config, arguments: dict[str, object], expected_error: str
+) -> None:
+    """MySQL database update rejects invalid inputs before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_database_mysql_instance_update", arguments)
+
+    assert expected_error in result[0].text
+    mock_client.update_mysql_database_instance.assert_not_called()
+
+
+async def test_database_mysql_instance_update_dry_run_previews_without_client_call(
+    sample_config: Config,
+) -> None:
+    """MySQL database update dry-run returns the PUT preview and body."""
+    arguments: dict[str, Any] = {
+        "instance_id": 123,
+        "label": "primary-db",
+        "confirm": True,
+        "dry_run": True,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_database_mysql_instance_update", arguments)
+
+    payload = json.loads(result[0].text)
+    assert payload["dry_run"] is True
+    assert payload["would_execute"] == {
+        "method": "PUT",
+        "path": "/databases/mysql/instances/123",
+        "body": {"label": "primary-db"},
+    }
+    mock_client.update_mysql_database_instance.assert_not_called()
 
 
 async def test_database_mysql_instances_list_tool_is_exported_and_registered(
@@ -5633,6 +5863,94 @@ async def test_database_mysql_instances_list_dispatches_from_registry(
         ({"page": True}, "page must be an integer"),
     ],
 )
+async def test_database_mysql_instances_list_rejects_invalid_page(
+    sample_config: Config, arguments: dict[str, object], expected_error: str
+) -> None:
+    """MySQL Managed Database list rejects invalid page before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_database_mysql_instances_list", arguments)
+
+    assert expected_error in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        ({"page_size": 24}, "page_size must be at least 25"),
+        ({"page_size": 501}, "page_size must be at most 500"),
+        ({"page_size": "25"}, "page_size must be an integer"),
+        ({"page_size": False}, "page_size must be an integer"),
+    ],
+)
+async def test_database_mysql_instances_list_rejects_invalid_page_size(
+    sample_config: Config, arguments: dict[str, object], expected_error: str
+) -> None:
+    """MySQL Managed Database list rejects invalid page_size before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_database_mysql_instances_list", arguments)
+
+    assert expected_error in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_database_instances_list_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Managed Database list tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_database_instances_list_tool" in tools_mod.__all__
+    assert "handle_linode_database_instances_list" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_database_instances_list_tool()
+    assert tool.name == "linode_database_instances_list"
+    assert capability is Capability.Read
+    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
+    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+
+    srv = Server(sample_config)
+    assert "linode_database_instances_list" in srv.registered_tool_names
+
+
+async def test_database_instances_list_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Managed Database list is callable through server dispatch."""
+    response_data = {
+        "data": [{"id": 123, "label": "primary-db"}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_database_instances.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_database_instances_list", {"page": 1, "page_size": 25}
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.list_database_instances.assert_awaited_once_with(page=1, page_size=25)
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        ({"page": 0}, "page must be at least 1"),
+        ({"page": "1"}, "page must be an integer"),
+        ({"page": True}, "page must be an integer"),
+    ],
+)
 async def test_database_instances_list_rejects_invalid_page(
     sample_config: Config, arguments: dict[str, object], expected_error: str
 ) -> None:
@@ -5648,31 +5966,6 @@ async def test_database_instances_list_rejects_invalid_page(
 
     assert expected_error in result[0].text
     mock_client.list_database_instances.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    ("arguments", "expected_error"),
-    [
-        ({"page": 0}, "page must be at least 1"),
-        ({"page": "1"}, "page must be an integer"),
-        ({"page": True}, "page must be an integer"),
-    ],
-)
-async def test_database_mysql_instances_list_rejects_invalid_page(
-    sample_config: Config, arguments: dict[str, object], expected_error: str
-) -> None:
-    """MySQL Managed Database list rejects invalid page before client calls."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        srv = Server(sample_config)
-        result = await srv.dispatch("linode_database_mysql_instances_list", arguments)
-
-    assert expected_error in result[0].text
-    mock_client.list_mysql_database_instances.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -5699,32 +5992,6 @@ async def test_database_instances_list_rejects_invalid_page_size(
 
     assert expected_error in result[0].text
     mock_client.list_database_instances.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    ("arguments", "expected_error"),
-    [
-        ({"page_size": 24}, "page_size must be at least 25"),
-        ({"page_size": 501}, "page_size must be at most 500"),
-        ({"page_size": "25"}, "page_size must be an integer"),
-        ({"page_size": True}, "page_size must be an integer"),
-    ],
-)
-async def test_database_mysql_instances_list_rejects_invalid_page_size(
-    sample_config: Config, arguments: dict[str, object], expected_error: str
-) -> None:
-    """MySQL Managed Database list rejects invalid page_size before client calls."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        srv = Server(sample_config)
-        result = await srv.dispatch("linode_database_mysql_instances_list", arguments)
-
-    assert expected_error in result[0].text
-    mock_client.list_mysql_database_instances.assert_not_called()
 
 
 async def test_betas_list_tool_is_exported_and_registered(

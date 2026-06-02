@@ -164,6 +164,16 @@ def test_meta_returns_empty() -> None:
             Capability.Write,
             [Scope.DatabasesReadWrite],
         ),
+        (
+            "linode_database_mysql_instance_update",
+            Capability.Write,
+            [Scope.DatabasesReadWrite],
+        ),
+        (
+            "linode_database_mysql_instances_list",
+            Capability.Read,
+            [Scope.DatabasesReadOnly],
+        ),
     ],
 )
 def test_read_vs_write_per_category(

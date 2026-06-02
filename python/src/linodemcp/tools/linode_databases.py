@@ -38,6 +38,15 @@ _CREATE_MYSQL_OPTIONAL_FIELDS = (
 _CREATE_MYSQL_ALLOWED_FIELDS = (
     _CREATE_MYSQL_REQUIRED_FIELDS + _CREATE_MYSQL_OPTIONAL_FIELDS
 )
+_UPDATE_MYSQL_OPTIONAL_FIELDS = (
+    "allow_list",
+    "engine_config",
+    "label",
+    "private_network",
+    "type",
+    "updates",
+    "version",
+)
 
 
 def _validate_non_empty_string(
@@ -182,6 +191,108 @@ def _build_mysql_database_payload(
     error = _copy_mysql_optional_fields(arguments, payload)
     if error is not None:
         return None, error
+    return payload, None
+
+
+def _validate_instance_id(value: object) -> tuple[int | None, str | None]:
+    """Validate a MySQL Managed Database instance ID path parameter."""
+    if value is None:
+        return None, "instance_id is required"
+    if not isinstance(value, int) or isinstance(value, bool):
+        return None, "instance_id must be an integer"
+    if value < 1:
+        return None, "instance_id must be at least 1"
+    return value, None
+
+
+def _copy_optional_update_string(
+    arguments: dict[str, Any], payload: dict[str, Any], name: str
+) -> str | None:
+    if name not in arguments:
+        return None
+    value = arguments[name]
+    if not isinstance(value, str):
+        return f"{name} must be a string"
+    normalized = value.strip()
+    if not normalized:
+        return f"{name} must be a non-empty string"
+    if normalized != value:
+        return f"{name} must not include leading or trailing whitespace"
+    payload[name] = value
+    return None
+
+
+def _copy_mysql_update_allow_list(
+    arguments: dict[str, Any], payload: dict[str, Any]
+) -> str | None:
+    if "allow_list" not in arguments:
+        return None
+    allow_list = arguments["allow_list"]
+    if not isinstance(allow_list, list):
+        return "allow_list must be an array of non-empty strings"
+    allow_list_items = cast("list[object]", allow_list)
+    if any(not isinstance(item, str) or not item.strip() for item in allow_list_items):
+        return "allow_list must be an array of non-empty strings"
+    payload["allow_list"] = allow_list
+    return None
+
+
+def _copy_mysql_update_object(
+    arguments: dict[str, Any], payload: dict[str, Any], name: str
+) -> str | None:
+    if name not in arguments:
+        return None
+    value = arguments[name]
+    if not isinstance(value, dict):
+        return f"{name} must be an object"
+    payload[name] = value
+    return None
+
+
+def _copy_mysql_update_object_or_null(
+    arguments: dict[str, Any], payload: dict[str, Any], name: str
+) -> str | None:
+    if name not in arguments:
+        return None
+    value = arguments[name]
+    if value is not None and not isinstance(value, dict):
+        return f"{name} must be an object or null"
+    payload[name] = value
+    return None
+
+
+def _copy_mysql_update_objects(
+    arguments: dict[str, Any], payload: dict[str, Any]
+) -> str | None:
+    for field in ("engine_config", "updates"):
+        error = _copy_mysql_update_object(arguments, payload, field)
+        if error is not None:
+            return error
+    return _copy_mysql_update_object_or_null(arguments, payload, "private_network")
+
+
+def _build_mysql_database_update_payload(
+    arguments: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str | None]:
+    payload: dict[str, Any] = {}
+    for field in arguments:
+        if field in ("environment", "confirm", PARAM_DRY_RUN, "instance_id"):
+            continue
+        if field not in _UPDATE_MYSQL_OPTIONAL_FIELDS:
+            return None, f"unsupported argument: {field}"
+
+    for field in ("label", "type", "version"):
+        error = _copy_optional_update_string(arguments, payload, field)
+        if error is not None:
+            return None, error
+    error = _copy_mysql_update_allow_list(arguments, payload)
+    if error is not None:
+        return None, error
+    error = _copy_mysql_update_objects(arguments, payload)
+    if error is not None:
+        return None, error
+    if not payload:
+        return None, "at least one update field is required"
     return payload, None
 
 
@@ -389,6 +500,54 @@ def create_linode_database_mysql_instances_list_tool() -> tuple[Tool, Capability
     ), Capability.Read
 
 
+def create_linode_database_mysql_instance_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_database_mysql_instance_update tool."""
+    return Tool(
+        name="linode_database_mysql_instance_update",
+        description=(
+            "Updates a MySQL Managed Database. Requires confirm=true; pass "
+            "dry_run=true to preview without updating."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "instance_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "MySQL Managed Database instance ID",
+                },
+                "allow_list": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "IPv4/IPv6 addresses or ranges allowed to connect",
+                },
+                "engine_config": {
+                    "type": "object",
+                    "description": "Engine-specific configuration",
+                },
+                "label": {"type": "string", "description": "Database label"},
+                "private_network": {
+                    "type": ["object", "null"],
+                    "description": "Private network configuration",
+                },
+                "type": {"type": "string", "description": "Linode database plan type"},
+                "updates": {
+                    "type": "object",
+                    "description": "Maintenance update settings",
+                },
+                "version": {"type": "string", "description": "MySQL version"},
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Must be true to confirm database update.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["instance_id", "confirm"],
+        },
+    ), Capability.Write
+
+
 def create_linode_database_instances_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_database_instances_list tool."""
     return Tool(
@@ -563,6 +722,62 @@ async def handle_linode_database_mysql_instance_delete(
     return await execute_tool(cfg, arguments, "delete MySQL Managed Database", _call)
 
 
+async def handle_linode_database_mysql_instances_list(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_database_mysql_instances_list tool request."""
+    try:
+        page = _optional_int_argument(arguments, "page", 1)
+        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.list_mysql_database_instances(
+            page=page, page_size=page_size
+        )
+
+    return await execute_tool(
+        cfg, arguments, "list Linode MySQL database instances", _call
+    )
+
+
+async def handle_linode_database_mysql_instance_update(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_database_mysql_instance_update tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response("Set confirm=true to proceed.")
+
+    instance_id, error = _validate_instance_id(arguments.get("instance_id"))
+    if error is not None or instance_id is None:
+        return error_response(error or "instance_id is required")
+
+    payload, error = _build_mysql_database_update_payload(arguments)
+    if error is not None or payload is None:
+        return error_response(error or "invalid database update arguments")
+
+    encoded_instance_id = quote(str(instance_id), safe="")
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_database_mysql_instance_update",
+            arguments.get("environment", ""),
+            "PUT",
+            f"/databases/mysql/instances/{encoded_instance_id}",
+            None,
+            side_effects=[f"MySQL Managed Database {instance_id} will be updated."],
+            warnings=["Updating a Managed Database can change service behavior."],
+            request_body=payload,
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.update_mysql_database_instance(instance_id, payload)
+
+    return await execute_tool(
+        cfg, arguments, f"update MySQL Managed Database {instance_id}", _call
+    )
+
+
 async def handle_linode_database_instances_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -608,26 +823,6 @@ async def handle_linode_database_mysql_config_get(
 
     return await execute_tool(
         cfg, arguments, "retrieve MySQL Managed Database advanced parameters", _call
-    )
-
-
-async def handle_linode_database_mysql_instances_list(
-    arguments: dict[str, Any], cfg: Config
-) -> list[TextContent]:
-    """Handle linode_database_mysql_instances_list tool request."""
-    try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
-    except (TypeError, ValueError) as exc:
-        return error_response(str(exc))
-
-    async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_mysql_database_instances(
-            page=page, page_size=page_size
-        )
-
-    return await execute_tool(
-        cfg, arguments, "list Linode MySQL database instances", _call
     )
 
 

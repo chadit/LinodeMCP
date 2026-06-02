@@ -2083,6 +2083,20 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetDatabaseMySQLInstance", e) from e
 
+    async def update_mysql_database_instance(
+        self, instance_id: int, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update a MySQL Managed Database instance."""
+        encoded_instance_id = quote(str(instance_id), safe="")
+        try:
+            response = await self.make_request(
+                "PUT", f"/databases/mysql/instances/{encoded_instance_id}", payload
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateMysqlDatabaseInstance", e) from e
+
     async def list_account_child_accounts(
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
@@ -8148,6 +8162,12 @@ class RetryableClient:
     ) -> dict[str, Any]:
         """Delete a MySQL Managed Database once without retry replay."""
         return await self.client.delete_mysql_database_instance(instance_id)
+
+    async def update_mysql_database_instance(
+        self, instance_id: int, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update a MySQL Managed Database once without retry replay."""
+        return await self.client.update_mysql_database_instance(instance_id, payload)
 
     async def enroll_account_beta(self, beta_id: str) -> dict[str, Any]:
         """Enroll in an account beta once without retry replay."""
