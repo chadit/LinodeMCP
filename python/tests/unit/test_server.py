@@ -4737,6 +4737,305 @@ async def test_account_support_ticket_replies_list_dispatches_from_registry(
     )
 
 
+class _JsonResponse:
+    def __init__(self, data: dict[str, Any]) -> None:
+        self._data = data
+
+    def json(self) -> dict[str, Any]:
+        return self._data
+
+
+@pytest.mark.parametrize("restricted", [True, False])
+async def test_account_user_create_client_sends_exact_route_and_body(
+    restricted: bool,
+) -> None:
+    """Client user create sends the documented POST body."""
+    client = Client("https://api.example.test/v4", "token")
+    client.make_request = AsyncMock(  # type: ignore[method-assign]
+        return_value=_JsonResponse(
+            {
+                "username": "newuser",
+                "email": "new@example.test",
+                "restricted": restricted,
+            }
+        )
+    )
+
+    try:
+        result = await client.create_account_user(
+            "newuser", "new@example.test", restricted
+        )
+    finally:
+        await client.close()
+
+    assert result["username"] == "newuser"
+    client.make_request.assert_awaited_once_with(
+        "POST",
+        "/account/users",
+        {"username": "newuser", "email": "new@example.test", "restricted": restricted},
+    )
+
+
+async def test_account_user_create_retryable_client_does_not_replay() -> None:
+    """Retryable user create delegates once without generic retry replay."""
+    retry_client = RetryableClient("https://api.example.test/v4", "token")
+    retry_client.client.create_account_user = AsyncMock(  # type: ignore[method-assign]
+        side_effect=NetworkError("CreateAccountUser", Exception("boom"))
+    )
+    try:
+        with pytest.raises(NetworkError):
+            await retry_client.create_account_user("newuser", "new@example.test", True)
+    finally:
+        await retry_client.close()
+
+    retry_client.client.create_account_user.assert_awaited_once_with(
+        "newuser", "new@example.test", True
+    )
+
+
+async def test_account_user_create_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Account user create tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_user_create_tool" in tools_mod.__all__
+    assert "handle_linode_account_user_create" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_account_user_create_tool()
+    assert tool.name == "linode_account_user_create"
+    assert capability is Capability.Write
+    assert tool.inputSchema["properties"]["username"]["minLength"] == 1
+    assert tool.inputSchema["properties"]["email"]["minLength"] == 1
+    assert tool.inputSchema["properties"]["restricted"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert "dry_run" in tool.inputSchema["properties"]
+    assert tool.inputSchema["required"] == [
+        "username",
+        "email",
+        "restricted",
+        "confirm",
+    ]
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_account_user_create" in srv.registered_tool_names
+
+
+async def test_account_user_create_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Account user create dispatches through the registered handler."""
+    mock_client = AsyncMock()
+    mock_client.create_account_user = AsyncMock(
+        return_value={
+            "username": "newuser",
+            "email": "new@example.test",
+            "restricted": True,
+        }
+    )
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_user_create",
+            {
+                "username": "newuser",
+                "email": "new@example.test",
+                "restricted": True,
+                "confirm": True,
+            },
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["message"] == "Account user created successfully"
+    assert payload["user"]["username"] == "newuser"
+    mock_client.create_account_user.assert_awaited_once_with(
+        "newuser", "new@example.test", True
+    )
+
+
+@pytest.mark.parametrize("confirm_value", [None, False, "true", 1])
+async def test_account_user_create_requires_boolean_confirm(
+    sample_config: Config, confirm_value: object
+) -> None:
+    """Account user create rejects missing/non-true confirm before client call."""
+    mock_client = AsyncMock()
+    mock_client.create_account_user = AsyncMock()
+    arguments: dict[str, object] = {
+        "username": "newuser",
+        "email": "new@example.test",
+        "restricted": True,
+    }
+    if confirm_value is not None:
+        arguments["confirm"] = confirm_value
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_account_user_create", arguments)
+
+    assert "Set confirm=true" in result[0].text
+    mock_client.create_account_user.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("username", None, "username is required"),
+        ("username", 123, "username is required"),
+        ("username", "   ", "username is required"),
+        ("email", None, "email is required"),
+        ("email", 123, "email is required"),
+        ("email", "   ", "email is required"),
+    ],
+)
+async def test_account_user_create_validates_required_arguments(
+    sample_config: Config, field: str, value: object, message: str
+) -> None:
+    """Account user create validates required string arguments first."""
+    mock_client = AsyncMock()
+    mock_client.create_account_user = AsyncMock()
+    arguments: dict[str, object] = {
+        "username": "newuser",
+        "email": "new@example.test",
+        "restricted": True,
+        "confirm": True,
+    }
+    if value is None:
+        arguments.pop(field)
+    else:
+        arguments[field] = value
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_account_user_create", arguments)
+
+    assert message in result[0].text
+    mock_client.create_account_user.assert_not_called()
+
+
+@pytest.mark.parametrize("restricted_value", [None, "true", "false", 1, 0])
+async def test_account_user_create_requires_boolean_restricted(
+    sample_config: Config, restricted_value: object
+) -> None:
+    """Account user create rejects ambiguous access semantics before client call."""
+    mock_client = AsyncMock()
+    mock_client.create_account_user = AsyncMock()
+    arguments: dict[str, object] = {
+        "username": "newuser",
+        "email": "new@example.test",
+        "confirm": True,
+    }
+    if restricted_value is not None:
+        arguments["restricted"] = restricted_value
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_account_user_create", arguments)
+
+    assert "restricted is required and must be a boolean" in result[0].text
+    mock_client.create_account_user.assert_not_called()
+
+
+async def test_account_user_create_dry_run_skips_client_call(
+    sample_config: Config,
+) -> None:
+    """Account user create dry-run previews the request without creating."""
+    mock_client = AsyncMock()
+    mock_client.create_account_user = AsyncMock()
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_user_create",
+            {
+                "username": "newuser",
+                "email": "new@example.test",
+                "restricted": True,
+                "confirm": True,
+                "dry_run": True,
+            },
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["tool"] == "linode_account_user_create"
+    assert payload["would_execute"] == {
+        "method": "POST",
+        "path": "/account/users",
+        "body": {
+            "username": "newuser",
+            "email": "new@example.test",
+            "restricted": True,
+        },
+    }
+    mock_client.create_account_user.assert_not_called()
+
+
+async def test_account_user_create_dry_run_requires_confirm(
+    sample_config: Config,
+) -> None:
+    """Account user create dry-run still requires explicit confirm."""
+    mock_client = AsyncMock()
+    mock_client.create_account_user = AsyncMock()
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_user_create",
+            {
+                "username": "newuser",
+                "email": "new@example.test",
+                "restricted": True,
+                "dry_run": True,
+            },
+        )
+
+    assert "Set confirm=true" in result[0].text
+    mock_client.create_account_user.assert_not_called()
+
+
+async def test_account_user_create_tool_propagates_client_error(
+    sample_config: Config,
+) -> None:
+    """Account user create reports client errors from dispatch."""
+    mock_client = AsyncMock()
+    mock_client.create_account_user = AsyncMock(
+        side_effect=NetworkError("CreateAccountUser", Exception("boom"))
+    )
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_user_create",
+            {
+                "username": "newuser",
+                "email": "new@example.test",
+                "restricted": True,
+                "confirm": True,
+            },
+        )
+
+    assert "CreateAccountUser" in result[0].text
+    mock_client.create_account_user.assert_awaited_once()
+
+
 async def test_account_oauth_client_create_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

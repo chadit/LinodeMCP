@@ -121,6 +121,11 @@ def test_meta_returns_empty() -> None:
             [Scope.AccountReadWrite],
         ),
         (
+            "linode_account_user_create",
+            Capability.Write,
+            [Scope.AccountReadWrite],
+        ),
+        (
             "linode_account_oauth_client_delete",
             Capability.Destroy,
             [Scope.AccountReadWrite],
