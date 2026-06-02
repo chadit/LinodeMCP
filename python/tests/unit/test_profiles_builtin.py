@@ -38,6 +38,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_account", Capability.Read),
         ToolDescriptor("linode_account_betas_list", Capability.Read),
         ToolDescriptor("linode_account_child_accounts_list", Capability.Read),
+        ToolDescriptor("linode_account_events_list", Capability.Read),
         # Compute reads + mutations.
         ToolDescriptor("linode_instances_list", Capability.Read),
         ToolDescriptor("linode_instance_get", Capability.Read),
