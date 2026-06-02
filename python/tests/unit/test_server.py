@@ -1422,6 +1422,139 @@ async def test_account_users_list_rejects_boolean_pagination(
     mock_client_class.assert_not_called()
 
 
+async def test_account_user_delete_tool_is_exported_registered_and_schema(
+    sample_config: Config,
+) -> None:
+    """Account user delete tool should be exported, registered, and gated."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_user_delete_tool" in tools_mod.__all__
+    assert "handle_linode_account_user_delete" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_account_user_delete_tool()
+    assert tool.name == "linode_account_user_delete"
+    assert capability is Capability.Destroy
+    assert tool.inputSchema["required"] == ["username", "confirm"]
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_account_user_delete" in srv.registered_tool_names
+
+
+async def test_account_user_delete_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Account user delete is callable through server dispatch."""
+    response_data: dict[str, object] = {"message": "deleted"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_account_user.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_user_delete",
+            {"username": "alice", "confirm": True},
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload == {
+        "message": "Account user deleted successfully",
+        "result": response_data,
+    }
+    mock_client.delete_account_user.assert_awaited_once_with("alice")
+
+
+async def test_account_user_delete_requires_boolean_confirm(
+    sample_config: Config,
+) -> None:
+    """Account user delete rejects non-true confirm values before client calls."""
+    for confirm in (None, False, "true", 1):
+        arguments: dict[str, object] = {"username": "alice"}
+        if confirm is not None:
+            arguments["confirm"] = confirm
+
+        with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+            srv = Server(_full_access_config(sample_config))
+            result = await srv.dispatch("linode_account_user_delete", arguments)
+
+        assert "Set confirm=true" in result[0].text
+        mock_client_class.assert_not_called()
+
+
+async def test_account_user_delete_validates_username(
+    sample_config: Config,
+) -> None:
+    """Account user delete rejects malformed usernames before client calls."""
+    for username in (
+        None,
+        "",
+        " alice",
+        "alice bob",
+        "alice/ops",
+        "alice?debug",
+        "alice#frag",
+        "alice%2Fops",
+        "alice@example",
+        "alice:ops",
+        r"alice\ops",
+        "..",
+    ):
+        arguments: dict[str, object] = {"confirm": True}
+        if username is not None:
+            arguments["username"] = username
+
+        with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+            srv = Server(_full_access_config(sample_config))
+            result = await srv.dispatch("linode_account_user_delete", arguments)
+
+        assert "username" in result[0].text
+        mock_client_class.assert_not_called()
+
+
+async def test_account_user_delete_dry_run_encodes_username(
+    sample_config: Config,
+) -> None:
+    """Account user delete dry-run previews the encoded DELETE path."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_user_delete",
+            {"username": "alice_ops", "confirm": True, "dry_run": True},
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["tool"] == "linode_account_user_delete"
+    assert payload["would_execute"]["method"] == "DELETE"
+    assert payload["would_execute"]["path"] == "/account/users/alice_ops"
+    mock_client_class.assert_not_called()
+
+
+async def test_account_user_delete_tool_propagates_client_error(
+    sample_config: Config,
+) -> None:
+    """Account user delete returns shared error output for client failures."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_account_user.side_effect = RuntimeError("boom")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_user_delete",
+            {"username": "alice", "confirm": True},
+        )
+
+    assert "boom" in result[0].text
+    mock_client.delete_account_user.assert_awaited_once_with("alice")
+
+
 async def test_account_settings_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
