@@ -5126,6 +5126,92 @@ async def test_retryable_get_account_payment_method_delegates_to_client() -> Non
     await client.close()
 
 
+async def test_make_account_payment_method_default_sends_exact_route() -> None:
+    """Setting the default payment method sends POST to the documented route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data: dict[str, Any] = {"id": 123, "is_default": True}
+    response = MagicMock()
+    response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        result = await client.make_account_payment_method_default(123)
+
+    assert result == response_data
+    mock_request.assert_awaited_once_with(
+        "POST", "/account/payment-methods/123/make-default"
+    )
+    await client.close()
+
+
+async def test_make_account_payment_method_default_encodes_path_param() -> None:
+    """Client URL-encodes the make-default payment method path parameter."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {"id": "123/456?query"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        result = await client.make_account_payment_method_default(
+            "123/456?query"  # type: ignore[arg-type]
+        )
+
+    assert result == {"id": "123/456?query"}
+    mock_request.assert_awaited_once_with(
+        "POST", "/account/payment-methods/123%2F456%3Fquery/make-default"
+    )
+    await client.close()
+
+
+async def test_make_account_payment_method_default_wraps_http_errors() -> None:
+    """HTTP errors from payment method make-default are wrapped."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.make_account_payment_method_default(123)
+
+    assert "MakeAccountPaymentMethodDefault" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_make_account_payment_method_default_delegates_once() -> None:
+    """Retryable make-default delegates once without generic retry replay."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+    response_data: dict[str, Any] = {"id": 123, "is_default": True}
+
+    with patch.object(
+        client.client, "make_account_payment_method_default", new_callable=AsyncMock
+    ) as mock_make_default:
+        mock_make_default.return_value = response_data
+
+        result = await client.make_account_payment_method_default(123)
+
+    assert result == response_data
+    mock_make_default.assert_awaited_once_with(123)
+    await client.close()
+
+
+async def test_retryable_make_payment_method_default_no_replay_errors() -> None:
+    """Retryable make-default does not replay a transient failure."""
+    client = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        client.client, "make_account_payment_method_default", new_callable=AsyncMock
+    ) as mock_make_default:
+        mock_make_default.side_effect = NetworkError("temporary", Exception("boom"))
+
+        with pytest.raises(NetworkError):
+            await client.make_account_payment_method_default(123)
+
+    mock_make_default.assert_awaited_once_with(123)
+    await client.close()
+
+
 def test_api_error_methods() -> None:
     """Test APIError helper methods."""
     auth_error = APIError(401, "Unauthorized")

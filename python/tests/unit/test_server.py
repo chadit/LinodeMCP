@@ -2653,6 +2653,146 @@ async def test_account_payment_method_get_schema_requires_payment_method_id(
     assert prop["minimum"] == 1
 
 
+async def test_account_payment_method_make_default_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Account payment method make-default tool is exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_account_payment_method_make_default_tool" in tools_mod.__all__
+    assert "handle_linode_account_payment_method_make_default" in tools_mod.__all__
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_account_payment_method_make_default" in srv.registered_tool_names
+
+
+async def test_account_payment_method_make_default_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Account payment method make-default is callable through dispatch."""
+    response_data: dict[str, object] = {"id": 123, "is_default": True}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.make_account_payment_method_default.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_payment_method_make_default",
+            {"payment_method_id": 123, "confirm": True},
+        )
+
+    assert json.loads(result[0].text) == {
+        "message": "Default payment method updated successfully",
+        "payment_method": response_data,
+    }
+    mock_client.make_account_payment_method_default.assert_awaited_once_with(123)
+
+
+async def test_account_payment_method_make_default_dry_run_skips_client(
+    sample_config: Config,
+) -> None:
+    """Account payment method make-default dry-run previews without a client."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_payment_method_make_default",
+            {"payment_method_id": 123, "confirm": False, "dry_run": True},
+        )
+
+    body = json.loads(result[0].text)
+    assert body["dry_run"] is True
+    assert body["would_execute"]["method"] == "POST"
+    assert body["would_execute"]["path"] == "/account/payment-methods/123/make-default"
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({}, "payment_method_id is required"),
+        (
+            {"payment_method_id": "123", "confirm": True},
+            "payment_method_id must be an integer",
+        ),
+        (
+            {"payment_method_id": True, "confirm": True},
+            "payment_method_id must be an integer",
+        ),
+        (
+            {"payment_method_id": 0, "confirm": True},
+            "payment_method_id must be at least 1",
+        ),
+        (
+            {"payment_method_id": "12/3", "confirm": True},
+            "payment_method_id must be an integer",
+        ),
+        (
+            {"payment_method_id": "12?3", "confirm": True},
+            "payment_method_id must be an integer",
+        ),
+        (
+            {"payment_method_id": "..", "confirm": True},
+            "payment_method_id must be an integer",
+        ),
+    ],
+)
+async def test_account_payment_method_make_default_rejects_invalid_payment_method_id(
+    sample_config: Config, arguments: dict[str, object], message: str
+) -> None:
+    """Account payment method make-default rejects invalid IDs before client calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_payment_method_make_default", arguments
+        )
+
+    assert message in result[0].text
+    mock_client_class.assert_not_called()
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_account_payment_method_make_default_requires_boolean_confirm_true(
+    sample_config: Config, confirm: object
+) -> None:
+    """Account payment method make-default requires explicit confirm=true."""
+    arguments: dict[str, object] = {"payment_method_id": 123}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_account_payment_method_make_default", arguments
+        )
+
+    assert "Set confirm=true to proceed" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_account_payment_method_make_default_schema_requires_confirm_and_dry_run(
+    sample_config: Config,
+) -> None:
+    """Account payment method make-default schema covers confirm and dry-run."""
+    Server(sample_config)
+    entry = next(
+        item
+        for item in get_tool_registry()
+        if item.name == "linode_account_payment_method_make_default"
+    )
+
+    assert entry.capability is Capability.Write
+    assert entry.tool.inputSchema["required"] == ["payment_method_id", "confirm"]
+    properties = entry.tool.inputSchema["properties"]
+    assert properties["payment_method_id"]["type"] == "integer"
+    assert properties["payment_method_id"]["minimum"] == 1
+    assert properties["confirm"]["type"] == "boolean"
+    assert properties["dry_run"]["type"] == "boolean"
+
+
 async def test_account_login_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

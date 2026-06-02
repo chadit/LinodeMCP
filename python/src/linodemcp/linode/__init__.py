@@ -1881,6 +1881,19 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetAccountPaymentMethod", e) from e
 
+    async def make_account_payment_method_default(
+        self, payment_method_id: int
+    ) -> dict[str, Any]:
+        """Set an account payment method as the default payment method."""
+        encoded_payment_method_id = quote(str(payment_method_id), safe="")
+        endpoint = f"/account/payment-methods/{encoded_payment_method_id}/make-default"
+        try:
+            response = await self.make_request("POST", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("MakeAccountPaymentMethodDefault", e) from e
+
     async def reset_account_oauth_client_secret(self, client_id: str) -> dict[str, Any]:
         """Reset an OAuth client secret by client ID."""
         encoded_client_id = quote(client_id, safe="")
@@ -7692,6 +7705,12 @@ class RetryableClient:
             self.client.get_account_payment_method, payment_method_id
         )
         return result
+
+    async def make_account_payment_method_default(
+        self, payment_method_id: int
+    ) -> dict[str, Any]:
+        """Set a default payment method once without retry replay."""
+        return await self.client.make_account_payment_method_default(payment_method_id)
 
     async def get_account_oauth_client_thumbnail(
         self, client_id: str
