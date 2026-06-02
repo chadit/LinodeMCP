@@ -3278,6 +3278,145 @@ async def test_database_mysql_instance_get_rejects_invalid_instance_id(
     mock_client.get_database_mysql_instance.assert_not_called()
 
 
+async def test_database_mysql_instance_credentials_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """MySQL database credentials get tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+    from linodemcp.version import get_version_info
+
+    assert (
+        "create_linode_database_mysql_instance_credentials_get_tool"
+        in tools_mod.__all__
+    )
+    assert "handle_linode_database_mysql_instance_credentials_get" in tools_mod.__all__
+
+    tool, capability = (
+        tools_mod.create_linode_database_mysql_instance_credentials_get_tool()
+    )
+    assert tool.name == "linode_database_mysql_instance_credentials_get"
+    assert capability is Capability.Write
+    assert tool.description is not None
+    assert "sensitive password material" in tool.description
+    assert tool.inputSchema["required"] == ["instance_id", "confirm"]
+    assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+
+    default_srv = Server(sample_config)
+    assert (
+        "linode_database_mysql_instance_credentials_get"
+        not in default_srv.registered_tool_names
+    )
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_database_mysql_instance_credentials_get" in srv.registered_tool_names
+
+    entry = next(
+        item
+        for item in get_tool_registry()
+        if item.name == "linode_database_mysql_instance_credentials_get"
+    )
+    assert entry.capability == Capability.Write
+    assert (
+        "linode_database_mysql_instance_credentials_get"
+        in get_version_info().features["tools"]
+    )
+
+
+async def test_database_mysql_instance_credentials_get_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """MySQL database credentials get is callable through server dispatch."""
+    response_data: dict[str, object] = {"username": "linode", "password": "secret"}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_database_mysql_instance_credentials.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_mysql_instance_credentials_get",
+            {"instance_id": 123, "confirm": True},
+        )
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.get_database_mysql_instance_credentials.assert_awaited_once_with(123)
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        ({}, "instance_id is required"),
+        ({"instance_id": 0}, "instance_id must be at least 1"),
+        ({"instance_id": "123"}, "instance_id must be an integer"),
+        ({"instance_id": True}, "instance_id must be an integer"),
+        ({"instance_id": "1/2"}, "instance_id must be an integer"),
+        ({"instance_id": "1?x=y"}, "instance_id must be an integer"),
+        ({"instance_id": ".."}, "instance_id must be an integer"),
+    ],
+)
+async def test_database_mysql_instance_credentials_get_rejects_invalid_instance_id(
+    sample_config: Config, arguments: dict[str, object], expected_error: str
+) -> None:
+    """MySQL credentials get rejects malformed path params before calls."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_mysql_instance_credentials_get", arguments
+        )
+
+    assert expected_error in result[0].text
+    mock_client.get_database_mysql_instance_credentials.assert_not_called()
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_database_mysql_instance_credentials_get_requires_boolean_confirm(
+    sample_config: Config, confirm: object
+) -> None:
+    """MySQL credentials get rejects non-true confirm before client calls."""
+    arguments: dict[str, object] = {"instance_id": 123}
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_mysql_instance_credentials_get", arguments
+        )
+
+    assert "Set confirm=true" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_database_mysql_instance_credentials_get_dry_run_previews(
+    sample_config: Config,
+) -> None:
+    """MySQL credentials get dry-run returns a GET preview without credentials."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_mysql_instance_credentials_get",
+            {"instance_id": 123, "confirm": True, "dry_run": True},
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["dry_run"] is True
+    assert payload["would_execute"] == {
+        "method": "GET",
+        "path": "/databases/mysql/instances/123/credentials",
+    }
+    assert "sensitive password material" in payload["warnings"][0]
+    mock_client_class.assert_not_called()
+
+
 async def test_account_beta_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

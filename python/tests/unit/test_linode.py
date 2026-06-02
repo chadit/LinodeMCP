@@ -14908,6 +14908,61 @@ async def test_update_account_user_wraps_http_errors() -> None:
     await client.close()
 
 
+async def test_get_database_mysql_instance_credentials_sends_encoded_get() -> None:
+    """Getting MySQL database credentials sends the documented route."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data = {"username": "linode", "password": "secret"}
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.get_database_mysql_instance_credentials(
+            cast("Any", "123/../../../etc/passwd")
+        )
+
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "GET",
+        "/databases/mysql/instances/123%2F..%2F..%2F..%2Fetc%2Fpasswd/credentials",
+    )
+
+    await client.close()
+
+
+async def test_get_database_mysql_instance_credentials_wraps_http_errors() -> None:
+    """Database credentials client wraps HTTP errors with route context."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ConnectError("temporary failure")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.get_database_mysql_instance_credentials(123)
+
+    assert "GetDatabaseMySQLInstanceCredentials" in str(exc_info.value)
+    await client.close()
+
+
+async def test_retryable_get_database_mysql_instance_credentials_delegates() -> None:
+    """Retryable database credentials get delegates through the retry wrapper."""
+    retry_client = RetryableClient("https://api.linode.com/v4", "test-token")
+    base_client = AsyncMock(spec=Client)
+    base_client.get_database_mysql_instance_credentials.return_value = {
+        "username": "linode"
+    }
+    retry_client.client = base_client
+
+    result = await retry_client.get_database_mysql_instance_credentials(123)
+
+    assert result == {"username": "linode"}
+    base_client.get_database_mysql_instance_credentials.assert_awaited_once_with(123)
+    await retry_client.close()
+
+
 async def test_get_database_engine_sends_encoded_get_with_query() -> None:
     """Getting a database engine sends GET with an encoded engine ID and query."""
     client = Client("https://api.linode.com/v4", "test-token")
