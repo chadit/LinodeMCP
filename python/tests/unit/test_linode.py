@@ -747,6 +747,79 @@ async def test_retryable_list_account_logins_delegates_to_client() -> None:
     await retryable.close()
 
 
+async def test_list_account_users_sends_exact_route_with_query() -> None:
+    """Account users listing sends GET /account/users with pagination query."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data = {
+        "data": [
+            {"username": "alice", "email": "alice@example.com", "restricted": False},
+            {"username": "bob", "email": "bob@example.com", "restricted": True},
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 2,
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.list_account_users(page=2, page_size=25)
+
+    assert result == response_data
+    mock_request.assert_called_once_with("GET", "/account/users?page=2&page_size=25")
+    await client.close()
+
+
+async def test_list_account_users_sends_exact_route_without_query_or_body() -> None:
+    """Account users listing sends GET /account/users without query."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data: dict[str, object] = {"data": [], "page": 1, "pages": 1, "results": 0}
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.list_account_users()
+
+    assert result == response_data
+    mock_request.assert_called_once_with("GET", "/account/users")
+    await client.close()
+
+
+async def test_list_account_users_wraps_http_errors() -> None:
+    """Account users listing wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.list_account_users()
+
+    assert "ListAccountUsers" in str(excinfo.value)
+    await client.close()
+
+
+async def test_retryable_list_account_users_delegates_to_client() -> None:
+    """RetryableClient delegates account users listing to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "list_account_users", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = {"data": [], "page": 1, "pages": 1, "results": 0}
+        result = await retryable.list_account_users(page=1, page_size=100)
+
+    mock_list.assert_awaited_once_with(page=1, page_size=100)
+    assert result == {"data": [], "page": 1, "pages": 1, "results": 0}
+    await retryable.close()
+
+
 async def test_list_account_oauth_clients_sends_exact_route_with_query() -> None:
     """Account OAuth clients listing sends GET /account/oauth-clients."""
     client = Client("https://api.linode.com/v4", "test-token")
