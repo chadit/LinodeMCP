@@ -1879,6 +1879,32 @@ async def test_create_account_oauth_client_sends_post_body() -> None:
     await client.close()
 
 
+async def test_create_account_payment_method_sends_post_body() -> None:
+    """Payment method creation sends POST /account/payment-methods."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    provider_data = {"nonce": "payment-token"}
+    payload = {"type": "credit_card", "data": provider_data, "is_default": True}
+    response_data = {
+        "id": 123,
+        "type": "credit_card",
+        "is_default": True,
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.create_account_payment_method(
+            "credit_card", {"nonce": "payment-token"}, True
+        )
+
+    assert result == response_data
+    mock_request.assert_called_once_with("POST", "/account/payment-methods", payload)
+    await client.close()
+
+
 async def test_delete_account_oauth_client_sends_delete_to_encoded_route() -> None:
     """OAuth client deletion sends DELETE with an encoded client ID path."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -1915,6 +1941,22 @@ async def test_create_account_oauth_client_wraps_http_errors() -> None:
     await client.close()
 
 
+async def test_create_account_payment_method_wraps_http_errors() -> None:
+    """Payment method creation wraps HTTP errors."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.create_account_payment_method(
+                "credit_card", {"nonce": "payment-token"}, True
+            )
+
+    assert "CreateAccountPaymentMethod" in str(excinfo.value)
+    await client.close()
+
+
 async def test_delete_account_oauth_client_wraps_http_errors() -> None:
     """OAuth client deletion wraps HTTP errors."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -1941,6 +1983,25 @@ async def test_retryable_delete_account_oauth_client_does_not_replay() -> None:
             await retryable.delete_account_oauth_client("client-123")
 
     mock_delete.assert_awaited_once_with("client-123")
+    await retryable.close()
+
+
+async def test_retryable_create_account_payment_method_does_not_replay() -> None:
+    """RetryableClient delegates payment method creation once without retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "create_account_payment_method", new_callable=AsyncMock
+    ) as mock_create:
+        mock_create.side_effect = httpx.HTTPError("transient")
+        with pytest.raises(httpx.HTTPError):
+            await retryable.create_account_payment_method(
+                "credit_card", {"nonce": "payment-token"}, True
+            )
+
+    mock_create.assert_awaited_once_with(
+        "credit_card", {"nonce": "payment-token"}, True
+    )
     await retryable.close()
 
 
