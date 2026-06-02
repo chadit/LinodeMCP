@@ -2128,6 +2128,19 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetDatabaseMySQLInstance", e) from e
 
+    async def get_database_postgresql_instance(
+        self, instance_id: int
+    ) -> dict[str, Any]:
+        """Get a PostgreSQL Managed Database instance by ID."""
+        encoded_instance_id = quote(str(instance_id), safe="")
+        endpoint = f"/databases/postgresql/instances/{encoded_instance_id}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetDatabasePostgreSQLInstance", e) from e
+
     async def get_database_mysql_instance_ssl(
         self, instance_id: int | str
     ) -> dict[str, Any]:
@@ -8331,6 +8344,15 @@ class RetryableClient:
         """Get a MySQL Managed Database instance with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_database_mysql_instance, instance_id
+        )
+        return result
+
+    async def get_database_postgresql_instance(
+        self, instance_id: int
+    ) -> dict[str, Any]:
+        """Get a PostgreSQL Managed Database instance with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_database_postgresql_instance, instance_id
         )
         return result
 

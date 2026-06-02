@@ -947,6 +947,26 @@ def create_linode_database_mysql_config_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def create_linode_database_postgresql_instance_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_database_postgresql_instance_get tool."""
+    return Tool(
+        name="linode_database_postgresql_instance_get",
+        description="Gets a PostgreSQL Managed Database instance.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "instance_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "PostgreSQL Managed Database instance ID",
+                },
+            },
+            "required": ["instance_id"],
+        },
+    ), Capability.Read
+
+
 def create_linode_database_postgresql_config_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_database_postgresql_config_get tool."""
     return Tool(
@@ -1363,6 +1383,25 @@ async def handle_linode_database_mysql_config_get(
 
     return await execute_tool(
         cfg, arguments, "retrieve MySQL Managed Database advanced parameters", _call
+    )
+
+
+async def handle_linode_database_postgresql_instance_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_database_postgresql_instance_get tool request."""
+    instance_id, error = _validate_instance_id(arguments.get("instance_id"))
+    if error is not None or instance_id is None:
+        return error_response(error or "instance_id is required")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_database_postgresql_instance(instance_id)
+
+    return await execute_tool(
+        cfg,
+        arguments,
+        f"retrieve PostgreSQL Managed Database instance {instance_id}",
+        _call,
     )
 
 
