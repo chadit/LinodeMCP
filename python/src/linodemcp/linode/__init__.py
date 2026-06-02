@@ -2310,6 +2310,27 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetBeta", e) from e
 
+    async def get_database_engine(
+        self, engine_id: str, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """Get a Managed Databases engine."""
+        encoded_engine_id = quote(engine_id, safe="")
+        endpoint = f"/databases/engines/{encoded_engine_id}"
+        # The OpenAPI contract documents page/page_size for this endpoint.
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
+        try:
+            response = await self.make_request("GET", endpoint)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetDatabaseEngine", e) from e
+
     async def list_regions(self) -> list[Region]:
         """List Linode regions."""
         try:
@@ -8243,6 +8264,17 @@ class RetryableClient:
         """List compute instance availability across regions with retry."""
         result: list[dict[str, Any]] = await self._execute_with_retry(
             self.client.list_regions_availability
+        )
+        return result
+
+    async def get_database_engine(
+        self, engine_id: str, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """Get a Managed Databases engine with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.get_database_engine(
+                engine_id, page=page, page_size=page_size
+            )
         )
         return result
 

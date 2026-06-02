@@ -83,6 +83,9 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_account_service_transfer_delete", Capability.Destroy),
         ToolDescriptor("linode_account_service_transfer_get", Capability.Read),
         ToolDescriptor("linode_account_user_update", Capability.Write),
+        # Databases.
+        ToolDescriptor("linode_database_engine_get", Capability.Read),
+        ToolDescriptor("linode_database_cluster_create", Capability.Write),
         # Compute reads + mutations.
         ToolDescriptor("linode_instances_list", Capability.Read),
         ToolDescriptor("linode_instance_get", Capability.Read),
@@ -404,6 +407,11 @@ def test_read_only_profiles_have_no_write_scopes() -> None:
             )
 
 
+def test_database_tool_category() -> None:
+    """Database tools map to the databases profile category."""
+    assert categories("linode_database_engine_get") == ["databases"]
+
+
 def test_full_access_scopes_match_expected_categories() -> None:
     """Full-access aggregates every write scope the catalog can produce.
 
@@ -420,6 +428,7 @@ def test_full_access_scopes_match_expected_categories() -> None:
     want_present = {
         Scope.LinodesReadWrite.value,
         Scope.VolumesReadWrite.value,
+        Scope.DatabasesReadWrite.value,
         Scope.DomainsReadWrite.value,
         Scope.FirewallReadWrite.value,
         Scope.NodeBalancersReadWrite.value,

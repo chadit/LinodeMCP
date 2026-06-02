@@ -14731,3 +14731,55 @@ async def test_update_account_user_wraps_http_errors() -> None:
 
     assert "UpdateAccountUser" in str(excinfo.value)
     await client.close()
+
+
+async def test_get_database_engine_sends_encoded_get_with_query() -> None:
+    """Getting a database engine sends GET with an encoded engine ID and query."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response_data = {"id": "mysql/8.0.26", "engine": "mysql", "version": "8.0.26"}
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.get_database_engine("mysql/8.0.26", page=2, page_size=25)
+
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "GET", "/databases/engines/mysql%2F8.0.26?page=2&page_size=25"
+    )
+
+    await client.close()
+
+
+async def test_get_database_engine_wraps_http_errors() -> None:
+    """Database engine client wraps HTTP errors with route context."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ConnectError("temporary failure")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.get_database_engine("mysql/8.0.26")
+
+    assert "GetDatabaseEngine" in str(exc_info.value)
+    await client.close()
+
+
+async def test_retryable_get_database_engine_delegates_with_retry() -> None:
+    """Retryable database engine get delegates through the retry wrapper."""
+    retry_client = RetryableClient("https://api.linode.com/v4", "test-token")
+    base_client = AsyncMock(spec=Client)
+    base_client.get_database_engine.return_value = {"id": "postgres/17"}
+    retry_client.client = base_client
+
+    result = await retry_client.get_database_engine("postgres/17", page=1, page_size=50)
+
+    assert result == {"id": "postgres/17"}
+    base_client.get_database_engine.assert_awaited_once_with(
+        "postgres/17", page=1, page_size=50
+    )
+    await retry_client.close()
