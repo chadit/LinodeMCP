@@ -3033,6 +3033,52 @@ async def handle_linode_account_user_get(
     )
 
 
+def create_linode_account_user_grants_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_account_user_grants_get tool."""
+    return Tool(
+        name="linode_account_user_grants_get",
+        description="Lists grants for an account user by username.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "username": {
+                    "type": "string",
+                    "pattern": _ACCOUNT_USERNAME_PATTERN_TEXT,
+                    "description": "Username whose grants to list",
+                },
+            },
+            "required": ["username"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_account_user_grants_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_account_user_grants_get tool request."""
+    raw_username = arguments.get("username")
+    if raw_username is None:
+        return error_response("username is required")
+    if not isinstance(raw_username, str):
+        return error_response("username must be a string")
+
+    username = raw_username.strip()
+    if not username:
+        return error_response("username is required")
+    if username != raw_username or not _ACCOUNT_USERNAME_PATTERN.fullmatch(username):
+        return error_response(
+            "username must contain only letters, numbers, underscores, or hyphens"
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_account_user_grants(username)
+
+    return await execute_tool(
+        cfg, arguments, f"list Linode account user grants for {username}", _call
+    )
+
+
 def create_linode_account_availability_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_availability_list tool."""
     return Tool(
