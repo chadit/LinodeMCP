@@ -4761,10 +4761,31 @@ async def test_account_availability_list_dispatches_from_registry(
     )
 
 
-async def test_account_betas_list_tool_is_exported_and_registered(
+async def test_client_list_betas_uses_exact_route_and_query() -> None:
+    """Low-level client uses the documented global Beta programs list route."""
+    response_data = {
+        "data": [{"id": "VPC", "label": "VPC Beta"}],
+        "page": 2,
+        "pages": 3,
+        "results": 51,
+    }
+    response = Mock()
+    response.json.return_value = response_data
+    client = Client("https://api.linode.test/v4", "token")
+    with patch.object(
+        client, "make_request", AsyncMock(return_value=response)
+    ) as make_request:
+        result = await client.list_betas(page=2, page_size=50)
+
+    assert result == response_data
+    make_request.assert_awaited_once_with("GET", "/betas?page=2&page_size=50")
+    await client.close()
+
+
+async def test_account_betas_list_tool_remains_exported_and_registered(
     sample_config: Config,
 ) -> None:
-    """Account betas list tool should be exported and registered."""
+    """Account beta enrollment list tool remains exported and registered."""
     from linodemcp import tools as tools_mod
 
     assert "create_linode_account_betas_list_tool" in tools_mod.__all__
@@ -4773,9 +4794,6 @@ async def test_account_betas_list_tool_is_exported_and_registered(
     tool, capability = tools_mod.create_linode_account_betas_list_tool()
     assert tool.name == "linode_account_betas_list"
     assert capability is Capability.Read
-    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
-    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
 
     srv = Server(sample_config)
     assert "linode_account_betas_list" in srv.registered_tool_names
@@ -4784,13 +4802,8 @@ async def test_account_betas_list_tool_is_exported_and_registered(
 async def test_account_betas_list_dispatches_from_registry(
     sample_config: Config,
 ) -> None:
-    """Account betas list is callable through server dispatch."""
-    response_data = {
-        "data": [{"id": "VPC", "label": "VPC Beta"}],
-        "page": 1,
-        "pages": 1,
-        "results": 1,
-    }
+    """Account beta enrollment list remains callable through server dispatch."""
+    response_data: dict[str, Any] = {"data": [], "page": 1, "pages": 1, "results": 0}
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -4808,6 +4821,51 @@ async def test_account_betas_list_dispatches_from_registry(
     mock_client.list_account_betas.assert_awaited_once_with(page=1, page_size=25)
 
 
+async def test_betas_list_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Global betas list tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_betas_list_tool" in tools_mod.__all__
+    assert "handle_linode_betas_list" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_betas_list_tool()
+    assert tool.name == "linode_betas_list"
+    assert capability is Capability.Read
+    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
+    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+
+    srv = Server(sample_config)
+    assert "linode_betas_list" in srv.registered_tool_names
+
+
+async def test_betas_list_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Global betas list is callable through server dispatch."""
+    response_data = {
+        "data": [{"id": "VPC", "label": "VPC Beta"}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_betas.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_betas_list", {"page": 1, "page_size": 25})
+
+    assert json.loads(result[0].text) == response_data
+    mock_client.list_betas.assert_awaited_once_with(page=1, page_size=25)
+
+
 @pytest.mark.parametrize(
     ("arguments", "expected_error"),
     [
@@ -4816,10 +4874,10 @@ async def test_account_betas_list_dispatches_from_registry(
         ({"page": True}, "page must be an integer"),
     ],
 )
-async def test_account_betas_list_rejects_invalid_page(
+async def test_betas_list_rejects_invalid_page(
     sample_config: Config, arguments: dict[str, object], expected_error: str
 ) -> None:
-    """Account betas list rejects invalid page before client calls."""
+    """Global betas list rejects invalid page before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
@@ -4827,10 +4885,10 @@ async def test_account_betas_list_rejects_invalid_page(
         mock_client_class.return_value = mock_client
 
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_betas_list", arguments)
+        result = await srv.dispatch("linode_betas_list", arguments)
 
     assert expected_error in result[0].text
-    mock_client.list_account_betas.assert_not_called()
+    mock_client.list_betas.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -4842,10 +4900,10 @@ async def test_account_betas_list_rejects_invalid_page(
         ({"page_size": True}, "page_size must be an integer"),
     ],
 )
-async def test_account_betas_list_rejects_invalid_page_size(
+async def test_betas_list_rejects_invalid_page_size(
     sample_config: Config, arguments: dict[str, object], expected_error: str
 ) -> None:
-    """Account betas list rejects invalid page_size before client calls."""
+    """Global betas list rejects invalid page_size before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
@@ -4853,10 +4911,10 @@ async def test_account_betas_list_rejects_invalid_page_size(
         mock_client_class.return_value = mock_client
 
         srv = Server(sample_config)
-        result = await srv.dispatch("linode_account_betas_list", arguments)
+        result = await srv.dispatch("linode_betas_list", arguments)
 
     assert expected_error in result[0].text
-    mock_client.list_account_betas.assert_not_called()
+    mock_client.list_betas.assert_not_called()
 
 
 async def test_account_child_accounts_list_tool_is_exported_and_registered(
