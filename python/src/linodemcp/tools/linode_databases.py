@@ -700,6 +700,45 @@ def create_linode_database_mysql_instance_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def create_linode_database_mysql_instance_ssl_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_database_mysql_instance_ssl_get tool."""
+    return Tool(
+        name="linode_database_mysql_instance_ssl_get",
+        description="Gets a MySQL Managed Database SSL certificate.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "instance_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "MySQL Managed Database instance ID",
+                },
+            },
+            "required": ["instance_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_database_mysql_instance_ssl_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_database_mysql_instance_ssl_get tool request."""
+    instance_id, error = _validate_instance_id(arguments.get("instance_id"))
+    if error is not None or instance_id is None:
+        return error_response(error or "instance_id is required")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_database_mysql_instance_ssl(instance_id)
+
+    return await execute_tool(
+        cfg,
+        arguments,
+        f"retrieve MySQL Managed Database SSL certificate for {instance_id}",
+        _call,
+    )
+
+
 def create_linode_database_mysql_instance_credentials_get_tool() -> tuple[
     Tool, Capability
 ]:
