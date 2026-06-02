@@ -96,6 +96,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_regions_availability_list", Capability.Read),
         ToolDescriptor("linode_regions_availability_get", Capability.Read),
         ToolDescriptor("linode_types_list", Capability.Read),
+        ToolDescriptor("linode_database_mysql_config_get", Capability.Read),
         ToolDescriptor("linode_images_list", Capability.Read),
         ToolDescriptor("linode_stackscripts_list", Capability.Read),
         # Compute deep (backups, disks, ips).
@@ -309,6 +310,10 @@ def test_database_tools_require_database_read_scope() -> None:
         Scope.DatabasesReadOnly
     ]
     assert categories("linode_database_instances_list") == ["databases"]
+    assert required_scopes("linode_database_mysql_config_get", Capability.Read) == [
+        Scope.DatabasesReadOnly
+    ]
+    assert categories("linode_database_mysql_config_get") == ["databases"]
 
 
 def test_account_payment_method_delete_is_account_category() -> None:

@@ -174,6 +174,20 @@ async def handle_linode_database_engine_get(
     )
 
 
+def create_linode_database_mysql_config_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_database_mysql_config_get tool."""
+    return Tool(
+        name="linode_database_mysql_config_get",
+        description="Lists MySQL Managed Database advanced parameters.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+            },
+        },
+    ), Capability.Read
+
+
 async def handle_linode_database_instances_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -188,6 +202,19 @@ async def handle_linode_database_instances_list(
         return await client.list_database_instances(page=page, page_size=page_size)
 
     return await execute_tool(cfg, arguments, "list Linode database instances", _call)
+
+
+async def handle_linode_database_mysql_config_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_database_mysql_config_get tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        return await client.get_database_mysql_config()
+
+    return await execute_tool(
+        cfg, arguments, "retrieve MySQL Managed Database advanced parameters", _call
+    )
 
 
 async def handle_linode_databases_engines_list(
