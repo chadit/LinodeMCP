@@ -16,7 +16,7 @@ from mcp.types import TextContent, Tool
 
 import linodemcp.tools as tools_module
 from linodemcp.audit import Capability as AuditCapability
-from linodemcp.audit import NoopSink, Sink, Status, new_event
+from linodemcp.audit import Mode, NoopSink, Sink, Status, new_event
 from linodemcp.config import get_config_path
 from linodemcp.linode import RetryableClient
 from linodemcp.profiles import (
@@ -336,6 +336,23 @@ class Server:
         """Names of tools the active profile allowed through registration."""
         return self._allowed_tool_names
 
+    def _yolo_active(self, arguments: dict[str, Any]) -> bool:
+        """Report whether this call is a permitted yolo execution: yolo:true
+        AND the active profile's allow_yolo. yolo:true alone (profile disallows)
+        is NOT a permitted yolo and falls through to the normal gate."""
+        return arguments.get("yolo") is True and self._active_profile.allow_yolo
+
+    def _execution_mode(self, arguments: dict[str, Any]) -> Mode:
+        """Derive the audit execution mode from the call's flags (mirrors the
+        Go executionMode). yolo wins only when permitted."""
+        if self._yolo_active(arguments):
+            return Mode.YOLO
+        if arguments.get("dry_run") is True:
+            return Mode.DRY_RUN
+        if arguments.get("confirm_bypass_dry_run") is True:
+            return Mode.BYPASS_DRY_RUN
+        return Mode.NORMAL
+
     async def dispatch(self, name: str, arguments: dict[str, Any]) -> list[Any]:
         """Invoke a registered tool handler with in-flight tracking.
 
@@ -367,6 +384,7 @@ class Server:
             linodemcp_version=LINODEMCP_VERSION,
             redact_pii=self._audit_redact_pii,
         )
+        event.set_mode(self._execution_mode(arguments), "")
 
         try:
             result = await self._dispatch_inner(name, arguments)
@@ -483,9 +501,14 @@ class Server:
                 return await handle_version(arguments)
             case _ if name in self._config_handlers:
                 if name in self._destroy_tools and arguments.get("dry_run") is not True:
-                    gate_error = _destroy_bypass_error(name, arguments)
-                    if gate_error is not None:
-                        return [TextContent(type="text", text=gate_error)]
+                    if self._yolo_active(arguments):
+                        # Permitted yolo bypasses the gate AND the handler's
+                        # per-handler confirm requirement.
+                        arguments = {**arguments, "confirm": True}
+                    else:
+                        gate_error = _destroy_bypass_error(name, arguments)
+                        if gate_error is not None:
+                            return [TextContent(type="text", text=gate_error)]
 
                 handler = self._config_handlers[name]
                 if self._config_takes_config[name]:

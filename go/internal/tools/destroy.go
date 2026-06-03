@@ -97,7 +97,7 @@ func RunDestructiveAction(
 		return runDestructiveDryRun(ctx, request, cfg, action)
 	}
 
-	if result := requireDestroyConfirmation(request, action.ToolName, action.ConfirmMessage); result != nil {
+	if result := requireDestroyConfirmation(ctx, request, action.ToolName, action.ConfirmMessage); result != nil {
 		return result, nil
 	}
 
@@ -113,6 +113,29 @@ func RunDestructiveAction(
 	return MarshalToolResponse(action.Success())
 }
 
+// destroyCtxKey namespaces context values this package reads. The server
+// middleware sets yoloAllowedCtxKey when a call passes yolo:true and the
+// active profile permits yolo, so the destroy gate can honor it without a
+// package global or a change to every caller's signature.
+type destroyCtxKey int
+
+const yoloAllowedCtxKey destroyCtxKey = iota
+
+// WithYoloAllowed marks a context as permitted to bypass the destroy gate and
+// confirm requirement via yolo. The server middleware sets this only when the
+// request asked for yolo and the active profile's allow_yolo is true.
+func WithYoloAllowed(ctx context.Context) context.Context {
+	return context.WithValue(ctx, yoloAllowedCtxKey, true)
+}
+
+// yoloAllowedFromContext reports whether the server marked this call as a
+// permitted yolo execution.
+func yoloAllowedFromContext(ctx context.Context) bool {
+	allowed, _ := ctx.Value(yoloAllowedCtxKey).(bool)
+
+	return allowed
+}
+
 // requireDestroyConfirmation enforces the Phase 3 bypass-dry-run gate for
 // CapDestroy tools. Beyond the existing confirm:true requirement, a real
 // destructive call must assert one of:
@@ -120,9 +143,14 @@ func RunDestructiveAction(
 //   - confirmed_dry_run: true  -- the model previewed the call with dry_run
 //   - confirm_bypass_dry_run: true -- the model is explicitly skipping the preview
 //
-// (A future yolo:true bypasses this entirely; see the yolo composition slice.)
+// A permitted yolo execution (yolo:true on a profile with allow_yolo) bypasses
+// the gate and the confirm requirement entirely.
 // Returns a non-nil error result to short-circuit, or nil to proceed.
-func requireDestroyConfirmation(request *mcp.CallToolRequest, toolName, confirmMessage string) *mcp.CallToolResult {
+func requireDestroyConfirmation(ctx context.Context, request *mcp.CallToolRequest, toolName, confirmMessage string) *mcp.CallToolResult {
+	if yoloAllowedFromContext(ctx) {
+		return nil
+	}
+
 	args := request.GetArguments()
 	confirm, _ := args[paramConfirm].(bool)
 	confirmedDryRun, _ := args[paramConfirmedDryRun].(bool)

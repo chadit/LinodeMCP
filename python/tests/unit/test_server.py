@@ -12,6 +12,7 @@ import httpx
 import pytest
 from mcp.types import ListToolsRequest, ListToolsResult
 
+from linodemcp.audit import CapturingSink, Mode
 from linodemcp.config import BuiltinOverride, UserProfileConfig
 from linodemcp.linode import (
     Client,
@@ -14834,3 +14835,45 @@ async def test_destroy_bypass_dry_run_gate(sample_config: Config) -> None:
         },
     )
     assert "not both" in result[0].text
+
+
+async def test_destroy_yolo_bypasses_gate_and_records_mode(
+    sample_config: Config,
+) -> None:
+    """Under a profile with allow_yolo, yolo:true bypasses both the dry-run
+    gate and the per-handler confirm, executes the destroy, and records
+    mode: yolo on the audit event."""
+    emergency_cfg = dataclasses.replace(
+        sample_config,
+        active_profile="emergency",
+        profiles_builtin_overrides={"emergency": BuiltinOverride(disabled=False)},
+    )
+    sink = CapturingSink()
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.delete_volume = AsyncMock(return_value=None)
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(emergency_cfg)
+        srv.set_audit_sink(sink)
+        # No confirm, no confirmed_dry_run: only yolo.
+        result = await srv.dispatch(
+            "linode_volume_delete", {"volume_id": 789, "yolo": True}
+        )
+
+    assert "is destructive" not in result[0].text
+    mock_client.delete_volume.assert_awaited_once_with(789)
+    assert sink.events()[-1].mode is Mode.YOLO
+
+
+async def test_yolo_ignored_when_profile_disallows(sample_config: Config) -> None:
+    """yolo:true under a profile without allow_yolo is not a permitted yolo:
+    the destroy gate still applies."""
+    srv = Server(_full_access_config(sample_config))
+    result = await srv.dispatch(
+        "linode_volume_delete",
+        {"volume_id": 789, "yolo": True, "confirm": True},
+    )
+    assert "is destructive" in result[0].text

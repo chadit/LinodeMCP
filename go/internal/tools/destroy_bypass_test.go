@@ -1,12 +1,15 @@
 package tools_test
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/chadit/LinodeMCP/internal/config"
 	"github.com/chadit/LinodeMCP/internal/tools"
 )
 
@@ -73,4 +76,30 @@ func TestDestroyBypassDryRunGate(t *testing.T) {
 	// The happy paths (confirm + confirmed_dry_run, and confirm + bypass both
 	// reach execution) are covered by every CapDestroy tool's existing
 	// execution test, which now passes confirmed_dry_run: true.
+}
+
+// TestDestroyYoloBypass verifies that a permitted yolo execution (the server
+// marks the context via WithYoloAllowed) bypasses both the dry-run gate AND
+// the confirm requirement: the destroy executes with neither confirm nor a
+// dry-run assertion present.
+func TestDestroyYoloBypass(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/volumes/789", r.URL.Path)
+		assert.Equal(t, http.MethodDelete, r.Method)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeVolumeDeleteTool(cfg)
+
+	// No confirm, no confirmed_dry_run; only the yolo-marked context.
+	ctx := tools.WithYoloAllowed(t.Context())
+	result, err := handler(ctx, createRequestWithArgs(t, map[string]any{keyVolumeID: float64(789)}))
+	require.NoError(t, err)
+	require.False(t, result.IsError, "yolo must bypass the gate and confirm, executing the delete")
 }

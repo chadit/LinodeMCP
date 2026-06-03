@@ -582,6 +582,13 @@ func (s *Server) addTool(tool *mcp.Tool, capability profiles.Capability, handler
 		evt := s.newAuditEvent(toolName, auditCapability, &req)
 		start := time.Now()
 
+		mode, yoloAllowed := s.executionMode(&req)
+		evt.SetMode(mode, "")
+
+		if yoloAllowed {
+			ctx = tools.WithYoloAllowed(ctx)
+		}
+
 		result, err := handler(ctx, req)
 
 		finalizeAuditEvent(&evt, start, err)
@@ -625,6 +632,35 @@ func (s *Server) newAuditEvent(
 		appinfo.Version,
 		s.auditRedactPII,
 	)
+}
+
+// executionMode derives the audit execution mode from the call's flags and
+// reports whether a permitted yolo execution applies. yolo wins only when the
+// active profile's allow_yolo is set; otherwise yolo:true is ignored here and
+// the normal destroy gate applies. Reads the profile under the read-lock so a
+// concurrent hot-reload can't observe a torn value.
+func (s *Server) executionMode(req *mcp.CallToolRequest) (audit.Mode, bool) {
+	args := req.GetArguments()
+
+	if yolo, _ := args["yolo"].(bool); yolo {
+		s.profileMu.RLock()
+		allow := s.activeProfile.AllowYolo
+		s.profileMu.RUnlock()
+
+		if allow {
+			return audit.ModeYolo, true
+		}
+	}
+
+	if dryRun, _ := args["dry_run"].(bool); dryRun {
+		return audit.ModeDryRun, false
+	}
+
+	if bypass, _ := args["confirm_bypass_dry_run"].(bool); bypass {
+		return audit.ModeBypassDryRun, false
+	}
+
+	return audit.ModeNormal, false
 }
 
 // writeRefusalAuditEvent records a refusal at the shutdown gate. The

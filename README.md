@@ -8,208 +8,36 @@ An MCP (Model Context Protocol) server that gives AI assistants like Claude|Gemi
 
 LinodeMCP exposes Linode API operations as MCP tools. AI assistants can use these tools to query and manage your Linode infrastructure -- all through a standard protocol.
 
-### Available Tools (125 total)
+### Available tools
 
-**Core Tools:**
+LinodeMCP aims for near-complete coverage of the [Linode API v4](https://techdocs.akamai.com/linode-api/reference/api): instances, volumes, object storage, networking, NodeBalancers, DNS, LKE, VPCs, databases, images, and account/profile. Each endpoint is exposed as an MCP tool named after it (e.g. `linode_instance_create`, `linode_volume_delete`, `linode_lke_cluster_create`).
 
-| Tool | Description |
-|------|-------------|
-| `hello` | Smoke test -- returns a greeting to confirm the server is running |
-| `version` | Returns build info: version, git commit, platform, feature flags |
+To see exactly which tools your build registers, call the `version` tool (it reports the feature list) or the `linode_profile_list_tools` meta tool. Which of those an AI client can actually invoke is governed by the active [profile](docs/profiles.md).
 
-**Account & Profile:**
-
-| Tool | Description |
-|------|-------------|
-| `linode_profile` | Fetches your Linode account profile (username, email, 2FA status) |
-| `linode_account` | Fetches account info (balance, billing, capabilities) |
-
-**Compute:**
-
-| Tool | Description |
-|------|-------------|
-| `linode_instances_list` | Lists your Linode instances with optional status filtering |
-| `linode_instance_get` | Gets detailed info about a specific instance by ID |
-| `linode_instance_create` | Creates a new Linode instance (confirm required) |
-| `linode_instance_delete` | Deletes a Linode instance (confirm required) |
-| `linode_instance_resize` | Resizes an instance to a different plan (confirm required) |
-| `linode_instance_boot` | Boots a stopped instance |
-| `linode_instance_reboot` | Reboots a running instance |
-| `linode_instance_shutdown` | Shuts down a running instance |
-| `linode_regions_list` | Lists available regions with country/capability filtering |
-| `linode_types_list` | Lists instance types (plans) with class filtering |
-| `linode_images_list` | Lists images with public/deprecated filtering |
-| `linode_stackscripts_list` | Lists StackScripts with is_public/mine/label filtering |
-
-**Storage:**
-
-| Tool | Description |
-|------|-------------|
-| `linode_volumes_list` | Lists block storage volumes with region/label filtering |
-| `linode_volume_create` | Creates a new block storage volume (confirm required) |
-| `linode_volume_attach` | Attaches a volume to an instance |
-| `linode_volume_detach` | Detaches a volume from an instance |
-| `linode_volume_resize` | Resizes a volume, expand only (confirm required) |
-| `linode_volume_delete` | Deletes a block storage volume (confirm required) |
-
-**Object Storage:**
-
-| Tool | Description |
-|------|-------------|
-| `linode_object_storage_buckets_list` | Lists all Object Storage buckets |
-| `linode_object_storage_bucket_get` | Gets detailed info about a specific bucket |
-| `linode_object_storage_bucket_contents` | Lists objects in a bucket with prefix/marker/delimiter filtering |
-| `linode_object_storage_bucket_create` | Creates a new Object Storage bucket (confirm required) |
-| `linode_object_storage_bucket_delete` | Deletes an Object Storage bucket (confirm required) |
-| `linode_object_storage_bucket_access_get` | Gets bucket ACL and CORS settings |
-| `linode_object_storage_bucket_access_update` | Updates bucket ACL and CORS settings (confirm required) |
-| `linode_object_storage_clusters_list` | Lists Object Storage cluster endpoints |
-| `linode_object_storage_type_list` | Lists Object Storage pricing types |
-| `linode_object_storage_keys_list` | Lists Object Storage access keys |
-| `linode_object_storage_key_get` | Gets detailed info about a specific access key |
-| `linode_object_storage_key_create` | Creates a new access key (confirm required, secret shown once) |
-| `linode_object_storage_key_update` | Updates access key label or bucket permissions (confirm required) |
-| `linode_object_storage_key_delete` | Revokes an access key permanently (confirm required) |
-| `linode_object_storage_transfer` | Gets Object Storage transfer usage |
-| `linode_object_storage_presigned_url` | Generates a presigned URL for object download or upload |
-| `linode_object_storage_object_acl_get` | Gets the ACL for a specific object |
-| `linode_object_storage_object_acl_update` | Updates an object's ACL (confirm required) |
-| `linode_object_storage_ssl_get` | Checks if a bucket has an SSL certificate |
-| `linode_object_storage_ssl_delete` | Removes a bucket's SSL certificate (confirm required) |
-
-**Networking:**
-
-| Tool | Description |
-|------|-------------|
-| `linode_firewalls_list` | Lists Cloud Firewalls with status/label filtering |
-| `linode_firewall_create` | Creates a new Cloud Firewall |
-| `linode_firewall_update` | Updates firewall rules and settings |
-| `linode_firewall_delete` | Deletes a Cloud Firewall (confirm required) |
-| `linode_nodebalancers_list` | Lists NodeBalancers with region/label filtering |
-| `linode_nodebalancer_get` | Gets detailed info about a specific NodeBalancer by ID |
-| `linode_nodebalancer_create` | Creates a new NodeBalancer (confirm required) |
-| `linode_nodebalancer_update` | Updates NodeBalancer settings (confirm required) |
-| `linode_nodebalancer_delete` | Deletes a NodeBalancer (confirm required) |
-
-**DNS:**
-
-| Tool | Description |
-|------|-------------|
-| `linode_domains_list` | Lists DNS domains |
-| `linode_domain_get` | Gets detailed info about a specific domain by ID |
-| `linode_domain_create` | Creates a new DNS domain |
-| `linode_domain_update` | Updates domain settings |
-| `linode_domain_delete` | Deletes a DNS domain and all its records |
-| `linode_domain_records_list` | Lists domain records with type/name filtering |
-| `linode_domain_record_create` | Creates a new DNS record |
-| `linode_domain_record_update` | Updates a DNS record |
-| `linode_domain_record_delete` | Deletes a DNS record |
-
-**Kubernetes (LKE):**
-
-| Tool | Description |
-|------|-------------|
-| `linode_lke_clusters_list` | Lists LKE clusters with optional label filtering |
-| `linode_lke_cluster_get` | Gets detailed info about a specific LKE cluster |
-| `linode_lke_cluster_create` | Creates a new LKE cluster with node pools (confirm required) |
-| `linode_lke_cluster_update` | Updates cluster label, version, tags, or HA setting (confirm required) |
-| `linode_lke_cluster_delete` | Deletes an LKE cluster and all its resources (confirm required) |
-| `linode_lke_cluster_recycle` | Recycles all nodes in a cluster (confirm required) |
-| `linode_lke_cluster_regenerate` | Regenerates the cluster service token (confirm required) |
-| `linode_lke_pools_list` | Lists node pools in an LKE cluster |
-| `linode_lke_pool_get` | Gets detailed info about a specific node pool |
-| `linode_lke_pool_create` | Creates a new node pool in a cluster (confirm required) |
-| `linode_lke_pool_update` | Updates node pool count, autoscaler, or tags (confirm required) |
-| `linode_lke_pool_delete` | Deletes a node pool and all its nodes (confirm required) |
-| `linode_lke_pool_recycle` | Recycles all nodes in a pool (confirm required) |
-| `linode_lke_node_get` | Gets status info about a specific node |
-| `linode_lke_node_delete` | Deletes a specific node from a cluster (confirm required) |
-| `linode_lke_node_recycle` | Recycles a specific node, replacing it (confirm required) |
-| `linode_lke_kubeconfig_get` | Gets the kubeconfig for a cluster (base64-encoded) |
-| `linode_lke_kubeconfig_delete` | Deletes and regenerates the kubeconfig (confirm required) |
-| `linode_lke_dashboard_get` | Gets the Kubernetes dashboard URL for a cluster |
-| `linode_lke_api_endpoints_list` | Lists API endpoints for a cluster |
-| `linode_lke_service_token_delete` | Deletes and regenerates the service token (confirm required) |
-| `linode_lke_acl_get` | Gets the control plane ACL configuration |
-| `linode_lke_acl_update` | Updates control plane ACL with allowed IPs (confirm required) |
-| `linode_lke_acl_delete` | Removes all IP restrictions from the API server (confirm required) |
-| `linode_lke_versions_list` | Lists available Kubernetes versions |
-| `linode_lke_version_get` | Gets details about a specific Kubernetes version |
-| `linode_lke_types_list` | Lists available LKE node types and pricing |
-| `linode_lke_tier_versions_list` | Lists Kubernetes versions available per tier |
-
-**VPCs & Subnets:**
-
-| Tool | Description |
-|------|-------------|
-| `linode_vpcs_list` | Lists VPCs with optional label and region filtering |
-| `linode_vpc_get` | Gets detailed info about a specific VPC |
-| `linode_vpc_create` | Creates a new VPC with optional subnets (confirm required) |
-| `linode_vpc_update` | Updates VPC label or description (confirm required) |
-| `linode_vpc_delete` | Deletes a VPC and all its subnets (confirm required) |
-| `linode_vpc_ips_list` | Lists all VPC IP addresses across all VPCs |
-| `linode_vpc_ip_list` | Lists IP addresses for a specific VPC |
-| `linode_vpc_subnets_list` | Lists subnets in a specific VPC |
-| `linode_vpc_subnet_get` | Gets detailed info about a specific subnet |
-| `linode_vpc_subnet_create` | Creates a new subnet in a VPC (confirm required) |
-| `linode_vpc_subnet_update` | Updates a subnet's label (confirm required) |
-| `linode_vpc_subnet_delete` | Deletes a subnet from a VPC (confirm required) |
-
-**Instance Backups:**
-
-| Tool | Description |
-|------|-------------|
-| `linode_instance_backups_list` | Lists all backups for an instance (automatic + manual snapshots) |
-| `linode_instance_backup_get` | Gets detailed info about a specific backup |
-| `linode_instance_backup_create` | Creates a manual snapshot of an instance (confirm required) |
-| `linode_instance_backup_restore` | Restores a backup to an instance (confirm required) |
-| `linode_instance_backups_enable` | Enables the backups service for an instance (confirm required) |
-| `linode_instance_backups_cancel` | Cancels the backups service for an instance (confirm required) |
-
-**Instance Disks:**
-
-| Tool | Description |
-|------|-------------|
-| `linode_instance_disks_list` | Lists all disks attached to an instance |
-| `linode_instance_disk_get` | Gets detailed info about a specific disk |
-| `linode_instance_disk_create` | Creates a new disk on an instance (confirm required) |
-| `linode_instance_disk_update` | Updates a disk's label (confirm required) |
-| `linode_instance_disk_delete` | Deletes a disk from an instance (confirm required) |
-| `linode_instance_disk_clone` | Clones a disk on an instance (confirm required) |
-| `linode_instance_disk_resize` | Resizes a disk on an instance (confirm required) |
-
-**Instance IPs:**
-
-| Tool | Description |
-|------|-------------|
-| `linode_instance_ips_list` | Lists all IP addresses (IPv4 and IPv6) for an instance |
-| `linode_instance_ip_get` | Gets detailed info about a specific IP address |
-| `linode_instance_ip_allocate` | Allocates a new IP address for an instance (confirm required) |
-| `linode_instance_ip_delete` | Removes an IP address from an instance (confirm required) |
-
-**Instance Actions:**
-
-| Tool | Description |
-|------|-------------|
-| `linode_instance_clone` | Clones an instance to a new one (confirm required) |
-| `linode_instance_migrate` | Migrates an instance to a new region (confirm required) |
-| `linode_instance_rebuild` | Rebuilds an instance with a new image (confirm required) |
-| `linode_instance_rescue` | Boots an instance into rescue mode (confirm required) |
-| `linode_instance_password_reset` | Resets the root password on an instance (confirm required) |
-
-**Security:**
-
-| Tool | Description |
-|------|-------------|
-| `linode_sshkeys_list` | Lists SSH keys with label filtering |
-| `linode_sshkey_create` | Adds a new SSH key to your profile |
-| `linode_sshkey_delete` | Removes an SSH key from your profile |
-
-**Safety Note:** Tools marked with "(confirm required)" are destructive or incur billing charges. These operations require `confirm: true` to execute.
+Write, destroy, and admin tools require `confirm: true` and support `dry_run: true` previews; destructive calls are additionally gated (see [Dry-run & safety](#dry-run--safety)).
 
 ### Multi-Environment Support
 
 Configure multiple Linode environments (production, staging, dev) in a single config file. Tools accept an optional `environment` parameter to target a specific one, falling back to `default` when omitted.
+
+## Documentation
+
+**For users & operators** — running, configuring, and trusting the server:
+
+| Doc | What it covers |
+|-----|----------------|
+| [Profiles](docs/profiles.md) | Restrict which tools an AI client can see and use; token-scope validation; the built-in profiles |
+| [Profile recipes](docs/profile-recipes.md) | Copy-paste profile starting points for common setups |
+| [Dry-run & safety](docs/dry-run.md) | Preview any mutator, bypass-confirm on destructive calls, profile pre-check, and yolo |
+| [Audit log](docs/audit-log.md) | What the AI did: event schema, sinks, retention, redaction, and the query tools |
+| [Audit reports](docs/audit-reports.md) | The custom-report filter grammar with worked examples |
+| [Host integrations](docs/host-integrations/README.md) | Wiring Claude Desktop / Claude Code / Gemini / Copilot and their slash commands |
+
+**For implementers & contributors** — working on the code:
+
+- [Development](#development) — build, test, and lint commands for both implementations
+- [Project layout](#project-layout) and [key design decisions](#key-design-decisions)
+- [`.claude/CLAUDE.md`](.claude/CLAUDE.md) — project conventions, the "adding a new tool" checklist, and redaction-list parity rules
 
 ## Installation
 
@@ -649,6 +477,17 @@ profiles:
 The AI can also help compose profiles via the `linode_profile_*` builder tools. Those run inside the MCP conversation; the user activates the saved profile separately.
 
 For the full reference (schema, capability tags, builder workflow, token-scope validation, security model), see [docs/profiles.md](docs/profiles.md). For copy-paste starting points, see [docs/profile-recipes.md](docs/profile-recipes.md). For host-specific wiring, see [docs/host-integrations/](docs/host-integrations/README.md).
+
+## Dry-run & safety
+
+Every mutating tool can be previewed before it runs, and destructive calls are gated so a resource can't be deleted or replaced without first previewing it (or explicitly opting out):
+
+- **Dry-run** — pass `dry_run: true` to any write/destroy/admin tool to get back `would_execute` + `current_state` (plus dependency cascades, side effects, billing deltas, and warnings) without mutating anything. Coverage is build-enforced by a capability invariant test.
+- **Bypass-confirm** — a `CapDestroy` call must either set `confirmed_dry_run: true` (it previewed first) or `confirm_bypass_dry_run: true` (explicitly skip the preview) alongside `confirm: true`, or it's rejected with guidance.
+- **Pre-check** — `linode_profile_can_run` reports which calls in a planned sequence the active profile would permit, so the model can bail before partial execution.
+- **Yolo** — a profile with `allow_yolo: true` (only the break-glass `emergency` built-in) lets `yolo: true` skip both the preview gate and confirm.
+
+Each call's safety path is recorded in the audit log's `mode` field (`normal` / `dry_run` / `bypass_dry_run` / `yolo`). Full reference: [docs/dry-run.md](docs/dry-run.md).
 
 ## Auditing
 
