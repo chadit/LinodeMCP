@@ -11743,6 +11743,121 @@ async def test_linode_images_sharegroup_get_rejects_invalid_sharegroup_id(
     mock_client.get_image_sharegroup.assert_not_called()
 
 
+async def test_linode_images_sharegroup_images_add_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Image share group add-images tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+    from linodemcp.version import get_version_info
+
+    assert "create_linode_images_sharegroup_images_add_tool" in tools_mod.__all__
+    assert "handle_linode_images_sharegroup_images_add" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_images_sharegroup_images_add_tool()
+    assert tool.name == "linode_images_sharegroup_images_add"
+    assert capability is Capability.Write
+    assert tool.inputSchema["required"] == ["sharegroup_id", "images", "confirm"]
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_images_sharegroup_images_add" in srv.registered_tool_names
+
+    entries = {entry.name: entry for entry in get_tool_registry()}
+    assert entries["linode_images_sharegroup_images_add"].capability is Capability.Write
+    assert "linode_images_sharegroup_images_add" in get_version_info().features["tools"]
+
+
+async def test_linode_images_sharegroup_images_add_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Image share group add-images dispatches through the registered tool."""
+    images = [{"id": "private/ubuntu"}]
+    response_data = {"images": images}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.add_image_sharegroup_images.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_images_sharegroup_images_add",
+            {
+                "sharegroup_id": "11111111-1111-4111-8111-111111111111",
+                "images": images,
+                "confirm": True,
+            },
+        )
+
+    assert json.loads(result[0].text) == {
+        "message": "Images added to image share group",
+        "result": response_data,
+    }
+    mock_client.add_image_sharegroup_images.assert_awaited_once_with(
+        "11111111-1111-4111-8111-111111111111", images
+    )
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_linode_images_sharegroup_images_add_rejects_non_true_confirm(
+    sample_config: Config, confirm: object
+) -> None:
+    """Image share group add-images requires literal confirm=True before calls."""
+    arguments: dict[str, object] = {
+        "sharegroup_id": "11111111-1111-4111-8111-111111111111",
+        "images": [{"id": "private/ubuntu"}],
+    }
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_images_sharegroup_images_add", arguments)
+
+    assert "Set confirm=true" in result[0].text
+    mock_client.add_image_sharegroup_images.assert_not_called()
+
+
+async def test_linode_images_sharegroup_images_add_dry_run_uses_encoded_path(
+    sample_config: Config,
+) -> None:
+    """Image share group add-images dry-run previews encoded path and body."""
+    images = [{"id": "private/ubuntu"}]
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_images_sharegroup_images_add",
+            {
+                "sharegroup_id": "11111111-1111-4111-8111-111111111111",
+                "images": images,
+                "confirm": True,
+                "dry_run": True,
+            },
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["dry_run"] is True
+    assert payload["would_execute"] == {
+        "method": "POST",
+        "path": "/images/sharegroups/11111111-1111-4111-8111-111111111111/images",
+        "body": {"images": images},
+    }
+    mock_client.add_image_sharegroup_images.assert_not_called()
+
+
 async def test_linode_images_sharegroup_update_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

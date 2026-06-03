@@ -281,6 +281,13 @@ def test_image_sharegroup_update_needs_images_write() -> None:
     ]
 
 
+def test_image_sharegroup_images_add_needs_images_write() -> None:
+    """Adding images to a share group needs image write scope."""
+    assert required_scopes("linode_images_sharegroup_images_add", Capability.Write) == [
+        Scope.ImagesReadWrite
+    ]
+
+
 def test_instance_create_needs_linodes_write_and_images_read() -> None:
     """Provisioning a Linode from an image requires images:read_only too.
 

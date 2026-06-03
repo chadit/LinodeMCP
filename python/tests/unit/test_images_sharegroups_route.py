@@ -14,6 +14,7 @@ from linodemcp.profiles import Capability, Scope, required_scopes
 from linodemcp.server import get_tool_registry
 from linodemcp.tools.linode_images import (
     create_linode_image_sharegroup_create_tool,
+    create_linode_images_sharegroup_images_add_tool,
     create_linode_images_sharegroup_images_list_tool,
     create_linode_images_sharegroups_list_tool,
     create_linode_images_sharegroups_token_delete_tool,
@@ -23,6 +24,7 @@ from linodemcp.tools.linode_images import (
     create_linode_images_sharegroups_token_update_tool,
     create_linode_images_sharegroups_tokens_list_tool,
     handle_linode_image_sharegroup_create,
+    handle_linode_images_sharegroup_images_add,
     handle_linode_images_sharegroup_images_list,
     handle_linode_images_sharegroups_list,
     handle_linode_images_sharegroups_token_delete,
@@ -39,6 +41,20 @@ if TYPE_CHECKING:
 
 
 T = TypeVar("T")
+
+INVALID_ADD_IMAGE_SHAREGROUP_IMAGES_CASES: list[tuple[object, str]] = [
+    (None, "images must be a non-empty list of image objects"),
+    ([], "images must be a non-empty list of image objects"),
+    ("private/ubuntu", "images must be a non-empty list of image objects"),
+    (["private/ubuntu"], "images must contain objects"),
+    ([{}], "images[].id must be a non-empty string"),
+    ([{"id": ""}], "images[].id must be a non-empty string"),
+    ([{"id": "private/ubuntu", "label": 1}], "images[].label must be a string"),
+    (
+        [{"id": "private/ubuntu", "description": 1}],
+        "images[].description must be a string",
+    ),
+]
 
 
 class _CapturingRetryableClient(RetryableClient):
@@ -1112,6 +1128,283 @@ async def test_retryable_list_image_sharegroup_images_uses_read_retry() -> None:
     assert result["data"][0]["id"] == "private/ubuntu"
     assert len(retryable.calls) == 1
     mock_list.assert_awaited_once_with(sharegroup_id)
+
+
+@pytest.mark.asyncio
+async def test_client_add_image_sharegroup_images_sends_exact_path_and_body() -> None:
+    """Low-level client sends POST /images/sharegroups/{sharegroupId}/images."""
+    seen: list[httpx.Request] = []
+    sharegroup_id = "22222222-2222-4222-8222-222222222222"
+    images = [
+        {"id": "private/ubuntu", "label": "Private Ubuntu", "description": "Ubuntu"}
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"images": images})
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        result = await client.add_image_sharegroup_images(sharegroup_id, images)
+    finally:
+        await client.close()
+
+    assert result == {"images": images}
+    assert len(seen) == 1
+    request = seen[0]
+    assert request.method == "POST"
+    assert request.url.path == f"/v4/images/sharegroups/{sharegroup_id}/images"
+    assert request.url.query == b""
+    assert json.loads((await request.aread()).decode()) == {"images": images}
+    assert request.headers["Authorization"] == "Bearer test-token"
+
+
+@pytest.mark.asyncio
+async def test_client_add_image_sharegroup_images_encodes_path_param() -> None:
+    """Low-level client URL-encodes sharegroup_id before appending /images."""
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"images": []})
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        await client.add_image_sharegroup_images(
+            "sharegroup/with?separator", [{"id": "private/ubuntu"}]
+        )
+    finally:
+        await client.close()
+
+    assert seen[0].url.raw_path == (
+        b"/v4/images/sharegroups/sharegroup%2Fwith%3Fseparator/images"
+    )
+
+
+@pytest.mark.asyncio
+async def test_client_add_image_sharegroup_images_rejects_empty_images() -> None:
+    """Low-level client rejects an empty required body before the request."""
+    called = False
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        return httpx.Response(200, json={})
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        with pytest.raises(ValueError, match="images must be a non-empty"):
+            await client.add_image_sharegroup_images(
+                "22222222-2222-4222-8222-222222222222", []
+            )
+    finally:
+        await client.close()
+
+    assert called is False
+
+
+@pytest.mark.asyncio
+async def test_client_add_image_sharegroup_images_maps_http_error() -> None:
+    """Low-level client maps HTTP transport failures."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("temporary failure", request=request)
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        with pytest.raises(NetworkError, match="AddImageSharegroupImages"):
+            await client.add_image_sharegroup_images(
+                "22222222-2222-4222-8222-222222222222",
+                [{"id": "private/ubuntu"}],
+            )
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_retryable_add_image_sharegroup_images_delegates_once() -> None:
+    """Mutating add-images route delegates once without retry replay."""
+    retryable = _CapturingRetryableClient()
+    sharegroup_id = "22222222-2222-4222-8222-222222222222"
+    images = [{"id": "private/ubuntu"}]
+    mock_add = AsyncMock(return_value={"images": images})
+    cast("Any", retryable.client).add_image_sharegroup_images = mock_add
+
+    try:
+        result = await retryable.add_image_sharegroup_images(sharegroup_id, images)
+    finally:
+        await retryable.close()
+
+    assert result == {"images": images}
+    assert retryable.calls == []
+    mock_add.assert_awaited_once_with(sharegroup_id, images)
+
+
+def test_create_linode_images_sharegroup_images_add_tool_schema() -> None:
+    """Tool schema requires UUID path, images body, and confirm."""
+    tool, capability = create_linode_images_sharegroup_images_add_tool()
+
+    assert tool.name == "linode_images_sharegroup_images_add"
+    assert capability is Capability.Write
+    assert set(tool.inputSchema["properties"]) == {
+        "environment",
+        "sharegroup_id",
+        "images",
+        "confirm",
+        "dry_run",
+    }
+    assert tool.inputSchema["required"] == ["sharegroup_id", "images", "confirm"]
+    assert tool.inputSchema["properties"]["images"]["minItems"] == 1
+    assert (
+        "[0-9a-fA-F]{8}" in tool.inputSchema["properties"]["sharegroup_id"]["pattern"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_handle_linode_images_sharegroup_images_add_success(
+    sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """Handler adds images to a share group."""
+    sharegroup_id = "22222222-2222-4222-8222-222222222222"
+    images = [{"id": "private/ubuntu", "label": "Private Ubuntu"}]
+    mock_linode_client.add_image_sharegroup_images.return_value = {"images": images}
+
+    result = await handle_linode_images_sharegroup_images_add(
+        {"sharegroup_id": f" {sharegroup_id} ", "images": images, "confirm": True},
+        sample_config,
+    )
+
+    payload = json.loads(result[0].text)
+    assert payload == {
+        "message": "Images added to image share group",
+        "result": {"images": images},
+    }
+    mock_linode_client.add_image_sharegroup_images.assert_awaited_once_with(
+        sharegroup_id, images
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_handle_linode_images_sharegroup_images_add_requires_literal_confirm(
+    confirm: object, sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """Handler rejects omitted and non-literal confirm before the client call."""
+    arguments: dict[str, Any] = {
+        "sharegroup_id": "22222222-2222-4222-8222-222222222222",
+        "images": [{"id": "private/ubuntu"}],
+    }
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    result = await handle_linode_images_sharegroup_images_add(arguments, sample_config)
+
+    assert result[0].text.startswith("Error: This adds images")
+    mock_linode_client.add_image_sharegroup_images.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {},
+        {"sharegroup_id": ""},
+        {"sharegroup_id": "not-a-uuid"},
+        {"sharegroup_id": "22222222/2222-4222-8222-222222222222"},
+        {"sharegroup_id": "22222222?2222-4222-8222-222222222222"},
+        {"sharegroup_id": ".."},
+        {"sharegroup_id": 123},
+    ],
+)
+async def test_handle_linode_images_sharegroup_images_add_rejects_invalid_uuid(
+    arguments: dict[str, Any], sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """Handler rejects malformed sharegroup UUIDs before the client call."""
+    arguments = {**arguments, "images": [{"id": "private/ubuntu"}], "confirm": True}
+
+    result = await handle_linode_images_sharegroup_images_add(arguments, sample_config)
+
+    assert result[0].text.startswith("Error: ")
+    mock_linode_client.add_image_sharegroup_images.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("images", "message"), INVALID_ADD_IMAGE_SHAREGROUP_IMAGES_CASES
+)
+async def test_handle_linode_images_sharegroup_images_add_rejects_invalid_body(
+    images: object, message: str, sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """Handler rejects invalid images payloads before confirm/client calls."""
+    result = await handle_linode_images_sharegroup_images_add(
+        {
+            "sharegroup_id": "22222222-2222-4222-8222-222222222222",
+            "images": images,
+            "confirm": True,
+        },
+        sample_config,
+    )
+
+    assert result[0].text == f"Error: {message}"
+    mock_linode_client.add_image_sharegroup_images.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_handle_linode_images_sharegroup_images_add_dry_run(
+    sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """Dry run previews the encoded mutating request without client call."""
+    sharegroup_id = "22222222-2222-4222-8222-222222222222"
+    images = [{"id": "private/ubuntu"}]
+
+    result = await handle_linode_images_sharegroup_images_add(
+        {
+            "sharegroup_id": sharegroup_id,
+            "images": images,
+            "confirm": True,
+            "dry_run": True,
+        },
+        sample_config,
+    )
+
+    payload = json.loads(result[0].text)
+    assert payload["tool"] == "linode_images_sharegroup_images_add"
+    assert payload["would_execute"]["method"] == "POST"
+    assert payload["would_execute"]["path"] == (
+        f"/images/sharegroups/{sharegroup_id}/images"
+    )
+    assert payload["would_execute"]["body"] == {"images": images}
+    mock_linode_client.add_image_sharegroup_images.assert_not_called()
+
+
+def test_linode_images_sharegroup_images_add_registered() -> None:
+    """Dynamic registry exports the add-images tool and handler pair."""
+    entries = {entry.name: entry for entry in get_tool_registry()}
+
+    entry = entries["linode_images_sharegroup_images_add"]
+    assert entry.capability is Capability.Write
+    assert entry.tool.name == "linode_images_sharegroup_images_add"
+    assert entry.handle_fn is handle_linode_images_sharegroup_images_add
+
+
+def test_linode_images_sharegroup_images_add_scopes_to_images_write() -> None:
+    """Profile scope mapping keeps the route in the Images write category."""
+    scopes = required_scopes("linode_images_sharegroup_images_add", Capability.Write)
+
+    assert scopes == [Scope.ImagesReadWrite]
+
+
+def test_linode_images_sharegroup_images_add_in_version_features() -> None:
+    """Version metadata advertises the add-images tool."""
+    assert "linode_images_sharegroup_images_add" in FEATURE_TOOLS_LIST.split(",")
 
 
 def test_create_linode_images_sharegroup_images_list_tool_schema() -> None:
