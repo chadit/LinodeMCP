@@ -14,6 +14,7 @@ from linodemcp.profiles import Capability, Scope, required_scopes
 from linodemcp.server import get_tool_registry
 from linodemcp.tools.linode_images import (
     create_linode_image_sharegroup_create_tool,
+    create_linode_images_sharegroup_image_update_tool,
     create_linode_images_sharegroup_images_add_tool,
     create_linode_images_sharegroup_images_list_tool,
     create_linode_images_sharegroups_list_tool,
@@ -24,6 +25,7 @@ from linodemcp.tools.linode_images import (
     create_linode_images_sharegroups_token_update_tool,
     create_linode_images_sharegroups_tokens_list_tool,
     handle_linode_image_sharegroup_create,
+    handle_linode_images_sharegroup_image_update,
     handle_linode_images_sharegroup_images_add,
     handle_linode_images_sharegroup_images_list,
     handle_linode_images_sharegroups_list,
@@ -2030,3 +2032,362 @@ def test_linode_images_sharegroups_tokens_list_scopes_to_images_read() -> None:
 def test_linode_images_sharegroups_tokens_list_in_version_features() -> None:
     """Version metadata advertises the token list tool."""
     assert "linode_images_sharegroups_tokens_list" in FEATURE_TOOLS_LIST.split(",")
+
+
+@pytest.mark.asyncio
+async def test_client_update_image_sharegroup_image_sends_exact_path_and_body() -> None:
+    """Low-level client sends PUT to the documented shared-image route."""
+    seen: list[httpx.Request] = []
+    sharegroup_id = "123"
+    image_id = "1234"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"id": str(image_id), "label": "new-label"})
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        result = await client.update_image_sharegroup_image(
+            sharegroup_id, image_id, label="new-label", description="new description"
+        )
+    finally:
+        await client.close()
+
+    assert result == {"id": str(image_id), "label": "new-label"}
+    assert len(seen) == 1
+    request = seen[0]
+    assert request.method == "PUT"
+    assert request.url.raw_path.decode() == ("/v4/images/sharegroups/123/images/1234")
+    assert json.loads(request.content) == {
+        "label": "new-label",
+        "description": "new description",
+    }
+
+
+@pytest.mark.asyncio
+async def test_client_update_image_sharegroup_image_encodes_path_params() -> None:
+    """Low-level client URL-encodes both path params at the boundary."""
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"id": "shared-image"})
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        await client.update_image_sharegroup_image(
+            "group/one", "image?one", label="new-label"
+        )
+    finally:
+        await client.close()
+
+    assert (
+        seen[0].url.raw_path.decode()
+        == "/v4/images/sharegroups/group%2Fone/images/image%3Fone"
+    )
+
+
+@pytest.mark.asyncio
+async def test_client_update_image_sharegroup_image_rejects_empty_body() -> None:
+    """Empty update bodies are rejected before HTTP."""
+    called = False
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        return httpx.Response(200, json={})
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        with pytest.raises(
+            ValueError, match="at least one of label or description must be provided"
+        ):
+            await client.update_image_sharegroup_image("sharegroup", "image")
+    finally:
+        await client.close()
+
+    assert called is False
+
+
+@pytest.mark.asyncio
+async def test_client_update_image_sharegroup_image_rejects_empty_strings() -> None:
+    """Low-level client rejects weak body fields before HTTP."""
+    called = False
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        return httpx.Response(200, json={})
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        with pytest.raises(ValueError, match="label must be a non-empty string"):
+            await client.update_image_sharegroup_image("123", "1234", label=" ")
+        with pytest.raises(ValueError, match="description must be a non-empty string"):
+            await client.update_image_sharegroup_image("123", "1234", description="")
+    finally:
+        await client.close()
+
+    assert called is False
+
+
+@pytest.mark.asyncio
+async def test_client_update_image_sharegroup_image_wraps_http_errors() -> None:
+    """HTTP transport failures are mapped to route-specific NetworkError."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("temporary failure", request=request)
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        with pytest.raises(NetworkError, match="UpdateImageSharegroupImage"):
+            await client.update_image_sharegroup_image("123", "1234", label="x")
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_retryable_client_update_image_sharegroup_image_delegates_once() -> None:
+    """Mutating shared-image update does not use generic retry replay."""
+    retryable = _CapturingRetryableClient()
+    mock_update = AsyncMock(return_value={"id": "shared-image"})
+    cast("Any", retryable.client).update_image_sharegroup_image = mock_update
+
+    try:
+        result = await retryable.update_image_sharegroup_image(
+            "sharegroup", "image", label="new-label"
+        )
+    finally:
+        await retryable.close()
+
+    assert result == {"id": "shared-image"}
+    assert retryable.calls == []
+    mock_update.assert_awaited_once_with(
+        "sharegroup", "image", label="new-label", description=None
+    )
+
+
+def test_create_linode_images_sharegroup_image_update_tool_schema() -> None:
+    """Tool schema exposes both path params, body fields, confirm, and dry_run."""
+    tool, capability = create_linode_images_sharegroup_image_update_tool()
+
+    assert tool.name == "linode_images_sharegroup_image_update"
+    assert capability is Capability.Write
+    assert tool.inputSchema["required"] == ["sharegroup_id", "image_id", "confirm"]
+    assert tool.inputSchema["properties"]["sharegroup_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["image_id"]["minimum"] == 1
+    assert "dry_run" in tool.inputSchema["properties"]
+    assert "label" in tool.inputSchema["properties"]
+    assert "description" in tool.inputSchema["properties"]
+    assert "anyOf" in tool.inputSchema
+
+
+@pytest.mark.asyncio
+async def test_handle_linode_images_sharegroup_image_update_success(
+    sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """Handler updates one shared image and returns the response."""
+    sharegroup_id = 123
+    image_id = 1234
+    mock_linode_client.update_image_sharegroup_image.return_value = {
+        "id": str(image_id),
+        "label": "new-label",
+    }
+
+    result = await handle_linode_images_sharegroup_image_update(
+        {
+            "sharegroup_id": sharegroup_id,
+            "image_id": image_id,
+            "label": " new-label ",
+            "confirm": True,
+        },
+        sample_config,
+    )
+
+    payload = json.loads(result[0].text)
+    assert payload == {
+        "message": "Shared image updated",
+        "image": {"id": str(image_id), "label": "new-label"},
+    }
+    mock_linode_client.update_image_sharegroup_image.assert_awaited_once_with(
+        str(sharegroup_id), str(image_id), label="new-label", description=None
+    )
+
+
+@pytest.mark.asyncio
+async def test_handle_linode_images_sharegroup_image_update_description_only_success(
+    sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """Handler accepts a description-only update body."""
+    mock_linode_client.update_image_sharegroup_image.return_value = {
+        "id": "1234",
+        "description": "new description",
+    }
+
+    result = await handle_linode_images_sharegroup_image_update(
+        {
+            "sharegroup_id": 123,
+            "image_id": 1234,
+            "description": " new description ",
+            "confirm": True,
+        },
+        sample_config,
+    )
+
+    payload = json.loads(result[0].text)
+    assert payload == {
+        "message": "Shared image updated",
+        "image": {"id": "1234", "description": "new description"},
+    }
+    mock_linode_client.update_image_sharegroup_image.assert_awaited_once_with(
+        "123", "1234", label=None, description="new description"
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("confirm_value", [None, False, "true", 1])
+async def test_handle_linode_images_sharegroup_image_update_requires_literal_confirm(
+    confirm_value: object, sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """Missing, false, string, and numeric confirm are rejected before client call."""
+    arguments: dict[str, object] = {
+        "sharegroup_id": 123,
+        "image_id": 1234,
+        "label": "new-label",
+    }
+    if confirm_value is not None:
+        arguments["confirm"] = confirm_value
+
+    result = await handle_linode_images_sharegroup_image_update(
+        arguments, sample_config
+    )
+
+    assert (
+        result[0].text
+        == "Error: This updates a shared image. Set confirm=true to proceed."
+    )
+    mock_linode_client.update_image_sharegroup_image.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"sharegroup_id": 0, "image_id": 1234},
+        {"sharegroup_id": "123", "image_id": 1234},
+        {"sharegroup_id": True, "image_id": 1234},
+        {"sharegroup_id": 123, "image_id": 0},
+        {"sharegroup_id": 123, "image_id": "1234"},
+        {"sharegroup_id": 123, "image_id": True},
+        {"sharegroup_id": "123/4", "image_id": 1234},
+        {"sharegroup_id": "123?4", "image_id": 1234},
+        {"sharegroup_id": "..", "image_id": 1234},
+        {"sharegroup_id": 123, "image_id": "123/4"},
+        {"sharegroup_id": 123, "image_id": "123?4"},
+        {"sharegroup_id": 123, "image_id": ".."},
+    ],
+)
+async def test_handle_linode_images_sharegroup_image_update_rejects_invalid_path_params(
+    arguments: dict[str, Any], sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """Handler rejects malformed numeric share group and image IDs."""
+    result = await handle_linode_images_sharegroup_image_update(
+        {**arguments, "label": "new-label", "confirm": True}, sample_config
+    )
+
+    assert result[0].text.startswith("Error: ")
+    mock_linode_client.update_image_sharegroup_image.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({}, "at least one of label or description must be provided"),
+        ({"label": ""}, "label must be a non-empty string when provided"),
+        ({"label": 1}, "label must be a non-empty string when provided"),
+        ({"description": ""}, "description must be a non-empty string when provided"),
+        (
+            {"description": False},
+            "description must be a non-empty string when provided",
+        ),
+    ],
+)
+async def test_handle_linode_images_sharegroup_image_update_rejects_invalid_body(
+    arguments: dict[str, Any],
+    message: str,
+    sample_config: Any,
+    mock_linode_client: AsyncMock,
+) -> None:
+    """Handler rejects invalid body fields before confirm/client calls."""
+    result = await handle_linode_images_sharegroup_image_update(
+        {
+            "sharegroup_id": 123,
+            "image_id": 1234,
+            **arguments,
+            "confirm": True,
+        },
+        sample_config,
+    )
+
+    assert result[0].text == f"Error: {message}"
+    mock_linode_client.update_image_sharegroup_image.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_handle_linode_images_sharegroup_image_update_dry_run(
+    sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """Dry run previews the encoded mutating request without client call."""
+    sharegroup_id = 123
+    image_id = 1234
+
+    result = await handle_linode_images_sharegroup_image_update(
+        {
+            "sharegroup_id": sharegroup_id,
+            "image_id": image_id,
+            "description": "new description",
+            "confirm": True,
+            "dry_run": True,
+        },
+        sample_config,
+    )
+
+    payload = json.loads(result[0].text)
+    assert payload["tool"] == "linode_images_sharegroup_image_update"
+    assert payload["would_execute"]["method"] == "PUT"
+    assert payload["would_execute"]["path"] == ("/images/sharegroups/123/images/1234")
+    assert payload["would_execute"]["body"] == {"description": "new description"}
+    mock_linode_client.update_image_sharegroup_image.assert_not_called()
+
+
+def test_linode_images_sharegroup_image_update_registered() -> None:
+    """Dynamic registry exports the shared-image update tool and handler pair."""
+    entries = {entry.name: entry for entry in get_tool_registry()}
+
+    entry = entries["linode_images_sharegroup_image_update"]
+    assert entry.capability is Capability.Write
+    assert entry.tool.name == "linode_images_sharegroup_image_update"
+    assert entry.handle_fn is handle_linode_images_sharegroup_image_update
+
+
+def test_linode_images_sharegroup_image_update_scopes_to_images_write() -> None:
+    """Profile scope mapping keeps the route in the Images write category."""
+    scopes = required_scopes("linode_images_sharegroup_image_update", Capability.Write)
+
+    assert scopes == [Scope.ImagesReadWrite]
+
+
+def test_linode_images_sharegroup_image_update_in_version_features() -> None:
+    """Version metadata advertises the shared-image update tool."""
+    assert "linode_images_sharegroup_image_update" in FEATURE_TOOLS_LIST.split(",")

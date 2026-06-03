@@ -3006,6 +3006,39 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("AddImageSharegroupImages", e) from e
 
+    async def update_image_sharegroup_image(
+        self,
+        sharegroup_id: str,
+        image_id: str,
+        *,
+        label: str | None = None,
+        description: str | None = None,
+    ) -> dict[str, Any]:
+        """Update a shared image inside an image share group."""
+        if label is None and description is None:
+            raise ValueError("at least one of label or description must be provided")
+        body: dict[str, Any] = {}
+        if label is not None:
+            if not label.strip():
+                raise ValueError("label must be a non-empty string when provided")
+            body["label"] = label.strip()
+        if description is not None:
+            if not description.strip():
+                raise ValueError("description must be a non-empty string when provided")
+            body["description"] = description.strip()
+        sharegroup_id_path = quote(str(sharegroup_id), safe="")
+        image_id_path = quote(str(image_id), safe="")
+        try:
+            response = await self.make_request(
+                "PUT",
+                f"/images/sharegroups/{sharegroup_id_path}/images/{image_id_path}",
+                body,
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateImageSharegroupImage", e) from e
+
     async def create_image_sharegroup_token(
         self, valid_for_sharegroup_uuid: str, label: str | None = None
     ) -> dict[str, Any]:
@@ -9309,6 +9342,21 @@ class RetryableClient:
     ) -> dict[str, Any]:
         """Add images to an image share group once without retry replay."""
         return await self.client.add_image_sharegroup_images(sharegroup_id, images)
+
+    async def update_image_sharegroup_image(
+        self,
+        sharegroup_id: str,
+        image_id: str,
+        *,
+        label: str | None = None,
+        description: str | None = None,
+    ) -> dict[str, Any]:
+        """Update a shared image once without retry replay."""
+        if label is None and description is None:
+            raise ValueError("at least one of label or description must be provided")
+        return await self.client.update_image_sharegroup_image(
+            sharegroup_id, image_id, label=label, description=description
+        )
 
     async def create_image_sharegroup_token(
         self, valid_for_sharegroup_uuid: str, label: str | None = None

@@ -230,6 +230,58 @@ def create_linode_images_sharegroup_images_list_tool() -> tuple[Tool, Capability
     ), Capability.Read
 
 
+def create_linode_images_sharegroup_image_update_tool() -> tuple[Tool, Capability]:
+    """Create the linode_images_sharegroup_image_update tool."""
+    # The shared-image route uses sharegroup-id-path.yaml, a numeric ID,
+    # unlike neighboring membership/token routes that use UUIDs.
+    return Tool(
+        name="linode_images_sharegroup_image_update",
+        description=(
+            "Updates a shared image label or description by share group and image ID."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "sharegroup_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Image share group numeric ID (required)",
+                },
+                "image_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": (
+                        "Shared image numeric ID, for example 1234 (required)"
+                    ),
+                },
+                "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "New non-empty label for the shared image",
+                },
+                "description": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "New non-empty description for the shared image",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this mutating operation.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["sharegroup_id", "image_id", "confirm"],
+            "anyOf": [{"required": ["label"]}, {"required": ["description"]}],
+        },
+    ), Capability.Write
+
+
 def create_linode_images_sharegroup_images_add_tool() -> tuple[Tool, Capability]:
     """Create the linode_images_sharegroup_images_add tool."""
     return Tool(
@@ -848,21 +900,39 @@ def _image_sharegroup_id_error(value: Any) -> str | None:
     return _image_sharegroup_token_uuid_error(value, "sharegroup_id")
 
 
+def _image_sharegroup_numeric_id_error(value: Any) -> str | None:
+    """Validate the numeric sharegroup_id arg for shared image routes.
+
+    OpenAPI sharegroup-id-path.yaml documents this path parameter as the
+    share group's numeric ID, not the UUID used by token-management routes.
+    """
+    if type(value) is not int or value <= 0:
+        return "sharegroup_id must be a positive integer"
+    return None
+
+
+def _image_sharegroup_image_id_error(value: Any) -> str | None:
+    """Validate the shared image numeric ID path arg."""
+    if type(value) is not int or value <= 0:
+        return "image_id must be a positive integer"
+    return None
+
+
 def _image_sharegroup_update_body(
     label: Any, description: Any
-) -> tuple[dict[str, str] | None, str | None]:
+) -> tuple[dict[str, str], str | None]:
     """Validate update body fields."""
     body: dict[str, str] = {}
     if label is not None:
         if not isinstance(label, str) or not label.strip():
-            return None, "label must be a non-empty string when provided"
+            return {}, "label must be a non-empty string when provided"
         body["label"] = label.strip()
     if description is not None:
         if not isinstance(description, str) or not description.strip():
-            return None, "description must be a non-empty string when provided"
+            return {}, "description must be a non-empty string when provided"
         body["description"] = description.strip()
     if not body:
-        return None, "at least one of label or description must be provided"
+        return {}, "at least one of label or description must be provided"
     return body, None
 
 
@@ -967,6 +1037,63 @@ async def handle_linode_images_sharegroup_images_list(
     return await execute_tool(cfg, arguments, "list image share group images", _call)
 
 
+async def handle_linode_images_sharegroup_image_update(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_images_sharegroup_image_update tool request."""
+    sharegroup_id = arguments.get("sharegroup_id")
+    id_error = _image_sharegroup_numeric_id_error(sharegroup_id)
+    if id_error is not None:
+        return error_response(id_error)
+
+    image_id = arguments.get("image_id")
+    image_id_error = _image_sharegroup_image_id_error(image_id)
+    if image_id_error is not None:
+        return error_response(image_id_error)
+
+    body, body_error = _image_sharegroup_update_body(
+        arguments.get("label"), arguments.get("description")
+    )
+    if body_error is not None:
+        return error_response(body_error)
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates a shared image. Set confirm=true to proceed."
+        )
+
+    sharegroup_id_str = str(cast("int", sharegroup_id))
+    image_id_str = str(cast("int", image_id))
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_images_sharegroup_image_update",
+            arguments.get("environment", ""),
+            "PUT",
+            (
+                f"/images/sharegroups/{quote(sharegroup_id_str, safe='')}"
+                f"/images/{quote(image_id_str, safe='')}"
+            ),
+            current_state=None,
+            request_body=body,
+            side_effects=["The shared image will be updated."],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        image = await client.update_image_sharegroup_image(
+            sharegroup_id_str,
+            image_id_str,
+            label=body.get("label"),
+            description=body.get("description"),
+        )
+        return {
+            "message": "Shared image updated",
+            "image": image,
+        }
+
+    return await execute_tool(cfg, arguments, "update shared image", _call)
+
+
 async def handle_linode_images_sharegroup_images_add(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
@@ -1032,7 +1159,6 @@ async def handle_linode_images_sharegroup_update(
     if not isinstance(sharegroup_id, str):
         return error_response("sharegroup_id must be a non-empty string")
     sharegroup_id_str = sharegroup_id.strip()
-    body = cast("dict[str, str]", body)
 
     if is_dry_run(arguments):
         return build_dry_run_response(
