@@ -13,7 +13,13 @@ import pytest
 from mcp.types import ListToolsRequest, ListToolsResult
 
 from linodemcp.config import BuiltinOverride, UserProfileConfig
-from linodemcp.linode import Client, NetworkError, Profile, RetryableClient
+from linodemcp.linode import (
+    Client,
+    DomainZoneFile,
+    NetworkError,
+    Profile,
+    RetryableClient,
+)
 from linodemcp.profiles import (
     ActiveProfileDisabledError,
     ActiveProfileUnknownError,
@@ -529,6 +535,57 @@ async def test_domain_record_get_tool_is_exported_and_registered(
 
     srv = Server(sample_config)
     assert "linode_domain_record_get" in srv.registered_tool_names
+
+
+async def test_domain_zone_file_get_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Domain zone file get tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+
+    assert "create_linode_domain_zone_file_get_tool" in tools_mod.__all__
+    assert "handle_linode_domain_zone_file_get" in tools_mod.__all__
+
+    srv = Server(sample_config)
+    assert "linode_domain_zone_file_get" in srv.registered_tool_names
+
+
+async def test_domain_zone_file_get_handler_returns_client_response(
+    sample_config: Config,
+) -> None:
+    """Domain zone file handler returns the client response."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_domain_zone_file.return_value = DomainZoneFile(
+            zone_file=["$ORIGIN example.com."]
+        )
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_domain_zone_file_get", {"domain_id": 1})
+
+    mock_client.get_domain_zone_file.assert_awaited_once_with(1)
+    assert json.loads(result[0].text) == {"zone_file": ["$ORIGIN example.com."]}
+
+
+@pytest.mark.parametrize(
+    "domain_id",
+    [None, 0, -1, True, "1", "1/2", "1?x=y", ".."],
+)
+async def test_domain_zone_file_get_handler_rejects_invalid_domain_id(
+    sample_config: Config, domain_id: Any
+) -> None:
+    """Domain zone file handler rejects invalid path parameters first."""
+    arguments: dict[str, Any] = {} if domain_id is None else {"domain_id": domain_id}
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_domain_zone_file_get", arguments)
+
+    mock_client_class.assert_not_called()
+    assert "domain_id must be a positive integer" in result[0].text
 
 
 async def test_regions_get_tool_is_exported_and_registered(

@@ -244,8 +244,10 @@ from linodemcp.tools.linode_domain_records import (
 )
 from linodemcp.tools.linode_domains import (
     create_linode_domain_get_tool,
+    create_linode_domain_zone_file_get_tool,
     create_linode_domains_list_tool,
     handle_linode_domain_get,
+    handle_linode_domain_zone_file_get,
     handle_linode_domains_list,
 )
 from linodemcp.tools.linode_domains_write import (
@@ -900,6 +902,7 @@ __all__ = [
     "create_linode_domain_record_update_tool",
     "create_linode_domain_records_list_tool",
     "create_linode_domain_update_tool",
+    "create_linode_domain_zone_file_get_tool",
     "create_linode_domains_list_tool",
     "create_linode_firewall_create_tool",
     "create_linode_firewall_delete_tool",
@@ -1245,6 +1248,7 @@ __all__ = [
     "handle_linode_domain_record_update",
     "handle_linode_domain_records_list",
     "handle_linode_domain_update",
+    "handle_linode_domain_zone_file_get",
     "handle_linode_domains_list",
     "handle_linode_firewall_create",
     "handle_linode_firewall_delete",

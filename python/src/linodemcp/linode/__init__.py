@@ -866,6 +866,13 @@ class Domain:
 
 
 @dataclass
+class DomainZoneFile:
+    """DNS zone file for a domain."""
+
+    zone_file: list[str]
+
+
+@dataclass
 class DomainRecord:
     """DNS record for a domain."""
 
@@ -2891,6 +2898,21 @@ class Client:
             return self._parse_domain(data)
         except httpx.HTTPError as e:
             raise NetworkError("GetDomain", e) from e
+
+    async def get_domain_zone_file(self, domain_id: int) -> DomainZoneFile:
+        """Get a domain zone file."""
+        if type(domain_id) is not int or domain_id <= 0:
+            msg = "domain_id must be a positive integer"
+            raise ValueError(msg)
+        encoded_domain_id = quote(str(domain_id), safe="")
+        endpoint = f"/domains/{encoded_domain_id}/zone-file"
+        try:
+            response = await self.make_request("GET", endpoint)
+            data = response.json()
+            zone_file = data.get("zone_file", [])
+            return DomainZoneFile(zone_file=list(zone_file))
+        except httpx.HTTPError as e:
+            raise NetworkError("GetDomainZoneFile", e) from e
 
     async def list_domain_records(self, domain_id: int) -> list[DomainRecord]:
         """List domain records for a domain."""
@@ -9029,6 +9051,13 @@ class RetryableClient:
         """Get a specific domain with retry."""
         result: Domain = await self._execute_with_retry(
             self.client.get_domain, domain_id
+        )
+        return result
+
+    async def get_domain_zone_file(self, domain_id: int) -> DomainZoneFile:
+        """Get a domain zone file with retry."""
+        result: DomainZoneFile = await self._execute_with_retry(
+            self.client.get_domain_zone_file, domain_id
         )
         return result
 

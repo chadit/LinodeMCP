@@ -89,6 +89,13 @@ async def handle_linode_domains_list(
     return await execute_tool(cfg, arguments, "retrieve domains", _call)
 
 
+def _validate_domain_id(value: Any) -> int | None:
+    """Return a valid domain ID or None for invalid input."""
+    if type(value) is not int or value <= 0:
+        return None
+    return value
+
+
 def create_linode_domain_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_domain_get tool."""
     return Tool(
@@ -132,3 +139,40 @@ async def handle_linode_domain_get(
         }
 
     return await execute_tool(cfg, arguments, "retrieve domain", _call)
+
+
+def create_linode_domain_zone_file_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_domain_zone_file_get tool."""
+    return Tool(
+        name="linode_domain_zone_file_get",
+        description="Gets the generated zone file for a specific domain by its ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                **ENV_PARAM_SCHEMA,
+                "domain_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": (
+                        "The ID of the domain zone file to retrieve (required)"
+                    ),
+                },
+            },
+            "required": ["domain_id"],
+        },
+    ), Capability.Read
+
+
+async def handle_linode_domain_zone_file_get(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_domain_zone_file_get tool request."""
+    domain_id = _validate_domain_id(arguments.get("domain_id"))
+    if domain_id is None:
+        return error_response("domain_id must be a positive integer")
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        zone_file = await client.get_domain_zone_file(domain_id)
+        return {"zone_file": zone_file.zone_file}
+
+    return await execute_tool(cfg, arguments, "retrieve domain zone file", _call)

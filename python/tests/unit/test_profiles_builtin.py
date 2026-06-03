@@ -150,6 +150,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         ToolDescriptor("linode_domains_list", Capability.Read),
         ToolDescriptor("linode_domain_clone", Capability.Write),
         ToolDescriptor("linode_domain_create", Capability.Write),
+        ToolDescriptor("linode_domain_zone_file_get", Capability.Read),
         ToolDescriptor("linode_domain_import", Capability.Write),
         ToolDescriptor("linode_domain_record_create", Capability.Write),
         # Networking.
