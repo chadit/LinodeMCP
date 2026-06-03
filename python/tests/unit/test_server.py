@@ -11532,6 +11532,138 @@ async def test_reload_profile_repeated_cycles_converge(
     assert set(srv.registered_tool_names) == set(fresh.registered_tool_names)
 
 
+async def test_linode_images_sharegroup_delete_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Image share group delete tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+    from linodemcp.version import get_version_info
+
+    assert "create_linode_images_sharegroup_delete_tool" in tools_mod.__all__
+    assert "handle_linode_images_sharegroup_delete" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_images_sharegroup_delete_tool()
+    assert tool.name == "linode_images_sharegroup_delete"
+    assert capability is Capability.Destroy
+    assert tool.inputSchema["required"] == ["sharegroup_id", "confirm"]
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_images_sharegroup_delete" in srv.registered_tool_names
+
+    entries = {entry.name: entry for entry in get_tool_registry()}
+    assert entries["linode_images_sharegroup_delete"].capability is Capability.Destroy
+    assert "linode_images_sharegroup_delete" in get_version_info().features["tools"]
+
+
+async def test_linode_images_sharegroup_delete_dispatches_from_registry(
+    sample_config: Config,
+) -> None:
+    """Image share group delete dispatches through the registered tool."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_images_sharegroup_delete",
+            {
+                "sharegroup_id": "11111111-1111-4111-8111-111111111111",
+                "confirm": True,
+            },
+        )
+
+    assert json.loads(result[0].text) == {"message": "Image share group deleted"}
+    mock_client.delete_image_sharegroup.assert_awaited_once_with(
+        "11111111-1111-4111-8111-111111111111"
+    )
+
+
+@pytest.mark.parametrize("confirm", [None, False, "true", 1])
+async def test_linode_images_sharegroup_delete_rejects_non_true_confirm(
+    sample_config: Config, confirm: object
+) -> None:
+    """Image share group delete requires literal confirm=True before calls."""
+    arguments: dict[str, object] = {
+        "sharegroup_id": "11111111-1111-4111-8111-111111111111",
+    }
+    if confirm is not None:
+        arguments["confirm"] = confirm
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_images_sharegroup_delete", arguments)
+
+    assert "Set confirm=true" in result[0].text
+    mock_client.delete_image_sharegroup.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_error"),
+    [
+        ({}, "sharegroup_id must be a non-empty string"),
+        ({"sharegroup_id": ""}, "sharegroup_id must be a non-empty string"),
+        ({"sharegroup_id": 123}, "sharegroup_id must be a non-empty string"),
+        ({"sharegroup_id": "12/34"}, "sharegroup_id must be a valid UUID"),
+        ({"sharegroup_id": "12?x=y"}, "sharegroup_id must be a valid UUID"),
+        ({"sharegroup_id": ".."}, "sharegroup_id must be a valid UUID"),
+    ],
+)
+async def test_linode_images_sharegroup_delete_rejects_invalid_sharegroup_id(
+    sample_config: Config, arguments: dict[str, object], expected_error: str
+) -> None:
+    """Image share group delete rejects malformed path params before calls."""
+    arguments.setdefault("confirm", True)
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch("linode_images_sharegroup_delete", arguments)
+
+    assert expected_error in result[0].text
+    mock_client.delete_image_sharegroup.assert_not_called()
+
+
+async def test_linode_images_sharegroup_delete_dry_run_uses_encoded_path(
+    sample_config: Config,
+) -> None:
+    """Image share group delete dry-run previews encoded path."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_images_sharegroup_delete",
+            {
+                "sharegroup_id": "11111111-1111-4111-8111-111111111111",
+                "confirm": True,
+                "dry_run": True,
+            },
+        )
+
+    payload = json.loads(result[0].text)
+    assert payload["dry_run"] is True
+    assert payload["would_execute"] == {
+        "method": "DELETE",
+        "path": "/images/sharegroups/11111111-1111-4111-8111-111111111111",
+    }
+    mock_client.delete_image_sharegroup.assert_not_called()
+
+
 async def test_linode_images_sharegroup_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:

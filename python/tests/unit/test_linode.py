@@ -9696,6 +9696,69 @@ async def test_create_stackscript() -> None:
     await client.close()
 
 
+async def test_delete_image_sharegroup_sends_delete_to_encoded_path() -> None:
+    """Image share group delete should issue DELETE to the encoded share group path."""
+    client = Client("https://api.linode.test/v4", "token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        await client.delete_image_sharegroup("11111111-1111-4111-8111-111111111111")
+
+    mock_request.assert_awaited_once_with(
+        "DELETE", "/images/sharegroups/11111111-1111-4111-8111-111111111111"
+    )
+    await client.close()
+
+
+async def test_delete_image_sharegroup_encodes_path_segment() -> None:
+    """Image share group delete should encode separator characters."""
+    client = Client("https://api.linode.test/v4", "token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        await client.delete_image_sharegroup("12/../?x=1")
+
+    mock_request.assert_awaited_once_with(
+        "DELETE", "/images/sharegroups/12%2F..%2F%3Fx%3D1"
+    )
+    await client.close()
+
+
+async def test_delete_image_sharegroup_wraps_http_errors() -> None:
+    """Image share group delete should map HTTP failures to NetworkError."""
+    client = Client("https://api.linode.test/v4", "token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.delete_image_sharegroup("11111111-1111-4111-8111-111111111111")
+
+    assert "DeleteImageSharegroup" in str(exc_info.value)
+    await client.close()
+
+
+async def test_retryable_delete_image_sharegroup_delegates_once() -> None:
+    """Retryable delete wrapper should not replay share group deletion."""
+    client = RetryableClient(
+        "https://api.linode.com/v4",
+        "test-token",
+        RetryConfig(max_retries=3, base_delay=0.01),
+    )
+
+    with patch.object(
+        client.client,
+        "delete_image_sharegroup",
+        new_callable=AsyncMock,
+    ) as mock_delete:
+        mock_delete.side_effect = httpx.HTTPError("temporary")
+
+        with pytest.raises(httpx.HTTPError):
+            await client.delete_image_sharegroup("11111111-1111-4111-8111-111111111111")
+
+        mock_delete.assert_awaited_once_with("11111111-1111-4111-8111-111111111111")
+
+    await client.close()
+
+
 async def test_get_image_sharegroup_sends_get_to_encoded_path() -> None:
     """Image share group get should issue GET to the encoded share group path."""
     response_data = {"id": "11111111-1111-4111-8111-111111111111"}

@@ -267,6 +267,13 @@ def test_image_sharegroup_token_update_needs_images_write() -> None:
     ) == [Scope.ImagesReadWrite]
 
 
+def test_image_sharegroup_delete_needs_images_write() -> None:
+    """Deleting an image share group needs image write scope."""
+    assert required_scopes("linode_images_sharegroup_delete", Capability.Destroy) == [
+        Scope.ImagesReadWrite
+    ]
+
+
 def test_image_sharegroup_update_needs_images_write() -> None:
     """Updating an image share group needs image write scope."""
     assert required_scopes("linode_images_sharegroup_update", Capability.Write) == [

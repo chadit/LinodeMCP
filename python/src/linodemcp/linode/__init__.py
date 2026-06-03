@@ -2861,6 +2861,16 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListImageSharegroups", e) from e
 
+    async def delete_image_sharegroup(self, sharegroup_id: str) -> None:
+        """Delete a single image share group."""
+        sharegroup_id_path = quote(str(sharegroup_id), safe="")
+        try:
+            await self.make_request(
+                "DELETE", f"/images/sharegroups/{sharegroup_id_path}"
+            )
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteImageSharegroup", e) from e
+
     async def get_image_sharegroup(self, sharegroup_id: str) -> dict[str, Any]:
         """Get a single image share group."""
         sharegroup_id_path = quote(str(sharegroup_id), safe="")
@@ -9170,6 +9180,10 @@ class RetryableClient:
             lambda: self.client.list_image_sharegroups(page=page, page_size=page_size)
         )
         return result
+
+    async def delete_image_sharegroup(self, sharegroup_id: str) -> None:
+        """Delete a single image share group without retry replay."""
+        await self.client.delete_image_sharegroup(sharegroup_id)
 
     async def get_image_sharegroup(self, sharegroup_id: str) -> dict[str, Any]:
         """Get a single image share group with retry."""
