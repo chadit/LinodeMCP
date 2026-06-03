@@ -253,6 +253,13 @@ def test_image_sharegroup_token_create_needs_images_write() -> None:
     ) == [Scope.ImagesReadWrite]
 
 
+def test_image_sharegroup_token_update_needs_images_write() -> None:
+    """Updating an image share group token needs image write scope."""
+    assert required_scopes(
+        "linode_images_sharegroups_token_update", Capability.Write
+    ) == [Scope.ImagesReadWrite]
+
+
 def test_instance_create_needs_linodes_write_and_images_read() -> None:
     """Provisioning a Linode from an image requires images:read_only too.
 

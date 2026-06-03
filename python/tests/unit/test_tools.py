@@ -69,6 +69,7 @@ from linodemcp.tools import (
     create_linode_firewall_template_get_tool,
     create_linode_image_create_tool,
     create_linode_images_sharegroups_token_create_tool,
+    create_linode_images_sharegroups_token_update_tool,
     create_linode_instance_backup_create_tool,
     create_linode_instance_backup_get_tool,
     create_linode_instance_backup_restore_tool,
@@ -217,6 +218,7 @@ from linodemcp.tools import (
     handle_linode_image_create,
     handle_linode_images_list,
     handle_linode_images_sharegroups_token_create,
+    handle_linode_images_sharegroups_token_update,
     handle_linode_instance_backup_create,
     handle_linode_instance_backup_get,
     handle_linode_instance_backup_restore,
@@ -3663,6 +3665,48 @@ async def test_image_create_dry_run_still_validates_disk_id(
 
     assert len(result) == 1
     assert "disk_id must be a positive integer" in result[0].text
+
+
+async def test_create_linode_images_sharegroups_token_update_tool_def() -> None:
+    """Image share group token update tool should require UUID, label, and confirm."""
+    tool, capability = create_linode_images_sharegroups_token_update_tool()
+
+    assert tool.name == "linode_images_sharegroups_token_update"
+    assert capability.name == "Write"
+    assert tool.inputSchema["required"] == ["token_uuid", "label", "confirm"]
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+
+
+async def test_handle_linode_images_sharegroups_token_update_success(
+    sample_config: Config,
+) -> None:
+    """Image share group token update should call the client once."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_image_sharegroup_token.return_value = {
+            "id": "sharegroup-record-1",
+            "label": "renamed-token",
+            "token_uuid": "11111111-1111-4111-8111-111111111111",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_images_sharegroups_token_update(
+            {
+                "token_uuid": "11111111-1111-4111-8111-111111111111",
+                "label": "renamed-token",
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+        assert len(result) == 1
+        assert "renamed-token" in result[0].text
+        mock_client.update_image_sharegroup_token.assert_awaited_once_with(
+            token_uuid="11111111-1111-4111-8111-111111111111",
+            label="renamed-token",
+        )
 
 
 async def test_create_linode_images_sharegroups_token_create_tool_def() -> None:
