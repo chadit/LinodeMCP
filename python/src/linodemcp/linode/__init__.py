@@ -3000,6 +3000,22 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListImageSharegroupMembers", e) from e
 
+    async def get_image_sharegroup_member_token(
+        self, sharegroup_id: str, token_uuid: str
+    ) -> dict[str, Any]:
+        """Get a membership token in an image share group."""
+        sharegroup_id_path = quote(str(sharegroup_id), safe="")
+        token_uuid_path = quote(token_uuid, safe="")
+        try:
+            response = await self.make_request(
+                "GET",
+                (f"/images/sharegroups/{sharegroup_id_path}/members/{token_uuid_path}"),
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("GetImageSharegroupMemberToken", e) from e
+
     async def add_members_to_image_sharegroup(
         self, sharegroup_id: str, *, label: str, token: str
     ) -> dict[str, Any]:
@@ -9387,6 +9403,17 @@ class RetryableClient:
         """List members by share group with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             lambda: self.client.list_image_sharegroup_members(sharegroup_id)
+        )
+        return result
+
+    async def get_image_sharegroup_member_token(
+        self, sharegroup_id: str, token_uuid: str
+    ) -> dict[str, Any]:
+        """Get a membership token in an image share group with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.get_image_sharegroup_member_token(
+                sharegroup_id, token_uuid
+            )
         )
         return result
 
