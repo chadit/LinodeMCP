@@ -2988,6 +2988,24 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListImageSharegroupImages", e) from e
 
+    async def add_image_sharegroup_images(
+        self, sharegroup_id: str, images: list[dict[str, str]]
+    ) -> dict[str, Any]:
+        """Add images to an image share group."""
+        if not images:
+            raise ValueError("images must be a non-empty list of image objects")
+        sharegroup_id_path = quote(str(sharegroup_id), safe="")
+        try:
+            response = await self.make_request(
+                "POST",
+                f"/images/sharegroups/{sharegroup_id_path}/images",
+                {"images": images},
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("AddImageSharegroupImages", e) from e
+
     async def create_image_sharegroup_token(
         self, valid_for_sharegroup_uuid: str, label: str | None = None
     ) -> dict[str, Any]:
@@ -9285,6 +9303,12 @@ class RetryableClient:
             lambda: self.client.list_image_sharegroup_images(sharegroup_id)
         )
         return result
+
+    async def add_image_sharegroup_images(
+        self, sharegroup_id: str, images: list[dict[str, str]]
+    ) -> dict[str, Any]:
+        """Add images to an image share group once without retry replay."""
+        return await self.client.add_image_sharegroup_images(sharegroup_id, images)
 
     async def create_image_sharegroup_token(
         self, valid_for_sharegroup_uuid: str, label: str | None = None
