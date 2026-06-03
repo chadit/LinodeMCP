@@ -120,6 +120,30 @@ def create_linode_images_sharegroups_tokens_list_tool() -> tuple[Tool, Capabilit
     ), Capability.Read
 
 
+def create_linode_images_sharegroups_token_get_tool() -> tuple[Tool, Capability]:
+    """Create the linode_images_sharegroups_token_get tool."""
+    return Tool(
+        name="linode_images_sharegroups_token_get",
+        description="Gets a single image share group token by UUID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "token_uuid": {
+                    "type": "string",
+                    "description": "Image share group token UUID (required)",
+                },
+            },
+            "required": ["token_uuid"],
+        },
+    ), Capability.Read
+
+
 def create_linode_images_sharegroups_token_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_images_sharegroups_token_create tool."""
     return Tool(
@@ -330,15 +354,20 @@ async def handle_linode_images_sharegroups_tokens_list(
     return await execute_tool(cfg, arguments, "list image share group tokens", _call)
 
 
-def _image_sharegroup_token_create_uuid_error(value: Any) -> str | None:
-    """Validate the valid_for_sharegroup_uuid arg."""
+def _image_sharegroup_token_uuid_error(value: Any, name: str) -> str | None:
+    """Validate an image share group UUID argument."""
     if not isinstance(value, str) or not value.strip():
-        return "valid_for_sharegroup_uuid must be a non-empty string"
+        return f"{name} must be a non-empty string"
     try:
         UUID(value.strip())
     except ValueError:
-        return "valid_for_sharegroup_uuid must be a valid UUID"
+        return f"{name} must be a valid UUID"
     return None
+
+
+def _image_sharegroup_token_create_uuid_error(value: Any) -> str | None:
+    """Validate the valid_for_sharegroup_uuid arg."""
+    return _image_sharegroup_token_uuid_error(value, "valid_for_sharegroup_uuid")
 
 
 def _image_sharegroup_token_create_label_error(value: Any) -> str | None:
@@ -348,6 +377,27 @@ def _image_sharegroup_token_create_label_error(value: Any) -> str | None:
     if not isinstance(value, str) or not value.strip():
         return "label must be a non-empty string when provided"
     return None
+
+
+async def handle_linode_images_sharegroups_token_get(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_images_sharegroups_token_get tool request."""
+    token_uuid = arguments.get("token_uuid")
+    uuid_error = _image_sharegroup_token_uuid_error(token_uuid, "token_uuid")
+    if uuid_error is not None:
+        return error_response(uuid_error)
+
+    token_uuid_str = cast("str", token_uuid).strip()
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        token = await client.get_image_sharegroup_token(token_uuid_str)
+        return {
+            "message": "Image share group token retrieved",
+            "token": token,
+        }
+
+    return await execute_tool(cfg, arguments, "get image share group token", _call)
 
 
 async def handle_linode_images_sharegroups_token_create(
