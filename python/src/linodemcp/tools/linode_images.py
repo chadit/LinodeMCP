@@ -102,6 +102,35 @@ def create_linode_images_sharegroups_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def create_linode_images_sharegroups_token_delete_tool() -> tuple[Tool, Capability]:
+    """Create the linode_images_sharegroups_token_delete tool."""
+    return Tool(
+        name="linode_images_sharegroups_token_delete",
+        description="Deletes an image share group token by UUID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "token_uuid": {
+                    "type": "string",
+                    "description": "Image share group token UUID (required)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this destructive operation.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["token_uuid", "confirm"],
+        },
+    ), Capability.Destroy
+
+
 def create_linode_images_sharegroups_tokens_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_images_sharegroups_tokens_list tool."""
     return Tool(
@@ -366,6 +395,39 @@ async def handle_linode_images_sharegroups_list(
         }
 
     return await execute_tool(cfg, arguments, "list image share groups", _call)
+
+
+async def handle_linode_images_sharegroups_token_delete(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_images_sharegroups_token_delete tool request."""
+    token_uuid = arguments.get("token_uuid")
+    uuid_error = _image_sharegroup_token_uuid_error(token_uuid, "token_uuid")
+    if uuid_error is not None:
+        return error_response(uuid_error)
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This deletes an image share group token. Set confirm=true to proceed."
+        )
+
+    token_uuid_str = cast("str", token_uuid).strip()
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_images_sharegroups_token_delete",
+            arguments.get("environment", ""),
+            "DELETE",
+            f"/images/sharegroups/tokens/{quote(token_uuid_str, safe='')}",
+            None,
+            side_effects=["The image share group token will be deleted."],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        await client.delete_image_sharegroup_token(token_uuid=token_uuid_str)
+        return {"message": "Image share group token deleted"}
+
+    return await execute_tool(cfg, arguments, "delete image share group token", _call)
 
 
 async def handle_linode_images_sharegroups_tokens_list(
