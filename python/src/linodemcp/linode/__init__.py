@@ -3000,6 +3000,26 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListImageSharegroupMembers", e) from e
 
+    async def add_members_to_image_sharegroup(
+        self, sharegroup_id: str, *, label: str, token: str
+    ) -> dict[str, Any]:
+        """Add members to an image share group."""
+        if not label.strip():
+            raise ValueError("label must be a non-empty string")
+        if not token.strip():
+            raise ValueError("token must be a non-empty string")
+        sharegroup_id_path = quote(str(sharegroup_id), safe="")
+        try:
+            response = await self.make_request(
+                "POST",
+                f"/images/sharegroups/{sharegroup_id_path}/members",
+                {"label": label, "token": token},
+            )
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("AddMembersToImageSharegroup", e) from e
+
     async def add_image_sharegroup_images(
         self, sharegroup_id: str, images: list[dict[str, str]]
     ) -> dict[str, Any]:
@@ -9369,6 +9389,14 @@ class RetryableClient:
             lambda: self.client.list_image_sharegroup_members(sharegroup_id)
         )
         return result
+
+    async def add_members_to_image_sharegroup(
+        self, sharegroup_id: str, *, label: str, token: str
+    ) -> dict[str, Any]:
+        """Add members to an image share group once without retry replay."""
+        return await self.client.add_members_to_image_sharegroup(
+            sharegroup_id, label=label, token=token
+        )
 
     async def add_image_sharegroup_images(
         self, sharegroup_id: str, images: list[dict[str, str]]
