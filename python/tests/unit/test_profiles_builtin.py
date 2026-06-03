@@ -149,6 +149,7 @@ def _synthetic_catalog() -> list[ToolDescriptor]:
         # DNS.
         ToolDescriptor("linode_domains_list", Capability.Read),
         ToolDescriptor("linode_domain_create", Capability.Write),
+        ToolDescriptor("linode_domain_import", Capability.Write),
         ToolDescriptor("linode_domain_record_create", Capability.Write),
         # Networking.
         ToolDescriptor("linode_firewalls_list", Capability.Read),
@@ -304,6 +305,7 @@ def test_network_admin_excludes_compute_writes() -> None:
     # But network mutators are present.
     assert "linode_firewall_create" in network_admin_tools
     assert "linode_domain_create" in network_admin_tools
+    assert "linode_domain_import" in network_admin_tools
     assert "linode_vpc_create" in network_admin_tools
 
 
@@ -318,6 +320,7 @@ def test_kubernetes_admin_includes_lke_and_compute() -> None:
     assert "linode_vpc_create" in k8s_tools
     # Outside its categories.
     assert "linode_domain_create" not in k8s_tools
+    assert "linode_domain_import" not in k8s_tools
     assert "linode_firewall_create" not in k8s_tools
 
 
