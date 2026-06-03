@@ -100,6 +100,25 @@ def create_linode_images_sharegroups_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
+def create_linode_images_sharegroups_tokens_list_tool() -> tuple[Tool, Capability]:
+    """Create the linode_images_sharegroups_tokens_list tool."""
+    return Tool(
+        name="linode_images_sharegroups_tokens_list",
+        description="Lists image share group tokens for the user.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+            },
+        },
+    ), Capability.Read
+
+
 def create_linode_image_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_image_create tool."""
     return Tool(
@@ -255,6 +274,26 @@ async def handle_linode_images_sharegroups_list(
         }
 
     return await execute_tool(cfg, arguments, "list image share groups", _call)
+
+
+async def handle_linode_images_sharegroups_tokens_list(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_images_sharegroups_tokens_list tool request."""
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        data = await client.list_image_sharegroup_tokens()
+        tokens = data.get("data", [])
+        return {
+            "message": "Image share group tokens listed",
+            "count": len(tokens),
+            "tokens": tokens,
+            "page": data.get("page"),
+            "pages": data.get("pages"),
+            "results": data.get("results"),
+        }
+
+    return await execute_tool(cfg, arguments, "list image share group tokens", _call)
 
 
 async def handle_linode_images_list(
