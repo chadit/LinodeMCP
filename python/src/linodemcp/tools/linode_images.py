@@ -131,6 +131,52 @@ def create_linode_images_sharegroup_delete_tool() -> tuple[Tool, Capability]:
     ), Capability.Destroy
 
 
+def create_linode_image_sharegroup_create_tool() -> tuple[Tool, Capability]:
+    """Create the linode_image_sharegroup_create tool."""
+    return Tool(
+        name="linode_image_sharegroup_create",
+        description="Creates a share group for sharing images with other users.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Label for the image share group (required)",
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Detailed description for the image share group",
+                },
+                "images": {
+                    "type": "array",
+                    "description": "Images to add to the share group",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string"},
+                            "label": {"type": "string"},
+                            "description": {"type": "string"},
+                        },
+                        "required": ["id"],
+                    },
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this mutating operation.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["label", "confirm"],
+        },
+    ), Capability.Write
+
+
 def create_linode_images_sharegroup_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_images_sharegroup_get tool."""
     return Tool(
@@ -434,6 +480,61 @@ def create_linode_image_create_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def _image_sharegroup_image_payload(
+    image_arg: object,
+) -> tuple[dict[str, str] | None, str | None]:
+    """Build and validate one image object for a share group create body."""
+    if not isinstance(image_arg, dict):
+        return None, "images must contain objects"
+
+    raw_image = cast("dict[str, object]", image_arg)
+    image_id = raw_image.get("id")
+    if not isinstance(image_id, str) or not image_id.strip():
+        return None, "images[].id must be a non-empty string"
+
+    image: dict[str, str] = {"id": image_id}
+    for field in ("label", "description"):
+        value = raw_image.get(field)
+        if value is not None:
+            if not isinstance(value, str):
+                return None, f"images[].{field} must be a string"
+            image[field] = value
+    return image, None
+
+
+def _image_sharegroup_create_payload(
+    arguments: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Build and validate the image share group create request body."""
+    label = arguments.get("label")
+    if not isinstance(label, str) or not label.strip():
+        return None, "label must be a non-empty string"
+
+    payload: dict[str, Any] = {"label": label}
+
+    description = arguments.get("description")
+    if description is not None:
+        if not isinstance(description, str):
+            return None, "description must be a string"
+        payload["description"] = description
+
+    images_arg = arguments.get("images")
+    if images_arg is None:
+        return payload, None
+    if not isinstance(images_arg, list):
+        return None, "images must be a list of image objects"
+
+    images: list[dict[str, str]] = []
+    for image_arg in cast("list[object]", images_arg):
+        image, image_err = _image_sharegroup_image_payload(image_arg)
+        if image_err is not None:
+            return None, image_err
+        images.append(cast("dict[str, str]", image))
+
+    payload["images"] = images
+    return payload, None
+
+
 def _image_create_disk_id_error(disk_id: Any) -> str | None:
     """Validate the disk_id arg; return an error message or None."""
     if not isinstance(disk_id, int) or isinstance(disk_id, bool) or disk_id <= 0:
@@ -454,6 +555,49 @@ def _image_create_tags(tags_arg: Any) -> tuple[list[str] | None, str | None]:
             return None, "tags must contain non-empty strings"
         tags.append(tag)
     return tags, None
+
+
+async def handle_linode_image_sharegroup_create(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_image_sharegroup_create tool request."""
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This creates an image share group. Set confirm=true to proceed."
+        )
+
+    payload, payload_err = _image_sharegroup_create_payload(arguments)
+    if payload_err is not None:
+        return error_response(payload_err)
+    payload = cast("dict[str, Any]", payload)
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_image_sharegroup_create",
+            arguments.get("environment", ""),
+            "POST",
+            "/images/sharegroups",
+            None,
+            side_effects=[
+                f"A new image share group labeled {payload['label']!r} will be created."
+            ],
+            request_body=payload,
+        )
+
+    images = cast("list[dict[str, str]] | None", payload.get("images"))
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        sharegroup = await client.create_image_sharegroup(
+            label=cast("str", payload["label"]),
+            description=cast("str | None", payload.get("description")),
+            images=images,
+        )
+        return {
+            "message": f"Image share group '{sharegroup.get('label')}' created",
+            "sharegroup": sharegroup,
+        }
+
+    return await execute_tool(cfg, arguments, "create image share group", _call)
 
 
 async def handle_linode_image_create(
