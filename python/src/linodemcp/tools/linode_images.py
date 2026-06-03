@@ -259,6 +259,50 @@ def create_linode_images_sharegroup_members_list_tool() -> tuple[Tool, Capabilit
     ), Capability.Read
 
 
+def create_linode_images_sharegroup_members_add_tool() -> tuple[Tool, Capability]:
+    """Create the linode_images_sharegroup_members_add tool."""
+    return Tool(
+        name="linode_images_sharegroup_members_add",
+        description="Adds members to an image share group by UUID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "description": (
+                        "Linode environment to use (optional, defaults to 'default')"
+                    ),
+                },
+                "sharegroup_id": {
+                    "type": "string",
+                    "pattern": (
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
+                        "[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-"
+                        "[0-9a-fA-F]{12}$"
+                    ),
+                    "description": "Image share group UUID (required)",
+                },
+                "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Label for the member being added (required)",
+                },
+                "token": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Share group token for the member (required)",
+                },
+                "confirm": {
+                    "type": "boolean",
+                    "description": "Set true to confirm this mutating operation.",
+                },
+                PARAM_DRY_RUN: DRY_RUN_PROP,
+            },
+            "required": ["sharegroup_id", "label", "token", "confirm"],
+        },
+    ), Capability.Write
+
+
 def create_linode_images_sharegroup_image_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_images_sharegroup_image_delete tool."""
     # The shared-image route uses sharegroup-id-path.yaml, a numeric ID,
@@ -713,6 +757,21 @@ def _image_sharegroup_images_add_payload(
             return None, image_err
         images.append(cast("dict[str, str]", image))
     return images, None
+
+
+def _image_sharegroup_member_add_payload(
+    arguments: dict[str, Any],
+) -> tuple[dict[str, str] | None, str | None]:
+    """Build and validate the add-members request body."""
+    label = arguments.get("label")
+    if not isinstance(label, str) or not label.strip():
+        return None, "label must be a non-empty string"
+
+    token = arguments.get("token")
+    if not isinstance(token, str) or not token.strip():
+        return None, "token must be a non-empty string"
+
+    return {"label": label, "token": token}, None
 
 
 def _image_sharegroup_create_payload(
@@ -1232,6 +1291,50 @@ async def handle_linode_images_sharegroup_image_update(
         }
 
     return await execute_tool(cfg, arguments, "update shared image", _call)
+
+
+async def handle_linode_images_sharegroup_members_add(
+    arguments: dict[str, Any], cfg: Any
+) -> list[TextContent]:
+    """Handle linode_images_sharegroup_members_add tool request."""
+    sharegroup_id = arguments.get("sharegroup_id")
+    id_error = _image_sharegroup_id_error(sharegroup_id)
+    if id_error is not None:
+        return error_response(id_error)
+
+    body, body_error = _image_sharegroup_member_add_payload(arguments)
+    if body_error is not None:
+        return error_response(body_error)
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This adds members to an image share group. Set confirm=true to proceed."
+        )
+
+    sharegroup_id_str = cast("str", sharegroup_id).strip()
+    body = cast("dict[str, str]", body)
+
+    if is_dry_run(arguments):
+        return build_dry_run_response(
+            "linode_images_sharegroup_members_add",
+            arguments.get("environment", ""),
+            "POST",
+            f"/images/sharegroups/{quote(sharegroup_id_str, safe='')}/members",
+            current_state=None,
+            request_body=body,
+            side_effects=["Members will be added to the image share group."],
+        )
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        result = await client.add_members_to_image_sharegroup(
+            sharegroup_id_str, label=body["label"], token=body["token"]
+        )
+        return {
+            "message": "Members added to image share group",
+            "result": result,
+        }
+
+    return await execute_tool(cfg, arguments, "add members to image share group", _call)
 
 
 async def handle_linode_images_sharegroup_images_add(

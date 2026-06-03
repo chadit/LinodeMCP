@@ -11929,6 +11929,40 @@ async def test_linode_images_sharegroup_get_rejects_invalid_sharegroup_id(
     mock_client.get_image_sharegroup.assert_not_called()
 
 
+async def test_linode_images_sharegroup_members_add_tool_is_exported_and_registered(
+    sample_config: Config,
+) -> None:
+    """Image share group add-members tool should be exported and registered."""
+    from linodemcp import tools as tools_mod
+    from linodemcp.version import get_version_info
+
+    assert "create_linode_images_sharegroup_members_add_tool" in tools_mod.__all__
+    assert "handle_linode_images_sharegroup_members_add" in tools_mod.__all__
+
+    tool, capability = tools_mod.create_linode_images_sharegroup_members_add_tool()
+    assert tool.name == "linode_images_sharegroup_members_add"
+    assert capability is Capability.Write
+    assert tool.inputSchema["required"] == [
+        "sharegroup_id",
+        "label",
+        "token",
+        "confirm",
+    ]
+    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+
+    srv = Server(_full_access_config(sample_config))
+    assert "linode_images_sharegroup_members_add" in srv.registered_tool_names
+
+    entries = {entry.name: entry for entry in get_tool_registry()}
+    assert (
+        entries["linode_images_sharegroup_members_add"].capability is Capability.Write
+    )
+    assert (
+        "linode_images_sharegroup_members_add" in get_version_info().features["tools"]
+    )
+
+
 async def test_linode_images_sharegroup_images_add_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
